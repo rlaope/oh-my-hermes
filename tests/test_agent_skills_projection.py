@@ -647,7 +647,7 @@ class AgentSkillsProjectionTests(unittest.TestCase):
                 self.assertEqual(json.loads(output)["projection"], "fresh")
                 self.assertEqual(json.loads(output)["drift"], "clean")
                 (mirror / MANIFEST_NAME).unlink()
-                self.assertEqual(json.loads(run_cli(command + ["--status"])[1])["projection"], "missing")
+                self.assertEqual(json.loads(run_cli(command + ["--status"])[1])["projection"], "fresh")
                 self.assertEqual(run_cli(command)[0], 0)
             # Neither generated copy may contaminate an implicit Hermes import.
             self.assertEqual(discover_skill_files(repo), [])
@@ -718,7 +718,46 @@ class AgentSkillsProjectionTests(unittest.TestCase):
             self.assertEqual(status["projection"], "stale")
             self.assertEqual(status["drift"], "clean")
             (mirror / MANIFEST_NAME).unlink()
-            self.assertEqual(agent_skills_status(target, mirror=mirror)["projection"], "missing")
+            self.assertEqual(agent_skills_status(target, mirror=mirror)["projection"], "stale")
+
+    def test_status_reports_primary_when_mirror_manifest_absent(self):
+        from unittest.mock import patch
+        from omh.install.agent_skills_projection import install_agent_skills, agent_skills_status, MANIFEST_NAME
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            target, mirror = home / ".agents/skills", home / ".claude/skills"
+            with patch.object(Path, "home", return_value=home):
+                empty = agent_skills_status(target, mirror=mirror)
+                self.assertEqual((empty["primary"], empty["mirror"], empty["projection"]),
+                                 ("missing", "missing", "missing"))
+                install_agent_skills(target)
+                status = agent_skills_status(target, mirror=mirror)
+                self.assertEqual((status["primary"], status["mirror"], status["projection"]),
+                                 ("fresh", "missing", "fresh"))
+                self.assertIn("mirror copy", status["warnings"][0])
+                self.assertIn("omh install --target agents --scope user", status["warnings"][0])
+                self.assertFalse(mirror.exists())
+                self.assertEqual(agent_skills_status(target)["mirror"], "none")
+                path = target / MANIFEST_NAME
+                manifest = json.loads(path.read_text())
+                manifest["catalog_revision"] = "old-revision"
+                path.write_text(json.dumps(manifest))
+                status = agent_skills_status(target, mirror=mirror)
+                self.assertEqual((status["primary"], status["mirror"], status["projection"]),
+                                 ("stale", "missing", "stale"))
+
+    def test_status_stale_mirror_still_stale(self):
+        from omh.install.agent_skills_projection import install_agent_skills, agent_skills_status, MANIFEST_NAME
+        with tempfile.TemporaryDirectory() as tmp:
+            target, mirror = Path(tmp) / ".agents/skills", Path(tmp) / ".claude/skills"
+            install_agent_skills(target, mirror=mirror)
+            path = mirror / MANIFEST_NAME
+            manifest = json.loads(path.read_text())
+            manifest["catalog_revision"] = "old-revision"
+            path.write_text(json.dumps(manifest))
+            status = agent_skills_status(target, mirror=mirror)
+            self.assertEqual((status["primary"], status["mirror"], status["projection"]),
+                             ("fresh", "stale", "stale"))
 
     def test_manifest_traversal_and_symlink_destinations_fail_before_writes(self):
         from omh.install.agent_skills_projection import install_agent_skills, MANIFEST_NAME

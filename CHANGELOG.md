@@ -17,6 +17,46 @@ All notable changes will be documented here.
   the consolidation brief and the save reminder, which asked for saves that
   `off` refuses.
 
+- **The memory consolidation brief no longer rides almost every console turn.** A session that ended with one to
+  four unconsolidated turns used to raise a brief at its end and again as a recovery at the next start, so 213 of 216
+  console turns on one machine carried the capture request (153 briefs came from session-start recovery), and every
+  capture grew the store that recall draws from. The session-ending reasons now need the same five turns as the turn
+  interval, and a given brief is shown once per session instead of on every later turn. Headroom, duplicate and
+  expiring-record reasons keep their own thresholds, `dreaming_mode` is unchanged, and the model still captures
+  through its own tool with no approve step.
+- **The `omh_recommend` tool result is about 12% smaller.** The handoff policy
+  used to ride on every recommended skill, and one policy can run past 1 KB.
+  It now stays on the top recommendation and on the skills the route selects,
+  which are the skills the agent acts on. When the top row is a router
+  (`meta-router`, `oh-my-hermes`), the first concrete skill below it keeps
+  its policy too. Every other row leaves it out, and the result says that
+  `omh_capabilities` `inspect` with section `skills` returns it for any skill.
+  The ranking, the top skill, the route and every other field are unchanged.
+  Over the routing corpus the mean result drops from 6,794 to 5,985 bytes.
+
+- **A multi-line paste no longer sends half a prompt where the terminal strips
+  paste markers, and arrows hold together over SSH and WSL.** When tmux, SSH
+  or the terminal itself drops bracketed-paste markers, the OMH TUI now reads
+  a burst of pasted lines as one paste: the lines land in the composer (as a
+  chip when the paste is long) instead of the first line break submitting the
+  first line. Over SSH the burst may arrive in chunks up to 100 ms apart. An
+  Enter pressed on its own still sends at once, and so does an Enter followed
+  by the next key typed. Two or more prompts typed ahead into one read while
+  the TUI was stalled now arrive as a draft in the composer instead of being
+  sent, since those bytes are the same as a paste. Over SSH and in WSL a lone Esc
+  now waits 100 ms instead of 40 ms for the rest of its sequence, so an arrow
+  key split by a slow link is the arrow and not Esc and two letters, which
+  could clear the draft or open rewind. Locally nothing changes.
+
+- **Typing in a long message no longer slows down.** The input box measured the
+  whole text again on every key, so a key cost about 5 ms at 5,000 characters
+  and about 17 ms at 20,000, longer than a frame. It now measures only the
+  words and lines an edit touched, which brings the 20,000-character key to
+  about 5 ms and the 5,000-character one to under 2 ms. This holds for text
+  with spaces between words (English, Korean and so on); a long line of
+  unspaced or Cyrillic text is still measured whole. What is drawn, the
+  caret, wrapping, wide characters, paste chips and image tokens are unchanged.
+
 - **Running work survives a context compaction.** When Hermes compacts a
   session, OMH now hands its summarizer the work this conversation still has
   open, stated as facts: each unfinished dag-ulw run (its goal, run state,
@@ -710,6 +750,27 @@ All notable changes will be documented here.
   the request verb "확인" now count as filler. Replayed over 722 Korean owner
   messages, lines naming those three skills fall from 24 to 11; each skill still
   matches its own nouns ("병렬 도구", "코덱스", "기억 점검").
+
+- **Codex fanout units get OMH's own skills, and can edit and commit inside the
+  fence.** OMH looked for Codex skills only in `~/.codex/skills`, while Codex
+  also loads `~/.agents/skills`, where `.codex/install.sh` puts OMH's pack. On
+  a Mac with six personal skills there, every Codex unit was told to start with
+  `$generate2dsprite` and `$game-video-feedback-loop` (11 of 11 units in a real
+  run, about 32k characters of unrelated skill text each). Discovery now reads
+  the repo `.agents/skills`, `$CODEX_HOME` and `~/.agents/skills` too, so the
+  same unit gets `$omh-plan`, `$omh-build-failure-triage`, `$omh-code-review`;
+  a name found in two roots is never suggested, since Codex refuses a plain
+  `$name` that matches two skills. Inside the macOS fence, zsh heredocs and `uv` now work:
+  `TMPPREFIX` and `UV_CACHE_DIR` point into the unit's scratch dir (before,
+  every `git commit -F - <<EOF` failed with "can't create temp file for here
+  document" and `uv run` could not open its cache). The fence's write
+  boundary is unchanged.
+- **A stale Codex skill pack is now reported and refreshed.** `omh update`
+  refreshes an installed `~/.agents/skills` pack in its recorded layout (it
+  never creates one), `omh doctor` warns with `omh update` when that pack is
+  stale or edited, and `omh install --target agents --scope user --status`
+  reports the pack's real state instead of `missing` when only the unused
+  `~/.claude/skills` mirror is absent.
 
 ## 4.0.4 - 2026-11-01
 
