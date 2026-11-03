@@ -20,6 +20,17 @@ All notable changes will be documented here.
   ambiguous registration and a missing directory separately. A healthy
   install shows the same suggestion and the same card as before.
 
+- **Running work survives a context compaction.** When Hermes compacts a
+  session, OMH now hands its summarizer the work this conversation still has
+  open, stated as facts: each unfinished dag-ulw run (its goal, run state,
+  nodes done, and the open nodes with their states) and the session's open
+  `omh_todo` plan items. The summary that replaces the old turns then still
+  knows about the run and the plan, so the model picks them up instead of
+  re-deriving them from scratch. It is bounded (at most 3 runs, 6 nodes a run,
+  10 plan items, 1,500 characters in all), adds nothing to a session with no
+  open work, and leaves a plan written by Hermes' own `todo_list` to Hermes,
+  which already carries that list across compaction.
+
 - **A redraw at an unchanged width no longer stalls the TUI.** Switching
   tabs, Ctrl+L, `/redraw` and every other full redraw at the width the
   session was printed at reprinted the session by wrapping every finished
