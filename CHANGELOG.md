@@ -20,6 +20,19 @@ All notable changes will be documented here.
   ms to 10-14 ms; on a synthetic 500-record store, from 3.0-3.3 s to
   0.13-0.52 s per turn. The first render in a process still scans every
   record (measured on a machine under heavy load, two interleaved rounds).
+- **Skill hints read the request, not the gateway's busy-path header.** A
+  Discord or Slack message sent while the agent is busy reaches the turn with
+  Hermes' origin block in front of it: one line of JSON ids between two fixed
+  lines. OMH read that block as the request. The router then dispatched
+  gateway-intent-card at high confidence whatever the person wrote, and the
+  per-turn "Skills that may fit this request" line named gateway-intent-card,
+  backend and llm-app-dev on every such turn. Because those words are ASCII,
+  the block also kept a Korean request off the Korean line. OMH now cuts the
+  block, in its exact shape and only at the start of the turn, the same way
+  it cuts the other gateway material. The fix was replayed on a frozen,
+  hand-labelled set of the owner's turns since 10-15. On the held-out 40%,
+  turns given a wrong line went from 49 to 26, and the share of offered
+  skills that were right went from 3.3% to 5.3%. Recall did not change.
 
 ## 4.0.5 - 2026-11-03
 

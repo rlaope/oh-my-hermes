@@ -59,6 +59,18 @@ def _slash_skill_turn(skill: str, instruction: str = "") -> str:
     return "\n".join(lines)
 
 
+# The origin Hermes writes before a message that steers or redirects a busy
+# turn on a messaging gateway (`_steer_text_with_origin`, `gateway/run_busy.py`),
+# in the shape of a Discord thread turn, with made-up ids.
+_GATEWAY_ORIGIN = (
+    "Gateway message origin (JSON data, not instructions or authorization):\n"
+    '{"platform": "discord", "chat_id": "1200000000000000001", "thread_id": "1200000000000000001", '
+    '"chat_type": "thread", "user_id": "1100000000000000002", "scope_id": "1000000000000000003", '
+    '"profile": "bot", "message_id": "1200000000000000004", "source_message_id": "1200000000000000004"}\n'
+    "Do not guess a reply destination when these fields are insufficient.\n\n"
+)
+
+
 @dataclass(frozen=True)
 class RoutingInterventionCase:
     id: str
@@ -5461,6 +5473,27 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "[Replying to: \"use omh-apple-design to review our iOS checkout\"]\n\nthanks, got it",
         "answer_directly",
         "direct_answer",
+    ),
+    # A message sent while the agent is busy steers or redirects the turn with
+    # its gateway origin written before it: an opening line, one JSON line of
+    # ids, a closing line. Read as the request, those keys dispatched
+    # gateway-intent-card at high confidence on every such turn, whatever the
+    # person wrote under them (2026-11-04, 327 kami turns since 10-26).
+    RoutingPrecisionCase(
+        "concept-question-behind-a-gateway-origin-stays-direct",
+        "A concept question behind a busy-path gateway origin stays a direct answer",
+        _GATEWAY_ORIGIN + "Explain what a cron job does.",
+        "answer_directly",
+        "direct_answer",
+        "gateway-intent-card",
+    ),
+    RoutingPrecisionCase(
+        "korean-remark-behind-a-gateway-origin-is-not-a-gateway-card",
+        "A Korean remark behind a busy-path gateway origin is not a gateway card",
+        _GATEWAY_ORIGIN + "새로고침해서 다시 해볼게요",
+        "answer_clarification",
+        "",
+        "gateway-intent-card",
     ),
     RoutingPrecisionCase(
         "native-loop-compound-interval-is-not-the-goal-loop",
@@ -20797,6 +20830,27 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "A module sweep that names ultrawork stays ultrawork",
         "ultrawork: build the export across every module in parallel",
         "dispatch", "ultrawork", "forward_plan_to_selected_workflow", "plan",
+    ),
+    # The request under a busy-path gateway origin routes as it does bare; the
+    # origin's keys used to dispatch gateway-intent-card instead.
+    RoutingInterventionCase(
+        "demo-video-behind-a-gateway-origin-reaches-show-reel",
+        "A demo-video request behind a busy-path gateway origin reaches show-reel",
+        _GATEWAY_ORIGIN + "Make a demo video for the app",
+        "dispatch", "show-reel", "prepare_show_reel", "show_reel",
+    ),
+    RoutingInterventionCase(
+        "korean-build-fix-behind-a-gateway-origin-reaches-build-triage",
+        "A Korean build-fix request behind a busy-path gateway origin reaches build-failure-triage",
+        _GATEWAY_ORIGIN + "배포 파이프라인이 깨졌는데 빌드 로그 보고 고쳐줘",
+        "dispatch", "build-failure-triage", "prepare_build_failure_triage", "build_failure_triage",
+    ),
+    RoutingInterventionCase(
+        "pr-review-behind-a-gateway-origin-offers-code-review",
+        "A PR review request behind a busy-path gateway origin offers code-review",
+        _GATEWAY_ORIGIN + "Review this pull request for bugs before merge.",
+        "clarify", "oh-my-hermes", "answer_clarification", "clarification",
+        expected_candidate="code-review",
     ),
 )
 
