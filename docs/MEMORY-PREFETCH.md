@@ -234,7 +234,10 @@ elements, never selected records or consolidation reminders. A reference-only
 index is memory content without a discrete count. Initialization and shutdown
 clear in-memory served status and receipts. A newly served empty pack replaces
 the old state. The status line alone doesn't name records or prove host delivery
-or model use.
+or model use. It reports nothing on a platform the profile's `recall_line`
+excludes (by default every one but `cli`, `tui` and `desktop`), while the pack
+and its receipt stay the same; see
+[Turning the recall line or recall off](MEMORY.md#turning-the-recall-line-or-recall-off).
 
 ## Receipt privacy and identity
 

@@ -66,7 +66,7 @@ from .hermes_memory import (
     read_approved_records,
     read_hermes_memory,
 )
-from .memory_admission import demotion_refusal_reason
+from .memory_admission import build_project_memory_policy, demotion_refusal_reason, read_project_memory_policy
 from .memory_store_io import guard_store_write, read_project_memory_candidates
 from .memory_block_replay import MemoryBlockSelection
 from .memory_blocks import (
@@ -112,6 +112,7 @@ from .memory_prefetch_receipt import (
 )
 from .memory_principals import principal_recall_decision
 from .memory_query_sanitizer import sanitize_memory_query
+from .memory_recall_settings import configured_recall_line, configured_recall_mode, recall_line_shown
 from .memory_recall_selector import resolve_scope_allowlist
 from .memory_recall_support import _record_perspective_matches
 from .memory_session_digest import (
@@ -281,6 +282,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._shared_surface = False
         # A console nobody is at: a Kanban worker (`_attended`).
         self._unattended = False
+        # The `platform` Hermes passed to `initialize` (`cli`, `tui`, a
+        # gateway name); `recall_line` decides by it where the line shows.
+        self._platform = ""
         # Names the lens files this provider writes, so it never withdraws or
         # widens another provider's lens under the same session id.
         self._instance = secrets.token_hex(8)
@@ -407,6 +411,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # a 1:1 DM or a group conversation is verified (`memory_messenger`); a
         # primary gateway session nothing verifies stays shared.
         platform, agent_context = kwargs.get("platform", ""), kwargs.get("agent_context", "")
+        self._platform = str(platform or "")
         shared_request = kwargs.get("shared_surface", False)
         self._conversation, self._channel_scope, self._authorization = None, None, None
         self._turn_author = ("", False)
@@ -856,6 +861,10 @@ class OmhMemoryProvider(_MemoryProviderBase):
         """
         if not self._served_pack or not self._served_has_memory:
             return None
+        # `recall_line` hides the line, never the memory: the pack above was
+        # still served, and the receipt still records it.
+        if not recall_line_shown(configured_recall_line(self._profile_home), self._platform, OPERATOR_CONSOLE_PLATFORMS):
+            return None
         return RecallStatus(provider_label=PROVIDER_LABEL, count=self._served_count)
 
     def latest_prefetch_receipt(self) -> dict[str, Any] | None:
@@ -1143,7 +1152,15 @@ class OmhMemoryProvider(_MemoryProviderBase):
             else ProjectIdentityResolution(diagnostics=("outside_repository",))
         )
         moment = now or datetime.now(timezone.utc)
-        console = self._surface_class in OWNER_SURFACE_CLASSES
+        # Per-turn recall needs both the project memory policy (`memory_mode`
+        # off, or a disabled retain_knowledge family, turns it off) and this
+        # profile's `recall_mode` at `auto`. Off, the turn gets no records and
+        # no blocks, and so no recall line; the brief and the digest are not
+        # recall and keep their own rules. Tool recall decides for itself.
+        policy = self._recall_policy()
+        if policy.get("recall_enabled", True) and configured_recall_mode(self._profile_home) != "auto":
+            policy = {**policy, "recall_enabled": False}
+        console = self._surface_class in OWNER_SURFACE_CLASSES and bool(policy.get("recall_enabled", True))
         blocks = read_memory_blocks(self._omh_home) if console else ()
         selection = self._block_selection(blocks=blocks, now=moment)
         system_blocks = tuple(block for block in blocks if block.tier == SYSTEM_TIER)
@@ -1158,6 +1175,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
             allowed_scopes=self._prefetch_scopes(),
             session_id=self._session_id,
             now=moment,
+            policy=policy,
             principal_context=self._principal_context,
             shared_surface=self._shared_surface,
             required_scope_kinds=prefetch_required_scope_kinds(self._project_resolution.identity),
@@ -1231,6 +1249,22 @@ class OmhMemoryProvider(_MemoryProviderBase):
             fitted.digest,
         )
         return pack
+
+    def _recall_policy(self) -> dict[str, object]:
+        """The project memory policy the selector applies; recall off when the profile cannot be read.
+
+        `read_project_memory_policy` raises on a `setup-profile.json` that is
+        not a JSON object, as capture does. A render must not raise into the
+        turn, and an unreadable profile may be the one that chose `off`, so
+        recall fails closed and the fault is recorded like a swallowed write.
+        """
+        try:
+            return read_project_memory_policy(self._omh_home)
+        except (OSError, ValueError, RecursionError) as error:
+            self._write_failure_count += 1
+            self._write_failures.append({"op": "memory_policy", "path": "setup-profile.json", "error": type(error).__name__})
+            del self._write_failures[:-WRITE_FAILURE_LIMIT]
+            return build_project_memory_policy(self._omh_home, mode="off")
 
     def _start_session_digest(self, *, initializing: bool) -> None:
         """Fix this session's digest window, before it serves or writes anything.

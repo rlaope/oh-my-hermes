@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH recall line stays off Discord and Slack, and recall can be turned
+  off.** `🧠 OMH — recalled N memories` now shows on the CLI, TUI and Desktop
+  only; on a messenger the memory is still used, with no line posted. The new
+  profile setting `recall_line` (`console` by default, `all`, `off`) chooses
+  where it shows, and `recall_mode` (`auto` by default, `on_demand`, `off`)
+  chooses whether memory is recalled every turn, only when the model asks, or
+  not at all. Set them with `omh memory recall-line` and `omh memory
+  recall-mode`; `omh memory status` shows both. A `memory_mode` of `off`, or a
+  disabled `retain_knowledge` family, now actually stops recall: before, the
+  provider and the recall tool kept serving records under it.
+
 - **A TUI performance bench lives in the repo.** `tools/benchmarks/tui_perf.py`
   measures frame cost by transcript size, full redraw, streaming per chunk,
   keystroke cost by composer length, idle wake-ups and bytes, plugin hook
