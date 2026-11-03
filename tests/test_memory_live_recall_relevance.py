@@ -32,16 +32,18 @@ from _local_package import load_local_package
 load_local_package()
 from memory_recall_fixture import included_ids, payload, reviewed, selection  # noqa: E402
 from project_identity_fixture import memory_paths as resolve_paths, seed_project_identity  # noqa: E402
+from omh.plugin_bundle.omh import memory_prefetch_receipt as receipts  # noqa: E402
 from omh.plugin_bundle.omh.memory_blocks import approve_memory_block, build_memory_block, write_memory_block  # noqa: E402
 from omh.plugin_bundle.omh.memory_provider import RecallStatus  # noqa: E402
 from omh.plugin_bundle.omh.memory_query_sanitizer import sanitize_memory_query  # noqa: E402
 from omh.plugin_bundle.omh.memory_recall_selector import recall_revision  # noqa: E402
-from omh.workflows import memory  # noqa: E402
+from omh.workflows import memory, memory_recall_incident as incident, memory_recall_incident_model as incident_model  # noqa: E402
 from test_memory_prefetch_canonical import SESSION, approve, provider, rendered_ids  # noqa: E402
 from test_memory_provider_hermes_order import hermes_turn  # noqa: E402
 
 _NO_MATCH = "quantum ledger reconciliation"
-_NOTICE = "[IMPORTANT: Background process proc_1a2b completed (exit code 0).]\nCommand: pytest -q\nOutput:\n12 passed"
+# Hermes' own shape (`tools/process_registry_notifications.py`): one bracketed block.
+_NOTICE = "[IMPORTANT: Background process proc_1a2b completed (exit code 0).\nCommand: pytest -q\nOutput:\n12 passed]"
 _BATCH = "[ASYNC DELEGATION BATCH COMPLETE batch_7: 3/3 tasks done]\nresults follow"
 _DEPLOY = "Deploys wait for the nightly build"
 _PARSER = "Parser ownership moved to the platform team"
@@ -121,6 +123,11 @@ class SanitizedHostOnlyTests(unittest.TestCase):
 
     def test_words_before_a_notice_or_a_blank_turn_are_not_host_only(self) -> None:
         self.assertFalse(sanitize_memory_query(f"how do deploys work?\n{_NOTICE}").host_only)
+        # A pasted notice followed by the person's own question: the words
+        # after the closing bracket are theirs.
+        for after in ("이거 왜 실패했어?", "why did it fail?"):
+            with self.subTest(after=after):
+                self.assertFalse(sanitize_memory_query(f"{_NOTICE}\n{after}").host_only)
         self.assertFalse(sanitize_memory_query("").host_only)
         self.assertFalse(sanitize_memory_query("   ").host_only)
         self.assertFalse(sanitize_memory_query("ok").host_only)
@@ -207,6 +214,48 @@ class ProviderLiveRecallTests(unittest.TestCase):
                 self.assertEqual(rendered_ids(hermes_turn(live, turn + 1, "when do deploys run?")), [])
                 self.assertIsNone(live.recall_status())
 
+    def test_a_new_conversation_reported_after_the_turn_render_still_serves(self) -> None:
+        # Hermes often reports `/new` after the next turn's on_turn_start has
+        # rendered under the old conversation; prefetch then sees the new id.
+        deploy = approve(self.root, _DEPLOY)
+        live = provider(self.root)
+        hermes_turn(live, 1, "when do deploys run?")
+        live.on_turn_start(1, "when do deploys run?")
+        pack = live.prefetch("when do deploys run?", session_id="session-new")
+        self.assertEqual(rendered_ids(pack), [deploy["record_id"]])
+        self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
+        receipt = live.latest_prefetch_receipt()
+        assert receipt is not None
+        self.assertEqual(receipt["session_id"], "session-new")
+        # The late report starts nothing over: the new conversation holds it now.
+        live.on_session_switch("session-new", parent_session_id=SESSION, reset=True)
+        self.assertEqual(rendered_ids(hermes_turn(live, 2, "when do deploys run?", session_id="session-new")), [])
+        self.assertIsNone(live.recall_status())
+
+    def test_a_new_conversation_reported_before_the_turn_serves(self) -> None:
+        deploy = approve(self.root, _DEPLOY)
+        live = provider(self.root)
+        hermes_turn(live, 1, "when do deploys run?")
+        live.on_session_switch("session-new", parent_session_id=SESSION, reset=True)
+        self.assertEqual(rendered_ids(hermes_turn(live, 1, "when do deploys run?", session_id="session-new")), [deploy["record_id"]])
+        self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
+
+    def test_a_held_record_is_named_in_the_receipt_and_the_incident(self) -> None:
+        deploy = approve(self.root, _DEPLOY)
+        live = provider(self.root)
+        hermes_turn(live, 1, "when do deploys run?")
+        hermes_turn(live, 2, "when do deploys run?")
+        receipt = live.latest_prefetch_receipt()
+        assert receipt is not None
+        self.assertEqual(receipt["selection"]["served_this_session"], [deploy["record_id"]])
+        self.assertEqual(receipts.validate_prefetch_receipt(receipt), [])
+        self.assertIn("selection.served_this_session", receipts.validate_prefetch_receipt(
+            {**receipt, "selection": {**receipt["selection"], "served_this_session": [""]}}))
+        self.assertEqual(incident._receipt_stage(receipt, deploy["record_id"], "unused"), ("served_this_session", "selected"))
+        diagnosed = incident_model.diagnosis("served_this_session", "live_prefetch_receipt")
+        self.assertEqual((diagnosed["stage"], diagnosed["reason_code"]), ("unresolved", "served_this_session"))
+        self.assertFalse(diagnosed["omh_correction_proposed"])
+
     def test_a_new_conversation_and_a_new_provider_serve_again(self) -> None:
         deploy = approve(self.root, _DEPLOY)
         live = provider(self.root)
@@ -251,6 +300,7 @@ class ToolRecallRelevanceTests(unittest.TestCase):
         self.assertEqual((found["status"], [row["record_id"] for row in found["records"]]), ("found", [saved["record_id"]]))
         missing = self.recall(_NO_MATCH)
         self.assertEqual((missing["status"], missing["records"]), ("nothing_found", []))
+        self.assertIn("matches words, not meaning", missing["next_action"])
 
     def test_a_query_naming_record_ids_still_finds_them(self) -> None:
         first = json.loads(self.live.handle_tool_call("omh_remember", {"summary": _DEPLOY, "record_type": "decision"}))["record_id"]

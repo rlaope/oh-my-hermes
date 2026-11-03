@@ -1839,16 +1839,24 @@ and 84% repeated a record the session already held):
 - A turn that was only host framing or a host notice (a background-process
   or delegation-completion notice, a bare skill invocation; the sanitizer's
   `host_only`) serves no records at all, not even pins.
-- Hermes replays each turn's injected block for the rest of the session, so a
-  record served once is still in context. The provider keeps the
+- Hermes stamps each turn's injected block onto that turn's stored message and
+  replays it for the rest of the session, so a record served once is still in
+  context. Mixture-of-agents (MoA) turns are the exception: Hermes does not
+  stamp the block there (`agent/turn_context.py`), and the provider cannot tell
+  such a turn apart, so a record first served on a MoA turn is held as served
+  without staying in context until the next compaction or `/new`. (The
+  `codex_app_server` mode calls no prefetch at all.) The provider keeps the
   `recall_revision` of each record it served (the stored `revision` plus the
   summary, type and open/settled state it renders) and the selector skips a
   record still at that revision as `served_this_session`, before the budget
   cut. A revised record is served again. Every session switch Hermes reports
   clears the list: a compaction, rotated or in place, summarises away the
   blocks that carried the records, so each may be served once more. A new
-  provider starts empty as well. A queued render never marks a record served;
-  only `prefetch` does.
+  provider starts empty as well. When Hermes reports `/new` only after the
+  next turn's prefetch already moved to the new session id, that prefetch
+  started the new conversation empty and renders again if its pack had left a
+  held record out; the late report then clears nothing. A queued render never
+  marks a record served; only `prefetch` does.
 - Blocks are still rendered every turn on a console; they count toward the
   recall line only when their rendered text changed since the last serve.
 
@@ -1877,7 +1885,10 @@ the same markers and first/last rule as Hermes' own
 empty query. A host notice (a background-process, delegation-completion or
 gateway-provenance notice) ends the person's words at the line where it
 starts, and a turn that is only a notice gives an empty query marked
-`host_only`, for which the provider serves no records. A turn that
+`host_only`, for which the provider serves no records. A background-process
+notice is one bracketed block, so a turn with text after its closing bracket
+(a pasted notice followed by "why did it fail?") is not `host_only` and is
+served as an empty query (pins only). A turn that
 only mentions one of these phrases mid-sentence keeps it, backfill with no
 `[New message]` boundary is kept whole, and a relay with two or more
 distinct speakers keeps its prefixes.

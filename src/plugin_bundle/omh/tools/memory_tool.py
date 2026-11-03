@@ -1230,7 +1230,10 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
     next_action = (
         "Use a record_id with confirm, correct, or retire when the conversation settles it."
         if rows
-        else "No recallable OMH record matches; nothing was counted."
+        else (
+            "No recallable OMH record matches; nothing was counted. Recall matches words, not meaning: "
+            "retry with other words, the names the record would use, or the language it was saved in."
+        )
     )
     if has_origin:
         next_action += " " + RECALL_ORIGIN_NEXT_ACTION

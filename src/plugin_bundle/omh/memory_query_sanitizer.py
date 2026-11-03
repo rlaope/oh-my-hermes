@@ -329,5 +329,27 @@ def sanitize_memory_query(raw: str) -> SanitizedQuery:
                 method = "framing_only"
     return SanitizedQuery(
         clean=clean, method=method, original_length=len(raw), clean_length=len(clean), context=context,
-        host_only=not clean and bool(raw.strip()),
+        host_only=not clean and bool(raw.strip()) and _notice_runs_to_the_end(raw),
     )
+
+
+# Notices whose text runs on after a one-line header with no closing mark;
+# Hermes posts them as turns of their own.
+_OPEN_ENDED_NOTICES = ("[ASYNC DELEGATION", "[INTERNAL NOTIFICATION")
+
+
+def _notice_runs_to_the_end(raw: str) -> bool:
+    """True when nothing follows the turn's host notice, or the turn has none.
+
+    A background-process notice is one bracketed block that ends with ``]``,
+    so text after that bracket is someone's own words ("[IMPORTANT: Background
+    process ... ]" and then "why did it fail?"), and such a turn is not
+    host-only. A delegation or gateway notice carries an open body after its
+    header line, which nothing tells apart from appended words; Hermes posts
+    those as turns of their own, so they count as running to the end.
+    """
+    notice = _HOST_NOTICE.search(raw)
+    if notice is None:
+        return True
+    tail = raw[notice.start():].strip()
+    return tail.endswith("]") or tail.startswith(_OPEN_ENDED_NOTICES)

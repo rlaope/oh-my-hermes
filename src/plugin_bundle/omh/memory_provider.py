@@ -346,6 +346,10 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._recalled_blocks = ""
         self._prepared_record_revisions: dict[str, str] = {}
         self._pack_blocks_digest = ""
+        # True when the current pack left out a record only because it was
+        # held (`served_this_session`): a rebind that forgets what is held
+        # must render again rather than serve that pack.
+        self._pack_held = False
         # The "since your last session" digest (`memory_session_digest`): its
         # window is fixed at a session start, every render carries it until a
         # prefetch serves one, then never again in that session.
@@ -414,6 +418,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_receipt, self._served_receipt = None, None
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._pack_held = False
         self._forget_recalled()
         self._session_id = str(session_id or "")
         # Hermes passes `platform` (`cli`, `tui`, `desktop`, a gateway name,
@@ -518,6 +523,12 @@ class OmhMemoryProvider(_MemoryProviderBase):
                 # conversation, and a real `/new` still reaches
                 # `on_session_switch(reset=True)` from Hermes' worker.
                 self._rebind_session(str(session_id), reset=True)
+                if self._pack_held:
+                    # `on_turn_start` rendered this turn while the old
+                    # conversation's records were still held, and the rebind
+                    # just forgot them: Hermes often reports `/new` only after
+                    # that render. The new conversation holds none of them.
+                    self._pack = self.render_pack()
             if principal_context is not None and self._conversation is None:
                 # A verified messenger conversation binds its own principal.
                 supplied = parse_principal_context(
@@ -919,6 +930,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_receipt, self._served_receipt = None, None
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._pack_held = False
         self._forget_recalled()
         self._digest_window, self._digest_pending, self._pack_digest_evaluated, self._pack_digest = None, False, False, ""
         self._principal_context = None
@@ -962,6 +974,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
             self._prepared_receipt = None
             self._prepared_reminder, self._reminder_recorded = None, False
             self._prepared_record_ids, self._served_recorded = (), False
+            self._pack_held = False
             self._pack_digest_evaluated, self._pack_digest = False, ""
             self._query_sanitized = sanitize_memory_query(str(message or ""))
             self._query = self._query_sanitized.clean
@@ -1007,7 +1020,11 @@ class OmhMemoryProvider(_MemoryProviderBase):
             # false) summarises away the turns whose blocks carried the served
             # records, and a rewind drops turns. Each record may be served once
             # more rather than be missing for the rest of the conversation.
-            self._forget_recalled()
+            # A `/new` reported late, after `prefetch` already adopted its id,
+            # is the exception: that rebind started the new conversation empty,
+            # and what it served since is in the new context.
+            if not (reset and not rewound and new_id == self._session_id):
+                self._forget_recalled()
             if rewound:
                 return
             if new_id != self._session_id:
@@ -1246,6 +1263,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_reminder = None
         self._reminder_recorded = False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._pack_held = False
         reminder = (
             select_open_reminder(
                 snapshot.records,
@@ -1306,6 +1324,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_record_ids = tuple(str(item["record_id"]) for item in prepared.section.rendered)
         by_id = {str(record.get("record_id", "")): record for record in snapshot.records}
         self._prepared_record_revisions = {record_id: recall_revision(by_id[record_id]) for record_id in self._prepared_record_ids}
+        self._pack_held = bool(prepared.selection.exclusion_reason_counts.get("served_this_session"))
         # A digest the budget left out stays pending for a later render.
         self._pack_digest_evaluated, self._pack_digest = (
             not digest_withheld and self._digest_pending and fitted.digest == digest,

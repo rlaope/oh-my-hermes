@@ -45,6 +45,7 @@ MAX_UNREADABLE_NAMES = 16
 # Records a newer same-subject record replaced, named by id; the count in
 # `exclusion_reason_counts` is never cut.
 MAX_SUBJECT_SUPERSEDED = 16
+MAX_SERVED_THIS_SESSION = 16
 
 
 def build_prefetch_receipt(
@@ -138,6 +139,13 @@ def build_prefetch_receipt(
                 for item in pack.get("excluded_records", [])
                 if isinstance(item, dict) and item.get("reason") == "superseded_by_subject"
             ][:MAX_SUBJECT_SUPERSEDED],
+            # Records left out because this conversation already holds them
+            # from an earlier turn, so an incident names that case. Ids only.
+            "served_this_session": [
+                str(item.get("record_id", ""))
+                for item in pack.get("excluded_records", [])
+                if isinstance(item, dict) and item.get("reason") == "served_this_session"
+            ][:MAX_SERVED_THIS_SESSION],
         },
         "rendering": {
             "rendered_records": [
@@ -258,6 +266,8 @@ def validate_prefetch_receipt(value: object) -> list[str]:
         errors.append("selection.selected_count")
     elif "subject_superseded" in selection and not _subject_superseded_ok(selection["subject_superseded"]):
         errors.append("selection.subject_superseded")
+    elif "served_this_session" in selection and not _held_ids_ok(selection["served_this_session"]):
+        errors.append("selection.served_this_session")
     if not isinstance(rendering, dict) or not isinstance(rendering.get("rendered_records"), list):
         errors.append("rendering")
     else:
@@ -352,6 +362,15 @@ def _subject_superseded_ok(value: object) -> bool:
             and all(isinstance(item[key], str) and item[key] for key in item)
             for item in value
         )
+    )
+
+
+def _held_ids_ok(value: object) -> bool:
+    """A bounded list of non-empty record ids; absent on older receipts."""
+    return (
+        isinstance(value, list)
+        and len(value) <= MAX_SERVED_THIS_SESSION
+        and all(isinstance(item, str) and item for item in value)
     )
 
 
