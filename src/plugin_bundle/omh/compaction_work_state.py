@@ -20,7 +20,15 @@ What counts as live work, read the way the other views read it:
   conversation as `omh_dag` and the open-run nudge look it up, with its
   open nodes and their derived states;
 * this session's plan todo when the shared projection says it is
-  ``established`` (open items, fresh, this session's own). A plan Hermes'
+  ``established`` (open items, fresh) AND it is this session's own record
+  (``own_record``). ``established`` alone is not enough: the projection
+  also answers ``established`` from the home-wide ``runtime/todo.json`` a
+  plan written with no session falls back to, whenever it cannot tell whose
+  that plan is, and a summary would then call another person's plan the
+  work of "this conversation" -- on a shared gateway surface too, where the
+  memory blocks are withheld. The other consumers that need strict ownership
+  (`plan_stage_gate`, the team binding) read ``own_record`` the same way.
+  A plan Hermes'
   native `todo_list` wrote (``source: todo_list``) is left out: Hermes folds
   its own todo list back into the compacted transcript verbatim
   (`_fold_todo_snapshot`, `agent/conversation_compression.py`), so a second
@@ -99,7 +107,8 @@ def _run_lines(omh_home: Path, hermes_home: Path, durable: str, now: float) -> l
     runs = [record for segment in segments for record, _path in dag_run.session_runs(omh_home, segment)]
     if not runs:
         return []
-    runs.sort(key=lambda record: float(record.get("updated_at") or 0.0), reverse=True)
+    # `read_run` does not check ``updated_at``; a stamp that is not a number sorts last instead of raising.
+    runs.sort(key=lambda record: dag_run._number(record.get("updated_at")) or 0.0, reverse=True)
     children = dag_tool._children(omh_home, segments, hermes_home)
     lines = []
     for record in runs:
@@ -114,7 +123,7 @@ def _run_lines(omh_home: Path, hermes_home: Path, durable: str, now: float) -> l
 
 def _todo_line(omh_home: Path, hermes_home: Path, session: str) -> str:
     todo = read_omh_todo(omh_home, hermes_home, session_ref=session)
-    if todo.get("status") != "established" or todo.get("source") == NATIVE_TODO_TOOL:
+    if todo.get("status") != "established" or not todo.get("own_record") or todo.get("source") == NATIVE_TODO_TOOL:
         return ""
     counts = todo["counts"]
     stamps = [f"plan stage {todo['plan_stage']}" if todo.get("plan_stage") else "",

@@ -8,15 +8,17 @@ the open plan items, and nothing at all for a finished or empty session.
 
 from __future__ import annotations
 
+import json
 import time
 import unittest
+from unittest.mock import patch
 
 from _local_package import load_local_package
 
 load_local_package()
 
 from _delegation_state import PARENT, homes  # noqa: E402
-from omh.plugin_bundle.omh import dag_run  # noqa: E402
+from omh.plugin_bundle.omh import compaction_work_state, dag_run  # noqa: E402
 from omh.plugin_bundle.omh.compaction_work_state import (  # noqa: E402
     HEADER,
     MAX_TEXT_CHARS,
@@ -66,9 +68,9 @@ def stored_todo(home, items: list[dict], *, title: str = "Export feature", sourc
     write_todo(home.omh, build_todo_record(title, items, source=source, session_ref=session, **fields))
 
 
-def provider_for(home, session: str = PARENT) -> OmhMemoryProvider:
+def provider_for(home, session: str = PARENT, *, platform: str = "cli") -> OmhMemoryProvider:
     provider = OmhMemoryProvider(home.omh)
-    provider.initialize(session, platform="cli", hermes_home=str(home.hermes), agent_context="primary",
+    provider.initialize(session, platform=platform, hermes_home=str(home.hermes), agent_context="primary",
                         cwd=str(home.omh.parent))
     return provider
 
@@ -133,6 +135,72 @@ class LiveWorkTests(unittest.TestCase):
         self.assertNotIn("wait for the review", text)
 
 
+class SurfaceAndFaultTests(unittest.TestCase):
+    """Mutation: compute the facts unguarded, drop the block-budget reservation, or sort on a raw ``updated_at``."""
+
+    def test_a_shared_surface_gets_its_own_facts_and_no_blocks(self) -> None:
+        with homes() as home:
+            write_memory_block(home.omh, approve_memory_block(build_memory_block("facts", "operator only")))
+            stored_run(home, [node("api")], session="discord-1")
+            preserved = provider_for(home, "discord-1", platform="discord").on_pre_compress([{"role": "user"}])
+            work = facts(home, "discord-1")
+        self.assertTrue(work)
+        self.assertEqual(preserved, work)
+        self.assertNotIn("operator only", preserved)
+
+    def test_past_the_hosts_ceiling_the_facts_survive_its_elision_whole(self) -> None:
+        # `sanitize_memory_context` (`agent/context_engine.py`): past 6,000 characters Hermes keeps
+        # the first 4,000 and the last 1,500. Block elements fill their budget and the omission lines
+        # for the blocks that did not fit come on top of it.
+        with homes() as home:
+            for index in range(60):
+                write_memory_block(home.omh, approve_memory_block(
+                    build_memory_block(f"fact{index:02d}", f"{index:02d} " + "v" * 1_800)))
+            stored_run(home, [node("api"), node("docs", depends_on=("api",))])
+            stored_todo(home, [{"text": f"Step {index}", "state": "pending"} for index in range(10)])
+            work = facts(home)
+            provider = provider_for(home)
+            preserved = provider.on_pre_compress([{"role": "user"}])
+            blocks = read_memory_blocks(home.omh, tier="system")
+            evaluations = provider._block_selection(blocks=blocks, now=None).evaluations
+        # The blocks gave up exactly the facts' room, which here costs them a block.
+        reduced = render_memory_blocks(blocks, budget_chars=DEFAULT_SYSTEM_RENDER_BUDGET_CHARS - len(work) - 2,
+                                       evaluations=evaluations)
+        full = render_memory_blocks(blocks, budget_chars=DEFAULT_SYSTEM_RENDER_BUDGET_CHARS, evaluations=evaluations)
+        self.assertEqual(preserved, reduced + "\n\n" + work)
+        self.assertNotEqual(reduced, full)
+        self.assertGreater(len(preserved), 6_000)
+        self.assertTrue(preserved.endswith(work))
+        kept_tail = preserved[-1_500:]
+        self.assertIn(work, kept_tail)
+
+    def test_a_fault_in_the_facts_costs_only_the_facts(self) -> None:
+        with homes() as home:
+            write_memory_block(home.omh, approve_memory_block(build_memory_block("facts", "kept through a fault")))
+            stored_run(home, [node("api")])
+            provider = provider_for(home)
+            with patch.object(compaction_work_state, "work_state_facts", side_effect=AttributeError("boom")):
+                preserved = provider.on_pre_compress([{"role": "user"}])
+            blocks = read_memory_blocks(home.omh, tier="system")
+            selection = provider._block_selection(blocks=blocks, now=None)
+        self.assertEqual(preserved, render_memory_blocks(
+            blocks, budget_chars=DEFAULT_SYSTEM_RENDER_BUDGET_CHARS, evaluations=selection.evaluations))
+        self.assertEqual(provider._write_failures[-1],
+                         {"op": "work_state", "path": "compaction_work_state", "error": "AttributeError"})
+
+    def test_a_run_whose_stamp_is_not_a_number_sorts_last_and_costs_nothing(self) -> None:
+        with homes() as home:
+            stored_run(home, [node("api")], run="good")
+            stored_run(home, [node("api")], run="odd")
+            path = dag_run.record_path(home.omh, PARENT, "odd")
+            record = json.loads(path.read_text(encoding="utf-8"))
+            record["updated_at"] = "yesterday"
+            path.write_text(json.dumps(record), encoding="utf-8")
+            text = facts(home)
+        runs = [line for line in text.splitlines() if line.startswith("- dag-ulw run")]
+        self.assertEqual([line.split()[3] for line in runs], ["good", "odd"])
+
+
 class IdleTests(unittest.TestCase):
     """Mutation: let a finished run or a finished plan through, or emit the header with no lines."""
 
@@ -155,6 +223,17 @@ class IdleTests(unittest.TestCase):
             selection = provider._block_selection(blocks=blocks, now=None)
         self.assertEqual(preserved, render_memory_blocks(
             blocks, budget_chars=DEFAULT_SYSTEM_RENDER_BUDGET_CHARS, evaluations=selection.evaluations))
+
+    def test_a_home_wide_plan_of_no_session_is_not_this_conversations(self) -> None:
+        # `omh runtime todo set` with no session writes `runtime/todo.json`. The projection may still
+        # call it `established` for a reader whose ownership it cannot decide; it is not `own_record`.
+        with homes() as home:
+            write_todo(home.omh, build_todo_record("Owner plan", [{"text": "Owner step", "state": "pending"}],
+                                                   source="omh"))
+            self.assertTrue((home.omh / "runtime" / "todo.json").is_file())
+            self.assertEqual(facts(home, "20261103_discord_abc"), "")
+            self.assertEqual(provider_for(home, "20261103_discord_abc", platform="discord").on_pre_compress(
+                [{"role": "user"}]), "")
 
     def test_another_sessions_work_is_not_this_sessions(self) -> None:
         with homes() as home:
