@@ -37,6 +37,27 @@ globally installed `ruff` needed):
 uv run --group lint ruff check src tests
 ```
 
+### Performance bench
+
+`tools/benchmarks/tui_perf.py` measures the TUI and the plugin hooks offline:
+a fake byte-counting terminal, the tests' recording client and replay gateway,
+temp homes, no live gateway. Cases: steady, keystroke and busy frames by
+transcript size, full redraw, streaming per chunk, keystroke by composer
+length, idle and busy wake-ups and bytes, plugin hook latency, and launch to
+first frame.
+
+```sh
+uv run python -P tools/benchmarks/tui_perf.py [--json] [--case frame]
+uv run python -P tools/benchmarks/tui_perf.py --compare ../other-checkout
+```
+
+`--compare TREE` runs the same script against TREE (base) and this checkout
+(head), alternating rounds on one machine through the repo-root `omh/` shim
+(`PYTHONPATH=<tree>:<tree>/tests`), and flags a time metric only beyond
+`--tolerance` percent. Compare numbers taken back to back, never across
+sessions. `tests/test_tui_perf_bench.py` runs every case at a tiny size so the
+output schema cannot rot; it asserts counts only, never wall-clock time.
+
 ## Contribution Rules
 
 - Keep Hermes as the runtime boundary.

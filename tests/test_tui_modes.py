@@ -38,8 +38,11 @@ from test_tui_app import (
 from omh.tui import app as app_module
 from omh.tui import gateway_contract as contract
 from omh.tui import modes as modes_module
+from omh.tui import screen as screen_module
+from omh.tui import transcript as transcript_module
 from omh.tui.app import (
-    ATTACH_LEFT_NOTICE, OSC52_COPY, SLOT_ARM_SECONDS, STEER_FALLBACK_KEY, App, QueuedLine, queue_lines,
+    ATTACH_LEFT_NOTICE, OSC52_COPY, RESIZE_SETTLE_SECONDS, SLOT_ARM_SECONDS, STEER_FALLBACK_KEY, App, QueuedLine,
+    queue_lines,
 )
 from omh.tui.frame import MODE_ACCEPT, MODE_ACCEPT_PLAN, MODE_NORMAL, MODE_PLAN
 from omh.tui.gateway import Event, GatewayUnavailable, Response, ServerRequest
@@ -47,6 +50,7 @@ from omh.tui.keys import CHAR, DOWN, ENTER, TAB, UP, Key, KeyDecoder, Paste
 from omh.tui.layout import MIN_COLS, MIN_ROWS, slot_cap
 from omh.tui.modes import EFFORT_CYCLE
 from omh.tui.pager import Pager
+from omh.tui.screen import CLEAR_SCREEN_AND_SCROLLBACK
 from omh.tui.session_picker import SessionPicker, SessionRow
 from omh.tui.slash import parse_slash, plan_invocation
 from omh.tui.style import Style
@@ -1576,7 +1580,7 @@ class RedrawTailTests(unittest.TestCase):
             app._full_redraw()
         drawn(app)
         shown = "\n".join(app.terminal.screen.history())  # type: ignore[attr-defined]
-        self.assertIn("⋯ 35 earlier messages · /history shows all", shown)
+        self.assertIn("⋯ 35 earlier entries · /history shows all", shown)
         self.assertNotIn("notice 34\n", shown)
         self.assertIn("notice 39", shown)
 
@@ -1594,9 +1598,9 @@ class RedrawTailTests(unittest.TestCase):
         from omh.tui.transcript import BLOCK_CAP
 
         prose = " ".join((Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text(encoding="utf-8").split())
-        self.assertIn(f"holds a session's last {BLOCK_CAP:,} messages", prose)
+        self.assertIn(f"holds a session's last {BLOCK_CAP:,} entries", prose)
 
-    def test_history_opens_with_a_row_counting_the_messages_the_cap_dropped(self) -> None:
+    def test_history_opens_with_a_row_counting_the_entries_the_cap_dropped(self) -> None:
         app, _client = make_app(rows=24, cols=80)
         with patch("omh.tui.transcript.BLOCK_CAP", 10):
             for number in range(25):
@@ -1604,9 +1608,9 @@ class RedrawTailTests(unittest.TestCase):
                 drawn(app)  # printed, so the cap may drop it
         app._history("")
         shown = [line.rstrip() for line in drawn(app)]
-        self.assertEqual(shown[:3], ["⋯ 15 earlier messages no longer held", "", "· notice 15"])
+        self.assertEqual(shown[:3], ["⋯ 15 earlier entries no longer held", "", "· notice 15"])
         self.assertEqual(shown[20:23], ["· notice 24", "", ""])  # the row, a blank, then the 10 notices held, spaced
-        self.assertIn("history · 1-10/10 messages", shown[-1])
+        self.assertIn("history · 1-10/10 entries", shown[-1])
 
     def test_a_drop_while_history_is_open_leaves_its_count_as_it_opened(self) -> None:
         app, _client = make_app(rows=24, cols=80)
@@ -1620,7 +1624,7 @@ class RedrawTailTests(unittest.TestCase):
                 app.transcript.take_stable_lines(80, DEFAULT_THEME)
             self.assertEqual(app.transcript.dropped, 20)
             shown = [line.rstrip() for line in drawn(app)]
-        self.assertEqual(shown[:3], ["⋯ 15 earlier messages no longer held", "", "· notice 15"])
+        self.assertEqual(shown[:3], ["⋯ 15 earlier entries no longer held", "", "· notice 15"])
 
     def test_history_renders_its_first_block_once_for_the_check_and_the_first_page(self) -> None:
         app, _client = make_app(rows=24, cols=80)
@@ -1652,8 +1656,89 @@ class RedrawTailTests(unittest.TestCase):
         with patch("omh.tui.app.REDRAW_TAIL_ROWS", 6):
             app._draw_history(messages)
         taken = [line for line in app.transcript.take_stable_lines(80, DEFAULT_THEME) if line]
-        self.assertEqual(taken[0][0].text, "⋯ 37 earlier messages · /history shows all")
+        self.assertEqual(taken[0][0].text, "⋯ 37 earlier entries · /history shows all")
         self.assertEqual([line_text(line) for line in taken[1:]], ["┃ ❯ question 37", "┃ ❯ question 38", "┃ ❯ question 39"])  # each prompt on its rail
+
+
+class RedrawKeptRowsTests(unittest.TestCase):
+    """A full redraw at an unchanged width writes what one with nothing kept writes, without wrapping a finished
+    reply or painting a flushed row again; at a new width every row is laid out anew."""
+
+    REPLY = ("## Answer {turn}\n\n한국어 문장입니다 — 폭이 두 칸인 글자 🎉\n\n- item **bold** with `code`\n\n"
+             "```python\ndef fib(n: int) -> int:\n    return n\n```\n\n" + "lorem ipsum dolor sit amet " * 6)
+
+    def session(self, cols: int = 80) -> tuple[App, list[float]]:
+        """A resumed session of 30 turns, drawn, with nothing kept from another test."""
+        now = [100.0]
+        app, _client = make_app(rows=24, cols=cols, clock=lambda: now[0])
+        messages: list[dict] = []
+        for turn in range(30):
+            messages.append({"role": "user", "text": f"question {turn}: 한국어 질문 🎯"})
+            messages.append({"role": "tool", "name": "terminal", "tool_call_id": f"t{turn}", "text": "ok",
+                             "args": {"command": "ls -la"}})
+            messages.append({"role": "assistant", "text": self.REPLY.format(turn=turn)})
+        screen_module._flushed_row.cache_clear()
+        app._draw_history(messages)
+        drawn(app)
+        return app, now
+
+    def redraw(self, app: App) -> tuple[str, int]:
+        """The bytes a full redraw and its frame write, and how many times it wrapped markdown."""
+        terminal = app.terminal
+        start = len(terminal.writes)  # type: ignore[attr-defined]
+        with patch("omh.tui.transcript.render_lines", wraps=transcript_module.render_lines) as wrapped:
+            app._full_redraw()
+            drawn(app)
+        return "".join(terminal.writes[start:]), wrapped.call_count  # type: ignore[attr-defined]
+
+    def forget(self, app: App) -> None:
+        """Nothing kept: every reply is wrapped and every row painted as if never drawn."""
+        screen_module._flushed_row.cache_clear()
+        for block in app.transcript.blocks:
+            if isinstance(block, AssistantBlock):
+                block.kept = None
+
+    def test_the_rows_kept_outnumber_the_rows_a_redraw_prints(self) -> None:
+        # Kept by recency: a redraw that printed more rows than are kept would find none of them kept the next time.
+        self.assertGreater(screen_module.FLUSHED_ROWS_KEPT, app_module.REDRAW_TAIL_ROWS)
+
+    def test_a_redraw_at_the_same_width_writes_the_bytes_of_one_with_nothing_kept(self) -> None:
+        app, _now = self.session()
+        self.forget(app)
+        cold, wrapped = self.redraw(app)
+        self.assertEqual(wrapped, 30)
+        before = screen_module._flushed_row.cache_info()
+        kept, wrapped = self.redraw(app)
+        after = screen_module._flushed_row.cache_info()
+        self.assertEqual(wrapped, 0)
+        self.assertEqual(after.misses, before.misses)  # no flushed row painted again
+        self.assertEqual(kept, cold)
+        self.assertIn(CLEAR_SCREEN_AND_SCROLLBACK, kept)
+
+    def test_a_same_size_settled_resize_prints_the_session_as_it_was(self) -> None:
+        app, now = self.session()
+        shown = app.terminal.screen.history()  # type: ignore[attr-defined]
+        self.assertTrue(any("question 0:" in row for row in shown))  # the whole session: scrollback and screen
+        app._on_resize()
+        now[0] += RESIZE_SETTLE_SECONDS
+        with patch("omh.tui.transcript.render_lines", wraps=transcript_module.render_lines) as wrapped:
+            app._redraw_when_settled()
+            drawn(app)
+        self.assertEqual(wrapped.call_count, 0)
+        self.assertEqual(app.terminal.screen.history(), shown)  # type: ignore[attr-defined]
+
+    def test_a_redraw_at_a_new_width_lays_every_row_out_as_a_session_drawn_there(self) -> None:
+        app, _now = self.session(cols=80)
+        self.redraw(app)  # everything kept at 80 columns
+        app.terminal.screen.resize(24, 60)  # type: ignore[attr-defined]
+        app._take_size()
+        self.redraw(app)
+        narrowed = app.terminal.screen.history()  # type: ignore[attr-defined]
+        there, _now = self.session(cols=60)
+        self.forget(there)
+        self.redraw(there)
+        self.assertEqual(narrowed, there.terminal.screen.history())  # type: ignore[attr-defined]
+        self.assertTrue(all(len(row) <= 60 for row in narrowed))
 
 
 class CallExpiryTests(unittest.TestCase):
@@ -1716,7 +1801,7 @@ class LazyHistoryTests(unittest.TestCase):
             app._history("")
             shown = [line.rstrip() for line in drawn(app)]
         self.assertEqual(shown[0], "· notice 0")
-        self.assertIn("history · 1-12/500 messages", shown[-1])
+        self.assertIn("history · 1-12/500 entries", shown[-1])
         self.assertLess(len(rendered), 30)  # the first page and the last, not 500 blocks
         self.assertEqual(set(rendered), {True})  # thinking text, result summaries and whole diffs
 

@@ -4,6 +4,40 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Running work survives a context compaction.** When Hermes compacts a
+  session, OMH now hands its summarizer the work this conversation still has
+  open, stated as facts: each unfinished dag-ulw run (its goal, run state,
+  nodes done, and the open nodes with their states) and the session's open
+  `omh_todo` plan items. The summary that replaces the old turns then still
+  knows about the run and the plan, so the model picks them up instead of
+  re-deriving them from scratch. It is bounded (at most 3 runs, 6 nodes a run,
+  10 plan items, 1,500 characters in all), adds nothing to a session with no
+  open work, and leaves a plan written by Hermes' own `todo_list` to Hermes,
+  which already carries that list across compaction.
+
+- **A redraw at an unchanged width no longer stalls the TUI.** Switching
+  tabs, Ctrl+L, `/redraw` and every other full redraw at the width the
+  session was printed at reprinted the session by wrapping every finished
+  reply's markdown and painting every row again: 119 ms for a 1,100-turn
+  session, 109 ms for a 100-turn one. A finished reply in the redraw's tail
+  now keeps its rows for the width and theme it was drawn at, and a row printed above the live
+  region keeps its bytes, so the second and later redraws take 6 to 9 ms and
+  the first after a reply streamed about half what it did. What is written is
+  unchanged, byte for byte. A redraw still erases the terminal's
+  scrollback and prints the last 3,000 rows, because a tab switch can reach
+  the TUI as one same-size signal after the terminal has already reflowed
+  its rows. The row over the rest, and the `/history` footer, now count
+  "entries" (`⋯ 2940 earlier entries`): the number counts prompts, replies,
+  tool groups, notices and done lines one each, which is not what
+  "messages" said.
+
+- **A TUI performance bench lives in the repo.** `tools/benchmarks/tui_perf.py`
+  measures frame cost by transcript size, full redraw, streaming per chunk,
+  keystroke cost by composer length, idle wake-ups and bytes, plugin hook
+  latency and launch to first frame, offline with temp homes, and
+  `--compare <tree>` judges two checkouts back to back. It changes nothing
+  you see in the TUI.
+
 - **Ctrl+N/P and Ctrl+J/K move through lists and menus.** In the `/model`,
   `/sessions`, `/rewind` and `/theme` pickers, the agent list (roster and DAG
   tree), history search (Ctrl+R) and the slash and `@` path completion menus,
