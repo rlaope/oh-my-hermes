@@ -19,6 +19,34 @@ All notable changes will be documented here.
   focus reports type nothing in any mode and are switched off on every exit
   and while the TUI is suspended.
 
+- **A full redraw keeps 4,000 rows of the session, up from 3,000.** A
+  resize, a tab switch, Ctrl+L, `/redraw` and a resumed session erase the
+  terminal's scrollback and print the session's last rows again, because a
+  tab switch can reach the TUI as one same-size signal after the terminal
+  has already reflowed its rows. After that, a 1,100-turn session's
+  scrollback went from 27,504 rows to 3,006; it now keeps 4,006. The count
+  was chosen by measurement on a session of distinct replies. A redraw at
+  the width the session was printed at takes 13 to 18 ms instead of 11 to
+  14 ms. The first redraw at a new width takes about 235 to 290 ms instead
+  of 170 to 240 ms, and holding what that redraw reuses takes 1.2 to 1.5 MiB
+  more. Raising the count further made both slower in proportion: 6,000
+  rows took 23 to 29 ms and 375 to 450 ms. The rows above the cut are still
+  in `/history`. A terminal's own scrollback limit can keep fewer rows than
+  this.
+
+- **The recall switches and records say what they do.** Under
+  `recall_mode: on_demand` or `off`, a save that resembles a held memory no
+  longer tells the model that either one "recalls": no turn is served
+  memories unasked there, and the hint now says so. Tool recall reads
+  `recall_mode` from the profile the memory provider was started with rather
+  than the process's `HERMES_HOME`, so the two cannot disagree about whether
+  recall is off. In the TUI, an `omh_remember` recall that found memories
+  lists them and gets the same sweep as an `omh_memory` one. A test now pins
+  that a consolidation brief raised in the same second by another trigger is
+  served. A pinned memory still suppresses the list of the rest's names on a
+  message that matches nothing: listing them would make the live recall
+  select differently from coding handoffs, which the recall suite and
+  incident replay hold equal.
 - **Skill hints read the request, not the gateway's busy-path header.** A
   Discord or Slack message sent while the agent is busy reaches the turn with
   Hermes' origin block in front of it: one line of JSON ids between two fixed
