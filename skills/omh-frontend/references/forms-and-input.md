@@ -139,10 +139,10 @@ these languages.
 arrived in engines at different times. Check each against the
 browser-support target named in the brief. A feature newer than the target
 (by default, anything only Baseline Newly available) ships behind feature
-detection with a fallback, or the target changes on purpose. A behavior that cannot be
-detected (the backdrop scroll above) cannot take that path: it ships only as
-an enhancement whose absence the page tolerates, or a different technique
-covers the target.
+detection with a fallback, or the target changes on purpose. A behavior that
+cannot be detected (the backdrop scroll above) cannot take that path: it
+ships only as an enhancement whose absence the page tolerates, or a
+different technique covers the target.
 
 ## Boundary
 

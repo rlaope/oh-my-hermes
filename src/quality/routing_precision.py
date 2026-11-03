@@ -2780,6 +2780,11 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     # repo", "shallow modules in this codebase"); each of their words alone
     # stays with the lane it had on main. System design, the CTO roadmap
     # trade-off, water, and an architecture firm never name the debt ledger.
+    # The English cases below that quote these phrases verbatim do not carry
+    # a forbidden_candidate: naming tech-debt-audit as the clarify candidate
+    # there is an accepted cost of the clarify-only cap, which never
+    # dispatches. Each pins that nothing dispatches, and none should gain a
+    # forbidden_candidate.
     RoutingPrecisionCase(
         "shallow-water-not-tech-debt-audit",
         "Shallow water is not a shallow module",
@@ -3069,6 +3074,24 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "answer_clarification",
         "",
         "tech-debt-audit",
+    ),
+    # The request form with a non-code "코드" still names tech-debt-audit as a
+    # clarify candidate (measured on origin/main and on this branch), the same
+    # accepted cost as the English cases above, so these two pin only that
+    # nothing dispatches: no forbidden_candidate.
+    RoutingPrecisionCase(
+        "korean-dress-code-request-form-no-dispatch",
+        "A Korean dress code named in the architecture request form never dispatches the audit",
+        "드레스 코드 아키텍처 개선해줘",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-qr-code-request-form-no-dispatch",
+        "A Korean QR code named in the architecture request form never dispatches the audit",
+        "QR 코드 아키텍처 개선해줘",
+        "answer_clarification",
+        "",
     ),
     RoutingPrecisionCase(
         "sales-award-not-award-bar-score",

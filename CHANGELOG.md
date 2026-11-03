@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Code-skill round follow-ups.** Seven review findings from the last round,
+  fixed in OMH's own words. Commit-pr-authoring says where the reversibility
+  line goes when the PR template has no risk or rollout section: one sentence
+  at the end of its summary section. App-debugging names what the loop-cost
+  filter checks before `competing_hypotheses/v1` exists, and lets
+  `regression_seam: none_correct` name the verifying reproduction loop in
+  place of a regression test. Plan's append-only-file task keeps a generated,
+  drift-gated file's gate out of each slice's done check. Verification-gate
+  says a fix recorded with `regression_seam: none_correct` has no fix test, so
+  the regression-witness rule does not apply. Frontend's support-target
+  paragraph is reflowed to 80 columns, and backend's thin-handler paragraph
+  gets its own heading inside section 7. Two Korean negative controls pin that
+  a dress code or a QR code in the architecture request form never dispatches
+  `tech-debt-audit`; they still name it as a clarify candidate, the accepted
+  cost of the clarify-only cap, as the English cases do.
+
 - **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
   architecture-deepening reading: it looks for shallow modules (an interface
   nearly as large as what it hides), proves each one with the deletion test

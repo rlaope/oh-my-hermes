@@ -13,7 +13,7 @@ The order never changes: an observed reproduction, then competing hypotheses, th
 | Expected | the output that would have been correct, and where that expectation comes from |
 | Symptom match | the observed failure quoted beside the one the user reported; a different failure near the same code is a different bug, and the record stays not_observed for this one |
 | Hit rate | failures over runs, for example `4/20`; one sighting is a report, not a reproduction |
-| Loop cost | wall time per run; what was pinned, which is only what no standing hypothesis implicates; for an intermittent fault, how the rate was raised |
+| Loop cost | wall time per run; what was pinned, which is only what no standing hypothesis implicates (before `competing_hypotheses/v1` exists, the check is the user's report and any hypothesis already written); for an intermittent fault, how the rate was raised |
 | Minimised | what left the reproduction and what stayed, each element that stayed because the symptom (or the rate) went with it |
 | Environment | interpreter, dependency versions, OS, parallelism, and anything the failing run had that the passing run did not |
 | State | observed or not_observed; nothing between |
@@ -30,7 +30,7 @@ If a capture is too redacted to diagnose, record that and ask for a narrower one
 
 Record time per run and what was pinned or raised under Loop cost.
 
-**Then minimise.** An element of the reproduction -- an input, a caller, a config value, a data row, a step -- leaves it only when the loop rerun without it still shows the symptom; otherwise it goes back. For an intermittent fault, "still shows" means the same rate at the same N, never one red run. The Minimised field lists what left and what stayed. What stayed leaves section 2 fewer parts to suspect, and it is what `fix_handoff/v1` turns into the regression test.
+**Then minimise.** An element of the reproduction -- an input, a caller, a config value, a data row, a step -- leaves it only when the loop rerun without it still shows the symptom; otherwise it goes back. For an intermittent fault, "still shows" means the same rate at the same N, never one red run. The Minimised field lists what left and what stayed. What stayed leaves section 2 fewer parts to suspect, and it is what `fix_handoff/v1` turns into the regression test (or, under `regression_seam: none_correct`, the verifying reproduction loop).
 
 ### When no test reaches the fault
 
