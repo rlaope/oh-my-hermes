@@ -20,6 +20,18 @@ All notable changes will be documented here.
   separately. A healthy install shows the same suggestion and the same card
   as before.
 
+- **The OMH recall line stays off Discord and Slack, and recall can be turned
+  off.** `🧠 OMH — recalled N memories` now shows on the CLI, TUI and Desktop
+  only; on a messenger the memory is still used, with no line posted. The new
+  profile setting `recall_line` (`console` by default, `all`, `off`) chooses
+  where it shows, and `recall_mode` (`auto` by default, `on_demand`, `off`)
+  chooses whether memory is recalled every turn, only when the model asks, or
+  not at all. Set them with `omh memory recall-line` and `omh memory
+  recall-mode`; `omh memory status` shows both. A `memory_mode` of `off`, or a
+  disabled `retain_knowledge` family, now actually stops recall: before, the
+  provider and the recall tool kept serving records under it. It also stops
+  the consolidation brief and the save reminder, which asked for saves that
+  `off` refuses.
 - **The OMH TUI's first frame no longer waits on the skill catalog.** When the
   shared gateway names every skill in its first answer, the launch card used to
   import the whole skill catalog to label them before the first frame was

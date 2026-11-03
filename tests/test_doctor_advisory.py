@@ -54,6 +54,7 @@ ADVISORY_CHECK_IDS = {
     "turn_budget_loop_exposure",
     "loop_hard_stop_disabled",
     "mode_setting_unrecognized",
+    "recall_setting_unrecognized",
     "lsp_tools_disabled",
 }
 
@@ -473,6 +474,8 @@ class MembershipGuardrailTests(unittest.TestCase):
                 # The fixture config sets no `dreaming_mode`: unset reads as
                 # the default, which nobody needs telling about.
                 "mode_setting_unrecognized": "ok",
+                # Nor `recall_line` / `recall_mode`: both defaults are in force.
+                "recall_setting_unrecognized": "ok",
                 # The fixture config sets no `lsp_tools`: hidden tools with a
                 # named enable path, which is advice, not failure.
                 "lsp_tools_disabled": "advice",
