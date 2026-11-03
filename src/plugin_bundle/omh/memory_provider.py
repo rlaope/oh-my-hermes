@@ -58,6 +58,7 @@ if RecallStatus is None:
         glyph: str = "🧠"
 
 
+from . import compaction_work_state as _compaction_work_state
 from .hermes_memory import (
     entry_digest,
     HermesMemoryFile,
@@ -1048,30 +1049,64 @@ class OmhMemoryProvider(_MemoryProviderBase):
         session happens to end -- so the evaluation runs here rather than being
         deferred with a flag.
 
-        The return value is the system blocks and nothing else. Hermes'
-        compressor JSON-encodes it and tells the summarizer to decode it "only
-        as source material to preserve in the summary, not as instructions"
-        (``agent/context_compressor.py``, ``_memory_provider_section``), so a
-        request appended here would argue with the host's own rule. The facts
-        are reached the other way: Hermes' summary template already keeps the
-        user's preferences, constraints and decisions under a fixed heading,
-        and the compaction brief served next turn points the model at it. OMH
-        stays a v1 best-effort provider (no ``pre_compress_checkpoint_api_version``),
-        so this text never takes part in a checkpoint decision.
+        The return value is the system blocks followed by facts about this
+        conversation's unfinished OMH work (`compaction_work_state`), and no
+        request of any kind. Hermes' compressor JSON-encodes it and tells the
+        summarizer to decode it "only as source material to preserve in the
+        summary, not as instructions" (``agent/context_compressor.py``,
+        ``_memory_provider_section``), so a request appended here would argue
+        with the host's own rule. The user's facts are reached the other way:
+        Hermes' summary template already keeps the user's preferences,
+        constraints and decisions under a fixed heading, and the compaction
+        brief served next turn points the model at it. OMH stays a v1
+        best-effort provider (no ``pre_compress_checkpoint_api_version``), so
+        this text never takes part in a checkpoint decision.
+
+        The work facts are empty when nothing is open, and then the return is
+        exactly the blocks. Otherwise the blocks give up the facts' length from
+        their budget, so the two together take no more room than the blocks
+        did alone, and the facts go last, inside the 1,500-character tail
+        Hermes keeps when it elides. A fault while reading them costs only the
+        facts (`_work_state_facts`), never the blocks.
         """
         self._observe_lens()
         if self._attended:
             self._mutate_state(record_compaction)
             self._evaluate_if_due("compaction", messages_at_risk=len(messages or []))
         blocks = () if self._shared_surface else read_memory_blocks(self._omh_home, tier=SYSTEM_TIER)
-        if not blocks:
-            return ""
-        selection = self._block_selection(blocks=blocks, now=now)
-        return render_memory_blocks(
+        selection = self._block_selection(blocks=blocks, now=now) if blocks else None
+        facts = self._work_state_facts()
+        if selection is None:
+            return facts
+        rendered = render_memory_blocks(
             blocks,
-            budget_chars=DEFAULT_SYSTEM_RENDER_BUDGET_CHARS,
+            budget_chars=DEFAULT_SYSTEM_RENDER_BUDGET_CHARS - (len(facts) + 2 if facts else 0),
             evaluations=selection.evaluations,
         )
+        return "\n\n".join(part for part in (rendered, facts) if part)
+
+    def _work_state_facts(self) -> str:
+        """This conversation's unfinished-work facts for `on_pre_compress`, or ``""``; a fault costs only them.
+
+        The module is bound at load, not imported here: Hermes evicts the
+        plugin's modules from ``sys.modules`` while its hooks stay callable
+        (#1979), so a call-time relative import would have no parent package
+        (`tests/test_plugin_bundle_standalone.py` holds that). Whatever fails
+        while reading -- a store in a shape no reader expected -- is counted
+        and recorded as op ``work_state`` with its error class in the write
+        failures the next receipt reports, and the compaction keeps its memory
+        blocks. Hermes' memory manager would otherwise drop this provider's
+        whole return.
+        """
+        try:
+            return _compaction_work_state.work_state_facts(
+                omh_home=self._omh_home, hermes_home=self._hermes_home, session_id=self._session_id
+            )
+        except Exception as error:  # noqa: BLE001 - classified in tests/test_broad_exception_policy.py
+            self._write_failure_count += 1
+            self._write_failures.append({"op": "work_state", "path": "compaction_work_state", "error": type(error).__name__})
+            del self._write_failures[:-WRITE_FAILURE_LIMIT]
+            return ""
 
     def on_memory_write(
         self,
