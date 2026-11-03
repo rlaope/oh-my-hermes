@@ -106,6 +106,20 @@ def _write_hermes_memory(hermes_home: Path, *entries: str) -> Path:
     return path
 
 
+
+def seed_unconsolidated_turns(root: Path, turns: int) -> None:
+    """Put ``turns`` unconsolidated turns on disk for this fixture's profile.
+
+    A session-ending brief needs the turn interval's worth of turns, and the
+    interval itself would already have raised and reset at the fifth live turn,
+    so a test for the session-ending moment states the counter directly.
+    """
+    state = empty_dreaming_state()
+    for _ in range(turns):
+        state = record_turn(state)
+    write_dreaming_state(root / ".omh", root / ".hermes", state)
+
+
 class BlockStoreTests(unittest.TestCase):
     def test_a_block_round_trips_through_disk(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -319,9 +333,24 @@ class StandingConditionSuppressionTests(unittest.TestCase):
         state = clear_after_consolidation(
             empty_dreaming_state(), at="t", reasons=["session_ending_with_unconsolidated_turns:3"]
         )
-        state = record_turn(record_turn(record_turn(state)))
+        for _ in range(DEFAULT_TURN_INTERVAL):
+            state = record_turn(state)
         reasons = consolidation_reasons(state, session_ending=True)
-        self.assertIn("session_ending_with_unconsolidated_turns:3", reasons)
+        self.assertIn(f"session_ending_with_unconsolidated_turns:{DEFAULT_TURN_INTERVAL}", reasons)
+        # At the interval the moment is named once, not twice.
+        self.assertFalse(any(r.startswith("turn_interval_reached") for r in reasons))
+
+    def test_a_session_ending_below_the_interval_raises_nothing(self) -> None:
+        state = empty_dreaming_state()
+        for _ in range(DEFAULT_TURN_INTERVAL - 1):
+            state = record_turn(state)
+        self.assertEqual(consolidation_reasons(state, session_ending=True), [])
+        # Other reasons keep their own thresholds: a short session on a full file still raises.
+        self.assertEqual(
+            consolidation_reasons(state, session_ending=True, headroom_chars=10),
+            ["headroom_below_floor:10<=300"],
+        )
+        self.assertEqual(consolidation_reasons(state, session_ending=True, duplicate_count=2), ["duplicate_records:2"])
 
     def test_the_provider_stops_rewriting_the_same_brief(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -699,26 +728,36 @@ class LossPreventionTests(unittest.TestCase):
             # Raised before the messages go, read after: it names what is left.
             self.assertIn("replaced earlier turns of this conversation with a summary", briefs[0]["requested_of_executor"][0])
 
-    def test_shutdown_consolidates_even_below_the_interval(self) -> None:
-        # Three turns and a closed lid would otherwise leave nothing behind: the
-        # interval assumes a later turn, and a closing session has none.
+    def test_shutdown_consolidates_a_session_with_the_intervals_worth_of_turns(self) -> None:
+        # A closed lid with the interval's worth of unconsolidated turns would
+        # otherwise leave nothing behind (the counter is seeded because the
+        # live interval would already have fired and reset it).
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             provider = self._provider(root)
-            for turn in range(1, 4):
-                provider.on_turn_start(turn, "hi")
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
             provider.shutdown()
 
             briefs = self._briefs(root)
             self.assertEqual(len(briefs), 1)
             self.assertEqual(briefs[0]["trigger"], "shutdown")
-            self.assertIn("session_ending_with_unconsolidated_turns:3", briefs[0]["reasons"])
+            self.assertIn(f"session_ending_with_unconsolidated_turns:{DEFAULT_TURN_INTERVAL}", briefs[0]["reasons"])
 
-    def test_session_end_consolidates_even_below_the_interval(self) -> None:
+    def test_a_short_session_raises_no_brief_at_shutdown_or_session_end(self) -> None:
+        for hook in ("shutdown", "on_session_end"):
+            with self.subTest(hook=hook), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                provider = self._provider(root)
+                for turn in range(1, DEFAULT_TURN_INTERVAL):
+                    provider.on_turn_start(turn, "hi")
+                getattr(provider, hook)(*([[]] if hook == "on_session_end" else []))
+                self.assertEqual(self._briefs(root), [])
+
+    def test_session_end_consolidates_a_session_with_the_intervals_worth_of_turns(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             provider = self._provider(root)
-            provider.on_turn_start(1, "hi")
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
             provider.on_session_end([])
             self.assertEqual(self._briefs(root)[0]["trigger"], "session_end")
 
@@ -728,9 +767,10 @@ class LossPreventionTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             died = self._provider(root, "dead-session")
-            for turn in range(1, 4):
+            for turn in range(1, DEFAULT_TURN_INTERVAL):
                 died.on_turn_start(turn, "hi")
             self.assertEqual(self._briefs(root), [])
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
             del died
 
             self._provider(root, "next-session")
@@ -738,6 +778,18 @@ class LossPreventionTests(unittest.TestCase):
             self.assertEqual(len(briefs), 1)
             self.assertEqual(briefs[0]["trigger"], "session_start_recovery")
             self.assertIn("closed laptop", briefs[0]["requested_of_executor"][0])
+
+    def test_a_short_dead_session_is_not_recovered(self) -> None:
+        # 153 of the 159 briefs one console raised were recoveries of sessions
+        # this short; each asked the model to capture and grew the store.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            died = self._provider(root, "dead-session")
+            for turn in range(1, DEFAULT_TURN_INTERVAL):
+                died.on_turn_start(turn, "hi")
+            del died
+            self._provider(root, "next-session")
+            self.assertEqual(self._briefs(root), [])
 
     def test_a_clean_start_recovers_nothing_and_says_nothing(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -754,6 +806,7 @@ class LossPreventionTests(unittest.TestCase):
             provider.on_turn_start(1, "hi")
             provider.on_pre_compress([{"role": "user"}])
             provider.on_turn_start(2, "hi")
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
             provider.shutdown()
 
             triggers = [brief["trigger"] for brief in self._briefs(root)]
@@ -858,6 +911,7 @@ class CompactionCaptureTests(unittest.TestCase):
             root = Path(tmp)
             provider = self._provider(root)
             provider.on_turn_start(1, "hi")
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
             provider.shutdown()
             requested = self._latest(root)["requested_of_executor"]
             self.assertEqual(self._latest(root)["trigger"], "shutdown")
@@ -1982,10 +2036,11 @@ class ConsolidationResetsTheClockTests(unittest.TestCase):
             provider.initialize("s", platform="cli", hermes_home=str(root / ".hermes"), agent_context="primary")
             provider.on_turn_start(1, "hi")
             provider.on_memory_write("add", "memory", "a new fact")
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
             provider.on_session_end([])
             brief = read_latest_consolidation(root / ".omh", root / ".hermes")
             self.assertTrue(brief["due"])
-            self.assertIn("session_ending_with_unconsolidated_turns:1", brief["reasons"])
+            self.assertIn(f"session_ending_with_unconsolidated_turns:{DEFAULT_TURN_INTERVAL}", brief["reasons"])
 
     def test_turns_after_the_consolidation_count_from_zero(self) -> None:
         # The interval restarts at the consolidation, not at the last brief.
@@ -2899,7 +2954,8 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
             _write_hermes_memory(root / ".hermes", "one fact")
             provider = self._provider(root)
             provider.on_turn_start(1, "hi")
-            provider.on_session_end()  # a single unconsolidated turn is enough at a session end
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
+            provider.on_session_end()
             self.assertTrue(consolidation_path(root / ".omh", root / ".hermes").exists())
             provider.queue_prefetch("")
             pack = provider.prefetch("next turn")
@@ -2916,8 +2972,42 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
             write_memory_block(root / ".omh", approve_memory_block(build_memory_block("facts", "OMH wraps Hermes.")))
             provider.queue_prefetch("")
             pack = provider.prefetch("next turn")
-            self.assertIn("<memory_consolidation", pack)
+            # The same brief is not served a second time in this session.
+            self.assertNotIn("<memory_consolidation", pack)
             self.assertEqual(provider.recall_status(), RecallStatus(provider_label="OMH", count=1))
+
+    def test_a_brief_is_served_once_per_session_and_a_new_one_is_served_again(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_hermes_memory(root / ".hermes", "one fact")
+            provider = self._provider(root)
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
+            provider.on_session_end()
+            served = []
+            for turn in range(2, 5):
+                provider.on_turn_start(turn, "hello")
+                served.append("<memory_consolidation" in provider.prefetch("hello"))
+                provider.queue_prefetch("")
+            self.assertEqual(served, [True, False, False])
+            # A new brief (a different raised_at) is a new request and is served.
+            brief_path = consolidation_path(root / ".omh", root / ".hermes")
+            raised = json.loads(brief_path.read_text(encoding="utf-8"))
+            raised["raised_at"] = "2099-01-01T00:00:00Z"
+            brief_path.write_text(json.dumps(raised), encoding="utf-8")
+            provider.on_turn_start(5, "hello")
+            self.assertIn('raised_at="2099-01-01T00:00:00Z"', provider.prefetch("hello"))
+
+    def test_a_brief_that_was_not_served_is_not_marked_served(self) -> None:
+        # A render nobody served (a queued re-render) must not spend the brief.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_hermes_memory(root / ".hermes", "one fact")
+            provider = self._provider(root)
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
+            provider.on_session_end()
+            provider.queue_prefetch("")
+            provider.queue_prefetch("")
+            self.assertIn("<memory_consolidation", provider.prefetch("x"))
 
     def test_the_brief_leaves_the_pack_once_consolidation_is_observed(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -2925,6 +3015,7 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
             _write_hermes_memory(root / ".hermes", "one fact")
             provider = self._provider(root)
             provider.on_turn_start(1, "hi")
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
             provider.on_session_end()
             provider.queue_prefetch("")
             self.assertIn("<memory_consolidation", provider.prefetch("x"))
@@ -2939,6 +3030,7 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
             heard: list[str] = []
             provider = self._provider(root, status_callback=heard.append)
             provider.on_turn_start(1, "hi")
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
             provider.on_session_end()
             self.assertEqual(len(heard), 1)
             self.assertTrue(heard[0].startswith("💤 OMH — memory consolidation due (session_end: "), heard[0])
@@ -2954,6 +3046,7 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
             _write_hermes_memory(root / ".hermes", "one fact")
             quiet = self._provider(root)
             quiet.on_turn_start(1, "hi")
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
             quiet.on_session_end()  # no callback: nothing raised
 
             def broken(_line: str) -> None:
@@ -2961,6 +3054,7 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
 
             provider = self._provider(root, status_callback=broken)
             provider.on_turn_start(1, "hi")
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
             provider.on_session_end()  # a failing host channel never fails the hook
             self.assertTrue(consolidation_path(root / ".omh", root / ".hermes").exists())
 

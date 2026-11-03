@@ -2155,6 +2155,13 @@ Only an attended operator console evaluates at these points
 ([Surface classes](#surface-classes)); a shared surface, a background run and a
 Kanban worker raise no brief and move no counter.
 
+The session-ending points (`session_end`, `shutdown`, `session_start_recovery`)
+share the turn interval's threshold: a session with fewer than five
+unconsolidated turns raises no brief (it once raised one at a single turn, which
+put a capture request on nearly every console turn). A brief is also served at
+most once per session: Hermes replays provider context for the rest of the
+session, so the same brief (`raised_at`) is not rendered again on later turns.
+
 ### Per-profile dreaming state and the mode setting
 
 The counters and the brief belong to one Hermes profile, not to the OMH home.
@@ -2310,7 +2317,7 @@ this on the CLI surface), the provider also prints one line when a brief
 fires and one when it is honoured:
 
 ```text
-💤 OMH — memory consolidation due (session_end: session_ending_with_unconsolidated_turns:1)
+💤 OMH — memory consolidation due (session_end: session_ending_with_unconsolidated_turns:5)
 🧹 OMH — memory consolidated (replace on memory)
 ```
 

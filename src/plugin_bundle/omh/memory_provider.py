@@ -222,10 +222,11 @@ SYSTEM_BLOCKS_PACK_FLOOR_CHARS = 3_000
 KANBAN_WORKER_ENV_TASK = "HERMES_KANBAN_TASK"
 KANBAN_WORKER_ENV_SOURCE = ("HERMES_SESSION_SOURCE", "kanban")
 
-# Moments after which this session gets no further turn. The turn interval
-# assumes a later turn will come; at these it will not, so a single
-# unconsolidated turn is enough. `session_start_recovery` belongs here because
-# it is settling the account of a session that already ended without one.
+# Moments after which this session gets no further turn. They name the reason
+# for the moment (`session_ending_with_unconsolidated_turns`) but share the turn
+# interval's threshold: a session shorter than it leaves nothing worth a brief.
+# `session_start_recovery` belongs here because it is settling the account of a
+# session that already ended without one.
 _SESSION_ENDING_TRIGGERS = frozenset({"session_end", "shutdown", "session_start_recovery"})
 
 
@@ -330,6 +331,13 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # turn is one serve. `served.json` is never a ranking input.
         self._prepared_record_ids: tuple[str, ...] = ()
         self._served_recorded = False
+        # The consolidation brief is served once per session: Hermes replays
+        # provider context for the rest of the session, so the same brief
+        # (`raised_at`) rode every later turn as well. `_prepared_brief_at` is
+        # the brief the current render carries; `prefetch` moves it to
+        # `_served_brief_at`, which the next render skips.
+        self._prepared_brief_at = ""
+        self._served_brief_at = ""
         # The "since your last session" digest (`memory_session_digest`): its
         # window is fixed at a session start, every render carries it until a
         # prefetch serves one, then never again in that session.
@@ -398,6 +406,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_receipt, self._served_receipt = None, None
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._prepared_brief_at, self._served_brief_at = "", ""
         self._session_id = str(session_id or "")
         # Hermes passes `platform` (`cli`, `tui`, `desktop`, a gateway name,
         # `cron`, `subagent`) and `agent_context` (`agent/agent_init.py`,
@@ -574,6 +583,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
             if self._prepared_record_ids and not self._served_recorded:
                 self._served_recorded = True
                 self._record_served(self._prepared_record_ids)
+            if self._prepared_brief_at:
+                self._served_brief_at = self._prepared_brief_at
             return self._pack
 
     def _record_served(self, record_ids: tuple[str, ...]) -> None:
@@ -896,6 +907,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_receipt, self._served_receipt = None, None
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._prepared_brief_at, self._served_brief_at = "", ""
         self._digest_window, self._digest_pending, self._pack_digest_evaluated, self._pack_digest = None, False, False, ""
         self._principal_context = None
         self._profile_ref = ""
@@ -938,6 +950,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
             self._prepared_receipt = None
             self._prepared_reminder, self._reminder_recorded = None, False
             self._prepared_record_ids, self._served_recorded = (), False
+            self._prepared_brief_at = ""
             self._pack_digest_evaluated, self._pack_digest = False, ""
             self._query_sanitized = sanitize_memory_query(str(message or ""))
             self._query = self._query_sanitized.clean
@@ -1172,6 +1185,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_reminder = None
         self._reminder_recorded = False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._prepared_brief_at = ""
         reminder = (
             select_open_reminder(
                 snapshot.records,
@@ -1191,6 +1205,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
             if self._attended
             else None
         )
+        if brief is not None and brief.get("raised_at") == self._served_brief_at:
+            brief = None
         # A status, not a memory either: counts only, and never the recall count.
         # Withheld for a turn that is not the owner's DM: it stays pending,
         # never spent where it cannot be shown.
@@ -1209,6 +1225,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._pack_count = fitted.block_count + len(prepared.section.rendered)
         self._pack_has_memory = bool(fitted.system or fitted.index or fitted.records)
         self._prepared_reminder = reminder if fitted.reminder else None
+        self._prepared_brief_at = str(brief.get("raised_at", "") or "") if brief is not None and fitted.brief else ""
         self._prepared_receipt = build_prefetch_receipt(
             prepared,
             session_id=self._session_id,
