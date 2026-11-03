@@ -320,7 +320,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # omh/code-skills-round-followups: plan's append-only-file line and
         # verification-gate's none_correct clause move those two bodies only;
         # main's pin before it was fac0aeb1db64b01df8b9c2ed35c1e15c97d0ef4bcff316586c1f8d1b04e88048.
-        self.assertEqual(_digest(legacy_hashes), '88077868a27032057348998ad1bd84d68b542c301010b45b6d2ac8fd3088c975')
+        # Its review round rewords verification-gate's none_correct clause
+        # (reason recorded, intermittent rate kept); the pin before it was
+        # 88077868a27032057348998ad1bd84d68b542c301010b45b6d2ac8fd3088c975.
+        self.assertEqual(_digest(legacy_hashes), '098cb4a9b1ccc5e7640128451f7609dae34cf48f6e050172566dc2ae5cb11f7d')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

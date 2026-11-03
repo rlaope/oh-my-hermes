@@ -2780,11 +2780,6 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     # repo", "shallow modules in this codebase"); each of their words alone
     # stays with the lane it had on main. System design, the CTO roadmap
     # trade-off, water, and an architecture firm never name the debt ledger.
-    # The English cases below that quote these phrases verbatim do not carry
-    # a forbidden_candidate: naming tech-debt-audit as the clarify candidate
-    # there is an accepted cost of the clarify-only cap, which never
-    # dispatches. Each pins that nothing dispatches, and none should gain a
-    # forbidden_candidate.
     RoutingPrecisionCase(
         "shallow-water-not-tech-debt-audit",
         "Shallow water is not a shallow module",
@@ -2891,7 +2886,10 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     ),
     # Each shipped phrase quoted inside someone else's request (a job ad, a
     # translation, a README line, a bank repo, a contract) may name the audit
-    # in the question but never dispatches it.
+    # in the question but never dispatches it. Naming tech-debt-audit as the
+    # clarify candidate here is an accepted cost of the clarify-only cap, which
+    # never dispatches, so none of these cases carries a forbidden_candidate
+    # and none should gain one.
     RoutingPrecisionCase(
         "job-ad-quoting-codebase-architecture-does-not-dispatch",
         "A job ad quoting the phrase is writing, not an audit",

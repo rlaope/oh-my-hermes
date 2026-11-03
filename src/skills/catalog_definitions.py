@@ -211,8 +211,9 @@ REGRESSION_WITNESS_RULE = (
     "after. When the test calls a seam the fix added, force the red by reverting only the behavioural lines, keep the "
     "seam, and show that diff. When the fix changes only test code, the witness is the old test's measured failure "
     "rate on the pre-fix tree beside the new test's 0/N at the same N. A fix test only ever observed green is HOLD "
-    "with `regression_witness_missing`. A fix recorded with `regression_seam: none_correct` has no fix test: its "
-    "evidence is the reproduction loop observed red before and green after, and this witness rule does not apply."
+    "with `regression_witness_missing`. A fix recorded with `regression_seam: none_correct` and its reason has no fix "
+    "test; its evidence is the reproduction loop observed red before and green after (for an intermittent fault, its "
+    "rate over N runs before beside 0/N after), and the test witness rule does not apply."
 )
 
 # Hermes' bundled `grounded-citations` skill (`scripts/sources.py`), as

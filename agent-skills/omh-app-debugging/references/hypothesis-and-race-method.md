@@ -13,7 +13,7 @@ The order never changes: an observed reproduction, then competing hypotheses, th
 | Expected | the output that would have been correct, and where that expectation comes from |
 | Symptom match | the observed failure quoted beside the one the user reported; a different failure near the same code is a different bug, and the record stays not_observed for this one |
 | Hit rate | failures over runs, for example `4/20`; one sighting is a report, not a reproduction |
-| Loop cost | wall time per run; what was pinned, which is only what no standing hypothesis implicates (before `competing_hypotheses/v1` exists, the check is the user's report and any hypothesis already written); for an intermittent fault, how the rate was raised |
+| Loop cost | wall time per run; what was pinned, which is only what neither the user's report nor a hypothesis already written implicates (before `competing_hypotheses/v1` exists); for an intermittent fault, how the rate was raised |
 | Minimised | what left the reproduction and what stayed, each element that stayed because the symptom (or the rate) went with it |
 | Environment | interpreter, dependency versions, OS, parallelism, and anything the failing run had that the passing run did not |
 | State | observed or not_observed; nothing between |
