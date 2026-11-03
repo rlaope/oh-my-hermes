@@ -2099,7 +2099,9 @@ receipt is the file it names) or ask the model to recall.
 
 Tool recall reads `recall_mode` from the same profile `config.yaml` the
 provider reads: the profile home Hermes initialized the provider with, which
-it publishes in the session lens, not the tool process's `HERMES_HOME`.
+it publishes in the session lens, not the tool process's `HERMES_HOME`. The
+capture hint's "recalls", the `origin` handles a recall returns and `demote`
+read that same profile, so one call never mixes two profiles.
 
 `recall_mode` is about recall only. The consolidation brief keeps its own
 `dreaming_mode`, and the "since your last session" digest is a count, not

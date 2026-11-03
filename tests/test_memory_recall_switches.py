@@ -34,7 +34,7 @@ from omh.plugin_bundle.omh.memory_recall_settings import (  # noqa: E402
     read_recall_line_setting,
     read_recall_mode_setting,
 )
-from omh.plugin_bundle.omh.memory_session_lens import session_lens_path  # noqa: E402
+from omh.plugin_bundle.omh.memory_session_lens import lens_profile_home, session_lens_path  # noqa: E402
 from omh.plugin_bundle.omh.tools.memory_tool import omh_remember_handler  # noqa: E402
 from test_memory_messenger import DISCORD_OWNER, SLACK_DM, SLACK_OWNER, TELEGRAM_OWNER, _Messenger  # noqa: E402
 from test_memory_prefetch_canonical import rendered_ids  # noqa: E402
@@ -239,6 +239,13 @@ class ToolRecallProfileHomeTests(_Switches):
                     self.assertEqual(recalled["status"], "found", recalled)
                     self.assertEqual([row["record_id"] for row in recalled["records"]], [records["tui"]])
 
+    def test_a_profile_home_that_is_not_an_absolute_path_is_not_read(self) -> None:
+        self.assertEqual(lens_profile_home({"profile_home": str(self.hermes)}), self.hermes)
+        for written in ("relative/hermes-home", "", None, 7, f"{self.hermes}\x00x"):
+            with self.subTest(profile_home=written):
+                self.assertIsNone(lens_profile_home({"profile_home": written}))
+        self.assertIsNone(lens_profile_home({}))
+
     def test_a_lens_that_names_no_profile_home_keeps_the_process_home(self) -> None:
         self.seed()
         self.on("tui", "tui-old-lens")
@@ -269,16 +276,28 @@ class CaptureHintRecallSettingTests(_Switches):
         self.assertIn(f"{result['record_id']} recalls, {held} recalls.", result["next_action"])
 
     def test_with_per_turn_recall_off_nothing_is_said_to_recall(self) -> None:
-        for mode in ("on_demand", "off"):
-            with self.subTest(recall_mode=mode):
+        # The last case puts the process's Hermes home on a profile at `auto`
+        # while the provider's profile says `on_demand`: the hint must read
+        # the provider's, as tool recall does (`ToolRecallProfileHomeTests`).
+        launch = self.hermes.parent / "launch-home"
+        launch.mkdir()
+        (launch / "config.yaml").write_text(
+            "plugins:\n  entries:\n    omh:\n      settings:\n        recall_mode: auto\n", encoding="utf-8", newline="\n"
+        )
+        for mode, process_home in (("on_demand", self.hermes), ("off", self.hermes), ("on_demand", launch)):
+            with self.subTest(recall_mode=mode, process_home=process_home.name):
                 self.settings(recall_mode=mode)
-                held, result = self.hinted(f"tui-hint-{mode}")
-                self.assertEqual(result["recalls_now"], [])
-                self.assertIn("per-turn recall is off for this profile, so neither recalls.", result["next_action"])
-                self.assertNotIn(f"{held} recalls", result["next_action"])
-                self.assertIn(f"record_id='{held}'", result["next_action"], "the correct instruction is unchanged")
-                (self.home / "memory" / "records" / f"{held}.json").unlink()
-                (self.home / "memory" / "records" / f"{result['record_id']}.json").unlink()
+                try:
+                    with patch.dict(os.environ, {"HERMES_HOME": str(process_home)}):
+                        held, result = self.hinted(f"tui-hint-{mode}-{process_home.name}")
+                    self.assertEqual(result["recalls_now"], [])
+                    self.assertIn("per-turn recall is off for this profile, so neither recalls.", result["next_action"])
+                    self.assertNotIn(f"{held} recalls", result["next_action"])
+                    self.assertIn(f"record_id='{held}'", result["next_action"], "the correct instruction is unchanged")
+                finally:
+                    # Each case starts from an empty store, so one failure cannot hint at the next case's records.
+                    for path in (self.home / "memory" / "records").glob("*.json"):
+                        path.unlink()
 
     def test_correcting_to_the_held_record_still_works_under_on_demand(self) -> None:
         # The hint's wording follows the setting; whether the held record can

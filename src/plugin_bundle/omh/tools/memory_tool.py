@@ -123,7 +123,7 @@ from ..memory_session_lens import (
     surface_flags,
 )
 from ..memory_recall_selector import resolve_scope_allowlist
-from ..memory_recall_settings import configured_recall_mode
+from ..memory_recall_settings import configured_recall_mode, per_turn_recall_enabled
 from ..memory_recall_support import (
     PROJECT_MEMORY_RECORD_SCHEMA_VERSION,
     _REVIEW_DEFAULT_DAYS,
@@ -680,8 +680,7 @@ def _per_turn_recall(lens: "_SessionLens") -> bool:
     `memory_mode` off or a disabled retain_knowledge family (the policy), or a
     `recall_mode` other than `auto` in the provider's profile, serves none.
     """
-    policy = read_project_memory_policy(lens.lens_home)
-    return bool(policy.get("recall_enabled", True)) and configured_recall_mode(lens.settings_home()) == "auto"
+    return per_turn_recall_enabled(read_project_memory_policy(lens.lens_home), lens.settings_home())
 
 
 def _recall_clause(record_id: str, recallable: set[str] | None) -> str:
@@ -845,7 +844,7 @@ def _demote(args: dict, kwargs: dict) -> dict[str, object]:
             )
         if refusal:
             return _demote_result("refused", reason=refusal[0], next_action="Keep the Hermes entry; nothing was moved. " + refusal[1])
-        return _demote_entry(wanted, lens.lens_home, Path(_home("HERMES_HOME", "~/.hermes")))
+        return _demote_entry(wanted, lens.lens_home, lens.settings_home())
     except Exception as exc:
         # In-process inside Hermes' tool dispatch: a fault is an error result,
         # never `demoted`, so the model is never told to remove the original.
@@ -1078,12 +1077,15 @@ class _SessionLens:
     required_scope_kinds: tuple[str, ...]
     # A group conversation's own scope (`memory_session_lens.lens_channel_scope`).
     channel_scope: dict[str, str] | None = None
-    # The Hermes profile home the provider reads `recall_mode` from
+    # The Hermes profile home the provider was initialized with
     # (`memory_session_lens.lens_profile_home`); None when the lens names none.
     profile_home: Path | None = None
 
     def settings_home(self) -> Path:
-        """Where this session's recall settings live: the provider's profile home, else this process's Hermes home."""
+        """This session's Hermes profile: the provider's profile home, else this process's Hermes home.
+
+        Recall settings, recall origins and demote all read it, so one call reads one profile.
+        """
         return self.profile_home if self.profile_home is not None else Path(_home("HERMES_HOME", "~/.hermes"))
 
 
@@ -1341,7 +1343,7 @@ def _attach_origins(rows: list[dict[str, object]], records: tuple[dict, ...], le
         if not session_id:
             continue
         if hermes_home is None:
-            hermes_home = Path(_home("HERMES_HOME", "~/.hermes"))
+            hermes_home = lens.settings_home()
         captured_at = str(record.get("created_at", "") or record.get("approved_at", "") or "")
         origin = resolve_origin(hermes_home, session_id, captured_at)
         if origin is not None:
