@@ -146,8 +146,10 @@ from .memory_session_lens import (
     tighter_surface_class,
     withdraw_session_lens,
 )
+from . import live_session
 from .memory_records import (
     PREFETCH_EXECUTOR_TARGET,
+    origin_record_ids,
     prefetch_required_scope_kinds,
     prefetch_scope_allowlist,
     prepare_prefetch_records,
@@ -223,11 +225,17 @@ SYSTEM_BLOCKS_PACK_FLOOR_CHARS = 3_000
 KANBAN_WORKER_ENV_TASK = "HERMES_KANBAN_TASK"
 KANBAN_WORKER_ENV_SOURCE = ("HERMES_SESSION_SOURCE", "kanban")
 
-# Moments after which this session gets no further turn. The turn interval
-# assumes a later turn will come; at these it will not, so a single
-# unconsolidated turn is enough. `session_start_recovery` belongs here because
-# it is settling the account of a session that already ended without one.
+# Moments after which this session gets no further turn. They name the reason
+# for the moment (`session_ending_with_unconsolidated_turns`) but share the turn
+# interval's threshold: a session shorter than it leaves nothing worth a brief.
+# `session_start_recovery` belongs here because it is settling the account of a
+# session that already ended without one.
 _SESSION_ENDING_TRIGGERS = frozenset({"session_end", "shutdown", "session_start_recovery"})
+
+
+def _brief_key(brief: dict[str, Any]) -> str:
+    """What identifies one brief: `raised_at` has second precision, so the trigger rides with it."""
+    return f"{brief.get('raised_at', '')}|{brief.get('trigger', '')}"
 
 
 class OmhMemoryProvider(_MemoryProviderBase):
@@ -331,6 +339,13 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # turn is one serve. `served.json` is never a ranking input.
         self._prepared_record_ids: tuple[str, ...] = ()
         self._served_recorded = False
+        # The consolidation brief is served once per session: Hermes replays
+        # provider context for the rest of the session, so the same brief
+        # (`raised_at`) rode every later turn as well. `_prepared_brief_at` is
+        # the brief the current render carries; `prefetch` moves it to
+        # `_served_brief_at`, which the next render skips.
+        self._prepared_brief_at = ""
+        self._served_brief_at = ""
         # The "since your last session" digest (`memory_session_digest`): its
         # window is fixed at a session start, every render carries it until a
         # prefetch serves one, then never again in that session.
@@ -399,6 +414,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_receipt, self._served_receipt = None, None
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._prepared_brief_at, self._served_brief_at = "", ""
         self._session_id = str(session_id or "")
         # Hermes passes `platform` (`cli`, `tui`, `desktop`, a gateway name,
         # `cron`, `subagent`) and `agent_context` (`agent/agent_init.py`,
@@ -575,6 +591,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
             if self._prepared_record_ids and not self._served_recorded:
                 self._served_recorded = True
                 self._record_served(self._prepared_record_ids)
+            if self._prepared_brief_at:
+                self._served_brief_at = self._prepared_brief_at
             return self._pack
 
     def _record_served(self, record_ids: tuple[str, ...]) -> None:
@@ -897,6 +915,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_receipt, self._served_receipt = None, None
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._prepared_brief_at, self._served_brief_at = "", ""
         self._digest_window, self._digest_pending, self._pack_digest_evaluated, self._pack_digest = None, False, False, ""
         self._principal_context = None
         self._profile_ref = ""
@@ -939,6 +958,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
             self._prepared_receipt = None
             self._prepared_reminder, self._reminder_recorded = None, False
             self._prepared_record_ids, self._served_recorded = (), False
+            self._prepared_brief_at = ""
             self._pack_digest_evaluated, self._pack_digest = False, ""
             self._query_sanitized = sanitize_memory_query(str(message or ""))
             self._query = self._query_sanitized.clean
@@ -989,6 +1009,10 @@ class OmhMemoryProvider(_MemoryProviderBase):
                 # `on_session_end`, so the old conversation's writes stay out.
                 self._start_session_digest(initializing=False)
                 self._record_session_close()
+                # A new conversation is owed a still-due brief. Not in
+                # `_rebind_session`: a turn-lease reload rebinds with
+                # reset=True for the same conversation.
+                self._prepared_brief_at, self._served_brief_at = "", ""
 
     def _rebind_session(self, new_id: str, *, reset: bool) -> None:
         """Withdraw the old lens and publish one under ``new_id``; carry its lists unless ``reset``."""
@@ -1196,6 +1220,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
             principal_context=self._principal_context,
             shared_surface=self._shared_surface,
             required_scope_kinds=prefetch_required_scope_kinds(self._project_resolution.identity),
+            index_fallback=True,
+            full_text_ids=origin_record_ids(snapshot.records, self._conversation_session_ids()),
         )
         # The reminder asks about the oldest open record whose review deadline
         # passed and whose last ask is older than `open_ask_days`, one line per
@@ -1207,6 +1233,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_reminder = None
         self._reminder_recorded = False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._prepared_brief_at = ""
         reminder = (
             select_open_reminder(
                 snapshot.records,
@@ -1226,6 +1253,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
             if self._attended
             else None
         )
+        if brief is not None and _brief_key(brief) == self._served_brief_at:
+            brief = None
         # A status, not a memory either: counts only, and never the recall count.
         # Withheld for a turn that is not the owner's DM: it stays pending,
         # never spent where it cannot be shown.
@@ -1244,6 +1273,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._pack_count = fitted.block_count + len(prepared.section.rendered)
         self._pack_has_memory = bool(fitted.system or fitted.index or fitted.records)
         self._prepared_reminder = reminder if fitted.reminder else None
+        self._prepared_brief_at = _brief_key(brief) if brief is not None and fitted.brief else ""
         self._prepared_receipt = build_prefetch_receipt(
             prepared,
             session_id=self._session_id,
@@ -1266,6 +1296,19 @@ class OmhMemoryProvider(_MemoryProviderBase):
             fitted.digest,
         )
         return pack
+
+    def _conversation_session_ids(self) -> set[str]:
+        """Verified compaction segments only; a lineage fault keeps just this session."""
+        session_ids = {self._session_id}
+        if self._hermes_home is not None:
+            try:
+                session_ids.update(live_session.compaction_ancestors(str(self._hermes_home), self._session_id)["ancestors"])
+            except Exception as error:  # noqa: BLE001 - classified in tests/test_broad_exception_policy.py
+                self._write_failure_count += 1
+                self._write_failures.append({"op": "compaction_ancestors", "path": "session_lineage", "error": type(error).__name__})
+                del self._write_failures[:-WRITE_FAILURE_LIMIT]
+                return {self._session_id}
+        return session_ids
 
     def _start_session_digest(self, *, initializing: bool) -> None:
         """Fix this session's digest window, before it serves or writes anything.

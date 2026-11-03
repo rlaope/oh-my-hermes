@@ -48,6 +48,22 @@ class HermesHookOrderTests(unittest.TestCase):
             self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
             self.assertIsNotNone(live.latest_prefetch_receipt(), "a served pack leaves its receipt")
 
+    def test_an_unmatched_first_turn_indexes_old_memory_but_shows_this_conversation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".hermes").mkdir()
+            old = approve(root, "Release approvals need a checklist")
+            current = approve(root, "This conversation chose a short answer", source_ref="hermes-session:session-a")
+            live = provider(root)
+            pack = hermes_turn(live, 1, "Astronomy telescope")
+            self.assertIn("<record_index", pack)
+            self.assertNotIn(old["summary"], pack)
+            self.assertEqual(rendered_ids(pack), [current["record_id"]])
+            self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
+            receipt = live.latest_prefetch_receipt()
+            self.assertEqual(receipt["rendering"]["indexed_records"], [old["record_id"]])
+            self.assertEqual(receipt["selection"]["query_fallback"]["readmitted_count"], 2)
+
     def test_every_later_turn_serves_too_after_the_host_queues_the_finished_turn(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -82,8 +98,8 @@ class HermesHookOrderTests(unittest.TestCase):
             memories.mkdir(parents=True)
             (memories / "MEMORY.md").write_text("- one fact\n", encoding="utf-8")
             live = provider(root)
-            hermes_turn(live, 1, "hi")
-            live.on_session_end()  # one unconsolidated turn is enough at a session end
+            for turn in range(1, 6):  # the fifth turn reaches the interval
+                hermes_turn(live, turn, "hi")
             self.assertTrue(consolidation_path(root / ".omh", root / ".hermes").exists())
             # The next session's first turn, in Hermes order.
             resumed = provider(root)

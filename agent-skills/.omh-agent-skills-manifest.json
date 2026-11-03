@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "c408094695b3e0e34fd348e36249ee4ba571cd5e6121f37548709e79a2b00a50",
+  "catalog_revision": "70c9834af50e0b00cb63897e1cc2419e1ebe4c4f2da2acbf420407d5179a023d",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -319,7 +319,7 @@
     "ulw-context/references/project-terms.md": "0b6baee554fc8fa813d9b4b86aab55a9858441d2c3b2d90ef0d037a8f12afd45",
     "ulw-interview/SKILL.md": "4ca5fcbe496f4ac2350ba0b68a20f0a0d04abf508725d235bb224cb24230f22c",
     "ulw-interview/references/ambiguity-taxonomy.md": "af4b13bcfe583b138e9b1de47a851e40e227ce30b0404fcb10bfa16abe297d3a",
-    "ulw-loop/SKILL.md": "04c5021c9d6fe5e3f4a2ef5cf22b880438b4c919a5cf7ddebcaa31fac036bffd",
+    "ulw-loop/SKILL.md": "3859309f3f3e6a1ffee67c75dbc2bdbf457ce7436f7fe5691e3fb006706a70d9",
     "ulw-loop/references/goal-constraint-discipline.md": "e9755a82604a6b9d363716b6bf33bc980406ea40bce813d763eda9703e1a093f",
     "ulw-loop/references/loop-design-review.md": "c56c960fae8793b2f7932703a824a1baeef9e8cdfaa4cea679da1e4b4735ed9c",
     "ulw-loop/references/measured-loop-discipline.md": "857c7918fd278e8fca1d420c57e9ab4b6e337e44f039dcc6eb5e14ae5204b4fb",

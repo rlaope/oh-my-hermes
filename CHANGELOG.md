@@ -14,6 +14,22 @@ All notable changes will be documented here.
   of landing on the screen and shifting every later frame. A crash that does
   end the TUI still prints its traceback once your terminal is restored.
 
+- **The OMH TUI's first frame no longer waits on the skill catalog.** When the
+  shared gateway names every skill in its first answer, the launch card used to
+  import the whole skill catalog to label them before the first frame was
+  drawn; it now takes the labels from a small module of their own. The card is
+  drawn the same, byte for byte. In a clean process, starting up against a
+  shared gateway went from about 55 ms to 7 ms and imports 24 modules instead
+  of 114. On a stdio gateway, the first regrouping of the skills when they
+  arrive went from about 50 ms to under 1 ms.
+
+- **The memory consolidation brief no longer rides almost every console turn.** A session that ended with one to
+  four unconsolidated turns used to raise a brief at its end and again as a recovery at the next start, so 213 of 216
+  console turns on one machine carried the capture request (153 briefs came from session-start recovery), and every
+  capture grew the store that recall draws from. The session-ending reasons now need the same five turns as the turn
+  interval, and a given brief is shown once per session instead of on every later turn. Headroom, duplicate and
+  expiring-record reasons keep their own thresholds, `dreaming_mode` is unchanged, and the model still captures
+  through its own tool with no approve step.
 - **The `omh_recommend` tool result is about 12% smaller.** The handoff policy
   used to ride on every recommended skill, and one policy can run past 1 KB.
   It now stays on the top recommendation and on the skills the route selects,
@@ -761,6 +777,22 @@ All notable changes will be documented here.
   stale or edited, and `omh install --target agents --scope user --status`
   reports the pack's real state instead of `missing` when only the unused
   `~/.claude/skills` mirror is absent.
+
+- **Memory that does not match a message is listed, not injected; a stuck run changes approach before it stops.**
+  When a chat message shares no word with any stored record, the memory pack used to serve every active
+  record in full, and Hermes frames that pack as reference data for the reply, so rules about unrelated work
+  steered it. Those records now arrive as one `<record_index>` line naming each record's subject (at most
+  eight, then `+K more`), and `omh_remember recall` reads one in full when it bears on the request. Records
+  saved in the same conversation still arrive in full, a matching message gets the same pack as before, and
+  CLI recall, `omh_memory recall` and coding handoffs are unchanged. `omh_remember save` takes `tags`, a
+  few topic words in the user's own language, so a later message in that language can match a record whose
+  summary is written in another. In dag-ulw, a node's last repair cycle is now a re-plan: its tasks carry the
+  earlier failure reasons and ask for two or three approaches that differ in kind before any edit, unless
+  every failure was an infrastructure cut. The loop stop ladder's first no-progress stop now asks for one
+  re-plan from the goal ledger (`replan_stuck_loop_once`) and resets the window; only a stop after that
+  names the blocker step. The dag-ulw run loop reference gains a "When the path is unknown" section (cheap
+  scout nodes on different hypotheses first, then `extend` with the build layer), and the interview skill
+  keeps at least one answer candidate from outside recalled memory.
 
 ## 4.0.4 - 2026-11-01
 
