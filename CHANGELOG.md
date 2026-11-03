@@ -19,6 +19,16 @@ All notable changes will be documented here.
   read-only copies of the owner's stores, the largest per-session memory text
   went from 111,665 to 6,649 characters on the console profile, repeats from
   91% to 0%, and messenger recall lines from 447 to 61.
+- **One broken part of the OMH TUI's screen no longer ends the session.** If
+  the info line, the live transcript, a picker, the plan or HUD panel, the
+  agent view or the sticky prompt fails to draw, that part becomes one row in
+  the warning colour that names it, and the rest of the screen and your keys
+  keep working. Its traceback is kept once, and `/logs` shows it after the
+  gateway's lines. While the TUI runs, a background thread's traceback, a
+  Python warning or a stray print now goes to the same in-memory log instead
+  of landing on the screen and shifting every later frame. A crash that does
+  end the TUI still prints its traceback once your terminal is restored.
+
 - **OMH notices when Hermes cannot load its skills.** From 27 Oct to 2 Nov
   the skills were installed but Hermes could not load them by name: a stale
   generation directory registered beside the pointer made every name

@@ -245,7 +245,7 @@ class RefusedLaunchResumeTests(unittest.TestCase):
         environ = {**ENVIRON, "HERMES_TUI_RESUME": resume} if resume else dict(ENVIRON)
         terminal = ScriptedTerminal(24, 80)
         code = _run(client, environ, _Told(said), lambda: terminal, lambda omh, hermes: FakePoller(),  # type: ignore[arg-type]
-                    Spawner())
+                    Spawner(), contain_faults=False)
         self.assertEqual(terminal.entered, 0)  # nothing was drawn
         return code, said.getvalue()
 
