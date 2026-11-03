@@ -121,6 +121,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable, Sequence
+from functools import lru_cache
 import unicodedata
 
 from .edge_glow import Edge
@@ -147,6 +148,9 @@ SYNC_BEGIN = f"{CSI}?2026h"
 SYNC_END = f"{CSI}?2026l"
 TEXT_GAP = 2  # cells left blank between a row's text and the first wallpaper glyph after it
 FLUSHED_KEPT = 512  # flushed rows kept to paint the screen's top row back under the edge frame (more than any screen)
+# A full redraw flushes again the rows flushed last (`app.REDRAW_TAIL_ROWS` and its banner), so what `_flush` works
+# out for a row is kept for this many rows, by row, width and margin: a redraw at the same width works out none again.
+FLUSHED_ROWS_KEPT = 4096
 
 
 def cursor_up(rows: int) -> str:
@@ -247,6 +251,21 @@ def paint_line(line: Line, width: int) -> str:
     if line_width(clipped) < width:
         parts.append(f"{fill.sgr()}{ERASE_TO_LINE_END}{SGR_RESET}" if fill is not None else ERASE_TO_LINE_END)
     return "".join(parts)
+
+
+def _painted(line: Line, width: int, margin: int) -> str:
+    """`paint_line`, and with a margin, a band's background (a fill erasing to the line's end) taken back off the
+    right margin, so it ends at `width` as it starts after the left margin."""
+    painted = paint_line(line, width)
+    if margin and line and is_fill(line[-1]):
+        painted += CARRIAGE_RETURN + cursor_forward(margin + width) + ERASE_TO_LINE_END
+    return painted
+
+
+@lru_cache(maxsize=FLUSHED_ROWS_KEPT)
+def _flushed_row(line: Line, width: int, margin: int) -> tuple[str, int | None]:
+    """A row `_flush` writes: its bytes (`_painted`) and where the wallpaper may start on it (`_blank_from`)."""
+    return _painted(line, width, margin), _blank_from(line, width, margin)
 
 
 class LiveRegion:
@@ -520,12 +539,7 @@ class LiveRegion:
         self._send(*self._compose(frame, self._cursor, width, ops))
 
     def _paint(self, line: Line, width: int) -> str:
-        """`paint_line`, and with a margin, a band's background (a fill erasing to the line's end) taken back off the
-        right margin, so it ends at `width` as it starts after the left margin."""
-        painted = paint_line(line, width)
-        if self._margin and line and is_fill(line[-1]):
-            painted += CARRIAGE_RETURN + cursor_forward(self._margin + width) + ERASE_TO_LINE_END
-        return painted
+        return _painted(line, width, self._margin)
 
     def _frameable(self, rows: int) -> int | None:
         """The region's top row where an edge frame may be painted on a screen `rows` tall: where the region is is
@@ -746,11 +760,11 @@ class LiveRegion:
         ops: list[str] = []
         self._move_to(0, ops)
         for index, line in enumerate(lines):
-            painted = self._paint(line, width)
+            painted, blank = _flushed_row(line, width, self._margin)
             ops.append(painted if index == 0 else cursor_forward(self._margin) + painted)
             ops.append(NEWLINE)
             self._above.append(painted)
-            self._above_blank.append(_blank_from(line, width, self._margin))
+            self._above_blank.append(blank)
         # The cursor now sits on the row below the last flushed line: the new top.
         self._row = 0
         self._parked = None

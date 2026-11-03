@@ -94,7 +94,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # loader migration, Korean messages with "OMH가" that read as on main,
         # OMH ignoring files, and a filler adverb, a why-question about a
         # parser and "Hermes with OMH" before a task stay off it too.
-        self.assertEqual(payload["summary"]["case_count"], 1386)
+        self.assertEqual(payload["summary"]["case_count"], 1388)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])

@@ -17,8 +17,9 @@ from unittest.mock import patch
 
 from _vt_screen import VTOverflow, VTScreen
 
+from omh.tui import screen as screen_module
 from omh.tui.screen import LiveRegion, paint_line
-from omh.tui.style import SGR_RESET, Line, Span, Style
+from omh.tui.style import SGR_RESET, Line, Span, Style, fill
 
 _CSI = re.compile(r"\x1b\[([0-?]*)[ -/]*([@-~])")
 RED_BOLD = Style(fg="#ff0000", bold=True)
@@ -266,6 +267,7 @@ class PaintReuseTests(unittest.TestCase):
     def test_after_a_flush_the_rows_its_lines_did_not_cover_are_kept_not_painted_again(self) -> None:
         harness = Harness(rows=10, history=9)
         harness.render(plain("tail 1", "tail 2", "alpha", "beta"), cursor=(3, 0))
+        screen_module._flushed_row.cache_clear()  # a row another test flushed at this width is kept already
         painted: list[Line] = []
 
         def counting(line: Line, width: int) -> str:
@@ -283,6 +285,59 @@ class PaintReuseTests(unittest.TestCase):
         harness.flush(plain("done one", "done two", "done three"))
         harness.render(plain("alpha", "beta"), cursor=(1, 0))
         self.assertEqual(harness.screen.lines()[-5:], ["done one", "done two", "done three", "alpha", "beta"])
+
+
+class FlushedRowKeptTests(unittest.TestCase):
+    """A row flushed again (a full redraw prints the rows flushed last) is not painted again: its kept bytes are the
+    bytes painting it writes, by width and margin."""
+
+    BAND = Style(fg="#c0c0c0", bg="#202040")
+    ROWS: list[Line] = [
+        (Span("┃ ", Style(fg="#ff8800", gutter=True)), Span("한국어 문장 ✅ and "), Span("bold", Style(bold=True))),
+        (Span("❯ a prompt on its band", BAND), fill(BAND)),
+        (),
+        (Span("x" * 30),),  # wider than the screen: clipped
+    ]
+
+    def flushed(self, cols: int, margin: int = 0) -> tuple[list[str], list[int | None], int]:
+        """The bytes and wallpaper starts of `ROWS` flushed by a new region, and how many rows were painted."""
+        harness = Harness(rows=10, cols=cols)
+        harness.region = LiveRegion(harness._write, margin=margin)
+        harness.region.render(plain("live"), (0, 0), cols - 2 * margin)
+        painted: list[Line] = []
+
+        def counting(line: Line, width: int) -> str:
+            painted.append(line)
+            return paint_line(line, width)
+
+        harness.writes.clear()
+        with patch("omh.tui.screen.paint_line", counting):
+            harness.region.render(plain("live"), (0, 0), cols - 2 * margin, flush=self.ROWS)
+        flushed = [row for row in painted if row in self.ROWS]
+        return list(harness.region._above), list(harness.region._above_blank), len(flushed)
+
+    def test_a_row_flushed_again_writes_what_painting_it_writes(self) -> None:
+        for cols, margin in ((20, 0), (20, 2), (14, 0)):
+            with self.subTest(cols=cols, margin=margin):
+                screen_module._flushed_row.cache_clear()
+                first, first_blank, painted = self.flushed(cols, margin)
+                self.assertEqual(painted, len(self.ROWS))
+                again, again_blank, painted = self.flushed(cols, margin)
+                self.assertEqual(painted, 0)  # every row's bytes were kept
+                self.assertEqual((again, again_blank), (first, first_blank))
+                width = cols - 2 * margin
+                self.assertEqual(first, [screen_module._painted(row, width, margin) for row in self.ROWS])
+                self.assertEqual(first_blank, [screen_module._blank_from(row, width, margin) for row in self.ROWS])
+
+    def test_another_width_or_margin_paints_the_row_again(self) -> None:
+        screen_module._flushed_row.cache_clear()
+        at_20, _blank, _painted = self.flushed(20)
+        at_14, _blank, painted = self.flushed(14)
+        self.assertEqual(painted, len(self.ROWS))
+        self.assertNotEqual(at_14, at_20)
+        margined, _blank, painted = self.flushed(24, margin=2)  # 20 columns between the margins, as at 20 without one
+        self.assertEqual(painted, len(self.ROWS))
+        self.assertNotEqual(margined[1], at_20[1])  # the band is taken back off the right margin
 
 
 class HeightChangeTests(unittest.TestCase):
