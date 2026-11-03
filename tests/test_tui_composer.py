@@ -870,7 +870,8 @@ class ChunkedShapeTests(unittest.TestCase):
     """The text is measured chunk by chunk, so an edit measures only the chunk it touched, and nothing drawn moves."""
 
     PIECES = ("a", "bc", " ", "  ", "\n", "\t", HANGUL, HANGUL_NFD, "한 글", FAMILY, THUMBS_UP_TONED, FLAG_KR, Q_ACUTE,
-              "\u0301", " \u0301", "界 ", "x y z ", "😀", "\u200d")
+              "\u0301", " \u0301", "界 ", "x y z ", "😀", "\u200d",
+              " \u1161", " \u11a8", " \ud7cb", " \ufe0f", " \U0001F3FB", " \u0600", " \u200b", " \ufeff")
 
     def assert_matches_whole_text(self, composer: Composer) -> None:
         shape = composer._measured()
@@ -900,6 +901,37 @@ class ChunkedShapeTests(unittest.TestCase):
                 self.assert_matches_whole_text(composer)
                 composer.render(rng.choice((12, 30, 80)), 6)
 
+    def test_no_character_the_cut_rule_admits_joins_the_space_before_it(self) -> None:
+        edge = composer_module._CHUNK_EDGE
+        admitted = [chr(code) for code in range(0x110000)
+                    if not 0xD800 <= code <= 0xDFFF and len(edge.split(" " + chr(code))) == 2]
+        self.assertGreater(len(admitted), 30000)
+        for before in (" ", "a\u200d "):
+            for ch in admitted:
+                for tail in ("", "\u0301", "\u200d", "\u3099", "\u1161", "a"):
+                    self.assertEqual(clusters(before + ch + tail), clusters(before) + clusters(ch + tail),
+                                     (before, hex(ord(ch)), tail))
+
+    def test_a_relabelled_token_is_drawn_with_its_new_label_after_the_next_edit(self) -> None:
+        composer = Composer()
+        self.assertTrue(composer.insert_image("[Image #1]", "a"))
+        composer._measured()
+        token = next(iter(composer.images))
+        composer.images[token] = ("[Image #22]", "a")
+        typed(composer, "x")
+        self.assertIn("[Image #22]", composer._measured().shown)
+        self.assert_matches_whole_text(composer)
+
+    def test_the_kept_chunks_never_outnumber_the_distinct_chunks_of_the_text(self) -> None:
+        composer = Composer()
+        rng = random.Random(7)
+        for _ in range(100):
+            composer.handle(Paste("".join(rng.choices(self.PIECES, k=3))))
+            if rng.random() < 0.4:
+                composer.handle(Key(BACKSPACE))
+            shape = composer._measured()
+            self.assertLessEqual(len(composer._chunks), len(set(composer_module._CHUNK_EDGE.split(shape.text))))
+
     def test_an_edit_in_a_long_text_measures_only_the_chunk_it_touched(self) -> None:
         composer = Composer()
         composer.replace(0, 0, "".join(f"word{n} 한글 " for n in range(2000)) + "\n".join(f"line {n}" for n in range(500)))
@@ -915,8 +947,10 @@ class ChunkedShapeTests(unittest.TestCase):
             composer.handle(Key(CHAR, "x"))
             composer.handle(Key(BACKSPACE))
             composer.handle(Key(CHAR, "한"))
+            composer.handle(Key(CHAR, " "))
+            composer.handle(Key(BACKSPACE))
             composer.render(80, 6)
-        self.assertLessEqual(len(calls), 6)
+        self.assertLessEqual(len(calls), 12)
         self.assertLess(max(calls), 40)
         self.assert_matches_whole_text(composer)
 

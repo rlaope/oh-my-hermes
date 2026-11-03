@@ -8,7 +8,9 @@ All notable changes will be documented here.
   whole text again on every key, so a key cost about 5 ms at 5,000 characters
   and about 17 ms at 20,000, longer than a frame. It now measures only the
   words and lines an edit touched, which brings the 20,000-character key to
-  about 5 ms and the 5,000-character one to under 2 ms. What is drawn, the
+  about 5 ms and the 5,000-character one to under 2 ms. This holds for text
+  with spaces between words (English, Korean and so on); a long line of
+  unspaced or Cyrillic text is still measured whole. What is drawn, the
   caret, wrapping, wide characters, paste chips and image tokens are unchanged.
 
 - **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
