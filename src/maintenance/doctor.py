@@ -27,6 +27,7 @@ from ..config_adapter import (
 )
 from ..hashutil import sha256_file, sha256_text
 from ..local_store import can_write_dir, read_json_object
+from ..install import agent_skills_projection
 from ..install.guidance_projection import build_guidance_projection_status, catalog_revision
 from ..install.hook_integrity import HOOK_HOST_TARGET, VALID_HOOK_EVENTS, build_hook_integrity_status
 from ..install.curator_ledger import LedgerWrite, read_ledger_writes
@@ -552,6 +553,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.extend(_plugin_hook_error_checks(paths))
     checks.append(_retired_skill_install_check(paths))
     checks.append(_flat_skill_layout_check(paths))
+    checks.append(_agent_skills_pack_check())
     checks.append(_plugin_ulw_lifecycle_check(paths))
     checks.append(_omh_tui_check(paths))
     checks.extend(_hermes_gateway_checks(paths))
@@ -1473,6 +1475,67 @@ def _flat_skill_layout_check(paths: OmhPaths) -> Check:
             "Hermes banner"
         ),
         next_action="run `omh update` to move them under their category directory",
+    )
+
+
+def _agent_skills_pack_check() -> Check:
+    """The user-scope OMH Agent Skills pack Codex and other `.agents` hosts load.
+
+    Read-only: it looks at `~/.agents/skills` only, writes nothing, and never
+    fails doctor. No receipt there means the optional pack is not installed,
+    which is not a finding. A receipt is checked in its own shape -- a
+    portable single-target install, or the target+mirror pair it lists -- so
+    a pack `omh update` would refresh is reported stale here first.
+    """
+    name = "agent_skills_pack"
+    target = agent_skills_projection.agent_skills_user_home() / ".agents/skills"
+    try:
+        # Inside the try: on Python < 3.14 `is_file()` raises PermissionError
+        # for an unsearchable directory instead of returning False.
+        if not (target / agent_skills_projection.MANIFEST_NAME).is_file():
+            return Check(name, True, f"OMH Agent Skills pack for Codex/.agents hosts is not installed at {target}", severity="ok")
+        manifest = agent_skills_projection._read_manifest(target)
+        if manifest is None:
+            raise ValueError(f"Agent Skills manifest vanished: {target / agent_skills_projection.MANIFEST_NAME}")
+        target, mirror = agent_skills_projection.installed_receipt_roots(target, manifest)
+        if mirror is not None and agent_skills_projection._read_manifest(mirror) is None:
+            mirror = None
+        status = agent_skills_projection.agent_skills_status(target, mirror=mirror)
+        current = agent_skills_projection.agent_skills_manifest(agent_skills_projection.agent_skill_files())["files"]
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
+        return Check(
+            name,
+            True,
+            f"could not read the OMH Agent Skills pack at {target}: {exc}",
+            severity="warning",
+            next_action=f"Inspect {target / agent_skills_projection.MANIFEST_NAME}, then rerun `omh doctor`.",
+            observed=False,
+        )
+    roots = ", ".join(status["target_dirs"])
+    if status["locally_modified"]:
+        return Check(
+            name,
+            True,
+            f"{len(status['locally_modified'])} locally-modified file(s) in the OMH Agent Skills pack at {roots}",
+            severity="warning",
+            next_action=status["next_action"],
+        )
+    if status["projection"] != "fresh":
+        installed = manifest["files"]
+        differ = sum(1 for relative in installed.keys() | current.keys() if installed.get(relative) != current.get(relative))
+        detail = f": {differ} file(s) differ from the current catalog" if differ else ""
+        return Check(
+            name,
+            True,
+            f"OMH Agent Skills pack at {roots} is {status['projection']}{detail}",
+            severity="warning",
+            next_action="omh update",
+        )
+    return Check(
+        name,
+        True,
+        f"OMH Agent Skills pack at {roots} matches catalog {status['catalog_revision'][:12]}",
+        severity="ok",
     )
 
 

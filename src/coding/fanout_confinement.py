@@ -282,7 +282,16 @@ class FanoutFilesystemConfinement:
         )
 
     def command_environment(self, environment: Mapping[str, str] | None = None) -> dict[str, str]:
-        """Keep toolchain scratch writes within the confined worktree."""
+        """Keep toolchain scratch writes within the confined worktree.
+
+        TMPDIR covers most tools. zsh writes heredoc temp files under
+        TMPPREFIX (default `/tmp/zsh`) and uv locks its cache (default
+        `~/.cache/uv`); both defaults are outside every write root, so
+        `zsh -c "... <<EOF"` and `uv run` fail inside the fence. They are
+        pointed into the same scratch directory, which preparation creates
+        (`_write_scratch_ignore`); a caller value already inside a write root
+        is kept. The fence itself is unchanged.
+        """
         selected_environment = self.environment if environment is None else environment
         if (
             self.receipt.get("enforced") is not True
@@ -290,10 +299,25 @@ class FanoutFilesystemConfinement:
             or self.selected not in {"sandbox-exec", "bwrap"}
         ):
             return dict(selected_environment)
-        return {
-            **selected_environment,
-            "TMPDIR": str(self.child.work / _FANOUT_TOOLCHAIN_TEMP_DIRECTORY),
-        }
+        scratch = self.child.work / _FANOUT_TOOLCHAIN_TEMP_DIRECTORY
+        result = {**selected_environment, "TMPDIR": str(scratch)}
+        # TMPPREFIX is a file-name prefix (`<prefix>XXXX`), so what must sit
+        # inside a root is its directory; `TMPPREFIX=<root>` writes beside it.
+        for key, default, as_prefix in (
+            ("TMPPREFIX", scratch / "zsh", True),
+            ("UV_CACHE_DIR", scratch / "uv-cache", False),
+        ):
+            if not self._within_write_roots(selected_environment.get(key, ""), as_prefix=as_prefix):
+                result[key] = str(default)
+        return result
+
+    def _within_write_roots(self, value: str, *, as_prefix: bool = False) -> bool:
+        if not value or not os.path.isabs(value):
+            return False
+        resolved = Path(os.path.realpath(value))
+        if as_prefix:
+            resolved = resolved.parent
+        return any(resolved.is_relative_to(os.path.realpath(root)) for root in self.write_roots)
 
 
 # What git the dispatcher runs for itself in a unit worktree keeps of the
