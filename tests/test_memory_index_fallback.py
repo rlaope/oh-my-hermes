@@ -73,7 +73,11 @@ class MemoryIndexFallbackTests(unittest.TestCase):
             live = provider(root)
             with mock.patch.object(memory_provider.live_session, "compaction_ancestors", return_value={"status": "unverified", "ancestors": ["before-compact"]}) as lookup:
                 pack = serve(live, "Astronomy telescope")
-            lookup.assert_called_once_with(str(root / ".hermes"), SESSION)
+            # Compare resolved paths: Windows runners hand out 8.3 short temp names that resolve_homes expands.
+            lookup.assert_called_once()
+            (home_arg, session_arg), _ = lookup.call_args
+            self.assertEqual(Path(home_arg).resolve(), (root / ".hermes").resolve())
+            self.assertEqual(session_arg, SESSION)
             self.assertIn(ancestor["summary"], pack)
             self.assertNotIn(foreign["summary"], pack)
             self.assertEqual(rendered_ids(pack), [ancestor["record_id"]])
