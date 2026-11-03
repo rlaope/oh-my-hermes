@@ -138,6 +138,12 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "rather than losing the whole consolidation request.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/memory_provider.py", "_conversation_session_ids", INTENTIONAL,
+        "A lineage failure withholds ancestors and preserves only this session's origin records. "
+        "The receipt reports op compaction_ancestors and its error class through the provider's "
+        "bounded failure counter; failed discovery never admits another conversation's full text.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/memory_provider.py",
         "_guard_digest",
         INTENTIONAL,
@@ -975,8 +981,11 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 99 -> 100 / 90 -> 91: `memory_provider._work_state_facts`, the unfinished-work
 # facts at compaction (a fault is recorded as a write failure and costs only the
 # facts, never the memory blocks).
-EXPECTED_HANDLER_COUNT = 100
-EXPECTED_ANCHOR_COUNT = 91
+# 100 -> 101 / 91 -> 92: `memory_provider._conversation_session_ids`, the
+# compaction-lineage read that decides which records stay in full on a no-match
+# turn (a fault keeps only this session and is reported on the receipt).
+EXPECTED_HANDLER_COUNT = 101
+EXPECTED_ANCHOR_COUNT = 92
 
 
 class DerivedSite(NamedTuple):

@@ -20,7 +20,7 @@ from memory_recall_fixture import Json, included_ids, mapping, payload, reviewed
 from omh.plugin_bundle.omh.memory_provider import RecallStatus  # noqa: E402
 from omh.plugin_bundle.omh.memory_recall_support import normalized_summary_key  # noqa: E402
 from omh.workflows import memory  # noqa: E402
-from test_memory_prefetch_canonical import approve, provider, rendered_ids  # noqa: E402
+from test_memory_prefetch_canonical import SESSION, approve, provider, rendered_ids  # noqa: E402
 
 _NO_MATCH = "quantum ledger reconciliation"
 _FALLBACK = {"mode": "active_tier", "reason": "no_query_overlap", "readmitted_count": 2}
@@ -195,11 +195,33 @@ class HermesOrderFallbackTests(unittest.TestCase):
             live = provider(root)
             live.on_turn_start(1, "hello there")
             pack = live.prefetch("hello there")
+            self.assertIn('<record_index count="1" reason="no_query_overlap">', pack)
+            index_line = next(line for line in pack.splitlines() if "<record_index " in line)
+            self.assertIn(f'{record["record_type"]} {record["record_id"]}', index_line)
+            self.assertNotIn(record["summary"], pack)
+            self.assertEqual(rendered_ids(pack), [])
+            self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=0))
+            receipt = live.latest_prefetch_receipt()
+            assert isinstance(receipt, dict)
+            self.assertEqual(receipt["selection"]["query_fallback"], {**_FALLBACK, "readmitted_count": 1})
+            self.assertEqual(receipt["rendering"]["indexed_records"], [record["record_id"]])
+
+    def test_a_greeting_still_serves_the_record_captured_in_this_session(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".hermes").mkdir()
+            record = approve(root, "OMH uses deterministic token recall for memory packs",
+                             source_ref=f"hermes-session:{SESSION}")
+            live = provider(root, session_id=SESSION)
+            live.on_turn_start(1, "hello there")
+            pack = live.prefetch("hello there")
+            self.assertIn(record["summary"], pack)
             self.assertEqual(rendered_ids(pack), [record["record_id"]])
             self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
             receipt = live.latest_prefetch_receipt()
             assert isinstance(receipt, dict)
             self.assertEqual(receipt["selection"]["query_fallback"], {**_FALLBACK, "readmitted_count": 1})
+            self.assertEqual(receipt["rendering"]["indexed_records"], [])
 
 
 if __name__ == "__main__":

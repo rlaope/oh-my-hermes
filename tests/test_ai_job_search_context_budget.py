@@ -323,7 +323,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Its review round rewords verification-gate's none_correct clause
         # (reason recorded, intermittent rate kept); the pin before it was
         # 88077868a27032057348998ad1bd84d68b542c301010b45b6d2ac8fd3088c975.
-        self.assertEqual(_digest(legacy_hashes), '098cb4a9b1ccc5e7640128451f7609dae34cf48f6e050172566dc2ae5cb11f7d')
+        # Re-derived for scout-first, final-repair re-plan, loop re-plan and
+        # outside-memory candidates: clean origin/main reproduces 098cb4a9...11f7d;
+        # only dag-ulw (old 39dd80a2), loop (old dbfddeb5), and deep-interview
+        # (old 00aff6d5) body digests move. Capability row digests are unchanged.
+        self.assertEqual(_digest(legacy_hashes), '2050e2289b7cf81ab57cf2ce984eac188295e3369ae952b88d833b6c5260df6b')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
