@@ -814,8 +814,10 @@ class AppEscTests(unittest.TestCase):
 
     def test_bytes_a_legacy_terminal_sends_decode_and_dispatch_as_vim_keys(self) -> None:
         app, client, _clock = vim_app()
-        decoder = KeyDecoder()
+        now = [0.0]
+        decoder = KeyDecoder(lambda: now[0])
         for chunk in (b"hello world", b"\x1b", b"0dw", b"\x1bA", b"!\r"):  # ESC A in one read: Esc, then A
+            now[0] += 0.1  # a read a tenth of a second after the one before, as typing brings them
             for event in decoder.feed(chunk):
                 app._on_input(event)
         self.assertEqual(client.named("prompt.submit")[-1]["text"], "world!")
