@@ -46,7 +46,7 @@ from pathlib import Path
 import stat
 
 from .composer import HISTORY_CAP, PROMPT
-from .keys import BACKSPACE, CHAR, ENTER, ESCAPE, Key, Paste
+from .keys import BACKSPACE, CHAR, ENTER, ESCAPE, Key, Paste, list_nav_step
 from .style import Line, Span
 from .theme import Theme
 from .width import cell_width, truncate_line
@@ -180,7 +180,10 @@ class HistorySearch:
             return SEARCH_CANCEL
         if event.name == ENTER:
             return SEARCH_ACCEPT if self.current() is not None else SEARCH_CANCEL
-        if event.name == CHAR and event.ctrl and event.char == "r":
+        step = list_nav_step(event)
+        if step != 0 and self.matches():
+            self.skip = min(max(self.skip + step, 0), len(self.matches()) - 1)
+        elif event.name == CHAR and event.ctrl and event.char == "r":
             self.skip = min(self.skip + 1, max(len(self.matches()) - 1, 0))
         elif event.name == BACKSPACE:
             if not self.query:
