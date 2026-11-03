@@ -183,6 +183,16 @@ class RecallModeTests(_Switches):
         saved = self.remember("tui-off", action="save", summary="The owner reviews invoices on Fridays.")
         self.assertEqual(saved["status"], "remembered", saved)
 
+    def test_the_save_reminder_points_at_recall_only_where_recall_answers(self) -> None:
+        for mode, mentions_recall in (("auto", True), ("on_demand", True), ("off", False)):
+            with self.subTest(recall_mode=mode):
+                self.settings(recall_mode=mode)
+                block = self.on("tui", f"tui-prompt-{mode}").system_prompt_block()
+                self.assertIn("call omh_remember save", block, "saving is still asked for")
+                self.assertEqual("Use recall later." in block, mentions_recall)
+        (self.hermes / "config.yaml").unlink()
+        self.assertTrue(self.on("tui", "tui-prompt-default").system_prompt_block().endswith(" Use recall later."), "the default is unchanged")
+
     def test_recall_mode_does_not_touch_the_consolidation_brief_setting(self) -> None:
         self.settings(recall_mode="off")
         self.assertEqual(read_recall_mode_setting(self.hermes)["value"], "off")
@@ -221,7 +231,30 @@ class MemoryModeOffTests(_Switches):
         self.assertEqual(rendered_ids(pack), [])
         receipt = live.latest_prefetch_receipt()
         assert receipt is not None
-        self.assertIn("memory_policy", json.dumps(receipt))
+        self.assertIn("setup-profile.json", receipt["store"]["unreadable"], "a read fault, named as the file that could not be read")
+        self.assertEqual(receipt["write_failures_count"], 0, "not a write failure")
+        self.assertEqual(live.system_prompt_block(), "")
+        recalled = json.loads(omh_remember_handler({"action": "recall", "query": "billing service deploy"}, session_id="tui-broken", cwd=str(self.workspace)))
+        self.assertEqual((recalled["status"], recalled["reason"]), ("error", "memory_policy_unreadable"), recalled)
+        self.assertIn("nothing was searched", recalled["next_action"])
+        self.assertNotIn("update failed", recalled["next_action"])
+
+    def raise_brief(self) -> None:
+        """A console session that ends with an unconsolidated turn leaves a brief for the next one."""
+        earlier = self.on("tui", "tui-earlier")
+        self.turn(earlier, 1, "hello")
+        earlier.shutdown()
+
+    def test_under_memory_mode_off_no_capture_prompt_is_served(self) -> None:
+        self.raise_brief()
+        control = self.on("tui", "tui-control")
+        self.assertIn("<memory_consolidation", self.turn(control, 1, "hello"), "the brief is pending")
+        self.assertIn("call omh_remember save", control.system_prompt_block())
+        self.memory_policy({"memory_policy": {"mode": "off", "mode_source": "explicit"}})
+        live = self.on("tui", "tui-capture-off")
+        pack = self.turn(live, 1, "hello")
+        self.assertNotIn("<memory_consolidation", pack)
+        self.assertEqual(live.system_prompt_block(), "")
 
     def test_auto_safe_default_still_recalls(self) -> None:
         records = self.seed()
@@ -288,10 +321,40 @@ class SetPluginSettingTests(_Switches):
         self.assertTrue(change.changed)
         self.assertEqual(change.text, text.replace("recall_line: all", "recall_line: 'off'"))
 
+    def test_keeps_a_trailing_comment_on_the_rewritten_leaf(self) -> None:
+        for written, kept in (
+            ("recall_line: all  # chosen 2026-11", "recall_line: 'off'  # chosen 2026-11"),
+            ("recall_line: 'all' # quoted", "recall_line: 'off' # quoted"),
+            ("recall_line: all", "recall_line: 'off'"),
+        ):
+            with self.subTest(written=written):
+                text = f"plugins:\n  entries:\n    omh:\n      settings:\n        {written}\n"
+                change = set_plugin_setting(text, "recall_line", "off")
+                self.assertTrue(change.changed, change.message)
+                self.assertEqual(change.text, f"plugins:\n  entries:\n    omh:\n      settings:\n        {kept}\n")
+
     def test_adds_a_missing_leaf_beside_existing_settings(self) -> None:
         text = "plugins:\n  entries:\n    omh:\n      settings:\n        omh_home: '/x'\n"
         change = set_plugin_setting(text, "recall_mode", "on_demand")
         self.assertEqual(change.text, text + "        recall_mode: 'on_demand'\n")
+
+
+class RecallSettingAdvisoryTests(_Switches):
+    def test_doctor_names_a_value_that_is_not_read(self) -> None:
+        from omh.maintenance.advisory import check_recall_settings
+
+        self.assertEqual(check_recall_settings(self.hermes).status, "unobserved", "no config.yaml at all")
+        for settings, status, said in (
+            ({}, "ok", "recall_line: unset, console is in force; recall_mode: unset, auto is in force"),
+            ({"recall_line": "off", "recall_mode": "on_demand"}, "ok", "recall_line: off, off is in force"),
+            ({"recall_line": "discord"}, "advice", "recall_line is 'discord', which is not all, console, off; console is in force"),
+            ({"recall_mode": "never"}, "advice", "recall_mode is 'never', which is not auto, on_demand, off; auto is in force"),
+        ):
+            with self.subTest(settings=settings):
+                self.settings(**settings)
+                entry = check_recall_settings(self.hermes)
+                self.assertEqual((entry.check_id, entry.status), ("recall_setting_unrecognized", status))
+                self.assertIn(said, entry.observed)
 
 
 if __name__ == "__main__":

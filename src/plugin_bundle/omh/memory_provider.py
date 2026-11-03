@@ -166,8 +166,8 @@ from .memory_thread_parent import auto_thread_parent_channel
 from .tools.memory_tool import REMEMBER_TOOL_SCHEMA, REMEMBER_TOOL_NAME, omh_remember_handler
 
 PROVIDER_NAME = "omh"
-# What Hermes prints in front of "recalled N memories" on every surface it
-# speaks through -- CLI, TUI, and each gateway platform -- when a prefetch
+# What Hermes prints in front of "recalled N memories" on the surfaces the
+# profile's `recall_line` admits (by default cli/tui/desktop) when a prefetch
 # actually put OMH memory into the turn.
 PROVIDER_LABEL = "OMH"
 # The brief rides in the prefetch pack, bounded so a long reason list or eviction
@@ -483,10 +483,19 @@ class OmhMemoryProvider(_MemoryProviderBase):
         return json.dumps({"status": "error", "reason": "unknown_tool"}, sort_keys=True)
 
     def system_prompt_block(self) -> str:
-        """A static save reminder for foreground conversations, not background agents."""
+        """A static save reminder for foreground conversations, not background agents.
+
+        None where capture is off (`memory_mode` off, a disabled
+        retain_knowledge family, an unreadable profile): it would ask for saves
+        that are refused. Under `recall_mode: off` it no longer points at
+        recall, which the tool refuses there.
+        """
         if self._surface_class == SURFACE_BACKGROUND:
             return ""
-        return "When the user states lasting preferences, decisions or facts, call omh_remember save in that same turn, before other work, even if the message also asks for something. If a shown OMH record already says it, pass its id as replaces. Use recall later."
+        if not self._recall_policy()[0].get("capture_enabled", True):
+            return ""
+        reminder = "When the user states lasting preferences, decisions or facts, call omh_remember save in that same turn, before other work, even if the message also asks for something. If a shown OMH record already says it, pass its id as replaces."
+        return reminder if configured_recall_mode(self._profile_home) == "off" else f"{reminder} Use recall later."
 
     def prefetch(
         self,
@@ -852,8 +861,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
         """What the last prefetch put into the turn, for Hermes' recall line.
 
         Hermes prints ``🧠 OMH — recalled N memories`` through its status
-        channel -- CLI, TUI, and every gateway platform alike -- right after the
-        prefetch that carried it, so the user sees memory was used even when
+        channel, on the surfaces the profile's `recall_line` admits (by default
+        cli/tui/desktop), right after the prefetch that carried it, so the user sees memory was used even when
         the model says nothing about it. Nothing served, nothing said. A pack
         that is only a reference-block index counts as content without a
         discrete count, which Hermes renders generically; a pack that is only
@@ -1157,7 +1166,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # profile's `recall_mode` at `auto`. Off, the turn gets no records and
         # no blocks, and so no recall line; the brief and the digest are not
         # recall and keep their own rules. Tool recall decides for itself.
-        policy = self._recall_policy()
+        policy, policy_unreadable = self._recall_policy()
         if policy.get("recall_enabled", True) and configured_recall_mode(self._profile_home) != "auto":
             policy = {**policy, "recall_enabled": False}
         console = self._surface_class in OWNER_SURFACE_CLASSES and bool(policy.get("recall_enabled", True))
@@ -1209,6 +1218,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
             if self._attended
             else None
         )
+        if not policy.get("capture_enabled", True):
+            # The brief asks for captures this policy refuses.
+            brief = None
         # A status, not a memory either: counts only, and never the recall count.
         # Withheld for a turn that is not the owner's DM: it stays pending,
         # never spent where it cannot be shown.
@@ -1234,7 +1246,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
             rendered_block_count=fitted.block_count,
             project_resolution=self._project_resolution,
             reminder=self._prepared_reminder,
-            unreadable=snapshot.unreadable,
+            unreadable=(*snapshot.unreadable, "setup-profile.json") if policy_unreadable else snapshot.unreadable,
             store_read_error=snapshot.store_read_error,
             pack_chars=len(pack),
             surface_class=self._surface_class,
@@ -1250,21 +1262,18 @@ class OmhMemoryProvider(_MemoryProviderBase):
         )
         return pack
 
-    def _recall_policy(self) -> dict[str, object]:
-        """The project memory policy the selector applies; recall off when the profile cannot be read.
+    def _recall_policy(self) -> tuple[dict[str, object], bool]:
+        """The project memory policy, and whether `setup-profile.json` could not be read.
 
         `read_project_memory_policy` raises on a `setup-profile.json` that is
         not a JSON object, as capture does. A render must not raise into the
         turn, and an unreadable profile may be the one that chose `off`, so
-        recall fails closed and the fault is recorded like a swallowed write.
+        memory fails closed and the receipt names the file as unreadable.
         """
         try:
-            return read_project_memory_policy(self._omh_home)
-        except (OSError, ValueError, RecursionError) as error:
-            self._write_failure_count += 1
-            self._write_failures.append({"op": "memory_policy", "path": "setup-profile.json", "error": type(error).__name__})
-            del self._write_failures[:-WRITE_FAILURE_LIMIT]
-            return build_project_memory_policy(self._omh_home, mode="off")
+            return read_project_memory_policy(self._omh_home), False
+        except (OSError, ValueError, RecursionError):
+            return build_project_memory_policy(self._omh_home, mode="off"), True
 
     def _start_session_digest(self, *, initializing: bool) -> None:
         """Fix this session's digest window, before it serves or writes anything.

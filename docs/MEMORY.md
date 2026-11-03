@@ -1974,26 +1974,31 @@ plugins:
 
 | Setting | Value | What it silences |
 | --- | --- | --- |
-| `recall_line` | `console` (default) | The line on every platform but `cli`, `tui` and `desktop` |
+| `recall_line` | `console` (default) | The line on every platform but `cli`, `tui` and `desktop`: messengers (Discord, Slack, Telegram and the rest, the owner's own DM included) and `api_server` clients such as Open WebUI |
 | | `all` | Nothing: every surface shows the line, as before |
 | | `off` | The line everywhere |
 | `recall_mode` | `auto` (default) | Nothing: memory is recalled every turn |
 | | `on_demand` | Per-turn records and blocks, and so the line. `omh_remember` / `omh_memory` recall and saving still work |
 | | `off` | The same, and tool recall too, which refuses with `reason: recall_disabled`. Saving still works |
 
-`recall_line` hides the line, never the memory. On a messenger under the
-default, memory still reaches the turn and can shape a reply with no visible
+`recall_line` hides the line, never the memory. On a messenger, the owner's
+DM included, or an `api_server` client under the default, memory still reaches the turn and can shape a reply with no visible
 sign that it did. To see what a turn was given, read the prefetch receipt
 (`omh memory status` shows the last one under `last_prefetch`; the full
 receipt is the file it names) or ask the model to recall.
 
 `recall_mode` is about recall only. The consolidation brief keeps its own
 `dreaming_mode`, and the "since your last session" digest is a count, not
-recall, so both are unchanged. A `memory_mode` of `off`, or a disabled
-`retain_knowledge` capability family, turns recall off whatever `recall_mode`
-says: per-turn recall serves nothing and tool recall refuses with
-`recall_disabled`. If `setup-profile.json` cannot be read, per-turn recall
-also serves nothing, and the receipt records the fault as `memory_policy`.
+recall, so both are unchanged. Under `recall_mode: off` the provider's save
+reminder in the system prompt no longer says "Use recall later".
+
+A `memory_mode` of `off`, or a disabled `retain_knowledge` capability family,
+turns recall off whatever `recall_mode` says: per-turn recall serves nothing
+and tool recall refuses with `recall_disabled`. Because capture is off too,
+nothing asks for a save either: the consolidation brief is not served and the
+save reminder is left out of the system prompt. If `setup-profile.json` cannot
+be read, OMH treats the profile as `off`. The receipt lists the file under
+`store.unreadable`, and tool recall returns `memory_policy_unreadable`.
 
 Set them with `omh memory recall-line [all|console|off]` and `omh memory
 recall-mode [auto|on_demand|off]`. Each writes only
@@ -2004,7 +2009,9 @@ exits 1 with the old value still in force. `omh memory status` reports both
 under `recall_settings`. As with `dreaming_mode`, `off`, `false` and `no` all
 mean `off`. Any other value, or a config this reader cannot follow, keeps the
 default and carries `issue: recall_setting_unrecognized` with a `reason` of
-`unknown_value` or `config_unreadable`.
+`unknown_value` or `config_unreadable`. `omh doctor` prints the same as a
+`recall_setting_unrecognized` advice line, which never changes the doctor
+status.
 
 ### The `omh reminder:` line
 

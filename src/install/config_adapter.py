@@ -973,7 +973,8 @@ def set_plugin_setting(config_text: str, name: str, value: str) -> ConfigChange:
         if _has_child_lines(lines, index):
             return ConfigChange(False, f"plugins.entries.omh.settings.{name} is a block value; leaving it alone", config_text)
         line = lines[index]
-        edited = [*lines[:index], f"{line[: len(line) - len(line.lstrip(' '))]}{name}: {leaf}", *lines[index + 1 :]]
+        indent = line[: len(line) - len(line.lstrip(" "))]
+        edited = [*lines[:index], f"{indent}{name}: {leaf}{_trailing_comment(line.partition(':')[2])}", *lines[index + 1 :]]
     text = _joined(edited)
     try:
         written = runtime_paths.plugin_setting_text(text, name)
@@ -982,6 +983,19 @@ def set_plugin_setting(config_text: str, name: str, value: str) -> ConfigChange:
     if written != value:
         return ConfigChange(False, f"the plugin would not read the written {name} back; leaving the config alone", config_text)
     return ConfigChange(True, f"recorded plugins.entries.omh.settings.{name}", text)
+
+
+def _trailing_comment(rest: str) -> str:
+    """The comment after the value in `key: value  # note`, with its spacing; "" when there is none."""
+    value = rest.strip()
+    if value.startswith("#"):
+        return f" {value}"
+    if value[:1] in {"'", '"'}:
+        end = value.find(value[0], 1)
+        tail = value[end + 1 :].strip() if end > 0 else ""
+        return f" {tail}" if tail.startswith("#") else ""
+    before, separator, after = rest.partition(" #")
+    return f"{before[len(before.rstrip()):]} #{after}" if separator else ""
 
 
 def _block_children_end(lines: list[str], start: int, stop: int, parent_indent: int) -> int:

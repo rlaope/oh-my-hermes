@@ -1110,7 +1110,11 @@ def _lifecycle(action: str, args: dict, kwargs: dict) -> dict[str, object]:
             action,
             "error",
             reason=_safe_error_type(type(exc).__name__),
-            next_action="Nothing is confirmed changed. Tell the user the memory update failed.",
+            next_action=(
+                "Nothing was searched. Tell the user memory recall failed."
+                if action == "recall"
+                else "Nothing is confirmed changed. Tell the user the memory update failed."
+            ),
         )
 
 
@@ -1197,7 +1201,15 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
     # The same policy per-turn recall applies: `memory_mode` off, a disabled
     # retain_knowledge family, or this profile's `recall_mode: off` refuses.
     # `on_demand` only quiets per-turn recall; asking still works there.
-    policy = read_project_memory_policy(lens.lens_home)
+    try:
+        policy = read_project_memory_policy(lens.lens_home)
+    except (OSError, ValueError, RecursionError):
+        # A read fault, not a failed update: the profile that may have turned
+        # recall off cannot be read, so nothing is searched.
+        return _lifecycle_result(
+            "recall", "error", reason="memory_policy_unreadable",
+            next_action="OMH could not read this profile's memory settings (setup-profile.json); nothing was searched. Tell the user memory recall is unavailable.",
+        )
     if not policy.get("recall_enabled", True) or configured_recall_mode(Path(_home("HERMES_HOME", "~/.hermes"))) == "off":
         return _lifecycle_result(
             "recall", "refused", reason="recall_disabled",
