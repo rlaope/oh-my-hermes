@@ -221,6 +221,7 @@ def register(ctx: _PluginContext) -> None:
         AWARENESS_SECTION_MAX_CHARS,
         awareness_system_prompt_section,
         pre_llm_call,
+        start_import_warmup,
     )
     from .hooks.result_transforms import transform_llm_output, transform_tool_result
     from .hooks.session_hooks import on_session_end, on_session_start, subagent_start, subagent_stop
@@ -536,3 +537,6 @@ def register(ctx: _PluginContext) -> None:
         from .browser_bridge import register as register_browser
 
         setattr(ctx, "browser_task", register_browser(ctx, browser_config))
+    # Last, after every registration: the first turns' package imports move onto a daemon thread,
+    # so register() itself takes no longer and a failed import there cannot unregister anything.
+    start_import_warmup()
