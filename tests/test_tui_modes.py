@@ -31,6 +31,7 @@ from test_tui_app import (
     AppTestCase,
     FakePoller,
     ScriptedTerminal,
+    TYPED_AHEAD,
     Step,
     startup_answers,
     info_row_of,
@@ -790,7 +791,7 @@ class SteerReplayTests(AppTestCase):
         terminal.script(
             # One read: a second prompt queued while the first prompt's turn is pending, then Ctrl+J, a bare line
             # feed in raw mode, on the empty composer: it sends the queued prompt now.
-            Step(b"first prompt\rsecond prompt\r\n", when=terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"first prompt\rsecond prompt\r\n", when=terminal.idle, label="idle"),
             Step(b"\x04", when=lambda: "┃ ❯ second prompt" in terminal.history() and terminal.idle(), label="steered"),
         )
         self.run_main(run)
@@ -2606,7 +2607,7 @@ class ModeReplayTests(AppTestCase):
         terminal.script(
             Step(b"Write the numbers from 1 to 300, one per line, nothing else.\r", when=terminal.idle, label="idle"),
             # The replay holds this turn open until it sees session.interrupt.
-            Step(b"second prompt\rthird prompt\r", when=running, label="running"),
+            Step(TYPED_AHEAD + b"second prompt\rthird prompt\r", when=running, label="running"),
             Step(b"\x1b[A", when=terminal.shows("⧗ third prompt"), capture="queued", label="queued"),
             Step(b"\x03", when=terminal.shows("❯ second prompt"), capture="recalled", label="recalled"),
             Step(b"\x03", when=lambda: not terminal.shows("third prompt")(), label="cleared"),
