@@ -608,6 +608,18 @@ All notable changes will be documented here.
   citation rule still applies. Method notes come from a frame-by-frame study of
   a public 99 s launch film; nothing was copied.
 
+- **Cancelling a dag run names the children still running.** `omh_dag
+  action=cancel` now lists each node whose delegate child is still out, with its
+  subagent id and how long it has been open, under `still_running`, and the reply
+  names each one with its `delegate_task action=stop` route. A repeated cancel
+  names the same children instead of saying none are left. (#2512)
+- **The LSP opt-in has a visible enable path.** When the impact check finds new
+  errors and the `omh-lsp` toolset is off, its note says `lsp_diagnostics`
+  re-checks directly once `OMH_LSP_TOOLS=1` or the `lsp_tools` setting is on and
+  Hermes restarted; with the toolset on it no longer repeats that. `omh doctor`
+  advisories gain `lsp_tools_disabled` (advice when unset or off, unobserved
+  when the config shape cannot be read). (#2511)
+
 ## 4.0.4 - 2026-11-01
 
 - **Name your own identity: a prompt and a model chain.** Write
