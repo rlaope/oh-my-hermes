@@ -52,10 +52,13 @@ class HermesHookOrderTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".hermes").mkdir()
-            record = approve(root, "OMH uses deterministic token recall for memory packs")
+            approve(root, "OMH uses deterministic token recall for memory packs")
+            record = approve(root, "Memory packs are rebuilt after each turn ends")
             live = provider(root)
-            hermes_turn(live, 1, "how does omh recall memory packs")
-            live.queue_prefetch("how does omh recall memory packs")  # end of turn 1, as Hermes does
+            hermes_turn(live, 1, "how does omh recall with deterministic tokens")
+            live.queue_prefetch("how does omh recall with deterministic tokens")  # end of turn 1, as Hermes does
+            # Turn 1's record is still in context (Hermes replays it), so only
+            # the record new to the conversation is served and counted.
             pack = hermes_turn(live, 2, "and the memory packs again")
             self.assertEqual(rendered_ids(pack), [record["record_id"]])
             self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
@@ -161,8 +164,10 @@ class HermesHookOrderTests(unittest.TestCase):
             self.assertIsNone(live.recall_status())
             self.assertIsNone(live.latest_prefetch_receipt())
             self.assertEqual(read_dreaming_state(root / ".omh", root / ".hermes")["turns_since_consolidation"], turns_before + 1)
-            # The next turn renders again and recovers on its own.
-            self.assertNotEqual(hermes_turn(live, 3, "how does omh recall memory packs"), "")
+            # The next turn renders again and recovers on its own. The first
+            # record is already in this conversation, so a new one shows it.
+            later = approve(root, "A failed render recovers on the next turn")
+            self.assertEqual(rendered_ids(hermes_turn(live, 3, "does a failed render recover?")), [later["record_id"]])
 
     def test_served_text_and_count_come_from_one_render(self) -> None:
         # Hermes queues the finished turn's render on a worker thread while the

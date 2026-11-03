@@ -27,6 +27,7 @@ to beside the control plane's handoff attachments.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -226,6 +227,8 @@ def select_prefetch_records(
     principal_context: dict[str, object] | None = None,
     shared_surface: bool = False,
     required_scope_kinds: tuple[str, ...] = ("project",),
+    query_fallback: bool = True,
+    session_served: Mapping[str, str] | None = None,
 ) -> MemoryRecallSelection:
     """The canonical selection for a live prefetch: delivery mode, never inspection."""
     return select_memory_recall(
@@ -247,6 +250,8 @@ def select_prefetch_records(
         query_intent=query_intent,
         principal_context=principal_context,
         shared_surface=shared_surface,
+        query_fallback=query_fallback,
+        session_served=session_served,
     )
 
 
@@ -266,6 +271,8 @@ def prepare_prefetch_records(
     principal_context: dict[str, object] | None = None,
     shared_surface: bool = False,
     required_scope_kinds: tuple[str, ...] = ("project",),
+    query_fallback: bool = True,
+    session_served: Mapping[str, str] | None = None,
 ) -> PreparedPrefetch:
     """Select, then render, under one clock. The receipt is built from this."""
     clock = now if now is not None else _utc_now()
@@ -283,6 +290,8 @@ def prepare_prefetch_records(
         principal_context=principal_context,
         shared_surface=shared_surface,
         required_scope_kinds=required_scope_kinds,
+        query_fallback=query_fallback,
+        session_served=session_served,
     )
     return PreparedPrefetch(selection, render_selected_memory_records(selection, snapshot.records, budget_chars=budget_chars), clock)
 

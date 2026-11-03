@@ -91,6 +91,8 @@ def _read_live_receipt(paths: OmhPaths, request: RecallIncidentRequest, *, invoc
             observed=str(perspective.get('observed', '') or '') or None,
             query_intent=str(lens.get('query_intent', '') or '') or None,
             limit=request.limit, max_chars=request.max_chars, now=request.now,
+            # A returned receipt is the live provider's, which never falls back.
+            query_fallback=False,
         )
         principal = receipt.get('principal_decision')
         binding = {

@@ -45,8 +45,10 @@ class SanitizedProviderQueryTests(CaptureReachHomes):
             "Traceback retry analysis uses the crash archive.",
             "Telemetry error reports live in the diagnostics folder.",
         )]
-        live = provider(self.root)
         for turn, message in enumerate((LOG + "\n" + QUESTION, QUESTION + "\n" + LOG), 1):
+            # A fresh conversation each: one that already holds the deploy
+            # record would not serve it again.
+            live = provider(self.root, session_id=f"session-{turn}")
             with self.subTest(question_first=turn == 2):
                 ids = rendered_ids(hermes_turn(live, turn, message))
                 self.assertTrue(ids)

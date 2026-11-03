@@ -1357,7 +1357,11 @@ the unrelated one. The collapse reads two structured fields and never the
 summaries. A record with no subject never joins a group, different scopes
 never merge, and a pin does not hold an older value in place.
 
-A query that matches nothing does not empty the pack. When a query has
+A query that matches nothing does not empty a handoff or CLI pack. (The live
+per-turn prefetch and `omh_remember`/`omh_memory` recall pass
+`query_fallback=False` and do not fall back; see
+[Provider Prefetch and the Recall Line](#provider-prefetch-and-the-recall-line).)
+When a query has
 indexable tokens and no eligible record overlaps it, not even on a
 store-common term, and no pin applies, every `active`-tier record that was held
 out as `no_query_overlap` is served the way an unqueried pack serves it —
@@ -1824,6 +1828,36 @@ inside any repository (owner decision 2026-10-13; before it, the allowlist was
 empty there, so a capture made outside a repository was stored and never
 recalled). A shared surface outside a repository still reads nothing.
 
+A live turn serves only what it asked for, and only once per conversation
+(2026-11-03 audit: 89% of live-served records shared no word with the turn,
+and 84% repeated a record the session already held):
+
+- The provider calls the selector with `query_fallback=False`. A query that
+  matches no record serves no record, never the active-tier fallback below. A
+  query with no indexable terms ("ok", "야", an empty message) serves pinned
+  records only, and everything else is `no_query_overlap`.
+- A turn that was only host framing or a host notice (a background-process
+  or delegation-completion notice, a bare skill invocation; the sanitizer's
+  `host_only`) serves no records at all, not even pins.
+- Hermes replays each turn's injected block for the rest of the session, so a
+  record served once is still in context. The provider keeps the
+  `recall_revision` of each record it served (the stored `revision` plus the
+  summary, type and open/settled state it renders) and the selector skips a
+  record still at that revision as `served_this_session`, before the budget
+  cut. A revised record is served again. Every session switch Hermes reports
+  clears the list: a compaction, rotated or in place, summarises away the
+  blocks that carried the records, so each may be served once more. A new
+  provider starts empty as well. A queued render never marks a record served;
+  only `prefetch` does.
+- Blocks are still rendered every turn on a console; they count toward the
+  recall line only when their rendered text changed since the last serve.
+
+`omh_remember` and `omh_memory` recall also pass `query_fallback=False`: a
+query that matches nothing is `nothing_found`. A query made only of record ids
+looks those records up through the same lens and eligibility. Coding
+handoffs, `omh memory recall` and the retrieval suite's adapter arm keep the
+fallback.
+
 ### The recall query
 
 The pack is ranked against a query built from the person's turn, and that
@@ -1842,7 +1876,8 @@ the same markers and first/last rule as Hermes' own
 `extract_user_instruction_from_skill_message`; a bare invocation gives an
 empty query. A host notice (a background-process, delegation-completion or
 gateway-provenance notice) ends the person's words at the line where it
-starts, and a turn that is only a notice gives an empty query. A turn that
+starts, and a turn that is only a notice gives an empty query marked
+`host_only`, for which the provider serves no records. A turn that
 only mentions one of these phrases mid-sentence keeps it, backfill with no
 `[New message]` boundary is kept whole, and a relay with two or more
 distinct speakers keeps its prefixes.
@@ -1940,7 +1975,10 @@ memory:
 ```
 
 The count is rendered full blocks plus rendered record elements in the last
-pack returned by `prefetch`, not the number selected for a queued pack. Record
+pack returned by `prefetch`, not the number selected for a queued pack, and
+only what is new to the conversation: records it did not already hold, and
+blocks whose text changed since the last serve. A turn that adds nothing new
+prints no line. Record
 summaries are bounded projections, not a promise of full source content. A
 reference-only block index reports content without a discrete count.
 Initialization, a newly served empty pack, and shutdown don't retain an old

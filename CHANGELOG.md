@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Memory recall serves what the turn asked for, once per conversation.**
+  A message that matches no saved memory now gets none. Before, it got the
+  six most recent ones. A message with nothing to search for ("ok", an empty
+  turn) gets only pinned records. A background-process or delegation notice
+  that nobody typed gets nothing. A record the conversation already holds is
+  not sent again until it changes, or until a compaction drops it from
+  context. The recall line counts only what is new, so a turn that adds
+  nothing posts no line. `omh_remember` and `omh_memory` recall return
+  `nothing_found` for a query that matches nothing and still look up record
+  ids. Coding handoffs and `omh memory recall` are unchanged. These numbers
+  come from replaying stored turns on read-only copies of the owner's stores
+  through the old and new selection rules. On the console profile, the share
+  of served memories that share a word with the turn went from 11% to 97%,
+  repeats from 87% to 0%, and the largest per-session record total from
+  147,123 to 4,767 characters. On the messenger profile, recall lines went
+  from 349 to 35 in that replay.
+
 - **A TUI performance bench lives in the repo.** `tools/benchmarks/tui_perf.py`
   measures frame cost by transcript size, full redraw, streaming per chunk,
   keystroke cost by composer length, idle wake-ups and bytes, plugin hook

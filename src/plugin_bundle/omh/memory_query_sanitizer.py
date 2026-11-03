@@ -119,6 +119,10 @@ class SanitizedQuery:
     clean_length: int
     # "", "reply", or "same_author"; reply wins when both sources contribute.
     context: str = ""
+    # The turn had text and all of it was host framing or a host notice (a
+    # background-process or delegation-completion notice, a bare skill
+    # invocation): nobody asked anything, so live recall serves no records.
+    host_only: bool = False
 
 
 def _finished(text: str) -> str:
@@ -325,4 +329,5 @@ def sanitize_memory_query(raw: str) -> SanitizedQuery:
                 method = "framing_only"
     return SanitizedQuery(
         clean=clean, method=method, original_length=len(raw), clean_length=len(clean), context=context,
+        host_only=not clean and bool(raw.strip()),
     )

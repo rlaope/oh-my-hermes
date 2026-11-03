@@ -2655,7 +2655,7 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             for index in range(40):
                 _approve_record(root, f"Approved local fact {index}.")
             provider = self._provider(root)
-            text = provider.prefetch("")
+            text = provider.prefetch("approved local fact")
             # The 2,400 budget is the records section's. This first pack of a
             # session may also carry the "since your last session" digest (40
             # records were just created; those made in the session-start second
@@ -2679,7 +2679,7 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             root = Path(tmp)
             write_memory_block(root / ".omh", approve_memory_block(build_memory_block("facts", "OMH wraps Hermes.")))
             _approve_record(root, "Tests need PYTHONPATH=tests.")
-            pack = self._provider(root).prefetch("")
+            pack = self._provider(root).prefetch("tests need pythonpath")
             self.assertLess(pack.index("<memory_blocks>"), pack.index("<memory_records>"))
 
     def test_the_queued_query_ranks_the_records(self) -> None:
@@ -2700,11 +2700,13 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             pack = provider.prefetch("cut a release")
             self.assertIn("Release notes", pack)
             self.assertNotIn("menubar helper", pack)
-            # An unqueried turn ranks rather than excludes: both records travel.
+            # An unqueried live turn serves pins only (no active-tier fallback),
+            # so neither record travels, and both are named as not overlapping.
             provider.queue_prefetch("")
             pack = provider.prefetch("")
-            self.assertIn("Release notes", pack)
-            self.assertIn("menubar helper", pack)
+            self.assertNotIn("Release notes", pack)
+            self.assertNotIn("menubar helper", pack)
+            self.assertEqual(_served_receipt(provider)["selection"]["exclusion_reason_counts"], {"no_query_overlap": 2})
 
     def test_the_project_store_is_read_when_the_session_runs_inside_a_repository(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -2718,11 +2720,12 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             # labelled `user-global`. Neither is inferred from the store path.
             _approve_record(root, "Project-scoped: the API lives under src/api.", home="repo/.omh")
             _approve_record(root, "User-scoped: the owner prefers Korean replies.", scope_kind="user-global", scope_ref="default")
-            pack = self._provider(root, cwd=repo / "src" / "deep").prefetch("")
+            query = "where does the api live, which replies"
+            pack = self._provider(root, cwd=repo / "src" / "deep").prefetch(query)
             self.assertIn("Project-scoped", pack)
             self.assertIn("User-scoped", pack)
             # Outside any repository only the user store is read.
-            self.assertNotIn("Project-scoped", self._provider(root, cwd=root).prefetch(""))
+            self.assertNotIn("Project-scoped", self._provider(root, cwd=root).prefetch(query))
 
     def test_summaries_are_escaped_and_the_budget_names_what_it_cut(self) -> None:
         records = [
@@ -2794,7 +2797,8 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             provider.queue_prefetch("release", now=_datetime(2025, 12, 31, tzinfo=_timezone.utc))
             pack = provider.prefetch("release")
             self.assertIn("Expired release note.", pack)
-            self.assertEqual(_served_receipt(provider)["selection"]["exclusion_reason_counts"], {"superseded": 1})
+            # The live note is still in this conversation from the first serve.
+            self.assertEqual(_served_receipt(provider)["selection"]["exclusion_reason_counts"], {"served_this_session": 1, "superseded": 1})
 
     def test_a_record_id_shared_by_two_homes_is_read_once_project_first(self) -> None:
         with TemporaryDirectory() as tmp:

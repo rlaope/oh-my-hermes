@@ -57,13 +57,18 @@ class MemoryRecallIncidentTests(unittest.TestCase):
         assert isinstance(record, dict)
         return record
 
-    def serve(self, session_id: str = SESSION) -> dict[str, object]:
-        """The actual provider lifecycle persists the receipt this profile's diagnosis reads."""
+    def serve(self, session_id: str = SESSION, query: str = 'structured response output') -> dict[str, object]:
+        """The actual provider lifecycle persists the receipt this profile's diagnosis reads.
+
+        The query names the records under test: a live turn serves only what
+        its query matches (no active-tier fallback), so an empty one would
+        select nothing but pins.
+        """
         assert self.root is not None
         live = OmhMemoryProvider(self.paths.omh_home, hermes_home=self.paths.hermes_home)
         live.initialize(session_id, platform="cli", hermes_home=str(self.paths.hermes_home), agent_context='primary', cwd=str(self.root))
-        live.queue_prefetch('')
-        live.prefetch('')
+        live.queue_prefetch(query)
+        live.prefetch(query)
         receipt = live.latest_prefetch_receipt()
         live.shutdown()
         assert receipt is not None
@@ -74,7 +79,7 @@ class MemoryRecallIncidentTests(unittest.TestCase):
         """Eight long summaries: the selector keeps six, the render budget fewer."""
         for index in range(8):
             self.approved(f'release detail {index} {LONG_SUMMARY}')
-        receipt = self.serve()
+        receipt = self.serve(query='release detail checklist step')
         rendering = receipt['rendering']
         assert isinstance(rendering, dict)
         omitted = rendering['selected_not_rendered']
@@ -206,7 +211,7 @@ class MemoryRecallIncidentTests(unittest.TestCase):
                 self.assertIn(reason, selection['exclusion_reason_counts'])
         # Given the actual provider's persisted receipt for this profile and session.
         rendered = self.approved('rendered preference for the live turn')
-        receipt = self.serve()
+        receipt = self.serve(query='rendered preference for the live turn')
         selection = receipt['selection']
         assert isinstance(selection, dict)
         self.assertIn(rendered['record_id'], selection['selected_record_ids'])
@@ -346,7 +351,7 @@ class MemoryRecallIncidentTests(unittest.TestCase):
         api = self.api()
         record = self.approved()
         other = self.approved('unrelated user-global preference', scope_kind='user-global', scope_ref='default')
-        receipt = self.serve()
+        receipt = self.serve(query='structured response output, unrelated preference')
         path = receipts.prefetch_receipt_path(self.paths.omh_home)
         request = api.RecallIncidentRequest(record_id=record['record_id'], session_id=SESSION)
         # When

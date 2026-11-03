@@ -1194,19 +1194,29 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             next_action="OMH memory is not available to this session right now; nothing was searched.",
         )
     snapshot = read_record_store_snapshot(lens.homes)
+    # A query naming record ids looks those records up: unqueried, so every
+    # eligible record in this lens is a candidate, then kept to the ids named.
+    # Any other query is matched by its words with no fallback, so a query
+    # that matches nothing is `nothing_found`, never the unrelated active tier.
+    named = query.split()
+    lookup = set(named) <= {str(record.get("record_id", "")) for record in snapshot.records}
     selection = select_prefetch_records(
         snapshot,
-        query,
+        "" if lookup else query,
         allowed_scopes=lens.scopes,
         session_id=lens.session_id,
         executor_target=lens.executor_target,
-        limit=limit,
+        limit=max(len(snapshot.records), 1) if lookup else limit,
         principal_context=lens.principal_context,
         shared_surface=lens.shared_surface,
         required_scope_kinds=lens.required_scope_kinds,
+        query_fallback=lookup,
     )
+    included = selection.pack.get("included_records", [])
+    if lookup:
+        included = [item for item in included if str(item.get("record_id", "")) in named]
     rows = []
-    for item in selection.pack.get("included_records", [])[:limit]:
+    for item in included[:limit]:
         row = {key: item.get(key) for key in ("record_id", "record_type", "summary", "tags", "approved_at")}
         if item.get("resolution_marker"):
             row["resolution_marker"] = item["resolution_marker"]

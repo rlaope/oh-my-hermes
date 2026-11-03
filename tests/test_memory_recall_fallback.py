@@ -17,8 +17,8 @@ from _local_package import load_local_package
 
 load_local_package()
 from memory_recall_fixture import Json, included_ids, mapping, payload, reviewed, selection, text  # noqa: E402
-from omh.plugin_bundle.omh.memory_provider import RecallStatus  # noqa: E402
 from omh.plugin_bundle.omh.memory_recall_support import normalized_summary_key  # noqa: E402
+from project_identity_fixture import memory_paths  # noqa: E402
 from omh.workflows import memory  # noqa: E402
 from test_memory_prefetch_canonical import approve, provider, rendered_ids  # noqa: E402
 
@@ -187,7 +187,10 @@ class DuplicateSummaryCollapseTests(unittest.TestCase):
 
 
 class HermesOrderFallbackTests(unittest.TestCase):
-    def test_a_greeting_still_serves_the_approved_active_record(self) -> None:
+    def test_a_greeting_serves_nothing_live_while_the_handoff_still_falls_back(self) -> None:
+        # The live turn passes query_fallback=False (2026-11-03 audit: 89% of
+        # live-served records shared no word with the turn); the handoff
+        # facade keeps the selector's default.
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".hermes").mkdir()
@@ -195,11 +198,17 @@ class HermesOrderFallbackTests(unittest.TestCase):
             live = provider(root)
             live.on_turn_start(1, "hello there")
             pack = live.prefetch("hello there")
-            self.assertEqual(rendered_ids(pack), [record["record_id"]])
-            self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
+            self.assertEqual(rendered_ids(pack), [])
+            self.assertIsNone(live.recall_status())
             receipt = live.latest_prefetch_receipt()
             assert isinstance(receipt, dict)
-            self.assertEqual(receipt["selection"]["query_fallback"], {**_FALLBACK, "readmitted_count": 1})
+            self.assertIsNone(receipt["selection"]["query_fallback"])
+            handoff = memory.build_project_memory_recall_pack(
+                memory_paths(root / ".omh", root / ".hermes"), "hello there",
+                scope_kind="project", scope_ref=record["scope"]["ref"], inspection=False,
+            )
+            self.assertEqual([item["record_id"] for item in handoff["included_records"]], [record["record_id"]])  # type: ignore[union-attr]
+            self.assertEqual(handoff["query_fallback"], {**_FALLBACK, "readmitted_count": 1})
 
 
 if __name__ == "__main__":
