@@ -1308,6 +1308,40 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(result["state"], "cancelled")
         self.assertEqual(settle["reason"], "run_cancelled")
 
+    def test_cancel_names_still_running_children(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node("api"), node("docs")])
+            call(action="ready", run="feat")
+            child_started(home, "feat", "api")
+            result = call(action="cancel", run="feat")
+        still = result.get("still_running", [])
+        self.assertEqual([row["id"] for row in still], ["api"])
+        self.assertEqual(still[0]["subagent_id"], "sa-api")
+        self.assertIn("open_for_s", still[0])
+        self.assertIn("api as subagent sa-api", result["say"])
+        self.assertIn("delegate_task action=stop", result["say"])
+        self.assertIn("never settles them", result["say"])
+
+    def test_a_repeated_cancel_still_names_the_running_child(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node("api"), node("docs")])
+            call(action="ready", run="feat")
+            child_started(home, "feat", "api")
+            call(action="cancel", run="feat")
+            again = call(action="cancel", run="feat")
+        self.assertEqual([row["subagent_id"] for row in again.get("still_running", [])], ["sa-api"])
+        self.assertNotIn("No child is still running", again["say"])
+
+    def test_cancel_without_running_children_says_so(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=FEATURE)
+            result = call(action="cancel", run="feat")
+        self.assertNotIn("still_running", result)
+        self.assertIn("No child is still running", result["say"])
+
     def test_the_record_holds_no_child_output(self) -> None:
         with homes() as home:
             slots_table(home)
