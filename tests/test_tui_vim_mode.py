@@ -16,8 +16,10 @@ clusters of more than one code point.
 
 from __future__ import annotations
 
+import re
 import string
 import unittest
+from unittest import mock
 
 from _tui_lines import line_text, without_badge
 from test_tui_agent_view import agent_app
@@ -25,9 +27,11 @@ from test_tui_cc_look import working_rows
 from test_tui_modes import SID, make_app, type_text
 from test_tui_subagents import FIRST
 from test_tui_rewind import Clock
+from omh.tui import app as app_module
 from omh.tui.app import DOUBLE_ESCAPE_SECONDS, App, PathItem, vim_mode
 from omh.tui.composer import CANCEL, NONE, SUBMIT, VIM_INSERT, VIM_NORMAL, Composer
 from omh.tui.gateway import ServerRequest
+from omh.tui.screen import CURSOR_SHAPE_BEAM, CURSOR_SHAPE_BLOCK, CURSOR_SHAPE_DEFAULT
 from omh.tui.keys import BACKSPACE, CHAR, DELETE, DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key, KeyDecoder, Paste
 from omh.tui.modes import chip_column, editing_label, info_line, mode_label
 from omh.tui.frame import MODE_ACCEPT, MODE_NORMAL
@@ -508,6 +512,22 @@ class SubmitTests(unittest.TestCase):
                 action = composer.handle(Key(ENTER))
                 self.assertEqual((action.kind, action.text), (SUBMIT, text))
 
+    def test_enter_in_insert_adds_a_line_and_only_normal_sends(self) -> None:
+        composer = Composer(vim=True)
+        keys(composer, "ab")
+        self.assertEqual(composer.handle(Key(ENTER)).kind, NONE)
+        keys(composer, "cd")
+        self.assertEqual(composer.text, "ab\ncd")
+        composer.handle(ESC)
+        action = composer.handle(Key(ENTER))
+        self.assertEqual((action.kind, action.text), (SUBMIT, "ab\ncd"))
+
+    def test_enter_still_sends_without_vim_mode_and_in_a_masked_composer(self) -> None:
+        for composer in (Composer(), Composer(vim=True, masked=True)):
+            with self.subTest(vim=composer.vim):
+                keys(composer, "secret")
+                self.assertEqual(composer.handle(Key(ENTER)).kind, SUBMIT)
+
     def test_a_backslash_then_enter_in_insert_still_adds_a_line(self) -> None:
         composer = Composer(vim=True)
         keys(composer, "end\\")
@@ -816,7 +836,7 @@ class AppEscTests(unittest.TestCase):
         app, client, _clock = vim_app()
         now = [0.0]
         decoder = KeyDecoder(lambda: now[0])
-        for chunk in (b"hello world", b"\x1b", b"0dw", b"\x1bA", b"!\r"):  # ESC A in one read: Esc, then A
+        for chunk in (b"hello world", b"\x1b", b"0dw", b"\x1bA", b"!", b"\x1b", b"\r"):  # ESC A in one read: Esc, then A
             now[0] += 0.1  # a read a tenth of a second after the one before, as typing brings them
             for event in decoder.feed(chunk):
                 app._on_input(event)
@@ -986,6 +1006,68 @@ class InfoLineTests(unittest.TestCase):
         label = editing_label(VIM_INSERT, MODE_ACCEPT, DEFAULT_THEME)
         self.assertEqual(chip_column(MODE_ACCEPT, DEFAULT_THEME, VIM_INSERT), line_width(label) + 3)
         self.assertEqual(editing_label("", MODE_ACCEPT, DEFAULT_THEME), mode_label(MODE_ACCEPT, DEFAULT_THEME))
+
+
+class CursorShapeTests(unittest.TestCase):
+    """The terminal's cursor follows the editing mode (DECSCUSR): a beam in INSERT, a block in NORMAL."""
+
+    @staticmethod
+    def shapes(app: App) -> list[str]:
+        app.terminal.writes.clear()
+        app._render()
+        return [shape for text in app.terminal.writes for shape in re.findall(r"\x1b\[\d q", text)]
+
+    def test_the_shape_follows_insert_and_normal_and_is_written_only_when_it_changes(self) -> None:
+        app, _client = make_app()
+        app._take_settings({"config": {"display": {"vim_mode": True}}})
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BEAM])
+        self.assertEqual(self.shapes(app), [])
+        app._on_input(ESC)
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BLOCK])
+        app._on_input(Key(CHAR, "i"))
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BEAM])
+
+    def test_without_vim_mode_the_terminal_keeps_its_own_shape(self) -> None:
+        app, _client = make_app()
+        self.assertEqual(self.shapes(app), [])
+        self.assertIsNone(app.cursor_shape)
+
+    def test_turning_vim_mode_off_or_leaving_gives_the_terminals_shape_back(self) -> None:
+        app, _client = make_app()
+        app._take_settings({"config": {"display": {"vim_mode": True}}})
+        self.shapes(app)
+        app._take_settings({"config": {"display": {"vim_mode": False}}})
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_DEFAULT])
+        app._take_settings({"config": {"display": {"vim_mode": True}}})
+        self.shapes(app)
+        app.terminal.writes.clear()
+        app._shutdown()
+        self.assertIn(CURSOR_SHAPE_DEFAULT, app.terminal.writes)
+
+    def test_a_question_that_takes_the_keys_gives_the_terminals_shape_back(self) -> None:
+        app, _client = make_app()
+        app._take_settings({"config": {"display": {"vim_mode": True}}})
+        self.shapes(app)
+        app._on_server_request(ServerRequest("srq-1", "approval", {"command": "rm -rf ./x"}))
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_DEFAULT])
+
+    def test_ctrl_z_gives_the_terminals_shape_back_before_the_stop_and_the_next_frame_sets_it_again(self) -> None:
+        app, _client = make_app()
+        app._take_settings({"config": {"display": {"vim_mode": True}}})
+        self.shapes(app)
+        app.terminal.writes.clear()
+        stopped_at: list[int] = []
+        original = app.terminal.suspend
+
+        def suspend() -> bool:
+            stopped_at.append(len(app.terminal.writes))
+            return original()
+
+        app.terminal.suspend = suspend  # type: ignore[method-assign]
+        with mock.patch.object(app_module.signal, "SIGTSTP", 20, create=True):
+            app._suspend()
+        self.assertIn(CURSOR_SHAPE_DEFAULT, app.terminal.writes[: stopped_at[0]])
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BEAM])
 
 
 if __name__ == "__main__":

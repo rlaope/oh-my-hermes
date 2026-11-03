@@ -690,7 +690,7 @@ class Composer:
 
     # -- key handling ---------------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> ComposerAction:
+    def handle(self, event: Key | Paste, *, submit_now: bool = False) -> ComposerAction:
         if isinstance(event, Key) and event.name == CHAR and event.ctrl and not event.alt:
             redo = event.char == REDO_CHAR or (self.normal and event.char == VIM_REDO_CHAR)
             if event.char in UNDO_CHARS or redo:
@@ -703,7 +703,7 @@ class Composer:
         if modal is _TOOK_STEP:
             self._clamp_normal()
             return NOTHING
-        action = self._handle(event) if modal is None else modal
+        action = self._handle(event, submit_now=submit_now) if modal is None else modal
         if action.kind == SUBMIT:
             self._undo.clear()
             self._redo.clear()
@@ -1068,17 +1068,21 @@ class Composer:
         if index > 0:
             self.caret = bounds[index - 1]
 
-    def _handle(self, event: Key | Paste) -> ComposerAction:
+    def _handle(self, event: Key | Paste, *, submit_now: bool = False) -> ComposerAction:
         if isinstance(event, Paste):
             self._insert_paste(event.text)
             return NOTHING
         if event.name == ENTER:
+            # The app opts a running turn into Ctrl+Enter steering; idle keeps normal editing rules.
+            if submit_now and event.ctrl and not (event.alt or event.shift):
+                return self._submit()
             adds_line = event.alt or event.shift
             continues = not self.masked and not self.normal and self.text[self.caret - 1 : self.caret] == "\\"
             if not adds_line and continues:  # in NORMAL, Enter always sends
                 self._replace(self.caret - 1, self.caret, NEWLINE)
                 return NOTHING
-            if adds_line:
+            # In vim mode INSERT is for writing, so Enter adds a line there and only NORMAL sends.
+            if adds_line or (self.vim and not self.normal and not self.masked):
                 self._insert(NEWLINE)
                 return NOTHING
             return self._submit()

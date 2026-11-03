@@ -136,7 +136,7 @@ from ..skin_pack import (
     write_wallpaper_choice,
 )
 from . import gateway_contract as contract
-from .composer import COMPLETE, EXIT, IMAGE_LABEL, INTERRUPT, SUBMIT, Composer, ComposerAction
+from .composer import COMPLETE, EXIT, IMAGE_LABEL, INTERRUPT, SUBMIT, VIM_INSERT, VIM_NORMAL, Composer, ComposerAction
 from .frame import INFO_INSET, MODE_NORMAL, MODE_SHELL, Frame, badge_forms, branch_forms, build_frame, sticky_line
 from .git_status import GitWatcher
 from .history import SEARCH_ACCEPT, SEARCH_CANCEL, SEARCH_HINTS, HistorySearch, append_entry, history_path, load_history
@@ -223,6 +223,8 @@ from .screen import (
     CARRIAGE_RETURN,
     CLEAR_SCREEN_AND_SCROLLBACK,
     CURSOR_HOME,
+    CURSOR_SHAPE_BEAM,
+    CURSOR_SHAPE_BLOCK,
     ERASE_SCROLLBACK,
     HIDE_CURSOR,
     SHOW_CURSOR,
@@ -1022,6 +1024,7 @@ class TerminalLike(Protocol):
     def read(self, timeout: float, wake: int | None = None) -> bytes: ...
     def write(self, text: str) -> None: ...
     def set_mouse(self, enabled: bool, drag: bool = False) -> None: ...
+    def set_cursor_shape(self, shape: str | None) -> None: ...
     def suspend(self) -> bool: ...
 
 
@@ -1885,6 +1888,7 @@ class App(ModesMixin, AgentViewMixin):
         self.wallpaper = self._saved_wallpaper()
         self.background_answered: str | None = None
         self.ground_set: str | None = None
+        self.cursor_shape: str | None = None  # the DECSCUSR shape vim mode set (`_sync_cursor_shape`), None while the terminal's own
         self.rows_ground: str | None = None  # the ground the session's rows were printed on (set by a full redraw)
         self.ambient_at = 0.0  # when the wallpaper's cells were last painted, on `clock`
         self._take_size()
@@ -2693,6 +2697,7 @@ class App(ModesMixin, AgentViewMixin):
         reports_may_arrive = self._reports_may_arrive()  # read before the off below starts a new grace period
         try:
             self._restore_ground()  # first: whatever fails after it, the terminal has its own background back
+            self._restore_cursor_shape()
             self._set_mouse(False)
             if self.pager is not None:
                 self.pager = None
@@ -3767,13 +3772,13 @@ class App(ModesMixin, AgentViewMixin):
         ):
             self.exit_code = 0
             return
-        action = self._edit(self.composer, event)
+        action = self._edit(self.composer, event, submit_now=event == SEND_NOW_KEY and self._steer_keys_live())
         self._on_composer(action, event, steer=isinstance(event, Key) and event.name == ENTER and event.ctrl)
 
-    def _edit(self, composer: Composer, event: Key | Paste) -> ComposerAction:
+    def _edit(self, composer: Composer, event: Key | Paste, *, submit_now: bool = False) -> ComposerAction:
         """`event` to `composer`, the person's own key: one that changes its text reopens the `/` menu at its top."""
         before, editing = composer.text, composer.normal
-        action = composer.handle(event)
+        action = composer.handle(event, submit_now=submit_now)
         if composer.text != before:
             self.menu_index = 0
             self.menu_closed = None
@@ -4010,6 +4015,7 @@ class App(ModesMixin, AgentViewMixin):
         self._set_mouse(False)
         self.region.clear()
         self._restore_ground()  # the shell's own background while stopped; the first frame after sets it again
+        self._restore_cursor_shape()  # likewise the shell's own cursor
         if self.title_pushed:
             self.terminal.write(TITLE_POP)
             self.title_pushed, self.shown_title, self.title_words = False, None, ""
@@ -7217,6 +7223,21 @@ class App(ModesMixin, AgentViewMixin):
             self.terminal.write(background_set(ground))
             self.ground_set = ground
 
+    def _sync_cursor_shape(self) -> None:
+        """Vim mode's cursor: a beam in INSERT, a block in NORMAL (DECSCUSR), written only when it changes. Without
+        vim mode, or where the composer does not have the keys, the terminal's own shape is back."""
+        label = self.composer.vim_label if self._composer_open() else ""
+        shape = CURSOR_SHAPE_BLOCK if label == VIM_NORMAL else CURSOR_SHAPE_BEAM if label == VIM_INSERT else None
+        if shape != self.cursor_shape:
+            self.terminal.set_cursor_shape(shape)
+            self.cursor_shape = shape
+
+    def _restore_cursor_shape(self) -> None:
+        """Put the terminal's own cursor shape back if vim mode set one: on every way out and at a stop."""
+        if self.cursor_shape is not None:
+            self.cursor_shape = None
+            self.terminal.set_cursor_shape(None)
+
     def _restore_ground(self) -> None:
         """Put the terminal's own background back if the wallpaper set another: on every way out (`_shutdown`), at a
         stop (`_suspend`, set again by the first frame after), and when the wallpaper goes."""
@@ -7346,6 +7367,7 @@ class App(ModesMixin, AgentViewMixin):
         self._settle_list()
         self._write_title()
         self._sync_ground()
+        self._sync_cursor_shape()
         if self.pager is not None:
             self.bg_row_shown = False
             self.clickable = {}
