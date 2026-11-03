@@ -44,6 +44,7 @@ Boundaries, in order of importance:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Final, Iterator, Mapping
 
@@ -73,8 +74,13 @@ SOURCE_STATUSES: Final[tuple[str, ...]] = ("present", "absent", "unreadable", "u
 # sequenced instead of an empty payload with no trace.
 _CLAUDE_USER_SKILLS: Final[str] = ".claude/skills"
 _CLAUDE_PLUGINS: Final[str] = ".claude/plugins"
-_CODEX_PROMPTS: Final[str] = ".codex/prompts"
-_CODEX_SKILLS: Final[str] = ".codex/skills"
+# Codex roots follow Codex's own loader (openai/codex `host_roots.rs`):
+# `$CODEX_HOME` (default `~/.codex`) holds prompts and skills, and the
+# `.agents/skills` roots — per user and per repo — hold the agent-skills packs
+# OMH itself installs for Codex. All skill roots invoke as `$name`.
+_CODEX_HOME_DEFAULT: Final[str] = ".codex"
+_CODEX_HOME_ENV: Final[str] = "CODEX_HOME"
+_AGENT_SKILLS: Final[str] = ".agents/skills"
 
 _PI_FAMILY_RUNTIME_SOURCE_REASON: Final[str] = (
     "no skill probe exists for the pi-family runtime: its host CLIs (pi-family and opencode) declare no "
@@ -149,10 +155,19 @@ def discovered_executor_skills(
     delegation, so a table covering every profile would be dead weight.
     """
     base = home if home is not None else Path.home()
+    codex_home = _codex_home(base, honour_env=home is None)
     sources: dict[str, object] = {}
     skills: list[dict[str, str]] = []
     rejected = 0
-    for source_id, entries, status, reason in _probe_profile(profile, base, project_root):
+    # Codex lists every skill it finds (deduped by SKILL.md path, not by
+    # name) and refuses a plain `$name` mention when two skills share the name
+    # (openai/codex `skills/selection.rs`). So an invocation found in more than
+    # one Codex root is ambiguous there: it is dropped from the payload, never
+    # recommended, and counted. Keyed on the invocation: a `/name` prompt and a
+    # `$name` skill are distinct commands.
+    seen_invocations: set[str] | None = set() if profile == "codex" else None
+    ambiguous: set[str] = set()
+    for source_id, entries, status, reason in _probe_profile(profile, base, project_root, codex_home):
         source: dict[str, str] = {"status": status}
         if reason:
             source["reason"] = reason
@@ -162,16 +177,23 @@ def discovered_executor_skills(
             if safe is None:
                 rejected += 1
                 continue
+            resolved_invocation = invocation.replace(_NAME_PLACEHOLDER, safe)
+            if seen_invocations is not None:
+                if resolved_invocation in seen_invocations:
+                    ambiguous.add(resolved_invocation)
+                    continue
+                seen_invocations.add(resolved_invocation)
             role, score = classify_role_scored(description, safe)
             skills.append(
                 {
                     "name": safe,
-                    "invocation": invocation.replace(_NAME_PLACEHOLDER, safe),
+                    "invocation": resolved_invocation,
                     "role": role,
                     "role_score": score,
                     "source": source_id,
                 }
             )
+    skills = [entry for entry in skills if entry["invocation"] not in ambiguous]
     skills.sort(key=lambda entry: (str(entry["role"]), -int(entry["role_score"]), str(entry["name"])))
     return {
         "schema_version": EXECUTOR_SKILL_DISCOVERY_SCHEMA_VERSION,
@@ -180,6 +202,7 @@ def discovered_executor_skills(
         "sources": sources,
         "skills": skills,
         "rejected_name_count": rejected,
+        "ambiguous_name_count": len(ambiguous),
         "claim_boundary": EXECUTOR_SKILL_DISCOVERY_CLAIM_BOUNDARY,
     }
 
@@ -409,10 +432,21 @@ def skill_selection_card(
 _NAME_PLACEHOLDER: Final[str] = "{name}"
 
 
+def _codex_home(base: Path, *, honour_env: bool) -> Path:
+    """Return Codex's home: `$CODEX_HOME` when set (and no explicit home was
+    passed), else `<base>/.codex` — the same default Codex itself uses."""
+    if honour_env:
+        configured = os.environ.get(_CODEX_HOME_ENV, "").strip()
+        if configured:
+            return Path(configured).expanduser()
+    return base / _CODEX_HOME_DEFAULT
+
+
 def _probe_profile(
     profile: str,
     base: Path,
     project_root: Path | None,
+    codex_home: Path,
 ) -> Iterator[tuple[str, list[tuple[str, str, str]], str, str]]:
     if profile == "claude-code":
         yield (*_skill_dir_source("claude_user_skills", base / _CLAUDE_USER_SKILLS, f"/{_NAME_PLACEHOLDER}"), "")
@@ -426,10 +460,25 @@ def _probe_profile(
             )
         return
     if profile == "codex":
-        # Codex custom prompts are addressed by file stem; an OMX-style skill
-        # pack installs skill directories alongside them and uses `$name`.
-        yield (*_prompt_file_source("codex_prompts", base / _CODEX_PROMPTS, f"/{_NAME_PLACEHOLDER}"), "")
-        yield (*_skill_dir_source("codex_skills", base / _CODEX_SKILLS, f"${_NAME_PLACEHOLDER}"), "")
+        # Yielded in Codex's precedence order (first wins on a duplicate
+        # name): repo agent skills, then `$CODEX_HOME` prompts (addressed by
+        # file stem) and skills, then the user's agent skills. Only the
+        # project root's `.agents/skills` is probed — OMH knows the root, not
+        # the executor's eventual cwd below it.
+        skill = f"${_NAME_PLACEHOLDER}"
+        if project_root is not None:
+            yield (
+                *_skill_dir_source(
+                    "codex_repo_agent_skills", project_root / _AGENT_SKILLS, skill, confine_to_root=True
+                ),
+                "",
+            )
+        yield (*_prompt_file_source("codex_prompts", codex_home / "prompts", f"/{_NAME_PLACEHOLDER}"), "")
+        yield (*_skill_dir_source("codex_skills", codex_home / "skills", skill, confine_to_root=True), "")
+        yield (
+            *_skill_dir_source("codex_user_agent_skills", base / _AGENT_SKILLS, skill, confine_to_root=True),
+            "",
+        )
         return
     if profile == "pi-family-runtime":
         # An explicit unsupported entry, not silence: without it a dry run
@@ -444,20 +493,41 @@ def _skill_dir_source(
     source_id: str,
     root: Path,
     invocation: str,
+    *,
+    confine_to_root: bool = False,
 ) -> tuple[str, list[tuple[str, str, str]], str]:
+    """Entries for one `<root>/<name>/SKILL.md` tree.
+
+    With `confine_to_root`, a symlinked skill directory is listed only when it
+    resolves inside `root`; one that escapes (or cannot be resolved) is
+    skipped, so a link cannot point discovery at an arbitrary tree. Hidden
+    directories such as Codex's `.system` never list: without a SKILL.md of
+    their own they are skipped here, and with one their names fail
+    `_safe_name` and are counted as rejected.
+    """
     if not root.is_dir():
         return (source_id, [], "absent")
     entries: list[tuple[str, str, str]] = []
     try:
         children = sorted(child for child in root.iterdir() if child.is_dir())
-    except OSError:
+        resolved_root = root.resolve() if confine_to_root else root
+    except (OSError, RuntimeError):
         return (source_id, [], "unreadable")
     for child in children[:_MAX_ENTRIES_PER_SOURCE]:
+        if confine_to_root and child.is_symlink() and not _resolves_within(child, resolved_root):
+            continue
         definition = child / "SKILL.md"
         if not definition.is_file():
             continue
         entries.append((child.name, invocation, _frontmatter_description(definition)))
     return (source_id, entries, "present")
+
+
+def _resolves_within(path: Path, root: Path) -> bool:
+    try:
+        return path.resolve().is_relative_to(root)
+    except (OSError, RuntimeError):
+        return False
 
 
 def _prompt_file_source(

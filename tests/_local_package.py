@@ -43,6 +43,9 @@ def _redirect_home_env_to_temp_root() -> None:
     # The OMH TUI's update notice asks registry.npmjs.org once a day per OMH home, and the home above is a real one:
     # off for the whole process, so no test reaches the network. Its own tests turn it on with the fetch injected.
     os.environ["OMH_TUI_UPDATE_CHECK"] = "0"
+    # `omh update` refreshes and `omh doctor` reads the user-scope `.agents/skills` pack Codex loads;
+    # without this every update test rewrote the developer's real ~/.agents/skills.
+    os.environ["OMH_AGENT_SKILLS_HOME"] = str(root / "agent-skills-home")
 
 
 _redirect_home_env_to_temp_root()
