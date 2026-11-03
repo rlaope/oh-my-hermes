@@ -47,7 +47,7 @@ from omh.tui.app import (
 )
 from omh.tui.frame import MODE_ACCEPT, MODE_ACCEPT_PLAN, MODE_NORMAL, MODE_PLAN
 from omh.tui.gateway import Event, GatewayUnavailable, Response, ServerRequest
-from omh.tui.keys import CHAR, DOWN, ENTER, TAB, UP, Key, KeyDecoder, Paste
+from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, TAB, UP, Key, KeyDecoder, Paste
 from omh.tui.layout import MIN_COLS, MIN_ROWS, slot_cap
 from omh.tui.modes import EFFORT_CYCLE
 from omh.tui.pager import Pager
@@ -2710,6 +2710,48 @@ class ModeReplayTests(AppTestCase):
         self.assertEqual(submitted["params"], {"session_id": LIVE_ID, "text": PLAN_PROMPT})
         self.assertIn("❯ /plan fix the flaky test", terminal.history())
         self.assertNotIn("PLAN MODE", terminal.history())
+
+
+class LeaderLabelTests(unittest.TestCase):
+    def armed(self):
+        app, _client = make_app()
+        app.composer.set_vim(True)
+        app._on_input(Key(ESCAPE))
+        app._on_input(Key(CHAR, " "))
+        return app
+
+    def test_leader_arms_updates_vim_label(self) -> None:
+        app = self.armed()
+        self.assertTrue(app.composer.leader)
+        self.assertEqual(app.composer.vim_label, "NORMAL · SPC")
+
+    def test_leader_disarm_restores_vim_label(self) -> None:
+        for follower in (Key(ESCAPE), Key(CHAR, "z"), Key(CHAR, "p")):
+            with self.subTest(follower=follower):
+                app = self.armed()
+                app._on_input(follower)
+                self.assertFalse(app.composer.leader)
+                self.assertEqual(app.composer.vim_label, "NORMAL")
+
+    def test_chip_column_with_leader_label(self) -> None:
+        app = self.armed()
+        for mode in (MODE_NORMAL, MODE_ACCEPT, MODE_PLAN):
+            with self.subTest(mode=mode):
+                label = modes_module.editing_label(app.composer.vim_label, mode, DEFAULT_THEME)
+                self.assertIn("NORMAL · SPC", line_text(label))
+                self.assertEqual(modes_module.chip_column(mode, DEFAULT_THEME, app.composer.vim_label),
+                                 line_width(label) + 3)
+                self.assertEqual(
+                    modes_module.chip_column(mode, DEFAULT_THEME, "NORMAL · SPC")
+                    - modes_module.chip_column(mode, DEFAULT_THEME, "NORMAL"), 6)
+
+    def test_info_line_renders_whole_leader_label_without_clipping(self) -> None:
+        app = self.armed()
+        for width in (20, 40, 80):
+            with self.subTest(width=width):
+                line = app._info_line(width)
+                self.assertIn("NORMAL · SPC", line_text(line))
+                self.assertLessEqual(line_width(line), width)
 
 
 if __name__ == "__main__":

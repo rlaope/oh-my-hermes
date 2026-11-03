@@ -14,6 +14,7 @@ import re
 import signal
 import string
 import unittest
+from unittest.mock import patch
 
 from _tui_lines import line_text
 from test_tui_app import FakePoller, ScriptedTerminal
@@ -871,6 +872,194 @@ class CtrlNPNavigationTests(unittest.TestCase):
                         1,
                         f"{prefix} char={key_char} mod={mod} must not change picker index",
                     )
+
+
+class LeaderShortcutTests(unittest.TestCase):
+    def normal_app(self, text: str = "draft") -> tuple[App, RecordingClient]:
+        app, client = make_app()
+        app.composer.set_vim(True)
+        type_text(app, text)
+        app._on_input(Key(ESCAPE))
+        return app, client
+
+    def arm(self, app: App) -> None:
+        app._on_input(Key(CHAR, " "))
+        self.assertTrue(app.composer.leader)
+
+    def test_leader_s_opens_sessions(self) -> None:
+        app, client = self.normal_app()
+        self.arm(app)
+        app._on_input(Key(CHAR, "s"))
+        self.assertEqual(client.named("session.list"), [{"limit": 50}])
+        self.assertFalse(app.composer.leader)
+        self.assertEqual(app.composer.text, "draft")
+
+    def test_leader_b_opens_bots(self) -> None:
+        app, _ = self.normal_app()
+        with patch.object(app, "_bots") as bots:
+            self.arm(app)
+            app._on_input(Key(CHAR, "b"))
+            bots.assert_called_once_with("")
+        self.assertFalse(app.composer.leader)
+
+    def test_leader_p_toggles_plan_fold(self) -> None:
+        from omh.tui.panels import HudSnapshot
+        from test_tui_panels import hud_payload
+
+        app, _ = self.normal_app()
+        app.hud = HudSnapshot(app.stored_id, hud_payload([{"text": "Ship it", "state": "active"}]), 0.0)
+        drawn(app)
+        before = app.plan_folded
+        for folded in (not before, before):
+            self.arm(app)
+            app._on_input(Key(CHAR, "p"))
+            self.assertEqual(app.plan_folded, folded)
+            self.assertFalse(app.composer.leader)
+
+    def test_leader_p_without_visible_plan_is_consumed(self) -> None:
+        app, _ = self.normal_app()
+        before = app.plan_folded
+        self.arm(app)
+        self.assertTrue(app._plan_fold_key(Key(CHAR, "p")))
+        self.assertEqual(app.plan_folded, before)
+        self.assertFalse(app.composer.leader)
+        self.assertEqual(app.composer.text, "draft")
+
+    def test_leader_r_opens_search_in_normal_mode(self) -> None:
+        for char in ("r", "/"):
+            with self.subTest(char=char):
+                app, client = self.normal_app()
+                self.arm(app)
+                app._on_input(Key(CHAR, char))
+                self.assertIsNotNone(app.search)
+                assert app.search is not None
+                self.assertEqual(app.search.original, "draft")
+                self.assertTrue(app.composer.normal)
+                self.assertFalse(app.composer.leader)
+                self.assertEqual(client.calls, [])
+
+    def test_leader_m_cycles_mode(self) -> None:
+        leader, leader_client = self.normal_app()
+        control, control_client = self.normal_app()
+        self.arm(leader)
+        leader._on_input(Key(CHAR, "m"))
+        from omh.tui.keys import TAB
+        control._on_input(Key(TAB, shift=True))
+        self.assertEqual(leader_client.calls, control_client.calls)
+        self.assertEqual(leader_client.calls, [("config.set", {"key": "yolo", "session_id": leader.sid, "value": "on"})])
+        self.assertFalse(leader.composer.leader)
+
+    def test_leader_t_steps_effort(self) -> None:
+        from omh.tui.modes import EFFORT_CYCLE
+
+        app, client = self.normal_app()
+        app.effort = EFFORT_CYCLE[0]
+        self.arm(app)
+        app._on_input(Key(CHAR, "t"))
+        self.assertEqual(client.named("config.set"), [{"key": "reasoning", "session_id": app.sid, "value": EFFORT_CYCLE[1]}])
+        self.assertFalse(app.composer.leader)
+
+    def test_active_picker_preempts_leader_shortcuts(self) -> None:
+        from omh.tui.history import HistorySearch
+
+        for char in "sbpr/mt":
+            with self.subTest(char=char):
+                app, client = self.normal_app()
+                self.arm(app)
+                app.search = HistorySearch([], "")
+                with patch.object(app, "_leader_key") as leader:
+                    app._on_input(Key(CHAR, char))
+                    leader.assert_not_called()
+                self.assertIsNotNone(app.search)
+                self.assertEqual(client.calls, [])
+
+    def test_prompt_slot_preempts_leader_shortcuts(self) -> None:
+        app, client = self.normal_app()
+        self.arm(app)
+        app._on_server_request(ServerRequest("srq-leader", "vault.code", {}))
+        with patch.object(app, "_leader_key") as leader:
+            app._on_input(Key(CHAR, "s"))
+            leader.assert_not_called()
+        self.assertEqual(client.calls, [])
+
+    def test_unmapped_and_modified_followers_do_not_leak(self) -> None:
+        from omh.tui.keys import TAB
+
+        events = [Key(CHAR, c) for c in "?ixud q"] + [Key(ESCAPE), Key(DOWN), Key(TAB, shift=True)]
+        events += [Key(CHAR, c, **{mod: True}) for c in "sbpr/mtxovl" for mod in ("ctrl", "alt", "shift", "reported_shift")]
+        for event in events:
+            with self.subTest(event=event):
+                app, client = self.normal_app()
+                before = (app.composer.text, app.composer.caret, app.composer.normal)
+                self.arm(app)
+                app._on_input(event)
+                self.assertEqual((app.composer.text, app.composer.caret, app.composer.normal), before)
+                self.assertFalse(app.composer.leader)
+                self.assertEqual(client.calls, [])
+                self.assertIsNone(app.pager)
+                self.assertIsNone(app.search)
+                self.assertIsNone(app.exit_code)
+
+    def test_insert_and_non_vim_spaces_still_type(self) -> None:
+        for vim in (False, True):
+            with self.subTest(vim=vim):
+                app, client = make_app()
+                app.composer.set_vim(vim)
+                type_text(app, " sbpr/mt")
+                self.assertEqual(app.composer.text, " sbpr/mt")
+                self.assertFalse(app.composer.leader)
+                self.assertEqual(client.calls, [])
+
+    def test_ctrl_r_keeps_redo_without_leader(self) -> None:
+        app, client = self.normal_app()
+        app._on_input(Key(CHAR, "x"))
+        self.assertEqual(app.composer.text, "draf")
+        app._on_input(Key(CHAR, "u"))
+        self.assertEqual(app.composer.text, "draft")
+        app._on_input(Key(CHAR, "r", ctrl=True))
+        self.assertEqual(app.composer.text, "draf")
+        self.assertIsNone(app.search)
+        self.assertEqual(client.calls, [])
+
+    def test_paste_keeps_existing_behavior(self) -> None:
+        app, _ = self.normal_app()
+        self.arm(app)
+        app._on_input(Paste("pasted"))
+        self.assertFalse(app.composer.leader)
+        self.assertIn("pasted", app.composer.text)
+
+    def test_server_request_invalidates_leader_across_focus_transfer(self) -> None:
+        # Approval request
+        app, client = self.normal_app()
+        self.arm(app)
+        app._on_server_request(ServerRequest("srq-1", "approval", {"command": "test"}))
+        app.slot_opened_at = app.clock() - 10.0
+        app._on_input(Key(ESCAPE))
+        self.assertIsNone(app.slot)
+        self.assertFalse(app.composer.leader)
+        app._on_input(Key(CHAR, "m"))
+        self.assertEqual(client.calls, [])
+
+        # Text question
+        app, client = self.normal_app()
+        self.arm(app)
+        app._on_server_request(ServerRequest("srq-2", "vault.code", {}))
+        type_text(app, "1234")
+        app.slot_opened_at = app.clock() - 10.0
+        app._on_input(Key(ENTER))
+        self.assertIsNone(app.slot)
+        self.assertFalse(app.composer.leader)
+        app._on_input(Key(CHAR, "m"))
+        self.assertEqual(client.calls, [])
+
+    def test_paste_after_space_preserves_attachment_drop(self) -> None:
+        app, client = self.normal_app()
+        self.arm(app)
+        app._on_input(Paste("/Users/example/image.png"))
+        self.assertFalse(app.composer.leader)
+        self.assertEqual(app.composer.text, "draft")
+        self.assertEqual(client.named("input.detect_drop"), [{"session_id": "live-1", "text": "/Users/example/image.png"}])
+
 
 
 if __name__ == "__main__":

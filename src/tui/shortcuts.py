@@ -68,7 +68,12 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                        "NORMAL and does nothing else; in NORMAL, h l 0 ^ $ w b e j k gg G move, i a I A o O insert, "
                        "x X dd D C cc S s r, d c y with a motion, p P, u and Ctrl+R edit, a count repeats, and Esc "
                        "does what it does without vim mode, except that during a turn it takes two to interrupt. "
-                       "The info line says INSERT or NORMAL"),
+                       "In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the "
+                       "plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps "
+                       "reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued "
+                       "prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into "
+                       "session history. Esc or an unmapped key cancels the leader. "
+                       "The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed"),
     ("Ctrl+V", "Attaches the clipboard image as an [Image #N] token at the caret"),
     ("Ctrl+O", "Opens the whole transcript with every detail (thinking, tool output, whole diffs) at its end, or, "
                "while Hermes asks something, the whole question (it answers nothing); q leaves it"),
