@@ -2876,8 +2876,8 @@ class RecordsReachPrefetchTests(unittest.TestCase):
 
 
 class RecallIndicatorTests(unittest.TestCase):
-    """Hermes prints `🧠 <label> — recalled N memories` on every surface it speaks
-    through, right after the prefetch that carried it, by asking each provider
+    """Hermes prints `🧠 <label> — recalled N memories` on surfaces recall_line
+    admits (by default cli/tui/desktop), right after the prefetch that carried it, by asking each provider
     `recall_status()`. OMH answered None forever, so three weeks of daily use
     never showed the user that OMH memory was in play."""
 

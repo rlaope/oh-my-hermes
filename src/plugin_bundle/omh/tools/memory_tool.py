@@ -122,6 +122,7 @@ from ..memory_session_lens import (
     surface_flags,
 )
 from ..memory_recall_selector import resolve_scope_allowlist
+from ..memory_recall_settings import configured_recall_mode
 from ..memory_recall_support import (
     PROJECT_MEMORY_RECORD_SCHEMA_VERSION,
     _REVIEW_DEFAULT_DAYS,
@@ -1109,7 +1110,11 @@ def _lifecycle(action: str, args: dict, kwargs: dict) -> dict[str, object]:
             action,
             "error",
             reason=_safe_error_type(type(exc).__name__),
-            next_action="Nothing is confirmed changed. Tell the user the memory update failed.",
+            next_action=(
+                "Nothing was searched. Tell the user memory recall failed."
+                if action == "recall"
+                else "Nothing is confirmed changed. Tell the user the memory update failed."
+            ),
         )
 
 
@@ -1193,6 +1198,23 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             "recall", "refused", reason="session_lens_unavailable", lens_state="unbound",
             next_action="OMH memory is not available to this session right now; nothing was searched.",
         )
+    # The same policy per-turn recall applies: `memory_mode` off, a disabled
+    # retain_knowledge family, or this profile's `recall_mode: off` refuses.
+    # `on_demand` only quiets per-turn recall; asking still works there.
+    try:
+        policy = read_project_memory_policy(lens.lens_home)
+    except (OSError, ValueError, RecursionError):
+        # A read fault, not a failed update: the profile that may have turned
+        # recall off cannot be read, so nothing is searched.
+        return _lifecycle_result(
+            "recall", "error", reason="memory_policy_unreadable",
+            next_action="OMH could not read this profile's memory settings (setup-profile.json); nothing was searched. Tell the user memory recall is unavailable.",
+        )
+    if not policy.get("recall_enabled", True) or configured_recall_mode(Path(_home("HERMES_HOME", "~/.hermes"))) == "off":
+        return _lifecycle_result(
+            "recall", "refused", reason="recall_disabled",
+            next_action="Recall is turned off for this profile; nothing was searched.",
+        )
     snapshot = read_record_store_snapshot(lens.homes)
     # The labels a `<record_index>` line lists ("decision mem_...",
     # "deploy-branch") must read a record, and the selector never matches a
@@ -1221,6 +1243,7 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             session_id=lens.session_id,
             executor_target=lens.executor_target,
             limit=max(len(snapshot.records), 1) if unqueried else limit,
+            policy=policy,
             principal_context=lens.principal_context,
             shared_surface=lens.shared_surface,
             required_scope_kinds=lens.required_scope_kinds,

@@ -941,6 +941,63 @@ def ensure_plugin_omh_home(config_text: str, omh_home: str | Path) -> ConfigChan
     return ConfigChange(True, "recorded plugins.entries.omh.settings.omh_home", text)
 
 
+def set_plugin_setting(config_text: str, name: str, value: str) -> ConfigChange:
+    """Set `plugins.entries.omh.settings.<name>` to one plain word, adding or replacing the leaf.
+
+    For the plugin's own mode settings (`recall_line`, `recall_mode`), which
+    a person chooses and changes, unlike `omh_home`. Only the leaf line is
+    touched; a leaf with child lines (a block scalar) is somebody's shape and
+    is left alone. The value is written quoted, so a bare `off` is not a YAML
+    false to Hermes' own loader, and the result is read back through the
+    plugin's own scan before it is returned.
+    """
+    key_path = ("plugins", "entries", "omh", "settings", name)
+    try:
+        current = runtime_paths.plugin_setting_text(config_text, name)
+    except runtime_paths.RuntimeBindingError as exc:
+        return ConfigChange(False, f"{exc}; plugins.entries.omh.settings.{name} left unchanged", config_text)
+    lines = config_text.splitlines()
+    chain = _block_key_chain(lines, key_path)
+    if current == value and chain is not None:
+        return ConfigChange(False, f"plugins.entries.omh.settings.{name} is already {value}", config_text)
+    guard = section_edit_guard(lines, "plugins", "entries")
+    if guard:
+        return ConfigChange(False, f"{guard}; plugins.entries.omh.settings.{name} left unchanged", config_text)
+    leaf = f"'{value}'"
+    if chain is None:
+        edited = _insert_block_leaf(lines, key_path, leaf)
+        if edited is None:
+            return ConfigChange(False, f"plugins.entries is in a shape this editor does not extend; {name} left unchanged", config_text)
+    else:
+        index = chain[-1]
+        if _has_child_lines(lines, index):
+            return ConfigChange(False, f"plugins.entries.omh.settings.{name} is a block value; leaving it alone", config_text)
+        line = lines[index]
+        indent = line[: len(line) - len(line.lstrip(" "))]
+        edited = [*lines[:index], f"{indent}{name}: {leaf}{_trailing_comment(line.partition(':')[2])}", *lines[index + 1 :]]
+    text = _joined(edited)
+    try:
+        written = runtime_paths.plugin_setting_text(text, name)
+    except runtime_paths.RuntimeBindingError:
+        written = None
+    if written != value:
+        return ConfigChange(False, f"the plugin would not read the written {name} back; leaving the config alone", config_text)
+    return ConfigChange(True, f"recorded plugins.entries.omh.settings.{name}", text)
+
+
+def _trailing_comment(rest: str) -> str:
+    """The comment after the value in `key: value  # note`, with its spacing; "" when there is none."""
+    value = rest.strip()
+    if value.startswith("#"):
+        return f" {value}"
+    if value[:1] in {"'", '"'}:
+        end = value.find(value[0], 1)
+        tail = value[end + 1 :].strip() if end > 0 else ""
+        return f" {tail}" if tail.startswith("#") else ""
+    before, separator, after = rest.partition(" #")
+    return f"{before[len(before.rstrip()):]} #{after}" if separator else ""
+
+
 def _block_children_end(lines: list[str], start: int, stop: int, parent_indent: int) -> int:
     """The first line at or before `parent_indent` in `[start, stop)`, else `stop`."""
     for index in range(start, stop):

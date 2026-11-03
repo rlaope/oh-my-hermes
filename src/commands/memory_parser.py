@@ -4,6 +4,7 @@ import argparse
 
 from ..plugin_bundle.omh.memory_blocks import DEFAULT_BLOCK_LIMIT_CHARS
 from ..plugin_bundle.omh.memory_governance import SCOPE_KINDS, SOURCE_CLASSES
+from ..plugin_bundle.omh.memory_recall_settings import RECALL_LINES, RECALL_MODES
 from ..workflows.memory import CAPTURE_ON_DUPLICATE_CHOICES, MEMORY_ATTENTION_TIERS
 from . import memory
 from .domain_intelligence_parser import add_domain_intelligence_commands
@@ -472,3 +473,20 @@ def add_memory_commands(sub: argparse._SubParsersAction[argparse.ArgumentParser]
     provider_slot.add_argument("--disable", action="store_true", help="Hand the slot back, only when OMH currently holds it.")
     provider.add_argument("--dry-run", action="store_true", help="Report the change without writing Hermes config.")
     provider.set_defaults(func=memory.cmd_memory_provider)
+
+    recall_line = memory_sub.add_parser(
+        "recall-line", help="Show or set where Hermes shows the OMH recall line for this profile (default: console)."
+    )
+    recall_line.add_argument("value", nargs="?", choices=RECALL_LINES, help="all: every surface; console: CLI, TUI and Desktop only; off: nowhere.")
+    recall_line.add_argument("--dry-run", action="store_true", help="Report the change without writing Hermes config.")
+    recall_line.set_defaults(func=memory.cmd_memory_recall_line)
+
+    recall_mode = memory_sub.add_parser(
+        "recall-mode", help="Show or set whether this profile recalls OMH memory every turn (default: auto)."
+    )
+    recall_mode.add_argument(
+        "value", nargs="?", choices=RECALL_MODES,
+        help="auto: every turn; on_demand: only when the model asks; off: never, tool recall refused too.",
+    )
+    recall_mode.add_argument("--dry-run", action="store_true", help="Report the change without writing Hermes config.")
+    recall_mode.set_defaults(func=memory.cmd_memory_recall_mode)

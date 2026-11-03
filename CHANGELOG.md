@@ -20,6 +20,27 @@ All notable changes will be documented here.
   went from 111,665 to 6,649 characters on the console profile, repeats from
   91% to 0%, and messenger recall lines from 447 to 61.
 
+- **The OMH recall line stays off Discord and Slack, and recall can be turned
+  off.** `🧠 OMH — recalled N memories` now shows on the CLI, TUI and Desktop
+  only; on a messenger the memory is still used, with no line posted. The new
+  profile setting `recall_line` (`console` by default, `all`, `off`) chooses
+  where it shows, and `recall_mode` (`auto` by default, `on_demand`, `off`)
+  chooses whether memory is recalled every turn, only when the model asks, or
+  not at all. Set them with `omh memory recall-line` and `omh memory
+  recall-mode`; `omh memory status` shows both. A `memory_mode` of `off`, or a
+  disabled `retain_knowledge` family, now actually stops recall: before, the
+  provider and the recall tool kept serving records under it. It also stops
+  the consolidation brief and the save reminder, which asked for saves that
+  `off` refuses.
+- **The OMH TUI's first frame no longer waits on the skill catalog.** When the
+  shared gateway names every skill in its first answer, the launch card used to
+  import the whole skill catalog to label them before the first frame was
+  drawn; it now takes the labels from a small module of their own. The card is
+  drawn the same, byte for byte. In a clean process, starting up against a
+  shared gateway went from about 55 ms to 7 ms and imports 24 modules instead
+  of 114. On a stdio gateway, the first regrouping of the skills when they
+  arrive went from about 50 ms to under 1 ms.
+
 - **The memory consolidation brief no longer rides almost every console turn.** A session that ended with one to
   four unconsolidated turns used to raise a brief at its end and again as a recovery at the next start, so 213 of 216
   console turns on one machine carried the capture request (153 briefs came from session-start recovery), and every
