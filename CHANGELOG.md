@@ -6,8 +6,9 @@ All notable changes will be documented here.
 
 - **A running turn with the glow and a living wallpaper uses less CPU.** The same frames are drawn, byte for byte,
   but the colours the glow and the wallpaper scenes mix are no longer parsed again for every cell, and the loop no
-  longer wakes a second time per frame to wait out the frame interval. On a 60x200 screen with the aurora look, a
-  busy frame went from about 9.9 ms to 5.6 ms and the loop from 38 to 19 wake-ups a second.
+  longer wakes a second time per frame to wait out the frame interval when nothing arrives from the
+  gateway. On a 60x200 screen with the aurora look, a busy frame went from about 9.9 ms to 5.6 ms and
+  the loop from 38 to 19 wake-ups a second.
 
 - **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
   architecture-deepening reading: it looks for shallow modules (an interface

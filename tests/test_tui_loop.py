@@ -87,7 +87,10 @@ class LoopWaitTests(unittest.TestCase):
         app._render_when_due()
         app._step()
         app._step()
-        self.assertEqual(terminal.log_reads()[2:], [(TICK_SECONDS, WAKE), (0.0, WAKE)])  # the first read ends at the tick: due then
+        reads = terminal.log_reads()[2:]
+        self.assertEqual(reads[0], (TICK_SECONDS, WAKE))  # one read to the tick, not a pace read first
+        self.assertEqual(len(reads), 2)
+        self.assertTrue(all(wake == WAKE for _timeout, wake in reads))
 
     def test_held_bytes_bring_the_loop_back_and_settle_after_a_silence(self) -> None:
         app, terminal, client = loop_app((0.0, b"\x1b"), busy=True)

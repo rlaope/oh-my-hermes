@@ -16,8 +16,8 @@ depth, never the text, so a row is the same width at every depth.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from functools import lru_cache
 from dataclasses import dataclass
+from functools import lru_cache
 
 from ..skin_pack import hex_to_rgb
 

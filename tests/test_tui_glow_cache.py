@@ -8,7 +8,7 @@ import unittest
 from unittest import mock
 
 from omh import skin_pack
-from omh.tui import style, theme
+from omh.tui import app as app_module, style, theme
 from omh.tui.app import MIN_FRAME_SECONDS
 from omh.tui.gateway import Event
 from omh.tui.wallpaper import SCENES
@@ -17,6 +17,9 @@ from test_tui_modes import make_app
 ENVIRON = {"COLORTERM": "truecolor", "TERM": "xterm-256color", "OMH_TUI_GLOW": "1", "OMH_TUI_WALLPAPER": "1"}
 CACHED = (
     (skin_pack, "hex_to_rgb"),
+    (theme, "hex_to_rgb"),  # the modules that import it by name hold their own reference
+    (style, "hex_to_rgb"),
+    (app_module, "hex_to_rgb"),
     (theme, "_mix"),
     (style, "_colour_parameter"),
 )
