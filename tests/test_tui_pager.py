@@ -139,7 +139,7 @@ class HistoryPagerTests(unittest.TestCase):
         first = VTScreen(24, 80)
         first.feed(pager.frame(80, 24, THEME))
         self.assertEqual(first.lines()[0].rstrip(), "block 0 row 0")
-        self.assertIn("history · 1-6/2000 messages", first.lines()[-1])
+        self.assertIn("history · 1-6/2000 entries", first.lines()[-1])
         self.assertLess(len(calls), 20)  # the first page and the last one, 6 blocks each
         pager.handle_key(key("G"), 24)
         last = VTScreen(24, 80)
