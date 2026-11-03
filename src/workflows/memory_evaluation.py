@@ -518,6 +518,7 @@ def _receipt_projection(receipt: object) -> dict[str, object]:
         "selector_schema_version": body.get("selector_schema_version"),
         "recall_pack_schema_version": body.get("recall_pack_schema_version"),
         "rendered_order": [str(item.get("record_id", "")) for item in rendered],
+        "indexed_order": [str(value) for value in rendering.get("indexed_records", []) if isinstance(value, str)],
         "receipt_errors": validate_prefetch_receipt(receipt),
     }
 
@@ -529,9 +530,11 @@ def _parity_divergences(canonical: dict[str, object], live: dict[str, object]) -
         if canonical[field] != live.get(field)
     ]
     # The renderer may stop early on its section budget, never reorder or
-    # skip: what it rendered must be a prefix of the canonical order.
+    # skip: what it rendered must be a prefix of the canonical order, once the
+    # records it listed in the no-match index line are set aside.
     rendered = _strings(live.get("rendered_order"))
-    included = _strings(canonical.get("included_order"))
+    indexed = set(_strings(live.get("indexed_order")))
+    included = [value for value in _strings(canonical.get("included_order")) if value not in indexed]
     if rendered != included[: len(rendered)]:
         divergences.append({"field": "rendered_order", "canonical": included, "live": rendered})
     if live.get("receipt_errors"):

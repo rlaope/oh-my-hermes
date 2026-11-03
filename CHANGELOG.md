@@ -777,6 +777,22 @@ All notable changes will be documented here.
   reports the pack's real state instead of `missing` when only the unused
   `~/.claude/skills` mirror is absent.
 
+- **Memory that does not match a message is listed, not injected; a stuck run changes approach before it stops.**
+  When a chat message shares no word with any stored record, the memory pack used to serve every active
+  record in full, and Hermes frames that pack as reference data for the reply, so rules about unrelated work
+  steered it. Those records now arrive as one `<record_index>` line naming each record's subject (at most
+  eight, then `+K more`), and `omh_remember recall` reads one in full when it bears on the request. Records
+  saved in the same conversation still arrive in full, a matching message gets the same pack as before, and
+  CLI recall, `omh_memory recall` and coding handoffs are unchanged. `omh_remember save` takes `tags`, a
+  few topic words in the user's own language, so a later message in that language can match a record whose
+  summary is written in another. In dag-ulw, a node's last repair cycle is now a re-plan: its tasks carry the
+  earlier failure reasons and ask for two or three approaches that differ in kind before any edit, unless
+  every failure was an infrastructure cut. The loop stop ladder's first no-progress stop now asks for one
+  re-plan from the goal ledger (`replan_stuck_loop_once`) and resets the window; only a stop after that
+  names the blocker step. The dag-ulw run loop reference gains a "When the path is unknown" section (cheap
+  scout nodes on different hypotheses first, then `extend` with the build layer), and the interview skill
+  keeps at least one answer candidate from outside recalled memory.
+
 ## 4.0.4 - 2026-11-01
 
 - **Name your own identity: a prompt and a model chain.** Write

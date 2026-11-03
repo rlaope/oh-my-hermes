@@ -109,6 +109,7 @@ Quality bar:
 - Ingest bounded snapshots via `omh loop goal-driver-observe`. External state guides recovery, not checkpoint decisions; native turns still require activation and contiguous same-session evidence.
 - Treat ticks as preparation only. Advance one legal role phase through loop_phase_transition/v1 only after its named gate has observed evidence.
 - Treat a judge `done` verdict, a turn-ceiling pause, or a gate-retry pause as narration; completion still requires the linked goal ledger completion gate and observed evidence.
+- When the stop ladder names `replan_stuck_loop_once`, re-plan once from the goal ledger and recorded failures alone, not the transcript or recalled memory; record the new approach and continue; a second stop names the blocker step.
 - Treat any future change to the default as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.
 - Compare only observed outcomes under matched task, model/provider, permissions, turn budget, and verification surface; unresolved evidence keeps the current default.
 - Keep promotion governance separate from goal-ledger completion and ordinary measured-loop keep/discard decisions; do not invent subjective scorers, fixed numeric thresholds, minimum run counts, weighted percentages, or per-turn artifact quotas.

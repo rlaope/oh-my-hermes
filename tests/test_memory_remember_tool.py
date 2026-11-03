@@ -31,7 +31,9 @@ class RememberSchemaTests(unittest.TestCase):
         self.assertEqual(schema["name"], memory_tool.REMEMBER_TOOL_NAME)
         self.assertEqual(schema["name"], "omh_remember")
         properties = schema["parameters"]["properties"]
-        self.assertEqual(set(properties), {"action", "summary", "record_type", "subject", "replaces", "query"})
+        self.assertEqual(set(properties), {"action", "summary", "record_type", "tags", "subject", "replaces", "query"})
+        self.assertEqual(properties["tags"], {"type": "array", "items": {"type": "string"}})
+        self.assertIn("Tags: 2-5 topic words in the user's own language", schema["description"])
         self.assertEqual(properties["action"]["enum"], ["save", "recall"])
         self.assertEqual(properties["action"]["default"], "save")
         self.assertEqual(properties["record_type"]["enum"], list(memory_tool.CAPTURE_RECORD_TYPES))
@@ -76,6 +78,32 @@ class RememberStoreTests(unittest.TestCase):
         self.assertEqual(rendered_ids(hermes_turn(self.live, 1, "release branch")), [record_id])
 
 
+    def test_save_stores_normalized_topic_tags(self) -> None:
+        saved = self.call({
+            "summary": "Builds use the pinned compiler.",
+            "tags": [" Toolchain ", "toolchain", " 배포 ", "テスト", ""],
+        })
+        self.assertEqual(saved["status"], "remembered", saved)
+        self.assertEqual(self.record(saved["record_id"])["tags"], ["toolchain", "배포", "テスト"])
+
+    def test_later_recall_matches_topic_tags_without_summary_overlap(self) -> None:
+        later = provider(self.root, session_id="later-tag-recall")
+        for turn, (tag, summary) in enumerate((
+            ("toolchain", "Desktop builds use the pinned compiler."),
+            ("배포", "Service builds use the pinned compiler."),
+            ("テスト", "Worker builds use the pinned compiler."),
+        ), 1):
+            with self.subTest(tag=tag):
+                self.assertNotIn(tag, summary.lower())
+                saved = self.call({"summary": summary, "tags": [tag]})
+                self.assertEqual(saved["status"], "remembered", saved)
+                recalled = self.call({"action": "recall", "query": tag}, later)
+                self.assertEqual(recalled["status"], "found", recalled)
+                self.assertEqual([row["record_id"] for row in recalled["records"]], [saved["record_id"]])
+                # A genuine tag match renders full text in a later session;
+                # unmatched fallback would merely index the record instead.
+                self.assertEqual(rendered_ids(hermes_turn(later, turn, tag)), [saved["record_id"]])
+
     def store_bytes(self) -> dict[str, bytes]:
         directory = self.home / "memory"
         return {str(path.relative_to(directory)): path.read_bytes() for path in directory.rglob("*") if path.is_file()}
@@ -101,6 +129,23 @@ class RememberStoreTests(unittest.TestCase):
         self.assertEqual(self.record(merged["record_id"])["summary"], merged_summary)
         recalled = self.call({"action": "recall", "query": "pull requests merge"})
         self.assertEqual([row["record_id"] for row in recalled["records"]], [merged["record_id"]])
+
+    def test_save_with_replaces_stores_new_tags(self) -> None:
+        for index, (tags, expected) in enumerate((
+            ([" Toolchain ", "toolchain", " 배포 ", "テスト"], ["toolchain", "배포", "テスト"]),
+            ([], []),
+        )):
+            with self.subTest(tags=tags):
+                first = self.call({"summary": f"Compiler version {index + 1} is pinned.", "tags": ["legacy"]})
+                self.assertEqual(first["status"], "remembered", first)
+                merged = self.call({
+                    "summary": f"Compiler version {index + 3} is pinned.",
+                    "replaces": first["record_id"], "tags": tags,
+                })
+                self.assertEqual((merged["status"], merged["superseded_record_id"]), ("corrected", first["record_id"]), merged)
+                self.assertEqual(self.record(merged["record_id"])["tags"], expected)
+                archived = json.loads((self.home / "memory" / "history" / f"{first['record_id']}.r1.json").read_text(encoding="utf-8"))
+                self.assertEqual(archived["tags"], ["legacy"])
 
     def test_similar_save_hint_points_at_replaces_and_following_it_leaves_one_record(self) -> None:
         first = self.call({"summary": "Repository docs, tests and fixtures stay language neutral.", "record_type": "decision"})
@@ -133,8 +178,12 @@ class RememberStoreTests(unittest.TestCase):
         self.assertEqual(self.record(merged["record_id"])["scope"], first_thread._channel_scope)
 
     def test_replaces_with_an_unknown_id_still_saves_the_fact(self) -> None:
-        saved = self.call({"summary": "Builds use the pinned compiler.", "replaces": "mem_0000000000000000"})
+        saved = self.call({
+            "summary": "Builds use the pinned compiler.", "replaces": "mem_0000000000000000",
+            "tags": [" Toolchain ", "toolchain", " 배포 ", "テスト"],
+        })
         self.assertEqual((saved["status"], saved["replace_skipped"], saved["replaces"]), ("remembered", "record_not_found", "mem_0000000000000000"), saved)
+        self.assertEqual(self.record(saved["record_id"])["tags"], ["toolchain", "배포", "テスト"])
         self.assertTrue((self.home / "memory" / "records" / f"{saved['record_id']}.json").is_file())
 
     def test_background_replaces_is_refused_without_changing_store_bytes(self) -> None:
@@ -157,7 +206,7 @@ class RememberStoreTests(unittest.TestCase):
 
     def test_save_keeps_defaults_instead_of_accepting_full_tool_options(self) -> None:
         saved = self.call({
-            "summary": "Builds use the pinned compiler.", "scope": "user", "tags": ["injected"], "retention_class": "volatile",
+            "summary": "Builds use the pinned compiler.", "scope": "user", "retention_class": "volatile",
         })
         self.assertEqual(saved["status"], "remembered", saved)
         record = self.record(saved["record_id"])
@@ -203,12 +252,36 @@ class RememberStoreTests(unittest.TestCase):
             ({"summary": "x" * 501}, "summary_too_long"),
             ({"summary": "Builds use the pinned compiler.", "record_type": "rumor"}, "unsupported_record_type"),
             ({"summary": "Builds use the pinned compiler.", "subject": "../invalid"}, "invalid_subject"),
+            *(({"summary": "Builds use the pinned compiler.", "tags": tags}, "invalid_tags") for tags in (
+                "toolchain", {"topic": "toolchain"}, ["toolchain", 1], ["tag"] * 9,
+            )),
+            ({"summary": "Builds use the pinned compiler.", "tags": ["bad\x00tag"]}, "control_character"),
         ):
             with self.subTest(reason=reason):
                 before = self.store_bytes()
                 refused = self.call(args)
-                self.assertEqual((refused["status"], refused["reason"]), ("refused", reason), refused)
+                self.assertEqual((refused["status"], refused.get("reason")), ("refused", reason), refused)
                 self.assertEqual(self.store_bytes(), before)
+
+    def test_invalid_tags_on_replaces_are_refused_without_changing_the_store(self) -> None:
+        first = self.call({"summary": "Builds use the pinned compiler.", "tags": ["legacy"]})
+        self.assertEqual(first["status"], "remembered", first)
+        for replaces in (first["record_id"], "mem_0000000000000000"):
+            for tags, reason in (
+                ("toolchain", "invalid_tags"),
+                ({"topic": "toolchain"}, "invalid_tags"),
+                (["toolchain", 1], "invalid_tags"),
+                (["tag"] * 9, "invalid_tags"),
+                (["bad\x00tag"], "control_character"),
+            ):
+                with self.subTest(replaces=replaces, tags=tags):
+                    before = self.store_bytes()
+                    refused = self.call({
+                        "summary": "Builds use the pinned compiler and a locked toolchain.",
+                        "replaces": replaces, "tags": tags,
+                    })
+                    self.assertEqual((refused["status"], refused.get("reason")), ("refused", reason), refused)
+                    self.assertEqual(self.store_bytes(), before)
 
     def test_recall_uses_the_full_tools_query_and_limit_validation(self) -> None:
         for args, reason in (

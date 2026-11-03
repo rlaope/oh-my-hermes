@@ -2984,11 +2984,14 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
             fresh = json.loads(brief_path.read_text(encoding="utf-8"))
             fresh["raised_at"] = "2099-01-01T00:00:00Z"
             brief_path.write_text(json.dumps(fresh), encoding="utf-8")
+            # A changed block text makes the block news again.
+            write_memory_block(root / ".omh", approve_memory_block(build_memory_block("facts", "OMH wraps Hermes and ships tools.")))
             provider.queue_prefetch("")
             pack = provider.prefetch("next turn")
             self.assertIn("<memory_consolidation", pack)
-            # The unchanged block was counted on the serve before; the brief never counts.
-            self.assertIsNone(provider.recall_status())
+            self.assertIn("ships tools", pack)
+            # The brief never counts: only the changed block does.
+            self.assertEqual(provider.recall_status(), RecallStatus(provider_label="OMH", count=1))
 
     def test_a_new_conversation_is_served_a_still_due_brief_but_a_rebind_is_not(self) -> None:
         with TemporaryDirectory() as tmp:

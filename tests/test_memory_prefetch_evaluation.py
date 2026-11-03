@@ -263,6 +263,26 @@ class LiveProviderParityTests(unittest.TestCase):
         self.assertIn("rendered_order", _fields(arm))
         self.assertNotIn("included_order", _fields(arm))
 
+    def test_records_listed_in_the_index_line_are_set_aside_before_the_prefix_check(self) -> None:
+        # Mutation: compare rendered ids with every selected id again; this case then diverges.
+        def _index_first(receipt: dict[str, Any]) -> None:
+            rendered = receipt["rendering"]["rendered_records"]
+            if rendered:
+                receipt["rendering"]["indexed_records"] = [rendered.pop(0)["record_id"]]
+
+        report = run_memory_retrieval_evaluation(live_arms=_mutated_arms("provider_session", _index_first))
+        arm = _arm(_case_result(report, _TWO_RECORD_CASE), "provider_session")
+        self.assertNotIn("rendered_order", _fields(arm))
+
+        def _skip_without_index(receipt: dict[str, Any]) -> None:
+            rendered = receipt["rendering"]["rendered_records"]
+            if rendered:
+                rendered.pop(0)
+
+        report = run_memory_retrieval_evaluation(live_arms=_mutated_arms("provider_session", _skip_without_index))
+        arm = _arm(_case_result(report, _TWO_RECORD_CASE), "provider_session")
+        self.assertIn("rendered_order", _fields(arm))
+
 
 class LiveParityReportShapeTests(unittest.TestCase):
     def test_every_retained_case_holds_live_parity_on_both_arms(self) -> None:

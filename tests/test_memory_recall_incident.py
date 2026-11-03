@@ -17,6 +17,7 @@ from _local_package import load_local_package
 load_local_package()
 from project_identity_fixture import PROJECT_IDENTITY, memory_paths as resolve_paths
 from omh.plugin_bundle.omh import memory_prefetch_receipt as receipts
+from omh.plugin_bundle.omh import memory_records  # noqa: E402
 from omh.plugin_bundle.omh.memory_provider import OmhMemoryProvider
 from omh.routing.chat import route_chat_message
 from omh.workflows import memory
@@ -241,6 +242,62 @@ class MemoryRecallIncidentTests(unittest.TestCase):
             record_id=record['record_id'], query='volcano'))
         self.assertEqual(result['reason_code'], 'no_query_overlap')
         self.assertEqual(result['stage'], 'relevance_attention_or_budget_exclusion')
+
+    def test_indexed_receipt_and_budget_cut_have_distinct_incident_reasons(self) -> None:
+        api = self.api()
+        record = self.approved()
+        record_id = record['record_id']
+        query = 'astronomy telescope'
+        snapshot = memory_records.read_record_store_snapshot([self.paths.omh_home])
+        request = api.RecallIncidentRequest(record_id=record_id, session_id=SESSION, query=query)
+        # The same selected record is indexed with room, but omitted when even
+        # its index cannot fit. An older receipt may lack indexed_records.
+        for budget, legacy, reason, stage in (
+            (memory_records.DEFAULT_RECORD_RENDER_BUDGET_CHARS, False,
+             'no_query_overlap', 'relevance_attention_or_budget_exclusion'),
+            (1, False, 'selected_not_rendered', 'selected_not_rendered'),
+            (1, True, 'selected_not_rendered', 'selected_not_rendered'),
+        ):
+            with self.subTest(budget=budget, legacy=legacy):
+                prepared = memory_records.prepare_prefetch_records(
+                    snapshot, query, session_id=SESSION,
+                    allowed_scopes=memory_records.prefetch_scope_allowlist(
+                        project_identity=PROJECT_IDENTITY, session_id=SESSION),
+                    budget_chars=budget, index_fallback=True,
+                )
+                receipt = receipts.build_prefetch_receipt(
+                    prepared, session_id=SESSION, home_digests=snapshot.home_digests)
+                self.assertEqual(receipt['selection']['selected_record_ids'], [record_id])
+                self.assertEqual(receipt['selection']['query_fallback'], {
+                    'mode': 'active_tier', 'reason': 'no_query_overlap', 'readmitted_count': 1})
+                rendering = receipt['rendering']
+                self.assertEqual(rendering['rendered_records'], [])
+                self.assertEqual(rendering['indexed_records'],
+                                 [record_id] if reason == 'no_query_overlap' else [])
+                self.assertEqual(rendering['selected_not_rendered'],
+                                 [] if reason == 'no_query_overlap' else [
+                                     {'record_id': record_id, 'reason': 'render_budget_exhausted'}])
+                if legacy:
+                    del rendering['indexed_records']
+                # Marking the genuine builder result returned also signs the
+                # old-key shape; the incident still validates the entire receipt.
+                receipt = receipts.mark_prefetch_receipt_returned(receipt)
+                self.assertEqual(receipts.validate_prefetch_receipt(receipt), [])
+                path = receipts.prefetch_receipt_path(self.paths.omh_home)
+                path.write_text(json.dumps(receipt), encoding='utf-8')
+                self.assertEqual(receipts.read_prefetch_receipt(self.paths.omh_home), receipt)
+
+                result = api.build_memory_recall_incident(self.paths, request)
+
+                self.assertEqual(result['reason_code'], reason)
+                self.assertEqual(result['stage'], stage)
+                self.assertEqual(result['last_proven_stage'], 'selected')
+                self.assertEqual(result['evidence_basis'], 'live_prefetch_receipt')
+                self.assertEqual(result['evidence_surfaces']['live_prefetch_receipt'],
+                                 {'status': 'observed', 'basis': 'canonical_1452_receipt_bound'})
+                self.assertEqual(result['configuration_identity']['receipt_id'], receipt['receipt_id'])
+                self.assertIsNone(result['delivery_observed'])
+                self.assertIsNone(result['model_use_observed'])
 
     def test_receipt_absence_is_not_nondelivery(self) -> None:
         # Given selected memory but no record-bound live evidence.

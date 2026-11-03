@@ -655,6 +655,13 @@ The memory provider exposes this small, always-visible tool for `save` and
 tools such as `omh_memory`; tools returned by a memory provider are never
 deferred, so saving a fact does not require a tool search first.
 
+`save` also takes optional `tags`: a few topic words in the user's own
+language. They are stored like capture tags and the selector matches them like
+summary words, so a later message that names the topic in that language can
+recall the fact even when it shares no word with the summary. With `replaces`,
+new tags (including an empty list) replace the old record's tags; without
+them the old tags carry over.
+
 The full `omh_memory(action="capture", summary=..., record_type=..., tags=...,
 scope=..., retention_class=..., subject=...)` entry point remains available for
 additional capture options. Both save entry points use the same session-lens
@@ -1386,6 +1393,27 @@ and whitespace collapse — the same normalization capture uses for
 `approved_at`, else the smaller record id stays, and the other is excluded as
 `duplicate_record` with `duplicate_of` naming the record kept. The collapse
 runs after eligibility and before ranking, so a duplicate never spends budget.
+
+The memory provider's prefetch pack does not inject that fallback in full.
+When `query_fallback` is set, each readmitted record is listed by name in one
+index line inside `<memory_records>` instead of a `<record>` element:
+
+```text
+  <record_index count="N" reason="no_query_overlap">N stored records did not match this message and are listed, not shown: ITEMS. Read one with omh_remember recall when it bears on the request.</record_index>
+```
+
+Each item is the record's `subject` slug, or `<record_type> <record_id>` when
+it has none; at most 8 are named, then `+K more`. Records captured in the same
+conversation are the exception and still render in full: a record whose
+`source_ref` is `hermes-session:<id>` for this session or one of its verified
+compaction ancestors. `omh_remember(action="recall", query=...)` reads an
+indexed record in full. The CLI `omh memory recall`, `omh_memory(action="recall")`
+and coding-handoff packs never index and still serve the active tier in full.
+The prefetch receipt lists the indexed ids as `rendering.indexed_records`
+(always present on new receipts, read as empty on older ones); rendered ids
+must equal the selected ids with the indexed ids removed, as a prefix, and
+`selected_not_rendered` never names an indexed id. An indexed record is not
+rendered, so it counts as neither served nor seen.
 
 Two per-record counters exist, and only one of them is a ranking input:
 

@@ -96,6 +96,7 @@ class RenderedRecordSection:
     rendered: tuple[dict[str, str], ...]
     omissions: dict[str, int]
     budget_chars: int = DEFAULT_RECORD_RENDER_BUDGET_CHARS
+    indexed: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -273,6 +274,8 @@ def prepare_prefetch_records(
     required_scope_kinds: tuple[str, ...] = ("project",),
     query_fallback: bool = True,
     session_served: Mapping[str, str] | None = None,
+    index_fallback: bool = False,
+    full_text_ids: frozenset[str] | set[str] = frozenset(),
 ) -> PreparedPrefetch:
     """Select, then render, under one clock. The receipt is built from this."""
     clock = now if now is not None else _utc_now()
@@ -293,7 +296,9 @@ def prepare_prefetch_records(
         query_fallback=query_fallback,
         session_served=session_served,
     )
-    return PreparedPrefetch(selection, render_selected_memory_records(selection, snapshot.records, budget_chars=budget_chars), clock)
+    return PreparedPrefetch(selection, render_selected_memory_records(
+        selection, snapshot.records, budget_chars=budget_chars, index_fallback=index_fallback, full_text_ids=full_text_ids,
+    ), clock)
 
 
 def render_selected_memory_records(
@@ -301,6 +306,8 @@ def render_selected_memory_records(
     records: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     *,
     budget_chars: int = DEFAULT_RECORD_RENDER_BUDGET_CHARS,
+    index_fallback: bool = False,
+    full_text_ids: frozenset[str] | set[str] = frozenset(),
 ) -> RenderedRecordSection:
     """Render the canonical selection in its order, bounded by the section budget.
 
@@ -326,13 +333,23 @@ def render_selected_memory_records(
         if record_id not in by_id:
             raise ValueError("incompatible recall pack: selected record is absent from the snapshot")
         items.append(item)
-    text, rendered_items = _render_bounded(
-        items,
-        budget_chars=budget_chars,
-        limit=None,
-        omissions={"render_budget_exhausted": 0, "over_budget": int(selection.exclusion_reason_counts.get("over_budget", 0))},
-        preserve_prefix=True,
-    )
+    indexed: tuple[str, ...] = ()
+    if index_fallback and "query_fallback" in pack:
+        full_items = [item for item in items if str(item["record_id"]) in full_text_ids]
+        index_items = [by_id[str(item["record_id"])] for item in items if str(item["record_id"]) not in full_text_ids]
+        text, rendered_items, indexed = _render_indexed_bounded(
+            full_items, index_items, budget_chars=budget_chars,
+            over_budget=int(selection.exclusion_reason_counts.get("over_budget", 0)),
+            full_prefix_limit=next((index for index, item in enumerate(items) if str(item["record_id"]) not in full_text_ids), len(items)),
+        )
+    else:
+        text, rendered_items = _render_bounded(
+            items,
+            budget_chars=budget_chars,
+            limit=None,
+            omissions={"render_budget_exhausted": 0, "over_budget": int(selection.exclusion_reason_counts.get("over_budget", 0))},
+            preserve_prefix=True,
+        )
     rendered = tuple(
         {
             "record_id": str(item.get("record_id", "")),
@@ -341,10 +358,69 @@ def render_selected_memory_records(
         for item in rendered_items
     )
     omissions = {
-        "render_budget_exhausted": len(items) - len(rendered_items),
+        "render_budget_exhausted": len(items) - len(rendered_items) - len(indexed),
         "over_budget": int(selection.exclusion_reason_counts.get("over_budget", 0)),
     }
-    return RenderedRecordSection(text=text, rendered=rendered, omissions=omissions, budget_chars=max(budget_chars, 0))
+    return RenderedRecordSection(text=text, rendered=rendered, omissions=omissions, budget_chars=max(budget_chars, 0), indexed=indexed)
+
+
+def _record_index_line(records: list[dict[str, Any]]) -> str:
+    labels = [str(record.get("subject") or f'{record.get("record_type", "")} {record["record_id"]}') for record in records[:8]]
+    if len(records) > 8:
+        labels.append(f"+{len(records) - 8} more")
+    count = len(records)
+    return (
+        f'  <record_index count="{_attribute(count)}" reason="no_query_overlap">'
+        f'{count} stored records did not match this message and are listed, not shown: '
+        f'{_text(", ".join(labels))}. Read one with omh_remember recall when it bears on the request.</record_index>'
+    )
+
+
+def _render_indexed_bounded(
+    full_items: list[dict[str, Any]], index_items: list[dict[str, Any]], *, budget_chars: int, over_budget: int,
+    full_prefix_limit: int,
+) -> tuple[str, list[dict[str, Any]], tuple[str, ...]]:
+    """Prefer a full-text prefix, then one all-or-nothing index within the same bound."""
+    if not full_items and not index_items:
+        return "", [], ()
+    index_line = _record_index_line(index_items) if index_items else ""
+
+    def section(count: int, include_index: bool) -> str:
+        lines = ["<memory_records>", *(_render_record(record) for record in full_items[:count])]
+        if include_index:
+            lines.append(index_line)
+        unresolved = sum(1 for record in full_items[:count] if _is_open(record))
+        if unresolved:
+            lines.append(_unresolved_line(unresolved))
+        omitted = len(full_items) - count + (0 if include_index else len(index_items))
+        if omitted:
+            lines.append(f'  <omitted count="{omitted}" reason="render_budget_exhausted" />')
+        if over_budget:
+            lines.append(f'  <omitted count="{over_budget}" reason="over_budget" />')
+        lines.append("</memory_records>")
+        return "\n".join(lines)
+
+    # Work backwards so the first fit is the longest full-text prefix. Index
+    # inclusion never promotes a later full-text record over an earlier one.
+    for count in range(len(full_items), -1, -1):
+        for include_index in ((True, False) if index_items else (False,)):
+            # Once the index is dropped, its ids cannot exempt a gap from
+            # the receipt's selected-minus-indexed prefix rule.
+            if not include_index and count > full_prefix_limit:
+                continue
+            text = section(count, include_index)
+            if len(text) <= max(budget_chars, 0):
+                indexed = tuple(str(record["record_id"]) for record in index_items) if include_index else ()
+                return text, full_items[:count], indexed
+    return "", [], ()
+
+
+def origin_record_ids(
+    records: list[dict[str, Any]] | tuple[dict[str, Any], ...], session_ids: set[str] | frozenset[str] | list[str] | tuple[str, ...],
+) -> frozenset[str]:
+    """Records captured in these conversation segments, never inferred from scope."""
+    sources = {f"hermes-session:{session_id}" for session_id in session_ids if session_id}
+    return frozenset(str(record["record_id"]) for record in records if record.get("source_ref") in sources)
 
 
 def render_memory_records(
@@ -605,6 +681,7 @@ __all__ = [
     "RECORD_SUMMARY_LIMIT_CHARS",
     "RecordStoreSnapshot",
     "RenderedRecordSection",
+    "origin_record_ids",
     "prefetch_required_scope_kinds",
     "prefetch_scope_allowlist",
     "prepare_prefetch_records",
