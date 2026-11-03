@@ -99,8 +99,9 @@ def omh_recommend_handler(args: dict, **kwargs) -> str:
         "route": route,
         "tool_guidance": (
             "Use this tool when Hermes needs the nearest OMH workflow without asking the user to approve "
-            "`omh recommend` or `omh list` shell commands. For a row without handoff_policy, "
-            "`omh_capabilities` action `inspect` with that skill id returns it."
+            "`omh recommend` or `omh list` shell commands. For a skill without handoff_policy in these rows, "
+            "including route.selected_skill, `omh_capabilities` action `inspect` with section `skills` and "
+            "that skill id returns it."
         ),
         "claim_boundary": _claim_boundary(),
     }
@@ -136,12 +137,19 @@ def _policy_on_pointed_rows(
 ) -> list[dict[str, Any]]:
     """Keep `handoff_policy` only on the rows this result points the model at.
 
-    A policy runs about 1.3 KB and the model acts on one skill, so repeating it
-    on every row was most of the result. The top row and the route's selected
-    and candidate skills keep it; `omh_capabilities` inspect returns it for any
-    other skill, as `tool_guidance` says.
+    The model acts on one skill, so repeating every row's policy (median about
+    200 bytes, `ultrawork` past 1 KB) was the largest field of the result. The
+    top row and the route's selected and candidate skills keep it. A top row in
+    the catalog's `router` category (`meta-router`, `oh-my-hermes`) hands the
+    choice on to the first concrete row, so that row keeps it too.
+    `omh_capabilities` inspect returns it for any other skill, as
+    `tool_guidance` says.
     """
     pointed = {str(recommendations[0].get("skill") or "")} if recommendations else set()
+    if recommendations and recommendations[0].get("category") == "router":
+        concrete = next((item for item in recommendations if item.get("category") != "router"), None)
+        if concrete is not None:
+            pointed.add(str(concrete.get("skill") or ""))
     if route:
         pointed |= {str(route.get("selected_skill") or ""), str(route.get("candidate_skill") or "")}
     for item in recommendations:
