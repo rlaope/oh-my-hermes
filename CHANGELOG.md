@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+## 4.0.5 - 2026-11-03
+
+- **Matching a coding handoff to a specialist domain is about 2.7 times
+  faster on English text.** Preparing a handoff folds the task message and the
+  plan text before it matches specialist domains, and ran the full Unicode
+  normalisation on every pass even for plain ASCII, which that work cannot
+  change. ASCII text now takes a direct lowercase fold, and text that is still
+  ASCII after the first normalisation step returns early. Other text keeps the
+  original steps in the original order, so routing decisions, exclusions and
+  errors are identical. On the domain-routing benchmark 772.81 ms fell to
+  290.94 ms (median of three runs). Contributed by @dexhunter (#2536).
+
 - **Memory recall shows what the turn asked for, once per conversation.**
   A message with nothing to search for (an empty turn, "야") used to get every
   saved memory in full; it now gets pinned ones in full and the rest as the
@@ -46,8 +58,8 @@ All notable changes will be documented here.
   of landing on the screen and shifting every later frame. A crash that does
   end the TUI still prints its traceback once your terminal is restored.
 
-- **OMH notices when Hermes cannot load its skills.** From 27 Oct to 2 Nov
-  the skills were installed but Hermes could not load them by name: a stale
+- **OMH notices when Hermes cannot load its skills.** Skills could be
+  installed while Hermes could not load them by name: a stale
   generation directory registered beside the pointer made every name
   ambiguous, and then a cached path to a deleted generation left none. The
   launch card still said "skills 89 installed", and the skill suggestion
@@ -168,44 +180,14 @@ All notable changes will be documented here.
   end of the line (Alt+Enter or Shift+Enter still add a line, Esc closes the
   menu). With no list or menu open, Ctrl+J keeps its newline and steer
   behaviour, Ctrl+K deletes to the end of the line and Ctrl+P folds the plan.
+  A Shift-reported Ctrl+N/P/J/K does not move a list; terminals without key
+  reporting cannot tell Shift apart. Contributed by @DanRioDev (#2513; #2524, carried by #2525).
 
 - **A running turn with the glow and a living wallpaper uses less CPU.** The same frames are drawn, byte for byte,
   but the colours the glow and the wallpaper scenes mix are no longer parsed again for every cell, and the loop no
   longer wakes a second time per frame to wait out the frame interval when nothing arrives from the
   gateway. On a 60x200 screen with the aurora look, a busy frame went from about 9.9 ms to 5.6 ms and
   the loop from 38 to 19 wake-ups a second.
-
-- **Code-skill round follow-ups.** Seven review findings from the last round,
-  fixed in OMH's own words. Commit-pr-authoring says where the reversibility
-  line goes when the PR template has no risk or rollout section: one sentence
-  at the end of its summary section. App-debugging names what the loop-cost
-  filter checks before `competing_hypotheses/v1` exists, and lets
-  `regression_seam: none_correct` name the verifying reproduction loop in
-  place of a regression test. Plan's append-only-file task keeps a generated,
-  drift-gated file's gate out of each slice's done check. Verification-gate
-  says a fix recorded with `regression_seam: none_correct` has no fix test, so
-  the regression-witness rule does not apply. Frontend's support-target
-  paragraph is reflowed to 80 columns, and backend's thin-handler paragraph
-  gets its own heading inside section 7. Two Korean negative controls pin that
-  a dress code or a QR code in the architecture request form never dispatches
-  `tech-debt-audit`; they still name it as a clarify candidate, the accepted
-  cost of the clarify-only cap, as the English cases do.
-
-- **Ctrl+J and Ctrl+K navigate lists across the OMH TUI.** Complementing
-  Ctrl+N and Ctrl+P, Ctrl+J moves down and Ctrl+K moves up across all picker
-  dialogs (`/model`, `/sessions`, `/rewind`, `/theme`), the agent view list
-  and tree, history search, and open slash and @ completion menus, matching
-  Down and Up arrow navigation. When no list or menu is open, Ctrl+J keeps its
-  newline and steer behaviors and Ctrl+K keeps delete-to-end-of-line. A
-  Shift-reported Ctrl+N/P/J/K does not move a list; terminals without key
-  reporting cannot tell Shift apart.
-
-- **Ctrl+N and Ctrl+P navigate lists across the OMH TUI.** In the `/model`,
-  `/sessions`, `/rewind` and `/theme` pickers, the agent list (ordinary roster
-  and DAG tree modes), history search, and slash and `@` path completion menus,
-  Ctrl+N moves down and Ctrl+P moves up by one row, matching Down and Up arrow
-  navigation. On an open completion menu, Ctrl+P navigates the menu rather than
-  folding the plan.
 
 - **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
   architecture-deepening reading: it looks for shallow modules (an interface
@@ -222,7 +204,7 @@ All notable changes will be documented here.
   architecture", "improve the architecture of this repo", "find deepening
   opportunities in this codebase", "shallow modules in this codebase",
   "코드베이스 아키텍처 개선해줘") now name the audit in the clarifying
-  question, where main named codebase onboarding or unrelated lanes; they
+  question, where 4.0.4 named codebase onboarding or unrelated lanes; they
   dispatch it only beside its own words, such as "tech debt". An
   architecture that is not code (a model, cloud infra, an org chart, a
   building) routes exactly as before.
@@ -267,9 +249,10 @@ All notable changes will be documented here.
   coupled to internals (own-module fakes, call-count assertions, side-channel
   reads), fakes only at system boundaries chosen by dependency category, and a
   `regression_seam: none_correct` outcome when no seam can run the pattern
-  that produced a bug. `omh-backend`, `omh-frontend` and `omh-app-debugging`
-  load it when a handoff asks for tests, and `ulw-work`'s TDD page points at it
-  instead of keeping a second copy. `omh-backend` also gains
+  that produced a bug, where the verifying reproduction loop stands in place
+  of a regression test. `omh-backend`, `omh-frontend` and `omh-app-debugging`
+  load it when a handoff asks for tests, and `ulw-work`'s TDD page points at
+  it instead of keeping a second copy. `omh-backend` also gains
   `references/contract-tests.md`: one negative test per auth row and per
   error-table row, the same database engine in tests, writes read back through
   the interface, and migrations run on populated data.
@@ -317,13 +300,17 @@ All notable changes will be documented here.
   `*STANDARDS*.md`, linter and formatter configuration) before the smell
   baseline applies, hands that list to a dispatched reviewer, and skips
   smells the configured tooling already enforces on the diff.
-  `omh-commit-pr-authoring`'s no-template fallback says whether a revert undoes the change or what it
-  leaves behind, and a structural change shows the smallest file tree, call
-  tree or diff sketch of its new shape. `omh-rules-distill` classes each
-  recurring miss as mechanical (it becomes a check, proven by failing on an
-  injected violation) or judgement (prose). `omh-codebase-onboarding` checks
-  its own repo map, reading path, glossary, risk map and first-task runway
-  instead of a generic planning checklist.
+  `omh-commit-pr-authoring` has every PR body say whether a revert undoes
+  the change or what it leaves behind, and which surfaces a bad merge would
+  reach. Without a PR template that goes in the fallback body; with one, it
+  goes under the template's risk or rollout section, or, when the template
+  has neither, in one sentence at the end of its summary or description
+  section. A structural change's PR body shows the smallest file tree, call
+  tree or diff sketch of its new shape.
+  `omh-rules-distill` classes each recurring miss as mechanical (it becomes a
+  check, proven by failing on an injected violation) or judgement (prose).
+  `omh-codebase-onboarding` checks its own repo map, reading path, glossary,
+  risk map and first-task runway instead of a generic planning checklist.
 
 - **A green regression test no longer proves a fix on its own, and a
   reproduction has to be the reported bug.** `omh-verification-gate` now asks,
@@ -332,18 +319,20 @@ All notable changes will be documented here.
   worktree run, a CI job, or the debugging session's own pre-fix run, recorded
   with its source); an intermittent fault or a test-only fix is witnessed by a
   failure rate beside 0/N at the same N. A fix test only ever seen green holds
-  the claim with `regression_witness_missing`.
-  `omh-app-debugging`'s reproduction record gains `symptom_match` (the
-  observed failure beside the reported one; a nearby failure is another bug),
-  `loop_cost` (time per run and what was pinned), and `minimised` (the
-  reproduction cut down until every element is load-bearing). Its method
-  reference gains a ladder for faults no test reaches, ending in numbered
-  steps for a person with named fields to report, and a session tag on every
-  temporary probe with an observed search for it before handover. Commands
-  read credentials from environment variables and quoted output is redacted.
-  The confirmed hypothesis and its eliminated rivals go into the fix's commit
-  or PR body. `omh-native-debugging`'s fault statement takes the symptom
-  match, the minimise step and the probe tag too.
+  the claim with `regression_witness_missing`. A fix recorded with
+  `regression_seam: none_correct` has no fix test, so the witness rule does
+  not apply. `omh-app-debugging`'s reproduction record gains `symptom_match`
+  (the observed failure beside the reported one; a nearby failure is another
+  bug), `loop_cost` (time per run and what was pinned, which is only what
+  neither the report nor a hypothesis already written implicates), and
+  `minimised` (the reproduction cut down until every element is load-bearing).
+  Its method reference gains a ladder for faults no test reaches, ending in
+  numbered steps for a person with named fields to report, and a session tag
+  on every temporary probe with an observed search for it before handover.
+  Commands read credentials from environment variables and quoted output is
+  redacted. The confirmed hypothesis and its eliminated rivals go into the
+  fix's commit or PR body. `omh-native-debugging`'s fault statement takes the
+  symptom match, the minimise step and the probe tag too.
 
 - **`plan` cuts code tasks as vertical slices, and `decision-prototype` says
   what a good prototype looks like.** A plan's code tasks each deliver one
@@ -353,17 +342,17 @@ All notable changes will be documented here.
   Slices that write the same file are ordered rather than re-cut by layer,
   each later slice listing every earlier one that writes it as a direct
   dependency; a file every slice only appends to (a changelog, a generated
-  index) may instead be written by one task after them. A layer-only task is
-  a prefactor placed first, or a wide mechanical change handed to
-  `refactor-plan` (the new form beside the old, callers moved in groups while
-  both stay green, the old form deleted last). `decision-prototype` gains
-  `references/artifact-shapes.md`:
-  a logic or state question gets a pure module a later plan can lift, with the
-  full state shown after each action; an interaction or layout question gets
-  structurally different variants mounted in the real host page inside a
-  temporary worktree, with writes stubbed; and prototype code the receipt
-  lets later work reference is kept on a named throwaway ref the receipt
-  cites.
+  index) may instead be written by one task after them. That task keeps a
+  generated, drift-gated file's gate out of each slice's done check. A
+  layer-only task is a prefactor placed first, or a wide mechanical change
+  handed to `refactor-plan` (the new form beside the old, callers moved in
+  groups while both stay green, the old form deleted last).
+  `decision-prototype` gains `references/artifact-shapes.md`: a logic or state
+  question gets a pure module a later plan can lift, with the full state shown
+  after each action; an interaction or layout question gets structurally
+  different variants mounted in the real host page inside a temporary
+  worktree, with writes stubbed; and prototype code the receipt lets later
+  work reference is kept on a named throwaway ref the receipt cites.
 
 - **The round-end check names a test whose expectation a keep-behaviour turn
   rewrote, and diffs a Python file a command names.** A new always-on test
@@ -590,7 +579,7 @@ All notable changes will be documented here.
   material-credibility axis.
 
 - **The info line's badge carries the version.** It reads
-  `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
+  `[⚚ OMH Native v4.0.5]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before
   the branch name is cut and before the badge shortens.
 
@@ -600,8 +589,8 @@ All notable changes will be documented here.
   version and keeps only that and the time of the ask in
   `<omh_home>/tui/update-check.json`. While it is newer than the one running,
   the info line says so beside the badge:
-  `[⚚ OMH Native v4.0.4]  v4.0.5 available · omh update`. On a narrower
-  line it is the first thing to shorten, to `↑ v4.0.5`, which stays beside
+  `[⚚ OMH Native v4.0.5]  v4.0.6 available · omh update`. On a narrower
+  line it is the first thing to shorten, to `↑ v4.0.6`, which stays beside
   the version until the version itself goes. Offline, a timeout or a bad reply
   says nothing. `OMH_TUI_UPDATE_CHECK=0` holds it off in one terminal,
   `omh theme update-check off` in every later session, and so does an
@@ -614,12 +603,6 @@ All notable changes will be documented here.
   `<omh_home>/tui/whats-new.json` so they are not shown again. An install
   that ran the OMH TUI before this release is told too; a new install shows
   nothing. `/whats-new` shows them whenever you ask.
-
-- **A plan's done check for a code task is a command.** `plan` accepted a
-  done check such as "an exact signature and its file", which a converter to
-  `dag-ulw` had to turn into a command by guesswork. For a code task the done
-  check is now a command with the result that counts as passing (the
-  test's run command, a gate, a grep for the signature); a task that is not code may keep an observable check.
 
 - **The composer's rules are violet in the default look.** The lines above
   and below the composer, and the launch card's frames, were spectrum's
@@ -673,25 +656,26 @@ All notable changes will be documented here.
   `--verification-command`, which implies `--run-verification`, so the
   shorthand can reach `verified`.
 
-- **In a chat with many loaded tools, Hermes can save a stated preference or
-  decision to OMH memory without searching for a tool first. On Discord, a
-  fact saved in one conversation thread can be recalled in the next thread
-  Hermes starts in the same channel.** The memory provider exposes the small
-  `omh_remember` save/recall tool outside Hermes' deferred plugin-tool catalog,
-  using the existing admission and session-lens gates. Discord threads Hermes
-  auto-created from channel messages use their parent channel's memory scope;
-  other threads keep their own.
-- **Hermes saves a stated preference or decision in the same turn, even when
-  the message also asks for other work.** The `omh_remember` description and
-  its one-line prompt now ask for the save before other tools, limit it to the
-  user's own words, and exclude pasted text and facts that only matter for the
-  current task.
-- **A rule the user restates in other words updates the saved record instead
-  of adding a second one.** `omh_remember(action="save")` takes `replaces`,
-  the id of a record already shown to the conversation; the merged summary
-  goes through the correction path, the old record moves to history, and only
-  the merged record recalls. An id outside the session's lens still saves the
-  fact as a new record.
+- **Hermes can save a stated preference or decision to OMH memory in the same
+  turn, and a rule the user restates updates its record instead of adding a
+  second one.** The memory provider now exposes a small `omh_remember` tool
+  with `save` and `recall` actions outside Hermes' deferred plugin-tool
+  catalog, so a chat with many loaded tools no longer has to search for a tool
+  before it can save. `save` runs the existing capture path (admission, the
+  session lens, surface refusals, bound channel scope, duplicate skip) and
+  `recall` the existing recall path. The tool description and its one-line
+  prompt ask for the save before other tools, even when the message also asks
+  for other work, limit it to the user's own words, and exclude pasted text and
+  facts that only matter for the current task. `save` takes `replaces`, the id
+  of a record already shown to the conversation: the merged summary goes
+  through the correction path, the old record moves to history, and only the
+  merged record recalls; an id outside the session's lens still saves the fact
+  as a new record. It also takes `tags`, a few topic words in the user's own
+  language, so a later message in that language can match a record whose
+  summary is written in another. On Discord, a thread Hermes auto-created from
+  a channel message uses its parent channel's memory scope, so a fact saved in
+  one conversation thread can be recalled in the next thread started in the
+  same channel; other threads keep their own. `omh_memory` is unchanged.
 - **omher.app pages carry X's full share-card tag set.** Every indexable site page now
   carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
   `og:image:type` beside the existing share card, and `test_site_seo` pins
@@ -700,14 +684,19 @@ All notable changes will be documented here.
 - **A code-change plan from `plan` carries its execution order.** Each task
   now has an id, the tasks it depends on, the files it may write and its done
   check: the dependency and write-scope fields a `dag-ulw` node takes, and the
-  check its VERIFY and STOP WHEN come from. Of two tasks that write the same
-  file, one lists the other directly as a dependency, as `dag-ulw` requires.
-  Converting a plan to a graph still adds each node's label, category and full
-  prompt. The last task is a closing gate, named as the verification task:
-  real verification commands run by someone other than the builder, then a
-  review, and an unclean review adds a fix task (at most two rounds) instead
-  of ending the plan. After acceptance, `plan` and `ulw-plan` now offer
-  `dag-ulw` for a plan whose tasks form a graph.
+  check its VERIFY and STOP WHEN come from. For a code task the done check is
+  a command with the result that counts as passing (the test's run command, a
+  gate, a grep for the signature), not a description such as "an exact
+  signature and its file", which a converter to `dag-ulw` had to turn into a
+  command by guesswork; a task that is not code may keep an observable check.
+  Of two tasks that write the same file, one lists the other directly as a
+  dependency, as `dag-ulw` requires. Converting a plan to a graph still adds
+  each node's label, category and full prompt. The last task is a closing
+  gate, named as the verification task: real verification commands run by
+  someone other than the builder, then a review, and an unclean review adds a
+  fix task (at most two rounds) instead of ending the plan. After acceptance,
+  `plan` and `ulw-plan` now offer `dag-ulw` for a plan whose tasks form a
+  graph.
 
 - **A dag-ulw run that finished without a passing check no longer reads as a
   verified goal.** Each node now declares a `role` (`build` by default,
@@ -718,23 +707,20 @@ All notable changes will be documented here.
   under a verify node that was accepted with its handoff checked, otherwise
   `unverified` (with the reason) or `verify_failed`. `omh_dag`, the run
   summary, the messenger end block and the TUI end view all show it, and an
-  unverified done run is told to add a verify node through `extend`. Runs
-  stored before this update keep reading their nodes as before.
-
-- **A dag-ulw writer sent with no role that reads like a check stays native.**
-  A node with no `role` and a `write_scope` whose label reads like a check
-  past its first word ("Re-verify the fix", "Final verification pass",
-  "Re-review the diff", "Double-check the migration") ran as a build node and
-  could go to the external coding owner, where the builder approves itself.
-  It still runs as a build node and still counts as a producer, but it now
-  stays on `delegate_task`; the lint names the role it reads like, and
-  `role=build` sends it to the owner. Build work that reads the same way
-  ("Add input validation to the API") stays native too until the parent
-  names its role. When such a node reads like a verify node and fails, it
-  runs again after its repair, the way a verify node does. A new advisory
-  lint, `no_review_node`, names a run whose build nodes write more than docs
-  with no `review` node; it never refuses a run or moves its state or goal
-  verdict.
+  unverified done run is told to add a verify node through `extend`. A node
+  with no `role` and a `write_scope` whose label reads like a check past its
+  first word ("Re-verify the fix", "Final verification pass", "Re-review the
+  diff", "Double-check the migration") still runs as a build node and still
+  counts as a producer, but it stays on `delegate_task` instead of going to
+  the external coding owner, where the builder would approve itself; the lint
+  names the role it reads like, and `role=build` sends it to the owner. Build
+  work that reads the same way ("Add input validation to the API") stays
+  native too until the parent names its role. Such a node that reads like a
+  verify node and fails runs again after its repair, the way a verify node
+  does. An advisory lint, `no_review_node`, names a run whose build nodes
+  write more than docs with no `review` node; it never refuses a run or moves
+  its state or goal verdict. Runs stored before this update keep reading their
+  nodes as before.
 
 - **`omh_jev_ask` can reach a TypeSafe endpoint you configure.** It honors
   `TYPESAFE_BASE_URL`, the API-root variable TypeSafe's own SDKs read: an
@@ -754,8 +740,8 @@ All notable changes will be documented here.
   prices go in the post body), one number smaller than the logo, and the
   official logo at 25% or more of the frame height, checked on a still sheet
   before the render. `design-quality-gate` scores the same items as a
-  Short-clip discipline axis. Generalized from six review rounds on one
-  launch clip. (#2488)
+  Short-clip discipline axis. Generalized from six review rounds on one launch
+  clip. Contributed by @bellman-sionic (#2488, carried by #2490).
 
 - **Codex handoffs on native Windows can write (#2471).** Four changes:
   - The child environment now passes `SYSTEMDRIVE` with the other Windows
@@ -801,13 +787,15 @@ All notable changes will be documented here.
   action=cancel` now lists each node whose delegate child is still out, with its
   subagent id and how long it has been open, under `still_running`, and the reply
   names each one with its `delegate_task action=stop` route. A repeated cancel
-  names the same children instead of saying none are left. (#2512)
+  names the same children instead of saying none are left. Contributed by
+  @ryanrodrigues25200525-svg (#2512, carried by #2515).
 - **The LSP opt-in has a visible enable path.** When the impact check finds new
   errors and the `omh-lsp` toolset is off, its note says `lsp_diagnostics`
   re-checks directly once `OMH_LSP_TOOLS=1` or the `lsp_tools` setting is on and
   Hermes restarted; with the toolset on it no longer repeats that. `omh doctor`
   advisories gain `lsp_tools_disabled` (advice when unset or off, unobserved
-  when the config shape cannot be read). (#2511)
+  when the config shape cannot be read). Contributed by
+  @ryanrodrigues25200525-svg (#2511, carried by #2515).
 
 - **Korean requests that mention OMH by name stop drawing unrelated skill
   suggestions.** The per-turn "skills that may fit" line ranked Korean on
@@ -818,20 +806,26 @@ All notable changes will be documented here.
   messages, lines naming those three skills fall from 24 to 11; each skill still
   matches its own nouns ("병렬 도구", "코덱스", "기억 점검").
 
-- **Codex fanout units get OMH's own skills, and can edit and commit inside the
-  fence.** OMH looked for Codex skills only in `~/.codex/skills`, while Codex
-  also loads `~/.agents/skills`, where `.codex/install.sh` puts OMH's pack. On
-  a Mac with six personal skills there, every Codex unit was told to start with
-  `$generate2dsprite` and `$game-video-feedback-loop` (11 of 11 units in a real
-  run, about 32k characters of unrelated skill text each). Discovery now reads
-  the repo `.agents/skills`, `$CODEX_HOME` and `~/.agents/skills` too, so the
-  same unit gets `$omh-plan`, `$omh-build-failure-triage`, `$omh-code-review`;
-  a name found in two roots is never suggested, since Codex refuses a plain
-  `$name` that matches two skills. Inside the macOS fence, zsh heredocs and `uv` now work:
-  `TMPPREFIX` and `UV_CACHE_DIR` point into the unit's scratch dir (before,
-  every `git commit -F - <<EOF` failed with "can't create temp file for here
-  document" and `uv run` could not open its cache). The fence's write
-  boundary is unchanged.
+- **Codex fanout units get OMH's own skills, and can edit, commit and reach
+  the network inside the fence.** OMH looked for Codex skills only in
+  `~/.codex/skills`, while Codex also loads `~/.agents/skills`, where
+  `.codex/install.sh` puts OMH's pack. On a Mac with six personal skills
+  there, every Codex unit was told to start with `$generate2dsprite` and
+  `$game-video-feedback-loop` (11 of 11 units in a real run, about 32k
+  characters of unrelated skill text each). Discovery now reads the repo
+  `.agents/skills`, `$CODEX_HOME` and `~/.agents/skills` too, so the same unit
+  gets `$omh-plan`, `$omh-build-failure-triage`, `$omh-code-review`; a name
+  found in two roots is never suggested, since Codex refuses a plain `$name`
+  that matches two skills. Inside the macOS fence, zsh heredocs and `uv` now
+  work: `TMPPREFIX` and `UV_CACHE_DIR` point into the unit's scratch dir
+  (before, every `git commit -F - <<EOF` failed with "can't create temp file
+  for here document" and `uv run` could not open its cache). The fence's write
+  boundary is unchanged. On macOS the fence also allows the two `trustd` mach
+  lookups (`com.apple.trustd.agent`, `com.apple.trustd`), so Codex's TLS
+  certificate check can ask the trust daemon; before, a unit connected, could
+  not verify the certificate, and ended with `workspace routing discovery
+  failed` or retried until its timeout. They are lookup rules only: no file or
+  preference write is allowed (#2456).
 - **A stale Codex skill pack is now reported and refreshed.** `omh update`
   refreshes an installed `~/.agents/skills` pack in its recorded layout (it
   never creates one), `omh doctor` warns with `omh update` when that pack is
@@ -845,15 +839,16 @@ All notable changes will be documented here.
   steered it. Those records now arrive as one `<record_index>` line naming each record's subject (at most
   eight, then `+K more`), and `omh_remember recall` reads one in full when it bears on the request. Records
   saved in the same conversation still arrive in full, a matching message gets the same pack as before, and
-  CLI recall, `omh_memory recall` and coding handoffs are unchanged. `omh_remember save` takes `tags`, a
-  few topic words in the user's own language, so a later message in that language can match a record whose
-  summary is written in another. In dag-ulw, a node's last repair cycle is now a re-plan: its tasks carry the
-  earlier failure reasons and ask for two or three approaches that differ in kind before any edit, unless
-  every failure was an infrastructure cut. The loop stop ladder's first no-progress stop now asks for one
-  re-plan from the goal ledger (`replan_stuck_loop_once`) and resets the window; only a stop after that
-  names the blocker step. The dag-ulw run loop reference gains a "When the path is unknown" section (cheap
-  scout nodes on different hypotheses first, then `extend` with the build layer), and the interview skill
-  keeps at least one answer candidate from outside recalled memory.
+  CLI recall, `omh_memory recall` and coding handoffs are unchanged. In
+  dag-ulw, a node's last repair cycle is now a re-plan: its tasks carry the
+  earlier failure reasons and ask for two or three approaches that differ in
+  kind before any edit, unless every failure was an infrastructure cut. The
+  loop stop ladder's first no-progress stop now asks for one re-plan from the
+  goal ledger (`replan_stuck_loop_once`) and resets the window; only a stop
+  after that names the blocker step. The dag-ulw run loop reference gains a
+  "When the path is unknown" section (cheap scout nodes on different
+  hypotheses first, then `extend` with the build layer), and the interview
+  skill keeps at least one answer candidate from outside recalled memory.
 
 ## 4.0.4 - 2026-11-01
 
