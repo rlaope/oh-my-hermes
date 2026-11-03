@@ -151,6 +151,136 @@ class DiscoveryShapeTests(unittest.TestCase):
             self.assertIn(entry["role"], MODEL_ROLES)
 
 
+class CodexSkillRootTests(unittest.TestCase):
+    """Codex loads `$CODEX_HOME/skills` plus the user and repo `.agents/skills`
+    roots; discovery must read the same roots in the same precedence order."""
+
+    def test_codex_reads_user_agent_skills(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            _write_skill(home / ".agents" / "skills", "omh-plan", "Structured planning before execution")
+            payload = discovered_executor_skills("codex", home)
+        self.assertEqual(
+            [(entry["invocation"], entry["source"]) for entry in payload["skills"]],
+            [("$omh-plan", "codex_user_agent_skills")],
+        )
+        self.assertEqual(payload["sources"]["codex_user_agent_skills"]["status"], "present")
+        self.assertEqual(payload["sources"]["codex_skills"]["status"], "absent")
+        self.assertEqual(payload["shadowed_name_count"], 0)
+
+    def test_codex_repo_agent_skills_with_project_root(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            home.mkdir()
+            repo = Path(tmp) / "repo"
+            _write_skill(repo / ".agents" / "skills", "omh-code-review", "Bug-first code review")
+            without_root = discovered_executor_skills("codex", home)
+            with_root = discovered_executor_skills("codex", home, project_root=repo)
+        self.assertNotIn("codex_repo_agent_skills", without_root["sources"])
+        self.assertEqual(without_root["skills"], [])
+        self.assertEqual(with_root["sources"]["codex_repo_agent_skills"]["status"], "present")
+        self.assertEqual(
+            [(entry["invocation"], entry["source"]) for entry in with_root["skills"]],
+            [("$omh-code-review", "codex_repo_agent_skills")],
+        )
+        self.assertEqual(
+            list(with_root["sources"]),
+            ["codex_repo_agent_skills", "codex_prompts", "codex_skills", "codex_user_agent_skills"],
+        )
+
+    def test_codex_duplicate_name_keeps_codex_home_copy(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            _write_skill(home / ".codex" / "skills", "omh-plan", "Structured planning before execution")
+            _write_skill(home / ".agents" / "skills", "omh-plan", "Structured planning before execution")
+            payload = discovered_executor_skills("codex", home)
+        self.assertEqual(
+            [(entry["invocation"], entry["source"]) for entry in payload["skills"]],
+            [("$omh-plan", "codex_skills")],
+        )
+        self.assertEqual(payload["shadowed_name_count"], 1)
+
+    def test_codex_prompt_and_skill_with_one_name_do_not_shadow(self) -> None:
+        # `/name` and `$name` are distinct Codex commands, so neither hides the other.
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            prompts = home / ".codex" / "prompts"
+            prompts.mkdir(parents=True)
+            (prompts / "planner.md").write_text("---\ndescription: Plan work\n---\n", encoding="utf-8")
+            _write_skill(home / ".agents" / "skills", "planner", "Plan work")
+            payload = discovered_executor_skills("codex", home)
+        self.assertEqual(sorted(entry["invocation"] for entry in payload["skills"]), ["$planner", "/planner"])
+        self.assertEqual(payload["shadowed_name_count"], 0)
+
+    def test_codex_home_env_is_honoured(self) -> None:
+        with TemporaryDirectory() as tmp:
+            fake_home = Path(tmp) / "home"
+            _write_skill(fake_home / ".codex" / "skills", "default-home-skill", "Implement code")
+            codex_home = Path(tmp) / "custom-codex"
+            _write_skill(codex_home / "skills", "env-home-skill", "Implement code")
+            with mock.patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}), mock.patch.object(
+                Path, "home", return_value=fake_home
+            ):
+                from_env = discovered_executor_skills("codex")
+                # An explicit `home` argument pins every root under it.
+                explicit = discovered_executor_skills("codex", fake_home)
+            with mock.patch.dict(os.environ, {"CODEX_HOME": ""}), mock.patch.object(
+                Path, "home", return_value=fake_home
+            ):
+                empty_env = discovered_executor_skills("codex")
+        self.assertEqual([entry["invocation"] for entry in from_env["skills"]], ["$env-home-skill"])
+        self.assertEqual([entry["invocation"] for entry in explicit["skills"]], ["$default-home-skill"])
+        self.assertEqual([entry["invocation"] for entry in empty_env["skills"]], ["$default-home-skill"])
+
+    def test_hidden_and_escaping_symlink_dirs_are_skipped(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            agent_skills = home / ".agents" / "skills"
+            _write_skill(agent_skills, "omh-plan", "Structured planning before execution")
+            # Codex's bundled `.system` tree: a hidden dir without its own SKILL.md.
+            _write_skill(home / ".codex" / "skills" / ".system", "imagegen", "Generate images")
+            _write_skill(agent_skills, ".hidden-skill", "Implement code")
+            outside = Path(tmp) / "elsewhere"
+            _write_skill(outside, "escaped", "Implement code")
+            inside_target = agent_skills / "_store" / "inner"
+            _write_skill(agent_skills / "_store", "inner", "Review code")
+            try:
+                (agent_skills / "escaped").symlink_to(outside / "escaped", target_is_directory=True)
+                (agent_skills / "linked-inside").symlink_to(inside_target, target_is_directory=True)
+                (agent_skills / "dangling").symlink_to(Path(tmp) / "missing", target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"symlinks unavailable: {error}")
+            payload = discovered_executor_skills("codex", home)
+        names = sorted(entry["name"] for entry in payload["skills"])
+        self.assertEqual(names, ["linked-inside", "omh-plan"])
+        self.assertEqual(payload["rejected_name_count"], 1)
+        self.assertNotIn("escaped", repr(payload))
+        self.assertNotIn("imagegen", repr(payload))
+
+    def test_claude_code_payload_gains_only_a_zero_shadowed_count(self) -> None:
+        with TemporaryDirectory() as tmp:
+            payload = discovered_executor_skills("claude-code", _claude_home(tmp))
+        self.assertEqual(payload["shadowed_name_count"], 0)
+        self.assertEqual(
+            list(payload["sources"]), ["claude_user_skills", "claude_plugin_skills"]
+        )
+
+    def test_codex_unit_prompt_recommends_agent_skills(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            agent_skills = home / ".agents" / "skills"
+            _write_skill(agent_skills, "omh-plan", "Structured planning before execution")
+            _write_skill(agent_skills, "ulw-work", "Implement an accepted plan with an execution loop")
+            _write_skill(agent_skills, "omh-code-review", "Bug-first code review with findings")
+            payload = discovered_executor_skills("codex", home)
+        prompt = build_unit_prompt(_unit("codex"), _GOAL, payload)
+        steps = _sequence_steps(prompt)
+        self.assertEqual(steps, ["$omh-plan", "$ulw-work", "$omh-code-review"])
+        self.assertTrue(all(step.startswith("$") for step in steps))
+        for missing in ("codex_prompts", "codex_skills", "codex_repo_agent_skills"):
+            self.assertNotIn(missing, prompt)
+
+
 class PluginCacheLayoutTests(unittest.TestCase):
     """The cache layout is where installed plugin skills actually live."""
 
