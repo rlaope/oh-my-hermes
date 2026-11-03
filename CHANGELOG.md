@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The round-end check continues a turn less often, and shows what it found.**
+  A changed function's name in another file no longer continues the turn when
+  every mention there is proven to need no change: another object's method of
+  the same name, or an import whose calls bind the same way before and after the
+  edit. When the check does fire alone on a copy or a reference, the note now
+  shows those lines (a copy with its module docstring), so the model can decide
+  without searching for them first.
+
 - **A TUI performance bench lives in the repo.** `tools/benchmarks/tui_perf.py`
   measures frame cost by transcript size, full redraw, streaming per chunk,
   keystroke cost by composer length, idle wake-ups and bytes, plugin hook

@@ -59,6 +59,21 @@ ROUND_END_CHECKLIST: Final = (
     "you changed this turn that have to change with it, and fix any you find. Do not re-run tests for "
     "this check. This note is guidance, not verification evidence."
 )
+# When the check fires alone on a match the trigger can show (`Verdict.evidence`), the note shows it
+# instead of asking for a search: the model can decide from the lines themselves, often without
+# another tool call. In the 2026-11-03 head-to-head every look-alike the generic note sent the model
+# to search for cost two or three more calls, and none of them was changed.
+ROUND_END_FOUND: Final = {
+    "copy": "another definition of `{name}`, a name your edit changed",
+    "renamed": "`{name}`, which your edit removed or renamed",
+    "signature": "`{name}`, whose parameters your edit changed",
+    "line_copy": "a line your edit replaced or removed",
+}
+ROUND_END_EVIDENCE_TAIL: Final = (
+    "Decide from these lines whether this has to change with your edit, and fix it if it does, along with "
+    "any other copy or call site of the logic you changed that you know of. Do not re-run tests for this "
+    "check. This note is guidance, not verification evidence."
+)
 ROUND_END_CHECKLIST_BESIDE_A_RECHECK: Final = (
     "OMH round-end consistency check, once per turn: look for other copies or call sites of the logic "
     "you changed this turn that have to change with it, and fix any you find. This note is guidance, not "
@@ -179,7 +194,10 @@ def pre_verify(
             # the export note included: that note continues the turn on its own
             # whatever the trigger says, because fixing the line it names is the work.
             alone = not (surface_message or impact_message or export_message or test_message or plan_message)
-            if not alone or round_end_trigger(session_id, code_paths).fire:
+            verdict = round_end_trigger(session_id, code_paths) if alone else None
+            if verdict is not None and verdict.fire and verdict.evidence:
+                checklist_message = round_end_evidence_note(verdict)
+            elif verdict is None or verdict.fire:
                 # Beside a request to run or re-check something, the check must
                 # not say "do not re-run": that request stands.
                 checklist_message = (ROUND_END_CHECKLIST_BESIDE_A_RECHECK
@@ -213,6 +231,19 @@ def pre_verify(
     if attempt_value == 0 and plan_message and open_items:
         record_catch(str(_kwargs.get("omh_home") or ""), session_id, PLAN_CONTINUED, open_items=open_items)
     return {"action": "continue", "message": "\n".join(messages)}
+
+
+def round_end_evidence_note(verdict: object) -> str:
+    """The round-end check naming what `consistency_trigger` found, with its lines; the generic
+    checklist for a verdict it cannot phrase."""
+    reason = getattr(verdict, "reason", "")
+    evidence = getattr(verdict, "evidence", "")
+    template = ROUND_END_FOUND.get(reason) if isinstance(reason, str) else None
+    if template is None or not isinstance(evidence, str) or not evidence:
+        return ROUND_END_CHECKLIST
+    name = str(getattr(verdict, "detail", "")).split(" in ", 1)[0]
+    return (f"OMH round-end consistency check, once per turn: outside the files you edited this turn, OMH "
+            f"found {template.format(name=name)}:\n{evidence}\n{ROUND_END_EVIDENCE_TAIL}")
 
 
 def _stash_answer(session_id: object, answer: object) -> bool:

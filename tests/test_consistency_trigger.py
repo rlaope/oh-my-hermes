@@ -77,7 +77,8 @@ class _Workspace(unittest.TestCase):
         return str(self.root / self.write(relative, text))
 
     def verdict(self, *paths: str) -> ct.Verdict:
-        return ct.round_end_trigger(SESSION, tuple(paths))
+        """The verdict without its evidence lines; `EvidenceTest` reads those."""
+        return ct.round_end_trigger(SESSION, tuple(paths))._replace(evidence="")
 
 
 class CopySignalTest(_Workspace):
@@ -819,10 +820,24 @@ class PreVerifyGateTest(_Workspace):
         self.assertIsNone(self.fire(self.edit("src/app/units.py", '{"s": 60,', '{"s": 1,')))
         self.assertNotIn(SESSION, ct._sessions)
 
-    def test_alone_with_a_copy_the_check_fires_unchanged(self):
+    def test_alone_with_a_copy_the_check_shows_the_copy(self):
         self.write("src/app/invoice.py", INVOICE)
         self.write("src/app/receipt.py", RECEIPT)
         result = self.fire(self.edit("src/app/invoice.py", "ROUND_HALF_EVEN)\n\n\n", "ROUND_HALF_UP)\n\n\n"))
+        evidence = ("src/app/receipt.py:\n"
+                    '   1| """Receipt totals."""\n'
+                    "   5| def _to_cents(amount: str) -> decimal.Decimal:\n"
+                    '   6|     return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)')
+        self.assertEqual(result["message"], (
+            "OMH round-end consistency check, once per turn: outside the files you edited this turn, OMH found "
+            f"another definition of `_to_cents`, a name your edit changed:\n{evidence}\n"
+            f"{verify_hooks.ROUND_END_EVIDENCE_TAIL}\n{verify_hooks.ROUND_END_CLOSING}"))
+
+    def test_a_fire_without_evidence_keeps_the_generic_checklist(self):
+        self.write("src/app/units.py", UNITS)
+        changed = self.edit("src/app/units.py", '{"s": 60,', '{"s": 1,')
+        with mock.patch.object(verify_hooks, "round_end_trigger", lambda session_id, paths: ct.Verdict(True, "opaque_edit")):
+            result = self.fire(changed)
         self.assertEqual(result["message"], f"{verify_hooks.ROUND_END_CHECKLIST}\n{verify_hooks.ROUND_END_CLOSING}")
 
     def test_beside_another_nudge_the_check_rides_along_without_a_verdict(self):
@@ -850,6 +865,169 @@ class PreVerifyGateTest(_Workspace):
             tool_hooks.pre_tool_call(tool_name="patch", args={"path": "src/app/units.py", "old_string": "a", "new_string": "b"},
                                      session_id=SESSION, turn_id="t1")
         self.assertEqual(list(ct._sessions[SESSION]["before"].values()), [UNITS])
+
+
+HTTP_CLIENT = (
+    '"""A fake HTTP client."""\n\n\n'
+    "def fetch(url: str, *, timeout: float = 5.0, retries: int = 1) -> dict[str, object]:\n"
+    '    return {"url": url, "timeout": timeout, "retries": retries}\n'
+)
+FALLBACKS = (
+    "def fetch_primary(client):\n    try:\n        return client.fetch()\n    except RuntimeError:\n"
+    "        return {'source': 'fallback'}\n"
+)
+PRICING = '"""Fee arithmetic."""\n\n\ndef compute_fee(amount_cents: int, rate_bp: int) -> int:\n    return amount_cents * rate_bp // 10000\n'
+REEXPORT = 'from .pricing import compute_fee as fee\n\n__all__ = ["fee"]\n'
+
+
+class SettledReferenceTest(_Workspace):
+    """A `signature` hit is dropped only when every mention of the name in that file is proven not to
+    need the change; anything else fires as before."""
+
+    def rename_timeout(self) -> str:
+        return self.edit("src/app/http_client.py", "timeout: float = 5.0", "timeout_s: float = 5.0")
+
+    def test_another_objects_method_of_the_same_name_is_settled(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/fallbacks.py", FALLBACKS)
+        self.assertEqual(self.verdict(self.rename_timeout()),
+                         ct.Verdict(False, "no_copy_or_reference", "settled fetch"))
+
+    def test_an_attribute_of_an_assigned_name_fires(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/fallbacks.py", "from app import http_client\n\nclient = http_client\n\n\n"
+                                           "def ping():\n    return client.fetch('u')\n")
+        self.assertEqual(self.verdict(self.rename_timeout())[:2], (True, "signature"))
+
+    def test_an_attribute_of_the_imported_module_fires(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/health.py", "from app import http_client as hc\n\n\n"
+                                        "def ping(url):\n    return hc.fetch(url, timeout=1.0)\n")
+        self.assertEqual(self.verdict(self.rename_timeout())[:2], (True, "signature"))
+
+    def test_a_call_that_binds_the_same_way_is_settled(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("tests/test_http_client.py", "from app.http_client import fetch\n\n\n"
+                                                "def test_fetch_defaults():\n    assert fetch(\"u\")[\"url\"] == \"u\"\n")
+        self.assertEqual(self.verdict(self.rename_timeout()),
+                         ct.Verdict(False, "no_copy_or_reference", "settled fetch"))
+
+    def test_calls_that_do_not_bind_the_same_way_fire(self):
+        cases = {
+            "renamed_keyword": ("fetch('u', timeout=2.0)", "timeout: float = 5.0", "timeout_s: float = 5.0"),
+            "star_args": ("fetch(*ARGS)", "timeout: float = 5.0", "timeout_s: float = 5.0"),
+            "double_star": ("fetch('u', **OPTIONS)", "timeout: float = 5.0", "timeout_s: float = 5.0"),
+            "changed_default": ("fetch('u')", "timeout: float = 5.0", "timeout: float = 9.0"),
+            "new_required": ("fetch('u')", "retries: int = 1)", "retries: int = 1, verify: bool)"),
+            "shifted_positional": ("fetch('u', 'GET')", "(url: str, *,", "(url: str, method: str = 'GET', *,"),
+            "changed_return": ("fetch('u')", "-> dict[str, object]", "-> dict[str, str]"),
+        }
+        for label, (call, old, new) in cases.items():
+            with self.subTest(label):
+                ct.reset()
+                self.write("src/app/http_client.py", HTTP_CLIENT if label != "shifted_positional"
+                           else HTTP_CLIENT.replace("(url: str, *,", "(url: str, mode: str = 'x', *,"))
+                if label == "shifted_positional":
+                    old, new = "(url: str, mode: str = 'x', *,", "(url: str, method: str = 'GET', mode: str = 'x', *,"
+                self.write("src/app/sync.py", f"from app.http_client import fetch\n\nARGS = ()\nOPTIONS = {{}}\n\n\n"
+                                              f"def sync():\n    return {call}\n")
+                self.assertEqual(self.verdict(self.edit("src/app/http_client.py", old, new))[:2], (True, "signature"))
+
+    def test_a_mention_outside_code_fires(self):
+        for label, extra in {"comment": "# fetch is called above\n", "string": "NOTE = 'see fetch'\n",
+                             "value": "HANDLER = fetch\n"}.items():
+            with self.subTest(label):
+                ct.reset()
+                self.write("src/app/http_client.py", HTTP_CLIENT)
+                self.write("tests/test_http_client.py", "from app.http_client import fetch\n\n" + extra +
+                           "\n\ndef test_fetch():\n    assert fetch('u')\n")
+                self.assertEqual(self.verdict(self.rename_timeout())[:2], (True, "signature"))
+
+    def test_a_re_export_no_unedited_file_uses_is_settled(self):
+        self.write("src/app/pricing.py", PRICING)
+        self.write("src/app/__init__.py", REEXPORT)
+        changed = self.edit("src/app/pricing.py", "rate_bp: int)", "rate_bp: int, minimum_cents: int)")
+        self.assertEqual(self.verdict(changed), ct.Verdict(False, "no_copy_or_reference", "settled compute_fee"))
+
+    def test_a_re_export_an_unedited_file_uses_fires(self):
+        self.write("src/app/pricing.py", PRICING)
+        self.write("src/app/__init__.py", REEXPORT)
+        self.write("src/app/cli.py", "from app import fee\n\n\ndef cli_fee(argv):\n    return fee(int(argv[0]), 50)\n")
+        changed = self.edit("src/app/pricing.py", "rate_bp: int)", "rate_bp: int, minimum_cents: int)")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "signature", "compute_fee in src/app/__init__.py"))
+
+    def test_a_re_export_named_in_config_fires(self):
+        self.write("src/app/pricing.py", PRICING)
+        self.write("src/app/__init__.py", REEXPORT)
+        self.write("pyproject.toml", "[project.scripts]\nfee = 'app:fee'\n")
+        changed = self.edit("src/app/pricing.py", "rate_bp: int)", "rate_bp: int, minimum_cents: int)")
+        self.assertEqual(self.verdict(changed)[:2], (True, "signature"))
+
+    def test_an_import_from_another_module_fires(self):
+        self.write("src/app/pricing.py", PRICING)
+        self.write("src/app/use.py", "from vendor.fees import compute_fee\n\n\ndef f():\n    return compute_fee(1, 2)\n")
+        changed = self.edit("src/app/pricing.py", "rate_bp: int)", "rate_bp: int = 0)")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "signature", "compute_fee in src/app/use.py"))
+
+    def test_a_method_needle_is_never_settled_by_attribute(self):
+        self.write("src/app/client.py", "class Client:\n    def fetch(self, url: str) -> str:\n        return url\n")
+        self.write("src/app/use.py", "def ping(client):\n    return client.fetch('u')\n")
+        changed = self.edit("src/app/client.py", "(self, url: str)", "(self, url: str, *, timeout: float)")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "signature", "fetch in src/app/use.py"))
+
+    def test_a_decorated_function_is_never_settled(self):
+        self.write("src/app/http_client.py", "import functools\n\n\n@functools.cache\n" + HTTP_CLIENT.split("\n\n\n", 1)[1])
+        self.write("src/app/fallbacks.py", FALLBACKS)
+        self.assertEqual(self.verdict(self.rename_timeout())[:2], (True, "signature"))
+
+    def test_a_name_whose_signature_changed_in_two_edited_files_is_never_settled(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/mirror.py", HTTP_CLIENT)
+        self.write("src/app/fallbacks.py", FALLBACKS)
+        first = self.rename_timeout()
+        second = self.edit("src/app/mirror.py", "timeout: float = 5.0", "timeout_s: float = 5.0")
+        self.assertEqual(self.verdict(first, second)[:2], (True, "signature"))
+
+
+class EvidenceTest(_Workspace):
+    def test_a_copy_shows_its_module_docstring_comments_and_definition(self):
+        self.write("src/app/invoice.py", INVOICE)
+        self.write("src/app/duty.py", RECEIPT.replace('"""Receipt totals."""', '"""Duty amounts.\n\nKept apart."""').replace(
+            "def _to_cents", "# Banker's rounding.\ndef _to_cents"))
+        changed = self.edit("src/app/invoice.py", "ROUND_HALF_EVEN)\n\n\n", "ROUND_HALF_UP)\n\n\n")
+        self.assertEqual(ct.round_end_trigger(SESSION, (changed,)).evidence, (
+            "src/app/duty.py:\n"
+            '   1| """Duty amounts.\n'
+            "   2| \n"
+            '   3| Kept apart."""\n'
+            "   7| # Banker's rounding.\n"
+            "   8| def _to_cents(amount: str) -> decimal.Decimal:\n"
+            '   9|     return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)'))
+
+    def test_a_long_copy_is_cut(self):
+        self.write("src/app/invoice.py", INVOICE)
+        body = "".join(f"    step_{index} = {index}\n" for index in range(40))
+        self.write("src/app/duty.py", f"def _to_cents(amount):\n{body}    return amount\n")
+        changed = self.edit("src/app/invoice.py", "ROUND_HALF_EVEN)\n\n\n", "ROUND_HALF_UP)\n\n\n")
+        lines = ct.round_end_trigger(SESSION, (changed,)).evidence.splitlines()
+        self.assertEqual(len(lines), 1 + ct.MAX_EVIDENCE_LINES + 1)
+        self.assertEqual(lines[-1], "    | ...")
+
+    def test_a_reference_shows_its_matching_lines(self):
+        self.write("src/app/units.py", TO_CENTS)
+        self.write("src/app/cart.py", CART)
+        changed = self.edit("src/app/units.py", "def to_cents(", "def amount_to_cents(")
+        self.assertEqual(ct.round_end_trigger(SESSION, (changed,)).evidence, (
+            "src/app/cart.py:\n   1| from benchapp.units import to_cents\n   5|     return sum(map(to_cents, prices))"))
+
+    def test_a_replaced_line_shows_where_it_appears(self):
+        self.write("src/app/units.py", UNITS)
+        self.write("src/app/other.py", 'def table():\n    _DURATION_SECONDS = {"s": 60, "m": 60, "h": 3600}\n'
+                                       "    return _DURATION_SECONDS\n")
+        changed = self.edit("src/app/units.py", '{"s": 60,', '{"s": 1,')
+        verdict = ct.round_end_trigger(SESSION, (changed,))
+        self.assertEqual((verdict.reason, verdict.evidence), (
+            "line_copy", 'src/app/other.py:\n   2|     _DURATION_SECONDS = {"s": 60, "m": 60, "h": 3600}'))
 
 
 if __name__ == "__main__":
