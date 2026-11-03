@@ -11,6 +11,15 @@ All notable changes will be documented here.
   interval, and a given brief is shown once per session instead of on every later turn. Headroom, duplicate and
   expiring-record reasons keep their own thresholds, `dreaming_mode` is unchanged, and the model still captures
   through its own tool with no approve step.
+- **The `omh_recommend` tool result is about 12% smaller.** The handoff policy
+  used to ride on every recommended skill, and one policy can run past 1 KB.
+  It now stays on the top recommendation and on the skills the route selects,
+  which are the skills the agent acts on. When the top row is a router
+  (`meta-router`, `oh-my-hermes`), the first concrete skill below it keeps
+  its policy too. Every other row leaves it out, and the result says that
+  `omh_capabilities` `inspect` with section `skills` returns it for any skill.
+  The ranking, the top skill, the route and every other field are unchanged.
+  Over the routing corpus the mean result drops from 6,794 to 5,985 bytes.
 
 - **A multi-line paste no longer sends half a prompt where the terminal strips
   paste markers, and arrows hold together over SSH and WSL.** When tmux, SSH
@@ -728,6 +737,27 @@ All notable changes will be documented here.
   the request verb "확인" now count as filler. Replayed over 722 Korean owner
   messages, lines naming those three skills fall from 24 to 11; each skill still
   matches its own nouns ("병렬 도구", "코덱스", "기억 점검").
+
+- **Codex fanout units get OMH's own skills, and can edit and commit inside the
+  fence.** OMH looked for Codex skills only in `~/.codex/skills`, while Codex
+  also loads `~/.agents/skills`, where `.codex/install.sh` puts OMH's pack. On
+  a Mac with six personal skills there, every Codex unit was told to start with
+  `$generate2dsprite` and `$game-video-feedback-loop` (11 of 11 units in a real
+  run, about 32k characters of unrelated skill text each). Discovery now reads
+  the repo `.agents/skills`, `$CODEX_HOME` and `~/.agents/skills` too, so the
+  same unit gets `$omh-plan`, `$omh-build-failure-triage`, `$omh-code-review`;
+  a name found in two roots is never suggested, since Codex refuses a plain
+  `$name` that matches two skills. Inside the macOS fence, zsh heredocs and `uv` now work:
+  `TMPPREFIX` and `UV_CACHE_DIR` point into the unit's scratch dir (before,
+  every `git commit -F - <<EOF` failed with "can't create temp file for here
+  document" and `uv run` could not open its cache). The fence's write
+  boundary is unchanged.
+- **A stale Codex skill pack is now reported and refreshed.** `omh update`
+  refreshes an installed `~/.agents/skills` pack in its recorded layout (it
+  never creates one), `omh doctor` warns with `omh update` when that pack is
+  stale or edited, and `omh install --target agents --scope user --status`
+  reports the pack's real state instead of `missing` when only the unused
+  `~/.claude/skills` mirror is absent.
 
 ## 4.0.4 - 2026-11-01
 

@@ -548,6 +548,13 @@ def cmd_update(args: argparse.Namespace) -> int:
     if code:
         return code
     failures: list[dict[str, object]] = []
+    from ..install.agent_skills_projection import agent_skills_user_home, refresh_installed_agent_skills
+
+    payload["agent_skills"] = None
+    try:
+        payload["agent_skills"] = refresh_installed_agent_skills(agent_skills_user_home(), dry_run=bool(args.dry_run))
+    except (OSError, ValueError) as exc:
+        failures.append({"phase": "agent_skills", "error": f"{type(exc).__name__}: {_bounded_command_error(str(exc))}"})
     primary_registration: dict[str, object] | None = None
     try:
         if _paths(args).hermes_plugin_dir.is_dir():
@@ -591,6 +598,11 @@ def cmd_update(args: argparse.Namespace) -> int:
     else:
         if payload.get("skills") is not None:
             _print_install_summary(payload, command="update", language=_resolve_language(args))
+        agent_skills = payload.get("agent_skills")
+        if agent_skills and "refreshed_files" in agent_skills:
+            count = agent_skills["refreshed_files"]
+            print(f"Agent Skills (Codex/.agents): refreshed {count} files" if count
+                  else "Agent Skills (Codex/.agents): already up to date")
         _print_display_release_lines(primary_registration, profile_results)
         _print_registration_migrations(primary_registration, profile_results)
         _print_omh_home_reclaims(profile_results)
