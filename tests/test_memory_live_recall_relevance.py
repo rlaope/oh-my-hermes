@@ -1,4 +1,4 @@
-"""Live recall serves what the turn asked for, once per conversation.
+"""Live recall shows what the turn asked for, once per conversation.
 
 Measured on the owner's stores (2026-11-03 audit): 89% of the records a live
 turn received shared no word with the person's message, 84% repeated a record
@@ -6,16 +6,19 @@ the same session had already received, and 55 of 126 messenger recall lines
 fell on host notices nobody wrote. Three causes, each pinned here with the
 cases that must not change:
 
-- the selector's active-tier fallback served the whole store for a query that
-  matched nothing, and an unqueried selection served it for an empty one; the
-  live provider and tool recall now pass ``query_fallback=False``, while the
-  handoff facade keeps the fallback;
+- the selector's active-tier fallback served the whole store in full for a
+  query that matched nothing, and an unqueried selection for an empty one;
+  the live provider now lists both by name in one `<record_index>` line (#2535
+  for the first; pins and same-conversation captures stay in full), and tool
+  recall passes ``query_fallback=False``, while the handoff facade keeps the
+  fallback in full;
 - the provider re-served the same records every turn although Hermes replays
   each turn's injected block until compaction; it now skips a record the
-  conversation already holds at the same ``recall_revision``, and forgets that
-  at any session switch, so a compaction lets a record come back once;
-- a turn that was only a host notice was served the store; it now gets no
-  records, not even pins.
+  conversation already holds at the same ``recall_revision``, a record it was
+  shown by name leaves later indexes, and both are forgotten at any session
+  switch, so a compaction lets a record come back once;
+- a turn that was only a host notice was served the store; it now considers
+  no record at all, not even pins or an index.
 """
 from __future__ import annotations
 
@@ -114,6 +117,22 @@ class SelectorSessionServedTests(unittest.TestCase):
         self.assertNotIn("query_fallback", payload(result))
 
 
+class SelectorListedTests(unittest.TestCase):
+    def test_a_listed_record_leaves_an_unanswered_pack_without_pulling_in_another(self) -> None:
+        pairs = [reviewed(f"mem-{index}", summary=f"Distinct fact number {index}") for index in range(3)]
+        listed = {f"mem-{index}": f"listed:{recall_revision(pairs[index][0])}" for index in range(2)}
+        for query in (_NO_MATCH, ""):
+            with self.subTest(query=query):
+                result = selection(pairs, query, limit=2, session_served=listed)
+                self.assertEqual(included_ids(result), [], "the cut kept the two listed records; the third stays over budget")
+                self.assertEqual(result.exclusion_reason_counts, {"listed_this_session": 2, "over_budget": 1})
+
+    def test_a_query_that_matches_a_listed_record_gets_it_in_full(self) -> None:
+        record, review = reviewed("mem-a", summary="Deploys wait for nightly")
+        result = selection([(record, review)], "deploys", session_served={"mem-a": f"listed:{recall_revision(record)}"})
+        self.assertEqual(included_ids(result), ["mem-a"])
+
+
 class SanitizedHostOnlyTests(unittest.TestCase):
     def test_a_turn_of_only_host_notices_is_host_only(self) -> None:
         for raw in (_NOTICE, _BATCH):
@@ -157,25 +176,59 @@ class ProviderLiveRecallTests(unittest.TestCase):
         # The pin is still served on the person's next turn.
         self.assertEqual(rendered_ids(hermes_turn(live, 3, "ok")), [pinned["record_id"]])
 
-    def test_an_empty_turn_serves_pins_only(self) -> None:
+    def test_an_empty_turn_shows_pins_and_lists_the_rest(self) -> None:
         pinned = approve(self.root, _DEPLOY)
-        approve(self.root, _PARSER)
+        parser = approve(self.root, _PARSER)
         memory.set_memory_pin(self.paths, pinned["record_id"], pinned=True)
         live = provider(self.root)
-        self.assertEqual(rendered_ids(hermes_turn(live, 1, "")), [pinned["record_id"]])
-        self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
-
-    def test_a_turn_that_matches_nothing_serves_nothing_and_posts_no_line(self) -> None:
-        approve(self.root, _DEPLOY)
-        approve(self.root, _PARSER)
-        live = provider(self.root)
-        for turn, message in enumerate(("hello there", _NO_MATCH, "야"), start=1):
+        for turn, message in enumerate(("", "   ", "야"), start=1):
             with self.subTest(message=message):
-                self.assertEqual(rendered_ids(hermes_turn(live, turn, message)), [])
-                self.assertIsNone(live.recall_status())
+                pack = hermes_turn(live, turn, message)
                 receipt = live.latest_prefetch_receipt()
                 assert receipt is not None
-                self.assertIsNone(receipt["selection"]["query_fallback"])
+                if turn == 1:
+                    self.assertEqual(rendered_ids(pack), [pinned["record_id"]])
+                    self.assertNotIn(_PARSER, pack)
+                    self.assertEqual(receipt["rendering"]["indexed_records"], [parser["record_id"]])
+                    self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
+                else:
+                    # The pin is held and the index is unchanged: nothing new, no line.
+                    self.assertNotIn("<memory_records>", pack)
+                    self.assertIsNone(live.recall_status())
+                    self.assertEqual(
+                        receipt["selection"]["exclusion_reason_counts"], {"listed_this_session": 1, "served_this_session": 1},
+                    )
+
+    def test_a_turn_that_matches_nothing_lists_names_once(self) -> None:
+        deploy = approve(self.root, _DEPLOY)
+        parser = approve(self.root, _PARSER)
+        live = provider(self.root)
+        pack = hermes_turn(live, 1, "hello there")
+        self.assertIn('<record_index count="2" reason="no_query_overlap">', pack)
+        self.assertEqual(rendered_ids(pack), [])
+        self.assertNotIn(_DEPLOY, pack)
+        self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=0))
+        receipt = live.latest_prefetch_receipt()
+        assert receipt is not None
+        self.assertEqual(sorted(receipt["rendering"]["indexed_records"]), sorted([deploy["record_id"], parser["record_id"]]))
+        for turn, message in enumerate((_NO_MATCH, "야"), start=2):
+            with self.subTest(message=message):
+                self.assertNotIn("<record_index", hermes_turn(live, turn, message))
+                self.assertIsNone(live.recall_status())
+        # A message that does match a listed record gets it in full.
+        self.assertEqual(rendered_ids(hermes_turn(live, 4, "when do deploys run?")), [deploy["record_id"]])
+        self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
+
+    def test_an_index_names_only_records_the_conversation_does_not_hold(self) -> None:
+        deploy = approve(self.root, _DEPLOY)
+        parser = approve(self.root, _PARSER)
+        live = provider(self.root)
+        hermes_turn(live, 1, "when do deploys run?")
+        hermes_turn(live, 2, "hello there")
+        receipt = live.latest_prefetch_receipt()
+        assert receipt is not None
+        self.assertEqual(receipt["rendering"]["indexed_records"], [parser["record_id"]])
+        self.assertIn(deploy["record_id"], receipt["selection"]["served_this_session"])
 
     def test_a_matching_turn_serves_once_and_the_repeat_posts_no_line(self) -> None:
         deploy = approve(self.root, _DEPLOY)
@@ -301,6 +354,16 @@ class ToolRecallRelevanceTests(unittest.TestCase):
         missing = self.recall(_NO_MATCH)
         self.assertEqual((missing["status"], missing["records"]), ("nothing_found", []))
         self.assertIn("matches words, not meaning", missing["next_action"])
+        self.assertIn("tags hold its topic words", missing["next_action"])
+
+    def test_an_index_label_reads_the_record(self) -> None:
+        saved = json.loads(self.live.handle_tool_call(
+            "omh_remember", {"summary": _DEPLOY, "record_type": "decision", "subject": "deploy-window"}))["record_id"]
+        for query in ("deploy-window", f"decision {saved}", saved):
+            with self.subTest(query=query):
+                found = self.recall(query)
+                self.assertEqual((found["status"], [row["record_id"] for row in found["records"]]), ("found", [saved]))
+        self.assertEqual(self.recall("deploy-windows")["status"], "nothing_found")
 
     def test_a_query_naming_record_ids_still_finds_them(self) -> None:
         first = json.loads(self.live.handle_tool_call("omh_remember", {"summary": _DEPLOY, "record_type": "decision"}))["record_id"]

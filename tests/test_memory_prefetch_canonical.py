@@ -189,7 +189,7 @@ class CanonicalPrefetchTests(unittest.TestCase):
                 list(snapshot.records), "release tests", allowed_scopes=allowlist, required_scope_kinds=("project",),
                 inspection=False, review_resolver=snapshot.reviews, operation_states=snapshot.operation_states,
                 usage=snapshot.usage, pins=set(snapshot.pins), executor_target="hermes", session_id=SESSION,
-                limit=memory_records.DEFAULT_RECORD_LIMIT, now=NOW, query_fallback=False,
+                limit=memory_records.DEFAULT_RECORD_LIMIT, now=NOW,
             )
             self.assertEqual(included_ids(expected)[:3], [pinned["record_id"], strong["record_id"], used["record_id"]])
             self.assertEqual(receipt["selection"]["selected_record_ids"], included_ids(expected))

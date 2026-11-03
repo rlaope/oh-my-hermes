@@ -114,7 +114,7 @@ from .memory_prefetch_receipt import (
 from .memory_principals import principal_recall_decision
 from .memory_query_sanitizer import sanitize_memory_query
 from .memory_recall_selector import recall_revision, resolve_scope_allowlist
-from .memory_recall_support import _record_perspective_matches
+from .memory_recall_support import _memory_query_split, _record_perspective_matches
 from .memory_session_digest import (
     clamp_to_reported,
     digest_window_start,
@@ -353,6 +353,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._recalled: dict[str, str] = {}
         self._recalled_blocks = ""
         self._prepared_record_revisions: dict[str, str] = {}
+        # The records the current pack lists by name in its `<record_index>`,
+        # as `listed:<revision>` tokens for `_recalled`.
+        self._prepared_listed: dict[str, str] = {}
         self._pack_blocks_digest = ""
         # True when the current pack left out a record only because it was
         # held (`served_this_session`): a rebind that forgets what is held
@@ -434,6 +437,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
         self._pack_held = False
+        self._prepared_listed = {}
         self._forget_recalled()
         self._prepared_brief_at, self._served_brief_at = "", ""
         self._session_id = str(session_id or "")
@@ -619,6 +623,12 @@ class OmhMemoryProvider(_MemoryProviderBase):
                 self._served_recorded = True
                 self._record_served(self._prepared_record_ids)
                 self._recalled.update(self._prepared_record_revisions)
+            # Listed by name: held for later unanswered packs, never over a
+            # record the conversation holds in full.
+            for record_id, token in self._prepared_listed.items():
+                held = self._recalled.get(record_id)
+                if held is None or held.startswith("listed:"):
+                    self._recalled[record_id] = token
             if self._pack_blocks_digest:
                 self._recalled_blocks = self._pack_blocks_digest
             if self._prepared_brief_at:
@@ -949,6 +959,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
         self._pack_held = False
+        self._prepared_listed = {}
         self._forget_recalled()
         self._prepared_brief_at, self._served_brief_at = "", ""
         self._digest_window, self._digest_pending, self._pack_digest_evaluated, self._pack_digest = None, False, False, ""
@@ -994,6 +1005,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
             self._prepared_reminder, self._reminder_recorded = None, False
             self._prepared_record_ids, self._served_recorded = (), False
             self._pack_held = False
+            self._prepared_listed = {}
             self._prepared_brief_at = ""
             self._pack_digest_evaluated, self._pack_digest = False, ""
             self._query_sanitized = sanitize_memory_query(str(message or ""))
@@ -1260,13 +1272,17 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # explicit user-global/project/thread allowlist, the Hermes perspective
         # lens, and the selector's own lifecycle, ranking and budget ladder.
         snapshot = read_record_store_snapshot(self._record_homes())
-        # A live turn serves only what it asked for: no active-tier fallback
-        # for a query that matches nothing, pins only for one with no terms,
-        # and nothing at all for a turn that was only a host notice -- nobody
-        # wrote it, and on a messenger it posted the recall line anyway.
-        # Records this conversation already holds are skipped (`_recalled`).
+        # A live turn shows in full only what it asked for. A query that
+        # matches nothing, or has no terms at all, lists the records it would
+        # otherwise have shown by name in one `<record_index>` line; pins and
+        # records captured in this conversation stay in full. Records this
+        # conversation already holds -- shown, or listed in an earlier index --
+        # are left out (`_recalled`). A turn that was only a host notice
+        # considers no record at all: nobody wrote it, and on a messenger it
+        # posted the recall line anyway.
+        unqueried = not _memory_query_split(self._query)[0]
         prepared = prepare_prefetch_records(
-            replace(snapshot, pins=frozenset()) if self._query_sanitized.host_only else snapshot,
+            replace(snapshot, records=()) if self._query_sanitized.host_only else snapshot,
             self._query,
             allowed_scopes=self._prefetch_scopes(),
             session_id=self._session_id,
@@ -1274,10 +1290,10 @@ class OmhMemoryProvider(_MemoryProviderBase):
             principal_context=self._principal_context,
             shared_surface=self._shared_surface,
             required_scope_kinds=prefetch_required_scope_kinds(self._project_resolution.identity),
-            query_fallback=False,
             session_served=dict(self._recalled),
             index_fallback=True,
-            full_text_ids=origin_record_ids(snapshot.records, self._conversation_session_ids()),
+            full_text_ids=origin_record_ids(snapshot.records, self._conversation_session_ids()) | snapshot.pins,
+            index_unqueried=unqueried,
         )
         # The reminder asks about the oldest open record whose review deadline
         # passed and whose last ask is older than `open_ask_days`, one line per
@@ -1290,6 +1306,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._reminder_recorded = False
         self._prepared_record_ids, self._served_recorded = (), False
         self._pack_held = False
+        self._prepared_listed = {}
         self._prepared_brief_at = ""
         reminder = (
             select_open_reminder(
@@ -1354,7 +1371,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_record_ids = tuple(str(item["record_id"]) for item in prepared.section.rendered)
         by_id = {str(record.get("record_id", "")): record for record in snapshot.records}
         self._prepared_record_revisions = {record_id: recall_revision(by_id[record_id]) for record_id in self._prepared_record_ids}
-        self._pack_held = bool(prepared.selection.exclusion_reason_counts.get("served_this_session"))
+        self._prepared_listed = {record_id: f"listed:{recall_revision(by_id[record_id])}" for record_id in prepared.section.indexed}
+        counts = prepared.selection.exclusion_reason_counts
+        self._pack_held = bool(counts.get("served_this_session") or counts.get("listed_this_session"))
         # A digest the budget left out stays pending for a later render.
         self._pack_digest_evaluated, self._pack_digest = (
             not digest_withheld and self._digest_pending and fitted.digest == digest,

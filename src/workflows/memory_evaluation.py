@@ -400,11 +400,7 @@ def _run_parity_arms(
     arms: list[dict[str, object]] = []
     for name in PARITY_ARMS:
         limit, max_chars = budgets[name]
-        # The live provider serves a turn with no active-tier fallback; the
-        # prefetch adapter is the selector's default, as a handoff uses it.
-        canonical = _selection_projection(
-            _canonical_delivery_selection(paths, query, lens=lens, limit=limit, max_chars=max_chars, query_fallback=name != "provider_session")
-        )
+        canonical = _selection_projection(_canonical_delivery_selection(paths, query, lens=lens, limit=limit, max_chars=max_chars))
         live = _receipt_projection(receipts.get(name))
         divergences = _parity_divergences(canonical, live)
         arms.append(
@@ -446,7 +442,6 @@ def _canonical_delivery_selection(
     lens: dict[str, object],
     limit: int,
     max_chars: int | None,
-    query_fallback: bool = True,
 ) -> MemoryRecallSelection:
     """The canonical selector fed exactly what the handoff facade feeds it.
 
@@ -472,7 +467,6 @@ def _canonical_delivery_selection(
         limit=limit,
         max_chars=max_chars,
         now=FIXTURE_CLOCK,
-        query_fallback=query_fallback,
     )
 
 

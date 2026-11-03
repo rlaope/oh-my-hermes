@@ -406,11 +406,16 @@ def select_memory_recall(
 
     ``query_fallback`` False is the live per-turn and tool recall contract: a
     query with no indexable terms (or none at all) serves pinned records only,
-    and a query that matches nothing serves no active-tier fallback. Handoffs,
-    the CLI and inspection keep the default. ``session_served`` maps the
-    records a conversation already holds to their `recall_revision`; a record
-    still at that revision is excluded as `served_this_session` before the
-    budget cut, so it never spends a slot.
+    and a query that matches nothing serves no active-tier fallback. Tool
+    recall uses it; the live turn, handoffs, the CLI and inspection keep the
+    default. ``session_served`` maps the records a conversation already holds
+    to their `recall_revision` (shown in full) or ``listed:<revision>`` (named
+    in an earlier record index). A record still at that revision is excluded
+    as `served_this_session`, and a listed one as `listed_this_session` when
+    the query did not answer the pack; a query that does answer it still gets
+    the record in full. For an answered query the exclusion runs before the
+    budget cut, so the slot goes to the next match; for an unanswered one
+    after it, so the list never grows into further records.
     """
     policy = dict(policy) if policy is not None else {"recall_enabled": True, **_MEMORY_CADENCE_DEFAULTS}
     now = now if now is not None else datetime.now(timezone.utc)
@@ -634,9 +639,9 @@ def select_memory_recall(
     def overlaps(index: int) -> bool:
         return scores[index] > 0 and (unstemmed[index] or unstemmed_somewhere)
 
-    # No query, or one with no indexable terms, scores every record 1 above:
-    # with the fallback that serves the whole active and reference set, which
-    # on a live turn ("ok", "야", a cleaned-away notice) is unrelated memory.
+    # No query, or one with no indexable terms ("야", an empty turn), scores
+    # every record 1 above, so it serves the whole active and reference set
+    # unranked: tool recall cuts it to pins, the live turn lists it by name.
     unqueried = not _memory_query_split(query)[0]
 
     for kind, value in steps:
@@ -709,20 +714,36 @@ def select_memory_recall(
         fallback_served = {"mode": "active_tier", "reason": "no_query_overlap", "readmitted_count": len(included)}
     included, duplicates = _collapse_duplicate_summaries(included, pins=pins)
     excluded.extend(duplicates)
-    if session_served:
-        # After the fallback and the duplicate collapse decided what this
-        # query answers, so a record the conversation already holds is not
-        # replaced by an unrelated one, and before the budget cut.
-        by_id = {str(candidate[0].get("record_id", "")): candidate for candidate in candidates}
+    candidates_by_id = {str(candidate[0].get("record_id", "")): candidate for candidate in candidates}
+    # A pack the query did not answer (the active-tier fallback, or no query
+    # terms at all) is one a live turn lists by name rather than shows; the
+    # conversation's held records leave it only after the budget cut, so a
+    # held record never pulls a further one into the list.
+    unanswered = bool(fallback_served) or unqueried
+
+    def without_held(items: list[dict[str, object]]) -> list[dict[str, object]]:
+        """Drop what the conversation holds: shown at this revision, or listed by name in an unanswered pack."""
         fresh: list[dict[str, object]] = []
-        for item in included:
+        for item in items:
             record_id = str(item.get("record_id", ""))
-            candidate = by_id.get(record_id)
-            if candidate is not None and session_served.get(record_id) == recall_revision(candidate[0]):
+            candidate = candidates_by_id.get(record_id)
+            held = (session_served or {}).get(record_id)
+            revision = recall_revision(candidate[0]) if candidate is not None and held else ""
+            if candidate is not None and held == revision:
                 excluded.append(_recall_exclusion(candidate[0], candidate[1], staleness=candidate[2], reason="served_this_session"))
                 continue
+            if candidate is not None and unanswered and held == f"listed:{revision}" and record_id not in pins:
+                excluded.append(_recall_exclusion(candidate[0], candidate[1], staleness=candidate[2], reason="listed_this_session"))
+                continue
             fresh.append(item)
-        included = fresh
+        return fresh
+
+    if session_served and not unanswered:
+        # After the fallback and the duplicate collapse decided what this
+        # query answers, so a record the conversation already holds is not
+        # replaced by an unrelated one, and before the budget cut, so the
+        # slot goes to the next record the query answers.
+        included = without_held(included)
     _attach_recall_ranking(
         included,
         usage,
@@ -792,7 +813,7 @@ def select_memory_recall(
             continue
         kept.append(item)
         kept_chars += summary_chars
-    included = kept
+    included = without_held(kept) if session_served and unanswered else kept
     pack = {
         "schema_version": PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION,
         "enabled": True,

@@ -1194,12 +1194,18 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             next_action="OMH memory is not available to this session right now; nothing was searched.",
         )
     snapshot = read_record_store_snapshot(lens.homes)
-    # A query naming record ids looks those records up: unqueried, so every
-    # eligible record in this lens is a candidate, then kept to the ids named.
-    # Any other query is matched by its words with no fallback, so a query
-    # that matches nothing is `nothing_found`, never the unrelated active tier.
-    named = query.split()
-    lookup = set(named) <= {str(record.get("record_id", "")) for record in snapshot.records}
+    # A query naming records -- by id or by subject slug, the labels a
+    # `<record_index>` line lists ("decision mem_...", "deploy-branch") --
+    # looks those records up: unqueried, so every eligible record in this
+    # lens is a candidate, then kept to the ones named. The selector never
+    # matches a subject, so without this the index's own instruction would
+    # find nothing. Any other query is matched by its words with no fallback,
+    # so a query that matches nothing is `nothing_found`, never the unrelated
+    # active tier.
+    record_types = {str(record.get("record_type", "")) for record in snapshot.records}
+    named = {token for token in query.replace(",", " ").split() if token not in record_types}
+    labels = {str(record.get("record_id", "")) for record in snapshot.records} | {record_subject(record) for record in snapshot.records}
+    lookup = bool(named) and named <= labels - {""}
     selection = select_prefetch_records(
         snapshot,
         "" if lookup else query,
@@ -1214,7 +1220,7 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
     )
     included = selection.pack.get("included_records", [])
     if lookup:
-        included = [item for item in included if str(item.get("record_id", "")) in named]
+        included = [item for item in included if str(item.get("record_id", "")) in named or str(item.get("subject", "") or "") in named]
     rows = []
     for item in included[:limit]:
         row = {key: item.get(key) for key in ("record_id", "record_type", "summary", "tags", "approved_at")}
@@ -1232,7 +1238,8 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
         if rows
         else (
             "No recallable OMH record matches; nothing was counted. Recall matches words, not meaning: "
-            "retry with other words, the names the record would use, or the language it was saved in."
+            "retry with other words, the names the record would use, or the language it was saved in "
+            "(a record's tags hold its topic words); a record id or subject from a record index looks it up."
         )
     )
     if has_origin:

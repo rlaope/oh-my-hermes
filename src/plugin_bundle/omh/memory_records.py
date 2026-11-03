@@ -276,6 +276,7 @@ def prepare_prefetch_records(
     session_served: Mapping[str, str] | None = None,
     index_fallback: bool = False,
     full_text_ids: frozenset[str] | set[str] = frozenset(),
+    index_unqueried: bool = False,
 ) -> PreparedPrefetch:
     """Select, then render, under one clock. The receipt is built from this."""
     clock = now if now is not None else _utc_now()
@@ -298,6 +299,7 @@ def prepare_prefetch_records(
     )
     return PreparedPrefetch(selection, render_selected_memory_records(
         selection, snapshot.records, budget_chars=budget_chars, index_fallback=index_fallback, full_text_ids=full_text_ids,
+        index_unqueried=index_unqueried,
     ), clock)
 
 
@@ -308,6 +310,7 @@ def render_selected_memory_records(
     budget_chars: int = DEFAULT_RECORD_RENDER_BUDGET_CHARS,
     index_fallback: bool = False,
     full_text_ids: frozenset[str] | set[str] = frozenset(),
+    index_unqueried: bool = False,
 ) -> RenderedRecordSection:
     """Render the canonical selection in its order, bounded by the section budget.
 
@@ -317,6 +320,11 @@ def render_selected_memory_records(
     count so the pack can still say "this is not everything". The rendered
     tuple names exactly the records inside the returned text, each with the
     digest of its stored summary -- the same digest an incident anchors on.
+
+    With ``index_fallback``, a pack the active-tier fallback served lists its
+    records by name except ``full_text_ids``. ``index_unqueried`` does the
+    same for a pack whose query had no terms at all, which selects every
+    in-scope record unranked: the caller says so, since the pack cannot.
     """
     pack = selection.pack
     if pack.get("schema_version") != PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION:
@@ -334,7 +342,7 @@ def render_selected_memory_records(
             raise ValueError("incompatible recall pack: selected record is absent from the snapshot")
         items.append(item)
     indexed: tuple[str, ...] = ()
-    if index_fallback and "query_fallback" in pack:
+    if index_fallback and ("query_fallback" in pack or index_unqueried):
         full_items = [item for item in items if str(item["record_id"]) in full_text_ids]
         index_items = [by_id[str(item["record_id"])] for item in items if str(item["record_id"]) not in full_text_ids]
         text, rendered_items, indexed = _render_indexed_bounded(
