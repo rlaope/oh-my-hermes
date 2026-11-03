@@ -104,7 +104,9 @@ class Skills:
 @lru_cache(maxsize=1)
 def family_members() -> tuple[tuple[str, tuple[str, ...]], ...]:
     """(label, installed skill names) per family, from the generated sidecar, read once."""
-    from ..skills.catalog_types import omh_skill_display_name  # only once skills arrive, never on the import path
+    # Not `omh.skills`: its package `__init__` imports the whole catalog, ~100 modules before the frame that
+    # shows the shared gateway's skills. Only once skills arrive, never on the import path.
+    from ..catalogs.skill_display_names import omh_skill_display_name
 
     try:
         sidecar = resources.files("omh.plugin_bundle.omh.tools").joinpath("capability_families.json")
@@ -156,14 +158,17 @@ def installed_omh_count(omh_home: Path, hermes_home: Path | None) -> int | None:
     unknown home is not weighed either. A config that cannot be read is
     weighed, as the registration it may hold is the likelier case.
     """
-    from ..install.config_adapter import read_config  # only once skills arrive, never on the import path
-    from ..install.skill_registration import managed_skill_dir_candidates, registered_managed_entries
+    # Only once skills arrive, never on the import path, and none of these imports `omh.skills` (see
+    # `family_members`): the install readers wait until a manifest says there is something to weigh.
     from ..plugin_bundle.omh.installed_skills import installed_skill_labels
-    from ..system.paths import OmhPaths, managed_current_workflow_pack_dir
 
     labels = installed_skill_labels(omh_home)
     if labels is None or hermes_home is None:
         return None
+    from ..install.config_adapter import read_config
+    from ..install.skill_registration import managed_skill_dir_candidates, registered_managed_entries
+    from ..system.paths import OmhPaths, managed_current_workflow_pack_dir
+
     try:
         config_text = read_config(hermes_home / "config.yaml")
     except (OSError, UnicodeDecodeError):
