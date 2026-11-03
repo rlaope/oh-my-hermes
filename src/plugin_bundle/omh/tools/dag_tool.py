@@ -276,8 +276,13 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                                        oneshot_remaining=_wave_budget(record, derived, budget, now, limits=limits))
                 dag_run.write_run(path, record)
                 derived = dag_run.derive(record, children, now)
+                group_node = next(item for item in record["nodes"] if item["id"] == added[0])
+                replan = (f"This is {group_node['repairs']}'s last repair cycle; its nodes are briefed to re-plan "
+                          "from the earlier failures."
+                          if group_node["cycle"] == dag_run.REPLAN_CYCLE else "")
                 return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task,
-                              settled={"node": node, "repair_nodes": added}, budget=budget, limits=limits, ignored=ignored)
+                              settled={"node": node, "repair_nodes": added}, budget=budget, limits=limits,
+                              ignored=ignored, note=replan)
             if action == "extend":
                 added = dag_run.extend(record, derived, args.get("nodes"), args.get("node"), now,
                                        oneshot_remaining=_wave_budget(record, derived, budget, now, limits=limits))
@@ -658,8 +663,9 @@ def _ready(
     action: str, record: dict[str, Any], path: Path, derived: Mapping[str, Mapping[str, Any]],
     children: list[dict[str, Any]], omh_home: Path, hermes_home: Path, now: float, shown: set[str] | None, *,
     task: str, say: str = "", settled: Mapping[str, Any] | None = None, budget: Mapping[str, int] | None = None,
-    limits: dag_run.Limits = dag_run.DEFAULT_LIMITS, ignored: tuple[str, ...] = (),
+    limits: dag_run.Limits = dag_run.DEFAULT_LIMITS, ignored: tuple[str, ...] = (), note: str = "",
 ) -> str:
+    """``note`` is appended after every instruction the reply builds, so it never stands in for one of them."""
     slots = free_slots(hermes_home)
     if budget is not None:
         slots["oneshot"] = dict(budget)  # only in a one-shot session: an interactive payload is unchanged
@@ -735,6 +741,7 @@ def _ready(
     if waits:
         instruction = TERMINAL_INTERRUPTED if waits == "interrupted" else TERMINAL_FIRST
         say = " ".join(part for part in (say, instruction.format(backend=record["backend"])) if part)
+    say = " ".join(part for part in (say, note) if part)
     return _result(action, record, derived, shown, say=say, extra=extra, now=now, limits=limits, ignored=ignored)
 
 
