@@ -469,10 +469,11 @@ def format_note(new: list[tuple[str, int, str]], recheck_tool: bool) -> str:
         lines.append(f"... and {len(rows) - len(shown)} more")
     # Hermes passes no toolset list to its hooks, so a profile with `lsp_tools` on cannot tell whether
     # this session (a `-t file,terminal` run, a delegated child) has the tool: it is named as optional.
-    check = ("re-check them (with `lsp_diagnostics` if your tools include it; enable via `OMH_LSP_TOOLS=1`"
-             " or the `lsp_tools` setting)" if recheck_tool
-              else "re-run the checks that cover them (or enable `lsp_diagnostics` via `OMH_LSP_TOOLS=1`"
-              " or the `lsp_tools` setting)")
+    # With the toolset off, the enable path is named for the operator: the gateway reads it at start, so it
+    # takes a Hermes restart and cannot be switched on from inside this turn.
+    check = ("re-check them (with `lsp_diagnostics` if your tools include it)" if recheck_tool
+             else "re-run the checks that cover them (`lsp_diagnostics` re-checks directly once "
+             "`OMH_LSP_TOOLS=1` or the `lsp_tools` setting is on and Hermes restarted)")
     # No final-answer sentence here: `pre_verify` ends the whole message with one closing sentence
     # for this note and the round-end check together (`verify_hooks.ROUND_END_CLOSING`), because
     # whatever the model says after a continue becomes the turn's final answer.

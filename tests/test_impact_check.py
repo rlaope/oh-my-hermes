@@ -372,8 +372,11 @@ class FormatTests(unittest.TestCase):
         self.assertIn("re-run the checks", lines[-1])
         self.assertIn("OMH_LSP_TOOLS=1", lines[-1])
         self.assertIn("lsp_tools", lines[-1])
-        # The opt-in enable path is named even when the tool is present.
-        self.assertIn("OMH_LSP_TOOLS=1", format_note(rows[:1], recheck_tool=True))
+        self.assertIn("restarted", lines[-1])
+        # With the toolset already on, the note does not tell the model to enable it.
+        on = format_note(rows[:1], recheck_tool=True)
+        self.assertIn("lsp_diagnostics", on)
+        self.assertNotIn("OMH_LSP_TOOLS", on)
         # The final-answer sentence is not the note's: pre_verify adds one closing for the whole message.
         self.assertNotIn("final answer", note)
         self.assertEqual(format_note([], recheck_tool=True), "")

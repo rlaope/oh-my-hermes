@@ -1323,6 +1323,17 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("delegate_task action=stop", result["say"])
         self.assertIn("never settles them", result["say"])
 
+    def test_a_repeated_cancel_still_names_the_running_child(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node("api"), node("docs")])
+            call(action="ready", run="feat")
+            child_started(home, "feat", "api")
+            call(action="cancel", run="feat")
+            again = call(action="cancel", run="feat")
+        self.assertEqual([row["subagent_id"] for row in again.get("still_running", [])], ["sa-api"])
+        self.assertNotIn("No child is still running", again["say"])
+
     def test_cancel_without_running_children_says_so(self) -> None:
         with homes() as home:
             slots_table(home)

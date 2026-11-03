@@ -16,6 +16,7 @@ this module matches that convention.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -30,6 +31,7 @@ from ..config_adapter import anchor_external_dir_entry, external_dirs, read_conf
 from ..paths import default_hermes_home, expand_path, find_project_root
 from ..plugin_bundle.omh import hermes_memory
 from ..plugin_bundle.omh.memory_dreaming import MODE_SETTING_UNRECOGNIZED, read_dreaming_mode_setting
+from ..plugin_bundle.omh.runtime_paths import RuntimeBindingError, plugin_setting_text
 from ..routing.owner_preference import owner_preference_path, validate_owner_preference
 from ..surfaces.hermes_model_settings import HERMES_AUX_ALIASES
 from ..system.local_store import read_json_object_result
@@ -1402,8 +1404,6 @@ def check_lsp_tools_disabled(hermes_home: str | Path | None = None) -> AdviceEnt
 
     Report-only. OMH does not write this key.
     """
-    import os
-
     home = _resolve_hermes_home(hermes_home)
     config_path = home / "config.yaml"
     evidence_boundary = (
@@ -1416,33 +1416,22 @@ def check_lsp_tools_disabled(hermes_home: str | Path | None = None) -> AdviceEnt
         "profile's config.yaml (block style), then restart Hermes so the `omh-lsp` toolset "
         "registers."
     )
-    try:
-        if os.environ.get("OMH_LSP_TOOLS", "").strip().lower() in _LSP_TOOLS_ON:
-            return AdviceEntry(
-                "lsp_tools_disabled",
-                "ok",
-                remediation,
-                evidence_boundary,
-                "lsp_tools is enabled via OMH_LSP_TOOLS",
-            )
-    except Exception:
+    if os.environ.get("OMH_LSP_TOOLS", "").strip().lower() in _LSP_TOOLS_ON:
         return AdviceEntry(
             "lsp_tools_disabled",
-            "unobserved",
+            "ok",
             remediation,
             evidence_boundary,
-            "could not read the OMH_LSP_TOOLS environment",
+            "lsp_tools is enabled via OMH_LSP_TOOLS",
         )
     if not config_path.exists():
         return AdviceEntry(
             "lsp_tools_disabled", "unobserved", remediation, evidence_boundary, f"{config_path} not found"
         )
     try:
-        from ..plugin_bundle.omh.runtime_paths import plugin_setting_text
-
         text = config_path.read_text(encoding="utf-8")
         value = plugin_setting_text(text, "lsp_tools")
-    except Exception:
+    except (OSError, UnicodeDecodeError, RuntimeBindingError):
         return AdviceEntry(
             "lsp_tools_disabled",
             "unobserved",

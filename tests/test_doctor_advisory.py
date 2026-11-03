@@ -883,6 +883,12 @@ class LspToolsAdvisoryTests(unittest.TestCase):
         self.assertEqual(entry.status, "ok")
         self.assertIn("OMH_LSP_TOOLS", entry.observed)
 
+    def test_inline_shape_is_unobserved(self) -> None:
+        # The block scan refuses a flow-style block (RuntimeBindingError): the setting is unknown, not off.
+        entry = check_lsp_tools_disabled(self._home("plugins: {entries: {omh: {settings: {lsp_tools: true}}}}\n"))
+        self.assertEqual(entry.status, "unobserved")
+        self.assertIn("block-style", entry.observed)
+
     def test_missing_config_is_unobserved(self) -> None:
         entry = check_lsp_tools_disabled(self._home(None))
         self.assertEqual(entry.status, "unobserved")

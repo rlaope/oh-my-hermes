@@ -218,9 +218,10 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
             if action == "status":
                 return _result(action, record, derived, shown, now=now, limits=limits, ignored=ignored)
             if action == "cancel":
-                # Read the live children before the cancelled mark lands:
-                # derive reports them cancelled afterwards by design.
-                live = dag_run.running_children(record, dag_run.derive(record, children, now), now)
+                # Derive reports a cancelled run's running nodes as `cancelled`, so the live children are
+                # read with the mark lifted: a repeated cancel names the same children the first one did.
+                unmarked = {**record, "cancelled_at": None}
+                live = dag_run.running_children(unmarked, dag_run.derive(unmarked, children, now), now)
                 if record.get("cancelled_at") is None:
                     record["cancelled_at"] = now
                     record["updated_at"] = now
