@@ -979,7 +979,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   `read_file`, `12 matches` for
   `search_files` (`3 files` when it listed files, `50+ matches` when Hermes
   stopped counting, and Hermes' warning on the line under it when it gave
-  one, such as why nothing matched). An `omh_memory` recall that found
+  one, such as why nothing matched). An `omh_memory` or `omh_remember` recall that found
   records lists them from its own result, a line each, type then summary
   (`decision  rotate refresh tokens per session`), so a found recall prints
   your memory's summaries into the local transcript; as the call lands, one
