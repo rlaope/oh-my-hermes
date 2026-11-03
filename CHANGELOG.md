@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Ctrl+N/P and Ctrl+J/K move through lists and menus.** In the `/model`,
+  `/sessions`, `/rewind` and `/theme` pickers, the agent list (roster and DAG
+  tree), history search (Ctrl+R) and the slash and `@` path completion menus,
+  Ctrl+N and Ctrl+J move down one row and Ctrl+P and Ctrl+K move up, as Down
+  and Up do; in history search Down and Up now step through matches too. While
+  a completion menu is open those chords move the menu instead: Ctrl+P does not
+  fold the plan, and Ctrl+J and Ctrl+K do not add a newline or delete to the
+  end of the line (Alt+Enter or Shift+Enter still add a line, Esc closes the
+  menu). With no list or menu open, Ctrl+J keeps its newline and steer
+  behaviour, Ctrl+K deletes to the end of the line and Ctrl+P folds the plan.
+
 - **A running turn with the glow and a living wallpaper uses less CPU.** The same frames are drawn, byte for byte,
   but the colours the glow and the wallpaper scenes mix are no longer parsed again for every cell, and the loop no
   longer wakes a second time per frame to wait out the frame interval when nothing arrives from the
