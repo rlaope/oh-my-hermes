@@ -39,10 +39,13 @@ is named in every view (`stuck`); the profile can move that mark, the
 re-offer wait and the re-offer bound (`Limits`). A failed or blocked node blocks its
 dependents and nothing else. ``repair`` adds a group
 of repair nodes for a failed or blocked node, at most `MAX_REPAIR_CYCLES` per
-original node. Once its latest group is all accepted the original counts as
-satisfied and the nodes after it read the group's handoff files, except a
-verification node (or a role-less writer guessed as one, ``role_guess``): it
-runs again, and only its own accepted re-run satisfies it. Nodes of an earlier group that never got accepted are superseded. ``extend`` adds a round of nodes to a run whose every node passed
+original node. Its last repair cycle briefs a re-plan from the earlier
+failures, not another retry of the same approach. Once its latest group is
+all accepted the original counts as satisfied and the nodes after it read
+the group's handoff files, except a verification node (or a role-less writer
+guessed as one, ``role_guess``): it runs again, and only its own accepted
+re-run satisfies it. Nodes of an earlier group that never got accepted are
+superseded. ``extend`` adds a round of nodes to a run whose every node passed
 when the goal check finds work missing, at most `MAX_EXTEND_ROUNDS` per run.
 Each node records where it came from (``origin``): ``define``,
 ``repair:<root>`` or ``extend:<round>``.
@@ -83,6 +86,7 @@ MAX_SCOPE_ENTRIES: Final = 16
 MAX_SCOPE_CHARS: Final = 200
 MAX_REASON_CHARS: Final = 200
 MAX_REPAIR_CYCLES: Final = 2
+REPLAN_CYCLE: Final = MAX_REPAIR_CYCLES
 MAX_EXTEND_ROUNDS: Final = 2
 MAX_PROVIDER_RETRIES: Final = 1
 MAX_PARKS: Final = 3
@@ -1128,6 +1132,37 @@ def task_for(
             "The run goal is acceptance context, not permission to widen your SCOPE.",
             "",
         ])
+    if node.get("cycle") == REPLAN_CYCLE:
+        root = _root(node)
+        earlier = {root}
+        for group in (record.get("repairs") or {}).get(root, [])[:REPLAN_CYCLE - 1]:
+            earlier.update(group)
+        failures = [
+            (str(item["id"]), attempt)
+            for item in record["nodes"] if str(item["id"]) in earlier
+            for attempt in item.get("attempts") or [] if attempt.get("outcome") in ("failed", "blocked")
+        ]
+        failures.sort(key=lambda row: _number(row[1].get("settled_at")) or 0.0)
+        recent = [
+            (f"{attempt['outcome']} {node_id} attempt {attempt.get('n', 1)}: ",
+             " ".join(str(attempt.get("reason") or "").split()),
+             " (provider error)" if attempt.get("provider_error") else "")
+            for node_id, attempt in failures[-6:]
+        ]
+        intro = f"Re-plan: last repair cycle for {root}. Earlier failures (newest last):"
+        guidance = (
+            "Do not retry the same approach; before editing, write two or three approaches that differ in kind "
+            "into the handoff, rule out what the failures refute, and take the one that remains. "
+            "Read earlier handoffs (<node id>.md beside your handoff) for evidence (test ids, errors, measurements), "
+            "not for their plan. If every listed failure is an infrastructure cut (provider error, interrupted child), "
+            "retrying the same approach is right; say so in the handoff."
+        )
+        # Keep all six identities and provider flags; share the remaining space between settle reasons.
+        reason_limit = max(0, (1180 - len(intro) - len(guidance)
+                              - sum(len(prefix) + len(flag) + 1 for prefix, _, flag in recent)) // max(1, len(recent)))
+        evidence = [prefix + (reason if len(reason) <= reason_limit else reason[:max(0, reason_limit - 1)] + "…") + flag
+                    for prefix, reason, flag in recent]
+        lines.extend([intro, *evidence, guidance, ""])
     lines.extend([
         f"Handoff: before you stop, write your report to {node_handoff(record, omh_home, str(node['id']))}: "
         "what you did, the files you changed, what VERIFY showed, and anything still open. The parent reads that "

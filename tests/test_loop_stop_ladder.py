@@ -213,7 +213,7 @@ class StopLadderRungTests(unittest.TestCase):
         marker = second["runtime"]["stuck_marker"]
         self.assertEqual(marker["reason"], "no_progress_cap")
         self.assertEqual(marker["no_progress_ticks"], LOOP_NO_PROGRESS_TICK_CAP)
-        self.assertEqual(marker["next_action"], "record_goal_blocker_for_stuck_loop")
+        self.assertEqual(marker["next_action"], "replan_stuck_loop_once")
         self.assertIn("not a completion", marker["claim_boundary"])
         self.assertEqual(len(second["runtime"]["queue"]), 1)
         self.assertEqual(second["runtime"]["heartbeat_count"], 1)
@@ -227,16 +227,20 @@ class StopLadderRungTests(unittest.TestCase):
             cycle = _cycle(paths, linked_goal_id=goal["goal_id"])
 
             tick_loop_runtime(paths, cycle["loop_id"])
+            replanned = tick_loop_runtime(paths, cycle["loop_id"])
+            tick_loop_runtime(paths, cycle["loop_id"])
             stopped = tick_loop_runtime(paths, cycle["loop_id"])
             record_goal_blocker(paths, goal["goal_id"], "Loop stalled without recorded progress")
             resumed = tick_loop_runtime(paths, cycle["loop_id"])
 
+        self.assertEqual(replanned["next_action"], "replan_stuck_loop_once")
+        self.assertEqual(stopped["next_action"], "record_goal_blocker_for_stuck_loop")
         self.assertEqual(stopped["runtime"]["stop_ladder"]["stop_reason"], "no_progress_cap")
         self.assertFalse(resumed["runtime"]["stop_ladder"]["stop"])
         self.assertEqual(resumed["runtime"]["no_progress_ticks"], 0)
         self.assertEqual(resumed["runtime"]["last_stop_reason"], "none")
         self.assertNotIn("stuck_marker", resumed["runtime"])
-        self.assertEqual(len(resumed["runtime"]["queue"]), 2)
+        self.assertEqual(len(resumed["runtime"]["queue"]), 3)
 
 
 class StrictSecurityPostureStopLadderTests(unittest.TestCase):
