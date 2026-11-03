@@ -736,6 +736,10 @@ redacted to `[redacted]` never matches anything, for hints or duplicates.
   running the selector, so a same-second tie on a subject (approval stamps
   whole seconds, and the smaller record id wins) or a held record that is
   stale is reported as it is. The `next_action` sentence is built from it.
+  Where no turn is served records unasked (`recall_mode` `on_demand` or `off`
+  in the provider's profile), `recalls_now` is empty and the sentence says
+  per-turn recall is off, so neither recalls. Whether the held record can
+  stand in for a `correct` does not change with the setting.
 
 Neither hint holds or refuses the capture: refusing a capture that only
 resembles a held record would lose the new fact whenever the resemblance is
@@ -1938,7 +1942,13 @@ recall` and the retrieval suite keep the selector's default configuration.
 
 When a pin is in scope, a message that matches nothing gets the pin and no
 index of the rest: a pin counts as a match, so the fallback that feeds the
-index does not fire (unchanged from before the index existed).
+index does not fire (unchanged from before the index existed). The index
+lists only records the selection chose, and the selection is the one the
+coding handoff makes: the recall suite's live-parity arms and incident
+replay hold the live receipt's selection and configuration identity equal
+to the canonical selector's. Listing the rest would take a live-only
+selection rule, which either changes that identity or hides a rule from it,
+so it is left as is.
 
 ### The recall query
 
@@ -2109,6 +2119,12 @@ DM included, or an `api_server` client under the default, memory still reaches t
 sign that it did. To see what a turn was given, read the prefetch receipt
 (`omh memory status` shows the last one under `last_prefetch`; the full
 receipt is the file it names) or ask the model to recall.
+
+Tool recall reads `recall_mode` from the same profile `config.yaml` the
+provider reads: the profile home Hermes initialized the provider with, which
+it publishes in the session lens, not the tool process's `HERMES_HOME`. The
+capture hint's "recalls", the `origin` handles a recall returns and `demote`
+read that same profile, so one call never mixes two profiles.
 
 `recall_mode` is about recall only. The consolidation brief keeps its own
 `dreaming_mode`, and the "since your last session" digest is a count, not

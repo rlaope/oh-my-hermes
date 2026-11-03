@@ -14,6 +14,19 @@ All notable changes will be documented here.
   ("requires Hermes v0.22.5 or newer", "pin Node v20.11"), "Decided <date>:" lines,
   lessons and procedures get no such note.
 
+- **The recall switches and records say what they do.** Under
+  `recall_mode: on_demand` or `off`, a save that resembles a held memory no
+  longer tells the model that either one "recalls": no turn is served
+  memories unasked there, and the hint now says so. Tool recall reads
+  `recall_mode` from the profile the memory provider was started with rather
+  than the process's `HERMES_HOME`, so the two cannot disagree about whether
+  recall is off. In the TUI, an `omh_remember` recall that found memories
+  lists them and gets the same sweep as an `omh_memory` one. A test now pins
+  that a consolidation brief raised in the same second by another trigger is
+  served. A pinned memory still suppresses the list of the rest's names on a
+  message that matches nothing: listing them would make the live recall
+  select differently from coding handoffs, which the recall suite and
+  incident replay hold equal.
 - **Skill hints read the request, not the gateway's busy-path header.** A
   Discord or Slack message sent while the agent is busy reaches the turn with
   Hermes' origin block in front of it: one line of JSON ids between two fixed

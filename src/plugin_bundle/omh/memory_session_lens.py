@@ -370,6 +370,14 @@ def lens_channel_scope(lens: dict[str, Any]) -> dict[str, str] | None:
     return {"kind": "channel", "ref": str(scope["ref"])}
 
 
+def lens_profile_home(lens: dict[str, Any]) -> Path | None:
+    """The Hermes profile home whose settings the provider reads; None when the lens names no absolute one."""
+    value = lens.get("profile_home")
+    if not isinstance(value, str) or "\x00" in value or not Path(value).is_absolute():
+        return None
+    return Path(value)
+
+
 def _prune_stale(directory: Path, *, keep: Path) -> None:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=SESSION_LENS_MAX_AGE_DAYS)).timestamp()
     keep_lock = keep.with_name(f".{keep.name}.lock")
