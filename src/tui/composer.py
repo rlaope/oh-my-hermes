@@ -115,6 +115,8 @@ from __future__ import annotations
 from bisect import bisect_right
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
+from itertools import accumulate
+import re
 import unicodedata
 
 from .keys import (
@@ -233,13 +235,17 @@ class _Shape:
     widths: list[int | None]  # `None` for a newline
 
 
-def _shape(text: str, masked: bool, labels: Mapping[str, str]) -> _Shape:
+# Where `_shape` may cut the text into chunks that segment apart: after a newline (no cluster spans one), and after
+# a space when the next character is ASCII, a Hangul syllable or a CJK ideograph (none of them joins the space).
+_CHUNK_EDGE = re.compile("(?<=\n)|(?<= )(?=[\x00-\x7f\uac00-\ud7a3\u4e00-\u9fff])")
+_Chunk = tuple[list[str], list[str], list[int | None]]  # a chunk's clusters, what each draws as, and its widths
+
+
+def _chunk(text: str, masked: bool, labels: Mapping[str, str]) -> _Chunk:
     units = clusters(text)
-    bounds = [0]
     shown: list[str] = []
     widths: list[int | None] = []
     for unit in units:
-        bounds.append(bounds[-1] + len(unit))
         if unit == NEWLINE:
             shown.append("")
             widths.append(None)
@@ -255,6 +261,26 @@ def _shape(text: str, masked: bool, labels: Mapping[str, str]) -> _Shape:
         else:
             shown.append(unit)
             widths.append(cluster_width(unit))
+    return units, shown, widths
+
+
+def _shape(text: str, masked: bool, labels: Mapping[str, str], kept: dict[tuple[str, bool], _Chunk]) -> _Shape:
+    """`text` measured chunk by chunk; `kept` holds the chunks measured last time, so an edit measures only its own.
+
+    `kept` is replaced by the chunks of `text`, and must be emptied when `labels` change."""
+    now: dict[tuple[str, bool], _Chunk] = {}
+    units: list[str] = []
+    shown: list[str] = []
+    widths: list[int | None] = []
+    for piece in _CHUNK_EDGE.split(text):
+        key = (piece, masked)
+        chunk = now[key] = now.get(key) or kept.get(key) or _chunk(piece, masked, labels)
+        units += chunk[0]
+        shown += chunk[1]
+        widths += chunk[2]
+    kept.clear()
+    kept.update(now)
+    bounds = list(accumulate(map(len, units), initial=0))
     return _Shape(text, masked, units, bounds, shown, widths)
 
 
@@ -426,6 +452,9 @@ class Composer:
     _scroll: int = field(default=0, init=False, repr=False, compare=False)
     # The text measured, and its rows at one width: a caret move or a redraw reuses them until the text changes.
     _shaped: _Shape | None = field(default=None, init=False, repr=False, compare=False)
+    # The chunks of that text, and the image labels they were measured with (`_shape` reuses them across an edit).
+    _chunks: dict[tuple[str, bool], _Chunk] = field(default_factory=dict, init=False, repr=False, compare=False)
+    _chunk_labels: dict[str, str] = field(default_factory=dict, init=False, repr=False, compare=False)
     # (measured, cells, rows, the measured text as drawn at that width: a token wider than a row cut to it)
     _laid: tuple[_Shape, int, list[_Row], _Shape] | None = field(default=None, init=False, repr=False, compare=False)
     # Undo and redo: (text, caret, paste chips, image tokens) before each step, newest last.
@@ -447,7 +476,10 @@ class Composer:
         shape = self._shaped
         if shape is None or shape.masked != self.masked or shape.text != self.text:
             labels = {token: label for token, (label, _image) in self.images.items()}
-            shape = self._shaped = _shape(self.text, self.masked, labels)
+            if labels != self._chunk_labels:
+                self._chunks.clear()
+                self._chunk_labels = labels
+            shape = self._shaped = _shape(self.text, self.masked, labels, self._chunks)
         return shape
 
     def _rows(self, avail: int) -> tuple[_Shape, list[_Row]]:
