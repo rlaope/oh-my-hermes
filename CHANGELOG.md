@@ -721,6 +721,27 @@ All notable changes will be documented here.
   messages, lines naming those three skills fall from 24 to 11; each skill still
   matches its own nouns ("병렬 도구", "코덱스", "기억 점검").
 
+- **Codex fanout units get OMH's own skills, and can edit and commit inside the
+  fence.** OMH looked for Codex skills only in `~/.codex/skills`, while Codex
+  also loads `~/.agents/skills`, where `.codex/install.sh` puts OMH's pack. On
+  a Mac with six personal skills there, every Codex unit was told to start with
+  `$generate2dsprite` and `$game-video-feedback-loop` (11 of 11 units in a real
+  run, about 32k characters of unrelated skill text each). Discovery now reads
+  the repo `.agents/skills`, `$CODEX_HOME` and `~/.agents/skills` too, so the
+  same unit gets `$omh-plan`, `$omh-build-failure-triage`, `$omh-code-review`;
+  a name found in two roots is never suggested, since Codex refuses a plain
+  `$name` that matches two skills. Inside the macOS fence, zsh heredocs and `uv` now work:
+  `TMPPREFIX` and `UV_CACHE_DIR` point into the unit's scratch dir (before,
+  every `git commit -F - <<EOF` failed with "can't create temp file for here
+  document" and `uv run` could not open its cache). The fence's write
+  boundary is unchanged.
+- **A stale Codex skill pack is now reported and refreshed.** `omh update`
+  refreshes an installed `~/.agents/skills` pack in its recorded layout (it
+  never creates one), `omh doctor` warns with `omh update` when that pack is
+  stale or edited, and `omh install --target agents --scope user --status`
+  reports the pack's real state instead of `missing` when only the unused
+  `~/.claude/skills` mirror is absent.
+
 ## 4.0.4 - 2026-11-01
 
 - **Name your own identity: a prompt and a model chain.** Write
