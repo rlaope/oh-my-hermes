@@ -35,6 +35,13 @@ from omh.plugin_bundle.omh import memory_prefetch_receipt as receipts
 from omh.plugin_bundle.omh import memory_records
 from omh.plugin_bundle.omh import memory_recall_selector as selector
 from omh.plugin_bundle.omh.memory_blocks import approve_memory_block, build_memory_block, write_memory_block
+from omh.plugin_bundle.omh.memory_dreaming import (
+    DEFAULT_TURN_INTERVAL,
+    consolidation_path,
+    empty_dreaming_state,
+    record_turn,
+    write_dreaming_state,
+)
 from omh.plugin_bundle.omh.memory_provider import OmhMemoryProvider, RecallStatus
 from omh.workflows import memory
 
@@ -438,6 +445,11 @@ class CanonicalPrefetchTests(unittest.TestCase):
             record = approve(root, "reviewed record beside a block")
             live = provider(root)
             live.on_turn_start(1, "hi")
+            # A session-ending brief needs the turn interval's worth of turns.
+            state = empty_dreaming_state()
+            for _ in range(DEFAULT_TURN_INTERVAL):
+                state = record_turn(state)
+            write_dreaming_state(root / ".omh", root / ".hermes", state)
             live.on_session_end()
             pack = serve(live, "reviewed record beside a block")
             self.assertLess(pack.index("<memory_blocks>"), pack.index("<memory_records>"))
@@ -455,6 +467,11 @@ class CanonicalPrefetchTests(unittest.TestCase):
             (root / ".omh" / "memory" / "records" / f"{record['record_id']}.json").unlink()
             for path in (root / ".omh" / "memory" / "blocks").rglob("*.json"):
                 path.unlink()
+            # The first brief was served once; a fresh one (new raised_at) is served again.
+            brief_path = consolidation_path(root / ".omh", root / ".hermes")
+            fresh = json.loads(brief_path.read_text(encoding="utf-8"))
+            fresh["raised_at"] = "2099-01-01T00:00:00Z"
+            brief_path.write_text(json.dumps(fresh), encoding="utf-8")
             pack = serve(live)
             self.assertIn("<memory_consolidation", pack)
             self.assertIsNone(live.recall_status())

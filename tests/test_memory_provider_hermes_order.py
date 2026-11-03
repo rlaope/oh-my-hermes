@@ -85,8 +85,8 @@ class HermesHookOrderTests(unittest.TestCase):
             memories.mkdir(parents=True)
             (memories / "MEMORY.md").write_text("- one fact\n", encoding="utf-8")
             live = provider(root)
-            hermes_turn(live, 1, "hi")
-            live.on_session_end()  # one unconsolidated turn is enough at a session end
+            for turn in range(1, 6):  # the fifth turn reaches the interval
+                hermes_turn(live, turn, "hi")
             self.assertTrue(consolidation_path(root / ".omh", root / ".hermes").exists())
             # The next session's first turn, in Hermes order.
             resumed = provider(root)
