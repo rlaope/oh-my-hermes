@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The `omh_recommend` tool result is about 12% smaller.** The handoff policy
+  used to ride on every recommended skill, and one policy can run past 1 KB.
+  It now stays on the top recommendation and on the skills the route selects,
+  which are the skills the agent acts on. When the top row is a router
+  (`meta-router`, `oh-my-hermes`), the first concrete skill below it keeps
+  its policy too. Every other row leaves it out, and the result says that
+  `omh_capabilities` `inspect` with section `skills` returns it for any skill.
+  The ranking, the top skill, the route and every other field are unchanged.
+  Over the routing corpus the mean result drops from 6,794 to 5,985 bytes.
+
 - **A multi-line paste no longer sends half a prompt where the terminal strips
   paste markers, and arrows hold together over SSH and WSL.** When tmux, SSH
   or the terminal itself drops bracketed-paste markers, the OMH TUI now reads

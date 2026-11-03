@@ -99,7 +99,9 @@ def omh_recommend_handler(args: dict, **kwargs) -> str:
         "route": route,
         "tool_guidance": (
             "Use this tool when Hermes needs the nearest OMH workflow without asking the user to approve "
-            "`omh recommend` or `omh list` shell commands."
+            "`omh recommend` or `omh list` shell commands. For a skill without handoff_policy in these rows, "
+            "including route.selected_skill, `omh_capabilities` action `inspect` with section `skills` and "
+            "that skill id returns it."
         ),
         "claim_boundary": _claim_boundary(),
     }
@@ -126,7 +128,34 @@ def _recommendations(
         # package runtime failure, not a genuine missing-package fallback, so it must
         # not be mislabeled as `standalone_plugin_bundle_fallback`.
         return [], None, "package_recommend_error", _safe_error_type(type(exc).__name__)
-    return recommendations, _route_summary(message), "package_recommend", None
+    route = _route_summary(message)
+    return _policy_on_pointed_rows(recommendations, route), route, "package_recommend", None
+
+
+def _policy_on_pointed_rows(
+    recommendations: list[dict[str, Any]], route: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Keep `handoff_policy` only on the rows this result points the model at.
+
+    The model acts on one skill, so repeating every row's policy (median about
+    200 bytes, `ultrawork` past 1 KB) was the largest field of the result. The
+    top row and the route's selected and candidate skills keep it. A top row in
+    the catalog's `router` category (`meta-router`, `oh-my-hermes`) hands the
+    choice on to the first concrete row, so that row keeps it too.
+    `omh_capabilities` inspect returns it for any other skill, as
+    `tool_guidance` says.
+    """
+    pointed = {str(recommendations[0].get("skill") or "")} if recommendations else set()
+    if recommendations and recommendations[0].get("category") == "router":
+        concrete = next((item for item in recommendations if item.get("category") != "router"), None)
+        if concrete is not None:
+            pointed.add(str(concrete.get("skill") or ""))
+    if route:
+        pointed |= {str(route.get("selected_skill") or ""), str(route.get("candidate_skill") or "")}
+    for item in recommendations:
+        if str(item.get("skill") or "") not in pointed:
+            item.pop("handoff_policy", None)
+    return recommendations
 
 
 def _route_summary(message: str) -> dict[str, Any] | None:
