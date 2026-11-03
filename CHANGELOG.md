@@ -13,7 +13,7 @@ All notable changes will be documented here.
   was chosen by measurement on a session of distinct replies. A redraw at
   the width the session was printed at takes 13 to 18 ms instead of 11 to
   14 ms. The first redraw at a new width takes about 235 to 290 ms instead
-  of 170 to 240 ms, and holding what that redraw reuses takes about 1.3 MiB
+  of 170 to 240 ms, and holding what that redraw reuses takes 1.2 to 1.5 MiB
   more. Raising the count further made both slower in proportion: 6,000
   rows took 23 to 29 ms and 375 to 450 ms. The rows above the cut are still
   in `/history`. A terminal's own scrollback limit can keep fewer rows than
