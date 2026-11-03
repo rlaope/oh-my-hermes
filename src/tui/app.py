@@ -173,6 +173,7 @@ from .keys import (
     KeyDecoder,
     Mouse,
     Paste,
+    list_nav_step,
 )
 from .launch import CLOSED_EXIT, PICK_SESSION_ENV, SESSION_FILE_ENV, request_fallback
 from .agent_view import AGENT_STEER_LEFT_UNANSWERED_NOTICE, STEER_SAY, TAIL_ANSWER_SECONDS, AgentViewMixin
@@ -3815,6 +3816,8 @@ class App(ModesMixin, AgentViewMixin):
         alone for want of rows, where neither folding nor expanding it changes what shows (its header offers no key)."""
         if not isinstance(event, Key) or event != Key(CHAR, "p", ctrl=True):
             return False
+        if self._menu_rows():
+            return False
         payload = self.hud.payload if self.hud is not None else None
         if plan_state(payload) != "open" or not self.panel_shown:  # a menu over the plan: nothing to fold where seen
             return False
@@ -4661,13 +4664,15 @@ class App(ModesMixin, AgentViewMixin):
         return [(item.display or item.text, item.meta) for item in self.path_items]
 
     def _menu_moves(self, key: Key) -> bool:
-        """Up and Down move the open completion menu's highlight, stopping at either end as every list does."""
-        if key.name not in (UP, DOWN):
+        """Up and Down (or Ctrl+P/Ctrl+N) move the open completion menu's highlight, stopping at either end as every list does."""
+        step = list_nav_step(key)
+        if step == 0 and key.name not in (UP, DOWN):
             return False
         rows = self._menu_rows()
         if not rows:
             return False
-        self.menu_index = min(max(self.menu_index + (-1 if key.name == UP else 1), 0), len(rows) - 1)
+        delta = step if step != 0 else (-1 if key.name == UP else 1)
+        self.menu_index = min(max(self.menu_index + delta, 0), len(rows) - 1)
         return True
 
     def _menu_enter(self, key: Key) -> bool:

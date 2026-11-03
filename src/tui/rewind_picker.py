@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, Key, Paste
+from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, Key, Paste, list_nav_step
 from .session_picker import age_text, picker_frame, picker_row
 from .style import Line, Span
 from .theme import Theme
@@ -95,7 +95,10 @@ class RewindPicker:
         if event.name == ENTER:
             return RewindAction(PICK, shown[min(self.index, len(shown) - 1)]) if shown else None
         steps = {UP: -1, DOWN: 1, PAGE_UP: -self.page, PAGE_DOWN: self.page}
-        if event.name in steps and shown:
+        arc = list_nav_step(event)
+        if arc and shown:
+            self.index = min(max(self.index + arc, 0), len(shown) - 1)
+        elif event.name in steps and shown:
             self.index = min(max(self.index + steps[event.name], 0), len(shown) - 1)
         elif event.name == BACKSPACE:
             self._filter(self.query[:-1])

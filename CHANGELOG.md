@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Ctrl+J and Ctrl+K navigate lists across the OMH TUI.** Complementing
+  Ctrl+N and Ctrl+P, Ctrl+J moves down and Ctrl+K moves up across all picker
+  dialogs (/model, /sessions, /rewind, /theme, /launch), the agent view list
+  and tree, history search, and open slash and @ completion menus, matching
+  Down and Up arrow navigation. When no list or menu is open, Ctrl+J keeps its
+  newline and steer behaviors and Ctrl+K keeps delete-to-end-of-line.
+
+- **Ctrl+N and Ctrl+P navigate lists across the OMH TUI.** In the `/model`,
+  `/sessions`, `/rewind` and `/theme` pickers, the agent list (ordinary roster
+  and DAG tree modes), history search, and slash and `@` path completion menus,
+  Ctrl+N moves down and Ctrl+P moves up by one row, matching Down and Up arrow
+  navigation. On an open completion menu, Ctrl+P navigates the menu rather than
+  folding the plan.
+
 - **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
   architecture-deepening reading: it looks for shallow modules (an interface
   nearly as large as what it hides), proves each one with the deletion test

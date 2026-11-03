@@ -807,3 +807,26 @@ class KeyDecoder:
         self._pending.extend(body[end + len(PASTE_END) :])
         self._paste = None
         return Paste(_paste_text(bytes(body[:end])))
+
+
+def list_nav_step(event: Key | Paste) -> int:
+    """Return navigation delta for list/picker items: +1 (down) or -1 (up), else 0.
+
+    Matches DOWN, Ctrl+N and Ctrl+J (without Alt or Shift) to +1.
+    Matches UP, Ctrl+P and Ctrl+K (without Alt or Shift) to -1.
+    """
+    if not isinstance(event, Key):
+        return 0
+    if event.name == DOWN and not event.ctrl and not event.alt and not event.shift:
+        return 1
+    if event.name == UP and not event.ctrl and not event.alt and not event.shift:
+        return -1
+    if (
+        event.name == CHAR
+        and event.ctrl
+        and not event.alt
+        and not event.shift
+        and event.char in ("n", "p", "j", "k")
+    ):
+        return 1 if event.char in ("n", "j") else -1
+    return 0
