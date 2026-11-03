@@ -18,16 +18,19 @@ processes run with PYTHONPATH=<tree>:<tree>/tests. Time metrics (`*_ms`, `*_pct`
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
+import math
 import os
 import statistics
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+# The tree being measured: this checkout, or the base tree `--compare` hands a child process.
+TREE = Path(os.environ.get("OMH_PERF_TREE") or ROOT)
 SCHEMA = "omh_tui_perf/v1"
 CASES = ("frame", "redraw", "stream", "keystroke", "idle", "plugin", "startup")
 
@@ -45,21 +48,23 @@ def _load() -> dict:
     """Point every home at a temp dir, then import the harness. Deferred so importing this module has no side effects."""
     if _ns:
         return _ns
-    tmp = tempfile.mkdtemp(prefix="omh-tui-perf-")
-    os.environ.update({"HOME": tmp, "HERMES_HOME": os.path.join(tmp, "hermes"), "OMH_HOME": os.path.join(tmp, "omh")})
-    try:
-        import omh  # noqa: F401
-    except ImportError:
-        sys.path.insert(0, str(ROOT))
-    try:
-        import test_tui_app  # noqa: F401
-    except ImportError:
-        sys.path.insert(0, str(ROOT / "tests"))
+    for path in (str(TREE / "tests"), str(TREE)):  # the tree's repo-root omh/ shim then selects that tree
+        if path in sys.path:
+            sys.path.remove(path)
+        sys.path.insert(0, path)
+    from _test_temp_root import make_test_tempdir
+    holder = make_test_tempdir(prefix="omh-tui-perf-")
+    atexit.register(holder.cleanup)
+    tmp = holder.name
+    drive, tail = os.path.splitdrive(tmp)
+    os.environ.update({"HOME": tmp, "USERPROFILE": tmp, "HOMEDRIVE": drive, "HOMEPATH": tail or tmp,
+                       "HERMES_HOME": os.path.join(tmp, "hermes"), "OMH_HOME": os.path.join(tmp, "omh")})
+    import omh
     from test_tui_app import ScriptedTerminal, FakePoller
     from test_tui_modes import RecordingClient, SID
     from omh.tui.app import App
     from omh.tui.gateway import Event
-    _ns.update(tmp=tmp, ScriptedTerminal=ScriptedTerminal, FakePoller=FakePoller, RecordingClient=RecordingClient,
+    _ns.update(tmp=tmp, omh_file=str(Path(omh.__file__).resolve()), ScriptedTerminal=ScriptedTerminal, FakePoller=FakePoller, RecordingClient=RecordingClient,
                SID=SID, App=App, Event=Event)
 
     class CountingTerminal(ScriptedTerminal):
@@ -76,13 +81,13 @@ def _load() -> dict:
     return _ns
 
 
-def make_app(rows: int = 40, cols: int = 120, environ: dict | None = None):
+def make_app(rows: int = 40, cols: int = 120, environ: dict | None = None, **options):
     n = _load()
     env = {"OMH_TUI_GLOW": "0", "OMH_TUI_WALLPAPER": "0", "OMH_TUI_UPDATE_CHECK": "0", "HOME": n["tmp"],
            "HERMES_HOME": os.environ["HERMES_HOME"], "OMH_HOME": os.environ["OMH_HOME"],
            "COLORTERM": "truecolor", "TERM": "xterm-256color", **(environ or {})}
     term = n["CountingTerminal"](rows, cols)
-    app = n["App"](term, n["RecordingClient"](), env, poller=n["FakePoller"]())
+    app = n["App"](term, n["RecordingClient"](), env, poller=n["FakePoller"](), **options)
     app.sid = n["SID"]
     app.launch_layout = False
     return app, term
@@ -132,7 +137,7 @@ def p50(xs: list[float]) -> float:
 
 def p95(xs: list[float]) -> float:
     xs = sorted(xs)
-    return xs[max(int(len(xs) * 0.95) - 1, 0)]
+    return xs[max(math.ceil(0.95 * len(xs)) - 1, 0)]
 
 
 def row(case: str, label: str, **metrics: float) -> dict:
@@ -145,7 +150,8 @@ def case_frame(size: dict) -> list[dict]:
     from omh.tui.keys import CHAR, Key
     rows = []
     for turns in size["turns"]:
-        app, term = make_app()
+        now = [1000.0]  # a fake clock: the busy frame's bytes then depend on ticks, not on how fast the machine ran
+        app, term = make_app(clock=lambda: now[0])
         for i in range(turns):
             add_turn(app, i)
         b0 = term.bytes
@@ -165,8 +171,13 @@ def case_frame(size: dict) -> list[dict]:
         key_bytes = (term.bytes - b0) / reps
         app.turn_pending = True
         app.busy_since = app.clock()
+        from omh.tui.app import TICK_SECONDS
+
+        def tick_frame() -> None:
+            now[0] += TICK_SECONDS
+            render(app)
         b0 = term.bytes
-        tick = sample(lambda: render(app), reps)
+        tick = sample(tick_frame, reps)
         tick_bytes = (term.bytes - b0) / reps
         rows.append(row("frame", f"{turns} turns", first_frame_ms=first_ms, first_frame_bytes=first_bytes,
                         steady_frame_p50_ms=p50(steady), steady_frame_p95_ms=p95(steady),
@@ -257,13 +268,15 @@ def case_idle(size: dict) -> list[dict]:
         if look:
             app.launch_look = look
             app.rows_ground = app._ground()
-        stats = {"reads": 0, "renders": 0}
+        stats = {"reads": 0, "renders": 0, "end": None}
         deadline = time.monotonic() + seconds
 
         def read(timeout: float, wake=None) -> bytes:
-            stats["reads"] += 1
             if time.monotonic() >= deadline:
+                if stats["end"] is None:  # stop counting here: the shutdown flush is not idle cost either
+                    stats["end"] = (time.process_time(), time.monotonic(), term.bytes)
                 raise EOFError
+            stats["reads"] += 1
             time.sleep(min(timeout, max(deadline - time.monotonic(), 0)))
             return b""
 
@@ -271,19 +284,24 @@ def case_idle(size: dict) -> list[dict]:
         real_render = app._render
 
         def counted() -> None:
-            stats["renders"] += 1
+            if stats["end"] is None:
+                stats["renders"] += 1
             real_render()
 
         app._render = counted
         if busy:
             app.turn_pending = True
             app.busy_since = app.clock()
+        render(app)  # the first paint is not idle cost
+        app.dirty = False
+        stats["renders"] = 0
         b0 = term.bytes
         c0, w0 = time.process_time(), time.monotonic()
         app.run()
-        cpu, wall = time.process_time() - c0, time.monotonic() - w0
+        c1, w1, b1 = stats["end"]
+        cpu, wall = c1 - c0, w1 - w0
         rows.append(row("idle", label, wakeups_per_s=stats["reads"] / wall, frames_per_s=stats["renders"] / wall,
-                        kib_per_s=(term.bytes - b0) / 1024 / wall, cpu_pct=100 * cpu / wall))
+                        kib_per_s=(b1 - b0) / 1024 / wall, cpu_pct=100 * cpu / wall))
     return rows
 
 
@@ -354,6 +372,9 @@ def case_plugin(size: dict) -> list[dict]:
 
 def case_startup(size: dict) -> list[dict]:
     _load()
+    from omh.tui import terminal as tui_terminal
+    if tui_terminal.termios is None:
+        return []  # Windows: main() takes its fallback path, so there is no launch to time
     from test_tui_app import BOX_MARK, AppTestCase, Step, startup_answers
     from _tui_gateway_replay import Scenario, spans
     marks_all = []
@@ -378,6 +399,10 @@ def case_startup(size: dict) -> list[dict]:
                                  label="idle"))
         case.run_main(run)
         marks["main_returned_ms"] = (time.perf_counter() - t0) * 1000
+        try:
+            case.assert_clean_run(run)  # a launch that stalled or exited non-zero is not a launch time
+        except AssertionError as error:
+            raise SystemExit(f"startup case: main() did not run cleanly: {error}")
         marks_all.append(marks)
         case.doCleanups()
     names = sorted(set().union(*marks_all))
@@ -394,7 +419,8 @@ def run_cases(cases: tuple[str, ...], size_name: str) -> dict:
     results = []
     for name in cases:
         results.extend(RUNNERS[name](size))
-    return {"schema": SCHEMA, "size": size_name, "python": sys.version.split()[0], "tree": str(ROOT), "results": results}
+    return {"schema": SCHEMA, "size": size_name, "python": sys.version.split()[0], "tree": str(TREE),
+            "omh_file": _load()["omh_file"], "results": results}
 
 
 # --- output and comparison -----------------------------------------------------------------------------------------
@@ -415,10 +441,18 @@ def _is_time(metric: str) -> bool:
     return metric.endswith(("_ms", "_pct", "_per_s"))
 
 
-def verdict(metric: str, base: float, head: float, tolerance: float) -> tuple[float, str]:
-    delta = 0.0 if base == head else ((head - base) / base * 100 if base else float("inf"))
-    limit = tolerance if _is_time(metric) else 1.0
-    if abs(delta) <= limit or (metric.endswith("_ms") and abs(head - base) < 0.02):
+def verdict(metric: str, base: float, head: float, tolerance: float) -> tuple[float | None, str]:
+    """(percent change or None when base is 0, verdict). A time maximum is one sample: no verdict.
+    A p95 is a tail sample: tripled tolerance."""
+    limit = 1.0
+    if _is_time(metric):
+        limit = tolerance * (3 if "p95" in metric.split("_") else 1)
+    if _is_time(metric) and "max" in metric.split("_"):
+        return ((head - base) / base * 100 if base else None), "info"
+    if base == head or (metric.endswith("_ms") and abs(head - base) < 0.02) or (metric.endswith("_pct") and abs(head - base) < 0.5):
+        return (0.0 if base == head else (head - base) / base * 100 if base else None), "~"
+    delta = (head - base) / base * 100 if base else None
+    if delta is not None and abs(delta) <= limit:
         return delta, "~"
     return delta, "worse" if head > base else "better"
 
@@ -434,24 +468,33 @@ def median_payload(payloads: list[dict]) -> dict:
 
 def compare(base_tree: Path, cases: tuple[str, ...], size_name: str, rounds: int, tolerance: float) -> dict:
     runs: dict[str, list[dict]] = {"base": [], "head": []}
-    for _ in range(rounds):
-        for side, tree in (("base", base_tree), ("head", ROOT)):
-            env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(tree), str(tree / "tests")])}
+    for index in range(rounds):
+        order = (("base", base_tree), ("head", ROOT))
+        for side, tree in (order if index % 2 == 0 else order[::-1]):  # ABBA: no side always runs second
+            env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(tree), str(tree / "tests")]),
+                   "OMH_PERF_TREE": str(tree)}
             cmd = [sys.executable, "-P", str(Path(__file__).resolve()), "--json", "--size", size_name]
             for name in cases:
                 cmd += ["--case", name]
-            done = subprocess.run(cmd, env=env, cwd=str(tree), capture_output=True, text=True, check=False)
+            done = subprocess.run(cmd, env=env, cwd=str(tree), capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace", check=False)
             if done.returncode != 0:
                 raise SystemExit(f"{side} run failed in {tree}:\n{done.stderr[-2000:]}")
-            runs[side].append(json.loads(done.stdout))
+            payload = json.loads(done.stdout)
+            if not Path(payload["omh_file"]).is_relative_to(tree.resolve()):
+                raise SystemExit(f"{side} run measured {payload['omh_file']}, not {tree}")
+            runs[side].append(payload)
     base, head = _flatten(median_payload(runs["base"])), _flatten(median_payload(runs["head"]))
     rows = []
-    for key in head:
+    for key in list(head) + [k for k in base if k not in head]:
         if key not in base:
-            continue
-        delta, word = verdict(key[2], base[key], head[key], tolerance)
-        rows.append({"case": key[0], "label": key[1], "metric": key[2], "base": base[key], "head": head[key],
-                     "delta_pct": round(delta, 1), "verdict": word})
+            delta, word = None, "new-in-head"
+        elif key not in head:
+            delta, word = None, "missing-in-head"
+        else:
+            delta, word = verdict(key[2], base[key], head[key], tolerance)
+        rows.append({"case": key[0], "label": key[1], "metric": key[2], "base": base.get(key), "head": head.get(key),
+                     "delta_pct": None if delta is None else round(delta, 1), "verdict": word})
     return {"schema": SCHEMA + "+compare", "size": size_name, "rounds": rounds, "tolerance_pct": tolerance,
             "base_tree": str(base_tree), "head_tree": str(ROOT), "rows": rows}
 
@@ -461,8 +504,10 @@ def format_compare(payload: dict) -> str:
              f"tolerance={payload['tolerance_pct']}%",
              f"{'case':10s} {'label':32s} {'metric':30s} {'base':>12s} {'head':>12s} {'delta%':>8s}  verdict"]
     for r in payload["rows"]:
-        lines.append(f"{r['case']:10s} {r['label']:32s} {r['metric']:30s} {r['base']:12.3f} {r['head']:12.3f} "
-                     f"{r['delta_pct']:8.1f}  {r['verdict']}")
+        cell = lambda v, w: f"{'-' if v is None else format(v, '.3f'):>{w}s}"  # noqa: E731
+        delta = "-" if r["delta_pct"] is None else f"{r['delta_pct']:.1f}"
+        lines.append(f"{r['case']:10s} {r['label']:32s} {r['metric']:30s} {cell(r['base'], 12)} {cell(r['head'], 12)} "
+                     f"{delta:>8s}  {r['verdict']}")
     return "\n".join(lines)
 
 

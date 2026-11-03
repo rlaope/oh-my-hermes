@@ -27,7 +27,8 @@ class TuiPerfBenchSmokeTests(unittest.TestCase):
     def setUpClass(cls):
         env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(ROOT), str(ROOT / "tests")])}
         done = subprocess.run([sys.executable, "-P", str(SCRIPT), "--json", "--size", "tiny"], env=env,
-                              cwd=str(ROOT), capture_output=True, text=True, check=False, timeout=300)
+                              cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              check=False, timeout=300)
         if done.returncode != 0:
             raise AssertionError(done.stderr[-2000:])
         cls.payload = json.loads(done.stdout)
@@ -36,13 +37,23 @@ class TuiPerfBenchSmokeTests(unittest.TestCase):
         b = bench()
         self.assertEqual(self.payload["schema"], b.SCHEMA)
         self.assertEqual(self.payload["size"], "tiny")
-        self.assertEqual({r["case"] for r in self.payload["results"]}, set(b.CASES))
+        self.assertGreaterEqual({r["case"] for r in self.payload["results"]}, set(b.CASES) - {"startup"})  # startup: see below
         for result in self.payload["results"]:
             self.assertEqual(set(result), {"case", "label", "metrics"})
             self.assertTrue(result["metrics"], result)
             for name, value in result["metrics"].items():
                 self.assertTrue(isinstance(value, (int, float)) and math.isfinite(value) and value >= 0,
                                 (result["case"], name, value))
+
+    def test_startup_metrics_or_windows_skip(self):
+        startup = [r for r in self.payload["results"] if r["case"] == "startup"]
+        from omh.tui import terminal
+        if terminal.termios is None:
+            self.assertEqual(startup, [])
+            return
+        self.assertEqual(len(startup), 1)
+        self.assertEqual(set(startup[0]["metrics"]),
+                         {"first_write_ms", "first_composer_frame_ms", "idle_ms", "main_returned_ms"})
 
     def test_steady_frame_with_nothing_changed_writes_nothing(self):
         frames = [r for r in self.payload["results"] if r["case"] == "frame"]
@@ -58,6 +69,10 @@ class TuiPerfBenchSmokeTests(unittest.TestCase):
         self.assertEqual(b.verdict("steady_frame_p50_ms", 0.001, 0.005, 15.0)[1], "~")
         self.assertEqual(b.verdict("full_redraw_bytes", 1000, 1100, 15.0)[1], "worse")
         self.assertEqual(b.verdict("full_redraw_bytes", 1000, 1000, 15.0)[1], "~")
+        self.assertEqual(b.verdict("chunk_max_ms", 10.0, 40.0, 15.0)[1], "info")
+        self.assertEqual(b.verdict("context_bytes_max", 100, 200, 15.0)[1], "worse")
+        self.assertEqual(b.verdict("full_redraw_bytes", 0, 5, 15.0), (None, "worse"))
+        self.assertEqual(b.verdict("full_redraw_bytes", 0, 0, 15.0), (0.0, "~"))
 
 
 if __name__ == "__main__":
