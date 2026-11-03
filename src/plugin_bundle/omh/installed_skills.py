@@ -125,14 +125,24 @@ def skill_label_copies(labels: Iterable[str], roots: Sequence[tuple[int, str | P
 
     Hermes finds a skill by directory name at any depth (`skill_directories`
     walks the same way, and one unreadable directory skips only itself).
-    The lowest tier holding a label wins outright; inside it, copies that
-    resolve to one file are one copy (a symlinked view in a second root
-    loads fine), and copies under a single root count as that root. So one
-    directory is loadable, none is "not found", and two or more are refused
-    as ambiguous (`agent/skill_utils.py` `pick_skill_candidate`). Where
-    Hermes would still pick among copies under one root, this answers
-    loadable: a wrong "loadable" costs one recoverable load, a wrong
-    "unloadable" hides a skill that works.
+    The lowest tier holding a label wins outright. Inside it, copies under a
+    single root count as that root, and two roots whose copies resolve to
+    one `SKILL.md` count once: a root that is itself a link to another (the
+    `current` pointer beside its generation). A symlinked skill directory
+    inside a root is not walked at all, because `skill_directories` does not
+    follow links below the root, so a link to a skill another root already
+    holds adds no copy and that skill stays loadable, as it does in Hermes,
+    which dedups by resolved path. So one directory is loadable, none is
+    "not found", and two or more are refused as ambiguous
+    (`agent/skill_utils.py` `pick_skill_candidate`).
+
+    Every difference from Hermes lands on "loadable" but one. Hermes would
+    still pick among identical copies under one root; this calls any copies
+    under one root loadable. A wrong "loadable" costs one recoverable load.
+    The exception: Hermes' walk follows links, so a symlinked skill
+    directory pointing outside every scanned root is a copy Hermes loads and
+    this does not see. If it is the only copy, the skill reads "not found"
+    here. OMH's installer creates no such link.
     """
     wanted = set(labels)
     best: dict[str, tuple[int, dict[str, str]]] = {}

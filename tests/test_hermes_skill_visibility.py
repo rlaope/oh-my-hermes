@@ -235,6 +235,27 @@ class HintTests(_Installed):
                 self.assertEqual(_loadable(self.paths, module), installed)
         self.assertIn(FIRST_CANDIDATE, _candidates(_context(self.paths, "s-fault", _tiered(raises=True))))
 
+    def test_the_tiered_reader_alone_decides_and_wins_when_both_readers_disagree(self) -> None:
+        stale_pack = self.root / "generations" / "older" / "skills"
+        shutil.copytree(self.skills, stale_pack)
+        healthy = [self.skills]
+        ambiguous = [(TIER_EXTERNAL, self.skills), (TIER_EXTERNAL, stale_pack)]
+
+        alone = _loadable(self.paths, _tiered(*ambiguous))
+        assert alone is not None
+        self.assertNotIn(FIRST_CANDIDATE, alone)
+
+        for tiered_roots, external_roots, loadable in (
+            (ambiguous, healthy, False),
+            ([(TIER_EXTERNAL, self.skills)], [self.skills, stale_pack], True),
+        ):
+            with self.subTest(loadable=loadable):
+                both = _tiered(*tiered_roots)
+                both.get_external_skills_dirs = lambda roots=external_roots: list(roots)  # type: ignore[attr-defined]
+                names = _loadable(self.paths, both)
+                assert names is not None
+                self.assertEqual(FIRST_CANDIDATE in names, loadable)
+
     def test_a_copy_in_a_higher_tier_wins_over_an_external_collision(self) -> None:
         second = self.root / "second" / "skills"
         _copy_one(self.skills, FIRST_CANDIDATE, second)
