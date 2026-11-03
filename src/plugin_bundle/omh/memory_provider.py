@@ -58,6 +58,7 @@ if RecallStatus is None:
         glyph: str = "🧠"
 
 
+from .compaction_work_state import work_state_facts
 from .hermes_memory import (
     entry_digest,
     HermesMemoryFile,
@@ -1040,20 +1041,28 @@ class OmhMemoryProvider(_MemoryProviderBase):
         and the compaction brief served next turn points the model at it. OMH
         stays a v1 best-effort provider (no ``pre_compress_checkpoint_api_version``),
         so this text never takes part in a checkpoint decision.
+
+        After the blocks come the facts of this conversation's unfinished OMH
+        work (`compaction_work_state`), and nothing at all when there is none.
+        The blocks give up the facts' length from their budget, so the two
+        together take no more room than the blocks did alone; and the facts go
+        last, inside the 1,500-character tail Hermes keeps when it elides.
         """
         self._observe_lens()
         if self._attended:
             self._mutate_state(record_compaction)
             self._evaluate_if_due("compaction", messages_at_risk=len(messages or []))
+        facts = work_state_facts(omh_home=self._omh_home, hermes_home=self._hermes_home, session_id=self._session_id)
         blocks = () if self._shared_surface else read_memory_blocks(self._omh_home, tier=SYSTEM_TIER)
         if not blocks:
-            return ""
+            return facts
         selection = self._block_selection(blocks=blocks, now=now)
-        return render_memory_blocks(
+        rendered = render_memory_blocks(
             blocks,
-            budget_chars=DEFAULT_SYSTEM_RENDER_BUDGET_CHARS,
+            budget_chars=DEFAULT_SYSTEM_RENDER_BUDGET_CHARS - (len(facts) + 2 if facts else 0),
             evaluations=selection.evaluations,
         )
+        return "\n\n".join(part for part in (rendered, facts) if part)
 
     def on_memory_write(
         self,

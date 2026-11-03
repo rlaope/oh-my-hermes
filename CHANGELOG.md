@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Running work survives a context compaction.** When Hermes compacts a
+  session, OMH now hands its summarizer the work this conversation still has
+  open, stated as facts: each unfinished dag-ulw run (its goal, run state,
+  nodes done, and the open nodes with their states) and the session's open
+  `omh_todo` plan items. The summary that replaces the old turns then still
+  knows about the run and the plan, so the model picks them up instead of
+  re-deriving them from scratch. It is bounded (at most 3 runs, 6 nodes a run,
+  10 plan items, 1,500 characters in all), adds nothing to a session with no
+  open work, and leaves a plan written by Hermes' own `todo_list` to Hermes,
+  which already carries that list across compaction.
+
 - **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
   architecture-deepening reading: it looks for shallow modules (an interface
   nearly as large as what it hides), proves each one with the deletion test
