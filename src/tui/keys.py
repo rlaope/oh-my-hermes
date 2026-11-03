@@ -100,9 +100,12 @@ legacy `ESC[M` and three payload bytes instead; that is one unknown key.
 
 A focus report (`ESC[I` the window gained focus, `ESC[O` it lost it, asked
 for by `Terminal`) is no key and types nothing in any mode: it only sets
-`KeyDecoder.unfocused_at`. Any read says the window has focus again, since
-input comes from a focused window, so a focus-in the terminal never sent
-does not keep it counted as unfocused past the next key.
+`KeyDecoder.unfocused_at`. A whole report is taken out of a read before
+anything else reads it, so it never ends or splits an unmarked paste, never
+moves the burst window and never lands in a bracketed paste's text; a read
+of reports alone is no input. Any other read says the window has focus
+again, since input comes from a focused window, so a focus-in the terminal
+never sent does not keep it counted as unfocused past the next key.
 """
 
 from __future__ import annotations
@@ -349,6 +352,22 @@ _KEYBOARD_FLAGS_OFF = Key("keyboard-flags-off")
 _FOCUS_IN = Key("focus-in")
 _FOCUS_OUT = Key("focus-out")
 _FOCUS_FINALS = {"I": _FOCUS_IN, "O": _FOCUS_OUT}
+_FOCUS_IN_BYTES = b"\x1b[I"
+_FOCUS_OUT_BYTES = b"\x1b[O"
+
+
+def _without_focus_reports(data: bytes) -> tuple[bytes, Key | None]:
+    """`data` without its whole focus reports, and the marker of the last of them (None when it holds none).
+
+    Taken out before anything else reads the input, so a report never ends an unmarked paste's burst, never moves
+    its timing and never lands in a bracketed paste's text. A report split right after its ESC is not whole here;
+    the CSI decoding reads it (`_csi_key`).
+    """
+    gained, lost = data.rfind(_FOCUS_IN_BYTES), data.rfind(_FOCUS_OUT_BYTES)
+    if gained < 0 and lost < 0:
+        return data, None
+    return data.replace(_FOCUS_IN_BYTES, b"").replace(_FOCUS_OUT_BYTES, b""), (
+        _FOCUS_IN if gained > lost else _FOCUS_OUT)
 
 
 def _single_byte_key(byte: int) -> Key:
@@ -738,8 +757,14 @@ class KeyDecoder:
 
     def feed(self, data: bytes) -> list[Key | Paste | Mouse]:
         now = self._clock()
+        data, focus = _without_focus_reports(data)
+        self.unfocused_at = now if focus is _FOCUS_OUT else None
+        if not data:  # only focus reports: no input, but a lone ESC held from before is Esc, as at any other read
+            if self._pending == bytes((ESC_BYTE,)):
+                self._pending.clear()
+                return [Key(ESCAPE, arrived_at=self._held_at)]
+            return []
         gap, self._read_at = now - self._read_at, now
-        self.unfocused_at = None
         events: list[Key | Paste | Mouse] = []
         if self._burst is not None:
             # A paste goes on with any plain read in the window; a held line break only with a read shaped like a

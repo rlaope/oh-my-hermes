@@ -14,7 +14,8 @@ from unittest import mock
 from omh.tui import app as app_module
 from omh.tui.composer import VIM_NORMAL, Composer
 from omh.tui.keys import ESCAPE, Key, KeyDecoder, Paste
-from omh.tui.wallpaper import Cell
+from omh.tui.gateway import Event
+from omh.tui.wallpaper import SCENES, Cell
 from test_tui_keys import decode, decode_split_everywhere
 from test_tui_modes import type_text
 import test_tui_wallpaper as wallpaper_tests
@@ -71,11 +72,32 @@ class FocusReportDecodeTests(unittest.TestCase):
         self.assertEqual(decoder.feed(b"\x1b") + decoder.feed(b"[O") + decoder.flush(), [])
         self.assertIsNotNone(decoder.unfocused_at)
 
-    def test_an_unmarked_paste_settles_whole_before_a_report(self) -> None:
-        decoder = KeyDecoder()
-        self.assertEqual(decoder.feed(b"one\rtwo\rthree"), [])
-        self.assertEqual(decoder.feed(FOCUS_OUT), [Paste("one\ntwo\nthree")])
-        self.assertIsNotNone(decoder.unfocused_at)
+    def test_an_unmarked_paste_stays_one_paste_around_a_report(self) -> None:
+        # In the paste's own read, and as a read of its own inside the burst window: never Enter, never split.
+        for reads in ((b"one\rtwo\rthree\r" + FOCUS_OUT,), (b"one\rtwo\r", FOCUS_OUT, b"three\r")):
+            with self.subTest(reads=reads):
+                clock = wallpaper_tests.Clock(5.0)
+                decoder = KeyDecoder(clock)
+                events = []
+                for data in reads:
+                    events += decoder.feed(data)
+                    if data == reads[-1] or FOCUS_OUT in data:
+                        self.assertEqual(decoder.unfocused_at is not None, FOCUS_OUT in data, data)
+                    clock.at += 0.005
+                clock.at += 1.0
+                self.assertEqual(events + decoder.flush(), [Paste("one\ntwo\nthree\n")])
+
+    def test_a_report_inside_a_bracketed_paste_is_not_pasted(self) -> None:
+        start, end = b"\x1b[200~hello ", b"world\x1b[201~"
+        for reads in ((start, FOCUS_OUT, end), (start + FOCUS_OUT + end,)):
+            with self.subTest(reads=reads):
+                decoder = KeyDecoder()
+                events = []
+                for data in reads:
+                    events += decoder.feed(data)
+                    if FOCUS_OUT in data:  # a later read of the paste's rest is input again
+                        self.assertIsNotNone(decoder.unfocused_at)
+                self.assertEqual(events, [Paste("hello world")])
 
 
 class FocusInputTests(unittest.TestCase):
@@ -193,6 +215,38 @@ class BusyGlowTests(unittest.TestCase):
         for app in (paused, steady):
             app._render()
         self.assertEqual(screen_state(paused), screen_state(steady))
+
+
+class FocusedBytesTests(unittest.TestCase):
+    def test_a_focus_report_pair_writes_the_same_bytes_as_no_report_on_every_scene(self) -> None:
+        # Focus that went and came back at once leaves the session byte for byte what it was: idle ticks, then a
+        # running turn, with the glow on and off.
+        def session(look: str, glow: str, reports: bool) -> list[str]:
+            clock = wallpaper_tests.Clock(1000.0)
+            app, _client = wallpaper_tests.make_app(rows=42, cols=150, clock=clock,
+                                                    environ={**wallpaper_tests.WALLPAPER_ON, "OMH_TUI_GLOW": glow})
+            app.adopt_background(wallpaper_tests.ANSWERED)
+            app.region = app._new_region(at_top=True)
+            app.launch_look = look
+            app.dirty = True
+            app._render_when_due()
+            for step in range(80):
+                if step == 40:
+                    app.transcript.add_user("run")
+                    app.turn_pending = True
+                if step > 40 and step % 10 == 0:
+                    app.transcript.apply(Event(type="message.delta", session_id=app.sid, payload={"text": "w "}))
+                    app.dirty = True
+                clock.at += 0.05
+                for data in ((FOCUS_OUT, FOCUS_IN) if reports and step in (20, 60) else (b"",)):
+                    app._take_input(data)
+                app._render_when_due()
+            return app.terminal.writes
+
+        for look in SCENES:
+            for glow in ("0", "1"):
+                with self.subTest(look=look, glow=glow):
+                    self.assertEqual(session(look, glow, True), session(look, glow, False))
 
 
 if __name__ == "__main__":
