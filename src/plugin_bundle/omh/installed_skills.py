@@ -17,16 +17,15 @@ the candidate line emits labels.
 mtime and size: a turn costs one `stat`, and an install that rewrites the
 manifest is seen on the next turn without a Hermes restart.
 
-Installed is not loadable. Hermes loads a bare skill name from the
-`skills.external_dirs` it resolved, and from 27 Oct to 2 Nov 2026 that set
-held OMH's skills twice (a stale generation pack beside the pointer, and
-Hermes refuses a name two directories of one tier hold) and then not at all
-(a cached path to a generation that was garbage-collected). The manifest
-still listed every skill, so the candidate line kept telling the model to
-load names `skill_view` answered "not found" for.
-`hermes_loadable_skill_names` cuts the installed set to the skills exactly
-one of Hermes' directories holds, read from Hermes' own cached resolution in
-this process.
+Installed is not loadable. Hermes loads a bare skill name from the skill
+directories it resolved, and from 27 Oct to 2 Nov 2026 those held OMH's
+skills twice (a stale generation pack beside the pointer, and Hermes refuses
+a name two directories of one tier hold) and then not at all (a cached path
+to a generation that was garbage-collected). The manifest still listed every
+skill, so the candidate line kept telling the model to load names
+`skill_view` answered "not found" for. `hermes_loadable_skill_names` cuts the
+installed set to the skills Hermes resolves to one copy, read from Hermes'
+own cached resolution in this process.
 """
 
 from __future__ import annotations
@@ -37,15 +36,22 @@ import os
 from pathlib import Path, PurePosixPath
 import sys
 
+from .skill_ownership import skill_directories
 from .skill_shortlist import catalog_skill_names
 
 MANIFEST_NAME = "manifest.json"
 SKILL_FILE = "SKILL.md"
-# Hermes' module that resolves `skills.external_dirs` and caches the answer
-# per `config.yaml` signature (`agent/skill_utils.py`); `skill_view`, the
-# prompt index and the skills list all read their roots through it.
+# Hermes' module that orders every skill directory by precedence and caches
+# the resolved `skills.external_dirs` per `config.yaml` signature
+# (`agent/skill_utils.py`); `skill_view`, the prompt index and the skills
+# list all read their roots through it. `get_skill_search_roots` is the
+# tiered list; `get_external_skills_dirs` alone is the older, external-only
+# reader.
 HERMES_SKILL_UTILS_MODULE = "agent.skill_utils"
+HERMES_SEARCH_ROOTS_READER = "get_skill_search_roots"
 HERMES_EXTERNAL_DIRS_READER = "get_external_skills_dirs"
+# Hermes' precedence tiers, lowest wins (`agent/skill_utils.py`).
+TIER_PROJECT, TIER_LOCAL, TIER_CREATE_DIR, TIER_EXTERNAL = range(4)
 
 # (canonical name, label) per manifest record; either is "" when the record
 # does not carry it.
@@ -83,9 +89,9 @@ def _manifest(omh_home: str | Path) -> _Manifest | None:
     if cached is not None and cached[0] == key:
         return cached
     records = _read_manifest_records(path)
-    names = frozenset(alias for record in records for alias in record if alias) or None
-    _cache = (key, names, records)
-    return _cache
+    read = (key, frozenset(alias for record in records for alias in record if alias) or None, records)
+    _cache = read
+    return read
 
 
 def _read_manifest_records(path: Path) -> tuple[_Record, ...]:
@@ -114,109 +120,100 @@ def installed_skill_labels(omh_home: str | Path) -> frozenset[str] | None:
     return labels or None
 
 
-def skill_labels_under(root: str | Path) -> frozenset[str] | None:
-    """The skill directory names under `root` in OMH's pack layout; `None` when `root` is no directory.
+def skill_label_copies(labels: Iterable[str], roots: Sequence[tuple[int, str | Path]]) -> dict[str, list[str]]:
+    """For each label, the directories whose copy Hermes weighs when it loads the bare name.
 
-    A pack puts a skill at `<root>/<category>/<label>/SKILL.md`. A directory
-    holding `SKILL.md` straight under the root counts too and is not
-    descended into, the way Hermes stops at a skill. Hermes matches a bare
-    name at any depth; two levels is every layout OMH has written.
+    Hermes finds a skill by directory name at any depth (`skill_directories`
+    walks the same way, and one unreadable directory skips only itself).
+    The lowest tier holding a label wins outright; inside it, copies that
+    resolve to one file are one copy (a symlinked view in a second root
+    loads fine), and copies under a single root count as that root. So one
+    directory is loadable, none is "not found", and two or more are refused
+    as ambiguous (`agent/skill_utils.py` `pick_skill_candidate`). Where
+    Hermes would still pick among copies under one root, this answers
+    loadable: a wrong "loadable" costs one recoverable load, a wrong
+    "unloadable" hides a skill that works.
     """
-    labels: set[str] = set()
-    try:
-        with os.scandir(root) as entries:
-            children = [entry.path for entry in entries if entry.is_dir()]
-        for child in children:
-            if os.path.isfile(os.path.join(child, SKILL_FILE)):
-                labels.add(os.path.basename(child))
+    wanted = set(labels)
+    best: dict[str, tuple[int, dict[str, str]]] = {}
+    for tier, root in roots:
+        for directory in skill_directories(Path(root)):
+            label = directory.name
+            if label not in wanted:
                 continue
-            with os.scandir(child) as entries:
-                labels.update(
-                    entry.name
-                    for entry in entries
-                    if entry.is_dir() and os.path.isfile(os.path.join(entry.path, SKILL_FILE))
-                )
-    except OSError:
-        if not os.path.isdir(root):
-            return None
-    return frozenset(labels)
+            held = best.get(label)
+            if held is None or tier < held[0]:
+                held = best[label] = (tier, {})
+            elif tier > held[0]:
+                continue
+            held[1].setdefault(os.path.realpath(directory / SKILL_FILE), str(root))
+    return {label: sorted(set(best[label][1].values())) if label in best else [] for label in wanted}
 
 
-def skill_label_holders(labels: Iterable[str], roots: Sequence[str | Path]) -> dict[str, int]:
-    """How many of `roots` hold each label.
-
-    Hermes loads a bare name only when exactly one directory of the lowest
-    tier that holds it does. Every external directory is the same tier, and
-    two copies in two directories are refused as ambiguous even when they
-    are byte-identical (`agent/skill_utils.py` `pick_skill_candidate`). So 1
-    is loadable, 0 is not found, and 2 or more is refused.
-    """
-    held = [skill_labels_under(root) or frozenset() for root in roots]
-    return {label: sum(label in names for names in held) for label in labels}
-
-
-def hermes_external_skill_roots() -> list[Path] | None:
-    """The external skill directories this Hermes process resolved, from its own cache; `None` outside Hermes.
+def hermes_skill_search_roots() -> list[tuple[int, Path]] | None:
+    """The skill directories this Hermes process searches, by tier, from its own cache; `None` outside Hermes.
 
     The plugin runs inside Hermes, so this reads the module `skill_view`
-    reads. It is already loaded, and nothing is imported. Its cache is keyed
-    on the `config.yaml` signature and keeps a resolved path after the
-    directory behind it is deleted, which is the state that hid every OMH
-    skill from 30 Oct. A Hermes without the reader, or one whose reader
-    raises, gives `None`, and the caller keeps the installed set as it was.
+    reads. It is already loaded, and nothing is imported. Its external
+    directories are cached on the `config.yaml` signature, and a cached path
+    is kept after the directory behind it is deleted, which is the state
+    that hid every OMH skill from 30 Oct. A Hermes without either reader
+    gives `None`, and so does one whose reader raises, whatever it raises:
+    this runs inside `pre_llm_call`, and the caller then keeps the installed
+    set, which is what the hint named before this check existed.
     """
     module = sys.modules.get(HERMES_SKILL_UTILS_MODULE)
-    read = getattr(module, HERMES_EXTERNAL_DIRS_READER, None)
-    if not callable(read):
-        return None
+    tiered = getattr(module, HERMES_SEARCH_ROOTS_READER, None)
+    external = getattr(module, HERMES_EXTERNAL_DIRS_READER, None)
     try:
-        roots = read()
-    except (OSError, ValueError, TypeError, AttributeError, RuntimeError):
+        if callable(tiered):
+            return [(int(tier), Path(root)) for tier, root in tiered()]
+        if callable(external):
+            return [(TIER_EXTERNAL, Path(root)) for root in external()]
+    except Exception:  # noqa: BLE001 -- classified in tests/test_broad_exception_policy.py
         return None
-    if not isinstance(roots, list):
-        return None
-    return [Path(root) for root in roots if isinstance(root, (str, os.PathLike))]
+    return None
 
 
-def _root_signature(root: Path) -> tuple[object, ...]:
+def _root_signature(tier: int, root: Path) -> tuple[object, ...]:
     try:
         stat = root.stat()
     except OSError:
-        return (str(root),)
-    return (str(root), stat.st_ino, stat.st_mtime_ns)
+        return (tier, str(root))
+    return (tier, str(root), stat.st_ino, stat.st_mtime_ns)
 
 
 def hermes_loadable_skill_names(omh_home: str | Path) -> frozenset[str] | None:
     """`installed_skill_names`, cut to the skills Hermes can load by name in this process.
 
-    Whenever Hermes' resolution cannot be read (`hermes_external_skill_roots`
+    Whenever Hermes' resolution cannot be read (`hermes_skill_search_roots`
     is `None`), this is the installed set unchanged, so outside Hermes and on
     a healthy install the hint renders what it rendered before. A record
     with no path cannot be checked and is kept.
 
-    Cached per process on the manifest's key and each root's path, inode and
-    mtime. Hermes' cached list changes only when `config.yaml` does, and a
-    generation that is collected or replaced changes its root's stat, so a
-    turn costs one `stat` per root. A skill removed from inside a root that
-    otherwise stays is the doctor's `route_hint_skills` finding.
+    Cached per process on the manifest's key and each root's tier, path,
+    inode and mtime. Hermes' cached list changes only when `config.yaml`
+    does, and a generation that is collected or replaced changes its root's
+    stat, so a turn costs one `stat` per root. A skill removed from inside a
+    root that otherwise stays is the doctor's `route_hint_skills` finding.
     """
     global _loadable_cache
     read = _manifest(omh_home)
     if read is None or read[1] is None:
         return None
-    roots = hermes_external_skill_roots()
+    roots = hermes_skill_search_roots()
     if roots is None:
         return read[1]
-    key = (read[0], tuple(_root_signature(root) for root in roots))
+    key = (read[0], tuple(_root_signature(tier, root) for tier, root in roots))
     cached = _loadable_cache
     if cached is not None and cached[0] == key:
         return cached[1]
     records = read[2]
-    holders = skill_label_holders({label for _, label in records if label}, roots)
+    copies = skill_label_copies({label for _, label in records if label}, roots)
     loadable = frozenset(
         alias
         for name, label in records
-        if not label or holders[label] == 1
+        if not label or len(copies[label]) == 1
         for alias in (name, label)
         if alias
     )
@@ -247,14 +244,18 @@ def reset_installed_skill_cache() -> None:
 
 __all__ = [
     "HERMES_EXTERNAL_DIRS_READER",
+    "HERMES_SEARCH_ROOTS_READER",
     "HERMES_SKILL_UTILS_MODULE",
     "MANIFEST_NAME",
-    "hermes_external_skill_roots",
+    "TIER_CREATE_DIR",
+    "TIER_EXTERNAL",
+    "TIER_LOCAL",
+    "TIER_PROJECT",
     "hermes_loadable_skill_names",
+    "hermes_skill_search_roots",
     "installed_skill_labels",
     "installed_skill_names",
     "reset_installed_skill_cache",
-    "skill_label_holders",
-    "skill_labels_under",
+    "skill_label_copies",
     "skill_not_installed",
 ]

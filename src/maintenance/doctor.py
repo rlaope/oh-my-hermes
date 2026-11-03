@@ -67,9 +67,16 @@ from ..paths import (
     managed_current_workflow_pack_dir,
 )
 from ..plugin_bundle.omh import runtime_paths
-from ..plugin_bundle.omh.installed_skills import installed_skill_labels
+from ..plugin_bundle.omh.installed_skills import (
+    TIER_CREATE_DIR,
+    TIER_EXTERNAL,
+    TIER_LOCAL,
+    installed_skill_labels,
+    skill_label_copies,
+)
 from ..plugin_bundle.omh.installed_skills import installed_skill_names as hint_installed_skill_names
-from ..plugin_bundle.omh.installed_skills import skill_label_holders, skill_not_installed
+from ..plugin_bundle.omh.installed_skills import skill_not_installed
+from ..plugin_bundle.omh.skill_ownership import configured_create_dir
 from ..plugin_bundle.omh.memory_dreaming import read_dreaming_state, read_latest_consolidation
 from ..workflows.memory import (
     _OPEN_MAX_DAYS,
@@ -283,7 +290,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.append(_hermes_skill_edits_check(hermes_edits, ledger_writes, ledger_unread))
     checks.append(Check("skills_dir", paths.skills_dir.exists(), f"{paths.skills_dir}"))
     checks.append(_route_hint_skills_check(paths))
-    checks.append(_hermes_skill_visibility_check(paths))
+    checks.extend(_hermes_skill_visibility_checks(paths))
     runtime_writable, runtime_access = _dir_write_access(paths.runtime_dir, state_write=state_write)
     checks.append(
         Check("runtime_artifacts", runtime_writable, f"{paths.runtime_dir} {runtime_access}", observed=state_write)
@@ -2982,60 +2989,105 @@ def _route_hint_skills_check(paths: OmhPaths) -> Check:
     )
 
 
-def _hermes_skill_visibility_check(paths: OmhPaths) -> Check:
-    """Can Hermes load each installed OMH skill by name, as its config resolves them?
+def _hermes_skill_visibility_checks(paths: OmhPaths) -> list[Check]:
+    """Can Hermes load each installed OMH skill by name, as each home's config resolves them?
 
     `route_hint_skills` compares the manifest with the files on disk; this
-    compares it with what Hermes reads. Each `skills.external_dirs` entry is
-    anchored and resolved the way Hermes resolves it (a `current` pointer to
-    the generation it names), and every manifest label is counted across the
-    directories that exist (`skill_label_holders`). Two findings Hermes
-    reaches by different roads are kept apart, because they have different
-    repairs. Ambiguous: two directories hold the same skill, as a stale
-    generation pack beside the pointer did on 27-28 Oct 2026, and Hermes
-    refuses the name in both. Dangling: an entry resolves to a path that is
-    gone, as the collected generation was from 30 Oct, and Hermes lists
-    nothing from it.
+    compares it with what Hermes reads. A home is judged only when it
+    registers an OMH-managed skills directory (`registered_managed_entries`,
+    a dangling one included); one that never did is the registration
+    check's finding. Its directories are taken in Hermes' precedence: the
+    profile's own `skills`, then `skills.create_dir`, then each
+    `skills.external_dirs` entry anchored and resolved as Hermes resolves it
+    (a `current` pointer to the generation it names). Trusted project
+    directories depend on the session's working directory and are not read.
+    Every manifest label is counted the way Hermes picks
+    (`skill_label_copies`): a higher tier wins outright, and a symlinked
+    copy is one copy.
 
-    Read-only, and it reads the config file, not a running gateway: Hermes
-    caches the resolved path until `config.yaml` changes, so a gateway
-    started before a repair can still hold the old one. The launch card says
-    that one, from the count the gateway itself lists. A warning with
-    `ok=True`, like `external_dir_ambiguity`: the hint stops naming such
-    skills on its own, so this must not flip the exit code.
+    Two findings Hermes reaches by different roads are kept apart, because
+    they have different repairs. Ambiguous: two directories of one tier hold
+    the same skill, as a stale generation pack beside the pointer did on
+    27-28 Oct 2026, and Hermes refuses the name in both. Dangling: an OMH
+    entry resolves to a path that is gone, as the collected generation was
+    from 30 Oct, and Hermes lists nothing from it.
+
+    The primary home always has a row; each bot profile gets its own
+    `hermes_skill_visibility:<profile>` row when it has a finding, the way
+    `external_dir_ambiguity` walks them. Read-only, and it reads
+    `config.yaml`, not a running gateway: Hermes caches the resolved path
+    until `config.yaml` changes, so a gateway started before a repair can
+    still hold the old one, and the launch card is what says that. A
+    warning with `ok=True`, like `external_dir_ambiguity`: the hint stops
+    naming such skills on its own, so this must not flip the exit code.
     """
     name = "hermes_skill_visibility"
     labels = installed_skill_labels(paths.omh_home)
     if labels is None:
-        return Check(name, True, "no install manifest records a skill; nothing to compare with Hermes", observed=False)
+        return [Check(name, True, "no install manifest records a skill; nothing to compare with Hermes", observed=False)]
+    current = managed_current_workflow_pack_dir()
+    checks = [
+        _hermes_home_skill_visibility(
+            name, paths, labels, current, registration_home_label(paths.hermes_config_path)
+        )
+    ]
+    for profile, profile_dir in hermes_profile_dirs(paths.hermes_home):
+        profile_paths = _profile_paths(paths, profile_dir)
+        check = _hermes_home_skill_visibility(
+            f"{name}:{profile}",
+            profile_paths,
+            labels,
+            current,
+            registration_home_label(profile_paths.hermes_config_path, profile=profile),
+        )
+        if check.severity == "warning":
+            checks.append(check)
+    return checks
+
+
+def _hermes_home_skill_visibility(
+    name: str, paths: OmhPaths, labels: frozenset[str], current: Path | None, home: str
+) -> Check:
     try:
         config_text = read_config(paths.hermes_config_path)
     except (OSError, UnicodeDecodeError) as exc:
-        return Check(name, True, f"{paths.hermes_config_path} was not read: {exc}", observed=False)
-    entries = external_dirs(config_text)
-    if not entries:
+        return Check(name, True, f"{home} was not read: {exc}", observed=False)
+    omh_entries = registered_managed_entries(
+        config_text,
+        managed_skill_dir_candidates(paths, current=current),
+        hermes_home=paths.hermes_home,
+        current=current,
+        present_only=False,
+    )
+    if not omh_entries:
+        return Check(
+            name, True, f"{home} registers no OMH skills directory; the registration check reports that", observed=False
+        )
+    local = paths.hermes_home / "skills"
+    roots: list[tuple[int, str]] = [(TIER_LOCAL, str(local))]
+    create_dir, _readable = configured_create_dir(paths.hermes_home)
+    if create_dir is not None and create_dir.is_dir():
+        roots.append((TIER_CREATE_DIR, str(create_dir)))
+    externals: list[str] = []
+    for entry in external_dirs(config_text):
+        real = os.path.realpath(anchored_external_dir(entry, paths.hermes_home))
+        if real != os.path.realpath(local) and real not in externals and os.path.isdir(real):
+            externals.append(real)
+    roots += [(TIER_EXTERNAL, real) for real in externals]
+    omh_reals = {entry: os.path.realpath(anchored_external_dir(entry, paths.hermes_home)) for entry in omh_entries}
+    dangling = [
+        entry if real == entry else f"{entry} -> {real}" for entry, real in omh_reals.items() if not os.path.isdir(real)
+    ]
+    copies = skill_label_copies(labels, roots)
+    ambiguous = sorted(label for label, held in copies.items() if len(held) > 1)
+    missing = sorted(label for label, held in copies.items() if not held)
+    if not ambiguous and not missing:
         return Check(
             name,
             True,
-            f"{paths.hermes_config_path} names no skills.external_dirs entry; the registration check reports that",
-            observed=False,
+            f"Hermes can load all {len(labels)} installed OMH skill(s) by name as {home} resolves them. "
+            "This reads config.yaml only: a Hermes gateway started earlier may still hold an older path.",
         )
-    local = os.path.realpath(paths.hermes_home / "skills")
-    roots: list[str] = []
-    dangling: list[str] = []
-    for entry in entries:
-        real = os.path.realpath(anchored_external_dir(entry, paths.hermes_home))
-        if real == local or real in roots:
-            continue
-        if os.path.isdir(real):
-            roots.append(real)
-        else:
-            dangling.append(entry if real == entry else f"{entry} -> {real}")
-    holders = skill_label_holders(labels, roots)
-    ambiguous = sorted(label for label, count in holders.items() if count > 1)
-    missing = sorted(label for label, count in holders.items() if count == 0)
-    if not ambiguous and not missing:
-        return Check(name, True, f"Hermes can load all {len(labels)} installed OMH skill(s) by name")
 
     def listed(names: list[str]) -> str:
         return ", ".join(names[:5]) + (", ..." if len(names) > 5 else "")
@@ -3043,17 +3095,36 @@ def _hermes_skill_visibility_check(paths: OmhPaths) -> Check:
     parts: list[str] = []
     actions: list[str] = []
     if ambiguous:
+        colliding = sorted({root for label in ambiguous for root in copies[label]})
+        foreign = [root for root in colliding if root not in omh_reals.values()]
         parts.append(
-            f"{len(ambiguous)} sit in two or more of its skills directories ({', '.join(roots)}) and Hermes "
-            f"refuses a name two directories of one tier hold: {listed(ambiguous)}"
+            f"{len(ambiguous)} sit in two or more skills directories of one tier ({', '.join(colliding)}) and "
+            f"Hermes refuses a name two directories of one tier hold: {listed(ambiguous)}"
         )
-        actions.append(
-            f"Keep one OMH skills directory under skills.external_dirs in {paths.hermes_config_path} and "
-            "remove the others"
-        )
+        if foreign:
+            actions.append(
+                f"Rename or remove the copies of these skills in {', '.join(foreign)}, which OMH does not manage"
+            )
+        else:
+            pointer = external_dir_key(current) if current is not None else None
+            keep = next(
+                (
+                    entry
+                    for entry in omh_entries
+                    if external_dir_key(anchored_external_dir(entry, paths.hermes_home)) == pointer
+                ),
+                None,
+            )
+            actions.append(
+                f"Keep only {keep} of the OMH skills directories under skills.external_dirs in "
+                f"{paths.hermes_config_path} and remove {', '.join(entry for entry in omh_entries if entry != keep)}"
+                if keep is not None
+                else f"Keep one of the OMH skills directories under skills.external_dirs in {paths.hermes_config_path} "
+                f"({', '.join(omh_entries)}) and remove the others"
+            )
     if missing:
         where = (
-            f"skills.external_dirs names {len(dangling)} path(s) that do not exist ({', '.join(dangling)})"
+            f"skills.external_dirs names {len(dangling)} OMH path(s) that do not exist ({', '.join(dangling)})"
             if dangling
             else "no directory Hermes reads holds them"
         )
@@ -3061,17 +3132,25 @@ def _hermes_skill_visibility_check(paths: OmhPaths) -> Check:
         actions.append(
             "Point the missing entry at an existing OMH skills directory"
             if dangling
-            else f"Register OMH's skills directory under skills.external_dirs in {paths.hermes_config_path}"
+            else f"Point the OMH entry under skills.external_dirs in {paths.hermes_config_path} at a directory "
+            "that holds the installed skills"
         )
     visible = len(labels) - len(ambiguous) - len(missing)
     return Check(
         name,
         True,
-        f"Hermes can load {visible} of {len(labels)} installed OMH skill(s) by name; " + "; ".join(parts),
+        f"Hermes can load {visible} of {len(labels)} installed OMH skill(s) by name as {home} resolves them; "
+        + "; ".join(parts),
         severity="warning",
         remediation="; ".join(actions) + ", then restart the Hermes gateway so it resolves the directories again.",
         next_action=actions[0] + ", then restart the Hermes gateway.",
-        detail={"ambiguous": ambiguous, "not_found": missing, "dangling_entries": dangling, "directories": roots},
+        detail={
+            "ambiguous": ambiguous,
+            "not_found": missing,
+            "dangling_entries": dangling,
+            "omh_entries": omh_entries,
+            "directories": [root for _tier, root in roots],
+        },
     )
 
 

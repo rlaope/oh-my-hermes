@@ -884,6 +884,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "Handlers must not raise into the host: an unexpected failure is `ok: false`, error "
         "`unexpected_error` with the exception class, never a diagnostics list or a file reported checked.",
     ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/installed_skills.py",
+        "hermes_skill_search_roots",
+        INTENTIONAL,
+        "Hermes' own skill-root reader runs inside `pre_llm_call` and must not raise into the host; a failure "
+        "means 'resolution unknown' and the hint keeps the manifest's installed set, which is exactly what it "
+        "named before this check existed. The same question is answered independently, and surfaced, by "
+        "the `hermes_skill_visibility` doctor row and the launch card's count warning.",
+    ),
 )
 
 # Ruff reports one hit per handler; the inventory is keyed per enclosing
@@ -975,8 +984,11 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 99 -> 100 / 90 -> 91: `memory_provider._work_state_facts`, the unfinished-work
 # facts at compaction (a fault is recorded as a write failure and costs only the
 # facts, never the memory blocks).
-EXPECTED_HANDLER_COUNT = 100
-EXPECTED_ANCHOR_COUNT = 91
+# 100 -> 101 / 91 -> 92: `installed_skills.hermes_skill_search_roots`, Hermes' own
+# skill-root reader inside `pre_llm_call` (a failure keeps the manifest's
+# installed set, what the hint named before the check, never a raise into the host).
+EXPECTED_HANDLER_COUNT = 101
+EXPECTED_ANCHOR_COUNT = 92
 
 
 class DerivedSite(NamedTuple):

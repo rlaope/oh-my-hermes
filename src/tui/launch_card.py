@@ -147,29 +147,51 @@ def skill_rows(skills: Mapping[str, Sequence[str]], members=family_members) -> S
     return Skills(groups, len(omh), categories, len([name for name in installed if name not in omh]))
 
 
-def installed_omh_count(omh_home: Path) -> int | None:
-    """How many skills OMH's install manifest records, the plugin's own reader; None when it records none."""
-    from ..plugin_bundle.omh.installed_skills import installed_skill_labels  # only once skills arrive
+def installed_omh_count(omh_home: Path, hermes_home: Path | None) -> int | None:
+    """How many skills OMH's install manifest records, for a Hermes home that registers them; None otherwise.
+
+    A home whose `skills.external_dirs` names no OMH-managed directory, not
+    even a dangling one, never asked for OMH's skills, so a low count there
+    is not a stale path and nothing is weighed (`visibility_warning`). An
+    unknown home is not weighed either. A config that cannot be read is
+    weighed, as the registration it may hold is the likelier case.
+    """
+    from ..install.config_adapter import read_config  # only once skills arrive, never on the import path
+    from ..install.skill_registration import managed_skill_dir_candidates, registered_managed_entries
+    from ..plugin_bundle.omh.installed_skills import installed_skill_labels
+    from ..system.paths import OmhPaths, managed_current_workflow_pack_dir
 
     labels = installed_skill_labels(omh_home)
-    return None if labels is None else len(labels)
+    if labels is None or hermes_home is None:
+        return None
+    try:
+        config_text = read_config(hermes_home / "config.yaml")
+    except (OSError, UnicodeDecodeError):
+        return len(labels)
+    current = managed_current_workflow_pack_dir()
+    candidates = managed_skill_dir_candidates(OmhPaths(omh_home=omh_home, hermes_home=hermes_home), current=current)
+    registered = registered_managed_entries(config_text, candidates, hermes_home=hermes_home, current=current,
+                                            present_only=False)
+    return len(labels) if registered else None
 
 
-def visibility_warning(s: Skills | None, p: Paint) -> Line:
-    """A row saying Hermes lists far fewer OMH skills than are installed, and what to do; () otherwise.
+def visibility_warning(s: Skills | None, p: Paint) -> list[Line]:
+    """Two short rows saying Hermes sees far fewer OMH skills than are installed, and what to do; [] otherwise.
 
     Only for this session's own list, never a last-known one: the count is
-    what the gateway resolved when it built the session, so a low one means
-    the gateway holds a skills path that no longer serves them, or one its
-    config names twice. A restart makes it resolve again; a session begun
-    while they were missing keeps that index until `/new`. `omh doctor`
-    tells the two causes apart.
+    what the gateway resolved when it built the session, so a low one most
+    likely means the gateway holds a skills path that no longer serves them.
+    A restart makes it resolve again; a session begun while they were
+    missing keeps that index until `/new`. `omh doctor` is not offered: it
+    reads `config.yaml` afresh and reports healthy in exactly this case.
+    The counts and the remedy are separate rows, each short enough that a
+    two-column look keeps "restart" and "/new" whole.
     """
     if s is None or s.last_known or not s.omh_installed or s.omh >= s.omh_installed * VISIBLE_SHARE_FLOOR:
-        return ()
-    return (Span(f"Hermes lists {s.omh} of {s.omh_installed} installed OMH skills", p.theme.warn),
-            Span(" · ", p.theme.dim), Span("its skills path is likely stale: restart the gateway, or ", p.theme.muted),
-            Span("/new", p.theme.slash), Span(" for an older session · omh doctor says why", p.theme.muted))
+        return []
+    return [(Span(f"Hermes sees only {s.omh} of {s.omh_installed} OMH skills: stale path", p.theme.warn),),
+            (Span("restart the gateway, or ", p.theme.muted), Span("/new", p.theme.slash),
+             Span(" for an older session", p.theme.muted))]
 
 
 def snapshot_path(omh_home: Path) -> Path:
@@ -374,8 +396,7 @@ def _kept(s: Skills | None, drop: int) -> tuple[tuple[str, tuple[str, ...]], ...
 def _skills_body(s: Skills | None, width: int, per_group: int, drop: int, p: Paint) -> list[Line]:
     if s is None:
         return []
-    warning = visibility_warning(s, p)
-    rows = [_pad(warning, width)] if warning else []
+    rows = [_pad(row, width) for row in visibility_warning(s, p)]
     rows += grid(_kept(s, drop), width, per_group, p)
     return rows + (hermes_rows(s, width, p) if drop == 0 else [])
 

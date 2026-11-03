@@ -3436,7 +3436,8 @@ class App(ModesMixin, AgentViewMixin):
         rows = skill_rows({key: value for key, value in skills.items() if isinstance(value, list)})
         omh_home = self._omh_home()
         if omh_home is not None:  # what the card weighs Hermes' OMH count against (`visibility_warning`)
-            rows = replace(rows, omh_installed=installed_omh_count(omh_home))
+            hermes_home = self.history_file.parent if self.history_file is not None else None  # this profile's
+            rows = replace(rows, omh_installed=installed_omh_count(omh_home, hermes_home))
         home = self._snapshot_home()
         # What the next launch draws first, kept only when this info names the profile the launch opened on.
         same_profile = info.get("profile_name") == self.launch_profile
