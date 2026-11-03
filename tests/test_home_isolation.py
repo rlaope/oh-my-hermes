@@ -34,7 +34,7 @@ class HomeIsolationTests(unittest.TestCase):
     """
 
     def test_home_env_overrides_are_set_for_the_test_process(self) -> None:
-        for name in ("OMH_HOME", "HERMES_HOME"):
+        for name in ("OMH_HOME", "HERMES_HOME", "OMH_AGENT_SKILLS_HOME"):
             with self.subTest(env=name):
                 value = os.environ.get(name, "")
                 self.assertTrue(value, f"{name} must be set by tests/_local_package.py")

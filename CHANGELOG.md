@@ -4,6 +4,153 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Memory recall shows what the turn asked for, once per conversation.**
+  A message with nothing to search for (an empty turn, "야") used to get every
+  saved memory in full; it now gets pinned ones in full and the rest as the
+  one-line list of names a non-matching message already gets. A
+  background-process or delegation notice that nobody typed gets nothing at
+  all. A memory the conversation already holds is not sent again until it
+  changes or a compaction drops it, and a list of names it was already shown
+  is not repeated. The recall line counts only what is new, so a turn that
+  adds nothing posts no line. `omh_remember` and `omh_memory` recall return
+  `nothing_found` for a query that matches nothing instead of unrelated
+  memories, and look up a memory by the id or subject a list names. Coding
+  handoffs and `omh memory recall` are unchanged. Replaying stored turns on
+  read-only copies of the owner's stores, the largest per-session memory text
+  went from 111,665 to 6,649 characters on the console profile, repeats from
+  91% to 0%, and messenger recall lines from 447 to 61.
+- **Turns that only read, and a session's first turns, are faster.** The
+  round-end consistency check indexed every Python file in the workspace at a
+  turn's first tool call, which cost about 110-175 ms in a checkout of a few
+  thousand files even when the turn only read files or searched. The index is
+  now taken at the turn's first call that can change a file (an edit, a
+  command, a delegated child, any tool that is not a read), still before that
+  call runs, so a read-only turn pays nothing and the check decides as it did
+  for the turn's own edits; a file changed by something else (an editor, a
+  background process) before the turn's first non-read call is now part of
+  the baseline. The capability families and the router, which a session's first
+  user turns imported on the spot (about 60 ms on the first turn and 70-100 ms
+  on the next new kind of request), are now imported on a background thread
+  when the plugin loads, so after a normal pause before the first message the
+  first turn takes about 25-40 ms and the second about 2 ms. Plugin load time is
+  unchanged. A first message sent the moment the plugin loads waits for the
+  remaining imports.
+
+- **One broken part of the OMH TUI's screen no longer ends the session.** If
+  the info line, the live transcript, a picker, the plan or HUD panel, the
+  agent view or the sticky prompt fails to draw, that part becomes one row in
+  the warning colour that names it, and the rest of the screen and your keys
+  keep working. Its traceback is kept once, and `/logs` shows it after the
+  gateway's lines. While the TUI runs, a background thread's traceback, a
+  Python warning or a stray print now goes to the same in-memory log instead
+  of landing on the screen and shifting every later frame. A crash that does
+  end the TUI still prints its traceback once your terminal is restored.
+
+- **OMH notices when Hermes cannot load its skills.** From 27 Oct to 2 Nov
+  the skills were installed but Hermes could not load them by name: a stale
+  generation directory registered beside the pointer made every name
+  ambiguous, and then a cached path to a deleted generation left none. The
+  launch card still said "skills 89 installed", and the skill suggestion
+  kept telling the model to load skills that came back "not found". The
+  suggestion and the route hint now name only skills Hermes resolves to one
+  copy, read from the skill directories Hermes itself cached, so they go
+  quiet instead of steering into a failed load. When a profile that
+  registers OMH's skills sees fewer than half of them, the launch card says
+  how many Hermes sees and suggests a gateway restart, or `/new` for an
+  older session. `omh doctor` has a new `hermes_skill_visibility` row, per
+  profile, that reports an ambiguous registration and a missing directory
+  separately. A healthy install shows the same suggestion and the same card
+  as before.
+
+- **The OMH recall line stays off Discord and Slack, and recall can be turned
+  off.** `🧠 OMH — recalled N memories` now shows on the CLI, TUI and Desktop
+  only; on a messenger the memory is still used, with no line posted. The new
+  profile setting `recall_line` (`console` by default, `all`, `off`) chooses
+  where it shows, and `recall_mode` (`auto` by default, `on_demand`, `off`)
+  chooses whether memory is recalled every turn, only when the model asks, or
+  not at all. Set them with `omh memory recall-line` and `omh memory
+  recall-mode`; `omh memory status` shows both. A `memory_mode` of `off`, or a
+  disabled `retain_knowledge` family, now actually stops recall: before, the
+  provider and the recall tool kept serving records under it. It also stops
+  the consolidation brief and the save reminder, which asked for saves that
+  `off` refuses.
+- **The OMH TUI's first frame no longer waits on the skill catalog.** When the
+  shared gateway names every skill in its first answer, the launch card used to
+  import the whole skill catalog to label them before the first frame was
+  drawn; it now takes the labels from a small module of their own. The card is
+  drawn the same, byte for byte. In a clean process, starting up against a
+  shared gateway went from about 55 ms to 7 ms and imports 24 modules instead
+  of 114. On a stdio gateway, the first regrouping of the skills when they
+  arrive went from about 50 ms to under 1 ms.
+
+- **The memory consolidation brief no longer rides almost every console turn.** A session that ended with one to
+  four unconsolidated turns used to raise a brief at its end and again as a recovery at the next start, so 213 of 216
+  console turns on one machine carried the capture request (153 briefs came from session-start recovery), and every
+  capture grew the store that recall draws from. The session-ending reasons now need the same five turns as the turn
+  interval, and a given brief is shown once per session instead of on every later turn. Headroom, duplicate and
+  expiring-record reasons keep their own thresholds, `dreaming_mode` is unchanged, and the model still captures
+  through its own tool with no approve step.
+
+- **The `omh_recommend` tool result is about 12% smaller.** The handoff policy
+  used to ride on every recommended skill, and one policy can run past 1 KB.
+  It now stays on the top recommendation and on the skills the route selects,
+  which are the skills the agent acts on. When the top row is a router
+  (`meta-router`, `oh-my-hermes`), the first concrete skill below it keeps
+  its policy too. Every other row leaves it out, and the result says that
+  `omh_capabilities` `inspect` with section `skills` returns it for any skill.
+  The ranking, the top skill, the route and every other field are unchanged.
+  Over the routing corpus the mean result drops from 6,794 to 5,985 bytes.
+
+- **A multi-line paste no longer sends half a prompt where the terminal strips
+  paste markers, and arrows hold together over SSH and WSL.** When tmux, SSH
+  or the terminal itself drops bracketed-paste markers, the OMH TUI now reads
+  a burst of pasted lines as one paste: the lines land in the composer (as a
+  chip when the paste is long) instead of the first line break submitting the
+  first line. Over SSH the burst may arrive in chunks up to 100 ms apart. An
+  Enter pressed on its own still sends at once, and so does an Enter followed
+  by the next key typed. Two or more prompts typed ahead into one read while
+  the TUI was stalled now arrive as a draft in the composer instead of being
+  sent, since those bytes are the same as a paste. Over SSH and in WSL a lone Esc
+  now waits 100 ms instead of 40 ms for the rest of its sequence, so an arrow
+  key split by a slow link is the arrow and not Esc and two letters, which
+  could clear the draft or open rewind. Locally nothing changes.
+
+- **Typing in a long message no longer slows down.** The input box measured the
+  whole text again on every key, so a key cost about 5 ms at 5,000 characters
+  and about 17 ms at 20,000, longer than a frame. It now measures only the
+  words and lines an edit touched, which brings the 20,000-character key to
+  about 5 ms and the 5,000-character one to under 2 ms. This holds for text
+  with spaces between words (English, Korean and so on); a long line of
+  unspaced or Cyrillic text is still measured whole. What is drawn, the
+  caret, wrapping, wide characters, paste chips and image tokens are unchanged.
+
+- **Running work survives a context compaction.** When Hermes compacts a
+  session, OMH now hands its summarizer the work this conversation still has
+  open, stated as facts: each unfinished dag-ulw run (its goal, run state,
+  nodes done, and the open nodes with their states) and the session's open
+  `omh_todo` plan items. The summary that replaces the old turns then still
+  knows about the run and the plan, so the model picks them up instead of
+  re-deriving them from scratch. It is bounded (at most 3 runs, 6 nodes a run,
+  10 plan items, 1,500 characters in all), adds nothing to a session with no
+  open work, and leaves a plan written by Hermes' own `todo_list` to Hermes,
+  which already carries that list across compaction.
+
+- **A redraw at an unchanged width no longer stalls the TUI.** Switching
+  tabs, Ctrl+L, `/redraw` and every other full redraw at the width the
+  session was printed at reprinted the session by wrapping every finished
+  reply's markdown and painting every row again: 119 ms for a 1,100-turn
+  session, 109 ms for a 100-turn one. A finished reply in the redraw's tail
+  now keeps its rows for the width and theme it was drawn at, and a row printed above the live
+  region keeps its bytes, so the second and later redraws take 6 to 9 ms and
+  the first after a reply streamed about half what it did. What is written is
+  unchanged, byte for byte. A redraw still erases the terminal's
+  scrollback and prints the last 3,000 rows, because a tab switch can reach
+  the TUI as one same-size signal after the terminal has already reflowed
+  its rows. The row over the rest, and the `/history` footer, now count
+  "entries" (`⋯ 2940 earlier entries`): the number counts prompts, replies,
+  tool groups, notices and done lines one each, which is not what
+  "messages" said.
+
 - **A TUI performance bench lives in the repo.** `tools/benchmarks/tui_perf.py`
   measures frame cost by transcript size, full redraw, streaming per chunk,
   keystroke cost by composer length, idle wake-ups and bytes, plugin hook
@@ -670,6 +817,43 @@ All notable changes will be documented here.
   the request verb "확인" now count as filler. Replayed over 722 Korean owner
   messages, lines naming those three skills fall from 24 to 11; each skill still
   matches its own nouns ("병렬 도구", "코덱스", "기억 점검").
+
+- **Codex fanout units get OMH's own skills, and can edit and commit inside the
+  fence.** OMH looked for Codex skills only in `~/.codex/skills`, while Codex
+  also loads `~/.agents/skills`, where `.codex/install.sh` puts OMH's pack. On
+  a Mac with six personal skills there, every Codex unit was told to start with
+  `$generate2dsprite` and `$game-video-feedback-loop` (11 of 11 units in a real
+  run, about 32k characters of unrelated skill text each). Discovery now reads
+  the repo `.agents/skills`, `$CODEX_HOME` and `~/.agents/skills` too, so the
+  same unit gets `$omh-plan`, `$omh-build-failure-triage`, `$omh-code-review`;
+  a name found in two roots is never suggested, since Codex refuses a plain
+  `$name` that matches two skills. Inside the macOS fence, zsh heredocs and `uv` now work:
+  `TMPPREFIX` and `UV_CACHE_DIR` point into the unit's scratch dir (before,
+  every `git commit -F - <<EOF` failed with "can't create temp file for here
+  document" and `uv run` could not open its cache). The fence's write
+  boundary is unchanged.
+- **A stale Codex skill pack is now reported and refreshed.** `omh update`
+  refreshes an installed `~/.agents/skills` pack in its recorded layout (it
+  never creates one), `omh doctor` warns with `omh update` when that pack is
+  stale or edited, and `omh install --target agents --scope user --status`
+  reports the pack's real state instead of `missing` when only the unused
+  `~/.claude/skills` mirror is absent.
+
+- **Memory that does not match a message is listed, not injected; a stuck run changes approach before it stops.**
+  When a chat message shares no word with any stored record, the memory pack used to serve every active
+  record in full, and Hermes frames that pack as reference data for the reply, so rules about unrelated work
+  steered it. Those records now arrive as one `<record_index>` line naming each record's subject (at most
+  eight, then `+K more`), and `omh_remember recall` reads one in full when it bears on the request. Records
+  saved in the same conversation still arrive in full, a matching message gets the same pack as before, and
+  CLI recall, `omh_memory recall` and coding handoffs are unchanged. `omh_remember save` takes `tags`, a
+  few topic words in the user's own language, so a later message in that language can match a record whose
+  summary is written in another. In dag-ulw, a node's last repair cycle is now a re-plan: its tasks carry the
+  earlier failure reasons and ask for two or three approaches that differ in kind before any edit, unless
+  every failure was an infrastructure cut. The loop stop ladder's first no-progress stop now asks for one
+  re-plan from the goal ledger (`replan_stuck_loop_once`) and resets the window; only a stop after that
+  names the blocker step. The dag-ulw run loop reference gains a "When the path is unknown" section (cheap
+  scout nodes on different hypotheses first, then `extend` with the build layer), and the interview skill
+  keeps at least one answer candidate from outside recalled memory.
 
 ## 4.0.4 - 2026-11-01
 

@@ -52,6 +52,7 @@ from .memory_recall_support import (
     _cadence_value,
     _empty_recall_pack,
     _freshness_warnings,
+    _memory_query_split,
     _memory_relevance,
     _normalize_evaluator_timestamps,
     _ranking_field,
@@ -61,6 +62,7 @@ from .memory_recall_support import (
     _recall_item,
     _record_attention_tier,
     _record_perspective_matches,
+    _record_resolution,
     _record_staleness,
     _redacted_metadata_label,
     _replay_evaluation,
@@ -125,6 +127,7 @@ def _selection_result(
     hidden_exclusions: Counter[str], *, limit: int, max_chars: int | None,
     inspection: bool, include_stale: bool, include_archived: bool,
     principal_decision: dict[str, object], audience_digest: str,
+    query_fallback: bool = True,
 ) -> MemoryRecallSelection:
     counts = hidden_exclusions.copy()
     counts.update(str(item["reason"]) for item in pack["excluded_records"])
@@ -147,6 +150,9 @@ def _selection_result(
             for key in ("binding_state", "principal_ref", "actor_kind", "shared_surface", "context_digest")
         },
         "audience_policy_digest": audience_digest,
+        # Replaces the fallback's rule name only when it is off, so every
+        # configuration built with the fallback keeps its earlier identity.
+        **({"query_fallback": "off"} if not query_fallback else {}),
     }
     configuration_id = hashlib.sha256(json.dumps(configuration, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return MemoryRecallSelection(
@@ -218,6 +224,28 @@ def effective_recall_configuration() -> dict[str, object]:
         "subject_collapse": "newest_non_retired_per_scope_subject/v2",
         "subject_score_transfer": "kept_record_shares_a_query_term/v1",
     }
+
+
+def recall_revision(record: Mapping[str, Any]) -> str:
+    """What a record says as served: its stored revision and the text a pack renders.
+
+    The live provider skips a record it already put into the conversation
+    (`session_served`) until this changes. The stored `revision` moves when the
+    operator lifecycle rewrites a record; the summary, type and open/settled
+    state (`staleness.resolution`, where the store keeps it) are what the
+    rendered element carries, so an edit that leaves the revision alone still
+    counts. Confirming an open record settles it, so it is served once more,
+    now without its open marker; confirming a settled one changes nothing.
+    """
+    revision = record.get("revision")
+    revision = revision if isinstance(revision, int) and not isinstance(revision, bool) else 0
+    staleness = record.get("staleness")
+    resolution = _record_resolution(staleness if isinstance(staleness, Mapping) else {})
+    rendered = json.dumps(
+        [str(record.get("summary", "") or ""), str(record.get("record_type", "") or ""), resolution],
+        ensure_ascii=False,
+    )
+    return f"{revision}:{hashlib.sha256(rendered.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _subject_group(record: dict[str, Any]) -> tuple[str, str, str] | None:
@@ -372,12 +400,27 @@ def select_memory_recall(
     query_intent: str | None = None,
     principal_context: dict[str, object] | None = None,
     shared_surface: bool = False,
+    query_fallback: bool = True,
+    session_served: Mapping[str, str] | None = None,
 ) -> MemoryRecallSelection:
     """One read-only eligibility/ranking/budget contract for every recall surface.
 
     Delivery requires resolved explicit scopes. Inspection is an explicit,
     read-only compatibility affordance and must never be served as live recall.
     Foreign IDs/content are omitted; only aggregate exclusion counts survive.
+
+    ``query_fallback`` False is the live per-turn and tool recall contract: a
+    query with no indexable terms (or none at all) serves pinned records only,
+    and a query that matches nothing serves no active-tier fallback. Tool
+    recall uses it; the live turn, handoffs, the CLI and inspection keep the
+    default. ``session_served`` maps the records a conversation already holds
+    to their `recall_revision` (shown in full) or ``listed:<revision>`` (named
+    in an earlier record index). A record still at that revision is excluded
+    as `served_this_session`, and a listed one as `listed_this_session` when
+    the query did not answer the pack; a query that does answer it still gets
+    the record in full. For an answered query the exclusion runs before the
+    budget cut, so the slot goes to the next match; for an unanswered one
+    after it, so the list never grows into further records.
     """
     policy = dict(policy) if policy is not None else {"recall_enabled": True, **_MEMORY_CADENCE_DEFAULTS}
     now = now if now is not None else datetime.now(timezone.utc)
@@ -452,6 +495,7 @@ def select_memory_recall(
             include_archived=include_archived,
             principal_decision={**principal_metadata, "allowed_count": 0, "denied_count": 0, "reason_counts": {}},
             audience_digest=hashlib.sha256(b"").hexdigest(),
+            query_fallback=query_fallback,
         )
     pins = set(pins or ())
     usage = usage or {}
@@ -600,6 +644,11 @@ def select_memory_recall(
     def overlaps(index: int) -> bool:
         return scores[index] > 0 and (unstemmed[index] or unstemmed_somewhere)
 
+    # No query, or one with no indexable terms ("야", an empty turn), scores
+    # every record 1 above, so it serves the whole active and reference set
+    # unranked: tool recall cuts it to pins, the live turn lists it by name.
+    unqueried = not _memory_query_split(query)[0]
+
     for kind, value in steps:
         if kind == "excluded":
             excluded.append(value)
@@ -622,6 +671,9 @@ def select_memory_recall(
             continue
         # A pinned anchor is always in context: it skips only the
         # no_query_overlap cut, never an eligibility check above.
+        if not query_fallback and unqueried and str(record.get("record_id", "")) not in pins:
+            excluded.append(_recall_exclusion(record, evaluation, staleness=staleness, reason="no_query_overlap"))
+            continue
         if query and not overlaps(value) and str(record.get("record_id", "")) not in pins:
             if common_only[value]:
                 # It met the query only on words most candidates hold
@@ -655,18 +707,48 @@ def select_memory_recall(
     # already scores every record 1. A record that met the query only through
     # stemming is readmitted with its score, so it leads the fallback pack;
     # every other one scores 1.
-    query_fallback: dict[str, object] | None = None
+    fallback_served: dict[str, object] | None = None
     common_overlap = common_terms_only_excluded and unstemmed_somewhere
-    if query and not included and no_overlap_active and not common_overlap:
+    if query_fallback and query and not included and no_overlap_active and not common_overlap:
         readmitted = {id(entry) for entry, *_ in no_overlap_active}
         excluded = [entry for entry in excluded if id(entry) not in readmitted]
         included = [
             _recall_item(record, score=score, staleness=staleness, evaluation=evaluation, attention_tier="active")
             for _, record, evaluation, staleness, score in no_overlap_active
         ]
-        query_fallback = {"mode": "active_tier", "reason": "no_query_overlap", "readmitted_count": len(included)}
+        fallback_served = {"mode": "active_tier", "reason": "no_query_overlap", "readmitted_count": len(included)}
     included, duplicates = _collapse_duplicate_summaries(included, pins=pins)
     excluded.extend(duplicates)
+    candidates_by_id = {str(candidate[0].get("record_id", "")): candidate for candidate in candidates}
+    # A pack the query did not answer (the active-tier fallback, or no query
+    # terms at all) is one a live turn lists by name rather than shows; the
+    # conversation's held records leave it only after the budget cut, so a
+    # held record never pulls a further one into the list.
+    unanswered = bool(fallback_served) or unqueried
+
+    def without_held(items: list[dict[str, object]]) -> list[dict[str, object]]:
+        """Drop what the conversation holds: shown at this revision, or listed by name in an unanswered pack."""
+        fresh: list[dict[str, object]] = []
+        for item in items:
+            record_id = str(item.get("record_id", ""))
+            candidate = candidates_by_id.get(record_id)
+            held = (session_served or {}).get(record_id)
+            revision = recall_revision(candidate[0]) if candidate is not None and held else ""
+            if candidate is not None and held == revision:
+                excluded.append(_recall_exclusion(candidate[0], candidate[1], staleness=candidate[2], reason="served_this_session"))
+                continue
+            if candidate is not None and unanswered and held == f"listed:{revision}" and record_id not in pins:
+                excluded.append(_recall_exclusion(candidate[0], candidate[1], staleness=candidate[2], reason="listed_this_session"))
+                continue
+            fresh.append(item)
+        return fresh
+
+    if session_served and not unanswered:
+        # After the fallback and the duplicate collapse decided what this
+        # query answers, so a record the conversation already holds is not
+        # replaced by an unrelated one, and before the budget cut, so the
+        # slot goes to the next record the query answers.
+        included = without_held(included)
     _attach_recall_ranking(
         included,
         usage,
@@ -736,7 +818,7 @@ def select_memory_recall(
             continue
         kept.append(item)
         kept_chars += summary_chars
-    included = kept
+    included = without_held(kept) if session_served and unanswered else kept
     pack = {
         "schema_version": PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION,
         "enabled": True,
@@ -749,7 +831,7 @@ def select_memory_recall(
         "query_intent": query_intent,
         # Present only when the active-tier fallback served this pack, so a
         # pack the query answered stays byte-identical to before it existed.
-        **({"query_fallback": query_fallback} if query_fallback else {}),
+        **({"query_fallback": fallback_served} if fallback_served else {}),
         "included_records": included,
         "excluded_records": excluded,
         "freshness_warnings": _freshness_warnings(included, excluded),
@@ -784,4 +866,5 @@ def select_memory_recall(
             "reason_counts": dict(sorted(principal_counts.items())),
         },
         audience_digest=audience_digest,
+        query_fallback=query_fallback,
     )

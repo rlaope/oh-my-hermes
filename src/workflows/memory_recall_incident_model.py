@@ -119,6 +119,7 @@ REASON_STAGES: Final[dict[str, Stage]] = {
     'rendered_delivery_not_observed': 'rendered_delivery_not_observed',
     'delivered_model_use_unknown': 'delivered_model_use_unknown', 'used': 'used',
     'selected_live_evidence_unavailable': 'unresolved', 'live_selection_excluded': 'unresolved',
+    'served_this_session': 'unresolved',
     'store_unavailable': 'unresolved',
     'native_only_not_omh_reviewed': 'unresolved', 'selection_unresolved': 'unresolved',
     'ambiguous_anchor': 'unresolved', 'project_memory_disabled': 'unresolved',
@@ -164,6 +165,7 @@ def diagnose_synthetic_recall_stage(reason: str) -> Diagnosis:
 
 def recall_delivery_stage(
     *, rendered: bool, delivery_observed: bool | None, model_use_observed: bool | None,
+    indexed: bool = False,
 ) -> tuple[str, str]:
     """Classify supplied observations without crossing a missing earlier stage.
 
@@ -171,6 +173,8 @@ def recall_delivery_stage(
     Synthetic cases can exercise later states without gaining live authority.
     """
     if not rendered:
+        if indexed:
+            return 'no_query_overlap', 'selected'
         return 'selected_not_rendered', 'selected'
     if delivery_observed is not True:
         return 'rendered_delivery_not_observed', 'rendered'

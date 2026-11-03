@@ -575,9 +575,14 @@ def _locally_negated(tokens: tuple[str, ...], start: int) -> bool:
 
 
 def _fold_for_match(value: str) -> str:
+    if type(value) is str and value.isascii():
+        return value.casefold()
     normalized = unicodedata.normalize("NFKC", value).casefold()
+    if type(normalized) is str and normalized.isascii():
+        return normalized
     decomposed = unicodedata.normalize("NFKD", normalized)
-    return "".join(char for char in decomposed if not unicodedata.combining(char))
+    combining = unicodedata.combining
+    return "".join([char for char in decomposed if not combining(char)])
 
 
 def _compact(value: str) -> str:

@@ -627,10 +627,72 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
 
         environment = confinement.command_environment({"PATH": "/usr/bin", "OMH_MARK": "present"})
 
+        scratch = worktree / ".omh" / "confinement-tmp"
         self.assertEqual(
             environment,
-            {"PATH": "/usr/bin", "OMH_MARK": "present", "TMPDIR": str(worktree / ".omh" / "confinement-tmp")},
+            {
+                "PATH": "/usr/bin",
+                "OMH_MARK": "present",
+                "TMPDIR": str(scratch),
+                "TMPPREFIX": str(scratch / "zsh"),
+                "UV_CACHE_DIR": str(scratch / "uv-cache"),
+            },
         )
+
+    def _scratch_confinement(self, worktree: Path, *, enforced: bool = True) -> FanoutFilesystemConfinement:
+        child = ChildContext(
+            worktree, worktree, worktree, worktree, worktree,
+            worktree / "request", worktree / "artifact", "fanout-filesystem-confinement",
+        )
+        return FanoutFilesystemConfinement(
+            selected="sandbox-exec",
+            roots=(worktree,),
+            write_roots=(worktree,),
+            write_literals=(),
+            child=child,
+            environment={"PATH": "/usr/bin"},
+            backend_digest="digest",
+            executables={},
+            receipt={"enforced": enforced},
+        )
+
+    def test_zsh_and_uv_scratch_follow_tmpdir_only_for_an_enforced_fence(self) -> None:
+        with TemporaryDirectory() as temporary:
+            worktree = Path(temporary).resolve() / "worktree"
+            worktree.mkdir()
+            scratch = worktree / ".omh" / "confinement-tmp"
+
+            enforced = self._scratch_confinement(worktree).command_environment({"PATH": "/usr/bin"})
+            unenforced = self._scratch_confinement(worktree, enforced=False).command_environment({"PATH": "/usr/bin"})
+
+            self.assertEqual(enforced["TMPPREFIX"], str(scratch / "zsh"))
+            self.assertEqual(enforced["UV_CACHE_DIR"], str(scratch / "uv-cache"))
+            self.assertEqual(unenforced, {"PATH": "/usr/bin"})
+
+    def test_caller_uv_cache_and_tmpprefix_are_kept_only_inside_a_write_root(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = root / "worktree"
+            worktree.mkdir()
+            scratch = worktree / ".omh" / "confinement-tmp"
+            confinement = self._scratch_confinement(worktree)
+            inside = str(worktree / "cache" / "uv")
+            outside = str(root / "home" / ".cache" / "uv")
+
+            kept = confinement.command_environment(
+                {"UV_CACHE_DIR": inside, "TMPPREFIX": str(worktree / "zsh-tmp" / "zsh")}
+            )
+            replaced = confinement.command_environment({"UV_CACHE_DIR": outside, "TMPPREFIX": "/tmp/zsh"})
+            relative = confinement.command_environment({"UV_CACHE_DIR": "cache/uv"})
+            # TMPPREFIX is a file-name prefix: `<root>` itself writes `<root>XXXX` beside the root.
+            root_prefix = confinement.command_environment({"TMPPREFIX": str(worktree)})
+            self.assertEqual(root_prefix["TMPPREFIX"], str(scratch / "zsh"))
+
+            self.assertEqual(kept["UV_CACHE_DIR"], inside)
+            self.assertEqual(kept["TMPPREFIX"], str(worktree / "zsh-tmp" / "zsh"))
+            self.assertEqual(replaced["UV_CACHE_DIR"], str(scratch / "uv-cache"))
+            self.assertEqual(replaced["TMPPREFIX"], str(scratch / "zsh"))
+            self.assertEqual(relative["UV_CACHE_DIR"], str(scratch / "uv-cache"))
 
     def test_seatbelt_profile_adds_only_the_preference_read_ipc_and_no_write(self) -> None:
         # #1996: Codex fails startup when CFPreferencesAppSynchronize returns
@@ -756,6 +818,27 @@ class FanoutFilesystemConfinementTests(_ConfinedSpawnContract, unittest.TestCase
             self.assertTrue(source.is_file())
             self.assertFalse((linked_outside / "file").exists())
             self.assertFalse((unrelated_repo / "file").exists())
+
+    @unittest.skipUnless(Path("/usr/bin/sandbox-exec").exists() and Path("/bin/zsh").exists(), "needs sandbox-exec and zsh")
+    def test_zsh_heredoc_runs_inside_the_fence(self) -> None:
+        # zsh puts heredoc temp files under TMPPREFIX (default /tmp/zsh), which
+        # the fence denies; Codex writes every multi-line edit this way.
+        argv = ("/bin/zsh", "-c", "cat <<'EOF'\nok\nEOF")
+        with TemporaryDirectory() as temporary:
+            worktree = Path(temporary).resolve() / "worktree"
+            worktree.mkdir()
+            confinement = prepare_fanout_filesystem_confinement(
+                worktree, {"PATH": "/usr/bin:/bin", "TMPPREFIX": "/tmp/zsh"}, (argv,)
+            )
+            self.assertTrue(confinement.receipt["enforced"])
+            command = confinement.command(argv)
+            assert command is not None
+            completed = subprocess.run(
+                command, cwd=worktree, env=confinement.command_environment(),
+                text=True, capture_output=True, check=False,
+            )
+
+            self.assertEqual((completed.returncode, completed.stdout), (0, "ok\n"), completed.stderr)
 
     def test_preferences_synchronize_inside_the_fence_and_preference_writes_stay_refused(self) -> None:
         # #1996: the exact CoreFoundation call Codex makes at startup, after the

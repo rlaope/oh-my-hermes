@@ -206,10 +206,10 @@ class ProjectIdentityMigrationTests(unittest.TestCase):
                 self.migrate(report["report_digest"])
         provider = OmhMemoryProvider(self.paths.omh_home)
         provider.initialize("s", platform="cli", cwd=self.root)
-        self.assertNotIn(self.record["record_id"], provider.prefetch())
+        self.assertNotIn(self.record["record_id"], provider.prefetch("sentinel fact"))
         self.migrate(report["report_digest"])
         provider.initialize("s", platform="cli", cwd=self.root)
-        self.assertIn(self.record["record_id"], provider.prefetch())
+        self.assertIn(self.record["record_id"], provider.prefetch("sentinel fact"))
 
     def test_interrupted_rollback_resumes_without_rewriting_original(self):
         from omh.workflows import memory_store
@@ -236,7 +236,7 @@ class ProjectIdentityMigrationTests(unittest.TestCase):
         assert isinstance(stable, dict)
         live = OmhMemoryProvider(self.paths.omh_home)
         live.initialize("s", platform="cli", cwd=self.root)
-        text = live.prefetch()
+        text = live.prefetch("sentinel fact")
         self.assertIn(stable["record_id"], text)
         self.assertNotIn(self.record["record_id"], text)
         receipt = live.latest_prefetch_receipt()

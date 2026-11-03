@@ -87,6 +87,7 @@ class LaunchWaitCase(AppTestCase):
             open_terminal=lambda: run.terminal,
             make_client=make_client,
             make_poller=lambda omh_home, hermes_home: run.poller,
+            contain_faults=False,  # a render bug raises here (`App.contain_faults`)
         )
         return run
 

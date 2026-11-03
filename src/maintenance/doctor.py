@@ -12,6 +12,7 @@ from .advisory import AdvisoryReport, run_config_advisories
 from .structural_search import inspect_structural_search
 from ..command_path import inspect_omh_command_path
 from ..config_adapter import (
+    anchored_external_dir,
     external_dir_registered,
     external_dirs,
     memory_provider_selection,
@@ -26,6 +27,7 @@ from ..config_adapter import (
 )
 from ..hashutil import sha256_file, sha256_text
 from ..local_store import can_write_dir, read_json_object
+from ..install import agent_skills_projection
 from ..install.guidance_projection import build_guidance_projection_status, catalog_revision
 from ..install.hook_integrity import HOOK_HOST_TARGET, VALID_HOOK_EVENTS, build_hook_integrity_status
 from ..install.curator_ledger import LedgerWrite, read_ledger_writes
@@ -66,8 +68,16 @@ from ..paths import (
     managed_current_workflow_pack_dir,
 )
 from ..plugin_bundle.omh import runtime_paths
+from ..plugin_bundle.omh.installed_skills import (
+    TIER_CREATE_DIR,
+    TIER_EXTERNAL,
+    TIER_LOCAL,
+    installed_skill_labels,
+    skill_label_copies,
+)
 from ..plugin_bundle.omh.installed_skills import installed_skill_names as hint_installed_skill_names
 from ..plugin_bundle.omh.installed_skills import skill_not_installed
+from ..plugin_bundle.omh.skill_ownership import configured_create_dir
 from ..plugin_bundle.omh.memory_dreaming import read_dreaming_state, read_latest_consolidation
 from ..workflows.memory import (
     _OPEN_MAX_DAYS,
@@ -281,6 +291,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.append(_hermes_skill_edits_check(hermes_edits, ledger_writes, ledger_unread))
     checks.append(Check("skills_dir", paths.skills_dir.exists(), f"{paths.skills_dir}"))
     checks.append(_route_hint_skills_check(paths))
+    checks.extend(_hermes_skill_visibility_checks(paths))
     runtime_writable, runtime_access = _dir_write_access(paths.runtime_dir, state_write=state_write)
     checks.append(
         Check("runtime_artifacts", runtime_writable, f"{paths.runtime_dir} {runtime_access}", observed=state_write)
@@ -542,6 +553,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.extend(_plugin_hook_error_checks(paths))
     checks.append(_retired_skill_install_check(paths))
     checks.append(_flat_skill_layout_check(paths))
+    checks.append(_agent_skills_pack_check())
     checks.append(_plugin_ulw_lifecycle_check(paths))
     checks.append(_omh_tui_check(paths))
     checks.extend(_hermes_gateway_checks(paths))
@@ -1463,6 +1475,67 @@ def _flat_skill_layout_check(paths: OmhPaths) -> Check:
             "Hermes banner"
         ),
         next_action="run `omh update` to move them under their category directory",
+    )
+
+
+def _agent_skills_pack_check() -> Check:
+    """The user-scope OMH Agent Skills pack Codex and other `.agents` hosts load.
+
+    Read-only: it looks at `~/.agents/skills` only, writes nothing, and never
+    fails doctor. No receipt there means the optional pack is not installed,
+    which is not a finding. A receipt is checked in its own shape -- a
+    portable single-target install, or the target+mirror pair it lists -- so
+    a pack `omh update` would refresh is reported stale here first.
+    """
+    name = "agent_skills_pack"
+    target = agent_skills_projection.agent_skills_user_home() / ".agents/skills"
+    try:
+        # Inside the try: on Python < 3.14 `is_file()` raises PermissionError
+        # for an unsearchable directory instead of returning False.
+        if not (target / agent_skills_projection.MANIFEST_NAME).is_file():
+            return Check(name, True, f"OMH Agent Skills pack for Codex/.agents hosts is not installed at {target}", severity="ok")
+        manifest = agent_skills_projection._read_manifest(target)
+        if manifest is None:
+            raise ValueError(f"Agent Skills manifest vanished: {target / agent_skills_projection.MANIFEST_NAME}")
+        target, mirror = agent_skills_projection.installed_receipt_roots(target, manifest)
+        if mirror is not None and agent_skills_projection._read_manifest(mirror) is None:
+            mirror = None
+        status = agent_skills_projection.agent_skills_status(target, mirror=mirror)
+        current = agent_skills_projection.agent_skills_manifest(agent_skills_projection.agent_skill_files())["files"]
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
+        return Check(
+            name,
+            True,
+            f"could not read the OMH Agent Skills pack at {target}: {exc}",
+            severity="warning",
+            next_action=f"Inspect {target / agent_skills_projection.MANIFEST_NAME}, then rerun `omh doctor`.",
+            observed=False,
+        )
+    roots = ", ".join(status["target_dirs"])
+    if status["locally_modified"]:
+        return Check(
+            name,
+            True,
+            f"{len(status['locally_modified'])} locally-modified file(s) in the OMH Agent Skills pack at {roots}",
+            severity="warning",
+            next_action=status["next_action"],
+        )
+    if status["projection"] != "fresh":
+        installed = manifest["files"]
+        differ = sum(1 for relative in installed.keys() | current.keys() if installed.get(relative) != current.get(relative))
+        detail = f": {differ} file(s) differ from the current catalog" if differ else ""
+        return Check(
+            name,
+            True,
+            f"OMH Agent Skills pack at {roots} is {status['projection']}{detail}",
+            severity="warning",
+            next_action="omh update",
+        )
+    return Check(
+        name,
+        True,
+        f"OMH Agent Skills pack at {roots} matches catalog {status['catalog_revision'][:12]}",
+        severity="ok",
     )
 
 
@@ -2976,6 +3049,171 @@ def _route_hint_skills_check(paths: OmhPaths) -> Check:
         remediation="Run `omh update` to rewrite the install manifest from the skills on disk.",
         next_action="Run `omh update`, then `omh doctor` again.",
         detail={"not_installed": missing},
+    )
+
+
+def _hermes_skill_visibility_checks(paths: OmhPaths) -> list[Check]:
+    """Can Hermes load each installed OMH skill by name, as each home's config resolves them?
+
+    `route_hint_skills` compares the manifest with the files on disk; this
+    compares it with what Hermes reads. A home is judged only when it
+    registers an OMH-managed skills directory (`registered_managed_entries`,
+    a dangling one included); one that never did is the registration
+    check's finding. Its directories are taken in Hermes' precedence: the
+    profile's own `skills`, then `skills.create_dir`, then each
+    `skills.external_dirs` entry anchored and resolved as Hermes resolves it
+    (a `current` pointer to the generation it names). Trusted project
+    directories depend on the session's working directory and are not read.
+    Every manifest label is counted the way Hermes picks
+    (`skill_label_copies`): a higher tier wins outright, and a symlinked
+    copy is one copy.
+
+    Two findings Hermes reaches by different roads are kept apart, because
+    they have different repairs. Ambiguous: two directories of one tier hold
+    the same skill, as a stale generation pack beside the pointer did on
+    27-28 Oct 2026, and Hermes refuses the name in both. Dangling: an OMH
+    entry resolves to a path that is gone, as the collected generation was
+    from 30 Oct, and Hermes lists nothing from it.
+
+    The primary home always has a row; each bot profile gets its own
+    `hermes_skill_visibility:<profile>` row when it has a finding, the way
+    `external_dir_ambiguity` walks them. Read-only, and it reads
+    `config.yaml`, not a running gateway: Hermes caches the resolved path
+    until `config.yaml` changes, so a gateway started before a repair can
+    still hold the old one, and the launch card is what says that. A
+    warning with `ok=True`, like `external_dir_ambiguity`: the hint stops
+    naming such skills on its own, so this must not flip the exit code.
+    """
+    name = "hermes_skill_visibility"
+    labels = installed_skill_labels(paths.omh_home)
+    if labels is None:
+        return [Check(name, True, "no install manifest records a skill; nothing to compare with Hermes", observed=False)]
+    current = managed_current_workflow_pack_dir()
+    checks = [
+        _hermes_home_skill_visibility(
+            name, paths, labels, current, registration_home_label(paths.hermes_config_path)
+        )
+    ]
+    for profile, profile_dir in hermes_profile_dirs(paths.hermes_home):
+        profile_paths = _profile_paths(paths, profile_dir)
+        check = _hermes_home_skill_visibility(
+            f"{name}:{profile}",
+            profile_paths,
+            labels,
+            current,
+            registration_home_label(profile_paths.hermes_config_path, profile=profile),
+        )
+        if check.severity == "warning":
+            checks.append(check)
+    return checks
+
+
+def _hermes_home_skill_visibility(
+    name: str, paths: OmhPaths, labels: frozenset[str], current: Path | None, home: str
+) -> Check:
+    try:
+        config_text = read_config(paths.hermes_config_path)
+    except (OSError, UnicodeDecodeError) as exc:
+        return Check(name, True, f"{home} was not read: {exc}", observed=False)
+    omh_entries = registered_managed_entries(
+        config_text,
+        managed_skill_dir_candidates(paths, current=current),
+        hermes_home=paths.hermes_home,
+        current=current,
+        present_only=False,
+    )
+    if not omh_entries:
+        return Check(
+            name, True, f"{home} registers no OMH skills directory; the registration check reports that", observed=False
+        )
+    local = paths.hermes_home / "skills"
+    roots: list[tuple[int, str]] = [(TIER_LOCAL, str(local))]
+    create_dir, _readable = configured_create_dir(paths.hermes_home)
+    if create_dir is not None and create_dir.is_dir():
+        roots.append((TIER_CREATE_DIR, str(create_dir)))
+    externals: list[str] = []
+    for entry in external_dirs(config_text):
+        real = os.path.realpath(anchored_external_dir(entry, paths.hermes_home))
+        if real != os.path.realpath(local) and real not in externals and os.path.isdir(real):
+            externals.append(real)
+    roots += [(TIER_EXTERNAL, real) for real in externals]
+    omh_reals = {entry: os.path.realpath(anchored_external_dir(entry, paths.hermes_home)) for entry in omh_entries}
+    dangling = [
+        entry if real == entry else f"{entry} -> {real}" for entry, real in omh_reals.items() if not os.path.isdir(real)
+    ]
+    copies = skill_label_copies(labels, roots)
+    ambiguous = sorted(label for label, held in copies.items() if len(held) > 1)
+    missing = sorted(label for label, held in copies.items() if not held)
+    if not ambiguous and not missing:
+        return Check(
+            name,
+            True,
+            f"Hermes can load all {len(labels)} installed OMH skill(s) by name as {home} resolves them. "
+            "This reads config.yaml only: a Hermes gateway started earlier may still hold an older path.",
+        )
+
+    def listed(names: list[str]) -> str:
+        return ", ".join(names[:5]) + (", ..." if len(names) > 5 else "")
+
+    parts: list[str] = []
+    actions: list[str] = []
+    if ambiguous:
+        colliding = sorted({root for label in ambiguous for root in copies[label]})
+        foreign = [root for root in colliding if root not in omh_reals.values()]
+        parts.append(
+            f"{len(ambiguous)} sit in two or more skills directories of one tier ({', '.join(colliding)}) and "
+            f"Hermes refuses a name two directories of one tier hold: {listed(ambiguous)}"
+        )
+        if foreign:
+            actions.append(
+                f"Rename or remove the copies of these skills in {', '.join(foreign)}, which OMH does not manage"
+            )
+        else:
+            pointer = external_dir_key(current) if current is not None else None
+            keep = next(
+                (
+                    entry
+                    for entry in omh_entries
+                    if external_dir_key(anchored_external_dir(entry, paths.hermes_home)) == pointer
+                ),
+                None,
+            )
+            actions.append(
+                f"Keep only {keep} of the OMH skills directories under skills.external_dirs in "
+                f"{paths.hermes_config_path} and remove {', '.join(entry for entry in omh_entries if entry != keep)}"
+                if keep is not None
+                else f"Keep one of the OMH skills directories under skills.external_dirs in {paths.hermes_config_path} "
+                f"({', '.join(omh_entries)}) and remove the others"
+            )
+    if missing:
+        where = (
+            f"skills.external_dirs names {len(dangling)} OMH path(s) that do not exist ({', '.join(dangling)})"
+            if dangling
+            else "no directory Hermes reads holds them"
+        )
+        parts.append(f"{len(missing)} are not found, because {where}: {listed(missing)}")
+        actions.append(
+            "Point the missing entry at an existing OMH skills directory"
+            if dangling
+            else f"Point the OMH entry under skills.external_dirs in {paths.hermes_config_path} at a directory "
+            "that holds the installed skills"
+        )
+    visible = len(labels) - len(ambiguous) - len(missing)
+    return Check(
+        name,
+        True,
+        f"Hermes can load {visible} of {len(labels)} installed OMH skill(s) by name as {home} resolves them; "
+        + "; ".join(parts),
+        severity="warning",
+        remediation="; ".join(actions) + ", then restart the Hermes gateway so it resolves the directories again.",
+        next_action=actions[0] + ", then restart the Hermes gateway.",
+        detail={
+            "ambiguous": ambiguous,
+            "not_found": missing,
+            "dangling_entries": dangling,
+            "omh_entries": omh_entries,
+            "directories": [root for _tier, root in roots],
+        },
     )
 
 

@@ -43,7 +43,7 @@ The incident names the last claim it could prove in `last_proven_stage`
 | `rendered_delivery_not_observed` | `rendered_delivery_not_observed` | `unresolved` | `inspect_host_delivery` |
 | `delivered_model_use_unknown` | `delivered_model_use_unknown` | `unresolved` | `leave_model_use_unresolved` |
 | `used` | `used` | `unresolved` | `no_change` |
-| `unresolved` | `selected_live_evidence_unavailable`, `live_selection_excluded`, `store_unavailable`, `native_only_not_omh_reviewed`, `selection_unresolved`, `ambiguous_anchor`, `project_memory_disabled` | `unresolved` | `collect_record_bound_evidence` |
+| `unresolved` | `selected_live_evidence_unavailable`, `live_selection_excluded`, `served_this_session`, `store_unavailable`, `native_only_not_omh_reviewed`, `selection_unresolved`, `ambiguous_anchor`, `project_memory_disabled` | `unresolved` | `collect_record_bound_evidence` |
 
 Every remediation is `state: prepared_not_applied` and lists what it
 `requires`: `memory_curation_review/v1 approval` and `native_write_approval`.
@@ -70,8 +70,12 @@ can refine a locally selected record:
   `last_proven_stage: selected` and fault domain `provider`.
 - Rendered with the expected summary digest: `rendered_delivery_not_observed`,
   with `last_proven_stage: rendered`. Delivery and use remain unknown.
-- Absent from the receipt's selected IDs: `live_selection_excluded`, still
-  unresolved. Aggregate exclusion counts don't prove a reason for that record.
+- Named in the receipt's `selection.served_this_session`: `served_this_session`,
+  still unresolved. The live turn left the record out because an earlier
+  turn of the same conversation carried it, and that turn's receipt is gone.
+- Absent from the receipt's selected IDs otherwise: `live_selection_excluded`,
+  still unresolved. Aggregate exclusion counts don't prove a reason for that
+  record.
 
 A local lifecycle or scope exclusion remains a local verdict even when a bound
 receipt carries a matching aggregate reason. The incident never reranks the

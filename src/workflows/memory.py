@@ -34,6 +34,7 @@ from ..plugin_bundle.omh.memory_governance import (
     contains_credential_like_material,
 )
 from ..plugin_bundle.omh.memory_recall_support import normalized_summary_key
+from ..plugin_bundle.omh.memory_recall_settings import read_recall_line_setting, read_recall_mode_setting
 from ..plugin_bundle.omh.memory_records import prefetch_required_scope_kinds, prefetch_scope_allowlist
 from ..plugin_bundle.omh.memory_session_lens import (
     OPERATOR_CONSOLE_PLATFORMS,
@@ -1051,6 +1052,13 @@ def build_project_memory_status(paths: OmhPaths) -> dict[str, object]:
         "open_records": open_records[:_OPEN_RECORDS_STATUS_LIMIT],
         "recall_usage": _recall_usage_status(paths),
         "last_prefetch": last_prefetch_status(paths, now=now),
+        # This profile's recall switches (`omh memory recall-line`,
+        # `recall-mode`). A `policy.mode` of off turns recall off whatever
+        # `recall_mode` says; the line is hidden, never the served memory.
+        "recall_settings": {
+            "recall_line": read_recall_line_setting(paths.hermes_home),
+            "recall_mode": read_recall_mode_setting(paths.hermes_home),
+        },
         "hermes_memory": build_hermes_memory_bridge(paths),
         "redaction_policy": "metadata_only",
         "claim_boundary": "Project memory status is prepared local context only; it is not execution, review, CI, merge, or Hermes internal-memory evidence.",

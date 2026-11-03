@@ -639,7 +639,12 @@ class ServedCounterTests(_Home):
         self.assertEqual(rendered_ids(pack), [record_id])
         live.prefetch("omh recall memory packs")  # a second API call in the same turn
         self.assertEqual(read_served_counts(self.store)[record_id]["times_served"], 1)
-        hermes_turn(live, 2, "omh recall memory packs")
+        # The record is still in this conversation: a later turn does not serve it again.
+        self.assertEqual(rendered_ids(hermes_turn(live, 2, "omh recall memory packs")), [])
+        self.assertEqual(read_served_counts(self.store)[record_id]["times_served"], 1)
+        # After a compaction drops it from context, the next turn serves it once more.
+        live.on_session_switch(SESSION, reset=False)
+        hermes_turn(live, 3, "omh recall memory packs")
         self.assertEqual(read_served_counts(self.store)[record_id]["times_served"], 2)
         self.assertFalse((self.memory / "usage.json").exists(), "serving never feeds the ranking's usage counter")
         status = build_project_memory_status(self.paths)["recall_usage"]
