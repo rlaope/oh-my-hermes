@@ -383,11 +383,13 @@ def _json_candidates(directory: Path) -> list[Path]:
             names = [entry.name for entry in entries if fnmatch.fnmatch(entry.name, "*.json")]
     except FileNotFoundError:
         return []
-    # The order `sorted()` gives these paths, which differ only in their
-    # name (case-folded on Windows), without comparing `Path` objects: that
-    # comparison re-derives both paths' parts every time, and a live turn
-    # lists the records and reviews directories several times.
-    return [directory / name for name in sorted(names, key=os.path.normcase)]
+    # The order `sorted()` gives these paths, which differ only in their name,
+    # without comparing `Path` objects: that comparison re-derives both
+    # paths' parts every time, and a live turn lists the records and reviews
+    # directories several times. A case-insensitive flavour (Windows) orders
+    # by `str.lower()`, which is not what `os.path.normcase` does there for
+    # every non-ASCII name, so the key is `str.lower` itself.
+    return [directory / name for name in sorted(names, key=None if os.path.normcase("Aa") == "Aa" else str.lower)]
 
 
 def _read_reviews(directory: Path, *, unreadable: list[str] | None = None) -> dict[str, dict[str, object]]:

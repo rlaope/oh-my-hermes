@@ -315,9 +315,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # safety verdicts it cached (`_governance_safety`), which the next
         # render reuses. `prefetch` re-renders only when its query, principal
         # or session differs from the pack's. `_query` is what the pack was
-        # ranked for; `_pack_count`
-        # is how many memories it carries in full that this conversation did
-        # not already hold (`_recalled`).
+        # ranked for; `_pack_count` is how many memories it carries in full
+        # that this conversation did not already hold (`_recalled`).
         self._pack = ""
         self._query = ""
         self._query_sanitized = sanitize_memory_query("")

@@ -705,11 +705,13 @@ def _looks_like_opaque_token(content: str) -> bool:
 # (ids, digests, timestamps, tags: about 400 strings for 39 records), the same
 # strings every turn, and once the record verdicts below were cached this scan
 # was a third of a render. The verdict is a function of the string alone, so
-# the string itself is the key: exact, and an exact `str` only. Longer text is
-# scanned every time, so what this keeps stays small; cleared whole when full.
+# the string itself is the key: exact, and an exact `str` only. Only clean
+# strings are kept, so a secret is never held for the life of the process (it
+# is rescanned each time, as before). Longer text is scanned every time, so
+# what this keeps stays small; cleared whole when full.
 _CREDENTIAL_MEMO_MAX_CHARS = 256
 _CREDENTIAL_MEMO_LIMIT = 8192
-_credential_verdicts: dict[str, bool] = {}
+_credential_clean: set[str] = set()
 
 
 def contains_credential_like_material(content: str) -> bool:
@@ -718,13 +720,14 @@ def contains_credential_like_material(content: str) -> bool:
         return True
     if type(content) is not str or len(content) > _CREDENTIAL_MEMO_MAX_CHARS:
         return _credential_like(content)
-    verdict = _credential_verdicts.get(content)
-    if verdict is None:
-        verdict = _credential_like(content)
-        if len(_credential_verdicts) >= _CREDENTIAL_MEMO_LIMIT:
-            _credential_verdicts.clear()
-        _credential_verdicts[content] = verdict
-    return verdict
+    if content in _credential_clean:
+        return False
+    if _credential_like(content):
+        return True
+    if len(_credential_clean) >= _CREDENTIAL_MEMO_LIMIT:
+        _credential_clean.clear()
+    _credential_clean.add(content)
+    return False
 
 
 def _credential_like(content: str) -> bool:
@@ -811,6 +814,25 @@ def evaluate_renderable_strings(artifact: dict[str, object]) -> dict[str, object
     Returns worst-case result with status and reason_code.
     Fail-closed: any blocked field blocks, any needs_review field needs review.
     """
+    try:
+        blob = marshal.dumps(artifact, _VERDICT_KEY_MARSHAL_VERSION)
+    except ValueError:
+        return _renderable_verdict(artifact)
+    key = hashlib.sha256(blob).digest()
+    verdict = _renderable_verdicts.get(key)
+    if verdict is None:
+        # The decoded bytes are scanned, not the live dict, so the verdict is
+        # for exactly the text the key names even if the artifact changes
+        # after it was keyed.
+        verdict = _renderable_verdict(marshal.loads(blob))
+        if len(_renderable_verdicts) >= _RENDERABLE_VERDICT_LIMIT:
+            _renderable_verdicts.clear()
+        _renderable_verdicts[key] = verdict
+    return dict(verdict)
+
+
+def _renderable_verdict(artifact: Mapping[str, object]) -> dict[str, object]:
+    """The worst classification over the field names and their renderable strings, in scan order."""
     prioritized_fields = (
         "summary",
         "value",
@@ -834,22 +856,7 @@ def evaluate_renderable_strings(artifact: dict[str, object]) -> dict[str, object
         "attention",
     )
     renderable_fields = tuple(dict.fromkeys((*prioritized_fields, *(str(key) for key in artifact))))
-    try:
-        key: bytes | None = hashlib.sha256(marshal.dumps(artifact, _VERDICT_KEY_MARSHAL_VERSION)).digest()
-    except ValueError:
-        key = None
-    verdict = _renderable_verdicts.get(key) if key is not None else None
-    if verdict is None:
-        verdict = _renderable_verdict(artifact, renderable_fields)
-        if key is not None:
-            if len(_renderable_verdicts) >= _RENDERABLE_VERDICT_LIMIT:
-                _renderable_verdicts.clear()
-            _renderable_verdicts[key] = verdict
-    return dict(verdict)
 
-
-def _renderable_verdict(artifact: Mapping[str, object], renderable_fields: tuple[str, ...]) -> dict[str, object]:
-    """The worst classification over the field names and their renderable strings, in scan order."""
     worst_status = "safe"
     worst_field = None
 

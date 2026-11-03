@@ -20,9 +20,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
+import marshal
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -103,6 +105,32 @@ class RenderableVerdictCacheTests(unittest.TestCase):
             self.assertEqual(verdict["status"], "blocked")
         self.assertEqual(safety._renderable_verdicts, {})
 
+    def test_the_verdict_is_for_the_keyed_bytes_even_if_the_artifact_changes_after(self) -> None:
+        artifact = {"summary": "Deploys wait for the nightly build"}
+        real_dumps = marshal.dumps
+
+        def dumps_then_mutate(value: object, version: int) -> bytes:
+            blob = real_dumps(value, version)
+            artifact["summary"] = f"Deploys wait; {_SECRET}"
+            return blob
+
+        scanned: list[object] = []
+        real_verdict = safety._renderable_verdict
+
+        def record(value: dict[str, object]) -> dict[str, object]:
+            scanned.append(value)
+            return real_verdict(value)
+
+        keyed = SimpleNamespace(dumps=dumps_then_mutate, loads=marshal.loads)
+        with patch.object(safety, "marshal", keyed), patch.object(safety, "_renderable_verdict", side_effect=record):
+            verdict = safety.evaluate_renderable_strings(artifact)
+        # The scan saw the decoded copy of the keyed (safe) bytes, not the live dict.
+        self.assertEqual(verdict["status"], "safe")
+        self.assertIsNot(scanned[0], artifact)
+        self.assertEqual(scanned[0], {"summary": "Deploys wait for the nightly build"})
+        # The changed artifact is new bytes, so a new key and its own scan.
+        self.assertEqual(safety.evaluate_renderable_strings(artifact)["status"], "blocked")
+
     def test_a_caller_cannot_change_a_cached_verdict(self) -> None:
         artifact = {"summary": f"Deploys wait; {_SECRET}"}
         safety.evaluate_renderable_strings(artifact)["status"] = "safe"
@@ -116,23 +144,29 @@ class RenderableVerdictCacheTests(unittest.TestCase):
 
 
 class CredentialMemoTests(unittest.TestCase):
-    def test_the_memo_answers_as_the_scan_and_keeps_only_short_exact_strings(self) -> None:
+    def test_the_memo_answers_as_the_scan_and_keeps_only_short_clean_strings(self) -> None:
         class Text(str):
             pass
 
-        long_secret = f"{'x' * safety._CREDENTIAL_MEMO_MAX_CHARS} {_SECRET}"
-        cases = (("eligible", False), (_SECRET, True), (long_secret, True), (Text(_SECRET), True), (None, True))
-        with patch.dict(safety._credential_verdicts, clear=True):
+        long_clean = "x " * safety._CREDENTIAL_MEMO_MAX_CHARS
+        long_secret = f"{long_clean} {_SECRET}"
+        cases = (
+            ("eligible", False), (_SECRET, True), (long_clean, False), (long_secret, True),
+            (Text("eligible"), False), (Text(_SECRET), True), (None, True),
+        )
+        with patch.object(safety, "_credential_clean", set()):
             for value, expected in cases:
                 with self.subTest(value=str(value)[:12]):
                     self.assertEqual(safety._credential_like(value) if isinstance(value, str) else True, expected)
                     self.assertEqual(safety.contains_credential_like_material(value), expected)  # type: ignore[arg-type]
                     self.assertEqual(safety.contains_credential_like_material(value), expected)  # type: ignore[arg-type]
-            self.assertEqual(safety._credential_verdicts, {"eligible": False, _SECRET: True})
+            # A secret is never kept: only the short exact clean string is.
+            self.assertEqual(safety._credential_clean, {"eligible"})
+            self.assertNotIn(_SECRET, safety._credential_clean)
             with patch.object(safety, "_CREDENTIAL_MEMO_LIMIT", 2):
                 for index in range(5):
                     safety.contains_credential_like_material(f"fact {index}")
-                    self.assertLessEqual(len(safety._credential_verdicts), 2)
+                    self.assertLessEqual(len(safety._credential_clean), 2)
 
 
 class PerRenderScanWorkTests(unittest.TestCase):
@@ -208,13 +242,25 @@ class PerRenderScanWorkTests(unittest.TestCase):
 
 
 class StoreListingTests(unittest.TestCase):
+    # Non-ASCII names whose case mapping is where `str.lower` (what `PurePath`
+    # orders by on Windows) and Windows' own `ntpath.normcase` can disagree.
+    NAMES = ("mem_b.json", "Mem_a.json", "mem_C.json", "mem_a1.json", f"{chr(0x130)}.json", f"{chr(0x1E9E)}.json", "i.json")
+
     def test_candidates_keep_the_order_sorted_paths_had(self) -> None:
         with TemporaryDirectory() as tmp:
             directory = Path(tmp)
-            for name in ("mem_b.json", "Mem_a.json", "mem_C.json", "mem_a1.json", "notes.txt"):
+            for name in (*self.NAMES, "notes.txt"):
                 (directory / name).write_text("{}", encoding="utf-8", newline="\n")
             candidates = hermes_memory._json_candidates(directory)
             self.assertEqual(candidates, sorted(directory / name for name in os.listdir(directory) if name.endswith(".json")))
+
+    def test_a_case_insensitive_flavour_orders_by_str_lower(self) -> None:
+        """The key `_json_candidates` uses on Windows, checked on every platform."""
+        directory = PureWindowsPath("C:/store/records")
+        self.assertEqual(
+            sorted(directory / name for name in self.NAMES),
+            [directory / name for name in sorted(self.NAMES, key=str.lower)],
+        )
 
     def test_the_expiry_count_lists_the_records_once_and_still_counts_legacy_records(self) -> None:
         now = datetime.now(timezone.utc)
