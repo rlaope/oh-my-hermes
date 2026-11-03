@@ -1043,14 +1043,24 @@ class PersonRequestTextTest(unittest.TestCase):
     def test_a_busy_path_origin_goes_only_in_its_exact_shape_at_the_start(self):
         self.assertEqual(person_request_text(_BUSY_ORIGIN + "영상 20초짜리 만들어줘", messaging=True), "영상 20초짜리 만들어줘")
         self.assertEqual(person_request_text(_BUSY_ORIGIN + "fix the login bug"), "fix the login bug")
+        # Steers that arrived together are joined with a newline, and a leftover
+        # steer opens the next turn: every block goes, the person's lines stay
+        # in order, and no JSON key is left to rank a skill.
+        two = person_request_text(_BUSY_ORIGIN + "영상 만들어줘\n" + _BUSY_ORIGIN + "fix the login bug", messaging=True)
+        self.assertEqual(two, "영상 만들어줘\nfix the login bug")
+        self.assertEqual(person_request_text(_BUSY_ORIGIN + _BUSY_ORIGIN + "fix the login bug"), "fix the login bug")
+        for key in ("platform", "chat_id", "message_id", "Gateway message origin"):
+            self.assertNotIn(key, two)
         opening, ids, closing = _BUSY_ORIGIN.split("\n", 2)
         for kept in (
-            # Quoted by the person, after their own words.
+            # Quoted by the person, after their own words on the same line.
             "what does this mean? " + _BUSY_ORIGIN + "fix it",
             # Not the one-line JSON Hermes writes.
             opening + "\n" + ids.replace(", ", ",\n") + "\n" + closing + "fix it",
             # No closing line.
             opening + "\n" + ids + "\n\nfix it",
+            # A middle line that is not a JSON object.
+            opening + "\nhello world\n" + closing + "fix it",
         ):
             with self.subTest(kept=kept[:40]):
                 self.assertEqual(person_request_text(kept), kept)
