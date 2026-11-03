@@ -16,6 +16,14 @@ All notable changes will be documented here.
   provider and the recall tool kept serving records under it. It also stops
   the consolidation brief and the save reminder, which asked for saves that
   `off` refuses.
+- **The OMH TUI's first frame no longer waits on the skill catalog.** When the
+  shared gateway names every skill in its first answer, the launch card used to
+  import the whole skill catalog to label them before the first frame was
+  drawn; it now takes the labels from a small module of their own. The card is
+  drawn the same, byte for byte. In a clean process, starting up against a
+  shared gateway went from about 55 ms to 7 ms and imports 24 modules instead
+  of 114. On a stdio gateway, the first regrouping of the skills when they
+  arrive went from about 50 ms to under 1 ms.
 
 - **The memory consolidation brief no longer rides almost every console turn.** A session that ended with one to
   four unconsolidated turns used to raise a brief at its end and again as a recovery at the next start, so 213 of 216
