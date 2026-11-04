@@ -297,6 +297,71 @@ class AfterTheTurnsRoundEnd(_ShellTurn):
         self.assertIn("api.py:3", self.note(self.command("sed ... quota.py api.py", STALE_RENAME, turn="t2")))
 
 
+KWARG = ("Rename the keyword-only parameter timeout of fetch in src/benchapp/http_client.py to timeout_s (do not keep "
+         "timeout as an alias). What fetch returns stays the same, and every caller must keep its behaviour.")
+CLIENT = ('def fetch(url: str, *, timeout: float = 5.0, retries: int = 1) -> dict[str, object]:\n'
+          '    return {"url": url, "timeout": timeout, "retries": retries}\n')
+FETCH_FIXTURE = {
+    "pyproject.toml": "[project]\nname='benchapp'\n",
+    "src/benchapp/__init__.py": "",
+    "src/benchapp/http_client.py": CLIENT,
+    "src/benchapp/sync.py": ("from benchapp.http_client import fetch\n\n\n"
+                             "def sync_page(url: str) -> dict[str, object]:\n    return fetch(url, timeout=2.0)\n"),
+    "tests/test_http_client.py": ('from benchapp.http_client import fetch\n\n\ndef test_fetch_defaults():\n'
+                                  '    assert fetch("u") == {"url": "u", "timeout": 5.0, "retries": 1}\n'),
+}
+
+
+class EachCheckSpeaksOncePerTurn(_ShellTurn):
+    """Measured (OPT-M measurement 2, Haiku, I-KWARG-733331): a true caller note spent the turn's one shell note;
+    the model fixed the callers, then rewrote the test's expected key, and nothing named that line."""
+
+    def test_a_caller_note_leaves_the_test_check_free_to_name_a_later_rewrite(self):
+        self.fixture(FETCH_FIXTURE)
+        tc.note_request(SESSION, KWARG)
+        renamed = CLIENT.replace("timeout: float", "timeout_s: float").replace('"timeout": timeout', '"timeout": timeout_s')
+        caller = self.note(self.command("sed -i '' ... src/benchapp/http_client.py",
+                                        {"src/benchapp/http_client.py": renamed}))
+        self.assertIn("OMH caller check", caller)
+        self.assertIn("src/benchapp/sync.py:5", caller)
+        self.assertIsNone(self.command("sed -i '' 's/timeout=/timeout_s=/' src/benchapp/sync.py", {
+            "src/benchapp/sync.py": FETCH_FIXTURE["src/benchapp/sync.py"].replace("timeout=", "timeout_s=")}))
+        test = self.note(self.command(
+            "sed -i '' ... src/benchapp/http_client.py tests/test_http_client.py",
+            {"src/benchapp/http_client.py": renamed.replace('"timeout": timeout_s', '"timeout_s": timeout_s'),
+             "tests/test_http_client.py": FETCH_FIXTURE["tests/test_http_client.py"].replace('"timeout"', '"timeout_s"')}))
+        self.assertIn("OMH test check", test)
+        self.assertIn("tests/test_http_client.py:5", test)
+        self.assertNotIn("caller check", test)
+
+    def test_a_check_that_spoke_does_not_speak_again(self):
+        self.fixture(RENAME)
+        self.assertIn("api.py:3", self.note(self.command("sed ... quota.py api.py", STALE_RENAME)))
+        # `service.py` now names a definition that is gone: an export row, and the export check already spoke.
+        self.assertIsNone(self.command("echo >> src/benchapp/service.py",
+                                       {"src/benchapp/service.py": RENAME["src/benchapp/service.py"] + "\n"}))
+
+    def test_the_caller_and_test_checks_do_not_speak_again(self):
+        self.fixture(FETCH_FIXTURE)
+        tc.note_request(SESSION, KWARG)
+        renamed = CLIENT.replace("timeout: float", "timeout_s: float").replace('"timeout": timeout', '"timeout_s": timeout_s')
+        rewritten = FETCH_FIXTURE["tests/test_http_client.py"].replace('"timeout"', '"timeout_s"')
+        both = self.note(self.command("sed -i '' ... src/benchapp/http_client.py tests/test_http_client.py",
+                                      {"src/benchapp/http_client.py": renamed, "tests/test_http_client.py": rewritten}))
+        self.assertIn("OMH caller check", both)
+        self.assertIn("OMH test check", both)
+        # Both lines are still broken, and a Python file changed again: neither check repeats itself.
+        self.assertIsNone(self.command("echo >> src/benchapp/http_client.py",
+                                       {"src/benchapp/http_client.py": renamed + "\n"}))
+
+    def test_once_every_check_spoke_no_command_is_looked_at(self):
+        self.fixture(RENAME)
+        self.before("terminal", {"command": "ls"})
+        ct.spend_shell_round_end(SESSION, {"export", "test", "caller"})
+        with self.assertNoLogs("omh.verify_hooks", level="INFO"):
+            self.assertIsNone(self.command("sed ... quota.py api.py", STALE_RENAME))
+
+
 class ComposesWithTheOtherTerminalPass(_ShellTurn):
     def setUp(self):
         super().setUp()

@@ -46,7 +46,7 @@ deterministically and from the disk alone, whether such a thing exists:
    calls ``pre_verify`` only after a ``patch`` / ``write_file`` landed, so for a turn that made neither it
    re-indexes the workspace after each command and, when the command changed a Python file, returns every
    Python file the turn changed. ``verify_hooks.shell_round_end_note`` gives those files the structural
-   round-end notes, once per turn. Of a model message's calls only the last one that is not a read is
+   round-end notes, each check once per turn. Of a model message's calls only the last one that is not a read is
    looked at (``note_tool_batch``), and a turn whose state ``pre_verify`` already consumed gets none.
 
 No signal means the check is skipped. Every other outcome fires it as it fired before this module:
@@ -144,6 +144,8 @@ _COMMON_NAMES: Final = frozenset({"main", "log", "LOG", "logger", "LOGGER", "app
 _CONSTRUCTOR_METHODS: Final = frozenset({"__init__", "__new__", "__call__"})
 # Platforms `pre_verify` never gives the check (`verify_hooks._NO_CHECKLIST_PLATFORMS`, kept equal by a test).
 NO_CHECK_PLATFORMS: Final = frozenset({"subagent"})
+# The shell round end's checks (`verify_hooks.shell_round_end_note`), each said at most once per turn.
+SHELL_NOTE_KINDS: Final = frozenset({"export", "test", "caller"})
 # Statement bodies read as if their definitions sat at the enclosing level.
 _BLOCK_FIELDS: Final = ("body", "orelse", "finalbody")
 
@@ -343,7 +345,7 @@ def shell_changed_files(session_id: object, turn_id: object, tool_call_id: objec
                 return ()
             state = _sessions.get(session_id)
             if state is None or state["turn"] != str(turn_id or "") or state["index"] is None \
-                    or state["edit_tool"] or state["shell_spent"]:
+                    or state["edit_tool"] or state["shell_closed"] or state["shell_spent"] >= SHELL_NOTE_KINDS:
                 return ()
             start, last, root = state["index"], state["shell_index"] or state["index"], state["root"]
         current = _index(root, time.monotonic() + INDEX_SECONDS)
@@ -358,13 +360,24 @@ def shell_changed_files(session_id: object, turn_id: object, tool_call_id: objec
         return ()
 
 
-def spend_shell_round_end(session_id: object) -> None:
-    """The shell round end has spoken for this turn: it is said once, like ``pre_verify``'s attempt 0."""
-    if isinstance(session_id, str) and session_id:
+def spend_shell_round_end(session_id: object, kinds: object) -> None:
+    """These checks of the shell round end (``SHELL_NOTE_KINDS``) have spoken for this turn: each is said
+    once, like ``pre_verify``'s attempt 0. One that spoke does not silence the others: a caller note early in
+    the turn leaves the test check free to name an expectation the turn rewrites later."""
+    if isinstance(session_id, str) and session_id and isinstance(kinds, (set, frozenset, tuple, list)):
         with _lock:
             state = _sessions.get(session_id)
             if state is not None:
-                state["shell_spent"] = True
+                state["shell_spent"] |= {kind for kind in kinds if kind in SHELL_NOTE_KINDS}
+
+
+def shell_spent_kinds(session_id: object) -> frozenset[str]:
+    """The checks of the shell round end that already spoke this turn."""
+    if not isinstance(session_id, str) or not session_id:
+        return frozenset()
+    with _lock:
+        state = _sessions.get(session_id)
+        return frozenset(state["shell_spent"]) if state is not None else frozenset()
 
 
 def discard_snapshots(session_id: object) -> None:
@@ -425,7 +438,8 @@ def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
             return state
         state = {"turn": turn, "root": root, "indexed": False, "index": None, "unindexed": ("", ""), "before": {},
                  "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": [],
-                 "edit_tool": False, "shell_index": None, "shell_spent": bool(turn) and _ended.get(session_id) == turn}
+                 "edit_tool": False, "shell_index": None, "shell_spent": set(),
+                 "shell_closed": bool(turn) and _ended.get(session_id) == turn}
         _sessions.pop(session_id, None)
         _sessions[session_id] = state
         while len(_sessions) > _MAX_SESSIONS:
@@ -892,4 +906,5 @@ def _parse(text: str) -> ast.AST | None:
 
 
 __all__ = ["Verdict", "discard_snapshots", "note_tool_batch", "note_turn_posture", "reset", "round_end_trigger",
-           "shell_changed_files", "snapshot_before_edit", "spend_shell_round_end", "turn_root", "turn_snapshots"]
+           "shell_changed_files", "shell_spent_kinds", "snapshot_before_edit", "spend_shell_round_end", "turn_root",
+           "turn_snapshots"]

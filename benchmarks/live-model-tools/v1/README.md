@@ -574,7 +574,7 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
-### 2026-11-04 round end after shell-only edits: base vs on (`transform_tool_result`), gate failed
+### 2026-11-04 round end after shell-only edits: base vs on (`transform_tool_result`)
 
 Pre-registered before its first live run.
 
@@ -829,6 +829,61 @@ this correction, 20 luna sessions missed their digest and 3 notes did not match;
 instead of one shell note per turn. In `I-KWARG-733331` the test check would then have named the
 rewritten expectation, which is the line that failed the run. Under the fallback, it needs its own
 pre-registration.
+
+#### Measurement 3, pre-registered before its first run (2026-11-05)
+
+**The change since measurement 2 (v3).** Each of the three checks (export, test, caller) is said at
+most once per turn on its own. In v2 the turn had one shell note: the first note of any kind spent
+it. Measurement 2's S `I-KWARG-733331` lost its run that way: a true caller note spent the turn, and
+the test expectation the model rewrote afterwards was never named. A check that spoke stays silent
+for the rest of the turn; the others stay free. Re-indexing stops once all three have spoken. Every
+v2 guard is kept:
+- only a message's last call that is not a read is looked at;
+- nothing after `pre_verify` consumed the turn's state;
+- evidence is the files on disk, never command text;
+- a turn with a `patch` / `write_file` call is `pre_verify`'s.
+
+**Offline replay of v3** (`replay_shell.py --batches`; every shell-only replay ends on its recorded
+`final_tree_digest` except one, noted below):
+
+| Sessions | Noted | Notes by check | Notes on controls | Sessions with a second note |
+| --- | --- | --- | --- | --- |
+| OPT-K / OPT-L, 445 (71 shell-only) | 2 | export 2 (same as v1 and v2) | 0 | 0 |
+| Measurement 1, both arms, 174 (115 shell-only) | 22 | caller 17, export 4, test 2 | 0 | 1: h45 S on `I-KWARG-347911`, caller then test |
+| Measurement 2, both arms, 282 (170 shell-only) | 28 | caller 21, export 6, test 3 | 0 | 2: h45 S on `I-KWARG-733331` and h45 S base `I-KWARG-197711`, caller then test |
+
+- **`I-KWARG-733331` (measurement 2, the run that failed clause 1)** gets the caller note it got
+  live (call 7), and now also the test note at call 10: `tests/test_http_client.py:5: was assert
+  fetch("u") == {"url": "u", "timeout": 5.0, ...}`, the line the run failed on.
+- **No continues.** The shell round end adds none by construction: it rides a tool result and
+  never returns a `pre_verify` directive. Whether continues on controls stay at most base is left
+  to the live clause.
+- **One digest mismatch, outside the gated set.** Measurement 2's s55 base `I-SIGNATURE-197711`
+  chained several `sed -i` calls with `|`, so they ran concurrently and the final tree depends on
+  timing. It is a base-arm run; clause 5a reads on-arm runs only.
+
+**Setup.** As in measurement 2, except:
+- **Arms:** `base` origin/main `225f62ff2` (unchanged); `on` this branch at the commit that adds
+  this section.
+- **Seeds:** none appears in any text file under `.omc/research`, `docs` or the bench before this
+  section. 274877, 391553 and 452989 for every template; 806351 also for the three positives and
+  their three controls.
+- **Panel:** s55 and h45 in D and S; luna and sol in S; all gated. 372 runs.
+- **Live-run lock:** the shared `OPT/.live.lock`, taken only after optl-finish's Registration 2 run
+  releases it; the load and disk gates as before.
+- **Records:** measurement 2's records and profile snapshots move to `OPT/opt-m/m2/`.
+
+**The gate:** clauses 1-5 of this section, unchanged, recomputed by `OPT/opt-m/gate.py` and
+recounted from the raw records by separate code.
+
+**Fallback, fixed now.**
+- **A clause fails:** the branch does not merge, and the result is recorded here.
+- **A review finds a wrong note:** if a note names a line that is not broken when the model reads
+  it, that shape is made silent and the branch does not merge on this measurement.
+- **A loss in a session the shell route did not act on** (no `shell_round_end` line): it still
+  counts. The clause has no exception for it.
+- **If v3 fails:** nothing from this branch ships. The next candidate is chosen from the diagnosis
+  of the failing runs, under its own pre-registration.
 
 ### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
 

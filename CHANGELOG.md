@@ -11,9 +11,11 @@ All notable changes will be documented here.
   turns edit that way. Now, after a `terminal` or `execute_code` call that
   changed a Python file in a turn with no `patch` / `write_file`, OMH builds
   the same three notes from the files on disk and adds any that name a
-  broken line to that call's result, once per turn. When one message holds
-  several commands, only the last one is looked at, so a note never names
-  a line a later command of the same message already fixed. A command that
+  broken line to that call's result. Each check speaks at most once per
+  turn, so an early caller note does not silence a later test note. When
+  one message holds several commands, only the last one is looked at, so a
+  note never names a line a later command of the same message already
+  fixed. A command that
   changed no Python file, and every turn that used `patch` or `write_file`,
   is left as before.
 

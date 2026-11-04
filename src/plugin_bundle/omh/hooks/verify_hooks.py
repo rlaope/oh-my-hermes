@@ -13,7 +13,7 @@ from .. import runtime_paths
 from ..caller_check import round_end_note as caller_note
 from ..catch_log import PLAN_CONTINUED, record_catch
 from ..consistency_trigger import (discard_snapshots, note_tool_batch, round_end_trigger, shell_changed_files,
-                                   spend_shell_round_end, turn_root)
+                                   shell_spent_kinds, spend_shell_round_end, turn_root)
 from ..export_check import round_end_note as export_note
 from ..host_observation import observe_plugin_hook_call
 from ..impact_check import round_end_note
@@ -292,7 +292,7 @@ def reset_stashed_answers() -> None:
 # Hermes calls `pre_verify` only after a `patch` / `write_file` landed this turn, so a turn that edits
 # only through a command (`sed -i`, a heredoc script) never reaches it. The round end's structural notes
 # (export, test, caller: each names a line that is broken now, and is empty otherwise) ride the result of
-# the command that changed a Python file instead, once per turn, under their own key. The model reads a
+# the command that changed a Python file instead, each check once per turn, under their own key. The model reads a
 # message's results together, so of a message's commands only its last one is looked at; and a turn whose
 # round end `pre_verify` already ran gets none, since its turn-start text is gone. The consistency
 # checklist does not: it needs the coding posture, which this seam is not given, and alone it names no
@@ -337,15 +337,16 @@ def shell_round_end_note(session_id: object, turn_id: object, tool_call_id: obje
     if not paths or not isinstance(session_id, str):
         return ""
     root = turn_root(session_id)
-    export_message = export_note(session_id, list(paths), "", root)
-    test_message = test_note(session_id, root)
-    caller_message = caller_note(session_id, root, export_message)
+    spent = shell_spent_kinds(session_id)
+    export_message = export_note(session_id, list(paths), "", root) if "export" not in spent else ""
+    test_message = test_note(session_id, root) if "test" not in spent else ""
+    caller_message = caller_note(session_id, root, export_message) if "caller" not in spent else ""
     _LOG.info("shell_round_end session=%s files=%d export=%d test=%d caller=%d", session_id, len(paths),
               bool(export_message), bool(test_message), bool(caller_message))
-    note = "\n".join(text for text in (export_message, test_message, caller_message) if text)
-    if note:
-        spend_shell_round_end(session_id)
-    return note
+    spoke = {kind for kind, text in (("export", export_message), ("test", test_message), ("caller", caller_message))
+             if text}
+    spend_shell_round_end(session_id, spoke)
+    return "\n".join(text for text in (export_message, test_message, caller_message) if text)
 
 
 def _session_plan_reading(kwargs: dict[str, object], session_id: str) -> tuple[str, str, int]:
