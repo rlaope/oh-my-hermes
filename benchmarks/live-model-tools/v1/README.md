@@ -785,6 +785,88 @@ verdicts failed.
 note. So the evidence note is dropped and the settled references stay. Re-measuring that is a new
 pre-registration with new seeds. The branch does not ask to merge on this run.
 
+#### Registration 2 (2026-11-05): the fallback, base vs on
+
+Pre-registered before its first live run. This is a new registration, not an amendment of the one
+above, and no data of this arm exists yet. Smokes are uncounted and say so in their folder name.
+
+**Arms.** Each links its OMH bundle from a `git archive` snapshot (`OPT/opt-l/omh-head/<sha>`):
+- `base` = `225f62ff2`, the origin/main parent of this branch's merge. It includes the caller check
+  (#2546).
+- `on` = `12fb9c0c6`, this branch with the fallback applied: the evidence note is gone (`verify_hooks`
+  is byte-identical to `base`), the settled references stay, and the argument binder is the shared
+  `call_shape.py`.
+
+**Offline replay, before this registration** (`OPT/opt-l/replay.py`, the 198 H2H2 and H2H3 omn
+sessions):
+
+| Tree | Continue decision equal to live | Continues |
+| --- | --- | --- |
+| base `225f62ff2` | 198 / 198 | 68 |
+| on `12fb9c0c6` | n/a | 48 |
+
+- The 20 continues cut are `I-KWARG` 12 and `I-SIGNATURE` 8. Every one is a harmless false positive
+  that passed live.
+- No new fire appears. The other 178 sessions are identical to `base`, note text included.
+- On the first registration's own on-arm `I-SIGNATURE` sessions with a broken caller (h45 x3, luna
+  x3), the caller note fires on this tree and names `src/benchapp/cli.py:5`. That includes both
+  sessions the gate lost. No evidence note is sent.
+
+**Why clauses 5 and 8 change.** The fallback removes the only lever this item had on `C-DECOY`: the
+evidence note. `C-DECOY` replays identically on both trees. A projection, computed before this
+registration, replays this tree over the first registration's base-arm sessions. Wherever this tree
+would not continue, it removes the extra round's share of tokens and its calls:
+- `I-KWARG` 8 and `I-SIGNATURE` 4 continues are cut;
+- pooled median tokens 83,704 to 82,362 (0.984x);
+- sol median 90,984 to 82,721 (0.909x);
+- `C-DECOY` median tokens 100,656 to 100,656 (1.000x), median calls 11 to 11;
+- total tokens 0.961x.
+
+The script is `OPT/opt-l/project_fallback.py` (sha256 `a95e60a3...`), and its output is
+`project_fallback.txt` (sha256 `a5a87ca3...`). Under the first registration's clauses, 5 and 8 would
+fail by construction. They become no-regression clauses. Clauses 6 and 7 stay as the improvement
+clauses.
+
+**Setup.** As the first registration, except:
+- profiles `optl2-<lane>-<arm>` (`OPT/opt-l/make_profiles2.sh`);
+- driver `OPT/opt-l/run_optl2.py` (sha256 `4847b98e...`), which is `run_optl.py` with only the
+  profile prefix and the seeds changed;
+- seeds 284927, 648391 and 731957. None appears under `.omc/research`, in `~/.omh` or on main.
+
+The arms, configuration, panel and routes are unchanged:
+- `claude-proxy` (CPA) for h45 `claude-haiku-4-5-20251001` and s55 `claude-sonnet-5-5`;
+- `openai-codex` for luna `gpt-6-luna` and sol `gpt-6.1-sol`.
+
+Also unchanged: subscription routes only, the 11 templates, 264 runs, the alternating arm order, the
+load and disk gates, the shared live-run lock, retries and crash re-runs, both readings, and the
+definitions. The bench harness is this branch's at registration.
+
+The gate, `on` against `base`. Must hold:
+
+1. Total passes (n = 132): on at least base.
+2. Per template, pooled over the four models (n = 12): on at least base - 1.
+3. `C-DUPLICATE`, `L-RENAME-ALIAS` and `I-SIGNATURE` passes (n = 12 each): on at least base.
+4. `mutation_outside_scope` runs: on at most base.
+
+No regression:
+
+5. Pooled median tokens (n = 132): on at most 1.00x base.
+8. `C-DECOY` (n = 12): continues on at most base, and median tokens on at most 1.05x base.
+
+Must improve:
+
+6. Sol median tokens (n = 33): on at most 0.95x base.
+7. `I-KWARG` + `I-SIGNATURE` continues (n = 24): on strictly below base.
+
+Recomputed from the raw records by `OPT/opt-l/gate2.py`, and again independently by
+`OPT/opt-l/recompute2.py`.
+
+**Fallback.** The same chain as the first registration:
+- a quality clause (1 to 4) fails on a run whose on-arm verdict was `settled`: `_settled` is dropped;
+- only cost clauses (5 to 8) fail: the change does not merge on this run.
+
+A re-measure after any drop is a new registration with new seeds.
+
 ### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
 
 Pre-registered before its first live run.
