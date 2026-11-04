@@ -1728,6 +1728,27 @@ class RedrawKeptRowsTests(unittest.TestCase):
         self.assertEqual(wrapped.call_count, 0)
         self.assertEqual(app.terminal.screen.history(), shown)  # type: ignore[attr-defined]
 
+    def test_a_same_size_settle_keeps_more_of_a_long_session_than_the_old_tail(self) -> None:
+        # The tail was 3,000 rows: a long session's scrollback fell to about that on every tab switch.
+        now = [100.0]
+        app, _client = make_app(rows=24, cols=80, clock=lambda: now[0])
+        replies = (app_module.REDRAW_TAIL_ROWS + 1000) // 11  # 11 rows a reply: its name, 9 rows, a blank one
+        for number in range(replies):
+            app.transcript.blocks.append(AssistantBlock("\n".join(f"reply {number} row {row}" for row in range(9)), done=True))
+            if number % 50 == 0:
+                drawn(app)  # printed as it goes, so the BLOCK_CAP may drop what scrolled off
+        drawn(app)
+        self.assertGreater(len(app.terminal.screen.history()), app_module.REDRAW_TAIL_ROWS + 900)  # type: ignore[attr-defined]
+        app._on_resize()
+        now[0] += RESIZE_SETTLE_SECONDS
+        app._redraw_when_settled()
+        drawn(app)
+        kept = app.terminal.screen.history()  # type: ignore[attr-defined]
+        self.assertGreater(len(kept), 3000 + 24)
+        self.assertGreaterEqual(len(kept), app_module.REDRAW_TAIL_ROWS - 11)  # the cut falls between replies
+        self.assertTrue(kept[0].startswith("⋯ ") and "earlier entries" in kept[0])
+        self.assertIn(f"┃   reply {replies - 1} row 8", kept)
+
     def test_a_redraw_at_a_new_width_lays_every_row_out_as_a_session_drawn_there(self) -> None:
         app, _now = self.session(cols=80)
         self.redraw(app)  # everything kept at 80 columns

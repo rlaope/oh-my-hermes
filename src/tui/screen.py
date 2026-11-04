@@ -156,7 +156,7 @@ TEXT_GAP = 2  # cells left blank between a row's text and the first wallpaper gl
 FLUSHED_KEPT = 512  # flushed rows kept to paint the screen's top row back under the edge frame (more than any screen)
 # A full redraw flushes again the rows flushed last (`app.REDRAW_TAIL_ROWS` and its banner), so what `_flush` works
 # out for a row is kept for this many rows, by row, width and margin: a redraw at the same width works out none again.
-FLUSHED_ROWS_KEPT = 4096
+FLUSHED_ROWS_KEPT = 5120
 
 
 def cursor_up(rows: int) -> str:
