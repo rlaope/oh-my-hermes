@@ -949,12 +949,13 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         if workflow_context:
             payload["omh_active_workflow"] = workflow_context
             context_parts.append(render_active_workflow_context(workflow_context))
-        # `dag-ulw` beside carrying a plan out, on `/plan`'s own turn and on the
-        # turn that accepts a plan just made (`plan_follow_on`). A child is
-        # never offered dag-ulw, nor a home that cannot load it.
+        # `dag-ulw` as one option beside carrying a plan out, on `/plan`'s own
+        # turn and, conditionally, on the turn right after a plan was made
+        # (`plan_follow_on`). A child is never offered dag-ulw, nor a home
+        # that cannot load it.
         if not delegated and (installed_skills is None or DAG_ULW in installed_skills):
             follow_on = plan_turn_line(user_message) or acceptance_line(
-                request_message, kwargs.get("conversation_history"), workflow_context
+                request_message, kwargs.get("conversation_history"), workflow_context, session_id
             )
             if follow_on:
                 context_parts.append(follow_on)

@@ -6,124 +6,166 @@ but neither turn on which the person actually chooses one carried them:
 - Hermes' own `/plan` turn. It is host-written, so nothing of OMH's routes on
   it, and its template closes by offering to carry the plan out. That offer is
   the choice the person later answers ("구현하기"), and it named no engine.
-- The turn that accepts the plan. The planning skill was loaded a turn
+- The turn that answers a plan just made. The planning skill was loaded a turn
   earlier, or never (`/plan`), and the router reads "구현해줘" as plain work.
 
-So each gets one line here. `plan_turn_line` rides `/plan`'s turn, read from
-its frame alone (`host_plan_turn`). `acceptance_line` rides a person's turn
-that follows a plan and reads as accepting it, and is decided in two steps:
+So each gets one line here, and both lines only offer. `plan_turn_line` rides
+`/plan`'s turn, read from its frame alone (`host_plan_turn`).
+`acceptance_line` is conditional: it asks the model to read the person's
+message itself, may name `dag-ulw` beside carrying the plan out directly, and
+tells the model to ignore it when the message declined, held, edited, asked or
+changed topic. A misfire therefore costs one ignored note, never a start. It
+rides at most once per fresh plan, decided in two steps:
 
-1. A plan was just produced, read from structure, never from the words of
-   this turn: the active workflow is a planning one; or the previous turn
-   was `/plan`'s, invoked a planning skill, loaded one with `skill_view`, or
-   wrote or named a plan file (`.hermes/plans/`, `.omh/plans/`).
-2. This turn accepts it and leaves the way to run it open (`accepts_plan`): a
-   short message that says go, without a question, a change, a hold, or the
-   name of a way to run it (`dag-ulw`, `ultrawork`, subagents, "직접").
+1. A plan was just made, read from structure, never from this turn's words.
+   The turn before this one was `/plan`'s, invoked a planning skill by slash,
+   loaded one with `skill_view`, or wrote a plan file (`write_file` or `patch`
+   on a path under `.hermes/plans/` or `.omh/plans/`). A read or a mention of a
+   plan file does not count, so carrying a plan out never reopens it. Or this
+   is the first turn that sees a planning workflow state active for the
+   session (`_first_sight_of_planning_state`, held in this process).
+2. A cheap pre-filter on the person's words (`accepts_plan`): no question
+   mark, and every word from a closed set of go words, acknowledgements and
+   fillers, with at least one go word or acknowledgement. A word outside the
+   set ("아직", "only", "codex로", "테스트") leaves the turn as it was, and so
+   does a long message, which always holds one.
 
 Without step 1 nothing is read, so a turn with no fresh plan renders exactly
-what it rendered before. Both lines only offer: the person picks.
+what it rendered before.
 """
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 import json
 import re
+import threading
+import unicodedata
+from typing import Final
 
 from .hermes_session_commands import host_plan_turn, person_request_text
-from .text_fold import TOKEN_RE, fold_for_match
 
-DAG_ULW = "dag-ulw"
+DAG_ULW: Final = "dag-ulw"
 # The workflow states a plan is drafted under (`ALLOWED_TRANSITIONS` sources that name dag-ulw).
-PLANNING_WORKFLOWS = frozenset({"plan", "ralplan", "refactor-plan"})
+PLANNING_WORKFLOWS: Final = frozenset({"plan", "ralplan", "refactor-plan"})
 # Their catalog names and the labels Hermes lists and `skill_view` loads them by.
-PLANNING_SKILL_NAMES = frozenset({"plan", "omh-plan", "ralplan", "ulw-plan", "refactor-plan", "omh-refactor-plan"})
-PLAN_FILE_DIRS = (".hermes/plans/", ".omh/plans/")
-
-PLAN_TURN_LINE = (
-    "[OMH Plan Follow-on] When you offer to carry this plan out: if it has several tasks with an order "
-    "between them and a verification step, offer `dag-ulw` too (its tasks as a dependency graph with a "
-    "closing verify node) beside carrying it out directly. Start neither this turn."
+PLANNING_SKILL_NAMES: Final = frozenset(
+    {"plan", "omh-plan", "ralplan", "ulw-plan", "refactor-plan", "omh-refactor-plan"}
 )
-ACCEPTANCE_LINE = (
-    "[OMH Plan Follow-on] This message accepts the plan just made without saying how to run it. If the "
-    "plan has several tasks with an order between them and a verification step, and the person has not "
-    "already picked from an offer naming `dag-ulw`, offer `dag-ulw` (the tasks as a dependency graph with "
-    "a closing verify node) beside carrying it out directly, in one line, and start what they pick. "
-    "Otherwise carry it out."
+PLAN_FILE_DIRS: Final = (".hermes/plans/", ".omh/plans/")
+# Hermes' file tools that write (`tools/file_tools.py`); `read_file` and `search_files` only read.
+_WRITE_TOOLS: Final = frozenset({"write_file", "patch"})
+_V4A_FILE_HEADERS: Final = ("*** Add File:", "*** Update File:")
+
+# The fit condition is the planning skills' own (#2558): tasks that form a
+# graph with disjoint write scopes, ending in a verification task.
+PLAN_TURN_LINE: Final = (
+    "[OMH Plan Follow-on] When you offer to carry this plan out, and its tasks form a graph (some can run "
+    "apart, with disjoint write scopes) ending in a verification task, also name `dag-ulw` as one option "
+    "beside carrying it out directly, with the fit reason in one line. Start neither this turn."
+)
+ACCEPTANCE_LINE: Final = (
+    "[OMH Plan Follow-on] A plan was just made. If the person's message accepts it without choosing how to "
+    "run it, and its tasks form a graph (some can run apart, with disjoint write scopes) ending in a "
+    "verification task, you may name `dag-ulw` as one option beside carrying it out directly, with the fit "
+    "reason in one line, unless your last offer already named it. Start nothing they did not pick. If they "
+    "declined, held, edited, asked something or changed topic, ignore this note."
 )
 
-# A message longer than this is doing more than saying go.
-_MAX_WORDS = 12
-_LATIN_TOKEN = re.compile(r"[a-z0-9]+(?:['-][a-z0-9]+)*")
-# Saying go. English is matched as whole tokens or token runs; Korean stems
-# anywhere in the folded text, and Korean acknowledgements as whole words.
-_GO_TOKENS = frozenset(
+_LATIN_TOKEN = re.compile(r"[a-z0-9]+(?:'[a-z]+)?")
+_HANGUL = re.compile(r"[\u1100-\u11ff\u3131-\u318e\uac00-\ud7a3]")
+_EDGE_PUNCTUATION = ".,!~…:;—-–\"'()[]"
+
+# English: every token from this set, and at least one cue among them.
+_EN_CUES: Final = frozenset(
     {
-        "implement", "implementing", "execute", "proceed", "start", "begin", "build", "ship",
-        "approve", "approved", "accept", "accepted", "lgtm", "yes", "yep", "yeah", "ok", "okay", "sure",
+        "implement", "implementing", "execute", "proceed", "start", "begin", "build", "ship", "approve",
+        "approved", "accept", "accepted", "lgtm", "go", "yes", "yep", "yeah", "ok", "okay", "sure", "alright",
+        "good", "great", "perfect",
     }
 )
-_GO_PHRASES = (("do", "it"), ("go", "ahead"), ("carry", "it", "out"), ("looks", "good"), ("sounds", "good"),
-               ("let's", "go"), ("run", "it"))
-_GO_KO_STEMS = ("구현", "진행", "실행", "시작", "승인", "만들어", "개발", "착수", "가자", "고고", "ㄱㄱ", "대로")
-_GO_KO_WORDS = frozenset({"좋아", "좋아요", "좋습니다", "오케이", "ㅇㅋ", "ㅇㅇ", "응", "네", "넵", "예", "그래", "콜"})
-# A change, a question, a hold or a refusal: not acceptance yet.
-_NOT_YET_TOKENS = frozenset(
+_EN_FILLERS: Final = frozenset(
     {
-        "change", "instead", "but", "except", "add", "remove", "drop", "rename", "replace", "update", "revise",
-        "edit", "modify", "rewrite", "redo", "again", "not", "no", "don't", "dont", "wait", "hold", "stop",
-        "cancel", "later", "explain", "why", "what", "how", "which", "first", "before",
+        "please", "pls", "plz", "the", "this", "that", "plan", "now", "then", "let's", "lets", "let", "us",
+        "we", "you", "can", "and", "so", "as", "written", "is", "it", "do", "run", "carry", "out", "ahead",
+        "for", "with", "in", "looks", "sounds", "kick", "off", "all", "right",
     }
 )
-_NOT_YET_KO_STEMS = (
-    "바꿔", "바꾸", "변경", "수정", "고쳐", "대신", "근데", "그런데", "하지만", "다만", "빼고", "빼줘", "추가", "넣어",
-    "다시", "아니", "말고", "잠깐", "기다", "멈춰", "중지", "취소", "보류", "나중", "왜", "뭐", "무엇", "설명", "어떻게",
-    "먼저", "전에",
-)
-# A way to run it, already named: the person chose, so nothing is offered.
-_CHOSEN_TOKENS = frozenset(
-    {"dag", "ulw", "ultrawork", "ultraqa", "ralph", "loop", "team", "subagent", "subagents", "directly",
-     "yourself", "manually"}
-)
-_CHOSEN_KO_STEMS = ("서브에이전트", "서브 에이전트", "직접", "울트라")
+_EN_PHRASE_CUES: Final = (("do", "it"), ("do", "this"), ("run", "it"), ("carry", "it", "out"))
 
 
-def _folded(values: Sequence[str]) -> tuple[str, ...]:
-    return tuple(fold_for_match(value) for value in values)
+def _fold_ko(value: str) -> str:
+    return unicodedata.normalize("NFKC", value).casefold()
 
 
-_GO_KO = _folded(_GO_KO_STEMS)
-_GO_KO_WORDS_FOLDED = frozenset(_folded(tuple(_GO_KO_WORDS)))
-_NOT_YET_KO = _folded(_NOT_YET_KO_STEMS)
-_CHOSEN_KO = _folded(_CHOSEN_KO_STEMS)
+def _ko_set(values: Sequence[str]) -> frozenset[str]:
+    return frozenset(_fold_ko(value) for value in values)
 
 
-def _has_phrase(tokens: list[str], phrases: tuple[tuple[str, ...], ...]) -> bool:
-    return any(
-        tuple(tokens[at:at + len(phrase)]) == phrase for phrase in phrases for at in range(len(tokens) - len(phrase) + 1)
+# Korean: every word from these sets, and at least one cue word among them.
+_KO_ACKS: Final = _ko_set(
+    (
+        "좋아", "좋아요", "좋습니다", "좋다", "좋네", "좋네요", "오케이", "오키", "ㅇㅋ", "ㅇㅇ", "응", "넵", "네", "넹",
+        "예", "그래", "그래요", "콜", "굿", "승인", "승인합니다", "고", "고고", "ㄱ", "ㄱㄱ", "가자", "가즈아",
     )
+)
+_KO_GO_STEMS: Final = ("구현", "진행", "실행", "시작", "착수", "개발", "적용", "작업")
+_KO_GO_ENDINGS: Final = (
+    "", "해", "해줘", "해줘요", "해주세요", "해요", "해라", "하자", "하기", "합시다", "하세요", "하시죠", "해봐",
+    "해보자", "하죠", "고", "고고",
+)
+_KO_GO_WORDS: Final = _ko_set(
+    tuple(stem + ending for stem in _KO_GO_STEMS for ending in _KO_GO_ENDINGS)
+    + ("만들어", "만들어줘", "만들어주세요", "만들어요", "만들자", "들어가자", "해", "해줘", "해주세요", "하자",
+       "합시다", "그렇게")
+)
+_KO_FILLERS: Final = _ko_set(
+    ("이", "그", "이대로", "그대로", "플랜대로", "계획대로", "플랜", "계획", "플랜으로", "계획으로", "플랜을", "계획을",
+     "바로", "그럼", "이제", "자", "주세요", "줘")
+)
+
+_lock = threading.Lock()
+# Per session, the planning workflow already seen active in this process.
+_seen_planning_state: OrderedDict[str, str] = OrderedDict()
+_MAX_TRACKED_SESSIONS: Final = 256
+
+
+def _word_reading(word: str) -> tuple[bool, bool]:
+    """(the word is in the closed set, the word is a go word or acknowledgement)."""
+    if _HANGUL.search(word):
+        if word in _KO_ACKS or word in _KO_GO_WORDS:
+            return True, True
+        return word in _KO_FILLERS, False
+    tokens = _LATIN_TOKEN.findall(word)
+    if not tokens:
+        return False, False
+    allowed = all(token in _EN_CUES or token in _EN_FILLERS for token in tokens)
+    return allowed, allowed and any(token in _EN_CUES for token in tokens)
 
 
 def accepts_plan(text: str) -> bool:
-    """Whether a person's message, read right after a plan, says go and leaves how to run it open."""
-    folded = fold_for_match(text).strip()
-    words = folded.split()
-    if not words or len(words) > _MAX_WORDS or "?" in folded:
+    """The pre-filter: a message made only of go words, acknowledgements and fillers, and no question.
+
+    A path (a word holding `/`) is skipped, so "execute the plan in
+    .hermes/plans/x.md" still reads as go. The model, not this, decides
+    whether the message accepted the plan.
+    """
+    folded = _fold_ko(text).strip()
+    if not folded or "?" in folded:
         return False
-    kept = [word for word in words if "/" not in word]
-    # Latin runs on their own, so a particle glued on ("ultrawork로") leaves the word whole.
-    tokens = [token for word in kept for token in _LATIN_TOKEN.findall(word)]
-    parts = set(tokens) | {part for token in tokens for part in token.split("-")}
-    if parts & (_NOT_YET_TOKENS | _CHOSEN_TOKENS) or any(stem in folded for stem in _NOT_YET_KO + _CHOSEN_KO):
+    words = [word.strip(_EDGE_PUNCTUATION) for word in folded.split() if "/" not in word]
+    words = [word for word in words if word]
+    if not words:
         return False
-    return bool(
-        parts & _GO_TOKENS
-        or _has_phrase(tokens, _GO_PHRASES)
-        or any(stem in folded for stem in _GO_KO)
-        or _GO_KO_WORDS_FOLDED & {token for word in kept for token in TOKEN_RE.findall(word)}
+    readings = [_word_reading(word) for word in words]
+    if not all(allowed for allowed, _ in readings):
+        return False
+    tokens = [token for word in words for token in _LATIN_TOKEN.findall(word)]
+    phrase = any(
+        tuple(tokens[at:at + len(cue)]) == cue for cue in _EN_PHRASE_CUES for at in range(len(tokens) - len(cue) + 1)
     )
+    return phrase or any(cue for _, cue in readings)
 
 
 def _previous_turn(history: object) -> list[Mapping[str, object]]:
@@ -142,25 +184,42 @@ def _previous_turn(history: object) -> list[Mapping[str, object]]:
     return rows[users[-2]:users[-1]]
 
 
-def _names_plan_file(value: object) -> bool:
-    return isinstance(value, str) and any(directory in value for directory in PLAN_FILE_DIRS)
-
-
-def _loaded_planning_skill(call: object) -> bool:
-    function = call.get("function") if isinstance(call, Mapping) else None
-    if not isinstance(function, Mapping) or function.get("name") != "skill_view":
-        return False
+def _arguments(function: Mapping[str, object]) -> Mapping[str, object]:
     arguments = function.get("arguments")
-    try:
-        parsed = json.loads(arguments) if isinstance(arguments, str) else arguments
-    except ValueError:
+    if isinstance(arguments, str):
+        try:
+            arguments = json.loads(arguments)
+        except ValueError:
+            return {}
+    return arguments if isinstance(arguments, Mapping) else {}
+
+
+def _in_plan_dir(path: object) -> bool:
+    return isinstance(path, str) and any(directory in path for directory in PLAN_FILE_DIRS)
+
+
+def _makes_plan(call: object) -> bool:
+    """A tool call that loads a planning skill or writes a plan file."""
+    function = call.get("function") if isinstance(call, Mapping) else None
+    if not isinstance(function, Mapping):
         return False
-    name = parsed.get("name") if isinstance(parsed, Mapping) else None
-    return isinstance(name, str) and name.strip().rsplit("/", 1)[-1] in PLANNING_SKILL_NAMES
+    name = function.get("name")
+    arguments = _arguments(function)
+    if name == "skill_view":
+        skill = arguments.get("name")
+        return isinstance(skill, str) and skill.strip().rsplit("/", 1)[-1] in PLANNING_SKILL_NAMES
+    if name not in _WRITE_TOOLS:
+        return False
+    if _in_plan_dir(arguments.get("path")):
+        return True
+    patch = arguments.get("patch")
+    return isinstance(patch, str) and any(
+        line.startswith(_V4A_FILE_HEADERS) and _in_plan_dir(line) for line in patch.splitlines()
+    )
 
 
 def plan_just_made(history: object) -> bool:
-    """Whether the turn before this one produced a plan, read from its rows' structure."""
+    """Whether the turn before this one made a plan, read from its rows' structure."""
     turn = _previous_turn(history)
     if not turn:
         return False
@@ -171,18 +230,39 @@ def plan_just_made(history: object) -> bool:
         invoked = person_request_text(opening).split(maxsplit=1)
         if invoked and invoked[0].startswith("/") and invoked[0][1:] in PLANNING_SKILL_NAMES:
             return True
-    for row in turn[1:]:
-        if row.get("role") != "assistant":
-            continue
-        if _names_plan_file(row.get("content")):
-            return True
-        for call in row.get("tool_calls") or ():
-            if _loaded_planning_skill(call):
-                return True
-            function = call.get("function") if isinstance(call, Mapping) else None
-            if isinstance(function, Mapping) and _names_plan_file(function.get("arguments")):
-                return True
-    return False
+    return any(
+        _makes_plan(call)
+        for row in turn[1:]
+        for call in (row.get("tool_calls") or ())
+    )
+
+
+def _first_sight_of_planning_state(session_id: str, active_workflow: Mapping[str, object] | None) -> bool:
+    """True on the first turn this process sees a planning workflow active for the session.
+
+    The mark is dropped on a turn that sees none, so a later activation counts
+    again. A restarted process sees an active state for the first time once
+    more; the line it may add then is the conditional note above.
+    """
+    key = session_id.strip()
+    workflow = active_workflow.get("workflow") if active_workflow and active_workflow.get("state") == "active" else None
+    with _lock:
+        if workflow not in PLANNING_WORKFLOWS or not key:
+            if key:
+                _ = _seen_planning_state.pop(key, None)
+            return False
+        if _seen_planning_state.get(key) == workflow:
+            return False
+        _seen_planning_state[key] = str(workflow)
+        _seen_planning_state.move_to_end(key)
+        while len(_seen_planning_state) > _MAX_TRACKED_SESSIONS:
+            _ = _seen_planning_state.popitem(last=False)
+        return True
+
+
+def reset_plan_follow_on_state() -> None:
+    with _lock:
+        _seen_planning_state.clear()
 
 
 def plan_turn_line(user_message: object) -> str:
@@ -190,19 +270,17 @@ def plan_turn_line(user_message: object) -> str:
     return PLAN_TURN_LINE if host_plan_turn(user_message) else ""
 
 
-def acceptance_line(request: str, history: object, active_workflow: Mapping[str, object] | None) -> str:
-    """`ACCEPTANCE_LINE` on a person's turn that accepts a plan just made, else "".
+def acceptance_line(
+    request: str, history: object, active_workflow: Mapping[str, object] | None, session_id: str = ""
+) -> str:
+    """`ACCEPTANCE_LINE` on a person's turn right after a plan was made, when the pre-filter passes; else "".
 
     `request` is the person's own words (empty on a turn Hermes wrote), and
     `active_workflow` this session's `active_workflow_context` projection.
+    The state is observed on every turn, so its first sight is spent on the
+    turn right after the activation whatever that turn says.
     """
-    if not request.strip():
-        return ""
-    planning = bool(
-        active_workflow
-        and active_workflow.get("state") == "active"
-        and active_workflow.get("workflow") in PLANNING_WORKFLOWS
-    )
-    if not (planning or plan_just_made(history)):
+    fresh_state = _first_sight_of_planning_state(session_id, active_workflow)
+    if not request.strip() or not (fresh_state or plan_just_made(history)):
         return ""
     return ACCEPTANCE_LINE if accepts_plan(request) else ""

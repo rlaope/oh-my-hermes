@@ -126,10 +126,10 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # fallback label that only respells the action's underscores is dropped
 # (-73). Re-derived from the producer.
 # 5632 unchanged: the `plan_acceptance` scenario joins the set so the plan
-# follow-on line (`plan_follow_on`, 417 with its join) is measured on the turn
+# follow-on line (`plan_follow_on`, 479 with its join) is measured on the turn
 # that accepts a plan Hermes' `/plan` just wrote, beside the route hint and
-# the active plan line (2697). It rides only that turn and `/plan`'s own
-# (393 fenced alone), so it is under `all_surfaces`, which still sets the maximum,
+# the active plan line (2759). It rides at most once per plan made, and on
+# `/plan`'s own turn (410 fenced alone), so it is under `all_surfaces`, which still sets the maximum,
 # and the fallback maximum is unchanged with it. Re-derived from the producer.
 PRE_LLM_CALL_CONTEXT_CHAR_LIMIT = 5632
 # The same scenario set on the fallback: a session the awareness section did
