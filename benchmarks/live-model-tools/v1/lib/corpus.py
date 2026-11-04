@@ -34,8 +34,11 @@ CONSISTENCY_AB_TEMPLATES = (("DUPLICATE", "edit"), ("SCOPE-TRAP", "edit"), ("DEC
 # Each edit template changes a definition whose callers sit in other modules (one through
 # an alias, one through the module, one through a package re-export or `**options`), and
 # only the definition's own module has a test in the workspace; CONTROL breaks nothing.
+# DEFAULTED is the caller check's control: a signature change every existing call still binds to,
+# reached the same four ways plus a `*args` forwarder, so a correct edit leaves every caller as it is.
 IMPACT_AB_SPLIT = "impact-ab"
-IMPACT_AB_TEMPLATES = (("SIGNATURE", "edit"), ("RETURN-SHAPE", "edit"), ("KWARG", "edit"), ("CONTROL", "edit"))
+IMPACT_AB_TEMPLATES = (("SIGNATURE", "edit"), ("RETURN-SHAPE", "edit"), ("KWARG", "edit"), ("CONTROL", "edit"),
+                       ("DEFAULTED", "edit"))
 SPLITS = ("development", "evaluation", LSP_AB_SPLIT, IMPACT_AB_SPLIT, CONSISTENCY_AB_SPLIT)
 
 @dataclass(frozen=True)
@@ -557,11 +560,55 @@ def _control_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
     return files, {"allowed_paths": sorted(files), "allowed_prefixes": ["tests/"]}
 
 
+def _defaulted_params(seed: int) -> dict[str, Any]:
+    randomizer = random.Random(seed)
+    return {"per_kg": randomizer.choice((40, 55, 70)), "alias": randomizer.choice(("cost_for", "ship_for", "calc_cost"))}
+
+
+def _defaulted_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
+    """A keyword-only parameter with a default added to a function called directly, through an alias,
+    through the module (by a wrapper that forwards `*args`) and through a package re-export under
+    another name: every existing call still binds, so nothing outside the definition has to change."""
+    params = _defaulted_params(seed)
+    per_kg, alias = params["per_kg"], params["alias"]
+    files = {
+        "src/benchapp/__init__.py": "from .shipping import ship_cost as cost\n\n__all__ = [\"cost\"]\n",
+        "src/benchapp/shipping.py": (
+            '"""Shipping arithmetic."""\n\n\ndef ship_cost(weight_g: int, zone: int) -> int:\n'
+            '    """Cost in cents for a parcel of weight_g grams sent to a zone."""\n'
+            f"    return weight_g * zone * {per_kg} // 1000\n"
+        ),
+        "src/benchapp/orders.py": (
+            "from benchapp.shipping import ship_cost\n\n\n"
+            "def order_total(subtotal_cents: int, weight_g: int) -> int:\n"
+            "    return subtotal_cents + ship_cost(weight_g, 2)\n"
+        ),
+        "src/benchapp/labels.py": (
+            f"from benchapp.shipping import ship_cost as {alias}\n\n\n"
+            f"def label_cost(weight_g: int) -> int:\n    return {alias}(weight_g, zone=3)\n"
+        ),
+        "src/benchapp/express.py": (
+            "from benchapp import shipping\n\n\n"
+            "def express_cost(weight_g: int, *args: int) -> int:\n    return 2 * shipping.ship_cost(weight_g, *args)\n"
+        ),
+        "src/benchapp/cli.py": (
+            "from benchapp import cost\n\n\n"
+            "def cli_cost(argv: list[str]) -> int:\n    return cost(int(argv[0]), 1)\n"
+        ),
+        "tests/test_shipping.py": (
+            "from benchapp.shipping import ship_cost\n\n\n"
+            f"def test_ship_cost():\n    assert ship_cost(1000, 2) == {2 * per_kg}\n"
+        ),
+    }
+    return files, {"allowed_paths": sorted(files), "allowed_prefixes": ["tests/"], "per_kg": per_kg}
+
+
 _IMPACT_AB_FIXTURES = {
     "SIGNATURE": _signature_fixture,
     "RETURN-SHAPE": _return_shape_fixture,
     "KWARG": _kwarg_fixture,
     "CONTROL": _control_fixture,
+    "DEFAULTED": _defaulted_fixture,
 }
 
 
@@ -583,6 +630,7 @@ def _prompt(template_id: str, task_class: str, seed: int, decision: str) -> str:
         "RETURN-SHAPE": "Change build_quote in src/benchapp/quotes.py to return a frozen dataclass Quote, defined in quotes.py with fields units: int and total_cents: int, instead of a dict, and update the code that uses its result so behaviour stays the same. Return JSON with changed_paths.",
         "KWARG": "Rename the keyword-only parameter timeout of fetch in src/benchapp/http_client.py to timeout_s (do not keep timeout as an alias). What fetch returns stays the same, and every caller must keep its behaviour. Return JSON with changed_paths.",
         "CONTROL": "Make to_cents in src/benchapp/units.py raise ValueError('negative amount') for a negative amount, without changing its signature or its result for any other amount. Return JSON with changed_paths.",
+        "DEFAULTED": "ship_cost in src/benchapp/shipping.py must support a handling surcharge: add a keyword-only parameter handling_cents: int with default 0, and add it to the cost it returns. Existing callers pass no surcharge, so their results do not change. Return JSON with changed_paths.",
         "RENAME-EXPORTS": "Rename the function fetch_rows in src/benchapp/store/rows.py to load_rows everywhere it is referenced, including the store package's __all__, without changing behavior. Return JSON with changed_paths.",
         "RENAME-SHADOW": "Rename the function parse_limit defined in src/benchapp/limits.py to read_limit at its definition and every reference to that function, without changing behavior. Parameters or local variables that merely share the name are not references and must stay. Return JSON with changed_paths.",
     }
