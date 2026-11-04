@@ -146,6 +146,7 @@ from ..memory_records import (
     read_record_store_snapshot,
     record_used,
     select_prefetch_records,
+    snapshot_marked,
 )
 from ..memory_store_io import (
     assert_under_memory_root,
@@ -1316,7 +1317,7 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             row["subject"] = item["subject"]
         # The same mark the live pack carries: a later session learns here
         # that saving this thing's changed state should name it in `replaces`.
-        if point_in_time_cue(str(item.get("summary", "") or ""), str(item.get("record_type", "") or "")):
+        if snapshot_marked(item):
             row["snapshot"] = "as-of"
         rows.append(row)
     has_origin = _attach_origins(rows, snapshot.records, lens)

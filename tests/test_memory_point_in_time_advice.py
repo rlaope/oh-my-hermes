@@ -175,43 +175,72 @@ class SnapshotRecallMarkerTests(unittest.TestCase):
         self.assertEqual(len(rules), 1, text)
         self.assertEqual(rules[0].text, SNAPSHOT_RULE)
         # #2538's limit travels with the mark: only the same thing changing is a replacement.
-        self.assertIn("when that same thing changes", SNAPSHOT_RULE)
-        self.assertIn("Something newly added is its own record, saved without replaces", SNAPSHOT_RULE)
+        self.assertIn("still hold until it changes", SNAPSHOT_RULE)
+        self.assertIn("When that same thing changes", SNAPSHOT_RULE)
+        self.assertIn("something newly added is its own record, saved without replaces", SNAPSHOT_RULE)
 
-    def test_constraint_lesson_and_procedure_records_render_as_before(self) -> None:
+    def test_constraint_episode_lesson_and_procedure_records_render_as_before(self) -> None:
         records = [
             _record("mem_a", "As of v4.0 the gateway requires TLS 1.3."),
+            # An event never changes: capture still advises on it, recall does not mark it.
+            _record("mem_e", "Bug fixed in v1.2.3 of libfoo.", "episode"),
             _record("mem_b", SNAPSHOT, "procedure"),
             _record("mem_c", SNAPSHOT, "lesson"),
             _record("mem_d", LASTING),
         ]
+        self.assertTrue(point_in_time_cue("Bug fixed in v1.2.3 of libfoo.", "episode"))
         text, count = render_memory_records(records)
-        self.assertEqual(count, 4)
+        self.assertEqual(count, 5)
         self.assertNotIn("snapshot", text)
         self.assertEqual(
             text.splitlines()[1],
             '  <record id="mem_a" type="fact" approved="2026-10-30">As of v4.0 the gateway requires TLS 1.3.</record>',
         )
 
-    def test_the_rule_is_inside_the_bound_at_every_budget(self) -> None:
+    def test_the_mark_never_changes_which_records_render(self) -> None:
         records = [_record("mem_a", LASTING), _record("mem_b", SNAPSHOT), _record("mem_c", "Postgres 16 is the production database.")]
         full, _count = render_memory_records(records)
-        previous = 0
         for budget in range(len(full) + 1):
             text, count = render_memory_records(records, budget_chars=budget)
+            with patch.object(memory_records, "snapshot_marked", return_value=False):
+                plain, plain_count = render_memory_records(records, budget_chars=budget)
             with self.subTest(budget=budget):
+                # The same records as with no mark at all; the mark is added only when it fits.
+                self.assertEqual(count, plain_count)
                 self.assertLessEqual(len(text), budget)
-                # A larger bound never blanks a section a smaller one held: the
-                # line is counted when its first marked record is admitted.
-                self.assertGreaterEqual(count, previous)
-                previous = count
+                if text != plain:
+                    self.assertEqual(text.replace(f"\n  <snapshots>{SNAPSHOT_RULE}</snapshots>", "").replace(' snapshot="as-of">', ">"), plain)
                 if text:
-                    marked = _marked(text)
-                    self.assertEqual(len(marked), count)
-                    self.assertEqual(text.count("<snapshots>"), int(any(marked.values())))
-        lone, _count = render_memory_records([_record("mem_b", SNAPSHOT)])
-        self.assertEqual(render_memory_records([_record("mem_b", SNAPSHOT)], budget_chars=len(lone)), (lone, 1))
-        self.assertEqual(render_memory_records([_record("mem_b", SNAPSHOT)], budget_chars=len(lone) - 1)[1], 0)
+                    self.assertEqual(text.count("<snapshots>"), int(any(_marked(text).values())))
+        lone = [_record("mem_b", SNAPSHOT)]
+        marked, _count = render_memory_records(lone)
+        with patch.object(memory_records, "snapshot_marked", return_value=False):
+            plain, _count = render_memory_records(lone)
+        self.assertIn("<snapshots>", marked)
+        for budget in (len(plain), len(marked) - 1):
+            with self.subTest(lone_budget=budget):
+                self.assertEqual(render_memory_records(lone, budget_chars=budget), (plain, 1))
+        self.assertEqual(render_memory_records(lone, budget_chars=len(marked)), (marked, 1))
+        self.assertEqual(render_memory_records(lone, budget_chars=len(plain) - 1)[1], 0)
+
+    def test_a_snapshot_never_costs_a_record_at_the_live_budget(self) -> None:
+        # The provider renders at the default bound with the prefix rule; six
+        # records that fit unmarked must all render, as on main.
+        records = [_record("mem_0", (SNAPSHOT + " " + "x" * 280)[:330])]
+        records += [_record(f"mem_{index}", f"Lasting fact {index} " + "y" * 280) for index in range(1, 6)]
+
+        def render() -> tuple[str, list]:
+            return memory_records._render_bounded(
+                records, budget_chars=memory_records.DEFAULT_RECORD_RENDER_BUDGET_CHARS, limit=None,
+                omissions={"render_budget_exhausted": 0, "over_budget": 0}, preserve_prefix=True,
+            )
+
+        text, rendered = render()
+        with patch.object(memory_records, "snapshot_marked", return_value=False):
+            plain, plain_rendered = render()
+        self.assertEqual(len(plain_rendered), 6)
+        self.assertEqual(rendered, plain_rendered)
+        self.assertEqual(text, plain, "the mark does not fit here, so the section is main's bytes")
 
     def test_the_record_index_line_carries_no_mark(self) -> None:
         pairs = [reviewed("mem_one", summary=SNAPSHOT), reviewed("mem_two", summary=RELEASE_NOTE, subject="folder-export")]
@@ -226,6 +255,14 @@ class SnapshotRecallMarkerTests(unittest.TestCase):
         self.assertEqual(shown.text.count("<snapshots>"), 1)
         index_line = next(line for line in shown.text.splitlines() if "<record_index" in line)
         self.assertNotIn("snapshot", index_line)
+        # Short of room for the mark, the indexed section keeps the same records and index, unmarked.
+        with patch.object(memory_records, "snapshot_marked", return_value=False):
+            plain = memory_records.render_selected_memory_records(selected, records, index_fallback=True, full_text_ids={"mem_one"})
+        tight = memory_records.render_selected_memory_records(
+            selected, records, index_fallback=True, full_text_ids={"mem_one"}, budget_chars=len(shown.text) - 1,
+        )
+        self.assertEqual((tight.text, tight.rendered, tight.indexed), (plain.text, plain.rendered, plain.indexed))
+        self.assertEqual(tight.indexed, shown.indexed)
 
 
 class SnapshotRecallMarkerReachTests(_StoreCase):
@@ -248,7 +285,7 @@ class SnapshotRecallMarkerReachTests(_StoreCase):
         saved = self.save(summary="As of 2026-10-30 (v0.1.7), nanran's sidebar lists papers in one flat list.")
         pack = serve(provider(self.root, session_id="session-later"), "nanran sidebar papers")
         self.assertIn(f'<record id="{saved["record_id"]}"', pack)
-        self.assertEqual(pack.count('snapshot="as-of"'), 1, pack)
+        self.assertEqual(pack.count(' snapshot="as-of">'), 1, pack)
         self.assertEqual(pack.count(f"<snapshots>{SNAPSHOT_RULE}</snapshots>"), 1, pack)
 
 

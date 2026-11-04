@@ -705,21 +705,30 @@ newer", "Stay on React v18.3"), and neither do a bare `v1`, "since v0.1.12", or
 a Korean dated phrase (`2026-10-30 기준`).
 
 The save result reaches only the session that saved the record, and the state
-usually changes weeks later in another one. So recall marks the same records
-with the same rule. In the provider's `<memory_records>` pack, a snapshot
-record's element carries `snapshot="as-of"`, and a section holding at least
-one such record ends with one shared line, never one per record:
+usually changes weeks later in another one. So recall marks snapshot records
+with the same cue, for `fact` and `decision` records only. An `episode` is an
+event, which never changes, so recall leaves it unmarked even though its save
+was advised. In the provider's `<memory_records>` pack, a marked record's
+element carries `snapshot="as-of"`, and a section holding at least one marked
+record ends with one shared line, never one per record:
 
 ```text
-  <snapshots>Records marked snapshot state one thing at one moment: when that same thing changes, save its new state with replaces set to that id. Something newly added is its own record, saved without replaces.</snapshots>
+  <snapshots>Records marked snapshot="as-of" describe something as it stood on a date or version, and still hold until it changes. When that same thing changes, save its new state with replaces set to that id; something newly added is its own record, saved without replaces.</snapshots>
 ```
 
 `omh_remember` / `omh_memory` recall rows carry `"snapshot": "as-of"`, and
 the result's `next_action` states the same rule once. The `<record_index>`
 line is unchanged: it names records without their text, so nothing there is
-marked. Marking changes only rendered text. Selection, ranking, dedup and
-the receipt's record digests are unchanged. The section's character bound
-counts the shared line exactly, only once a marked record is admitted.
+marked.
+
+The mark is advisory and never costs a record. The section admits records
+exactly as it would unmarked. The attributes and the line are added only when
+the whole section still fits its character bound; otherwise the section is
+rendered unmarked. Selection, ranking, dedup and the receipt's record
+digests are unchanged.
+
+The cue is English only: a Korean snapshot (`2026-10-30 기준`) is neither
+advised at capture nor marked at recall.
 
 `subject` is optional: a short slug the model chooses for what the fact is
 about (`deploy-branch`, `reply-language`), in the closed shape
