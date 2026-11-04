@@ -39,12 +39,30 @@ from typing import Any
 from .awareness_delivery import _awareness_delivery_lock
 from .hermes_memory import RECORDS_DIRECTORY_LABEL, REVIEWS_DIRECTORY_LABEL, _read_reviews, _reviewed_records, read_reviewed_records
 from .memory_recall_selector import MemoryRecallSelection, select_memory_recall
-from .memory_recall_support import PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION
+from .memory_recall_support import PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION, point_in_time_cue
 from .memory_store_io import atomic_write_json, guard_store_write
 
 DEFAULT_RECORD_RENDER_BUDGET_CHARS = 2400
 DEFAULT_RECORD_LIMIT = 6
 RECORD_SUMMARY_LIMIT_CHARS = 500
+# A recalled point-in-time snapshot ("As of 2026-10-30 (v0.1.7), nanran has
+# ...") is marked on its element, with one shared line per section saying what
+# the mark asks. Capture's `point_in_time` advice reaches only the session that
+# saved the record; the state usually changes weeks later in another session,
+# which sees the record only here. The cue is capture's own
+# (`point_in_time_cue`), narrowed to facts and decisions: an episode is an
+# event, which never changes, so a mark there would invite a wrong `replaces`.
+# Every byte is replayed per turn, so the mark is one attribute and the rule is
+# one line, never per record. The mark is advisory: records are admitted
+# exactly as without it, and it is added only when the whole section still fits.
+SNAPSHOT_RECORD_ATTRIBUTE = ' snapshot="as-of"'
+SNAPSHOT_RECORD_TYPES = ("fact", "decision")
+SNAPSHOT_RULE = (
+    'Records marked snapshot="as-of" describe something as it stood on a date or version, and still hold until it '
+    "changes. When that same thing changes, save its new state with replaces set to that id; something newly added "
+    "is its own record, saved without replaces."
+)
+SNAPSHOT_RECALL_LINE = f"  <snapshots>{SNAPSHOT_RULE}</snapshots>"
 # The live provider serves the Hermes session itself, so the perspective lens
 # is Hermes: records observed about another executor stay out of the turn.
 PREFETCH_EXECUTOR_TARGET = "hermes"
@@ -401,13 +419,15 @@ def _render_indexed_bounded(
         return "", [], ()
     index_line = _record_index_line(index_items) if index_items else ""
 
-    def section(count: int, include_index: bool) -> str:
-        lines = ["<memory_records>", *(_render_record(record) for record in full_items[:count])]
+    def section(count: int, include_index: bool, mark: bool = False) -> str:
+        lines = ["<memory_records>", *(_render_record(record, mark=mark) for record in full_items[:count])]
         if include_index:
             lines.append(index_line)
         unresolved = sum(1 for record in full_items[:count] if _is_open(record))
         if unresolved:
             lines.append(_unresolved_line(unresolved))
+        if mark and any(snapshot_marked(record) for record in full_items[:count]):
+            lines.append(SNAPSHOT_RECALL_LINE)
         omitted = len(full_items) - count + (0 if include_index else len(index_items))
         if omitted:
             lines.append(f'  <omitted count="{omitted}" reason="render_budget_exhausted" />')
@@ -427,7 +447,8 @@ def _render_indexed_bounded(
             text = section(count, include_index)
             if len(text) <= max(budget_chars, 0):
                 indexed = tuple(str(record["record_id"]) for record in index_items) if include_index else ()
-                return text, full_items[:count], indexed
+                marked = section(count, include_index, mark=True)
+                return (marked if len(marked) <= max(budget_chars, 0) else text), full_items[:count], indexed
     return "", [], ()
 
 
@@ -471,10 +492,10 @@ def _render_bounded(
 ) -> tuple[str, list[dict[str, Any]]]:
     if not records:
         return "", []
-    lines, rendered = ["<memory_records>"], []
+    rendered: list[dict[str, Any]] = []
     omissions = dict(omissions)
     closing = "</memory_records>"
-    used = len(lines[0]) + 1 + len(closing)
+    used = len("<memory_records>") + 1 + len(closing)
     # Reserve every possible report once, at the largest count it can carry,
     # not an unbounded line per record.
     reserve = sum(
@@ -503,18 +524,33 @@ def _render_bounded(
             continue
         used += 1 + len(element)
         rendered.append(record)
-        lines.append(element)
-    unresolved = sum(1 for record in rendered if _is_open(record))
-    if unresolved:
-        lines.append(_unresolved_line(unresolved))
-    lines.extend(f'  <omitted count="{count}" reason="{reason}" />' for reason, count in omissions.items() if count)
-    lines.append(closing)
-    text = "\n".join(lines)
-    return (text, rendered) if len(text) <= max(budget_chars, 0) else ("", [])
+
+    def section(mark: bool) -> str:
+        lines = ["<memory_records>", *(_render_record(record, mark=mark) for record in rendered)]
+        unresolved = sum(1 for record in rendered if _is_open(record))
+        if unresolved:
+            lines.append(_unresolved_line(unresolved))
+        if mark and any(snapshot_marked(record) for record in rendered):
+            lines.append(SNAPSHOT_RECALL_LINE)
+        lines.extend(f'  <omitted count="{count}" reason="{reason}" />' for reason, count in omissions.items() if count)
+        lines.append(closing)
+        return "\n".join(lines)
+
+    text = section(False)
+    if len(text) > max(budget_chars, 0):
+        return "", []
+    marked = section(True)
+    return (marked if len(marked) <= max(budget_chars, 0) else text), rendered
 
 
 def _is_open(record: dict[str, Any]) -> bool:
     return str(record.get("resolution", "") or "") == "open"
+
+
+def snapshot_marked(record: Mapping[str, Any]) -> bool:
+    """Whether recall marks this record as a point-in-time snapshot (pack and tool recall alike)."""
+    record_type = str(record.get("record_type", "") or "")
+    return record_type in SNAPSHOT_RECORD_TYPES and point_in_time_cue(str(record.get("summary", "") or ""), record_type)
 
 
 def _unresolved_line(count: int) -> str:
@@ -522,7 +558,7 @@ def _unresolved_line(count: int) -> str:
     return f'  <unresolved count="{count}">{count} unresolved records delivered</unresolved>'
 
 
-def _render_record(record: dict[str, Any]) -> str:
+def _render_record(record: dict[str, Any], *, mark: bool = False) -> str:
     summary = str(record.get("summary", "") or "")[:RECORD_SUMMARY_LIMIT_CHARS]
     approved = str(record.get("approved_at", "") or "")[:10]
     # An open record carries its delivery marker on the element itself, so a
@@ -531,9 +567,10 @@ def _render_record(record: dict[str, Any]) -> str:
     # exactly as before.
     marker = str(record.get("resolution_marker", "") or "") if _is_open(record) else ""
     resolution = f' resolution="{_attribute(marker)}"' if marker else ""
+    snapshot = SNAPSHOT_RECORD_ATTRIBUTE if mark and snapshot_marked(record) else ""
     return (
         f'  <record id="{_attribute(record.get("record_id", ""))}" type="{_attribute(record.get("record_type", ""))}"'
-        f' approved="{_attribute(approved)}"{resolution}>{_text(summary)}</record>'
+        f' approved="{_attribute(approved)}"{resolution}{snapshot}>{_text(summary)}</record>'
     )
 
 
@@ -697,6 +734,7 @@ __all__ = [
     "RECORD_SUMMARY_LIMIT_CHARS",
     "RecordStoreSnapshot",
     "RenderedRecordSection",
+    "SNAPSHOT_RULE",
     "origin_record_ids",
     "prefetch_required_scope_kinds",
     "prefetch_scope_allowlist",
@@ -709,4 +747,5 @@ __all__ = [
     "render_memory_records",
     "render_selected_memory_records",
     "select_prefetch_records",
+    "snapshot_marked",
 ]
