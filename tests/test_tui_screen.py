@@ -363,6 +363,43 @@ def blank_backgrounds(screen: VTScreen, rows: range) -> set[str | None]:
             if not screen.line(row)[col:col + 1].strip()}
 
 
+def background_of(params: tuple[int, ...]) -> str | None:
+    """`background_at` for a cell's SGR parameters."""
+    colour, at = None, 0
+    while at < len(params):
+        if params[at] in (38, 48) and params[at + 1:at + 2] == (2,):
+            colour = "#%02X%02X%02X" % params[at + 2:at + 5] if params[at] == 48 else colour
+            at += 5
+            continue
+        colour = None if params[at] in (0, 49) else colour
+        at += 1
+    return colour
+
+
+def autowrap_at_erases(written: str) -> set[bool]:
+    """Whether autowrap was on at each erase-below and erase-line in `written`, read in order."""
+    states, on = set(), True
+    for match in re.finditer(r"\x1b\[\?7([hl])|\x1b\[2?[JK]", written):
+        if match.group(1):
+            on = match.group(1) == "h"
+        else:
+            states.add(on)
+    return states
+
+
+class ScrolledAttrs(VTScreen):
+    """The VT screen keeping the attributes of every row it scrolls into the scrollback."""
+
+    def __init__(self, rows: int, cols: int) -> None:
+        super().__init__(rows, cols)
+        self.scrolled_attrs: list[list[tuple[int, ...]]] = []
+
+    def _line_feed(self) -> None:
+        if self._row >= self.rows - 1:
+            self.scrolled_attrs.append(list(self._attrs[0]))
+        super()._line_feed()
+
+
 class GroundTests(unittest.TestCase):
     """A region given a look's ground (`screen.on_ground`) erases on it, so a terminal that clears a cell with its own
     colour whatever OSC 11 set (Otty) shows the ground there too: every erase, the margins, and a new ground painted
@@ -450,6 +487,7 @@ class GroundTests(unittest.TestCase):
         harness.region.clear()
         self.assertTrue(harness.writes[-1].endswith(screen_module.ERASE_BELOW))
         self.assertNotIn("48;2", harness.writes[-1], "the shell's rows come back on its own background")
+        self.assertNotIn(screen_module.SYNC_BEGIN, harness.writes[-1], "nothing painted again: the bytes as before")
 
     def test_taking_the_glows_frame_off_erases_its_rows_on_the_ground(self) -> None:
         from omh.tui.edge_glow import Edge
@@ -463,8 +501,67 @@ class GroundTests(unittest.TestCase):
         self.assertIn("*", harness.screen.line(7))
         harness.region.render(plain("one", "two"), (1, 0), 18, screen_rows=7)
         self.assertNotIn("*", harness.screen.line(0) + harness.screen.line(7))
-        # The top and last rows are erased; the side cells between are written blank, which takes the ground set.
-        self.assertEqual(blank_backgrounds(harness.screen, range(0, 8, 7)), {GROUND})
+        self.assertEqual(blank_backgrounds(harness.screen, range(0, 8, 7)), {GROUND}, "the top and last rows, erased")
+        # The side cells between are written blank, on the ground: the same cell an erase leaves.
+        self.assertEqual({background_at(harness.screen, row, col) for row in range(1, 7) for col in (0, 19)},
+                         {GROUND})
+
+    def test_a_blanked_wallpaper_cell_is_the_cell_an_erase_leaves(self) -> None:
+        from omh.tui.wallpaper import Cell
+
+        glyph = "#445566"
+        with self.subTest("taken off (no wallpaper)"):
+            harness = Harness(rows=8, at_top=True)
+            harness.region = LiveRegion(harness._write, at_top=True, ground=GROUND)
+            harness.region.render(plain("live"), (0, 0), 20, screen_rows=8, ambient=(Cell(5, 3, "@", glyph),))
+            self.assertEqual(harness.screen.line(5)[3], "@")
+            harness.region.render(plain("live"), (0, 0), 20, screen_rows=8, ambient=None)
+            self.assertEqual((harness.screen.line(5)[3:4].strip(), background_at(harness.screen, 5, 3)), ("", GROUND))
+        with self.subTest("lifted before a scroll carries it into the scrollback"):
+            harness = Harness(rows=6, at_top=True)
+            harness.screen = ScrolledAttrs(6, 20)
+            harness.region = LiveRegion(harness._write, at_top=True, ground=GROUND)
+            above = (Cell(0, 10, "@", glyph),)
+            harness.region.render(plain("a", "b"), (1, 0), 20, flush=plain("f0", "f1", "f2"), screen_rows=6,
+                                  ambient=above, ambient_above=True)
+            self.assertEqual(harness.screen.line(0)[10], "@")
+            harness.region.render(plain("a", "b"), (1, 0), 20, flush=plain("g0", "g1", "g2"), screen_rows=6,
+                                  ambient=above, ambient_above=True)
+            scrolled = harness.screen.scrollback.index("f0")
+            self.assertEqual(background_of(harness.screen.scrolled_attrs[scrolled][10]), GROUND)
+
+    def test_a_clear_that_paints_the_screen_again_is_one_synchronized_update_with_autowrap_off(self) -> None:
+        harness = Harness(rows=8, at_top=True)
+        harness.region = LiveRegion(harness._write, at_top=True, ground=GROUND)
+        harness.region.render(plain("live"), (0, 0), 20, flush=plain("done-0", "done-1"), screen_rows=8)
+        harness.region.set_ground(None)
+        harness.region.clear(8)
+        written = harness.writes[-1]
+        self.assertTrue(written.startswith(screen_module.SYNC_BEGIN) and written.endswith(screen_module.SYNC_END))
+        self.assertEqual(autowrap_at_erases(written), {False}, "every erase and row painted with autowrap off")
+        self.assertTrue(written.endswith(screen_module.AUTOWRAP_ON + screen_module.SYNC_END))
+
+    def test_clear_with_the_glows_footer_finds_the_regions_place_on_the_whole_screen(self) -> None:
+        # The region is pushed to the screen's last row: its top is worked out from the height with the footer row.
+        harness = Harness(rows=8, at_top=True)
+        harness.region = LiveRegion(harness._write, at_top=True, margin=1, footer=True, ground=GROUND)
+        for index in range(6):
+            harness.region.render(plain("live", "more"), (1, 0), 18, flush=plain(f"done-{index}"), screen_rows=7)
+        shown = harness.screen.lines()
+        harness.region.set_ground(None)
+        harness.region.clear(7)
+        self.assertEqual(harness.screen.lines()[:5], shown[:5], "the flushed rows painted again where they are")
+        self.assertEqual(blank_backgrounds(harness.screen, range(8)), {None})
+
+    def test_a_new_ground_where_the_regions_place_is_not_certain_erases_from_its_first_row(self) -> None:
+        harness = Harness(rows=10, history=4)  # started wherever the shell left the cursor: its row unknown
+        harness.region = LiveRegion(harness._write, ground=GROUND)
+        harness.render(plain("one", "two"), cursor=(1, 0), screen_rows=10)
+        self.assertIsNone(harness.region.top_row(10))
+        harness.region.set_ground(OTHER_GROUND)
+        harness.render(plain("one", "two"), cursor=(1, 0), screen_rows=10)
+        self.assertEqual(blank_backgrounds(harness.screen, range(4, 10)), {OTHER_GROUND})
+        self.assertEqual(blank_backgrounds(harness.screen, range(4)), {None}, "the shell's rows are not ours")
 
 
 class HeightChangeTests(unittest.TestCase):

@@ -863,12 +863,14 @@ class LiveRegion:
         if not self._rows and self._parked == (0, 0):
             return
         ops: list[str] = self._unframe() + self._unpaper()  # cells above the region's top survive the erase below
-        if self._regrounded and screen_rows is not None:
-            ops += self._reground(screen_rows + self._footer)
+        regrounding = self._regrounded and screen_rows is not None
+        if regrounding:
+            ops += [AUTOWRAP_OFF, *self._reground(screen_rows + self._footer)]
         self._regrounded = False
         self._move_to(0, ops)
         ops.append(ERASE_BELOW)
-        self._write("".join(ops))
+        # A screen painted again is one synchronized update, as a frame is, so the erased screen never shows.
+        self._write(f"{SYNC_BEGIN}{''.join(ops)}{AUTOWRAP_ON}{SYNC_END}" if regrounding else "".join(ops))
         self._rows = []
         self._parked = (0, 0)
         self._width = None
