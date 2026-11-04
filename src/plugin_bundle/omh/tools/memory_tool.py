@@ -134,16 +134,19 @@ from ..memory_recall_support import (
     _record_staleness,
     _retention_class,
     normalize_memory_subject,
+    point_in_time_cue,
     record_subject,
 )
 from ..memory_records import (
     DEFAULT_RECORD_LIMIT,
     PREFETCH_EXECUTOR_TARGET,
+    SNAPSHOT_RULE,
     prefetch_required_scope_kinds,
     prefetch_scope_allowlist,
     read_record_store_snapshot,
     record_used,
     select_prefetch_records,
+    snapshot_marked,
 )
 from ..memory_store_io import (
     assert_under_memory_root,
@@ -607,40 +610,6 @@ def _capture(args: dict, kwargs: dict) -> dict[str, object]:
     if result["status"] == "remembered" and result.get("record_id") and point_in_time_cue(summary, record_type):
         result["point_in_time"] = _point_in_time_advice(str(result["record_id"]))
     return result
-
-
-# A fact that states how something stands at one moment: "As of 2026-10-30
-# (v0.1.7), nanran has ...", "nanran v0.1.13 added ...", "nanran v0.1.16:
-# ...". The next release turns it into a past state, and a later save of the
-# new state is a second record unless it names this one in `replaces`; on the
-# owner's store 8 such records sat side by side, none ever replaced. The
-# capture stays durable and nothing is aged or hidden: the result only tells
-# the model how to retire it when the state moves on. Closed set; a version
-# alone ("requires Hermes v0.22.5", "tags look like v1.2.3") is not a cue,
-# and neither is any summary carrying constraint wording.
-_POINT_IN_TIME_CUES = (
-    re.compile(r"\bas of (?:\d{4}-\d{2}-\d{2}|v\d+\.\d+(?:\.\d+)*)\b", re.IGNORECASE),
-    re.compile(r"\bin v\d+\.\d+(?:\.\d+)*\b", re.IGNORECASE),
-    re.compile(r"(?<![\w.])v\d+\.\d+(?:\.\d+)* (?:added|adds|removed|removes|introduced|introduces|ships|shipped)\b", re.IGNORECASE),
-    re.compile(r"^[\w.-]+ v\d+\.\d+(?:\.\d+)*:", re.IGNORECASE),
-)
-_CONSTRAINT_WORDS = re.compile(
-    r"\b(?:requires?|required|minimum|at least|or newer|or later|pin|pinned|must|never|stay|frozen|compatible|below|above|prefers?)\b",
-    re.IGNORECASE,
-)
-# Statements of what is or was decided: three of the owner's eight snapshots
-# were saved as decisions ("As of 2026-11-01 (v0.1.15), nanran's sidebar
-# groups papers into folders"). A lesson or procedure keeps holding.
-_POINT_IN_TIME_RECORD_TYPES = ("fact", "episode", "decision")
-
-
-def point_in_time_cue(summary: str, record_type: str) -> bool:
-    """Whether a capture states a point-in-time state that a later save should replace."""
-    return (
-        record_type in _POINT_IN_TIME_RECORD_TYPES
-        and not _CONSTRAINT_WORDS.search(summary)
-        and any(pattern.search(summary) for pattern in _POINT_IN_TIME_CUES)
-    )
 
 
 def _point_in_time_advice(record_id: str) -> dict[str, object]:
@@ -1346,6 +1315,10 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             row["resolution_marker"] = item["resolution_marker"]
         if item.get("subject"):
             row["subject"] = item["subject"]
+        # The same mark the live pack carries: a later session learns here
+        # that saving this thing's changed state should name it in `replaces`.
+        if snapshot_marked(item):
+            row["snapshot"] = "as-of"
         rows.append(row)
     has_origin = _attach_origins(rows, snapshot.records, lens)
     if rows:
@@ -1362,6 +1335,8 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
     )
     if has_origin:
         next_action += " " + RECALL_ORIGIN_NEXT_ACTION
+    if any("snapshot" in row for row in rows):
+        next_action += " " + SNAPSHOT_RULE
     return _lifecycle_result(
         "recall",
         "found" if rows else "nothing_found",

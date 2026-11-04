@@ -736,6 +736,40 @@ def normalize_memory_subject(value: object) -> str:
         return value
     raise ValueError("subject must match [a-z0-9][a-z0-9-]{0,47}")
 
+# A fact that states how something stands at one moment: "As of 2026-10-30
+# (v0.1.7), nanran has ...", "nanran v0.1.13 added ...", "nanran v0.1.16:
+# ...". The next release turns it into a past state, and a later save of the
+# new state is a second record unless it names this one in `replaces`; on the
+# owner's store 8 such records sat side by side, none ever replaced. The
+# capture stays durable and nothing is aged or hidden: the result only tells
+# the model how to retire it when the state moves on. Closed set; a version
+# alone ("requires Hermes v0.22.5", "tags look like v1.2.3") is not a cue,
+# and neither is any summary carrying constraint wording. The one definition:
+# capture's advice and the recall marker (`memory_records`, tool recall) both
+# read it here.
+_POINT_IN_TIME_CUES = (
+    re.compile(r"\bas of (?:\d{4}-\d{2}-\d{2}|v\d+\.\d+(?:\.\d+)*)\b", re.IGNORECASE),
+    re.compile(r"\bin v\d+\.\d+(?:\.\d+)*\b", re.IGNORECASE),
+    re.compile(r"(?<![\w.])v\d+\.\d+(?:\.\d+)* (?:added|adds|removed|removes|introduced|introduces|ships|shipped)\b", re.IGNORECASE),
+    re.compile(r"^[\w.-]+ v\d+\.\d+(?:\.\d+)*:", re.IGNORECASE),
+)
+_CONSTRAINT_WORDS = re.compile(
+    r"\b(?:requires?|required|minimum|at least|or newer|or later|pin|pinned|must|never|stay|frozen|compatible|below|above|prefers?)\b",
+    re.IGNORECASE,
+)
+# Statements of what is or was decided: three of the owner's eight snapshots
+# were saved as decisions ("As of 2026-11-01 (v0.1.15), nanran's sidebar
+# groups papers into folders"). A lesson or procedure keeps holding.
+_POINT_IN_TIME_RECORD_TYPES = ("fact", "episode", "decision")
+
+def point_in_time_cue(summary: str, record_type: str) -> bool:
+    """Whether a capture states a point-in-time state that a later save should replace."""
+    return (
+        record_type in _POINT_IN_TIME_RECORD_TYPES
+        and not _CONSTRAINT_WORDS.search(summary)
+        and any(pattern.search(summary) for pattern in _POINT_IN_TIME_CUES)
+    )
+
 def memory_summary_terms(summary: str) -> frozenset[str]:
     """The stemmed index terms of one summary, as a set (capture's similarity hint)."""
     return frozenset(_memory_index_terms(str(summary or "")))

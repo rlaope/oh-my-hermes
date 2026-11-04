@@ -16,6 +16,25 @@ All notable changes will be documented here.
   yellow for stuck, red for failed, grey for done or waiting. Every word the pane
   colours now reads at 4.5:1 or better on Desktop's light and dark themes; the
   lowest before was about 2.2:1.
+- **The Windows loader probe keeps `LOCALAPPDATA`.** The isolated probe that
+  `omh doctor` runs dropped it, so the Hermes launcher could not find the home
+  directory and doctor reported `hermes_runtime_command_failed` although
+  `hermes --print-runtime-command` worked in a normal shell. The variable is
+  forwarded only when the parent has it. Carries #2548 by @DefinitelyNotSpammy.
+- **A recalled dated snapshot is marked for later sessions.** The advice to
+  name an old snapshot in `replaces` used to reach only the session that saved
+  it, and the state usually changes weeks later in another session. Now recall
+  marks snapshot facts and decisions: `snapshot="as-of"` on the record in the
+  memory pack, `"snapshot": "as-of"` on a recall tool row, and one shared line
+  per pack. The line says the record still holds until that same thing
+  changes, and only then is it named in `replaces`; something newly added
+  stays its own record. Episodes are not marked, since an event never
+  changes. This reaches the 7 existing snapshots on the owner's store without
+  a migration. The mark never costs a record: when it does not fit the pack's
+  bound, the pack renders unmarked, exactly as before. A marked pack is 287
+  characters longer for the line, plus 17 per marked record. The cue is
+  English only.
+
 - **The `omh_memory` consolidation status reads the session's own profile.**
   Like tool recall, `demote` and recall origins, it now takes the Hermes
   profile the memory provider was started with from the session lens, not
