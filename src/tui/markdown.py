@@ -450,8 +450,10 @@ def table_rows_on(
     while index < len(sources) and sources[index].strip().startswith("|"):
         cells = split_table_row(clean_text(sources[index]))
         if is_table_divider_cells(cells):
-            index += 1
-            continue
+            if index == first:
+                index += 1
+                continue
+            break  # the next table's divider; the row before it is already out
         if len(cells) < 2:
             break
         cells = _table_cells([cells], len(widths))[0]
@@ -478,9 +480,15 @@ def _table_block(
     while index < len(sources) and sources[index].strip().startswith("|"):
         cells = split_table_row(clean_text(sources[index]))
         if is_table_divider_cells(cells):
-            # the `|---|` row between header and body: one `─` band, no cells of the table
-            index += 1
-            continue
+            if index == first + 1:
+                # the `|---|` row between header and body: one `─` band, no cells of the table
+                index += 1
+                continue
+            # a later divider opens the next table: its header is the row before, which is not ours
+            if body:
+                body.pop()
+                index -= 1
+            break
         if len(cells) < 2:
             break  # a `|` line that is not a table row closes the table here
         body.append(cells)

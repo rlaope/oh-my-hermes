@@ -19,7 +19,7 @@ from test_tui_modes import make_app
 from omh.tui.gateway import Event
 from omh.tui.markdown import MarkdownState, opens_table, render_lines
 from omh.tui.theme import DEFAULT_THEME as THEME
-from omh.tui.transcript import Transcript
+from omh.tui.transcript import Transcript, _stable_lines
 
 SID = "b6af062a"
 WIDTH = 60
@@ -161,7 +161,6 @@ class TableStreamingTests(unittest.TestCase):
         rows = self.render("```\n| a | b |\n|---|---|\n```")
         self.assertEqual(rows[:2], ["| a | b |", "|---|---|"])
 
-
     # (e) Review follow-ups: exit, control characters, partial dividers, plain fallback.
 
     def test_exit_take_releases_held_table_rows(self) -> None:
@@ -255,6 +254,51 @@ class TableStreamingTests(unittest.TestCase):
         self.assertEqual(sum(1 for row in everything if "w" * 40 in row), 1)
         self.assertFalse(any("| " in row for row in self.taken), "a row reached scrollback raw")
 
+
+    # (g) Review round: frozen widths, app wiring, one-column policy, back-to-back tables.
+
+    def test_late_wider_row_widens_only_its_own_row(self) -> None:
+        def name(n: int) -> str:
+            return f"r{n}" + "q" * (n % 4)
+
+        self.step(ev("message.start"))
+        self.transcript.apply(ev("message.delta", text="| a | b |\n| --- | --- |\n"))
+        for n in range(1, 20):
+            self.transcript.apply(ev("message.delta", text=f"| {name(n)} | s{n} |\n"))
+            self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=12)))
+        self.transcript.apply(ev("message.delta", text="| late | " + "w" * 20 + " |\n"))
+        self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=12)))
+        early = next(row for row in self.taken if f"{name(1)} " in row + " ")
+        wide = next(row for row in self.taken if "late" in row)
+        self.assertLess(len(early.rstrip()), len(wide.rstrip()))
+        self.assertEqual(early.index("s1"), next(row for row in self.taken if name(17) in row).index("s17"))
+        self.transcript.apply(ev("message.complete", text="", status="complete"))
+        self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=12)))
+        words = [word for row in self.taken for word in row.split()]
+        for cell in ["a", "b", "late", "w" * 20] + [name(n) for n in range(1, 20)] + [f"s{n}" for n in range(1, 20)]:
+            self.assertEqual(words.count(cell), 1, cell)
+
+    def test_one_column_header_stays_plain_text(self) -> None:
+        self.assertEqual(self.render("| note |\n|---|"), ["| note |", "|---|"])
+        self.assertEqual(self.render("| note |"), ["| note |"])
+
+    def test_trailing_blank_lines_are_not_stable_after_the_held_run(self) -> None:
+        self.assertEqual(_stable_lines("para\n\n| a | b |\nx"), ["para"])
+
+    def test_a_second_table_with_no_blank_line_loses_no_cell(self) -> None:
+        source = "| a | b |\n|---|---|\n| 1 | 2 |\n| c | d | e |\n|---|---|---|\n| x | y | z |"
+        rows = self.render(source)
+        text = " ".join(rows).split()
+        for cell in ("a", "b", "1", "2", "c", "d", "e", "x", "y", "z"):
+            self.assertEqual(sum(1 for word in text if word == cell), 1, cell)
+        self.assertTrue(any("─" in row for row in rows))
+        streamed = Transcript(clock=lambda: 100.0)
+        streamed.apply(ev("message.start"))
+        streamed.apply(ev("message.delta", text=source))
+        streamed.apply(ev("message.complete", text=source, status="complete"))
+        history = lines_text(streamed.history_lines(WIDTH, THEME, details=False))
+        for cell in ("a", "b", "1", "2", "c", "d", "e", "x", "y", "z"):
+            self.assertEqual(sum(1 for row in history for word in row.split() if word == cell), 1, cell)
 
 if __name__ == "__main__":
     unittest.main()

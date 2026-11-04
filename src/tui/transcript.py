@@ -15,7 +15,10 @@ repaints. So the model answers three questions for the app loop:
 
 The invariant the tests hold: at any moment, the lines already taken followed
 by `live_lines()` equal `history_lines(details=False)` at the same width
-(unless `toggle_details` expanded the live block, or the cap dropped blocks).
+(unless `toggle_details` expanded the live block, or the cap dropped blocks,
+or a Markdown table taller than the live region was released as it grew: those
+rows keep the column widths they had when released, while `/history` and a
+redraw recompute the widths over the whole table; no cell is lost or repeated).
 Only the LAST block can still change; appending any block first closes the
 one before it, so a block is flushed only after every block above it.
 
@@ -1954,6 +1957,8 @@ class Transcript:
         `prompt_row` says where among them the newest prompt's first row is.
         `final` is the take at exit: it also releases the `|` rows held back for a divider.
         `live_rows` is the height of the live region: a held table taller than half of it is released as it grows.
+        A table released that way keeps the column widths it had when released; `/history` and redraws
+        recompute them over the whole table.
         """
         taken: list[Line] = []
         start = (self._cursor, self._cursor_lines)
