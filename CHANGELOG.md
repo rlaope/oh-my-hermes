@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The area under the composer is exactly as tall as what it draws.** On the
+  screen's bottom rows, when the agent view gives rows up (a dag-ulw layer
+  settles or folds, or the run ends and its tree goes), the composer moves
+  down by them and the output above is painted again that many rows lower,
+  in the same synchronized update. No row stays blank under the tree or
+  above the composer. This replaces the tree's high-water hold during a turn
+  and the blank rows a finished run left under the info line. The lines
+  painted again on the screen's first rows are also still in the terminal's
+  scrollback, one per row given up, so they show twice there once they
+  scroll off again.
 - **A dag-ulw run that waits shows whole and moves, and says what it waits
   on.** A run of up to 12 lanes (the transcript's own small-run measure)
   shows every layer and node. A done layer of one node is one dim row
