@@ -11,7 +11,9 @@ All notable changes will be documented here.
   shown in the live region as the same table the finished reply draws: bold header,
   a `─` band, wide characters aligned by cell width, `\|` kept as a literal pipe. A
   table wider than the row, and a `|` line with no divider under it, stay plain
-  text, and quitting mid-reply still prints the rows held back. Carried forward from #2550 by @kfatyuip.
+  text, quitting mid-reply still prints the rows held back, and a table taller than
+  half the terminal is released to scrollback as it grows, on the columns it
+  has. Carried forward from #2550 by @kfatyuip.
 - **The `omh_memory` consolidation status reads the session's own profile.**
   Like tool recall, `demote` and recall origins, it now takes the Hermes
   profile the memory provider was started with from the session lens, not

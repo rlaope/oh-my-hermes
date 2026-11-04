@@ -224,5 +224,37 @@ class TableStreamingTests(unittest.TestCase):
         self.assertEqual(rows, plain)
 
 
+    # (f) A table taller than the live region is released as it grows.
+
+    def test_tall_table_is_released_to_scrollback_while_streaming(self) -> None:
+        rows_high = 24
+        self.step(ev("message.start"))
+        self.step(ev("message.delta", text="| N | Value |\n| --- | --- |\n"))
+        taken_mid_stream = 0
+        for n in range(1, 201):
+            cell = "w" * 40 if n == 150 else f"v{n}"
+            self.transcript.apply(ev("message.delta", text=f"| {n} | {cell} |\n"))
+            self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=rows_high)))
+            live = lines_text(self.transcript.live_lines(WIDTH, THEME, max_rows=rows_high))
+            self.assertLessEqual(len(live), rows_high // 2 + 4, f"the held run was not bounded at row {n}")
+            if n == 100:
+                taken_mid_stream = len(self.taken)
+        self.assertGreater(taken_mid_stream, 90)
+        self.transcript.apply(ev("message.delta", text="| 201 | par"))
+        partial = lines_text(self.transcript.live_lines(WIDTH, THEME, max_rows=rows_high))
+        self.assertFalse(any("| " in row for row in partial), "the streaming row drew raw")
+        self.transcript.apply(ev("message.complete", text="", status="complete"))
+        self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=rows_high)))
+        everything = self.taken + lines_text(self.transcript.live_lines(WIDTH, THEME, max_rows=rows_high))
+        header = [i for i, row in enumerate(everything) if "Value" in row]
+        self.assertEqual(len(header), 1, "the header is in scrollback once")
+        self.assertEqual(header[0], min(i for i, row in enumerate(everything) if "N " in row or "Value" in row))
+        for n in range(1, 201):
+            if n != 150:
+                self.assertEqual(sum(1 for row in everything if f"v{n} " in row + " "), 1, n)
+        self.assertEqual(sum(1 for row in everything if "w" * 40 in row), 1)
+        self.assertFalse(any("| " in row for row in self.taken), "a row reached scrollback raw")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -7380,7 +7380,7 @@ class App(ModesMixin, AgentViewMixin):
             self._refresh_agent_log()
             self.terminal.write(self.pager.frame(*self.screen, self.theme))
             return
-        stable = self.transcript.take_stable_lines(cols, self.theme)
+        stable = self.transcript.take_stable_lines(cols, self.theme, live_rows=self.size[1])
         prompt_row = self.transcript.prompt_row
         head: list[Line] = []
         if self.banner_facts is not None:

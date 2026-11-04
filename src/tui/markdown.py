@@ -81,6 +81,7 @@ class MarkdownState:
     fence_indent: int = 0
     list_indent: int = 0  # content column of the most recent list item; 0 outside a list
     code_carry: str = ""  # the string or comment opener a highlighted fence line ended inside
+    table: tuple[int, ...] = ()  # the column widths of a table whose rows were taken before its end was seen
 
     @property
     def in_fence(self) -> bool:
@@ -140,13 +141,24 @@ def render_lines(
     limit = len(sources)
     while index < limit:
         source = sources[index]
+        if state.table:
+            if not state.in_fence and source.strip().startswith("|") and len(split_table_row(clean_text(source))) >= 2:
+                # a table cut short by the cap on holding it back: the rest hangs on the columns it was given
+                table_rows, consumed = table_rows_on(sources, index, state.table, width, theme)
+                rows.extend(table_rows)
+                index += consumed
+                if index < limit:
+                    state = replace(state, table=())
+                continue
+            state = replace(state, table=())
         if not state.in_fence and source.strip().startswith("|"):
             if index + 1 < limit and opens_table(source, sources[index + 1]):
                 # the header's next line is its divider: the block runs as one table
-                table_rows, consumed = table_block(sources, index, width, theme)
+                table_rows, consumed, widths = _table_block(sources, index, width, theme)
                 rows.extend(table_rows)
                 index += consumed
-                state = replace(state, list_indent=0)
+                # a table that runs to the last line may go on in lines not yet taken
+                state = replace(state, list_indent=0, table=widths if index >= limit else ())
                 continue
         lines, state = render_line(source, state, width, theme)
         rows.extend(lines)
@@ -419,6 +431,39 @@ def _table_cells(rows: list[list[str]], num_cols: int) -> list[list[str]]:
     return table_rows
 
 def table_block(sources: Sequence[str], first: int, width: int, theme: Theme) -> tuple[list[Line], int]:
+    """`_table_block` without the column widths."""
+    rows, consumed, _widths = _table_block(sources, first, width, theme)
+    return rows, consumed
+
+
+def table_rows_on(
+    sources: Sequence[str], first: int, widths: tuple[int, ...], width: int, theme: Theme
+) -> tuple[list[Line], int]:
+    """Body rows from `sources[first]` on columns already given: (rows, count of lines consumed).
+
+    A cell wider than its column pushes its own row wider; no row is cut or lost.
+    """
+    gap = " " * TABLE_GAP
+    indent = _leading_spaces(sources[first])
+    rows: list[Line] = []
+    index = first
+    while index < len(sources) and sources[index].strip().startswith("|"):
+        cells = split_table_row(clean_text(sources[index]))
+        if is_table_divider_cells(cells):
+            index += 1
+            continue
+        if len(cells) < 2:
+            break
+        cells = _table_cells([cells], len(widths))[0]
+        padded = [cell + " " * max(0, widths[ci] - cell_width(cell)) for ci, cell in enumerate(cells)]
+        rows.extend(wrap_prefixed((Span(gap.join(padded), theme.text),), (Span(" " * indent),), (Span(" " * indent),), width))
+        index += 1
+    return rows, index - first
+
+
+def _table_block(
+    sources: Sequence[str], first: int, width: int, theme: Theme
+) -> tuple[list[Line], int, tuple[int, ...]]:
     """`sources[first]` opens a Markdown table: `|` header, `|---|` divider, body rows.
 
     Header cells go bold in the accent colour, the divider row between the header
@@ -452,7 +497,7 @@ def table_block(sources: Sequence[str], first: int, width: int, theme: Theme) ->
     if indent + sum(column_width) + TABLE_GAP * (len(column_width) - 1) > width:
         # no width fitting: a table wider than the row stays the plain text it was, as `render_line` draws it
         plain = [row for source in sources[first:index] for row in render_line(source, MarkdownState(), width, theme)[0]]
-        return plain, index - first
+        return plain, index - first, ()
     header_style = replace(theme.text, bold=True, fg=theme.brand.fg or theme.accent.fg)
     # the cells of every row, padded to their column so the columns line up
     padded = [
@@ -482,7 +527,7 @@ def table_block(sources: Sequence[str], first: int, width: int, theme: Theme) ->
 
     header_lines = row_lines(padded[0], header_style)
     body_lines = [row for cells in padded[1:] for row in row_lines(cells, theme.text)]
-    return [*header_lines, *sep_lines(), *body_lines], index - first
+    return [*header_lines, *sep_lines(), *body_lines], index - first, tuple(column_width)
 
 
 # ── fenced code ───────────────────────────────────────────────────────────

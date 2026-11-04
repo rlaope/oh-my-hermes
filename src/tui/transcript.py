@@ -421,7 +421,7 @@ def _display_lines(text: str) -> list[str]:
     return _without_trailing_blanks(_source_lines(text))
 
 
-def _stable_lines(text: str, final: bool = False) -> list[str]:
+def _stable_lines(text: str, final: bool = False, cap: int | None = None) -> list[str]:
     """The source lines that can no longer change: complete ones, minus trailing blanks.
 
     A trailing run of `|` lines is held back too: a header is decided only
@@ -430,9 +430,12 @@ def _stable_lines(text: str, final: bool = False) -> list[str]:
     lines = _without_trailing_blanks(_source_lines(text)[:-1])
     if final:  # the last take, at exit: nothing is left to wait for, so a complete `|` row goes out
         return lines
-    while lines and lines[-1].strip().startswith("|"):
-        lines.pop()
-    return _without_trailing_blanks(lines)
+    held = len(lines)
+    while held and lines[held - 1].strip().startswith("|"):
+        held -= 1
+    if cap is not None and len(lines) - held > cap and opens_table(lines[held], lines[held + 1]):
+        return lines  # a table taller than the live region is released as it grows, on the columns it has
+    return _without_trailing_blanks(lines[:held])
 
 
 def _extension(streamed: str, text: str) -> str | None:
@@ -1943,11 +1946,14 @@ class Transcript:
 
     # ── output ──
 
-    def take_stable_lines(self, width: int, theme: Theme, final: bool = False) -> list[Line]:
+    def take_stable_lines(
+        self, width: int, theme: Theme, final: bool = False, live_rows: int | None = None
+    ) -> list[Line]:
         """Lines that will never change, each returned once: print them above the live region.
 
         `prompt_row` says where among them the newest prompt's first row is.
         `final` is the take at exit: it also releases the `|` rows held back for a divider.
+        `live_rows` is the height of the live region: a held table taller than half of it is released as it grows.
         """
         taken: list[Line] = []
         start = (self._cursor, self._cursor_lines)
@@ -1969,7 +1975,7 @@ class Transcript:
             block = self.blocks[self._cursor]
             index = self._cursor - first
             if isinstance(block, AssistantBlock) and not (block.done and index < len(held)):
-                taken.extend(self._take_assistant(block, width, theme, final))
+                taken.extend(self._take_assistant(block, width, theme, final, live_rows))
             elif block.done:
                 # A done reply taken from its first line is the rows `block_rows` gives it, as measured.
                 rows = held[index] if index < len(held) else block_rows(block, width, theme)
@@ -1986,8 +1992,11 @@ class Transcript:
         self._drop_past_cap()
         return taken
 
-    def _take_assistant(self, block: AssistantBlock, width: int, theme: Theme, final: bool = False) -> list[Line]:
-        sources = _display_lines(block.text) if block.done else _stable_lines(block.text, final)
+    def _take_assistant(
+        self, block: AssistantBlock, width: int, theme: Theme, final: bool = False, live_rows: int | None = None
+    ) -> list[Line]:
+        cap = max(live_rows // 2, 4) if live_rows else None
+        sources = _display_lines(block.text) if block.done else _stable_lines(block.text, final, cap)
         fresh = sources[self._cursor_lines :]
         if not fresh:
             return []
@@ -2160,6 +2169,9 @@ class Transcript:
         A trailing run of `|` lines whose next line is its divider renders as
         the table it is, re-derived from `sources` every frame.
         """
+        if self._cursor_state.table and sources and sources[-1].strip().startswith("|"):
+            # a table released to scrollback as it grew: the line still streaming hangs on the columns it was given
+            return render_lines(sources, self._cursor_state, width, theme)[0]
         # The maximal trailing run of `|` lines, in source order.
         run_at = len(sources)
         while run_at > 0 and sources[run_at - 1].strip().startswith("|"):
