@@ -361,7 +361,7 @@ def omh_memory_handler(args: dict, **kwargs) -> str:
     elif action == "read":
         payload, backend = _read_block(str((args or {}).get("label", "") or ""), kwargs), "bundle_memory"
     elif action == "consolidation":
-        payload, backend = _consolidation()
+        payload, backend = _consolidation(kwargs)
     elif action == "capture":
         payload, backend = _capture(args or {}, kwargs), "bundle_memory"
     elif action == "demote":
@@ -507,18 +507,19 @@ def _public_replay(evaluation: dict[str, object]) -> dict[str, object]:
     }
 
 
-def _consolidation() -> tuple[dict[str, object], str]:
+def _consolidation(kwargs: dict) -> tuple[dict[str, object], str]:
     """Read the latest reminder and counters without entering a provider session.
 
     Like `omh memory dream` without `--evaluate`, this is a status query, not
     a scheduler trigger. Keep a recorded due brief visible even when its
     reasons are suppressed for the next evaluation. No brief means unknown,
     not a fresh evaluation that found nothing due. Both are the calling
-    profile's: another profile on the same store keeps its own.
+    profile's (the session lens's profile home, else this process's Hermes
+    home): another profile on the same store keeps its own.
     """
     omh_home = _home("OMH_HOME", "~/.omh")
     try:
-        hermes_home = _home("HERMES_HOME", "~/.hermes")
+        hermes_home = _session_lens(kwargs).settings_home()
         payload = dict(read_latest_consolidation(omh_home, hermes_home) or {})
         payload["state"] = read_dreaming_state(omh_home, hermes_home)
         payload["evaluated"] = False
