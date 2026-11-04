@@ -42,6 +42,12 @@ deterministically and from the disk alone, whether such a thing exists:
        methods), and the function or class is named in another file;
      - ``line_copy``: a non-trivial line the edit replaced or removed also appears elsewhere.
 
+3. ``shell_changed_files`` (``transform_tool_result`` of a ``terminal`` / ``execute_code`` call): Hermes
+   calls ``pre_verify`` only after a ``patch`` / ``write_file`` landed, so for a turn that made neither it
+   re-indexes the workspace after each command and, when the command changed a Python file, returns every
+   Python file the turn changed. ``verify_hooks.shell_round_end_note`` gives those files the structural
+   round-end notes, once per turn.
+
 No signal means the check is skipped. Every other outcome fires it as it fired before this module:
 
 - a changed source file that is not Python;
@@ -174,6 +180,9 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
             return
         state = _turn_state(session_id, kwargs)
         tool_name = kwargs.get("tool_name")
+        if tool_name in _EDIT_TOOLS:
+            with _lock:
+                state["edit_tool"] = True  # Hermes ends this turn through `pre_verify`: no shell round end
         if tool_name not in _READ_TOOLS:
             _take_index(session_id, state)
         _prune_named(state)
@@ -279,6 +288,46 @@ def turn_snapshots(session_id: object) -> dict[str, str]:
         return {**state["named"], **state["before"]} if state is not None else {}
 
 
+def shell_changed_files(session_id: object, turn_id: object) -> tuple[str, ...]:
+    """After a ``terminal`` / ``execute_code`` call (``transform_tool_result``): every Python file this turn
+    changed, when the call just changed one. Empty otherwise, and always empty for a turn that made a
+    ``patch`` / ``write_file`` call (Hermes ends that turn through ``pre_verify``), a turn without an index,
+    one whose shell round end is spent, or a re-index over budget.
+
+    Hermes calls ``pre_verify`` only when a ``patch`` / ``write_file`` landed this turn, so a turn that
+    edits only through the shell gets no round-end check. The evidence here is the files themselves: the
+    workspace is re-indexed and compared with the index this function saw last (the turn-start one at
+    first), so a call that changed no Python file costs one walk and says nothing."""
+    try:
+        if not isinstance(session_id, str) or not session_id:
+            return ()
+        with _lock:
+            state = _sessions.get(session_id)
+            if state is None or state["turn"] != str(turn_id or "") or state["index"] is None \
+                    or state["edit_tool"] or state["shell_spent"]:
+                return ()
+            start, last, root = state["index"], state["shell_index"] or state["index"], state["root"]
+        current = _index(root, time.monotonic() + INDEX_SECONDS)
+        with _lock:
+            state["shell_index"] = current
+        if not any(_differs(last.get(path), current.get(path), path) for path in set(last) | set(current)):
+            return ()
+        return tuple(sorted(path for path in set(start) | set(current)
+                            if _differs(start.get(path), current.get(path), path)))
+    except Exception as exc:  # noqa: BLE001 - an undecidable call says nothing, as on a turn without this check
+        _LOG.warning("consistency_trigger shell_changed failed=%s: %s", type(exc).__name__, exc)
+        return ()
+
+
+def spend_shell_round_end(session_id: object) -> None:
+    """The shell round end has spoken for this turn: it is said once, like ``pre_verify``'s attempt 0."""
+    if isinstance(session_id, str) and session_id:
+        with _lock:
+            state = _sessions.get(session_id)
+            if state is not None:
+                state["shell_spent"] = True
+
+
 def discard_snapshots(session_id: object) -> None:
     """Drop the session's state without reading it (the turn's first stop did not need a verdict)."""
     if isinstance(session_id, str) and session_id:
@@ -322,7 +371,8 @@ def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         if state is not None and state["turn"] == turn:  # a parallel first call got here first
             return state
         state = {"turn": turn, "root": root, "indexed": False, "index": None, "unindexed": ("", ""), "before": {},
-                 "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": []}
+                 "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": [],
+                 "edit_tool": False, "shell_index": None, "shell_spent": False}
         _sessions.pop(session_id, None)
         _sessions[session_id] = state
         while len(_sessions) > _MAX_SESSIONS:
@@ -788,5 +838,5 @@ def _parse(text: str) -> ast.AST | None:
         return None
 
 
-__all__ = ["Verdict", "discard_snapshots", "note_turn_posture", "reset", "round_end_trigger", "snapshot_before_edit",
-           "turn_root", "turn_snapshots"]
+__all__ = ["Verdict", "discard_snapshots", "note_turn_posture", "reset", "round_end_trigger", "shell_changed_files",
+           "snapshot_before_edit", "spend_shell_round_end", "turn_root", "turn_snapshots"]

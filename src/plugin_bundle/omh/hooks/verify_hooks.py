@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Sequence
+import json
+import logging
 from pathlib import PurePosixPath
 from threading import Lock
 import time
@@ -10,7 +12,8 @@ from typing import Final, TypeGuard
 from .. import runtime_paths
 from ..caller_check import round_end_note as caller_note
 from ..catch_log import PLAN_CONTINUED, record_catch
-from ..consistency_trigger import discard_snapshots, round_end_trigger, turn_root
+from ..consistency_trigger import (discard_snapshots, round_end_trigger, shell_changed_files, spend_shell_round_end,
+                                   turn_root)
 from ..export_check import round_end_note as export_note
 from ..host_observation import observe_plugin_hook_call
 from ..impact_check import round_end_note
@@ -284,6 +287,56 @@ def reset_stashed_answers() -> None:
     """Forget every stashed answer (tests)."""
     with _STASH_LOCK:
         _STASHED_ANSWERS.clear()
+
+
+# Hermes calls `pre_verify` only after a `patch` / `write_file` landed this turn, so a turn that edits
+# only through a command (`sed -i`, a heredoc script) never reaches it. The round end's structural notes
+# (export, test, caller: each names a line that is broken now, and is empty otherwise) ride the result of
+# the command that changed a Python file instead, once per turn, under their own key. The consistency
+# checklist does not: it needs the coding posture, which this seam is not given, and alone it names no
+# line. The impact note does not either: its baseline is taken only before a `patch` / `write_file`.
+SHELL_ROUND_END_TOOLS: Final = frozenset({"terminal", "execute_code"})
+SHELL_ROUND_END_KEY: Final = "omh_round_end"
+_LOG = logging.getLogger("omh.verify_hooks")
+
+
+def annotate_shell_round_end(*, tool_name: object, result: object, session_id: object,
+                             turn_id: object) -> str | None:
+    """`transform_tool_result`: the command's result with the round-end notes for the Python files this
+    turn changed, when the command just changed one and a note names something; None otherwise."""
+    if tool_name not in SHELL_ROUND_END_TOOLS or not isinstance(result, str) or not result:
+        return None
+    try:
+        parsed: object = json.loads(result)
+    except (ValueError, TypeError):
+        parsed = None
+    if parsed is not None and (not isinstance(parsed, dict) or SHELL_ROUND_END_KEY in parsed):
+        return None
+    note = shell_round_end_note(session_id, turn_id)
+    if not note:
+        return None
+    if not isinstance(parsed, dict):
+        return f"{result}\n\n{note}"
+    parsed[SHELL_ROUND_END_KEY] = note
+    return json.dumps(parsed, ensure_ascii=False)
+
+
+def shell_round_end_note(session_id: object, turn_id: object) -> str:
+    """The export, test and caller notes `pre_verify` would give at attempt 0, for a turn that changed
+    Python files only through commands; ``""`` when the last command changed none or no note names a line."""
+    paths = shell_changed_files(session_id, turn_id)
+    if not paths or not isinstance(session_id, str):
+        return ""
+    root = turn_root(session_id)
+    export_message = export_note(session_id, list(paths), "", root)
+    test_message = test_note(session_id, root)
+    caller_message = caller_note(session_id, root, export_message)
+    _LOG.info("shell_round_end session=%s files=%d export=%d test=%d caller=%d", session_id, len(paths),
+              bool(export_message), bool(test_message), bool(caller_message))
+    note = "\n".join(text for text in (export_message, test_message, caller_message) if text)
+    if note:
+        spend_shell_round_end(session_id)
+    return note
 
 
 def _session_plan_reading(kwargs: dict[str, object], session_id: str) -> tuple[str, str, int]:

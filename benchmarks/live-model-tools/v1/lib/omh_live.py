@@ -219,15 +219,25 @@ def rename_directive(edit_surface: str) -> str:
             "use terminal only to search, run tests, and write the answer file.")
 
 
+# Shell-edit rule (`--edit-directive shell`), the same text for every surface and both arms: it makes
+# every model edit the way Sonnet often does unprompted, so the round end after a command-only edit is
+# measured on every lane, not only on the runs a model happened to edit through the shell.
+SHELL_DIRECTIVE = ("EDIT TOOL RULE: change files only through terminal commands (sed, python scripts, shell "
+                   "redirection). Do not use `patch` or `write_file`. Read and search files with any tool.")
+
+
 def directive_text(edit_surface: str, directive: bool | str) -> str | None:
-    """Prompt prefix for a run: None (off), the edit rule (True), or the rename rule ("rename")."""
+    """Prompt prefix for a run: None (off), the edit rule (True), the rename rule ("rename"), or the
+    shell-edit rule ("shell")."""
     if directive == "rename":
         return rename_directive(edit_surface)
+    if directive == "shell":
+        return SHELL_DIRECTIVE
     if directive is True:
         return edit_directive(edit_surface)
     if directive is False or directive is None:
         return None
-    raise ValueError("directive must be a bool or 'rename'")
+    raise ValueError("directive must be a bool, 'rename' or 'shell'")
 
 
 def prompt_pair(task: str, route: Mapping[str, Any]) -> tuple[str, str]:

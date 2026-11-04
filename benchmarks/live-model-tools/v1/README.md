@@ -574,6 +574,128 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-11-04 round end after shell-only edits: base vs on (`transform_tool_result`)
+
+Pre-registered before its first live run.
+
+**Diagnosis** (research folder `OPT/opt-m/`). Hermes calls `pre_verify` only when
+`_turn_file_mutation_paths` is non-empty (`agent/turn_stop_gates.py`, `_pre_verify_nudge`), and
+only a landed `patch` / `write_file` adds a path to it (`agent/turn_explainers.py`,
+`_record_file_mutation_result`; `FILE_MUTATING_TOOL_NAMES` in `agent/tool_result_classification.py`).
+A turn that edits only through `terminal` therefore gets no round-end note: in the 2026-11-03
+caller-check run, 24 of 48 Sonnet on-arm runs and 18 of 48 base-arm runs edited only through
+`terminal`, and none of them logged a round-end line. In OPT-L's Sonnet base arm, one shell-only
+`L-RENAME-ALIAS` run failed: a `sed` rename left `__all__ = ["compute_quota"]` in `api.py`, which
+the export check names on the `patch` path.
+
+**The change** (`consistency_trigger.py`, `hooks/verify_hooks.py`, `hooks/result_transforms.py`).
+After each `terminal` / `execute_code` call of a turn that made no `patch` / `write_file` call, the
+workspace's Python files are re-indexed and compared with the last index (the turn-start index at
+first). When the call changed a Python file, the export, test and caller notes `pre_verify` builds at
+attempt 0 are built for every Python file the turn changed, and a non-empty note rides that call's
+result under the JSON key `omh_round_end`, once per turn. Every other call, and every turn with a
+`patch` / `write_file` call, is left exactly as on main. The consistency checklist does not ride
+along (it needs the coding posture, which this seam is not given), nor does the opt-in impact note
+(its baseline is taken only before `patch` / `write_file`). No continue is added: the note arrives
+before the model's next call, which every tool result is followed by anyway.
+
+**Mechanisms considered** (Hermes read-only, ranked by how closely they reproduce `pre_verify`):
+adding the shell-changed paths to the agent's `_turn_file_mutation_paths` would reproduce it exactly
+but writes Hermes's private state (and also arms Hermes's own verify-on-stop); posting into
+`agent.lsp.deferred` would continue the turn at its first stop but labels the note as a language
+server's verdict; an `llm_execution` middleware re-issuing the final call would rewrite the
+conversation out of the transcript; `pre_llm_call` runs at the next turn's start; `transform_llm_output`
+cannot continue a turn. `transform_tool_result` on the call that changed the file is the plugin seam
+that delivers the same note text before the model's next decision.
+
+**Offline replay, before this registration** (`OPT/opt-m/replay_shell.py`): the 445 OPT-K / OPT-L
+sessions with a `terminal` call before their first `patch` / `write_file`, each re-run from its
+seed's fixture with the recorded commands; all 71 shell-only sessions end on their recorded
+`final_tree_digest`. Notes on 2 sessions, both export notes naming a line that was stale at that
+moment: the failing OPT-L Sonnet `L-RENAME-ALIAS-613981` (`api.py:3`, on its last command) and a
+passing OPT-K Sonnet `L-RENAME-SHADOW-857137` (`cli.py:1`, mid-edit; the model fixed that line two
+calls later). No note on any other session, controls included.
+
+The setup, fixed before the first live run:
+
+- **Arms.** Each arm links its OMH plugin bundle from a source snapshot (`git archive`):
+  - `base`: origin/main `225f62ff2`;
+  - `on`: this branch at the commit that adds this section. Its bundle differs from base in
+    `consistency_trigger.py`, `hooks/verify_hooks.py` and `hooks/result_transforms.py` only.
+- **Profiles.** `optm-<lane>-<arm>`, the 2026-11-03 caller-check configuration, product default:
+  Hermes's default `tools.tool_search`; plugin settings `omh_home` and `lsp_tools: true`;
+  `impact_check` not set, so off; `pyright` pinned by an absolute `lsp.servers.pyright.command`;
+  `agent.max_turns: 120` and `agent.run_budget_seconds: 600`; the observer-only meter plugin. Edit
+  surface `lsp`, the `baseline` prompt, `--git-init-workspace`, `--test-env`, effort `medium`.
+- **Panel.** Subscription routes only: `claude-sonnet-5-5` (s55) and `claude-haiku-4-5-20251001`
+  (h45) through `claude-proxy` (CPA). `gpt-6-luna` and `gpt-6.1-sol` through `openai-codex` are
+  added to condition S only if every s55 / h45 run has finished; they are reported, and gated only
+  if run.
+- **Conditions.**
+  - **D, product default** (no edit directive), the condition users get.
+  - **S, shell edits** (`--edit-directive shell`, the same sentence in both arms: change files
+    only through terminal commands, no `patch` / `write_file`). It makes every lane edit the way
+    Sonnet often does unprompted, so the positives are measured on models that leave a caller or
+    an export broken.
+- **Templates.** Each positive is paired with the control written for its check:
+  - export: `L-RENAME-ALIAS` / `L-RENAME-EXPORTS`;
+  - caller: `I-SIGNATURE` / `I-DEFAULTED`;
+  - test: `I-KWARG` / `C-TEST-UPDATE`;
+  - breaks nothing: `I-CONTROL`.
+  Condition D also runs the no-regression templates `L-RENAME-SHADOW`, `E-RENAME`, `C-DUPLICATE`
+  and `C-DECOY`.
+- **Seeds.** None appears under `.omc/research`, `docs` or the bench before this section:
+  431027, 583919 and 815473 for every template; 347911 also for the three positives and their
+  three controls. D: 11 templates x 3 + 6 = 39 instances per lane per arm; S: 7 x 3 + 6 = 27.
+  s55 + h45: 132 instances per arm, 264 runs.
+- **Order, retries, crashes.** As in the 2026-11-03 run: per instance the two arms run back to back
+  on identical fresh workspaces in alternating order; lanes run in parallel under the load gate
+  (1-min load at most 20) and the disk gate (wait below 8 GB free, stop below 5 GB), and under the
+  shared live-run lock; `rate_limited`, `provider_error`, `model_unavailable` and a client the gateway
+  refused within seconds are retried on the same route, every other outcome is final. Records as
+  run are the strict reading; each instance whose last record is a `process_crash` in either arm is
+  run once more in both arms (`runs-rerun/`) for the re-run reading. Both readings are reported.
+
+Definitions:
+- A **shell-only run** is a session with at least one `terminal` / `execute_code` call and no
+  `patch` / `write_file` call, from the session DB.
+- A **shell check** is a `shell_round_end session=<id> files=N ...` line in the on arm's profile
+  log; a **shell note** is such a line with `export=1`, `test=1` or `caller=1`.
+- A **continue** is a session with an assistant row whose `finish_reason` is `verify_hook_continue`.
+- **Tokens** are the run record's `observation.tokens`; a cell is one lane, one condition and one
+  template.
+
+The gate, `on` against `base`:
+
+1. **No template loses a pass**, pooled over lanes and conditions: for each template, on passes at
+   least base passes.
+2. **Controls stay silent:** 0 shell notes on `L-RENAME-EXPORTS`, `I-DEFAULTED`, `C-TEST-UPDATE`
+   and `I-CONTROL` in the on arm.
+3. **No new continues on controls:** continues on those four templates, on at most base.
+4. **No token blow-up:** no on-arm run above 3x the median tokens of the base arm in its cell.
+5. **The shell round end acts, and costs no pass:**
+   - (a) every on-arm shell-only run whose replay (`replay_shell.py`, the run's own commands on its
+     seed's fixture, checked against `final_tree_digest`) changes a Python file logs a shell check,
+     and the live shell notes equal the replayed ones;
+   - (b) shell-only positives pooled (`L-RENAME-ALIAS`, `I-SIGNATURE`, `I-KWARG` runs that are
+     shell-only), on passes at least base passes, counted per arm over that arm's shell-only runs
+     and reported beside the run counts.
+
+Reported, not gated: per lane, condition and template, passes, shell-only runs, shell checks and
+notes, continues, median tokens and median wall; the rows each note named; tokens and money by
+route.
+
+Recomputed from the raw run records, the session-DB snapshots and the profile logs by
+`OPT/opt-m/gate.py`, not from the driver log.
+
+**Fallback.** If any clause fails, the failure is recorded here and the branch does not merge;
+nothing from it ships. If a fresh review finds a note naming a line that is not broken, that shape
+is made silent and this run's sessions are replayed offline with the fix; a fix that would change
+any on-arm note in this run is reported, and the branch merges only on a new measurement. If a
+clause fails on runs where the note arrived mid-edit (a later command of the same turn fixed the
+named line on its own), the next candidate is a note that waits for a command that changed no
+Python file, under its own pre-registration.
+
 ### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
 
 Pre-registered before its first live run.
