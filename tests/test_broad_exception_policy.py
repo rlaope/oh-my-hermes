@@ -850,6 +850,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "off. A note is only ever built from fresh server diagnostics, so a failure never claims callers broke.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/caller_check.py",
+        "round_end_note",
+        INTENTIONAL,
+        "An unexpected failure reading the turn's edited module or its importers is logged as a warning naming the "
+        "exception class (`caller_check round_end ... failed=`) and yields no note; the turn ends as it would "
+        "without the check. A note is only ever built from calls that bound to the turn-start signature and no "
+        "longer bind, so a failure never claims a call is broken.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/consistency_trigger.py",
         "snapshot_before_edit",
         INTENTIONAL,
@@ -1021,8 +1030,11 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # (a part of the frame that raises is a warn row naming it, its traceback in /logs).
 # 103 -> 104 / 94 -> 95: `llm_hooks._warm_imports`, the register-time warm-up thread for the
 # first turns' package imports (a failure loads nothing, and the call sites import and report as before).
-EXPECTED_HANDLER_COUNT = 104
-EXPECTED_ANCHOR_COUNT = 95
+# 104 -> 105 / 95 -> 96: `caller_check.round_end_note`, the always-on round-end
+# read of call sites a signature change broke (a failure logs a named warning and
+# adds no note).
+EXPECTED_HANDLER_COUNT = 105
+EXPECTED_ANCHOR_COUNT = 96
 
 
 class DerivedSite(NamedTuple):
