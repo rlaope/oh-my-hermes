@@ -39,7 +39,7 @@ WHATS_NEW: dict[str, tuple[str, ...]] = {
         "Markdown tables are drawn as columns while a reply streams",
         "Looks with a scene paint their ground on every terminal",
         "Vim mode changes the cursor shape: beam in INSERT, block in NORMAL",
-        "A changed function's broken callers are named by file and line",
+        "After a plan is accepted, dag-ulw is offered and can start",
     ),
     "4.0.5": (
         "One part of the screen that fails to draw no longer ends the session",
