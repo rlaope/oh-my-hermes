@@ -1,5 +1,5 @@
-"""The colour caches under the working glow and the wallpaper (`hex_to_rgb`, `theme._mix`, `style._colour_parameter`)
-only skip repeated work: a busy frame with glow and each wallpaper scene is byte for byte what the same frame is
+"""The colour caches under the wallpaper (`hex_to_rgb`, `theme._mix`, `style._colour_parameter`) only skip repeated
+work: a busy frame with each wallpaper scene is byte for byte what the same frame is
 with the caches taken out, and a wake-up from the gateway during a frame's interval still waits that interval out."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from omh.tui.gateway import Event
 from omh.tui.wallpaper import SCENES
 from test_tui_modes import make_app
 
-ENVIRON = {"COLORTERM": "truecolor", "TERM": "xterm-256color", "OMH_TUI_GLOW": "1", "OMH_TUI_WALLPAPER": "1"}
+ENVIRON = {"COLORTERM": "truecolor", "TERM": "xterm-256color", "OMH_TUI_WALLPAPER": "1"}
 CACHED = (
     (skin_pack, "hex_to_rgb"),
     (theme, "hex_to_rgb"),  # the modules that import it by name hold their own reference

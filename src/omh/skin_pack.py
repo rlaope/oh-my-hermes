@@ -167,18 +167,6 @@ def write_launch_choice(omh_home: Path, name: str) -> Path:
     return _write_theme_store(omh_home, "launch", name)
 
 
-def read_glow_choice(omh_home: Path) -> bool | None:
-    """Whether the OMH TUI's working glow is on, as saved for this OMH home (`glow`, beside the theme); None when
-    nothing this module wrote says."""
-    value = _theme_store_record(omh_home).get("glow")
-    return {"on": True, "off": False}.get(value) if isinstance(value, str) else None
-
-
-def write_glow_choice(omh_home: Path, on: bool) -> Path:
-    """Save whether the OMH TUI's working glow is on; the path it was written to. The theme and look stay."""
-    return _write_theme_store(omh_home, "glow", "on" if on else "off")
-
-
 def read_wallpaper_choice(omh_home: Path) -> bool | None:
     """Whether the OMH TUI's living wallpaper (a look's background colour and its moving scene) is on, as saved for
     this OMH home (`wallpaper`, beside the theme); None when nothing this module wrote says."""
@@ -187,7 +175,7 @@ def read_wallpaper_choice(omh_home: Path) -> bool | None:
 
 
 def write_wallpaper_choice(omh_home: Path, on: bool) -> Path:
-    """Save whether the OMH TUI's living wallpaper is on; the path it was written to. The theme, look and glow stay."""
+    """Save whether the OMH TUI's living wallpaper is on; the path it was written to. The theme and look stay."""
     return _write_theme_store(omh_home, "wallpaper", "on" if on else "off")
 
 
@@ -204,7 +192,7 @@ def write_update_check_choice(omh_home: Path, on: bool) -> Path:
 
 
 # The keys the one writer (`_write_theme_store`) keeps: every write carries the others over.
-THEME_STORE_KEYS = ("theme", "launch", "glow", "wallpaper", "update_check")
+THEME_STORE_KEYS = ("theme", "launch", "wallpaper", "update_check")
 
 
 def _write_theme_store(omh_home: Path, key: str, value: str) -> Path:

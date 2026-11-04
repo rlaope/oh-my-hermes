@@ -555,7 +555,7 @@ class PickAtStartTests(unittest.TestCase):
                 return {"session_id": SID, "stored_session_id": "stored-1", "info": {"model": "m"}}
 
         client = Creating()
-        app = App(ScriptedTerminal(40, 100), client, {"OMH_TUI_GLOW": "0", "OMH_TUI_WALLPAPER": "0", **environ},
+        app = App(ScriptedTerminal(40, 100), client, {"OMH_TUI_WALLPAPER": "0", **environ},
                   poller=FakePoller())  # type: ignore[arg-type]
         app.startup()
         return app, client

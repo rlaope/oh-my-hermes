@@ -11,7 +11,7 @@ and the scattering comes from a fixed hash, `_noise`, not from `random`), so
 the same moment always gives the same cells. The screen layer
 (`screen.LiveRegion`) keeps the cells that fall on a blank cell, paints them
 with absolute moves over the screen and takes them off before anything can
-scroll, as it does the working glow's frame, so none reaches the scrollback.
+scroll, so none reaches the scrollback.
 
 The scenes are pixel art (owner's choice of 2026-10-29, after characters
 such as `%t;:` and rings of `O` read as broken text): a cell is two pixels,
