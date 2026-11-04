@@ -16,13 +16,21 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from xml.etree import ElementTree
 
 from _local_package import load_local_package
 
 load_local_package()
+from omh.plugin_bundle.omh import memory_records  # noqa: E402
+from omh.plugin_bundle.omh.memory_records import SNAPSHOT_RULE, render_memory_records  # noqa: E402
 from omh.plugin_bundle.omh.tools.memory_tool import omh_memory_handler, omh_remember_handler, point_in_time_cue  # noqa: E402
+from memory_recall_fixture import reviewed, selection  # noqa: E402
 from project_identity_fixture import seed_project_identity  # noqa: E402
-from test_memory_prefetch_canonical import SESSION, provider  # noqa: E402
+from test_memory_prefetch_canonical import SESSION, provider, serve  # noqa: E402
+
+SNAPSHOT = "As of 2026-10-30 (v0.1.7), nanran has light and dark themes."
+RELEASE_NOTE = "nanran v0.1.13 added folder export to the sidebar menu."
+LASTING = "OMH requires Hermes v0.22.5 or newer for delegation backends."
 
 
 class PointInTimeCueTests(unittest.TestCase):
@@ -77,7 +85,7 @@ class PointInTimeCueTests(unittest.TestCase):
         self.assertFalse(point_in_time_cue("Release tags are written as v<major>.<minor>.<patch>, e.g. v4.0.5", "procedure"))
 
 
-class PointInTimeAdviceTests(unittest.TestCase):
+class _StoreCase(unittest.TestCase):
     def setUp(self) -> None:
         self.root = Path(self.enterContext(TemporaryDirectory())).resolve()
         seed_project_identity(self.root)
@@ -92,6 +100,8 @@ class PointInTimeAdviceTests(unittest.TestCase):
     def stored(self, record_id: str) -> dict:
         return json.loads((self.store / "memory" / "records" / f"{record_id}.json").read_text(encoding="utf-8"))
 
+
+class PointInTimeAdviceTests(_StoreCase):
     def test_a_snapshot_save_stays_durable_and_says_how_to_retire_it(self) -> None:
         result = self.save(summary="nanran v0.1.13 added folder export to the sidebar menu.")
         self.assertEqual(result["status"], "remembered", result)
@@ -144,6 +154,102 @@ class PointInTimeAdviceTests(unittest.TestCase):
         again = self.save(summary=snapshot)
         self.assertEqual(again["status"], "already_remembered", again)
         self.assertNotIn("point_in_time", again)
+
+
+def _record(record_id: str, summary: str, record_type: str = "fact") -> dict:
+    return {"record_id": record_id, "record_type": record_type, "summary": summary, "approved_at": "2026-10-30T00:00:00Z"}
+
+
+def _marked(text: str) -> dict[str, bool]:
+    return {element.attrib["id"]: element.attrib.get("snapshot") == "as-of" for element in ElementTree.fromstring(text).iter("record")}
+
+
+class SnapshotRecallMarkerTests(unittest.TestCase):
+    """A later session sees a recalled snapshot marked, with the rule said once per section."""
+
+    def test_snapshot_records_are_marked_and_the_rule_is_said_once(self) -> None:
+        text, count = render_memory_records([_record("mem_a", SNAPSHOT), _record("mem_b", LASTING), _record("mem_c", RELEASE_NOTE, "decision")])
+        self.assertEqual(count, 3)
+        self.assertEqual(_marked(text), {"mem_a": True, "mem_b": False, "mem_c": True})
+        rules = ElementTree.fromstring(text).findall("snapshots")
+        self.assertEqual(len(rules), 1, text)
+        self.assertEqual(rules[0].text, SNAPSHOT_RULE)
+        # #2538's limit travels with the mark: only the same thing changing is a replacement.
+        self.assertIn("when that same thing changes", SNAPSHOT_RULE)
+        self.assertIn("Something newly added is its own record, saved without replaces", SNAPSHOT_RULE)
+
+    def test_constraint_lesson_and_procedure_records_render_as_before(self) -> None:
+        records = [
+            _record("mem_a", "As of v4.0 the gateway requires TLS 1.3."),
+            _record("mem_b", SNAPSHOT, "procedure"),
+            _record("mem_c", SNAPSHOT, "lesson"),
+            _record("mem_d", LASTING),
+        ]
+        text, count = render_memory_records(records)
+        self.assertEqual(count, 4)
+        self.assertNotIn("snapshot", text)
+        self.assertEqual(
+            text.splitlines()[1],
+            '  <record id="mem_a" type="fact" approved="2026-10-30">As of v4.0 the gateway requires TLS 1.3.</record>',
+        )
+
+    def test_the_rule_is_inside_the_bound_at_every_budget(self) -> None:
+        records = [_record("mem_a", LASTING), _record("mem_b", SNAPSHOT), _record("mem_c", "Postgres 16 is the production database.")]
+        full, _count = render_memory_records(records)
+        previous = 0
+        for budget in range(len(full) + 1):
+            text, count = render_memory_records(records, budget_chars=budget)
+            with self.subTest(budget=budget):
+                self.assertLessEqual(len(text), budget)
+                # A larger bound never blanks a section a smaller one held: the
+                # line is counted when its first marked record is admitted.
+                self.assertGreaterEqual(count, previous)
+                previous = count
+                if text:
+                    marked = _marked(text)
+                    self.assertEqual(len(marked), count)
+                    self.assertEqual(text.count("<snapshots>"), int(any(marked.values())))
+        lone, _count = render_memory_records([_record("mem_b", SNAPSHOT)])
+        self.assertEqual(render_memory_records([_record("mem_b", SNAPSHOT)], budget_chars=len(lone)), (lone, 1))
+        self.assertEqual(render_memory_records([_record("mem_b", SNAPSHOT)], budget_chars=len(lone) - 1)[1], 0)
+
+    def test_the_record_index_line_carries_no_mark(self) -> None:
+        pairs = [reviewed("mem_one", summary=SNAPSHOT), reviewed("mem_two", summary=RELEASE_NOTE, subject="folder-export")]
+        selected = selection(pairs, query="Astronomy telescope")
+        records = [record for record, _ in pairs]
+        section = memory_records.render_selected_memory_records(selected, records, index_fallback=True)
+        self.assertEqual(sorted(section.indexed), ["mem_one", "mem_two"])
+        self.assertNotIn("snapshot", section.text)
+        # A snapshot captured in this conversation is shown in full, and marked.
+        shown = memory_records.render_selected_memory_records(selected, records, index_fallback=True, full_text_ids={"mem_one"})
+        self.assertEqual(_marked(shown.text), {"mem_one": True})
+        self.assertEqual(shown.text.count("<snapshots>"), 1)
+        index_line = next(line for line in shown.text.splitlines() if "<record_index" in line)
+        self.assertNotIn("snapshot", index_line)
+
+
+class SnapshotRecallMarkerReachTests(_StoreCase):
+    """The mark reaches the live pack of another session and the tool's own recall."""
+
+    def test_tool_recall_marks_snapshot_rows_and_says_the_rule_once(self) -> None:
+        snapshot = self.save(summary="As of 2026-10-30 (v0.1.7), nanran's sidebar lists papers in one flat list.")
+        lasting = self.save(summary="nanran's sidebar papers are sorted by the date they were added.")
+        recalled = self.save(action="recall", query="nanran sidebar papers")
+        rows = {row["record_id"]: row for row in recalled["records"]}
+        self.assertEqual(set(rows), {snapshot["record_id"], lasting["record_id"]}, recalled)
+        self.assertEqual(rows[snapshot["record_id"]]["snapshot"], "as-of")
+        self.assertNotIn("snapshot", rows[lasting["record_id"]])
+        self.assertEqual(recalled["next_action"].count(SNAPSHOT_RULE), 1)
+        plain = self.save(action="recall", query="sorted date added")
+        self.assertEqual([row["record_id"] for row in plain["records"]], [lasting["record_id"]], plain)
+        self.assertNotIn(SNAPSHOT_RULE, plain["next_action"])
+
+    def test_a_later_session_sees_the_snapshot_marked_in_its_pack(self) -> None:
+        saved = self.save(summary="As of 2026-10-30 (v0.1.7), nanran's sidebar lists papers in one flat list.")
+        pack = serve(provider(self.root, session_id="session-later"), "nanran sidebar papers")
+        self.assertIn(f'<record id="{saved["record_id"]}"', pack)
+        self.assertEqual(pack.count('snapshot="as-of"'), 1, pack)
+        self.assertEqual(pack.count(f"<snapshots>{SNAPSHOT_RULE}</snapshots>"), 1, pack)
 
 
 if __name__ == "__main__":

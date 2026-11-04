@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A recalled dated snapshot is marked for later sessions.** The advice to
+  name an old snapshot in `replaces` used to reach only the session that saved
+  it, and the state usually changes weeks later in another session. Now recall
+  marks the same records: `snapshot="as-of"` on the record in the memory pack,
+  `"snapshot": "as-of"` on a recall tool row, and one shared line per pack that
+  says to pass that id as `replaces` only when that same thing changes.
+  Something newly added stays its own record. This reaches the 7 existing
+  snapshots on the owner's store without a migration. What recall selects is
+  unchanged. A pack holding a snapshot is 224 characters longer for the
+  line, plus 17 per marked record.
 - **Saving a dated snapshot now says how to retire it later.** When the
   model saves a fact like "As of 2026-10-30 (v0.1.7), nanran has ..." or
   "nanran v0.1.13 added ...", the result tells it to name this memory in

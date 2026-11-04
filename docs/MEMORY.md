@@ -704,6 +704,23 @@ So a version stated as a rule never qualifies ("OMH requires Hermes v0.22.5 or
 newer", "Stay on React v18.3"), and neither do a bare `v1`, "since v0.1.12", or
 a Korean dated phrase (`2026-10-30 기준`).
 
+The save result reaches only the session that saved the record, and the state
+usually changes weeks later in another one. So recall marks the same records
+with the same rule. In the provider's `<memory_records>` pack, a snapshot
+record's element carries `snapshot="as-of"`, and a section holding at least
+one such record ends with one shared line, never one per record:
+
+```text
+  <snapshots>Records marked snapshot state one thing at one moment: when that same thing changes, save its new state with replaces set to that id. Something newly added is its own record, saved without replaces.</snapshots>
+```
+
+`omh_remember` / `omh_memory` recall rows carry `"snapshot": "as-of"`, and
+the result's `next_action` states the same rule once. The `<record_index>`
+line is unchanged: it names records without their text, so nothing there is
+marked. Marking changes only rendered text. Selection, ranking, dedup and
+the receipt's record digests are unchanged. The section's character bound
+counts the shared line exactly, only once a marked record is admitted.
+
 `subject` is optional: a short slug the model chooses for what the fact is
 about (`deploy-branch`, `reply-language`), in the closed shape
 `[a-z0-9][a-z0-9-]{0,47}`. Anything else is refused as `invalid_subject`, never
