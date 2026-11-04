@@ -16,6 +16,7 @@ When the user then asks to review, refine, accept, or hand off the plan, read th
 - Hold every step to this skill's step shape.
 - Run the proportion check. `/plan` asks for complete code inside its steps, and this skill keeps code bodies out of a plan: reduce each body to the test name and what it asserts, an exact signature and its file, or a command and the output that passes. Say which steps you reduced. The file is the user's; change it only as part of the plan you put to them for acceptance.
 - Take acceptance from the user's own answer, exactly as for any plan. The file existing is not acceptance, and neither is `/plan`'s offer to carry it out: nothing is handed off or started until the user accepts.
+- Once the user accepts, offer the follow-on by this skill's rule, not only `/plan`'s offer to carry it out: when the tasks form a graph (ids, dependencies, write scopes and a closing verification task), name `dag-ulw` beside carrying it out directly, give the fit reason in one line, and start neither until the user picks one, unless their answer already named one.
 
 ## Two stores
 

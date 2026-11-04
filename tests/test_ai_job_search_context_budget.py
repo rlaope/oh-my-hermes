@@ -122,8 +122,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # b073f4fb...eda7 at 529803, main's 83828030...e82a at 530293).
             # #2501's second review moves only tech-debt-audit's "+N more triggers"
             # count (same length); the digest before it was 3a45e62c...32d7.
-            (skill_capabilities, 530427, FULL_ROW_DELTA_CAP,
-             '93de88ace8292b9aa1aadae79a64f518df2720597a1815f4b7a2c0b478c881c0',
+            # 530427 -> 530439 and the digest re-derived: ralplan's node-prompt line names
+            # `dag-ulw` nodes beside `ultrawork` board rows (+12, itemized at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin
+            # before it was 93de88ac...c1c0.
+            (skill_capabilities, 530439, FULL_ROW_DELTA_CAP,
+             'b8552607995eaa911bc93d87dee0894405e7b5b85d401c3cbb4fbe78431a5e6b',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -327,7 +331,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # outside-memory candidates: clean origin/main reproduces 098cb4a9...11f7d;
         # only dag-ulw (old 39dd80a2), loop (old dbfddeb5), and deep-interview
         # (old 00aff6d5) body digests move. Capability row digests are unchanged.
-        self.assertEqual(_digest(legacy_hashes), '2050e2289b7cf81ab57cf2ce984eac188295e3369ae952b88d833b6c5260df6b')
+        # Planning skills offer dag-ulw after acceptance: oh-my-hermes (router lane map and
+        # engine gate), ralplan (recovery note, node-prompt line), refactor-plan (whole-plan
+        # go) and dag-ulw (graph from an accepted plan) move; nothing else. Re-derived on the
+        # tree merged with main; the pin before it was 2050e228...df6b.
+        # Its delta review rewords refactor-plan's dag-ulw line (fit condition back, no
+        # rollback in STOP WHEN); only refactor-plan moves, and the pin before it was 354f7cf2...5e6b.
+        self.assertEqual(_digest(legacy_hashes), 'ab8d58ad765a67cd85c4892379fecd72382cdd788b384995171e6b5b6a6258e7')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
