@@ -13,6 +13,25 @@ All notable changes will be documented here.
   draft, a queued line or an open question holds it, and a notice says to send
   `continue`. At most 2 go between two prompts of the person's own; past that
   the old notice asks.
+- **A look with a scene paints its ground on every terminal.** The eight looks
+  with a scene set their ground only with OSC 11. Otty gives that colour only
+  to cells written after it, so every cell an erase cleared kept the terminal's
+  own black. That covered the chat area, every row's tail, the composer and the
+  blank rows: about 2,500–3,200 of the 6,300 cells on a 150x42 screen. Every
+  erase and blank fill on those looks now carries the ground as its background,
+  and so do the margins beside the glow. A terminal fills those cells with the
+  ground through background colour erase. A move in the /theme picker paints
+  the new ground over the whole visible screen in one synchronized update:
+  the region, the rows above it that are still on screen, and the blank rows
+  under it. Nothing is written into the scrollback. Pagers (/logs, /dag,
+  Ctrl+S) erase on the ground too. The default look, 256 and 16 colours,
+  NO_COLOR and `/wallpaper off` write the same bytes as before. At exit and
+  at Ctrl+Z, the rows still on screen are painted again on the terminal's own
+  background. One cost, accepted by the owner: rows already in the scrollback
+  keep the look's colour until they are printed again. The session rows left
+  above the prompt after a Ctrl+Z resume are on the terminal's own background
+  again, so Otty shows its own colour in their tails until they are reprinted,
+  as before this change. The background restore at exit is unchanged.
 - **On a dark look with a scene, the OMH TUI's diff and outcome bands and the
   pager's footer bar follow the look.** These bands were the skin's fixed dark
   green and maroon on every look, and the red one sank into aurora's teal at
