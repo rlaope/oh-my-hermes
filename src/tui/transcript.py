@@ -162,6 +162,8 @@ INTERRUPTED_NOTICE = "Interrupted."
 # An interrupted turn the person did not stop (`Transcript.hermes_interrupted`): Hermes ended it itself, as when the
 # session's lease was lost (Hermes #142161), and the person may want it to go on.
 HERMES_INTERRUPTED_NOTICE = "Hermes interrupted this turn; send `continue` to go on."
+# The same end when the TUI sends that `continue` itself after a short wait (`App._arm_auto_continue`).
+HERMES_RESUMING_NOTICE = "Hermes interrupted this turn; sending `continue` in {seconds} s · Esc cancels"
 FAILED_NOTICE = "The turn ended with an error."
 # The first row a full redraw prints when `retake_tail` left the session's earlier blocks out; once the cap
 # below has dropped blocks, /history no longer holds them all, and the row says how many it does.
@@ -1383,6 +1385,8 @@ class Transcript:
         # The app says, before each `message.complete`, whether it did not ask for the stop an `interrupted` status
         # reports (`App.interrupting`): then Hermes stopped the turn, and the notice says so.
         self.hermes_interrupted = False
+        # Whether the app sends `continue` for such an end itself, and after how many seconds (0: it does not).
+        self.hermes_resuming = 0.0
         self.details_expanded = False
         self._clock = clock
         self._waits: list[tuple[float, float]] = []  # questions' waits on the person that ended: (began, ended)
@@ -1851,8 +1855,13 @@ class Transcript:
             self._append(AssistantBlock(text))
         self._close_live()
         if status == "interrupted":
-            self._append(NoticeBlock(HERMES_INTERRUPTED_NOTICE if self.hermes_interrupted else INTERRUPTED_NOTICE,
-                                     NOTICE_WARN))
+            if not self.hermes_interrupted:
+                said = INTERRUPTED_NOTICE
+            elif self.hermes_resuming:
+                said = HERMES_RESUMING_NOTICE.format(seconds=f"{self.hermes_resuming:g}")
+            else:
+                said = HERMES_INTERRUPTED_NOTICE
+            self._append(NoticeBlock(said, NOTICE_WARN))
         if status == "error":
             self._append(NoticeBlock(error.strip() or FAILED_NOTICE, NOTICE_ERROR))
         warning = as_text(payload.get("warning")).strip()

@@ -701,6 +701,17 @@ QUEUE_BACK_NOTICE = "{why}: what you queued is back in the composer, not sent."
 QUEUE_BACK_HIDDEN_NOTICE = "{why}: what you queued is in your draft, which comes back when this field closes; not sent."
 QUEUE_HELD_NOTICE = "{why}: what you queued waits, not sent, until your next prompt; ↑ takes it back."
 INTERRUPTED_WHY = "Interrupted"
+# A turn Hermes interrupted itself (`Transcript.hermes_interrupted`; a sleep past the session's turn lease, its liveness
+# watchdog) goes on by itself: after AUTO_CONTINUE_SECONDS, in which Esc cancels, the TUI sends the `continue` the
+# notice asks the person for, as typed. At most AUTO_CONTINUE_LIMIT times between two prompts of the person's own.
+AUTO_CONTINUE_TEXT = "continue"
+AUTO_CONTINUE_SECONDS = 3.0
+AUTO_CONTINUE_LIMIT = 2
+AUTO_CONTINUE_HELD_NOTICE = "Not resumed: {why}; send `continue` to go on."
+AUTO_CONTINUE_ESCAPED = "Esc"
+AUTO_CONTINUE_DRAFTED = "you typed a draft"
+AUTO_CONTINUE_QUEUED = "a line is queued"
+AUTO_CONTINUE_ASKED = "a question or picker is open"
 RESPAWNED_WHY = "The Hermes gateway was restarted"
 # Gateway crash recovery, bounded as Hermes' own TUI bounds it (ui-tui `app/gatewayRecovery.ts`): at most
 # RESPAWN_LIMIT respawns in a sliding RESPAWN_WINDOW_SECONDS, each resuming the session that was open. Past that,
@@ -1957,6 +1968,11 @@ class App(ModesMixin, AgentViewMixin):
         # The person asked for the running turn to stop another way (`/stop`, a prompt in busy mode `interrupt`):
         # an `interrupted` end is theirs, not Hermes' own (`Transcript.hermes_interrupted`).
         self.stop_asked = False
+        # The `continue` the TUI sends itself for a turn Hermes interrupted: the session it is for (its stored id) and
+        # when it goes (`_auto_continue_when_due`); None when none waits. `auto_continues` counts those sent since the
+        # person's own last prompt (AUTO_CONTINUE_LIMIT).
+        self.auto_continue: tuple[str, float] | None = None
+        self.auto_continues = 0
         self.lifecycle_seen = 0  # the live session's `message.start` and `message.complete` events, counted
         self.inbound_at = 0.0  # when the gateway last sent anything (`GATEWAY_SILENCE_SECONDS`)
         self.authority_epoch: object = None  # the shared gateway's epoch the last create or resume answered
@@ -2591,6 +2607,7 @@ class App(ModesMixin, AgentViewMixin):
         self._take_input(data)
         if self.exit_code is not None:
             return
+        self._auto_continue_when_due()
         self._drain_gateway()
         if self.respawn_reason:
             self._respawn_gateway()
@@ -2657,6 +2674,8 @@ class App(ModesMixin, AgentViewMixin):
             due.append(self.ambient_at + WALLPAPER_TICK_SECONDS)
         if self.path_due is not None and self.sid:
             due.append(self.path_due)
+        if self.auto_continue is not None:
+            due.append(self.auto_continue[1])
         tail = self._tail_due_at()
         if tail is not None:
             due.append(tail)
@@ -3290,6 +3309,7 @@ class App(ModesMixin, AgentViewMixin):
                 self._settle_steers_at_turn_end()
                 # A stop the person asked for in no way (Esc, `/stop`, a prompt in busy mode `interrupt`) is Hermes' own.
                 self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)  # `_turn_ended` spends it
+                self.transcript.hermes_resuming = self._arm_auto_continue(payload)
             self.transcript.apply(event)
             self._track_sent_now(event.type)
             self._count_streamed(event.type, payload)
@@ -4083,6 +4103,9 @@ class App(ModesMixin, AgentViewMixin):
         if self._menu_entries():
             self.menu_closed = self.composer.text
             return True
+        if self.auto_continue is not None:
+            self._hold_auto_continue(AUTO_CONTINUE_ESCAPED)
+            return True
         if self.agent_steer is not None:
             self.agent_steer = None
             return True
@@ -4820,6 +4843,7 @@ class App(ModesMixin, AgentViewMixin):
         """
         if not text.strip():
             return
+        self.auto_continues = 0  # the person sent something: the next turn Hermes interrupts may go on by itself again
         seen = shown or text
         if self._switching():  # never into the session being left: what goes to a session goes where the switch lands
             invocation = None if seen.startswith(SHELL_PREFIX) else parse_slash(seen)
@@ -5228,6 +5252,66 @@ class App(ModesMixin, AgentViewMixin):
             self.queue_held = True
             self.transcript.add_notice(QUEUE_HELD_NOTICE.format(why=why))
 
+    def _arm_auto_continue(self, payload: Any) -> float:
+        """At a `message.complete`: whether this end is a turn Hermes interrupted itself that the TUI goes on with, and
+        then after how many seconds (0.0 when it does not).
+
+        Hermes' frame names no cause (tui_gateway/prompt_turn.py `_result_status`), so the cause is what the TUI
+        did not do: no Esc, `/stop` or interrupting prompt was asked for the turn (`Transcript.hermes_interrupted`).
+        An end carrying an error is not one, nor one past AUTO_CONTINUE_LIMIT. Nor is one the person has moved past
+        already: a draft, a queued line (it goes now, `_turn_ended`), a picked rewind or agent steer, an open
+        question; then the notice asks for `continue` as before.
+        """
+        self.auto_continue = None
+        if not isinstance(payload, Mapping) or as_text(payload.get("status")) != "interrupted":
+            return 0.0
+        if not self.transcript.hermes_interrupted or as_text(payload.get("error")).strip():
+            return 0.0
+        if self.auto_continues >= AUTO_CONTINUE_LIMIT or not self.sid or self._auto_continue_held():
+            return 0.0
+        self.auto_continue = (self.stored_id or self.sid, self.clock() + AUTO_CONTINUE_SECONDS)
+        return AUTO_CONTINUE_SECONDS
+
+    def _auto_continue_held(self) -> str:
+        """Why the person's own state holds a `continue` the TUI would send itself; "" when nothing does."""
+        if self._draft().text.strip() or self.agent_steer is not None or self.rewind is not None:
+            return AUTO_CONTINUE_DRAFTED
+        if self.queued:
+            return AUTO_CONTINUE_QUEUED
+        if self.slot is not None or self.tell_draft is not None:
+            return AUTO_CONTINUE_ASKED
+        return ""
+
+    def _hold_auto_continue(self, why: str) -> None:
+        """The `continue` that waited is not sent; the transcript says so and what the person can send instead."""
+        self.auto_continue = None
+        self.transcript.add_notice(AUTO_CONTINUE_HELD_NOTICE.format(why=why), NOTICE_WARN)
+        self.dirty = True
+
+    def _auto_continue_when_due(self) -> None:
+        """Send the waiting `continue` once its wait is over, as the person's typed `continue` goes (`_send_typed`).
+
+        A turn running by then (the person sent a prompt, another client started one) or another session open
+        drops it silently: the session has moved on. A draft, a queued line or an open question typed meanwhile
+        holds it, said in a notice. A reconnect to the same session keeps it (its stored id is the same).
+        """
+        if self.auto_continue is None or self.clock() < self.auto_continue[1]:
+            return
+        if self.decoder.holding:  # a lone Esc is held until input is quiet: it may be the person's cancel
+            return
+        session, _due = self.auto_continue
+        self.auto_continue = None
+        if (self.stored_id or self.sid) != session or not self.sid or self._busy() or self._switching() \
+                or self.starting is not None or self.held_submits:
+            return
+        why = self._auto_continue_held()
+        if why:
+            self._hold_auto_continue(why)
+            return
+        self.auto_continues += 1
+        self.dirty = True
+        self._send_typed(AUTO_CONTINUE_TEXT)
+
     def _drain_queue(self) -> None:
         """Send the next queued line: a prompt starts the next turn; a `!` line runs, and the one after waits for it.
 
@@ -5239,6 +5323,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         if self.queued and self.sid and not self.queue_held and self.starting is None:
             line = self.queued.popleft()
+            self.auto_continues = 0  # a line the person queued
             if line.shell:
                 self._run_shell(line.text[len(SHELL_PREFIX) :].strip(), drain_after=True, echo=line.shown)
             else:

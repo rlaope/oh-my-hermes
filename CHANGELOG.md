@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
+  the machine sleeps past the session's turn lease, Hermes stops the running
+  turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
+  on." It now says it sends that `continue` in 3 s, with Esc to cancel, and then
+  sends it as a typed `continue` goes. It never does so for the person's own Esc,
+  `/stop` or interrupting prompt, nor for a turn that ended with an error. A
+  draft, a queued line or an open question holds it, and a notice says to send
+  `continue`. At most 2 go between two prompts of the person's own; past that
+  the old notice asks.
 - **On a dark look with a scene, the OMH TUI's diff and outcome bands and the
   pager's footer bar follow the look.** These bands were the skin's fixed dark
   green and maroon on every look, and the red one sank into aurora's teal at
