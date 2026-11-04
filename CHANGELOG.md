@@ -12,6 +12,23 @@ All notable changes will be documented here.
   In the live bench this took gpt-6-luna on a signature change from 0/6 to 6/6, and Haiku 4.5 from
   5/6 to 6/6.
 
+- **Saving a dated snapshot now says how to retire it later.** When the
+  model saves a fact like "As of 2026-10-30 (v0.1.7), nanran has ..." or
+  "nanran v0.1.13 added ...", the result tells it to name this memory in
+  `replaces` when it saves the new state. The old memory then leaves recall
+  instead of being served beside the new one. The owner's store held 8 such
+  snapshots side by side, none ever replaced. The memory itself is unchanged:
+  it stays permanent and nothing is aged or hidden. Versions stated as rules
+  ("requires Hermes v0.22.5 or newer", "pin Node v20.11"), "Decided <date>:" lines,
+  lessons and procedures get no such note.
+- **Vim mode changes the cursor shape.** With `display.vim_mode` on, the
+  terminal's cursor is a steady beam in INSERT and a steady block in NORMAL
+  (DECSCUSR). This is an OMH addition: Hermes keeps a steady block in both
+  modes. It is written only when the mode changes, and the terminal's own
+  shape comes back when a question or picker takes the keys, when vim mode
+  goes off, and on exit or Ctrl+Z. On exit it is the terminal's default
+  shape, not whatever the shell had set before.
+
 - **Memory recall costs a turn far less.** The memory pack is rendered in
   `on_turn_start`, before the turn's model call, so its cost is turn latency
   (a code comment and `docs/MEMORY.md` said it was rendered off the hot path;
@@ -71,6 +88,7 @@ All notable changes will be documented here.
   message that matches nothing: listing them would make the live recall
   select differently from coding handoffs, which the recall suite and
   incident replay hold equal.
+
 - **Skill hints read the request, not the gateway's busy-path header.** A
   Discord or Slack message sent while the agent is busy reaches the turn with
   Hermes' origin block in front of it: one line of JSON ids between two fixed

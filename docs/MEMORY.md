@@ -677,6 +677,33 @@ adapters), with duplicates skipped, and map the result to one `status`:
 | `refused` | Nothing was written: invalid input (including an `invalid_subject`), a session that may not write (`shared_surface_writes_refused` on a shared surface, `writes_disabled` in a background run, `session_lens_unavailable` with no provider lens; see [Surface classes](#surface-classes)), memory turned off, a project scope this session cannot resolve, or an `instruction_shaped_summary` (a second-person order or a Korean request ending, outside `procedure` records), whose `next_action` asks for the fact restated as an observation. |
 | `error` | Admission raised (an unreadable store, a lock held past its 10 s wait); `reason` names the exception class and nothing is confirmed saved. |
 
+A `remembered` save whose summary states a point-in-time snapshot also
+carries `point_in_time`. It holds the new `record_id` and a `next_action` that
+asks the model to pass that id as `replaces` when it saves the changed state,
+so the old snapshot moves to `history/` instead of being recalled beside the
+newer one. The advice limits `replaces` to that same thing changing.
+Something newly added, such as a later release's new feature, is its own
+record and is saved without `replaces`. A `corrected` result whose new
+summary is still a snapshot carries the same field for the new id, so the
+chain continues. The capture itself is unchanged: it stays `durable`, gets no
+review deadline, and nothing is hidden.
+
+A summary counts as a snapshot only when all of these hold:
+
+- Its `record_type` is `fact`, `episode` or `decision`.
+- It carries one of these phrasings:
+  - a dated or versioned "as of" (`As of 2026-10-30 ...`, `as of v0.1.7`);
+  - "in" a version (`in v0.1.14`);
+  - a version followed by a change verb (`v0.1.13 added ...`, also `removed`,
+    `introduced`, `ships`);
+  - a leading name and version (`nanran v0.1.16: ...`).
+- It carries no constraint wording (`requires`, `minimum`, `or newer`, `pin`,
+  `must`, `never`, `stay`, `frozen`, `compatible`, `prefer` and similar).
+
+So a version stated as a rule never qualifies ("OMH requires Hermes v0.22.5 or
+newer", "Stay on React v18.3"), and neither do a bare `v1`, "since v0.1.12", or
+a Korean dated phrase (`2026-10-30 기준`).
+
 `subject` is optional: a short slug the model chooses for what the fact is
 about (`deploy-branch`, `reply-language`), in the closed shape
 `[a-z0-9][a-z0-9-]{0,47}`. Anything else is refused as `invalid_subject`, never

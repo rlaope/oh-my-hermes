@@ -602,7 +602,56 @@ def _capture(args: dict, kwargs: dict) -> dict[str, object]:
             reason=_safe_error_type(type(exc).__name__),
             next_action="Nothing is confirmed saved. Tell the user the capture failed; call action='status' to see what is held.",
         )
-    return _map_capture_payload(payload, lens)
+    result = _map_capture_payload(payload, lens)
+    if result["status"] == "remembered" and result.get("record_id") and point_in_time_cue(summary, record_type):
+        result["point_in_time"] = _point_in_time_advice(str(result["record_id"]))
+    return result
+
+
+# A fact that states how something stands at one moment: "As of 2026-10-30
+# (v0.1.7), nanran has ...", "nanran v0.1.13 added ...", "nanran v0.1.16:
+# ...". The next release turns it into a past state, and a later save of the
+# new state is a second record unless it names this one in `replaces`; on the
+# owner's store 8 such records sat side by side, none ever replaced. The
+# capture stays durable and nothing is aged or hidden: the result only tells
+# the model how to retire it when the state moves on. Closed set; a version
+# alone ("requires Hermes v0.22.5", "tags look like v1.2.3") is not a cue,
+# and neither is any summary carrying constraint wording.
+_POINT_IN_TIME_CUES = (
+    re.compile(r"\bas of (?:\d{4}-\d{2}-\d{2}|v\d+\.\d+(?:\.\d+)*)\b", re.IGNORECASE),
+    re.compile(r"\bin v\d+\.\d+(?:\.\d+)*\b", re.IGNORECASE),
+    re.compile(r"(?<![\w.])v\d+\.\d+(?:\.\d+)* (?:added|adds|removed|removes|introduced|introduces|ships|shipped)\b", re.IGNORECASE),
+    re.compile(r"^[\w.-]+ v\d+\.\d+(?:\.\d+)*:", re.IGNORECASE),
+)
+_CONSTRAINT_WORDS = re.compile(
+    r"\b(?:requires?|required|minimum|at least|or newer|or later|pin|pinned|must|never|stay|frozen|compatible|below|above|prefers?)\b",
+    re.IGNORECASE,
+)
+# Statements of what is or was decided: three of the owner's eight snapshots
+# were saved as decisions ("As of 2026-11-01 (v0.1.15), nanran's sidebar
+# groups papers into folders"). A lesson or procedure keeps holding.
+_POINT_IN_TIME_RECORD_TYPES = ("fact", "episode", "decision")
+
+
+def point_in_time_cue(summary: str, record_type: str) -> bool:
+    """Whether a capture states a point-in-time state that a later save should replace."""
+    return (
+        record_type in _POINT_IN_TIME_RECORD_TYPES
+        and not _CONSTRAINT_WORDS.search(summary)
+        and any(pattern.search(summary) for pattern in _POINT_IN_TIME_CUES)
+    )
+
+
+def _point_in_time_advice(record_id: str) -> dict[str, object]:
+    return {
+        "record_id": record_id,
+        "next_action": (
+            f"Saved as lasting. It states how one thing stands at one point in time: when that same thing changes, "
+            f"save its new state with replaces='{record_id}' so this one leaves recall instead of being served beside "
+            "it. Something newly added (another feature, a later release's change) is its own record: save it "
+            "without replaces."
+        ),
+    }
 
 
 def _bound_capture_scope(lens: "_SessionLens", requested: str) -> dict[str, object] | tuple[str, str] | None:
@@ -1656,6 +1705,12 @@ def _correct(home: Path, record: dict, summary: str, tags: object, lens: _Sessio
         receipt_state=str(payload.get("receipt_state", "") or "") or None,
         display_line=_display_line("✏️ OMH corrected: ", str(successor.get("summary", "") or summary), 80),
         next_action=f"The old revision is kept under history/ and no longer recalls; {new_id} replaces it.",
+        # A corrected snapshot is still a snapshot: the chain continues from the new id.
+        **(
+            {"point_in_time": _point_in_time_advice(new_id)}
+            if new_id and point_in_time_cue(summary, str(record.get("record_type", "") or "fact"))
+            else {}
+        ),
     )
 
 

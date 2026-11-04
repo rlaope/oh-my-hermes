@@ -159,6 +159,7 @@ class ScriptedTerminal:
         self.exited_at = 0.0
         self.mouse_reporting = False
         self.mouse_drag = False  # reports include a held button's motion (the pager's drag)
+        self.cursor_shape: str | None = None
         self.mouse_calls: list[bool] = []  # every `set_mouse` that changed the state, in order
         self.background: str | None = None  # what the background query answers
         self.cursor_row: int | None = None  # the 1-based cursor row the same query reports
@@ -218,6 +219,12 @@ class ScriptedTerminal:
         self.mouse_reporting = enabled
         self.mouse_calls.append(enabled)
         self.write(terminal_module.MOUSE_REPORTING_ON if enabled else terminal_module.MOUSE_REPORTING_OFF)
+
+    def set_cursor_shape(self, shape: str | None) -> None:
+        """As `Terminal.set_cursor_shape`: written only when the shape changes."""
+        if shape != self.cursor_shape:
+            self.cursor_shape = shape
+            self.write(shape or terminal_module.CURSOR_SHAPE_DEFAULT)
 
     def _wait(self, what: str) -> bytes:
         if time.monotonic() > self.deadline:
