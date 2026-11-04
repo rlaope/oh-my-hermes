@@ -36,6 +36,7 @@ from omh.tui.screen import TEXT_GAP, LiveRegion
 from omh.tui.style import TRUECOLOR, Span, Style
 from omh.tui.terminal import background_restore, background_set
 from omh.tui.theme import (
+    DARK_SCENE_BAND_SHARE,
     DEFAULT_LAUNCH,
     EDGE_CONTRAST,
     GLYPH_ROLES,
@@ -43,6 +44,7 @@ from omh.tui.theme import (
     LAUNCH_PRESETS,
     TEXT_CONTRAST,
     TEXT_ROLES,
+    _hue_held,
     build_theme,
     contrast_ratio,
     is_light,
@@ -303,6 +305,32 @@ class SceneBandTests(unittest.TestCase):
                     short.append((skin.short_name, look, "status",
                                   round(contrast_ratio(theme.status.fg, theme.status.bg), 2)))
         self.assertEqual(short[:12], [], f"{len(short)} under their floor or out of their hue")
+
+    def test_a_grey_word_colour_stays_grey_on_a_tinted_ground(self) -> None:
+        # An exact grey's OKLab chroma is rounding noise (~1e-8); held as a hue it turned mustard on violet (#392E0B).
+        for grey in ("#808080", "#FFFFFF", "#404040"):
+            for look in SCENES:
+                band = _hue_held(grey, look_ground(look, False), DARK_SCENE_BAND_SHARE)
+                self.assertEqual(len({band[1:3], band[3:5], band[5:7]}), 1, (grey, look, band))
+
+    def test_words_and_footer_words_are_lifted_where_the_raw_colours_miss_their_floor(self) -> None:
+        # Every shipped skin clears 4.5:1 on every shipped ground as it is, so the lift is measured on a ground
+        # just dark enough to count as dark, where each raw colour falls short.
+        skin, ground = default_theme(), "#747474"
+        colours = skin_colors(skin.skin_name)
+        self.assertFalse(is_light(ground))
+        theme = with_launch_look(build_theme(skin, ground), skin, ground, "gold", scene=True)
+        raw = {"diff_add": "banner_text", "diff_add_word": "diff_added_word", "diff_remove": "banner_text",
+               "diff_remove_word": "diff_removed_word", "status": "status_bar_text"}
+        for role, key in raw.items():
+            style = getattr(theme, role)
+            self.assertLess(contrast_ratio(colours[key], style.bg), TEXT_CONTRAST, (role, "the raw colour misses"))
+            self.assertGreaterEqual(contrast_ratio(style.fg, style.bg), TEXT_CONTRAST, (role, style))
+
+    def test_a_scene_with_no_reported_background_keeps_the_skins_bands(self) -> None:
+        skin = default_theme()
+        plain = with_launch_look(build_theme(skin, None), skin, None, "aurora")
+        self.assertEqual(with_launch_look(build_theme(skin, None), skin, None, "aurora", scene=True), plain)
 
     def test_the_default_look_a_light_ground_and_no_wallpaper_keep_the_skins_own_bands_and_bar(self) -> None:
         for skin in SKIN_THEMES:

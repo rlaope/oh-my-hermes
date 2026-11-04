@@ -119,6 +119,9 @@ LIGHT_STATUS_SHARE = 0.85
 # greys a red out on aurora's teal and a green on violet's plum. At 0.8 every band clears 1.25:1 against every
 # scene ground (about the default look's own bands), and the palette's light ink 7:1 on it.
 DARK_SCENE_BAND_SHARE = 0.8
+# The OKLCH chroma under which a colour counts as grey for `_hue_held`: an exact grey such as #808080 comes out of
+# OKLab at about 1e-8, not 0, and scaling that noise would give it a random hue.
+ACHROMATIC_CHROMA = 1e-4
 # An approval's highlighted choice: its tone moved this far toward the background for the band behind it (on a dark
 # background, on a light one), so the band is the tone's tint and the tone itself, lifted, still reads on it. On a
 # light background 0.85 left an amber band at 1.08:1, too close to the background to see.
@@ -183,9 +186,9 @@ DEFAULT_LAUNCH = LAUNCH_PRESETS[0]
 # in `rule` (its card-edge colour), a tool call's rail and the working row's spinner (`accent`, its label colour), a
 # sent prompt's band (`with_prompt_band`), a catch row and the working glow (`with_catch_colours`). Body text, the
 # neutral greys, the state colours (`running`, `ok`, `warn`, `error`), the kind hues and the skin's own roles
-# (`brand`, `heading`, syntax, diff) stay the skin's, so a look never changes what a colour says. On a dark scene
-# look's ground, the diff and outcome bands keep their hue and sit on the look (`DARK_SCENE_BAND_SHARE`), and the
-# pager's footer bar (`status`) takes the prompt band's colour.
+# (`brand`, `heading`, syntax, diff) keep the skin's hues, so a look never changes what a colour says. Only where a
+# band is drawn moves: on a dark scene look's ground the diff and outcome bands are the skin's diff hues set onto the
+# look (`DARK_SCENE_BAND_SHARE`), and the pager's footer bar (`status`) takes the prompt band's colour.
 LOOK_ROLES = ("rule", "accent", "prompt_band", "catch_mark", "catch_words", "glow_ring")
 
 
@@ -432,10 +435,11 @@ def _from_oklab(lightness: float, a: float, b: float) -> str:
 @lru_cache(maxsize=256)
 def _hue_held(colour: str, ground: str, share: float) -> str:
     """`colour` moved `share` of the way to `ground` in OKLCH lightness and chroma, its own hue held, so a band of it
-    sits on `ground` and still reads as `colour`'s hue (`DARK_SCENE_BAND_SHARE`)."""
+    sits on `ground` and still reads as `colour`'s hue (`DARK_SCENE_BAND_SHARE`). A grey (chroma under
+    `ACHROMATIC_CHROMA`, rounding noise) has no hue to hold and stays grey."""
     (light, a, b), (ground_light, ground_a, ground_b) = _oklab(colour), _oklab(ground)
     chroma, ground_chroma = (a * a + b * b) ** 0.5, (ground_a * ground_a + ground_b * ground_b) ** 0.5
-    scale = (chroma + (ground_chroma - chroma) * share) / chroma if chroma else 0.0
+    scale = (chroma + (ground_chroma - chroma) * share) / chroma if chroma >= ACHROMATIC_CHROMA else 0.0
     return _from_oklab(light + (ground_light - light) * share, a * scale, b * scale)
 
 
