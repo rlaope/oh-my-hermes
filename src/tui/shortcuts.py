@@ -73,6 +73,9 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                        "reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued "
                        "prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into "
                        "session history. Esc or an unmapped key cancels the leader. "
+                       "A picker taking input also cancels pending leader and Vim commands; a session picker waiting "
+                       "while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or "
+                       "Ctrl+C takes the picker. "
                        "The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed"),
     ("Ctrl+V", "Attaches the clipboard image as an [Image #N] token at the caret"),
     ("Ctrl+O", "Opens the whole transcript with every detail (thinking, tool output, whole diffs) at its end, or, "

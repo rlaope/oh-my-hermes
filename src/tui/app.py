@@ -3711,6 +3711,8 @@ class App(ModesMixin, AgentViewMixin):
             elif not self.pager.handle_key(event, self.screen[1]):
                 self._leave_pager()
             return
+        if self.slot is None and self._front_picker() is not None:
+            self.composer._drop_pending()  # the picker owns input, including display keys that return below
         if not (self.slot is None and self.composer.leader and self._front_picker() is None) and self._display_key(event):
             return
         if self.slot is not None and self._slot_arming(event):
@@ -3727,6 +3729,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         front = self._front_picker() if self.slot is None else None
         if front is None and self.slot is None and self.picker is not None and self._picker_arms(event):
+            self.composer._drop_pending()
             self._picker_key(event)
             return
         if front is not None:  # the one drawn (`_slot_lines`) has the keys

@@ -1023,6 +1023,231 @@ class LeaderShortcutTests(unittest.TestCase):
                 self.assertIsNotNone(app.search)
                 self.assertEqual(client.calls, [])
 
+    def picker_fixture(self, app: App, kind: str) -> object:
+        from omh.tui.history import HistorySearch
+        from omh.tui.launch_picker import LAUNCH_PRESETS, LaunchPicker
+        from omh.tui.model_picker import ModelPicker, ModelRow
+        from omh.tui.rewind_picker import RewindPicker, RewindRow
+        from omh.tui.session_picker import SessionPicker, SessionRow
+
+        pickers = {
+            "launch_picker": lambda: LaunchPicker(LAUNCH_PRESETS[0]),
+            "picker": lambda: SessionPicker([SessionRow("s1", "Session 1", "", 100.0, 1)], current=app.stored_id),
+            "search": lambda: HistorySearch(["earlier prompt"], app.composer.text),
+            "rewind_picker": lambda: RewindPicker([RewindRow(1, "earlier prompt", 1, 0, 100.0)]),
+            "model_picker": lambda: ModelPicker([ModelRow("m1", "p1", "Provider 1", True)], current="m1"),
+        }
+        picker = pickers[kind]()
+        setattr(app, kind, picker)
+        return picker
+
+    def sessions_answer(self, app: App, request_id: int) -> None:
+        from omh.tui.gateway import Response
+
+        app._on_response(Response(request_id, {"sessions": [
+            {"id": "s1", "title": "Session 1", "preview": "", "started_at": 100.0, "message_count": 1},
+        ]}, None))
+
+    def waiting_picker(self) -> tuple[App, RecordingClient]:
+        app, client = self.normal_app()
+        self.arm(app)
+        app._on_input(Key(CHAR, "s"))
+        request_id = len(client.calls)
+        type_text(app, "i!")
+        app._on_input(Key(ESCAPE))
+        self.sessions_answer(app, request_id)
+        self.assertIsNotNone(app.picker)
+        self.assertTrue(app.picker.waiting)
+        self.assertIsNone(app._front_picker())
+        return app, client
+
+    def assert_fresh_mode_chord(self, app: App, client: RecordingClient) -> None:
+        before = len(client.named("config.set"))
+        app._on_input(Key(CHAR, "m"))
+        self.assertEqual(len(client.named("config.set")), before)
+        self.arm(app)
+        app._on_input(Key(CHAR, "m"))
+        self.assertEqual(client.named("config.set")[before:], [
+            {"key": "yolo", "session_id": app.sid, "value": "on"},
+        ])
+
+    def test_delayed_session_answer_dismissal_cancels_rearmed_leader(self) -> None:
+        app, client = self.normal_app()
+        before = (app.composer.text, app.composer.caret, app.composer.normal)
+        self.arm(app)
+        app._on_input(Key(CHAR, "s"))
+        self.arm(app)  # the list is in flight, so the composer still has the keys
+        self.sessions_answer(app, len(client.calls))
+        self.assertIsNotNone(app.picker)
+        self.assertFalse(app.picker.waiting)
+        app._on_input(Key(ESCAPE))
+        self.assertIsNone(app.picker)
+        self.assertFalse(app.composer.leader)
+        self.assertFalse(app.composer.pending)
+        self.assertEqual((app.composer.text, app.composer.caret, app.composer.normal), before)
+        self.assert_fresh_mode_chord(app, client)
+        self.assertEqual(client.named("session.list"), [{"limit": 50}])
+
+    def test_all_front_pickers_clear_every_pending_normal_command(self) -> None:
+        for kind in ("launch_picker", "picker", "search", "rewind_picker", "model_picker"):
+            for pending in (" ", "3", "d", "d2", "g", "r"):
+                with self.subTest(kind=kind, pending=pending):
+                    app, client = self.normal_app()
+                    type_text(app, pending)
+                    self.assertTrue(app.composer.pending)
+                    before = (app.composer.text, app.composer.caret, app.composer.normal)
+                    self.picker_fixture(app, kind)
+                    app._on_input(Key(ESCAPE))
+                    self.assertIsNone(getattr(app, kind))
+                    self.assertFalse(app.composer.leader)
+                    self.assertFalse(app.composer.pending)
+                    self.assertEqual((app.composer.text, app.composer.caret, app.composer.normal), before)
+                    self.assert_fresh_mode_chord(app, client)
+
+    def test_front_picker_display_early_returns_clear_pending(self) -> None:
+        for kind in ("launch_picker", "picker", "search", "rewind_picker", "model_picker"):
+            for char in ("l", "o"):
+                with self.subTest(kind=kind, char=char):
+                    app, client = self.normal_app()
+                    self.arm(app)
+                    picker = self.picker_fixture(app, kind)
+                    app._on_input(Key(CHAR, char, ctrl=True))
+                    self.assertFalse(app.composer.pending)
+                    self.assertIs(getattr(app, kind), picker)
+                    self.assertEqual(client.calls, [])
+                    if app.pager is not None:
+                        app._on_input(Key(CHAR, "q"))
+                    app._on_input(Key(ESCAPE))
+                    self.assert_fresh_mode_chord(app, client)
+
+    def test_front_picker_events_are_delivered_once_after_reset(self) -> None:
+        for kind, handler in (("launch_picker", "_launch_picker_key"), ("picker", "_picker_key"),
+                              ("search", "_search_key"), ("rewind_picker", "_rewind_picker_key"),
+                              ("model_picker", "_model_picker_key")):
+            for event in (Key(DOWN), Key(CHAR, "m"), Key(CHAR, "m", alt=True), Paste("filter")):
+                with self.subTest(kind=kind, event=event):
+                    app, client = self.normal_app()
+                    self.arm(app)
+                    self.picker_fixture(app, kind)
+                    original = getattr(app, handler)
+
+                    def receive(event: Key | Paste) -> None:
+                        self.assertFalse(app.composer.pending)
+                        original(event)
+
+                    with patch.object(app, handler, side_effect=receive) as owned:
+                        app._on_input(event)
+                        owned.assert_called_once_with(event)
+                    self.assertFalse(app.composer.pending)
+                    self.assertEqual(client.calls, [])
+
+    def test_waiting_session_acquisition_clears_leader_before_same_event(self) -> None:
+        for event in (Key(UP), Key(DOWN), Key(ESCAPE), Key(CHAR, "c", ctrl=True)):
+            with self.subTest(event=event):
+                app, client = self.waiting_picker()
+                before = (app.composer.text, app.composer.caret, app.composer.normal)
+                self.arm(app)
+                original = app._picker_key
+
+                def receive(event: Key | Paste) -> None:
+                    self.assertFalse(app.composer.pending)
+                    self.assertFalse(app.picker.waiting)
+                    original(event)
+
+                with patch.object(app, "_picker_key", side_effect=receive) as owned:
+                    app._on_input(event)
+                    owned.assert_called_once_with(event)
+                if app.picker is not None:
+                    app._on_input(Key(ESCAPE))
+                self.assertIsNone(app.picker)
+                self.assertFalse(app.composer.pending)
+                self.assertEqual((app.composer.text, app.composer.caret, app.composer.normal), before)
+                self.assertEqual(client.named("session.resume"), [])
+                self.assert_fresh_mode_chord(app, client)
+
+    def test_waiting_session_keeps_leader_typing_and_enter_composer_owned(self) -> None:
+        for busy in (False, True):
+            for leader_enter in (False, True):
+                with self.subTest(busy=busy, leader_enter=leader_enter):
+                    app, client = self.waiting_picker()
+                    app.turn_pending = busy
+                    self.arm(app)
+                    app._on_input(Key(CHAR, "m"))
+                    self.assertEqual(client.named("config.set"), [
+                        {"key": "yolo", "session_id": app.sid, "value": "on"},
+                    ])
+                    self.assertTrue(app.picker.waiting)
+                    if leader_enter:
+                        self.arm(app)
+                    else:
+                        type_text(app, "i more")
+                        self.assertIn(" more", app.composer.text)
+                    text = app.composer.text
+                    self.assertTrue(app.picker.waiting)
+                    self.assertEqual(app.picker.query, "")
+                    app._on_input(Key(ENTER))
+                    if busy and not leader_enter:
+                        self.assertEqual(len(app.queued), 1)
+                        self.assertEqual(app.queued[0].text, text)
+                        self.assertEqual(client.named("prompt.submit"), [])
+                        self.assertEqual(client.named("session.steer"), [])
+                    else:
+                        method = "session.steer" if busy else "prompt.submit"
+                        self.assertEqual(client.named(method), [{"session_id": app.sid, "text": text}])
+                    self.assertEqual(client.named("session.resume"), [])
+                    self.assertTrue(app.picker.waiting)
+                    self.assertEqual(app.picker.query, "")
+
+    def test_list_failures_and_expiry_do_not_cancel_composer_leader(self) -> None:
+        from omh.tui.app import CALL_ANSWER_SECONDS
+        from omh.tui.gateway import Response
+
+        for outcome in ("empty", "refused", "expired"):
+            with self.subTest(outcome=outcome):
+                app, client = self.normal_app()
+                now = [100.0]
+                app.clock = lambda: now[0]
+                self.arm(app)
+                app._on_input(Key(CHAR, "s"))
+                request_id = len(client.calls)
+                self.arm(app)
+                if outcome == "expired":
+                    now[0] += CALL_ANSWER_SECONDS + 1
+                    app._expire_calls()
+                    self.sessions_answer(app, request_id)  # an expired answer cannot seize ownership
+                else:
+                    error = {"code": 5006, "message": "database is locked"} if outcome == "refused" else None
+                    app._on_response(Response(request_id, None if error else {"sessions": []}, error))
+                self.assertIsNone(app.picker)
+                self.assertTrue(app.composer.leader)
+                self.assertEqual(app.composer.text, "draft")
+                app._on_input(Key(CHAR, "m"))
+                self.assertEqual(len(client.named("config.set")), 1)
+                self.arm(app)
+                app._on_input(Key(CHAR, "s"))
+                retry_id = len(client.calls)
+                self.assertEqual(len(client.named("session.list")), 2)
+                self.sessions_answer(app, retry_id)
+                self.assertIsNotNone(app.picker)
+                app._on_input(Key(ESCAPE))
+                self.assertFalse(app.composer.pending)
+
+    def test_canceled_session_picker_can_be_reopened_without_stale_follower(self) -> None:
+        app, client = self.normal_app()
+        for _ in range(2):
+            self.arm(app)
+            app._on_input(Key(CHAR, "s"))
+            request_id = len(client.calls)
+            self.arm(app)
+            self.sessions_answer(app, request_id)
+            app._on_input(Key(ESCAPE))
+            self.sessions_answer(app, request_id)  # duplicate response is stale after cancellation
+            self.assertIsNone(app.picker)
+            self.assertFalse(app.composer.pending)
+            app._on_input(Key(CHAR, "m"))
+            self.assertEqual(client.named("config.set"), [])
+        self.assert_fresh_mode_chord(app, client)
+
     def test_prompt_slot_preempts_leader_shortcuts(self) -> None:
         app, client = self.normal_app()
         self.arm(app)
