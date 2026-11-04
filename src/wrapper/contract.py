@@ -649,7 +649,7 @@ _CONTEXT_PRIMER_GROUPS = (
     {
         "id": "intent_to_plan",
         "label": "Intent to plan",
-        "workflows": ("deep-interview", "ralplan", "loop", "ultrawork"),
+        "workflows": ("deep-interview", "ralplan", "dag-ulw", "loop", "ultrawork"),
         "use_when": "The user has a fuzzy goal, a large goal, or one delivery cycle that needs research, planning, execution, review, and sync.",
     },
     {

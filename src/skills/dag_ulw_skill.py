@@ -116,6 +116,10 @@ DEFINITION = SkillDefinition(
     ),
     opening_steps=(
         "Start at once; there is no plan approval. Write the goal criteria in one line.",
+        "When the conversation holds a plan the user accepted (from `plan`, `ralplan` or `refactor-plan`), build the graph "
+        "from it instead of re-planning: each task becomes a node with its id, depends_on and write scope, its done check "
+        "goes into VERIFY and STOP WHEN, and its closing verification task becomes the `role: verify` node; plan only what "
+        "it leaves open.",
         "Plan the graph and call `omh_dag action=define` with the complete run `goal` and each node's id, label, category, prompt, "
         "depends_on, write_scope and role (`build` by default; `baseline`, `verify`, `review`); "
         "fix every refusal and read the lint before going on. Never `delegate_task` "

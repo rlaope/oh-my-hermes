@@ -59,7 +59,10 @@ class PlanOffersDagUlwTests(unittest.TestCase):
         self.assertNotIn("dag-ulw", _portable_body("ulw-plan/SKILL.md"))
 
     def test_refactor_plan_approval_gate_names_dag_ulw_in_hermes_only(self) -> None:
-        self.assertIn("name `dag-ulw` as the way to run them", _hermes_body("refactor-plan"))
+        body = _hermes_body("refactor-plan")
+        self.assertIn("on a whole-plan go, also name `dag-ulw` as a way to run it", body)
+        self.assertIn("each phase's verification command its node's VERIFY and its rollback point its node's STOP WHEN", body)
+        self.assertIn("neither commits nor rolls back", body)
         self.assertNotIn("dag-ulw", _portable_body("omh-refactor-plan/SKILL.md"))
 
     def test_hermes_plan_reference_points_the_carry_out_offer_at_dag_ulw(self) -> None:
@@ -69,7 +72,22 @@ class PlanOffersDagUlwTests(unittest.TestCase):
             if template.skill_name == "plan" and template.relative_path == "references/hermes-plan-mode.md"
         )
         self.assertIn("name `dag-ulw` beside carrying it out directly", reference)
-        self.assertIn("start neither until the user picks one", reference)
+        self.assertIn("start neither until the user picks one, unless their answer already named one", reference)
+
+    def test_dag_ulw_builds_its_graph_from_an_accepted_plan(self) -> None:
+        body = _hermes_body("dag-ulw")
+        self.assertIn("When the conversation holds a plan the user accepted", body)
+        self.assertIn("its closing verification task becomes the `role: verify` node; plan only what it leaves open", body)
+
+    def test_wrapper_picker_and_primer_group_name_dag_ulw(self) -> None:
+        from omh.wrapper.contract import _CONTEXT_PRIMER_GROUPS
+        from omh.wrapper.route_hints import _route_hint_with_catalog_picker
+
+        group = next(item for item in _CONTEXT_PRIMER_GROUPS if item["id"] == "intent_to_plan")
+        self.assertIn("dag-ulw", group["workflows"])
+        picker = _route_hint_with_catalog_picker({"hints": []}, "what omh workflows are available?")
+        self.assertEqual(picker["hints"][0]["id"], "catalog_question_picker")
+        self.assertIn("dag-ulw", picker["hints"][0]["adjacent_workflows"])
 
     def test_deep_interview_playbook_plan_stage_names_dag_ulw(self) -> None:
         stages = inspect_playbook("deep-interview-to-plan")["playbook"]["stages"]

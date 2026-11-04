@@ -8,13 +8,16 @@ All notable changes will be documented here.
   usual follow-ons, and taking the offer works.** An accepted `plan` or
   `ralplan` whose tasks form a graph (ids, dependencies, write scopes and a
   closing verification task) now names `dag-ulw` with a one-line fit reason,
-  next to carrying the plan out directly or an `ultrawork` cycle. It starts
-  only on the user's go-ahead. Before, the workflow state refused to start
-  `dag-ulw` while `plan` or `ralplan` was active, so the offer could not be
-  taken even when it was made. `ralplan`'s recovery note, `refactor-plan`'s
-  approval gate, the `/plan` reference, the router's lane map and engine list,
-  the intent-to-plan card and the safe-feature and picker hints now name it
-  too. Routing is unchanged.
+  next to carrying the plan out directly or an `ultrawork` cycle.
+  `refactor-plan` names it on a whole-plan go: the phase order becomes the
+  graph's order, and each phase's check and rollback point go into its node.
+  It starts only on the user's go-ahead. Before, the workflow state refused
+  to start `dag-ulw` while `plan`, `ralplan` or `refactor-plan` was active,
+  so the offer could not be taken even when it was made. `dag-ulw` now builds
+  its graph from the plan the user accepted instead of planning a new one.
+  The `/plan` reference, the router's lane map and engine list, the
+  intent-to-plan card, and the safe-feature and picker hints name it too.
+  Routing is unchanged.
 - **A look with a scene paints its ground on every terminal.** The eight looks
   with a scene set their ground only with OSC 11. Otty gives that colour only
   to cells written after it, so every cell an erase cleared kept the terminal's

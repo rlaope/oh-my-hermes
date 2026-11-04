@@ -52,7 +52,7 @@ class WorkflowStateCliTests(unittest.TestCase):
 
     def test_accepted_plan_can_start_dag_ulw(self) -> None:
         # The planning skills offer dag-ulw after acceptance; taking the offer must not be refused.
-        for planner in ("plan", "ralplan"):
+        for planner in ("plan", "ralplan", "refactor-plan"):
             with self.subTest(planner=planner), TemporaryDirectory() as tmp:
                 omh_home = Path(tmp) / ".omh"
 
