@@ -4,7 +4,6 @@ from .. import runtime_paths
 
 import json
 from pathlib import Path
-import time
 from typing import Any
 
 from ..host_observation import (
@@ -13,7 +12,6 @@ from ..host_observation import (
     host_session_id,
     observe_plugin_tool_call,
 )
-from ..dag_run import open_run
 from ..dispatch_outcomes import _parse_timestamp
 from ..native_tools import NATIVE_CANCELLED_REASON, NATIVE_TODO_TOOL, OMH_TODO_HELD_PLANS, native_tool_presence_clause
 from ..orchestration_say import todo_say, with_say
@@ -278,7 +276,6 @@ def omh_todo_handler(args: dict[str, Any], **kwargs) -> str:
                 template=args.get("template", ""),
                 plan_stage=args.get("plan_stage", ""),
                 dropped=dropped,
-                dag_run=open_run(default_omh_home(), session_ref, time.time()),
             )
             write_todo(default_omh_home(), record)
             payload["status"] = "written"
