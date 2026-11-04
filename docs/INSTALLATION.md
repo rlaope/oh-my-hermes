@@ -1304,9 +1304,14 @@ a true turns it on (a number other than 0 too, or, written by hand as a
 string, `true`, `yes`, `on` or `1`); off or absent, every key does what the
 rest of this page says.
 
-- The terminal's cursor follows the mode: a steady beam in INSERT, a steady block in NORMAL (DECSCUSR, `CSI Ps SP q`),
-  as `hermes --cli` does. The terminal's own shape is back while a question or picker has the keys, when vim mode
-  goes off, and on exit or Ctrl+Z. A terminal that ignores the sequence keeps its own shape.
+- The terminal's cursor follows the mode, an OMH addition (Hermes keeps a
+  steady block in both modes): a steady beam in INSERT, a steady block in
+  NORMAL (DECSCUSR, `CSI Ps SP q`). It is written only when the mode
+  changes. The terminal's own shape is back while a question or picker has
+  the keys, when vim mode goes off, and on exit or Ctrl+Z. On exit it is
+  the terminal's default shape (`CSI 0 SP q`), not whatever your shell had
+  set before the TUI started, the same compromise Vim and Neovim make. A
+  terminal that ignores the sequence keeps its own shape.
 - The composer starts in INSERT, and the info line says `INSERT` or `NORMAL`
   first on its left, before accept or plan. In INSERT every key does what it
   does without vim mode except Esc: it goes to NORMAL, steps the caret back
@@ -1340,10 +1345,9 @@ rest of this page says.
     below or above the line); `u` undoes and Ctrl+R redoes;
   - a count before a command or a motion repeats it: `3w`, `2dd`, `d2w`,
     `2dw`, `3x`, `2p`, `3G`; `i a I A o O` and `0 ^ $` take none.
-- Enter sends the composer in NORMAL only, even with a `\` under or before
-  the caret; in INSERT it adds a line (`\` then Enter does too, taking the
-  backslash), as do Alt+Enter, Shift+Enter and Ctrl+J in both modes. Esc, then
-  Enter, sends.
+- Enter in NORMAL always sends the composer, as Enter does in INSERT, even
+  with a `\` under or before the caret; `\` then Enter adds a line in INSERT
+  only, and Alt+Enter, Shift+Enter and Ctrl+J add one in both modes.
   A sent prompt starts the next one in INSERT. Any other character in NORMAL
   does nothing, and so does a key that arrives while a command is typed
   halfway (`d` then Enter sends nothing): it drops the command. Backspace is
@@ -1378,8 +1382,9 @@ rest of this page says.
   (`iw`), search or find (`/`, `f`, `t`), `.` repeat, `~`, `J`, `>>` or
   mark; `w` `b` `e` move by words between blanks (Vim's `W` `B` `E`, not
   stopping at punctuation); `j` and `k` move a row on the screen, as ↑ and
-  ↓ do; a count does not repeat an insert; and the caret keeps its shape in
-  NORMAL.
+  ↓ do; a count does not repeat an insert; and Hermes keeps the cursor a
+  steady block in both modes, where OMH changes its shape with the mode (see
+  the first item above).
 
 Shift+Tab cycles three input modes, and the info line shows the one that is
 on. Accept all turns off Hermes' approval prompts for that

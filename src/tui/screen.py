@@ -137,8 +137,9 @@ ERASE_BELOW = f"{CSI}J"
 ERASE_LINE = f"{CSI}2K"
 HIDE_CURSOR = f"{CSI}?25l"
 SHOW_CURSOR = f"{CSI}?25h"
-# DECSCUSR: the cursor's shape. Vim mode shows a steady beam in INSERT and a steady block in NORMAL, as `hermes --cli`
-# does; 0 gives the terminal's own shape back. A terminal that does not know the sequence ignores it.
+# DECSCUSR: the cursor's shape. Vim mode shows a steady beam in INSERT and a steady block in NORMAL (an OMH addition:
+# `hermes --cli` keeps a block in both); 0 gives the terminal's default shape back. A terminal that does not know the
+# sequence ignores it.
 CURSOR_SHAPE_BEAM = f"{CSI}6 q"
 CURSOR_SHAPE_BLOCK = f"{CSI}2 q"
 CURSOR_SHAPE_DEFAULT = f"{CSI}0 q"

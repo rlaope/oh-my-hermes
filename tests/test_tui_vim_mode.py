@@ -512,22 +512,6 @@ class SubmitTests(unittest.TestCase):
                 action = composer.handle(Key(ENTER))
                 self.assertEqual((action.kind, action.text), (SUBMIT, text))
 
-    def test_enter_in_insert_adds_a_line_and_only_normal_sends(self) -> None:
-        composer = Composer(vim=True)
-        keys(composer, "ab")
-        self.assertEqual(composer.handle(Key(ENTER)).kind, NONE)
-        keys(composer, "cd")
-        self.assertEqual(composer.text, "ab\ncd")
-        composer.handle(ESC)
-        action = composer.handle(Key(ENTER))
-        self.assertEqual((action.kind, action.text), (SUBMIT, "ab\ncd"))
-
-    def test_enter_still_sends_without_vim_mode_and_in_a_masked_composer(self) -> None:
-        for composer in (Composer(), Composer(vim=True, masked=True)):
-            with self.subTest(vim=composer.vim):
-                keys(composer, "secret")
-                self.assertEqual(composer.handle(Key(ENTER)).kind, SUBMIT)
-
     def test_a_backslash_then_enter_in_insert_still_adds_a_line(self) -> None:
         composer = Composer(vim=True)
         keys(composer, "end\\")
@@ -836,7 +820,7 @@ class AppEscTests(unittest.TestCase):
         app, client, _clock = vim_app()
         now = [0.0]
         decoder = KeyDecoder(lambda: now[0])
-        for chunk in (b"hello world", b"\x1b", b"0dw", b"\x1bA", b"!", b"\x1b", b"\r"):  # ESC A in one read: Esc, then A
+        for chunk in (b"hello world", b"\x1b", b"0dw", b"\x1bA", b"!\r"):  # ESC A in one read: Esc, then A
             now[0] += 0.1  # a read a tenth of a second after the one before, as typing brings them
             for event in decoder.feed(chunk):
                 app._on_input(event)
@@ -1030,7 +1014,7 @@ class CursorShapeTests(unittest.TestCase):
     def test_without_vim_mode_the_terminal_keeps_its_own_shape(self) -> None:
         app, _client = make_app()
         self.assertEqual(self.shapes(app), [])
-        self.assertIsNone(app.cursor_shape)
+        self.assertIsNone(app.terminal.cursor_shape)
 
     def test_turning_vim_mode_off_or_leaving_gives_the_terminals_shape_back(self) -> None:
         app, _client = make_app()

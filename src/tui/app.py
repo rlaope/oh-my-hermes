@@ -1888,7 +1888,6 @@ class App(ModesMixin, AgentViewMixin):
         self.wallpaper = self._saved_wallpaper()
         self.background_answered: str | None = None
         self.ground_set: str | None = None
-        self.cursor_shape: str | None = None  # the DECSCUSR shape vim mode set (`_sync_cursor_shape`), None while the terminal's own
         self.rows_ground: str | None = None  # the ground the session's rows were printed on (set by a full redraw)
         self.ambient_at = 0.0  # when the wallpaper's cells were last painted, on `clock`
         self._take_size()
@@ -3772,13 +3771,13 @@ class App(ModesMixin, AgentViewMixin):
         ):
             self.exit_code = 0
             return
-        action = self._edit(self.composer, event, submit_now=event == SEND_NOW_KEY and self._steer_keys_live())
+        action = self._edit(self.composer, event)
         self._on_composer(action, event, steer=isinstance(event, Key) and event.name == ENTER and event.ctrl)
 
-    def _edit(self, composer: Composer, event: Key | Paste, *, submit_now: bool = False) -> ComposerAction:
+    def _edit(self, composer: Composer, event: Key | Paste) -> ComposerAction:
         """`event` to `composer`, the person's own key: one that changes its text reopens the `/` menu at its top."""
         before, editing = composer.text, composer.normal
-        action = composer.handle(event, submit_now=submit_now)
+        action = composer.handle(event)
         if composer.text != before:
             self.menu_index = 0
             self.menu_closed = None
@@ -7228,15 +7227,11 @@ class App(ModesMixin, AgentViewMixin):
         vim mode, or where the composer does not have the keys, the terminal's own shape is back."""
         label = self.composer.vim_label if self._composer_open() else ""
         shape = CURSOR_SHAPE_BLOCK if label == VIM_NORMAL else CURSOR_SHAPE_BEAM if label == VIM_INSERT else None
-        if shape != self.cursor_shape:
-            self.terminal.set_cursor_shape(shape)
-            self.cursor_shape = shape
+        self.terminal.set_cursor_shape(shape)  # the terminal writes only a change
 
     def _restore_cursor_shape(self) -> None:
-        """Put the terminal's own cursor shape back if vim mode set one: on every way out and at a stop."""
-        if self.cursor_shape is not None:
-            self.cursor_shape = None
-            self.terminal.set_cursor_shape(None)
+        """Put the terminal's own cursor shape back (a no-op if vim mode set none): on every way out and at a stop."""
+        self.terminal.set_cursor_shape(None)
 
     def _restore_ground(self) -> None:
         """Put the terminal's own background back if the wallpaper set another: on every way out (`_shutdown`), at a
