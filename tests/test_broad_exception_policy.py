@@ -79,7 +79,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "exception class and message under `omh_desktop_hud/v1`, and no `display` key; the pane "
         "renders that record as a reader error, so it is never mistaken for a HUD payload; the "
         "route answers 200 because in the pane a thrown error is indistinguishable from a transport "
-        "failure, and the record is what lets it say which one happened.",
+        "failure, and the record is what lets it say which one happened. Its second handler is the "
+        "delegation drawing for the pane: a renderer failure becomes `delegation_drawing` with "
+        "`error` under `omh_desktop_dag/v1` beside the reader's payload, and the pane draws the "
+        "lane rows it drew before the drawing existed.",
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/jev_ask_client.py",
@@ -1033,7 +1036,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 104 -> 105 / 95 -> 96: `caller_check.round_end_note`, the always-on round-end
 # read of call sites a signature change broke (a failure logs a named warning and
 # adds no note).
-EXPECTED_HANDLER_COUNT = 105
+# 105 -> 106 / 96: a second handler inside the classified `plugin_api.hud_payload`, the
+# Desktop pane's delegation drawing (a failure is a record with `error` beside a HUD that
+# still reads, and the pane draws its lane rows instead).
+EXPECTED_HANDLER_COUNT = 106
 EXPECTED_ANCHOR_COUNT = 96
 
 
