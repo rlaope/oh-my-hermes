@@ -10,6 +10,8 @@ nothing is saved.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -112,27 +114,6 @@ class ThemeCommandTests(unittest.TestCase):
             self.assertFalse(self._store(tmp).exists())
             self.assertEqual(self._hermes_home_entries(tmp), [])
 
-    def test_glow_off_is_saved_beside_the_theme_and_bare_glow_reports_it(self) -> None:
-        with TemporaryDirectory() as tmp:
-            homes = self._homes(tmp)
-            payload = json.loads(run_cli([*homes, "theme", "glow"])[1])
-            self.assertEqual((payload["glow"], payload["source"], payload["changed"]), ("on", "default", False))
-            run_cli([*homes, "theme", "use", "amber"])
-            status, out, _ = run_cli([*homes, "theme", "glow", "off"])
-            self.assertEqual(status, 0)
-            payload = json.loads(out)
-            self.assertEqual(payload["schema_version"], "omh_theme_glow/v1")
-            self.assertEqual((payload["glow"], payload["previous"], payload["changed"]), ("off", "on", True))
-            self.assertEqual(
-                json.loads(self._store(tmp).read_text(encoding="utf-8")),
-                {"schema_version": THEME_STORE_SCHEMA, "theme": "amber", "glow": "off"},
-            )
-            self.assertFalse(json.loads(run_cli([*homes, "theme", "glow", "off"])[1])["changed"])
-            payload = json.loads(run_cli([*homes, "theme", "glow"])[1])
-            self.assertEqual((payload["glow"], payload["source"]), ("off", "saved"))
-            self.assertEqual(json.loads(run_cli([*homes, "theme", "glow", "on"])[1])["glow"], "on")
-            self.assertEqual(self._hermes_home_entries(tmp), [])
-
     def test_update_check_off_is_saved_beside_the_theme_and_the_tui_reads_it(self) -> None:
         from omh.tui.update_notice_switch import update_check_off
 
@@ -179,19 +160,28 @@ class ThemeCommandTests(unittest.TestCase):
                 self.assertEqual((payload["update-check"], payload["effective"], payload["held_off_by"]),
                                  ("on", "off", "OMH_TUI_UPDATE_CHECK=0"))
 
-    def test_glow_takes_only_on_or_off(self) -> None:
+    def test_the_working_glow_is_no_choice_and_a_saved_one_is_dropped_by_the_next_write(self) -> None:
+        # The working glow was removed (owner, 2026-11-04): `omh theme glow` is refused, and a `glow` key an older
+        # release saved is left out the next time any choice is written.
         with TemporaryDirectory() as tmp:
-            status, _out, _err = run_cli([*self._homes(tmp), "theme", "glow", "maybe"])
-            self.assertNotEqual(status, 0)
+            homes = self._homes(tmp)
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as refused:
+                run_cli([*homes, "theme", "glow", "off"])
+            self.assertEqual(refused.exception.code, 2)  # argparse: no such choice
             self.assertFalse(self._store(tmp).exists())
+            self._store(tmp).parent.mkdir(parents=True)
+            self._store(tmp).write_text(json.dumps({"schema_version": THEME_STORE_SCHEMA, "glow": "off"}),
+                                        encoding="utf-8")
+            run_cli([*homes, "theme", "use", "amber"])
+            self.assertEqual(json.loads(self._store(tmp).read_text(encoding="utf-8")),
+                             {"schema_version": THEME_STORE_SCHEMA, "theme": "amber"})
 
-    def test_wallpaper_off_is_saved_beside_the_theme_and_glow_and_bare_wallpaper_reports_it(self) -> None:
+    def test_wallpaper_off_is_saved_beside_the_theme_and_bare_wallpaper_reports_it(self) -> None:
         with TemporaryDirectory() as tmp:
             homes = self._homes(tmp)
             payload = json.loads(run_cli([*homes, "theme", "wallpaper"])[1])
             self.assertEqual((payload["wallpaper"], payload["source"], payload["changed"]), ("on", "default", False))
             run_cli([*homes, "theme", "use", "amber"])
-            run_cli([*homes, "theme", "glow", "off"])
             status, out, _ = run_cli([*homes, "theme", "wallpaper", "off"])
             self.assertEqual(status, 0)
             payload = json.loads(out)
@@ -199,10 +189,10 @@ class ThemeCommandTests(unittest.TestCase):
             self.assertEqual((payload["wallpaper"], payload["previous"], payload["changed"]), ("off", "on", True))
             self.assertEqual(
                 json.loads(self._store(tmp).read_text(encoding="utf-8")),
-                {"schema_version": THEME_STORE_SCHEMA, "theme": "amber", "glow": "off", "wallpaper": "off"},
+                {"schema_version": THEME_STORE_SCHEMA, "theme": "amber", "wallpaper": "off"},
             )
             self.assertFalse(json.loads(run_cli([*homes, "theme", "wallpaper", "off"])[1])["changed"])
-            run_cli([*homes, "theme", "glow", "on"])  # a write of another key keeps this one
+            run_cli([*homes, "theme", "update-check", "on"])  # a write of another key keeps this one
             payload = json.loads(run_cli([*homes, "theme", "wallpaper"])[1])
             self.assertEqual((payload["wallpaper"], payload["source"]), ("off", "saved"))
             self.assertEqual(json.loads(run_cli([*homes, "theme", "wallpaper", "on"])[1])["wallpaper"], "on")

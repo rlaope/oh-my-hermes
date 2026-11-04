@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI's working glow is removed.** The light that went round the
+  screen's edge while a turn ran read as too big and uncomfortable, and its
+  trail framed the screen so the terminal's padding outside it looked like a
+  black margin. It is gone, with everything that existed only for it: the
+  `/glow` command, `omh theme glow`, `OMH_TUI_GLOW`, the faster 50 ms paint
+  while it moved, and the column on each side and the blank last row the
+  screen kept free for it, so rows start at the screen's first column again.
+  A `glow` choice an older release saved in `<omh_home>/tui/theme.json` is
+  ignored and dropped the next time a choice is written. The living
+  wallpaper, the working row and its spinner are unchanged.
+
 - **The Windows loader probe keeps `LOCALAPPDATA`.** The isolated probe that
   `omh doctor` runs dropped it, so the Hermes launcher could not find the home
   directory and doctor reported `hermes_runtime_command_failed` although

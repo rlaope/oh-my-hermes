@@ -907,16 +907,6 @@ run and approval decision stays Hermes'; the screen is OMH's.
   terminal's own notification: OSC 9 in iTerm2, WezTerm and Ghostty, OSC 777
   in foot and rxvt, the bell elsewhere (tmux among them, which flags the
   window); `OMH_TUI_BELL=0` keeps all of it quiet.
-- While a turn runs, a light goes round the screen's edge, clockwise, once
-  every four seconds, in the launch look's colours, and it is gone when the
-  turn ends. To keep the edge free, the rows are drawn one column in from
-  each side and the screen's last row stays blank, whether a turn runs or
-  not. It shows with motion on, at truecolor, on a screen 20×8 or larger.
-  `/glow off` turns it off and `/glow on` back on (`/glow` alone switches
-  it); the choice is saved beside the theme, as `glow` in
-  `<omh_home>/tui/theme.json`; `omh theme glow on|off` saves the same choice
-  from the shell. `OMH_TUI_GLOW=0` holds it off in one terminal whatever is
-  saved.
 - Each launch look has a living wallpaper: the TUI sets the terminal's
   background to the look's own colour (OSC 11) while it runs and keeps a
   scene moving in the screen's blank cells, drawn as pixel art in the
@@ -1482,7 +1472,7 @@ and Shift+Tab move the highlight, Space folds a box, d shows or hides Node
 details; it sends nothing anywhere; q or Esc closes it), `/bots` (the bot
 board, also Ctrl+S, described below), `/copy`, `/image`,
 `/paste` (the clipboard
-image), `/theme`, `/glow`, `/wallpaper`, `/omh-model`, `/rewind`, `/todos` (the session's whole
+image), `/theme`, `/wallpaper`, `/omh-model`, `/rewind`, `/todos` (the session's whole
 plan), `/whats-new` (this version's What's new, also `/whatsnew`), `/model` (alone, a picker of the models Hermes offers this session,
 from Hermes' `model.options`, opened on the session's model, marked `●`, which
 comes first when no provider lists it, and with the highlight's place in the
@@ -1653,8 +1643,7 @@ below), `aurora` (emerald and teal into violet, a box per section), `ember`
 tints the chrome: the composer's rules and the frames drawn like them take
 its card-edge colour, and a tool call's rail and the working row's spinner
 its label colour (a failed or denied call's rail stays red), as do a sent
-prompt's band, the catch rows, the `[⚚ OMH Native]` badge and the working
-glow. Body text, the grey details, the reply's rail and the state colours
+prompt's band, the catch rows and the `[⚚ OMH Native]` badge. Body text, the grey details, the reply's rail and the state colours
 (running blue, done green, warning amber, failure red) keep the theme's
 colours, so a look never changes what a colour says. The card sits under the banner until your first
 prompt, then stays in scrollback above it. It names the model and effort,
@@ -3242,7 +3231,6 @@ omh theme list               # plain listing, always (the scriptable surface)
 omh theme use crimson        # select one directly (also accepts omh-crimson)
 omh theme use crimson --dry-run
 omh theme status             # the active theme, which source decided it, and where it is saved
-omh theme glow off           # the working glow off in every later OMH TUI session (on, or alone to show it)
 omh theme wallpaper off      # the living wallpaper off in every later OMH TUI session (on, or alone to show it)
 omh theme update-check off   # no once-a-day ask of npm for a newer release (on, or alone to show it)
 ```
@@ -3273,8 +3261,7 @@ Rules worth knowing:
   the open session (see [The OMH TUI](#the-omh-tui)).
 - **The launch look is saved in the same record.** `/theme` in the OMH TUI
   writes `launch` beside `theme` in `<omh_home>/tui/theme.json`, and
-  `/glow` or `omh theme glow` writes `glow` there, `/wallpaper` or
-  `omh theme wallpaper` writes `wallpaper`, and `omh theme update-check`
+  `/wallpaper` or `omh theme wallpaper` writes `wallpaper` there, and `omh theme update-check`
   writes `update_check`; each write keeps the others.
 - **Bare `hermes` keeps its own skin.** `display.skin` is yours; OMH reads it
   only for the fallback above and never writes it.
