@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The `omh_memory` consolidation status reads the session's own profile.**
+  Like tool recall, `demote` and recall origins, it now takes the Hermes
+  profile the memory provider was started with from the session lens, not
+  the tool process's `HERMES_HOME`, so a brief raised in one profile is not
+  reported from another. Tests also pin that those three read the provider's
+  profile.
+
 - **Saving a dated snapshot now says how to retire it later.** When the
   model saves a fact like "As of 2026-10-30 (v0.1.7), nanran has ..." or
   "nanran v0.1.13 added ...", the result tells it to name this memory in

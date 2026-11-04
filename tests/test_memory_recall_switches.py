@@ -16,8 +16,10 @@ provider's `recall_status()` returns a value, and injects whatever
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 from _cli_harness import run_cli
@@ -37,6 +39,8 @@ from omh.plugin_bundle.omh.memory_recall_settings import (  # noqa: E402
 from omh.plugin_bundle.omh.memory_session_lens import lens_profile_home, session_lens_path  # noqa: E402
 from omh.plugin_bundle.omh.tools.memory_tool import omh_remember_handler  # noqa: E402
 from test_memory_messenger import DISCORD_OWNER, SLACK_DM, SLACK_OWNER, TELEGRAM_OWNER, _Messenger  # noqa: E402
+from omh.plugin_bundle.omh.memory_dreaming import DREAMING_HANDOFF_SCHEMA_VERSION, consolidation_path  # noqa: E402
+from test_memory_origin import add_messages, epoch, make_state_db  # noqa: E402
 from test_memory_prefetch_canonical import rendered_ids  # noqa: E402
 
 DISCORD_CHANNEL = "1111111111111111111"
@@ -238,6 +242,54 @@ class ToolRecallProfileHomeTests(_Switches):
                 else:
                     self.assertEqual(recalled["status"], "found", recalled)
                     self.assertEqual([row["record_id"] for row in recalled["records"]], [records["tui"]])
+
+    def launch_home(self) -> Path:
+        launch = self.hermes.parent / "launch-home"
+        launch.mkdir()
+        return launch
+
+    def test_demote_reads_the_providers_profile_not_the_process_home(self) -> None:
+        # Mutant: `_demote_entry(..., Path(HERMES_HOME))` finds nothing in the launch home.
+        entry = "The operator deploys from the release branch every Friday afternoon, never from main."
+        (self.hermes / "memories" / "MEMORY.md").write_text(entry, encoding="utf-8", newline="\n")
+        launch = self.launch_home()
+        with patch.dict(os.environ, {"HERMES_HOME": str(launch)}):
+            self.on("tui", "tui-demote-profile")
+            demoted = self.tool("demote", "tui-demote-profile", entry_sha256=hashlib.sha256(entry.encode("utf-8")).hexdigest()[:12])
+        self.assertEqual(demoted["status"], "demoted", demoted)
+        self.assertNotEqual(demoted.get("reason"), "entry_not_found")
+
+    def test_recall_origins_come_from_the_providers_profile_state_db(self) -> None:
+        # Mutant: `_attach_origins` back to the process home looks in the launch home's (absent) state.db.
+        launch = self.launch_home()
+        with patch.dict(os.environ, {"HERMES_HOME": str(launch)}):
+            self.on("tui", "tui-origin-profile")
+            saved = self.capture("tui-origin-profile", FACT)
+            record = json.loads((self.home / "memory" / "records" / f"{saved['record_id']}.json").read_text(encoding="utf-8"))
+            self.assertEqual(record["source_ref"], "hermes-session:tui-origin-profile")
+            db = self.hermes / "state.db"
+            make_state_db(db)
+            at = epoch(record["created_at"])
+            [before] = add_messages(db, "tui-origin-profile", [("user", at - 0.5)])
+            recalled = self.recall("tui-origin-profile")
+        self.assertEqual(recalled["status"], "found", recalled)
+        self.assertEqual(recalled["records"][0]["origin"], {"session_id": "tui-origin-profile", "around_message_id": before})
+
+    def test_the_consolidation_status_is_the_providers_profiles_not_the_process_homes(self) -> None:
+        brief = {
+            "schema_version": DREAMING_HANDOFF_SCHEMA_VERSION, "due": True, "trigger": "turn",
+            "raised_at": "2026-10-14T00:00:00Z", "reasons": ["profile_brief"], "requested_of_executor": [],
+        }
+        path = consolidation_path(self.home, self.hermes)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(brief), encoding="utf-8", newline="\n")
+        launch = self.launch_home()
+        with patch.dict(os.environ, {"HERMES_HOME": str(launch)}):
+            self.on("tui", "tui-consolidation-profile")
+            status = self.tool("consolidation", "tui-consolidation-profile")
+            # No lens: the process home, which holds no brief.
+            self.assertNotIn("reasons", self.tool("consolidation", "no-such-session"))
+        self.assertEqual(status["reasons"], ["profile_brief"], status)
 
     def test_a_profile_home_that_is_not_an_absolute_path_is_not_read(self) -> None:
         self.assertEqual(lens_profile_home({"profile_home": str(self.hermes)}), self.hermes)

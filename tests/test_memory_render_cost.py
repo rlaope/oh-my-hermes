@@ -244,7 +244,10 @@ class PerRenderScanWorkTests(unittest.TestCase):
 class StoreListingTests(unittest.TestCase):
     # Non-ASCII names whose case mapping is where `str.lower` (what `PurePath`
     # orders by on Windows) and Windows' own `ntpath.normcase` can disagree.
-    NAMES = ("mem_b.json", "Mem_a.json", "mem_C.json", "mem_a1.json", f"{chr(0x130)}.json", f"{chr(0x1E9E)}.json", "i.json")
+    # "j" sorts after U+0130 under `str.lower` but before it under an ASCII-only fold; a final sigma (U+03C2) keeps
+    # its form under `str.lower` and folds to U+03C3 under `str.casefold`, so "ςz" sorts before "σa" only under the former.
+    NAMES = ("mem_b.json", "Mem_a.json", "mem_C.json", "mem_a1.json", f"{chr(0x130)}.json", f"{chr(0x1E9E)}.json", "i.json",
+             "j.json", f"{chr(0x3C2)}z.json", f"{chr(0x3C3)}a.json")
 
     def test_candidates_keep_the_order_sorted_paths_had(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -261,6 +264,25 @@ class StoreListingTests(unittest.TestCase):
             sorted(directory / name for name in self.NAMES),
             [directory / name for name in sorted(self.NAMES, key=str.lower)],
         )
+
+    def test_the_listing_of_a_case_insensitive_flavour_uses_str_lower_not_normcase_or_casefold(self) -> None:
+        """Runs `_json_candidates` itself with `os.path.normcase` stubbed to fold only ASCII, as a case-insensitive flavour does."""
+
+        def ascii_fold(name: str) -> str:
+            return "".join(char.lower() if char.isascii() else char for char in name)
+
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            for name in self.NAMES:
+                (directory / name).write_text("{}", encoding="utf-8", newline="\n")
+            with patch.object(hermes_memory.os.path, "normcase", ascii_fold):
+                self.assertIs(hermes_memory._name_sort_key(), str.lower)
+                candidates = hermes_memory._json_candidates(directory)
+            self.assertEqual(candidates, [directory / name for name in sorted(self.NAMES, key=str.lower)])
+            self.assertNotEqual([path.name for path in candidates], sorted(self.NAMES, key=ascii_fold))
+            self.assertNotEqual([path.name for path in candidates], sorted(self.NAMES, key=str.casefold))
+        windows = PureWindowsPath("C:/store/records")
+        self.assertEqual([path.name for path in candidates], [path.name for path in sorted(windows / name for name in self.NAMES)])
 
     def test_the_expiry_count_lists_the_records_once_and_still_counts_legacy_records(self) -> None:
         now = datetime.now(timezone.utc)
