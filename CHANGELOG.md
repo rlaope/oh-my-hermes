@@ -23,7 +23,16 @@ All notable changes will be documented here.
   above the prompt after a Ctrl+Z resume are on the terminal's own background
   again, so Otty shows its own colour in their tails until they are reprinted,
   as before this change. The background restore at exit is unchanged.
-
+- **On a dark look with a scene, the OMH TUI's diff and outcome bands and the
+  pager's footer bar follow the look.** These bands were the skin's fixed dark
+  green and maroon on every look, and the red one sank into aurora's teal at
+  1.01:1. Each band now keeps its green or red hue and moves onto the look's
+  ground. It sits 1.27:1 or more against every ground, and its text stays at
+  4.5:1 or better. The footer bar of the pager, /dag and the Ctrl+S bot board
+  takes the sent prompt band's colour instead of the skin's teal-black, with
+  its words re-lifted to 4.5:1. The /theme picker's tile for the default look
+  now shows the terminal's own background, which is what picking it gives.
+  The default look and the light side are unchanged.
 - **The Hermes Desktop pane takes the OMH TUI's mood, and draws the DAG as the TUI does.**
   The pane stays a Desktop pane: the app's sans, its components and its theme
   tokens. It takes on the TUI's default launch look as Desktop colour mixes: a rose
