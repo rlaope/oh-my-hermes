@@ -14,6 +14,21 @@ All notable changes will be documented here.
   ("requires Hermes v0.22.5 or newer", "pin Node v20.11"), "Decided <date>:" lines,
   lessons and procedures get no such note.
 
+- **The OMH TUI's wallpaper and working glow hold still while its window is
+  in the background.** The TUI now asks the terminal for focus reports, as
+  Hermes' own TUI does. While the window does not have focus, the living
+  wallpaper's scene and the working glow's light stop where they were, and
+  nothing wakes the TUI to paint them. The spinner, streamed text and
+  everything else in a running turn keep updating. When focus comes back,
+  the next frame is the one the animation would have drawn at that moment,
+  and with focus the look is byte for byte what it was. On an idle screen
+  with a scene, an unfocused TUI went from 4 wake-ups and about 6 KiB written
+  a second to 1 wake-up and nothing written; during a turn with the glow,
+  from about 51 to 20 KiB a second. A terminal that does not send focus
+  reports is treated as focused throughout, so nothing changes there. The
+  focus reports type nothing in any mode and are switched off on every exit
+  and while the TUI is suspended.
+
 - **A full redraw keeps 4,000 rows of the session, up from 3,000.** A
   resize, a tab switch, Ctrl+L, `/redraw` and a resumed session erase the
   terminal's scrollback and print the session's last rows again, because a

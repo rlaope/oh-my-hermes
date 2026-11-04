@@ -22,7 +22,7 @@ from omh.tui import app as app_module
 from omh.tui import terminal as terminal_module
 from omh.tui.keys import CHAR, DOWN, Key
 from omh.tui.screen import CLEAR_SCREEN_AND_SCROLLBACK, ERASE_SCROLLBACK
-from omh.tui.terminal import BRACKETED_PASTE_ON, RESTORE_SEQUENCE, Terminal
+from omh.tui.terminal import BRACKETED_PASTE_ON, FOCUS_REPORTING_ON, RESTORE_SEQUENCE, Terminal
 
 CTRL_Z = Key(CHAR, "z", ctrl=True)
 
@@ -179,7 +179,7 @@ class TerminalSuspendPtyTests(unittest.TestCase):
             self.assertTrue(cooked, "the shell gets its own terminal modes back while stopped")
             self.assertTrue(written.endswith(RESTORE_SEQUENCE.encode()), written)
             self.assertFalse(termios.tcgetattr(self.slave)[3] & termios.ICANON)  # raw again
-            self.assertEqual(self.master_output(), BRACKETED_PASTE_ON.encode())
+            self.assertEqual(self.master_output(), (BRACKETED_PASTE_ON + FOCUS_REPORTING_ON).encode())
 
 
 if __name__ == "__main__":
