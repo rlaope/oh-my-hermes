@@ -109,7 +109,6 @@ COMMANDS: tuple[SlashCommand, ...] = (
     SlashCommand("paste", LOCAL, "Attach the clipboard image to the next message (also Ctrl+V)"),
     SlashCommand("theme", LOCAL, "Pick the launch look (a picker), or /theme <look|palette|auto|light|dark>",
                  echo_bare=False),
-    SlashCommand("glow", LOCAL, "Turn the light that goes round the screen during a turn on or off (/glow on|off)"),
     SlashCommand("wallpaper", LOCAL,
                  "Turn the look's background colour and its moving scene on or off (/wallpaper on|off)"),
     SlashCommand("omh-model", LOCAL, "Pick OMH model chains"),
