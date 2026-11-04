@@ -681,7 +681,11 @@ A `remembered` save whose summary states a point-in-time snapshot also
 carries `point_in_time`. It holds the new `record_id` and a `next_action` that
 asks the model to pass that id as `replaces` when it saves the changed state,
 so the old snapshot moves to `history/` instead of being recalled beside the
-newer one. The capture itself is unchanged: it stays `durable`, gets no
+newer one. The advice limits `replaces` to that same thing changing.
+Something newly added, such as a later release's new feature, is its own
+record and is saved without `replaces`. A `corrected` result whose new
+summary is still a snapshot carries the same field for the new id, so the
+chain continues. The capture itself is unchanged: it stays `durable`, gets no
 review deadline, and nothing is hidden.
 
 A summary counts as a snapshot only when all of these hold:

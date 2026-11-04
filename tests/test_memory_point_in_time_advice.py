@@ -98,6 +98,11 @@ class PointInTimeAdviceTests(unittest.TestCase):
         advice = result["point_in_time"]
         self.assertEqual(advice["record_id"], result["record_id"])
         self.assertIn(f"replaces='{result['record_id']}'", advice["next_action"])
+        # An additive release note must not be replaced by the next one ("v0.1.14
+        # added folder import"): replaces is limited to the same thing changing.
+        self.assertIn("when that same thing changes", advice["next_action"])
+        self.assertIn("Something newly added", advice["next_action"])
+        self.assertIn("is its own record: save it without replaces", advice["next_action"])
         record = self.stored(result["record_id"])
         self.assertEqual(record["retention"]["class"], "durable", "nothing ages")
         self.assertEqual(record["staleness"]["review_due_at"], "")
@@ -110,6 +115,15 @@ class PointInTimeAdviceTests(unittest.TestCase):
         self.assertEqual((second["status"], second["superseded_record_id"]), ("corrected", first["record_id"]), second)
         recalled = self.save(action="recall", query="nanran sidebar papers")
         self.assertEqual([row["record_id"] for row in recalled["records"]], [second["record_id"]])
+        # The corrected snapshot carries the advice for its own id, so the chain continues.
+        self.assertEqual(second["point_in_time"]["record_id"], second["record_id"])
+        self.assertIn(f"replaces='{second['record_id']}'", second["point_in_time"]["next_action"])
+
+    def test_a_correction_that_is_not_a_snapshot_carries_no_advice(self) -> None:
+        first = self.save(summary="As of 2026-10-30 (v0.1.7), nanran's sidebar lists papers in one flat list.")
+        settled = self.save(summary="nanran's sidebar groups papers into folders.", replaces=first["record_id"])
+        self.assertEqual(settled["status"], "corrected", settled)
+        self.assertNotIn("point_in_time", settled)
 
     def test_the_full_capture_tool_carries_the_same_advice(self) -> None:
         result = json.loads(omh_memory_handler(

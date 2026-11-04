@@ -646,8 +646,10 @@ def _point_in_time_advice(record_id: str) -> dict[str, object]:
     return {
         "record_id": record_id,
         "next_action": (
-            f"Saved as lasting. It states how things stand at one point in time: when that changes, save the new "
-            f"state with replaces='{record_id}' so this one leaves recall instead of being served beside it."
+            f"Saved as lasting. It states how one thing stands at one point in time: when that same thing changes, "
+            f"save its new state with replaces='{record_id}' so this one leaves recall instead of being served beside "
+            "it. Something newly added (another feature, a later release's change) is its own record: save it "
+            "without replaces."
         ),
     }
 
@@ -1703,6 +1705,12 @@ def _correct(home: Path, record: dict, summary: str, tags: object, lens: _Sessio
         receipt_state=str(payload.get("receipt_state", "") or "") or None,
         display_line=_display_line("✏️ OMH corrected: ", str(successor.get("summary", "") or summary), 80),
         next_action=f"The old revision is kept under history/ and no longer recalls; {new_id} replaces it.",
+        # A corrected snapshot is still a snapshot: the chain continues from the new id.
+        **(
+            {"point_in_time": _point_in_time_advice(new_id)}
+            if new_id and point_in_time_cue(summary, str(record.get("record_type", "") or "fact"))
+            else {}
+        ),
     )
 
 
