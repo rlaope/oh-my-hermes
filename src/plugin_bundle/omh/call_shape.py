@@ -1,6 +1,8 @@
 """Python's argument-binding rules over ``ast``, for the round-end checks that judge a call site.
 
 A leaf module: stdlib only, no other bundle import, so every check can import it without a cycle.
+The caller check names the calls a signature change broke with it; the consistency trigger uses it
+to settle calls that bind the same way before and after the change.
 
 - ``shape(arguments)`` reads what a call must satisfy from a ``def``'s ``ast.arguments``.
 - ``bind(shape, call)`` applies the binding rules to one ``ast.Call``: ``""`` when it binds, a short
@@ -16,6 +18,8 @@ from __future__ import annotations
 import ast
 from typing import Final, NamedTuple
 
+# Calls that expect an exception: `pytest.raises`, unittest's `assertRaises` / `assertRaisesRegex`, and
+# a handler catching what a bad call raises.
 _RAISES: Final = frozenset({"raises", "assertRaises", "assertRaisesRegex"})
 _BROAD: Final = frozenset({"TypeError", "Exception", "BaseException"})
 
@@ -49,30 +53,29 @@ def shape(arguments: ast.arguments) -> Shape:
 
 def bind(signature: Shape, call: ast.Call) -> str | None:
     """``""`` when ``call`` binds to ``signature``, the reason when it does not, ``None`` when unprovable."""
-    if any(isinstance(arg, ast.Starred) for arg in call.args) or any(kw.arg is None for kw in call.keywords):
+    if any(isinstance(arg, ast.Starred) for arg in call.args) or any(item.arg is None for item in call.keywords):
         return None
-    ordered = signature.positional_only + signature.positional
-    if len(call.args) > len(ordered) and not signature.var_positional:
-        return f"takes {len(ordered)} positional arguments but {len(call.args)} were given"
-    bound = set(ordered[:len(call.args)])
-    for keyword in call.keywords:
-        name = keyword.arg or ""
-        if name in signature.positional_only and signature.var_keyword:
-            continue  # a positional-only name passed by keyword goes to `**kwargs`
-        if name in bound:
-            return f"got multiple values for argument '{name}'"
+    slots = (*signature.positional_only, *signature.positional)
+    given = len(call.args)
+    if given > len(slots) and not signature.var_positional:
+        return f"{given} positional arguments, but it takes {len(slots)}"
+    bound = set(slots[:given])
+    for item in call.keywords:
+        name = item.arg
+        if name in signature.positional_only:
+            if signature.var_keyword:
+                continue  # a positional-only name passed by keyword goes to `**kwargs`
+            return f"positional-only `{name}` passed by keyword"
         if name in signature.positional or name in signature.keyword_only:
+            if name in bound:
+                return f"`{name}` given twice"
             bound.add(name)
         elif not signature.var_keyword:
-            if name in signature.positional_only:
-                return f"got a positional-only argument passed as keyword: '{name}'"
-            return f"got an unexpected keyword argument '{name}'"
-    missing = [name for name in ordered if name not in bound and name not in signature.defaulted]
+            return f"unexpected keyword `{name}`"
+    missing = [name for name in slots if name not in bound and name not in signature.defaulted]
+    missing += [name for name in signature.keyword_only if name in signature.required_keywords and name not in bound]
     if missing:
-        return f"missing required positional argument '{missing[0]}'"
-    missing = sorted(signature.required_keywords - bound)
-    if missing:
-        return f"missing required keyword-only argument '{missing[0]}'"
+        return "missing " + ", ".join(f"`{name}`" for name in missing)
     return ""
 
 
@@ -82,34 +85,32 @@ def expected_to_fail(tree: ast.Module) -> set[int]:
 
     def mark(nodes: list[ast.AST]) -> None:
         for node in nodes:
-            guarded.update(id(item) for item in ast.walk(node) if isinstance(item, ast.Call))
+            guarded.update(id(inner) for inner in ast.walk(node) if isinstance(inner, ast.Call))
 
     for node in ast.walk(tree):
-        if isinstance(node, (ast.With, ast.AsyncWith)) and any(
-                _raises_call(item.context_expr) for item in node.items):
-            mark(list(node.body))
-        elif isinstance(node, ast.Call) and _raises_call(node):
-            mark(list(node.args[1:]) + [kw.value for kw in node.keywords])
+        if isinstance(node, ast.Call) and _leaf(node.func) in _RAISES:
+            mark([*node.args, *(item.value for item in node.keywords)])
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
+            if any(isinstance(item.context_expr, ast.Call) and _leaf(item.context_expr.func) in _RAISES
+                   for item in node.items):
+                mark(list(node.body))
         elif isinstance(node, ast.Try) or type(node).__name__ == "TryStar":
-            if any(_catches_type_error(handler) for handler in getattr(node, "handlers", [])):
+            if any(_catches_type_error(handler.type) for handler in node.handlers):
                 mark(list(node.body))
     return guarded
 
 
-def _raises_call(node: ast.AST) -> bool:
-    if not isinstance(node, ast.Call):
-        return False
-    func = node.func
-    name = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else ""
-    return name in _RAISES
-
-
-def _catches_type_error(handler: ast.ExceptHandler) -> bool:
-    if handler.type is None:
+def _catches_type_error(caught: ast.expr | None) -> bool:
+    if caught is None:
         return True
-    caught = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
-    return any((item.attr if isinstance(item, ast.Attribute) else getattr(item, "id", "")) in _BROAD
-               for item in caught)
+    parts = caught.elts if isinstance(caught, ast.Tuple) else [caught]
+    return any(_leaf(part) in _BROAD for part in parts)
+
+
+def _leaf(node: ast.expr) -> str:
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return node.id if isinstance(node, ast.Name) else ""
 
 
 __all__ = ["Shape", "bind", "expected_to_fail", "shape"]

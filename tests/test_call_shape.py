@@ -24,15 +24,15 @@ class BindTest(unittest.TestCase):
     def test_binding_follows_python(self):
         cases = {
             ("(a, b=1)", "f(1)"): "",
-            ("(a, b=1)", "f(1, 2, 3)"): "takes 2 positional arguments but 3 were given",
+            ("(a, b=1)", "f(1, 2, 3)"): "3 positional arguments, but it takes 2",
             ("(a, *rest)", "f(1, 2, 3)"): "",
-            ("(a, b)", "f(1, a=2)"): "got multiple values for argument 'a'",
-            ("(a, /, b=1)", "f(a=1)"): "got a positional-only argument passed as keyword: 'a'",
+            ("(a, b)", "f(1, a=2)"): "`a` given twice",
+            ("(a, /, b=1)", "f(a=1)"): "positional-only `a` passed by keyword",
             ("(a, /, **kw)", "f(1, a=1)"): "",
-            ("(a)", "f(1, c=2)"): "got an unexpected keyword argument 'c'",
+            ("(a)", "f(1, c=2)"): "unexpected keyword `c`",
             ("(a, **kw)", "f(1, c=2)"): "",
-            ("(a, b)", "f(1)"): "missing required positional argument 'b'",
-            ("(a, *, t)", "f(1)"): "missing required keyword-only argument 't'",
+            ("(a, b)", "f(1)"): "missing `b`",
+            ("(a, *, t)", "f(1)"): "missing `t`",
             ("(a, *, t=1)", "f(1, t=2)"): "",
         }
         for (signature, call), expected in cases.items():
