@@ -18,13 +18,23 @@ All notable changes will be documented here.
   The `/plan` reference, the router's lane map and engine list, the
   intent-to-plan card, and the safe-feature and picker hints name it too.
   Routing is unchanged.
+- **The OMH TUI's working glow is removed.** The light that went round the
+  screen's edge while a turn ran read as too big and uncomfortable, and its
+  trail framed the screen so the terminal's padding outside it looked like a
+  black margin. It is gone, with everything that existed only for it: the
+  `/glow` command, `omh theme glow`, `OMH_TUI_GLOW`, the faster 50 ms paint
+  while it moved, and the column on each side and the blank last row the
+  screen kept free for it, so rows start at the screen's first column again.
+  A `glow` choice an older release saved in `<omh_home>/tui/theme.json` is
+  ignored and dropped the next time a choice is written. The living
+  wallpaper, the working row and its spinner are unchanged.
 - **A look with a scene paints its ground on every terminal.** The eight looks
   with a scene set their ground only with OSC 11. Otty gives that colour only
   to cells written after it, so every cell an erase cleared kept the terminal's
   own black. That covered the chat area, every row's tail, the composer and the
   blank rows: about 2,500–3,200 of the 6,300 cells on a 150x42 screen. Every
-  erase and blank fill on those looks now carries the ground as its background,
-  and so do the margins beside the glow. A terminal fills those cells with the
+  erase and blank fill on those looks now carries the ground as its
+  background. A terminal fills those cells with the
   ground through background colour erase. A move in the /theme picker paints
   the new ground over the whole visible screen in one synchronized update:
   the region, the rows above it that are still on screen, and the blank rows

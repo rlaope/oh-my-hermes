@@ -53,7 +53,7 @@ def launched(*reads: tuple[float, bytes]) -> tuple[App, RecordingTerminal]:
     """An App as `_run` builds it (`contain_faults`), on a terminal that reads `reads`."""
     now = [100.0]
     terminal = RecordingTerminal(now, list(reads))
-    environ = {"OMH_TUI_GLOW": "0", "OMH_TUI_WALLPAPER": "0", "OMH_TUI_UPDATE_CHECK": "0"}
+    environ = {"OMH_TUI_WALLPAPER": "0", "OMH_TUI_UPDATE_CHECK": "0"}
     app = App(terminal, RecordingClient(), environ, poller=FakePoller(), clock=lambda: now[0],  # type: ignore[arg-type]
               contain_faults=True)
     app.sid = SID

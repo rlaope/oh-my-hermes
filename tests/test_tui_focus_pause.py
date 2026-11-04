@@ -1,9 +1,8 @@
 """The ambience holds still while the terminal window does not have focus (owner decision D1, 2026-11-03).
 
 `Terminal` asks for focus reports (mode 1004); `KeyDecoder` reads `ESC[O` and `ESC[I` as no key and keeps when focus
-went (`unfocused_at`). While it is gone, the living wallpaper's idle tick is not scheduled and the working glow's
-light holds where it was, so nothing wakes the loop or is written for them; the spinner and the rest of a running
-turn's frame go on. With focus back, the first frame is the one a never-paused session draws at that time.
+went (`unfocused_at`). While it is gone, the living wallpaper's idle tick is not scheduled, so nothing wakes the
+loop or is written for it; the spinner and the rest of a running turn's frame go on. With focus back, the first frame is the one a never-paused session draws at that time.
 """
 
 from __future__ import annotations
@@ -17,9 +16,8 @@ from omh.tui.keys import ESCAPE, Key, KeyDecoder, Paste
 from omh.tui.gateway import Event
 from omh.tui.wallpaper import SCENES, Cell
 from test_tui_keys import decode, decode_split_everywhere
-from test_tui_modes import type_text
+from test_tui_modes import make_app, type_text
 import test_tui_wallpaper as wallpaper_tests
-import test_tui_working_glow as glow_tests
 
 FOCUS_IN = b"\x1b[I"
 FOCUS_OUT = b"\x1b[O"
@@ -177,54 +175,36 @@ class IdleWallpaperTests(unittest.TestCase):
             self.assertEqual(paint.call_count, 20)
 
 
-class BusyGlowTests(unittest.TestCase):
-    def app(self):
-        app, clock = glow_tests.AppGlowTests.app(self)
-        glow_tests.AppGlowTests.busy(self, app, clock, flushes=2)
-        return app, clock
-
-    @staticmethod
-    def edge_cells(app) -> tuple:
-        screen = app.terminal.screen
-        rows, cols = screen.rows, screen.cols
-        cells = [(row, col) for row in (0, rows - 1) for col in range(cols)]
-        cells += [(row, col) for row in range(1, rows - 1) for col in (0, cols - 1)]
-        return tuple((screen.line(row).ljust(cols)[col], screen.attrs_at(row, col)) for row, col in cells)
-
-    def test_the_glow_holds_still_while_the_spinner_goes_on_and_comes_back_where_it_would_be(self) -> None:
-        paused, clock = self.app()
-        steady, steady_clock = self.app()
-        self.assertEqual(paused._tick_seconds(), glow_tests.TICK_SECONDS)
-        paused._take_input(FOCUS_OUT)
-        self.assertEqual(paused._tick_seconds(), app_module.TICK_SECONDS, "the spinner's pace, not the glow's")
-        paused._render()
-        held = self.edge_cells(paused)
-        with mock.patch.object(paused, "_render", wraps=paused._render) as render:
-            for _ in range(40):  # two seconds of a running turn
-                for app, at in ((paused, clock), (steady, steady_clock)):
-                    at.at += glow_tests.TICK_SECONDS
-                    app._take_input(b"")
-                    app._render_when_due()
-                self.assertEqual(self.edge_cells(paused), held, "the light holds where focus left it")
-            # A frame each spinner step (0.1 s; a float step can land a hair short and draw on the next one), not
-            # each glow step (0.05 s).
+class BusyUnfocusedTests(unittest.TestCase):
+    def test_a_running_turn_goes_on_drawing_while_unfocused(self) -> None:
+        # Out of focus, a running turn's frame still moves: the spinner steps, the clock counts, the sweep goes on.
+        clock = wallpaper_tests.Clock(1000.0)
+        app, _client = make_app(busy=True, rows=24, cols=100, clock=clock)
+        app.busy_since = clock.at
+        app.region = app._new_region(at_top=True)
+        app._take_input(FOCUS_OUT)
+        self.assertIsNotNone(app.decoder.unfocused_at)
+        self.assertEqual(app._tick_seconds(), app_module.TICK_SECONDS)
+        app._render()
+        rows = set()
+        with mock.patch.object(app, "_render", wraps=app._render) as render:
+            for _ in range(20):  # two seconds
+                clock.at += app_module.TICK_SECONDS
+                app._take_input(b"")
+                app._render_when_due()
+                rows.add(next(line for line in app.terminal.screen.lines() if "Working" in line))
             self.assertTrue(13 <= render.call_count <= 20, f"the turn's frames go on: {render.call_count}")
-        self.assertNotEqual(self.edge_cells(steady), held, "the steady session's light went on round")
-        paused._take_input(FOCUS_IN)
-        self.assertEqual(paused._tick_seconds(), glow_tests.TICK_SECONDS)
-        for app in (paused, steady):
-            app._render()
-        self.assertEqual(screen_state(paused), screen_state(steady))
+        self.assertTrue(any("(2s" in row for row in rows), rows)
+        self.assertGreater(len({row[0] for row in rows}), 1, "the spinner steps")
 
 
 class FocusedBytesTests(unittest.TestCase):
     def test_a_focus_report_pair_writes_the_same_bytes_as_no_report_on_every_scene(self) -> None:
         # Focus that went and came back at once leaves the session byte for byte what it was: idle ticks, then a
-        # running turn, with the glow on and off.
-        def session(look: str, glow: str, reports: bool) -> list[str]:
+        # running turn.
+        def session(look: str, reports: bool) -> list[str]:
             clock = wallpaper_tests.Clock(1000.0)
-            app, _client = wallpaper_tests.make_app(rows=42, cols=150, clock=clock,
-                                                    environ={**wallpaper_tests.WALLPAPER_ON, "OMH_TUI_GLOW": glow})
+            app, _client = wallpaper_tests.make_app(rows=42, cols=150, clock=clock, environ=wallpaper_tests.WALLPAPER_ON)
             app.adopt_background(wallpaper_tests.ANSWERED)
             app.region = app._new_region(at_top=True)
             app.launch_look = look
@@ -244,9 +224,8 @@ class FocusedBytesTests(unittest.TestCase):
             return app.terminal.writes
 
         for look in SCENES:
-            for glow in ("0", "1"):
-                with self.subTest(look=look, glow=glow):
-                    self.assertEqual(session(look, glow, True), session(look, glow, False))
+            with self.subTest(look=look):
+                self.assertEqual(session(look, True), session(look, False))
 
 
 if __name__ == "__main__":

@@ -24,7 +24,6 @@ from omh.skin_pack import (
     read_wallpaper_choice,
     skin_colors,
     theme_store_path,
-    write_glow_choice,
     write_launch_choice,
     write_theme_choice,
     write_wallpaper_choice,
@@ -33,7 +32,7 @@ from omh.tui import app as app_module
 from omh.tui.gateway import Event
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key
 from omh.tui.screen import TEXT_GAP, LiveRegion
-from omh.tui.style import TRUECOLOR, Span, Style
+from omh.tui.style import Span, Style
 from omh.tui.terminal import background_restore, background_set
 from omh.tui.theme import (
     DARK_SCENE_BAND_SHARE,
@@ -62,7 +61,6 @@ from omh.tui.wallpaper import (
 from omh.tui.width import cell_width
 from test_tui_modes import make_app, notices, type_text
 from test_tui_theme import oklab
-import test_tui_working_glow as glow_tests
 
 ANSWERED = "#1E1E1E"  # what the terminal answered the startup background query with
 WALLPAPER_ON = {"COLORTERM": "truecolor", "TERM": "xterm-256color", "OMH_TUI_WALLPAPER": "1"}
@@ -463,8 +461,8 @@ class RegionTests(unittest.TestCase):
             self.assertEqual(screen.scrollback[0], "Greek: αβγδ → ok")
 
     def test_random_frames_never_cover_text_or_reach_the_scrollback(self) -> None:
-        # Seeded random frames, flushes, inserted rows, ticks and starting places, with and without the glow's margin
-        # and the rows above painted, of half-block pixels (`▀` over a background, a space on its colour, `▄`): every
+        # Seeded random frames, flushes, inserted rows, ticks and starting places, with and without the rows above
+        # painted, of half-block pixels (`▀` over a background, a space on its colour, `▄`): every
         # cell the region does not hold is the plain run's, text and attributes (so blanking takes a background off
         # too), every cell it holds shows a pixel, and every row the screen scrolls off reaches the scrollback as the
         # plain run's did, text and attributes (after the review's fuzz).
@@ -495,8 +493,6 @@ class RegionTests(unittest.TestCase):
     def random_frames(self, seed: int, wide: bool) -> None:
         rnd = random.Random(seed)
         rows, cols = rnd.choice([(8, 30), (12, 40), (20, 60)])
-        footer = rnd.random() < 0.5
-        margin = int(footer)
         start = rnd.choice(["top", "row", "none"])
         place = {"at_top": True} if start == "top" else {"start_row": rnd.randrange(rows)} if start == "row" else {}
         painted, plain = Recording(rows, cols), Recording(rows, cols)
@@ -504,8 +500,8 @@ class RegionTests(unittest.TestCase):
             shell = "shell\r\n" * rnd.randrange(rows) if start == "none" else f"\x1b[{place['start_row'] + 1};1H"
             for screen in (painted, plain):
                 screen.feed(shell)
-        regions = [LiveRegion(screen.feed, margin=margin, footer=footer, **place) for screen in (painted, plain)]
-        width, screen_rows = cols - 2 * margin, rows - footer
+        regions = [LiveRegion(screen.feed, **place) for screen in (painted, plain)]
+        width, screen_rows = cols, rows
         lines: list = []
         for step in range(50):
             ambient = self.pixel_cells(rnd, rows, cols, wide)
@@ -597,7 +593,6 @@ class AppWallpaperTests(unittest.TestCase):
         app.theme = app._themed()
         ground = look_ground("moonlit", False)
         self.assertEqual(app._surface(), ground)
-        self.assertEqual(app.theme.glow_surface.bg, ground)
         app._render()
         self.assertEqual(self.writes(app).count(background_set(ground)), 1)
         app._render()
@@ -686,49 +681,43 @@ class AppWallpaperTests(unittest.TestCase):
         self.assertNotIn("\x1b]11;#", self.writes(app))
 
     def test_a_turn_paints_the_blank_cells_and_nothing_of_it_reaches_the_scrollback(self) -> None:
-        for glow in ("0", "1"):  # with the working glow's frame too, which it never paints over
-            with self.subTest(glow=glow), mock.patch.object(app_module, "scene", everywhere):
-                app, clock = self.app({**WALLPAPER_ON, "OMH_TUI_GLOW": glow})
-                self.busy(app, clock)
-                screen = app.terminal.screen
-                self.assertGreater(len(screen.scrollback), 0, "the turn's output scrolled")
+        with mock.patch.object(app_module, "scene", everywhere):
+            app, clock = self.app(WALLPAPER_ON)
+            self.busy(app, clock)
+            screen = app.terminal.screen
+            self.assertGreater(len(screen.scrollback), 0, "the turn's output scrolled")
+            self.assertFalse(any(MARK in line for line in screen.scrollback))
+            self.assertIn(MARK, "".join(screen.lines()))
+            for _ in range(30):
+                clock.at += 0.05
+                app._render_when_due()
                 self.assertFalse(any(MARK in line for line in screen.scrollback))
-                self.assertIn(MARK, "".join(screen.lines()))
-                for _ in range(30):
-                    clock.at += 0.05
-                    app._render_when_due()
-                    self.assertFalse(any(MARK in line for line in screen.scrollback))
-                top = app.region.top_row(app.size[1])
-                self.assertIsNotNone(top)
-                for row in range(top):  # the transcript's rows above the region: glyphs only past their text
-                    text = screen.line(row).split(MARK)[0]
-                    if MARK in screen.line(row) and text.strip():
-                        self.assertTrue(text.endswith(" " * TEXT_GAP), f"row {row}: {screen.line(row)!r}")
-                self.assertTrue(any(MARK in screen.line(row) for row in range(top)), "the tails above are painted")
-                if glow == "1":
-                    edges = [screen.line(row).ljust(60)[col] for row in range(20) for col in (0, 59)]
-                    self.assertNotIn(MARK, edges, "the glow's columns stay its own")
-                    self.assertNotIn(MARK, screen.line(19))
+            top = app.region.top_row(app.size[1])
+            self.assertIsNotNone(top)
+            for row in range(top):  # the transcript's rows above the region: glyphs only past their text
+                text = screen.line(row).split(MARK)[0]
+                if MARK in screen.line(row) and text.strip():
+                    self.assertTrue(text.endswith(" " * TEXT_GAP), f"row {row}: {screen.line(row)!r}")
+            self.assertTrue(any(MARK in screen.line(row) for row in range(top)), "the tails above are painted")
 
     def test_a_session_reads_as_it_would_without_the_wallpaper_and_every_painted_cell_is_tracked(self) -> None:
         # The same session driven twice, with a scene that lights every cell and with the wallpaper off: with the
         # wallpaper's glyph taken out, the screen and the scrollback must be the same after every frame (no cell
         # painted over text, none scrolled away), and every glyph on screen must be one the region knows it painted
         # (none left behind where a scroll, a flush or an inserted row moved the screen under it).
-        for glow in ("0", "1"):
-            with self.subTest(glow=glow), mock.patch.object(app_module, "scene", everywhere):
-                runs = [self.app({**WALLPAPER_ON, "OMH_TUI_GLOW": glow, "OMH_TUI_WALLPAPER": on}) for on in "10"]
-                for step in range(40):
-                    for app, clock in runs:
-                        self.step(app, clock, step)
-                    painted, plain = (app.terminal.screen for app, _clock in runs)
-                    self.assertEqual([line.replace(MARK, " ").rstrip() for line in painted.lines()], plain.lines(),
-                                     f"step {step}")
-                    self.assertEqual(painted.scrollback, plain.scrollback, f"step {step}")
-                    marks = {(row, col) for row in range(20) for col, char in enumerate(painted.line(row))
-                             if char == MARK}
-                    self.assertEqual(marks, set(runs[0][0].region._paper), f"step {step}")
-                self.assertGreater(len(runs[0][0].terminal.screen.scrollback), 0, "the session scrolled")
+        with mock.patch.object(app_module, "scene", everywhere):
+            runs = [self.app({**WALLPAPER_ON, "OMH_TUI_WALLPAPER": on}) for on in "10"]
+            for step in range(40):
+                for app, clock in runs:
+                    self.step(app, clock, step)
+                painted, plain = (app.terminal.screen for app, _clock in runs)
+                self.assertEqual([line.replace(MARK, " ").rstrip() for line in painted.lines()], plain.lines(),
+                                 f"step {step}")
+                self.assertEqual(painted.scrollback, plain.scrollback, f"step {step}")
+                marks = {(row, col) for row in range(20) for col, char in enumerate(painted.line(row))
+                         if char == MARK}
+                self.assertEqual(marks, set(runs[0][0].region._paper), f"step {step}")
+            self.assertGreater(len(runs[0][0].terminal.screen.scrollback), 0, "the session scrolled")
 
     def step(self, app, clock, step: int) -> None:
         """One step of a session that grows from a short one (rows inserted under it), streams, flushes, scrolls and
@@ -811,7 +800,7 @@ class AppWallpaperTests(unittest.TestCase):
         clock = Clock(1000.0)
         client = StartClient()
         client.skills = SKILLS
-        app = app_module.App(ScriptedTerminal(42, 150), client, {**WALLPAPER_ON, "OMH_TUI_GLOW": "0"},  # type: ignore
+        app = app_module.App(ScriptedTerminal(42, 150), client, WALLPAPER_ON,  # type: ignore
                              poller=FakePoller(), clock=clock)
         with mock.patch.object(app_module, "scene", everywhere):
             app.startup()
@@ -932,7 +921,7 @@ class AppWallpaperTests(unittest.TestCase):
 
         client = StartClient()
         client.skills = SKILLS
-        app = app_module.App(ScriptedTerminal(42, 150), client, {**WALLPAPER_ON, "OMH_TUI_GLOW": "0"},  # type: ignore
+        app = app_module.App(ScriptedTerminal(42, 150), client, WALLPAPER_ON,  # type: ignore
                              poller=FakePoller(), clock=Clock(1000.0))
         app.startup()
         app.adopt_background(ANSWERED, {})
@@ -1108,31 +1097,30 @@ class GroundPaintTests(unittest.TestCase):
 
     def test_no_cell_keeps_the_terminals_own_background_on_any_look_with_a_scene(self) -> None:
         for look in SCENES:
-            for glow in ("1", "0"):
-                screen = WriteTimeGround(42, 150)
-                app = self.launched(look, {**WALLPAPER_ON, "OMH_TUI_GLOW": glow}, screen)
-                with self.subTest(look=look, glow=glow):
-                    self.assertEqual(screen.holes(app._ground()), [], "the launch screen")
-                    self.session(app)
-                    self.assertEqual(screen.holes(app._ground()), [], "after a reply")
-                    app._theme("")
+            screen = WriteTimeGround(42, 150)
+            app = self.launched(look, WALLPAPER_ON, screen)
+            with self.subTest(look=look):
+                self.assertEqual(screen.holes(app._ground()), [], "the launch screen")
+                self.session(app)
+                self.assertEqual(screen.holes(app._ground()), [], "after a reply")
+                app._theme("")
+                app._render()
+                history = list(screen.scrollback)  # the picker opening may scroll; its moves may not
+                names = list(LAUNCH_PRESETS)
+                other = names[(names.index(look) + 1) % len(names)] if look != names[-1] else names[-2]
+                while app._shown_look() != other:
+                    app._on_input(Key(DOWN if names.index(other) > names.index(look) else UP))
                     app._render()
-                    history = list(screen.scrollback)  # the picker opening may scroll; its moves may not
-                    names = list(LAUNCH_PRESETS)
-                    other = names[(names.index(look) + 1) % len(names)] if look != names[-1] else names[-2]
-                    while app._shown_look() != other:
-                        app._on_input(Key(DOWN if names.index(other) > names.index(look) else UP))
-                        app._render()
-                        self.assertEqual(screen.holes(app._ground()), [], f"previewing {app._shown_look()}")
-                    self.assertEqual(screen.scrollback, history, "a preview writes nothing into the scrollback")
-                    app._on_input(Key(ENTER))
-                    app._render()
-                    self.assertEqual(screen.holes(app._ground()), [], "the look kept")
+                    self.assertEqual(screen.holes(app._ground()), [], f"previewing {app._shown_look()}")
+                self.assertEqual(screen.scrollback, history, "a preview writes nothing into the scrollback")
+                app._on_input(Key(ENTER))
+                app._render()
+                self.assertEqual(screen.holes(app._ground()), [], "the look kept")
 
-    def test_a_walk_over_every_look_with_the_glow_on_leaves_no_cell_of_an_earlier_ground(self) -> None:
-        # The default look erases on the terminal's own background: a scene look's margins must not outlive the move.
+    def test_a_walk_over_every_look_leaves_no_cell_of_an_earlier_ground(self) -> None:
+        # The default look erases on the terminal's own background: a scene look's ground must not outlive the move.
         screen = WriteTimeGround(42, 150)
-        app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "1"}, screen)
+        app = self.launched("moonlit", WALLPAPER_ON, screen)
         self.session(app)
         app._theme("")
         app._render()
@@ -1145,7 +1133,7 @@ class GroundPaintTests(unittest.TestCase):
 
     def test_esc_from_a_preview_leaves_no_cell_of_the_previewed_ground(self) -> None:
         screen = WriteTimeGround(42, 150)
-        app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "1"}, screen)
+        app = self.launched("moonlit", WALLPAPER_ON, screen)
         self.session(app)
         app._theme("")
         app._render()
@@ -1159,29 +1147,27 @@ class GroundPaintTests(unittest.TestCase):
     def test_a_preview_after_ctrl_z_leaves_no_row_on_the_old_ground(self) -> None:
         # The region made at the resume knows none of the session's rows above it: they go back on the terminal's own
         # background at the stop, so OSC 11 recolours them again (a standard terminal), and none keeps the old ground.
-        for glow in ("1", "0"):
-            with self.subTest(glow=glow):
-                screen = WriteTimeGround(42, 150)
-                app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": glow}, screen)
-                self.session(app)
-                with mock.patch.object(app_module.signal, "SIGTSTP", 20, create=True):
-                    app.terminal.cursor_row = None
-                    original = app.terminal.query_cursor_row
-                    app.terminal.query_cursor_row = lambda: (b"", screen.cursor[0] + 1)  # type: ignore[method-assign]
-                    app._suspend()
-                    app.terminal.query_cursor_row = original  # type: ignore[method-assign]
-                self.assertEqual(screen.stale(TERMINAL_BLACK), [], "while stopped: the shell's own background")
-                app._render()
-                app._theme("")
-                app._render()
-                for _ in range(2):
-                    app._on_input(Key(DOWN))
-                    app._render()
-                    self.assertEqual(screen.stale(app._ground()), [], app._shown_look())
+        screen = WriteTimeGround(42, 150)
+        app = self.launched("moonlit", WALLPAPER_ON, screen)
+        self.session(app)
+        with mock.patch.object(app_module.signal, "SIGTSTP", 20, create=True):
+            app.terminal.cursor_row = None
+            original = app.terminal.query_cursor_row
+            app.terminal.query_cursor_row = lambda: (b"", screen.cursor[0] + 1)  # type: ignore[method-assign]
+            app._suspend()
+            app.terminal.query_cursor_row = original  # type: ignore[method-assign]
+        self.assertEqual(screen.stale(TERMINAL_BLACK), [], "while stopped: the shell's own background")
+        app._render()
+        app._theme("")
+        app._render()
+        for _ in range(2):
+            app._on_input(Key(DOWN))
+            app._render()
+            self.assertEqual(screen.stale(app._ground()), [], app._shown_look())
 
     def test_a_pager_on_a_look_with_a_scene_erases_on_its_ground(self) -> None:
         screen = WriteTimeGround(42, 150)
-        app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "0"}, screen)
+        app = self.launched("moonlit", WALLPAPER_ON, screen)
         app._open_pager("log", [(Span("a logged row"),)] * 3)
         app._render()
         self.assertTrue(screen.alternate)
@@ -1190,7 +1176,7 @@ class GroundPaintTests(unittest.TestCase):
     def test_the_wallpapers_cells_are_still_drawn_on_the_painted_ground(self) -> None:
         with mock.patch.object(app_module, "scene", everywhere):
             screen = WriteTimeGround(42, 150)
-            app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "0"}, screen)
+            app = self.launched("moonlit", WALLPAPER_ON, screen)
             self.session(app)
             top = app.region.top_row(app.size[1])
             answer = next(row for row in range(top) if "Read the reader." in screen.line(row))
@@ -1203,22 +1189,20 @@ class GroundPaintTests(unittest.TestCase):
         # reply still streaming flushes at exit included.
         from test_tui_modes import SID
 
-        for glow in ("1", "0"):
-            with self.subTest(glow=glow):
-                screen = WriteTimeGround(42, 150)
-                app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": glow}, screen)
-                self.session(app)
-                app.transcript.apply(Event("message.start", SID, {}))
-                app.transcript.apply(Event("message.delta", SID, {"text": "half a reply\n\nand its second paragraph"}))
-                app._render()
-                app.terminal.writes.clear()
-                app._shutdown()
-                written = "".join(app.terminal.writes)
-                self.assertIn(background_restore(TERMINAL_BLACK), written)
-                self.assertIn("half a reply", written[written.index(background_restore(TERMINAL_BLACK)):])
-                self.assertEqual(screen.stale(TERMINAL_BLACK), [])
-                self.assertFalse(any(screen.shown_bg(row, col) == (look_ground("moonlit", False).upper(), True)
-                                     for row in range(42) for col in range(150)))
+        screen = WriteTimeGround(42, 150)
+        app = self.launched("moonlit", WALLPAPER_ON, screen)
+        self.session(app)
+        app.transcript.apply(Event("message.start", SID, {}))
+        app.transcript.apply(Event("message.delta", SID, {"text": "half a reply\n\nand its second paragraph"}))
+        app._render()
+        app.terminal.writes.clear()
+        app._shutdown()
+        written = "".join(app.terminal.writes)
+        self.assertIn(background_restore(TERMINAL_BLACK), written)
+        self.assertIn("half a reply", written[written.index(background_restore(TERMINAL_BLACK)):])
+        self.assertEqual(screen.stale(TERMINAL_BLACK), [])
+        self.assertFalse(any(screen.shown_bg(row, col) == (look_ground("moonlit", False).upper(), True)
+                             for row in range(42) for col in range(150)))
 
     def test_the_default_look_and_every_depth_without_the_wallpaper_write_the_bytes_they_always_did(self) -> None:
         cases = {
@@ -1232,7 +1216,7 @@ class GroundPaintTests(unittest.TestCase):
             from omh.tui import screen as screen_module
 
             screen_module._flushed_row.cache_clear()
-            app = self.launched(look, {**environ, "OMH_TUI_GLOW": "1"})
+            app = self.launched(look, environ)
             self.session(app)
             app._theme("")
             app._render()
@@ -1261,56 +1245,11 @@ class WallpaperStoreTests(unittest.TestCase):
         write_wallpaper_choice(home, False)
         write_theme_choice(home, default_theme())
         write_launch_choice(home, "moonlit")
-        write_glow_choice(home, False)
         self.assertIs(read_wallpaper_choice(home), False)
         write_wallpaper_choice(home, True)
         record = json.loads(theme_store_path(home).read_text(encoding="utf-8"))
         self.assertEqual(record, {"schema_version": THEME_STORE_SCHEMA, "theme": default_theme().short_name,
-                                  "launch": "moonlit", "glow": "off", "wallpaper": "on"})
-
-
-class GlowWithWallpaperTests(glow_tests.AppGlowTests):
-    """The working glow's own tests, its scrollback ones included, with the living wallpaper on as well."""
-
-    def app(self, environ=glow_tests.GLOW_ON, rows=20, cols=60):
-        # The glow suite's screen is under the scenes' 80x24, so a scene that lights every cell stands in for them.
-        self.enterContext(mock.patch.object(app_module, "scene", everywhere))
-        app, clock = super().app({**environ, "OMH_TUI_WALLPAPER": "1"}, rows, cols)
-        app.adopt_background(glow_tests.BACKGROUND)
-        if app.color_depth == TRUECOLOR:
-            self.assertIsNotNone(app._ground(), "the wallpaper shows")
-        return app, clock
-
-    def test_the_wallpaper_paints_beside_the_glow(self) -> None:
-        app, clock = self.app()
-        self.busy(app, clock, flushes=1)  # a short session: blank rows under it
-        screen = app.terminal.screen
-        self.assertIn(MARK, "".join(screen.lines()))
-        self.assertTrue(app.region._paper)
-        self.assertFalse(any(MARK in line for line in screen.scrollback))
-
-    def test_the_real_art_and_the_glow_keep_their_own_cells(self) -> None:
-        # The glow's tests above stand a mark in for the scenes; here a real scene's half blocks, which are glyphs the
-        # glow draws as well, so the checks go by place: the art never takes the glow's edge, the glow lights the
-        # edge, and no half block of either reaches the scrollback.
-        rows, cols = 42, 150
-        app, clock = glow_tests.AppGlowTests.app(self, {**glow_tests.GLOW_ON, "OMH_TUI_WALLPAPER": "1"}, rows, cols)
-        app.adopt_background(glow_tests.BACKGROUND)
-        app.launch_look = "moonlit"
-        self.busy(app, clock, flushes=40)
-        screen = app.terminal.screen
-        edge = {(row, col) for row in range(rows) for col in range(cols)
-                if row in (0, rows - 1) or col in (0, cols - 1)}
-        lit_edge = art = False
-        for _ in range(int(glow_tests.LOOP_SECONDS / glow_tests.TICK_SECONDS)):  # the glow once round
-            clock.at += glow_tests.TICK_SECONDS
-            app._render()
-            self.assertFalse(set(app.region._paper) & edge, "the art keeps off the glow's edge")
-            lit_edge = lit_edge or any(screen._text[row][col] in glow_tests.GLYPHS for row, col in edge)
-            art = art or any(screen._text[row][col] in (UPPER, LOWER) for row, col in app.region._paper)
-            self.assertFalse(any({UPPER, LOWER} & set(line) for line in screen.scrollback))
-        self.assertGreater(len(screen.scrollback), 0, "the turn's output scrolled")
-        self.assertTrue(lit_edge and art, (lit_edge, art))
+                                  "launch": "moonlit", "wallpaper": "on"})
 
 
 if __name__ == "__main__":
