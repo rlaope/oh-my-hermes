@@ -34,6 +34,13 @@ SHORT_HINT = " · /whats-new lists it"
 EARLIER_TUI_STATE = ("tui/launch-skills.json",)
 
 WHATS_NEW: dict[str, tuple[str, ...]] = {
+    "4.0.6": (
+        "The working glow around the screen's edge is gone",
+        "Markdown tables are drawn as columns while a reply streams",
+        "Looks with a scene paint their ground on every terminal",
+        "Vim mode changes the cursor shape: beam in INSERT, block in NORMAL",
+        "A changed function's broken callers are named by file and line",
+    ),
     "4.0.5": (
         "One part of the screen that fails to draw no longer ends the session",
         "A slow or busy Hermes gateway no longer drops the running turn",
