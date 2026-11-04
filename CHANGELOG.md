@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Saving a dated snapshot now says how to retire it later.** When the
+  model saves a fact like "As of 2026-10-30 (v0.1.7), nanran has ..." or
+  "nanran v0.1.13 added ...", the result tells it to name this memory in
+  `replaces` when it saves the new state. The old memory then leaves recall
+  instead of being served beside the new one. The owner's store held 8 such
+  snapshots side by side, none ever replaced. The memory itself is unchanged:
+  it stays permanent and nothing is aged or hidden. Versions stated as rules
+  ("requires Hermes v0.22.5 or newer", "pin Node v20.11"), "Decided <date>:" lines,
+  lessons and procedures get no such note.
 - **Vim mode changes the cursor shape.** With `display.vim_mode` on, the
   terminal's cursor is a steady beam in INSERT and a steady block in NORMAL
   (DECSCUSR). This is an OMH addition: Hermes keeps a steady block in both
