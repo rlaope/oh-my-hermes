@@ -166,8 +166,9 @@ def down_to(app, key: str) -> None:
 
 DEFAULT = [  # the tree's rows up to their right-hand figures, at 120x72 (a cap of 24 rows: all of it fits)
     "  DAG · sweep · 7 nodes · 9 edges · 3 running · 1 failed · 2 waiting · 1 done",
-    "  ▸ ✓ layer 1 · 1 done",
-    "  ▾ layer 2 · 4 nodes · 2 running · 1 failed · 1 waiting",
+    "  ✓ layer 1 · Inventory rlaope PRs",  # a done one-node layer of a small run: its node on the layer's row
+    "",
+    "  ▾ layer 2 · 4 nodes",  # open, every node with its row: the counts are theirs
     "    ▾ ⠋ PR group 1: #138300 #107931",
     "        › terminal(uv run pytest tests/test_chat_name.py -q)",
     "        › Adding the test the review asks for",
@@ -181,7 +182,8 @@ DEFAULT = [  # the tree's rows up to their right-hand figures, at 120x72 (a cap 
     "            › read_file(tools/registry.py)",
     "            › Keeping both tool entries",
     "      · PR group 4: #128680 #110669",
-    "  ▾ layer 3 · 1 node · 1 waiting",
+    "",
+    "  ▾ layer 3",
     "      · Verify handoffs",
 ]
 
@@ -224,10 +226,8 @@ class DefaultFoldTests(unittest.TestCase):
         by_key["verify"]["summary"] = "Verify handoffs"
         app, _client = make_app(busy=True, rows=72, cols=160, clock=lambda: 0.0)
         with_graph(app, built)
-        view_text(app)
-        app.tree_folds.update({"settled:layer 1": True, "layer:layer 1": True})  # the done layer, opened
         shown = [left(row) for row in view_text(app)]
-        self.assertIn("      ✓ Inventory rlaope PRs · List every open PR by the…", shown)
+        self.assertIn("  ✓ layer 1 · Inventory rlaope PRs · List every open PR by the…", shown)
         self.assertIn("      ⠋ PR group 1: #138300 #107931", shown, f"{SHORT_LABEL} cells or more: the label alone")
         self.assertIn("      · Verify handoffs", shown, "a summary the label already says is not repeated")
         whole = "Inventory rlaope PRs · List every open PR by the author into inventory.json"
@@ -356,7 +356,7 @@ class FoldKeyTests(unittest.TestCase):
         app._on_input(Key(DOWN))
         for _ in range(40):
             app._on_input(Key(UP))
-        self.assertEqual(app.tree_selected, "settled:layer 1")
+        self.assertEqual(app.tree_selected, node_id("inventory"), "the done layer's one node, on its row")
         for _ in range(40):
             app._on_input(Key(DOWN))
         self.assertEqual(app.tree_selected, node_id("verify"))
@@ -487,8 +487,9 @@ class TreeColourTests(unittest.TestCase):
 
         self.assertEqual(span("PR group 1:", SPINNER_FRAMES[0]).style.fg, app.theme.running.fg)
         self.assertEqual(span("PR group 3:", "✗").style.fg, app.theme.error.fg)
-        self.assertEqual(span("layer 1 · 1 done", "✓").style.fg, app.theme.ok.fg)
-        self.assertNotEqual(span("layer 1 · 1 done", "✓").style.fg, app.theme.running.fg)
+        self.assertEqual(span("Inventory rlaope PRs", "✓").style.fg, app.theme.ok.fg)
+        self.assertNotEqual(span("Inventory rlaope PRs", "✓").style.fg, app.theme.running.fg)
+        self.assertEqual(span("Inventory rlaope PRs", "Inventory").style.fg, app.theme.muted.fg, "a done title is quiet")
         self.assertEqual(span("terminal(uv run pytest", "terminal").style.fg, kind_style("terminal", app.theme).fg)
         self.assertEqual(span("read_file(tools/registry.py)", "read_file").style.fg,
                          kind_style("read_file", app.theme).fg)
@@ -509,7 +510,7 @@ class RepairTests(unittest.TestCase):
         shown = [left(row) for row in view_text(app)]
         self.assertLessEqual(len(shown), 13)
         self.assertIn("    ▾ ✗ PR group 3: #127631 #58015", shown)
-        self.assertIn("  ▾ layer 3 · 1 node · 1 waiting", shown, "the layer that comes next stays open")
+        self.assertIn("  ▾ layer 3", shown, "the layer that comes next stays open; the cut counts its node")
         self.assertIn("        ▸ ⠋ ↻ repair 1 · Resolve the registry conflict", shown)
         self.assertIn("    ▸ ⠋ PR group 2: #128662 #99354", shown)
 
@@ -601,10 +602,7 @@ class TreeActionTests(unittest.TestCase):
         app, client = tree_app()
         app._on_input(Key(DOWN))
         app._on_input(Key(UP))  # layer 2's row
-        app._on_input(Key(UP))  # the done layers' row
-        app._on_input(Key(RIGHT))  # opened: layer 1's row, shut
-        app._on_input(Key(RIGHT))
-        app._on_input(Key(DOWN))  # the inventory, accepted
+        app._on_input(Key(UP))  # the inventory, accepted, on its done layer's row
         self.assertEqual(app.tree_selected, node_id("inventory"))
         app._on_input(Key(CHAR, "x"))
         app._on_input(Key(CHAR, "x"))
@@ -614,13 +612,12 @@ class TreeActionTests(unittest.TestCase):
     def test_on_a_layer_or_a_node_no_child_ran_for_enter_x_and_s_do_nothing(self) -> None:
         app, client = tree_app()
         app._on_input(Key(DOWN))
-        for _ in range(2):  # layer 2's row, the done layers' row
-            app._on_input(Key(UP))
-        self.assertEqual(app.tree_selected, "settled:layer 1")
+        app._on_input(Key(UP))  # layer 2's row
+        self.assertEqual(app.tree_selected, "layer:layer 2")
         for key in (Key(ENTER), Key(CHAR, "x"), Key(CHAR, "s")):
             app._on_input(key)
         self.assertEqual((app.pager, client.calls, app.agent_steer, app.tree_selected),
-                         (None, [], None, "settled:layer 1"))
+                         (None, [], None, "layer:layer 2"))
         self.assertEqual([left(row) for row in view_text(app)], DEFAULT, "and fold nothing")
         down_to(app, node_id("group-4"))
         for key in (Key(ENTER), Key(CHAR, "x"), Key(CHAR, "s")):
@@ -639,7 +636,7 @@ class OtherAgentsTests(unittest.TestCase):
         agent_event(app, "tool", "sa-helper", goal="Look up the release notes", model="glm-5.3",
                     child_session_id="helper-session", tool_name="web_search", tool_preview="hermes 0.22 notes")
         shown = [left(row) for row in view_text(app)]
-        self.assertEqual(shown[len(DEFAULT):], ["  ▾ other agents · 1 agent · 1 running",
+        self.assertEqual(shown[len(DEFAULT):], ["", "  ▾ other agents · 1 agent · 1 running",
                                                  "    ▾ ⠋ Look up the release notes",
                                                  "        › web_search(hermes 0.22 notes)"])
         app._on_input(Key(DOWN))
@@ -840,7 +837,7 @@ def shut_layer_2(app) -> None:
     app._on_input(Key(ESCAPE))
 
 
-LAYER_2_OPEN = "  ▾ layer 2 · 4 nodes · 2 running · 1 failed · 1 waiting"
+LAYER_2_OPEN = "  ▾ layer 2 · 4 nodes"
 
 
 class FoldScopeTests(unittest.TestCase):
@@ -950,7 +947,7 @@ class TreeMouseTests(unittest.TestCase):
         app, _client = tree_app()
         settled(app)
         app._on_input(Key(DOWN))
-        click(app, 10, row_of(app, "layer 3 · 1 node"))
+        click(app, 10, row_of(app, "▾ layer 3"))
         self.assertEqual(app.tree_selected, "layer:layer 3")
         self.assertIsNone(app.pager)
 
@@ -1034,15 +1031,15 @@ class CountLabelTests(unittest.TestCase):
 
     def test_the_middle_says_browse_for_a_done_layer_between_its_rows(self) -> None:
         shown = self.window("layer:layer 3")
-        self.assertEqual((shown[0], shown[-1]), ("  +10 more · ↑↓ to browse", "  +3 more below"))
+        self.assertEqual((shown[0], shown[-1]), ("  +11 more · ↑↓ to browse", "  +3 more below"))
 
     def test_the_last_rows_say_browse_for_a_done_layer_between_them(self) -> None:
         shown = self.window(node_id("ship-5"))
-        self.assertEqual(shown[0], "  +12 more · ↑↓ to browse")
+        self.assertEqual(shown[0], "  +13 more · ↑↓ to browse")
 
     def test_with_nothing_given_way_the_last_rows_count_what_is_above(self) -> None:
         shown = self.window(node_id("ship-5"), done=False)
-        self.assertEqual(shown[0], "  +12 more above")
+        self.assertEqual(shown[0], "  +13 more above")
 
     def test_a_highlighted_done_layer_keeps_its_row(self) -> None:
         shown = self.window("settled:layer 2")
@@ -1178,7 +1175,8 @@ class RunEndTests(unittest.TestCase):
         over = big_run((4, 6, 6, 4), {f"n{number}": "done" for number in range(1, 21)})
         app, _client = tree_app(rows=42, cols=150, children=False)
         pinned(app)
-        with_graph(app, over)
+        # The tree as the run ran (every lane running: open, its full height), as the panel's payload still holds it.
+        with_graph(app, big_run((4, 6, 6, 4), {f"n{number}": "running" for number in range(1, 21)}))
         app.stored_id = "stored-1"
         app.read_dag_graph = lambda _omh, _hermes, session: over
         top = box_top(drawn(app))

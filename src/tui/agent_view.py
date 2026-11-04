@@ -71,11 +71,11 @@ TREE_HINTS = (
 # The fewest rows a tree takes the keys in: its highlight between a count above and one below. Under it Down opens the
 # agent list in the view's rows, as it did before the tree.
 MIN_TREE_ROWS = 3
-# The most rows a dag run's tree takes under the composer (the owner, 2026-11-04: the area below the composer was too
-# big while a run waited): its header and seven rows, one more than the agent view's own cap (`layout.AGENT_VIEW_ROWS`,
-# 7) for the header. A third of a 24-row terminal is 8 too, so there it is the size it always was; on a taller one it
-# no longer grows, and `/dag` draws the whole graph.
-TREE_ROWS = 8
+# The most rows a dag run's tree takes under the composer, and never more than a third of the screen
+# (`layout.agent_view_cap`). The owner, 2026-11-04: 17 rows was too big and 8 too little and too cramped; 16 holds a
+# small run whole with its blank rows (the 6-node run in 14 at 150x42), and on a taller screen the tree stops growing
+# there, `/dag` drawing the whole graph.
+TREE_ROWS = 16
 # What the info line says once `x` asked, longest first.
 INTERRUPT_CONFIRM = "x again interrupts {name} · any other key cancels"
 INTERRUPT_CONFIRMS = (INTERRUPT_CONFIRM, "x again interrupts {name}", "x again interrupts")

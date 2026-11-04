@@ -567,38 +567,39 @@ class DagViewTests(unittest.TestCase):
         with_graph(app, graph)
         return app
 
-    def test_the_staged_export_tree_folds_its_done_stage_into_one_row_at_any_height(self) -> None:
+    def test_the_staged_export_tree_is_whole_at_40_rows_and_keeps_its_running_lane_at_24(self) -> None:
         from _delegation_graphs import export_run
 
         # The folding tree (the owner's pick of 2026-10-22) in place of the box-drawing tree: no `◆ main` row, a
-        # label row per stage, no blank row between two (the owner, 2026-11-04), and the done stage one row.
-        for rows in (40, 24):
-            with self.subTest(rows=rows):
-                whole = [row.rstrip() for row in view_text(self.tree_app(rows, export_run(staged=True)))]
-                self.assertEqual(len(whole), 8, whole)  # header, the done stage, two stages and their four lanes
-                self.assertFalse([row for row in whole if "more" in row or not row])
-                self.assertEqual([row.strip()[:12] for row in whole[:3]],
-                                 ["DAG · export", "▸ ✓ stage 1 ", "▾ stage 2 · "])
-                self.assertIn("  ▸ ✓ stage 1 · 1 done", whole)
-                self.assertTrue([row for row in whole if "⠋ Export button" in row and "running" in row], whole)
+        # label row per stage, a blank row between two; a done one-node stage on one row (the owner, 2026-11-04).
+        whole = [row.rstrip() for row in view_text(self.tree_app(40, export_run(staged=True)))]
+        self.assertEqual(len(whole), 10, whole)  # header, the done stage, two stages, their four lanes, two blanks
+        self.assertFalse([row for row in whole if "more" in row])
+        self.assertEqual([row.strip()[:12] for row in whole[:2]], ["DAG · export", "✓ stage 1 · "])
+        self.assertEqual(whole[2], "")
+        folded = [row.rstrip() for row in view_text(self.tree_app(24, export_run(staged=True)))]
+        self.assertLessEqual(len(folded), 24 // 3)
+        self.assertIn("    ▸ 2 more · 2 waiting", folded, "the busy stage's quiet lanes fold into one row")
+        self.assertTrue([row for row in folded if "⠋ Export button" in row and "running" in row], folded)
 
     def test_the_cap_is_tree_rows_whatever_runs(self) -> None:
         from _delegation_graphs import parallel
         from omh.tui.agent_view import TREE_ROWS
 
         # Nothing running: the non-DAG cap would be min(7, rows // 4), 6 at 24 rows and 7 at 40; the tree, twenty
-        # waiting lanes that fold no further, gets `TREE_ROWS` (a third of 24 rows, and no more on a taller screen),
-        # its last row the count of the rest.
+        # waiting lanes that fold no further, gets a third of the screen up to `TREE_ROWS` (no more on a taller
+        # screen), its last row the count of the rest.
         idle = parallel(20)
         for node in idle["nodes"][1:]:
             node.update(state="waiting", status="waiting")
         idle["edges"].append({"from": "l0", "to": "l1", "kind": "depends_on"})
         for rows in (24, 40, 72):
             with self.subTest(rows=rows):
+                cap = min(TREE_ROWS, rows // 3)
                 shown = view_text(self.tree_app(rows, idle))
-                self.assertEqual(len(shown), TREE_ROWS)
-                self.assertEqual(shown[-1].rstrip(), f"  +{20 - (TREE_ROWS - 2)} more · /dag")
-        self.assertEqual(len(view_text(self.tree_app(18, idle))), 18 // 3, "a short screen keeps its third")
+                self.assertEqual(len(shown), cap)
+                self.assertEqual(shown[-1].rstrip(), f"  +{20 - (cap - 2)} more · /dag")
+        self.assertEqual(TREE_ROWS, 16)
         # The same run's six-row tree without stages (one unnamed group draws no label row) fits whole at 24 rows.
         from _delegation_graphs import export_run
 

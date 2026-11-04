@@ -3,19 +3,25 @@
 The owner's ask of 2026-10-22 ("dag 돌면 프롬프트하단은 또 어떻게 뜸? 삼각형 및
 탭으로 연관 하위 공백으로 영역 표시"): each node a header row, what that child
 is doing indented under it, triangles that fold and unfold. The owner's of
-2026-11-04, a run waiting ("좀 정적이기도하고 하단에 영역이 너무많기도해서"):
-fewer rows, no blank row between layers, and what waits says what it waits
-on, its own row turning.
+2026-11-04, a run waiting ("좀 정적이기도하고 하단에 영역이 너무많기도해서"),
+then of an 8-row try ("너무없고 너무 촘촘해"): a small run whole with room
+between its groups, a big one folded, and what waits says what it waits on,
+its row moving.
 
 The rows, top to bottom: the graph's header (`delegation_view.header_text`);
-then each run of consecutive settled layers (every node done) as one row
-(`▸ ✓ layers 1–3 · 3 done`, its layers under it once opened); each other
-layer, a muted label row (`▾ layer 2 · 4 nodes · 2 running · 1 parked`), no
-blank row between two;
+then each layer, a muted label row (`▸ layer 2 · 4 nodes · 2 running · 1
+parked`; open with every node drawn, only how many it holds: `▾ layer 1 · 2
+nodes`, `▾ layer 4`), with one blank row between two layer groups when either
+is open (shut ones stack). A run of up to `SMALL_GRAPH_LANES` lanes (the
+transcript's own measure, `dag_block`) shows every layer open, and a done
+layer of one node on one dim row, its node on the layer's row (`✓ layer 2 ·
+<title>  model · accepted · ↓tokens`). In a bigger run each run of
+consecutive settled layers is one row (`▸ ✓ layers 1–3 · 3 done`, its layers
+under it once opened);
 under an open layer, one header row per node, four cells in: `▾` open or `▸`
 shut (none on a node with nothing under it), its state glyph in the state's
 colour (the spinner, on a running or parked node's row only, in the state's
-colour), its label in bold (a
+colour), its label in bold, a done one's muted (a
 running node's in the dag-ulw aura, its band moving through, where the aura
 moves: `aura.aura_text`), and
 `category · model:effort · status · ↓tokens` muted at the right edge (main's
@@ -57,11 +63,13 @@ graph no longer draws) close the tree as a group of their own, `other
 agents`, each a row like a node's, so the keys reach them as the agent list
 did.
 
-Folding. A layer holding a live node (running, stuck, failed, handed out or
-parked) opens, and so does the layer after it (the first unsettled layer
-when none is live); the others stay shut, and a run of settled layers is one
-shut row. Running, stuck, failed and parked nodes open, and so does a node
-with one of them under it (an extend round hangs under the done verification
+Folding. In a small run every layer opens. In a bigger one a layer holding a
+live node (running, stuck, failed, handed out or parked) opens, and so does
+the layer that comes next after it (the first one neither done nor live; the
+first unsettled layer when none is live), which fitting never shuts; the
+others stay shut, and a run of settled layers is one shut row. Running,
+stuck, failed and parked nodes open, and so does a node with one of them
+under it (an extend round hangs under the done verification
 that found the gap); done, waiting and handed-out ones stay shut. What the
 person folds or opens (`overrides`) wins. A tree
 taller than `cap` rows first shuts the quiet layers (no node running, stuck,
@@ -70,8 +78,9 @@ quiet nodes into one row at the layer's end (`▸ 12 more · 9 waiting · 3
 done`); then shuts the open nodes the person did not open, bottom up, except
 one with a running or failed node under it and a parked one. What still does
 not fit is cut: the done rows (a shut all-done layer, a run of settled
-layers, a `more` row of done nodes) go first, wherever they stand, so running and failed nodes keep the
-rows; then the rows from the bottom, the last row saying `+N more · /dag`.
+layers, a `more` row of done nodes) go first, wherever they stand, so
+running and failed nodes keep the rows; then the rows from the bottom, the
+last row saying `+N more · /dag`, with no blank row wasted next to it.
 While the tree has the keys (`selected`) the cut is the same, so Down moves
 no row, for as long as the highlight is among the rows shown (the last row
 then says `below`, or `↑↓ to browse` when it also counts a done row that
@@ -92,6 +101,7 @@ import time
 from typing import Any
 
 from .aura import aura_text
+from .dag_block import SMALL_GRAPH_LANES
 from .panels import DAG_INDENT, SPINNER_FRAMES, dag_style
 from .session_picker import pointer
 from .style import TRUECOLOR, Line, Span
@@ -125,7 +135,7 @@ TITLE_CAP = 52  # a node title's cells at most: a PR title's length, with room l
 SHORT_LABEL = 24  # a label narrower than this reads with its prompt's first clause after it (`node_title`)
 WORD_CUT_SHARE = 7  # tenths of a title's cells a cut at a word boundary keeps at least (`clamp_title`)
 FACT_SEPARATOR = " · "
-YIELDS = "yields"  # a row's mark for the cut: a shut layer, or a row of settled layers, whose every node is done
+BLANK, YIELDS = "blank", "yields"  # a row's mark for the cut: a blank row; a row whose every node is done
 OVERFLOW_HINT = " · /dag"  # the cut's count row without the keys: `/dag` draws the whole graph
 
 
@@ -142,6 +152,8 @@ class _Item:
     agent: Agent | None = None
     details: tuple[LogRow, ...] = ()
     settled: bool = False  # a layer with nodes, every one done, none of them left out by the graph reader's cap
+    small: bool = False  # a layer of a run of up to `SMALL_GRAPH_LANES` lanes: every layer and node shows
+    inline: bool = False  # a done layer's one node drawn on its layer's row (`✓ layer 2 · <title>`), or that layer
 
 
 @dataclass(frozen=True)
@@ -317,6 +329,14 @@ def _items(graph: Mapping[str, Any], roster: Roster, now: float, processes: Mapp
         layer.settled = bool(layer.kids) and not hidden.get(label) and all(
             each.state == "done" for each in _walk(layer.kids))
         layers.append(layer)
+    lanes = sum(1 for node in by_id.values() if node.get("kind") != "root")
+    hidden_nodes = graph.get("hidden_nodes") if isinstance(graph.get("hidden_nodes"), int) else 0
+    small = lanes + max(hidden_nodes, 0) <= SMALL_GRAPH_LANES
+    for layer in layers:
+        layer.small = small
+        if small and layer.settled and len(layer.kids) == 1 and not layer.kids[0].kids:
+            layer.inline = layer.kids[0].inline = True  # its one node on the layer's own row
+            layer.kids[0].origin = layer.label
     order = graph.get("group_order") if isinstance(graph.get("group_order"), list) else []
     drawn = {layer.label for layer in layers}
     emptied = [label for label in order if isinstance(label, str) and label not in drawn and hidden.get(label)]
@@ -344,7 +364,7 @@ def _walk(items: Sequence[_Item]) -> list[_Item]:
 
 
 def _foldable(item: _Item) -> bool:
-    return bool(item.kids or item.details)
+    return not (item.inline and item.node is not None) and bool(item.kids or item.details)
 
 
 def _active(item: _Item) -> bool:
@@ -362,8 +382,9 @@ def _labelled(layers: Sequence[_Item]) -> bool:
 
 
 def _settled_runs(layers: Sequence[_Item]) -> list[_Item]:
-    """Each run of consecutive settled layers as one item over them (`SETTLED_KEY` and its first layer's label)."""
-    if not _labelled(layers):
+    """Each run of consecutive settled layers as one item over them (`SETTLED_KEY` and its first layer's label); none
+    in a small run (`_Item.small`), which shows every layer."""
+    if not _labelled(layers) or any(layer.small for layer in layers):
         return []
     runs: list[_Item] = []
     for at, layer in enumerate(layers):
@@ -393,8 +414,10 @@ def _live_layer(layer: _Item) -> bool:
 
 
 def _opened_layers(layers: Sequence[_Item]) -> set[str]:
-    """The layers open by default: each holding a live node, the layer that comes next after them
-    (`_next_layers`), and the `other agents` group."""
+    """The layers open by default: every layer of a small run (`_Item.small`); else each holding a live node, the
+    layer that comes next after them (`_next_layers`); and the `other agents` group."""
+    if any(layer.small for layer in layers):
+        return {layer.key for layer in layers}
     return {layer.key for layer in layers if layer.key != OTHERS_KEY and _live_layer(layer)} | _next_layers(layers) | {
         OTHERS_KEY}
 
@@ -405,9 +428,10 @@ def _quiet(layer: _Item) -> list[_Item]:
 
 
 def _specs(layers: Sequence[_Item], expanded: Mapping[str, bool]) -> list[tuple[str, _Item | None, Any]]:
-    """The rows as (kind, item, detail) before they are drawn: `header`, `settled` (a run of settled layers, its
-    layers under it once opened), `layer`, `node`, `detail` (its log row), and `more` (its layer's folded nodes). No
-    blank row stands between two layers."""
+    """The rows as (kind, item, detail) before they are drawn: `header`, `blank`, `settled` (a run of settled
+    layers, its layers under it once opened), `layer`, `node`, `detail` (its log row), and `more` (its layer's folded
+    nodes). One blank row stands between two layer groups when either is open; shut layers, a run of settled layers
+    and inline done layers stack as one list."""
     specs: list[tuple[str, _Item | None, Any]] = [("header", None, None)]
     runs = {run.kids[0].key: run for run in _settled_runs(layers)}
     folded_runs: set[str] = set()
@@ -420,14 +444,28 @@ def _specs(layers: Sequence[_Item], expanded: Mapping[str, bool]) -> list[tuple[
                 node_specs(kid)
 
     labelled = _labelled(layers)
+    last: bool | None = None  # whether the group drawn last was open; None before the first
+
+    def group(open_: bool) -> None:
+        nonlocal last
+        if last is not None and (open_ or last):
+            specs.append(("blank", None, None))
+        last = open_
+
     for layer in layers:
         run = runs.get(layer.key)
         if run is not None:  # its row stays while it is open, so Left folds it again
+            group(False)
             specs.append(("settled", run, None))
             if not expanded.get(run.key):
                 folded_runs |= {each.key for each in run.kids}
         if layer.key in folded_runs:
             continue
+        if layer.inline:
+            group(False)
+            specs.append(("node", layer.kids[0], None))
+            continue
+        group(bool(expanded.get(layer.key)) or not labelled)
         if labelled:
             specs.append(("layer", layer, None))
         if expanded.get(layer.key) or not labelled:
@@ -529,9 +567,17 @@ class _Columns:
     widths: tuple[int, ...]  # each shown column's width
 
 
-def _prefix(item: _Item, expanded: bool, glyph: str) -> str:
-    lead = " " * (len(DAG_INDENT) + 2 + STEP * (item.depth - 1))
+def _lead(item: _Item, expanded: bool) -> tuple[str, str]:
+    """A node row's indent and triangle: an inline done layer's starts at the layer rows' indent, its `✓` where their
+    triangle stands."""
+    if item.inline:
+        return DAG_INDENT, ""
     triangle = (OPEN if expanded else SHUT) if _foldable(item) else LEAF
+    return " " * (len(DAG_INDENT) + 2 + STEP * (item.depth - 1)), triangle
+
+
+def _prefix(item: _Item, expanded: bool, glyph: str) -> str:
+    lead, triangle = _lead(item, expanded)
     origin = f"{item.origin}{FACT_SEPARATOR}" if item.origin else ""
     return f"{lead}{triangle}{glyph} {origin}"
 
@@ -572,9 +618,8 @@ def _node_row(
     glyph = SPINNER_FRAMES[frame % len(SPINNER_FRAMES)] if _spins(item) else UNICODE.glyphs.get(
         item.state, UNICODE.glyphs["unknown"])
     prefix = _prefix(item, expanded, glyph)
-    triangle = (OPEN if expanded else SHUT) if _foldable(item) else LEAF
+    lead, triangle = _lead(item, expanded)
     origin = f"{item.origin}{FACT_SEPARATOR}" if item.origin else ""
-    lead = " " * (len(DAG_INDENT) + 2 + STEP * (item.depth - 1))
     room = max(columns.title - cell_width(prefix), 1)
     title = clamp_title(node_title(node), room)
     parts = _figure_parts(node)
@@ -589,8 +634,9 @@ def _node_row(
         for at, text in enumerate(cells_shown)
     )
     pad = " " * max(room - cell_width(title), 0)
+    # A done node's title is quiet, as a done plan item's is: muted, not bold.
     shown = (aura_text(title, theme.aura, theme.aura_glint, aura) if aura is not None and item.state == "running"
-             else [Span(title, dag_style("title", theme))])
+             else [Span(title, theme.muted if item.state == "done" else dag_style("title", theme))])
     # A waiting row's slow dots, quieter than the spinner: one to three, a step a second, in the faint tone.
     dots = "·" * (beat % WAIT_DOTS + 1) if beat is not None and _waits(item) else ""
     return [
@@ -609,10 +655,12 @@ def _detail_row(item: _Item, row: LogRow, theme: Theme) -> list[Span]:
     return [*lead, Span(row.text, style)]
 
 
-def _layer_row(item: _Item, expanded: bool, theme: Theme, hidden: int = 0, beat: int | None = None) -> list[Span]:
-    """`▾ layer 2 · 4 nodes · 2 running`; `hidden` nodes the graph reader left out of the layer read as
-    `28 of 640 nodes`, so a capped graph's counts are not taken for the layer's. A shut layer whose nodes wait
-    carries the waiting dots (`beat`), as their own rows would."""
+def _layer_row(item: _Item, expanded: bool, theme: Theme, hidden: int = 0, beat: int | None = None,
+               whole: bool = False) -> list[Span]:
+    """`▸ layer 2 · 4 nodes · 2 running`; `hidden` nodes the graph reader left out of the layer read as
+    `28 of 640 nodes`, so a capped graph's counts are not taken for the layer's. An open layer whose every node has
+    its row (`whole`) says only how many it holds (`▾ layer 1 · 2 nodes`, `▾ layer 4`): the rows under it say the
+    rest. A shut layer whose nodes wait carries the waiting dots (`beat`), as their own rows would."""
     counts: dict[str, int] = {}
     for kid in item.kids:
         word = "running" if kid.state in ("running", "stuck") else "parked" if _parked(kid.node) else kid.state
@@ -624,6 +672,8 @@ def _layer_row(item: _Item, expanded: bool, theme: Theme, hidden: int = 0, beat:
     said = [f"{shown} {noun}{'' if total == 1 else 's'}"]
     said += [f"{counts[word]:,} {word}" for word in ("running", "parked", "failed", "waiting", "done")
              if counts.get(word)]
+    if whole and expanded and not hidden and item.key != OTHERS_KEY:
+        said = said[:1] if total > 1 else []
     dots = "·" * (beat % WAIT_DOTS + 1) if beat is not None and not expanded and any(
         _waits(kid) for kid in _walk(item.kids)) else ""
     return [Span(DAG_INDENT), Span(OPEN if expanded else SHUT, theme.muted),
@@ -713,13 +763,14 @@ def tree_lines(
     for kind, item, detail in specs:
         if kind == "header":
             spans = [Span(DAG_INDENT), Span(header_text(graph), dag_style("header", theme))]
-        elif item is None:
+        elif kind == "blank" or item is None:
             spans = []
         elif kind == "settled":
             spans = _settled_row(item, expanded[item.key], theme)
         elif kind == "layer":
             hidden = hidden_by_group.get(item.label, 0)
-            spans = _layer_row(item, expanded[item.key], theme, hidden if isinstance(hidden, int) else 0, beat)
+            whole = expanded.get(MORE_KEY + item.label, True)  # no quiet nodes folded into a `more` row
+            spans = _layer_row(item, expanded[item.key], theme, hidden if isinstance(hidden, int) else 0, beat, whole)
         elif kind == "node":
             spans = _node_row(item, expanded[item.key], width, theme, frame, columns, aura, beat)
         elif kind == "more":
@@ -737,7 +788,8 @@ def tree_lines(
         done = kind == "settled" and item is not None and not expanded[item.key] or kind == "layer" \
             and item is not None and not expanded[item.key] and all(each.state == "done" for each in _walk(item.kids)) \
             or kind == "more" and all(each.state == "done" for each in _walk(detail))
-        rows.append((truncate_line(line, width), key, _covers(kind, item, expanded, detail), YIELDS if done else ""))
+        mark = BLANK if kind == "blank" else YIELDS if done else ""
+        rows.append((truncate_line(line, width), key, _covers(kind, item, expanded, detail), mark))
     every = _walk(layers)
     order = tuple(key for _line, key, _count, _mark in rows if key)
     shown = [item for item in every if item.node is not None and item.key in order]
@@ -764,7 +816,7 @@ def tree_lines(
                                                    clocks=any(_clocked(item) for item in drawn))
 
 
-# A row as `_window` cuts it: (line, the key it selects or "", the nodes it stands for, `YIELDS` or "").
+# A row as `_window` cuts it: (line, the key it selects or "", the nodes it stands for, `BLANK`, `YIELDS` or "").
 _Row = tuple[Line, str, int, str]
 
 
@@ -772,14 +824,36 @@ def _counted(rows: Sequence[_Row]) -> int:
     return sum(count for _line, _key, count, _mark in rows)
 
 
+def _tidy(rows: list[_Row]) -> list[_Row]:
+    """`rows` without a blank row that sets nothing apart: one right under the header, after another, or last."""
+    kept: list[_Row] = []
+    for at, row in enumerate(rows):
+        if row[3] == BLANK and (len(kept) == 1 or kept[-1][3] == BLANK or at == len(rows) - 1):
+            continue
+        kept.append(row)
+    return kept
+
+
+def _first(rows: list[_Row], count: int) -> list[_Row]:
+    """The first `count` rows, a blank one last giving way to the row after it: no blank row stands over a cut."""
+    shown = rows[:count]
+    return shown[:-1] + [rows[count]] if shown[-1][3] == BLANK and len(rows) > count else shown
+
+
+def _last(rows: list[_Row], count: int) -> list[_Row]:
+    """The last `count` rows, a blank one first giving way to the row before it."""
+    shown = rows[len(rows) - count :]
+    return [rows[len(rows) - count - 1]] + shown[1:] if shown[0][3] == BLANK and len(rows) > count else shown
+
+
 def _window(rows: list[_Row], cap: int, selected: str | None, more: Callable[..., Line]) -> list[tuple[Line, str]]:
     """`rows` in `cap` rows, each with the key it selects: all of them when they fit. Else the done rows (a shut
     all-done layer, a run of settled layers, a `more` row of done nodes) yield first, wherever they stand, with the
     keys or without (the highlighted row itself never does), so running and failed nodes keep the rows and Down moves
-    nothing. Then, without
-    the keys, the rows from the bottom, a last row counting what is cut (`+N more · /dag`); with them, the same rows
-    while they show the highlight, else the rows around it between counts of what is above and below. A count that
-    holds a yielded row from the other side of it, or from between the rows shown, says `↑↓ to browse`."""
+    nothing. Then, without the keys, the rows from the bottom, a last row counting what is cut (`+N more · /dag`);
+    with them, the same rows while they show the highlight, else the rows around it between counts of what is above
+    and below. A count that holds a yielded row from the other side of it, or from between the rows shown, says
+    `↑↓ to browse`. No blank row stands next to a count row: the next row with something on it takes its place."""
 
     def drawn(cut: Sequence[_Row]) -> list[tuple[Line, str]]:
         return [(line, key) for line, key, _count, _mark in cut]
@@ -790,9 +864,10 @@ def _window(rows: list[_Row], cap: int, selected: str | None, more: Callable[...
         return drawn(rows[:cap])
     kept = list(rows)
     for row in [row for row in rows if row[3] == YIELDS and row[1] != selected]:
-        if len(kept) < cap:  # a row stays for the count
+        if len(_tidy(kept)) < cap:  # a row stays for the count
             break
         kept = [each for each in kept if each is not row]
+    kept = _tidy(kept)
     total, at = _counted(rows), {id(row): place for place, row in enumerate(rows)}
 
     def after(row: _Row) -> int:
@@ -802,7 +877,7 @@ def _window(rows: list[_Row], cap: int, selected: str | None, more: Callable[...
     def before(row: _Row) -> int:
         return sum(each[2] for each in rows[: at[id(row)]])
 
-    first = kept[: cap - 1]
+    first = _first(kept, cap - 1)
     if selected is None or cap < 3 or any(row[1] == selected for row in first):  # under 3 rows no highlight fits
         hidden = total - _counted(first)
         below = " below" if hidden == after(first[-1]) else " · ↑↓ to browse"
@@ -811,8 +886,14 @@ def _window(rows: list[_Row], cap: int, selected: str | None, more: Callable[...
     index = next((place for place, row in enumerate(kept) if row[1] == selected), 0)
     body = cap - 2
     start = min(max(index - body // 2, 0), len(kept) - body)
+    # A blank row is never the highlight's: one at either end of the window gives way to the row past the other end
+    # (at the tree's end that is the last rows' window, below).
+    if kept[start][3] == BLANK and start + body < len(kept):
+        start += 1
+    elif kept[start + body - 1][3] == BLANK and start > 1 and index < start + body - 1:
+        start -= 1
     if start + body >= len(kept):
-        shown = kept[len(kept) - (cap - 1) :]
+        shown = _last(kept, cap - 1)
         hidden = total - _counted(shown)
         return [(more(hidden, " above" if hidden == before(shown[0]) else " · ↑↓ to browse"), "")] + drawn(shown)
     shown = kept[start : start + body]

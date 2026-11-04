@@ -1,19 +1,22 @@
-"""A dag-ulw run waiting, under the composer (the owner, 2026-11-04: "좀 정적이기도하고 하단에 영역이 너무많기도해서").
+"""A dag-ulw run waiting, under the composer (the owner, 2026-11-04: "좀 정적이기도하고 하단에 영역이 너무많기도해서",
+then of the 8-row try "지금은 너무없고 너무 촘촘해": too little shown, too cramped).
 
-The tree under the composer is at most `agent_view.TREE_ROWS` rows: a run of
-settled layers is one `✓ layers 1–3 · 3 done` row, only the layers with a
-live node and the one after open, no blank row stands between two layers,
-and what does not fit is one `+N more · /dag` row. A parked node is a waiting
-one (it was drawn `?` and counted `unknown`), with its time since it parked,
-what its park recorded it waits on, and the spinner, which turns only on a
-running or parked node's row. An `unspecified-*` or unknown category draws no
-cell. A plan declared while the run was open (`todo.dag_run`, stamped by
-`omh_todo set` and the `todo_list` projection) is one line over that run's
-tree; any other plan is drawn as before.
+A run of up to `dag_block.SMALL_GRAPH_LANES` lanes shows whole: every layer
+and node, a done one-node layer on one dim row (`✓ layer 2 · <title>`), one
+blank row between layer groups, open layer rows without the counts their
+node rows say. A bigger run folds its settled layers into one `✓ layers 1–3`
+row and opens the live layers and the one that comes next. The tree is at
+most `agent_view.TREE_ROWS` rows (and a third of the screen); what does not
+fit is one `+N more · /dag` row. A parked node is a waiting one (it was drawn
+`?` and counted `unknown`), counted `parked`, with its time since it parked,
+what its park recorded it waits on, and the spinner. Waiting rows carry slow
+dots; times count on. An `unspecified-*` or unknown category draws no cell. A
+plan declared while the run was open (`todo.dag_run`) is one line over that
+run's tree; any other plan is drawn as before.
 
-The graph is a dag run record's, as `delegation_graph._dag_nodes` builds it:
-the owner's case, five layers, three done, one parked on a background
-process, two waiting.
+The graphs are dag run records', as `delegation_graph._dag_nodes` builds
+them: the owner's screenshots (`screenshot_run`), and a five-layer run with
+the parked node in layer 4 (`owners_run`).
 """
 
 from __future__ import annotations
@@ -91,23 +94,65 @@ def until() -> str:
     return time.strftime("%H:%M", time.localtime(WAKE_AT))
 
 
-class OwnersCaseTests(unittest.TestCase):
-    """The owner's run in `TREE_ROWS` rows: the done layers one row, the parked node live, nothing blank."""
+def screenshot_run() -> dict:
+    """The owner's screenshots: layer 1 the parked baseline beside the done hook, layers 2 and 3 done, the closing
+    gate in layer 4 and the review in layer 5, each waiting on 1 lane."""
+    nodes = [root(SONNET, "high")]
+    baseline = lane(node_id("baseline"), "기준선 전체 검사 (변경 전)", "quick", SONNET, "medium", "waiting", order=1,
+                    group="layer 1", status="parked")
+    baseline.update(parked=True, parked_at=PARKED_AT, elapsed_seconds=87.0, wake_at=WAKE_AT, wait_handle=PROC,
+                    output_tokens=4300)
+    nodes.append(baseline)
+    for order, (key, title, layer) in enumerate((("t1", "웹 도구 영수증 자동 기록 (훅)", 1),
+                                                 ("t2", "omh research receipts verify 명령", 2),
+                                                 ("t3", "리서치 스킬 지침 + 재생성", 3)), start=2):
+        nodes.append(lane(node_id(key), title, "unspecified-high", SONNET, "medium", "done", elapsed=60,
+                          order=order, group=f"layer {layer}", status="accepted"))
+    nodes.append(lane(node_id("gate"), "닫는 게이트: 전체 검사 + 스모크", "unspecified-low", "?", "", "waiting", order=5,
+                      group="layer 4", waits=1))
+    nodes.append(lane(node_id("review"), "코드 리뷰", "review", "?", "", "waiting", order=6, group="layer 5", waits=1))
+    edges = [("root", node_id("baseline"), "dispatch"), ("root", node_id("t1"), "dispatch"),
+             (node_id("t1"), node_id("t2"), "depends_on"), (node_id("t2"), node_id("t3"), "depends_on"),
+             (node_id("baseline"), node_id("gate"), "depends_on"), (node_id("t3"), node_id("gate"), "depends_on"),
+             (node_id("gate"), node_id("review"), "depends_on")]
+    built = graph(nodes, edges, name="인용 영수증 (PR A)", source="dag")
+    built["dag_open"] = True
+    return built
 
-    def test_the_waiting_run_reads_in_eight_rows(self) -> None:
+
+class OwnersCaseTests(unittest.TestCase):
+    """The owner's run whole at 150x42: every layer and node, the done ones dim on one row each, blank rows between
+    groups, the parked node live."""
+
+    def test_the_owners_run_reads_whole_in_fourteen_rows(self) -> None:
         for busy in (False, True):
             with self.subTest(busy=busy):
-                app, _client = waiting_app(busy=busy)
+                app, _client = waiting_app(screenshot_run(), rows=42, cols=150, busy=busy)
                 self.assertEqual(rows_of(app), [
-                    "  DAG · citation receipts (PR A) · 6 nodes · 6 edges · 1 parked · 2 waiting · 3 done",
-                    "  ▸ ✓ layers 1–3 · 3 done",
-                    "  ▾ layer 4 · 1 node · 1 parked",
-                    "    ▾ ⠋ Full baseline check (before change)  quick · sonnet-5-5:medium · parked 1m 27s   · ↓4.3k",
+                    "  DAG · 인용 영수증 (PR A) · 6 nodes · 5 edges · 1 parked · 2 waiting · 3 done",
+                    "  ▾ layer 1 · 2 nodes",
+                    "    ▾ ⠋ 기준선 전체 검사 (변경 전)               quick  · sonnet-5-5:medium · parked 1m 27s   · ↓4.3k",
                     f"        › waits on {CALL} · until {until()}",
-                    "  ▾ layer 5 · 2 nodes · 2 waiting",
-                    "      · Wire the receipts check                                          waits on 1 lane ·",
-                    "      · Verify the run                                                   waits on 1 lane ·",
+                    "      ✓ 웹 도구 영수증 자동 기록 (훅)                     sonnet-5-5:medium · accepted 1m 0s",
+                    "",
+                    "  ✓ layer 2 · omh research receipts verify 명령           sonnet-5-5:medium · accepted 1m 0s",
+                    "  ✓ layer 3 · 리서치 스킬 지침 + 재생성                   sonnet-5-5:medium · accepted 1m 0s",
+                    "",
+                    "  ▾ layer 4",
+                    "      · 닫는 게이트: 전체 검사 + 스모크                                       waits on 1 lane ·",
+                    "",
+                    "  ▾ layer 5",
+                    "      · 코드 리뷰                                review                     · waits on 1 lane ·",
                 ])
+
+    def test_a_done_layers_row_is_quiet(self) -> None:
+        from omh.tui.dag_tree import tree_lines
+
+        app, _client = waiting_app(screenshot_run(), rows=42, cols=150)
+        lines, _state = tree_lines(screenshot_run(), app.roster, 150, 16, app.theme, 0, {}, None)
+        row = next(line for line in lines if "omh research receipts verify" in "".join(span.text for span in line))
+        title = next(span for span in row if "omh research" in span.text)
+        self.assertEqual((title.style.fg, title.style.bold), (app.theme.muted.fg, app.theme.muted.bold))
 
     def test_the_parked_node_is_not_unknown(self) -> None:
         app, _client = waiting_app()
@@ -140,50 +185,12 @@ class OwnersCaseTests(unittest.TestCase):
         self.assertEqual(_figure_parts({"category": "deep", "model": "glm-5.3", "state": "done"})[0], "deep")
 
 
-def screenshot_run() -> dict:
-    """The owner's screenshots: layer 1 the parked baseline beside the done hook, layers 2 and 3 done, the closing
-    gate in layer 4 and the review in layer 5, each waiting on 1 lane."""
-    nodes = [root(SONNET, "high")]
-    baseline = lane(node_id("baseline"), "기준선 전체 검사 (변경 전)", "quick", SONNET, "medium", "waiting", order=1,
-                    group="layer 1", status="parked")
-    baseline.update(parked=True, parked_at=PARKED_AT, elapsed_seconds=87.0, wake_at=WAKE_AT, wait_handle=PROC,
-                    output_tokens=4300)
-    nodes.append(baseline)
-    for order, (key, title, layer) in enumerate((("t1", "웹 도구 영수증 자동 기록 (훅)", 1),
-                                                 ("t2", "omh research receipts verify 명령", 2),
-                                                 ("t3", "리서치 스킬 지침 + 재생성", 3)), start=2):
-        nodes.append(lane(node_id(key), title, "unspecified-high", SONNET, "medium", "done", elapsed=60,
-                          order=order, group=f"layer {layer}", status="accepted"))
-    nodes.append(lane(node_id("gate"), "닫는 게이트: 전체 검사 + 스모크", "unspecified-low", "?", "", "waiting", order=5,
-                      group="layer 4", waits=1))
-    nodes.append(lane(node_id("review"), "코드 리뷰", "review", "?", "", "waiting", order=6, group="layer 5", waits=1))
-    edges = [("root", node_id("baseline"), "dispatch"), ("root", node_id("t1"), "dispatch"),
-             (node_id("t1"), node_id("t2"), "depends_on"), (node_id("t2"), node_id("t3"), "depends_on"),
-             (node_id("baseline"), node_id("gate"), "depends_on"), (node_id("t3"), node_id("gate"), "depends_on"),
-             (node_id("gate"), node_id("review"), "depends_on")]
-    built = graph(nodes, edges, name="인용 영수증 (PR A)", source="dag")
-    built["dag_open"] = True
-    return built
-
-
 class FoldTests(unittest.TestCase):
-    def test_the_layer_that_comes_next_opens_past_the_done_layers_within_the_cap(self) -> None:
-        from omh.tui.agent_view import TREE_ROWS
-
-        app, _client = waiting_app(screenshot_run(), cols=150)
-        shown = [re.sub(r" ·{1,3}$", "", row) for row in rows_of(app)]
-        self.assertLessEqual(len(shown), TREE_ROWS)
-        self.assertEqual(shown[0], "  DAG · 인용 영수증 (PR A) · 6 nodes · 5 edges · 1 parked · 2 waiting · 3 done")
-        self.assertEqual(shown[-1], "  +3 more · /dag", "the done layers' row gave way first, then layer 5")
-        self.assertIn("  ▾ layer 4 · 1 node · 1 waiting", shown, "layer 2 and 3 are done: layer 4 comes next")
-        self.assertTrue([row for row in shown if row.startswith("      · 닫는 게이트: 전체 검사 + 스모크")], shown)
-        self.assertFalse([row for row in shown if "코드 리뷰" in row], "layer 5 stays shut or is counted")
-        self.assertTrue([row for row in rows_of(app) if "닫는 게이트" in row and row.endswith("·")], "and it moves")
-
-    """Settled layers fold into one row; only the live layers and the next one open; no blank rows; a cap."""
+    """A small run shows whole; a big one folds its settled layers and opens the live layers and the next."""
 
     def big(self) -> dict:
-        """The owner's run with eight more nodes done in layer 2 and twelve waiting nodes in three layers after it."""
+        """The owner's run with eight more nodes done in layer 2 and twelve waiting nodes in three layers after it:
+        26 lanes, past `SMALL_GRAPH_LANES`."""
         built = owners_run()
         for number in range(8):
             built["nodes"].insert(3, lane(node_id(f"pre-{number}"), f"Prep {number}", "quick", SONNET, "low", "done",
@@ -195,25 +202,37 @@ class FoldTests(unittest.TestCase):
             built["edges"].append({"from": node_id("t4"), "to": node_id(f"late-{number}"), "kind": "depends_on"})
         return built
 
-    def test_a_big_run_is_tree_rows_with_its_live_node_and_a_count_of_the_rest(self) -> None:
+    def test_a_small_run_shows_every_layer_and_node_at_any_size_that_holds_it(self) -> None:
+        for rows in (42, 50, 72):
+            with self.subTest(rows=rows):
+                app, _client = waiting_app(screenshot_run(), rows=rows, cols=150)
+                shown = rows_of(app)
+                self.assertFalse([row for row in shown if "more" in row], shown)
+                for title in ("기준선 전체 검사", "웹 도구 영수증", "omh research receipts verify", "리서치 스킬 지침",
+                              "닫는 게이트", "코드 리뷰"):
+                    self.assertTrue([row for row in shown if title in row], title)
+
+    def test_a_big_run_folds_its_done_layers_and_keeps_its_live_node_in_the_cap(self) -> None:
         from omh.tui.agent_view import TREE_ROWS
 
         for rows in (40, 50, 72):
             with self.subTest(rows=rows):
                 app, _client = waiting_app(self.big(), rows=rows)
                 shown = rows_of(app)
-                self.assertEqual(len(shown), TREE_ROWS, shown)
+                self.assertLessEqual(len(shown), min(TREE_ROWS, rows // 3), shown)
                 self.assertTrue([row for row in shown if "▾ ⠋ Full baseline check" in row], shown)
-                self.assertIn(f"        › waits on {CALL} · until {until()}", shown,
-                              "the parked node keeps its wait row; the cut takes the rows after it")
-                self.assertEqual(shown[-1], "  +23 more · /dag", "the 11 done nodes gave way first, then layers 6–8")
-                self.assertIn("  ▾ layer 5 · 2 nodes · 2 waiting", [re.sub(r" ·{1,3}$", "", row) for row in shown],
+                self.assertIn(f"        › waits on {CALL} · until {until()}", shown)
+                self.assertIn("  ▾ layer 5 · 2 nodes", [re.sub(r" ·{1,3}$", "", row) for row in shown],
                               "the layer that comes next stays open")
-                self.assertNotIn("", shown, "no blank row")
+                self.assertFalse([row for row in shown if "Prep" in row], "the done layers are folded")
+        app, _client = waiting_app(self.big(), rows=72)
+        self.assertIn("  ▸ ✓ layers 1–3 · 11 done", rows_of(app))
+        app, _client = waiting_app(self.big(), rows=40)
+        self.assertEqual(rows_of(app)[-1], "  +11 more · /dag", "at 13 rows the done layers' row gave way first")
 
     def test_a_row_of_done_nodes_gives_way_before_the_parked_nodes_wait(self) -> None:
         built = owners_run()
-        for number in range(6):  # layer 4 also holds two running nodes and six done ones
+        for number in range(6):  # layer 4 also holds two running nodes and six done ones: 14 lanes
             built["nodes"].append(lane(node_id(f"done-{number}"), f"Done step {number}", "quick", SONNET, "low",
                                        "done", elapsed=30, order=50 + number, group="layer 4", status="accepted"))
         for number in range(2):
@@ -221,37 +240,53 @@ class FoldTests(unittest.TestCase):
                                        "running", elapsed=30, order=60 + number, group="layer 4"))
         for key in [f"done-{number}" for number in range(6)] + ["run-0", "run-1"]:
             built["edges"].append({"from": node_id("t3"), "to": node_id(key), "kind": "depends_on"})
-        app, _client = waiting_app(built)
+        app, _client = waiting_app(built, rows=33)  # a cap of 11
         shown = rows_of(app)
         self.assertIn(f"        › waits on {CALL} · until {until()}", shown)
         self.assertFalse([row for row in shown if "6 more · 6 done" in row], shown)
-        self.assertEqual(shown[-1], "  +11 more · /dag", "the 3 done layers, the 6 done nodes, layer 5's 2")
+        self.assertEqual(shown[-1], "  +9 more · /dag", "the 3 done layers and the 6 done nodes")
+
+    def test_in_a_big_run_the_layer_that_comes_next_is_past_the_done_ones(self) -> None:
+        built = screenshot_run()  # the owner's layout, eight more done nodes in layer 2: 14 lanes, a big run
+        for number in range(8):
+            built["nodes"].append(lane(node_id(f"pre-{number}"), f"Prep {number}", "quick", SONNET, "low", "done",
+                                       elapsed=30, order=20 + number, group="layer 2", status="accepted"))
+            built["edges"].append({"from": node_id("t1"), "to": node_id(f"pre-{number}"), "kind": "depends_on"})
+        app, _client = waiting_app(built, rows=72, cols=150)
+        shown = [re.sub(r" ·{1,3}$", "", row) for row in rows_of(app)]
+        self.assertIn("  ▸ ✓ layers 2–3 · 10 done", shown)
+        self.assertIn("  ▾ layer 4", shown, "layers 2 and 3 are done: layer 4 comes next")
+        self.assertTrue([row for row in shown if row.startswith("      · 닫는 게이트")], shown)
+        self.assertIn("  ▸ layer 5 · 1 node · 1 waiting", shown)
+
+    def test_a_shut_layer_counts_its_parked_node_as_parked(self) -> None:
+        app, _client = waiting_app()
+        self.assertIn("  ▸ layer 4 · 1 node · 1 parked", tree_text(owners_run(), app, {"layer:layer 4": False}))
 
     def test_layers_past_the_one_after_a_live_layer_stay_shut(self) -> None:
         app, _client = waiting_app(self.big(), rows=72, cols=160)
         with patch("omh.tui.agent_view.TREE_ROWS", 40):  # room for every row the defaults open
             shown = [re.sub(r" ·{1,3}$", "", row) for row in rows_of(app)]  # the waiting dots left off
-        self.assertIn("  ▾ layer 5 · 2 nodes · 2 waiting", shown)
+        self.assertIn("  ▾ layer 5 · 2 nodes", shown)
         self.assertIn("  ▸ layer 6 · 4 nodes · 4 waiting", shown)
         self.assertIn("  ▸ layer 8 · 4 nodes · 4 waiting", shown)
 
     def test_the_done_row_opens_to_its_layers_and_left_folds_it_again(self) -> None:
         from omh.tui.keys import DOWN, LEFT, RIGHT, UP
 
-        app, _client = waiting_app()
+        app, _client = waiting_app(self.big(), rows=72)
         app._on_input(Key(DOWN))
-        for _ in range(4):
+        for _ in range(10):
             app._on_input(Key(UP))
         self.assertEqual(app.tree_selected, "settled:layer 1")
         app._on_input(Key(RIGHT))
         self.assertEqual(app.tree_selected, "layer:layer 1", "the first of its layers is highlighted")
-        opened = rows_of(app)
-        self.assertIn("  ▸ layer 1 · 1 node · 1 done", [re.sub(r"^.❯?\s*", "  ", row) if row.startswith("❯") else row
-                                                      for row in opened])
+        opened = [row.replace("❯", " ", 1) for row in rows_of(app)]
+        self.assertIn("  ▸ layer 1 · 1 node · 1 done", [re.sub(r" ·{1,3}$", "", row) for row in opened])
         app._on_input(Key(LEFT))  # a shut layer: Left goes to its parent, the done row
         self.assertEqual(app.tree_selected, "settled:layer 1")
         app._on_input(Key(LEFT))
-        self.assertIn("▸ ✓ layers 1–3 · 3 done", " ".join(rows_of(app)))
+        self.assertIn("▸ ✓ layers 1–3 · 11 done", " ".join(rows_of(app)))
 
 
 def tree_text(built: dict, app, folds: dict | None = None, **live: object) -> list[str]:
@@ -277,7 +312,7 @@ class MotionTests(unittest.TestCase):
         self.assertEqual([steps[2][at][-4:] for at in moved], [" ···", " ···"], "one to three dots")
         shut = tree_text(built, app, {"layer:layer 5": False}, beat=1)
         self.assertIn("  ▸ layer 5 · 2 nodes · 2 waiting ··", shut, "a shut layer of waiting nodes moves too")
-        self.assertIn("  ▸ ✓ layers 1–3 · 3 done", shut, "the done layers' row stays still")
+        self.assertFalse([at for at in moved if steps[0][at].startswith("  ✓")], "done rows stay still")
 
     def test_a_run_that_is_not_alive_draws_no_dots(self) -> None:
         app, _client = waiting_app()
