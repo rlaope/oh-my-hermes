@@ -266,7 +266,7 @@ class StoreListingTests(unittest.TestCase):
         )
 
     def test_the_listing_of_a_case_insensitive_flavour_uses_str_lower_not_normcase_or_casefold(self) -> None:
-        """Runs `_json_candidates` itself with `os.path.normcase` stubbed to fold only ASCII, as a case-insensitive flavour does."""
+        """Runs `_json_candidates` itself with `os.path.normcase` stubbed to an ASCII-only fold, which differs from str.lower on these names."""
 
         def ascii_fold(name: str) -> str:
             return "".join(char.lower() if char.isascii() else char for char in name)

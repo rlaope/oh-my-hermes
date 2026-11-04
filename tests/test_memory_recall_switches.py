@@ -287,8 +287,13 @@ class ToolRecallProfileHomeTests(_Switches):
         with patch.dict(os.environ, {"HERMES_HOME": str(launch)}):
             self.on("tui", "tui-consolidation-profile")
             status = self.tool("consolidation", "tui-consolidation-profile")
-            # No lens: the process home, which holds no brief.
+            # No lens: the process home. It holds no brief yet, then one of its own.
             self.assertNotIn("reasons", self.tool("consolidation", "no-such-session"))
+            own = consolidation_path(self.home, launch)
+            own.parent.mkdir(parents=True, exist_ok=True)
+            own.write_text(json.dumps({**brief, "reasons": ["process_brief"]}), encoding="utf-8", newline="\n")
+            self.assertEqual(self.tool("consolidation", "no-such-session")["reasons"], ["process_brief"])
+            self.assertEqual(self.tool("consolidation", "tui-consolidation-profile")["reasons"], ["profile_brief"])
         self.assertEqual(status["reasons"], ["profile_brief"], status)
 
     def test_a_profile_home_that_is_not_an_absolute_path_is_not_read(self) -> None:

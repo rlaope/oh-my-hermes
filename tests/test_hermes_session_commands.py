@@ -1072,6 +1072,7 @@ class PersonRequestTextTest(unittest.TestCase):
         # text, never their other words. What OMH hands on is the whole turn.
         for name, message, routed in (
             ("mid message", "look at this:\n" + _BUSY_ORIGIN + "and fix it", "look at this:\nand fix it"),
+            ("two blocks", "one\n" + _BUSY_ORIGIN + "two\n" + _BUSY_ORIGIN + "three", "one\ntwo\nthree"),
             ("inside a fence", "see\n```\n" + _BUSY_ORIGIN + "```\nfix it", "see\n```\n```\nfix it"),
         ):
             with self.subTest(name):
