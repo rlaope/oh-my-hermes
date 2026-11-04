@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The Windows loader probe keeps `LOCALAPPDATA`.** The isolated probe that
+  `omh doctor` runs dropped it, so the Hermes launcher could not find the home
+  directory and doctor reported `hermes_runtime_command_failed` although
+  `hermes --print-runtime-command` worked in a normal shell. The variable is
+  forwarded only when the parent has it. Carries #2548 by @DefinitelyNotSpammy.
 - **The `omh_memory` consolidation status reads the session's own profile.**
   Like tool recall, `demote` and recall origins, it now takes the Hermes
   profile the memory provider was started with from the session lens, not
