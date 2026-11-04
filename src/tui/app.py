@@ -702,6 +702,9 @@ AUTO_CONTINUE_ESCAPED = "Esc"
 AUTO_CONTINUE_DRAFTED = "you typed a draft"
 AUTO_CONTINUE_QUEUED = "a line is queued"
 AUTO_CONTINUE_ASKED = "a question or picker is open"
+AUTO_CONTINUE_SENT = "you sent a line"
+AUTO_CONTINUE_LEFT = "the session changed"
+AUTO_CONTINUE_UNSENT = "it did not go out"
 RESPAWNED_WHY = "The Hermes gateway was restarted"
 # Gateway crash recovery, bounded as Hermes' own TUI bounds it (ui-tui `app/gatewayRecovery.ts`): at most
 # RESPAWN_LIMIT respawns in a sliding RESPAWN_WINDOW_SECONDS, each resuming the session that was open. Past that,
@@ -1958,6 +1961,10 @@ class App(ModesMixin, AgentViewMixin):
         # person's own last prompt (AUTO_CONTINUE_LIMIT).
         self.auto_continue: tuple[str, float] | None = None
         self.auto_continues = 0
+        # The running turn is one this TUI submitted (a prompt was out at its `message.start`): only such a turn goes on
+        # by itself. Another client's Stop on a shared gateway, or Hermes' voice barge-in, ends one the TUI never sent.
+        self.turn_ours = False
+        self.auto_continue_out = False  # the TUI's own `continue` went to be sent and its turn has not started yet
         self.lifecycle_seen = 0  # the live session's `message.start` and `message.complete` events, counted
         self.inbound_at = 0.0  # when the gateway last sent anything (`GATEWAY_SILENCE_SECONDS`)
         self.authority_epoch: object = None  # the shared gateway's epoch the last create or resume answered
@@ -2397,7 +2404,7 @@ class App(ModesMixin, AgentViewMixin):
     def _adopt_session(self, result: Mapping[str, Any], fallback_stored: str = "") -> None:
         if self.starting is not None and self.starting[2] != as_text(result.get("session_id")):
             # A prompt held for the default check was typed in the session being left: back to the draft.
-            self._give_back(self.starting[0], self.starting_images)
+            self._give_back_prompt(self.starting[0], self.starting_images)
             self.starting, self.starting_images = None, ()
         self.sid = as_text(result.get("session_id"))
         self.shared_gateway = bool(as_text(result.get("subscription_id")))
@@ -2441,6 +2448,9 @@ class App(ModesMixin, AgentViewMixin):
         self._take_skills(info if isinstance(info, dict) else {})
         self._take_title(info if isinstance(info, dict) else {})
         self._adopt_stored(as_text(result.get("stored_session_id")) or fallback_stored)
+        self.turn_ours = self.auto_continue_out = False  # about the session being left; a reconnect carries its own
+        if self.auto_continue is not None and self.auto_continue[0] != (self.stored_id or self.sid):
+            self._hold_auto_continue(AUTO_CONTINUE_LEFT)  # `/new`, `/resume`, a new stored id: not that turn's session
 
     def _adopt_stored(self, stored: str) -> None:
         if not stored or stored == self.stored_id:
@@ -2592,12 +2602,12 @@ class App(ModesMixin, AgentViewMixin):
         self._take_input(data)
         if self.exit_code is not None:
             return
-        self._auto_continue_when_due()
         self._drain_gateway()
         if self.respawn_reason:
             self._respawn_gateway()
         if self.exit_code is not None:
             return
+        self._auto_continue_when_due()  # after the gateway's news: a turn started meanwhile drops it
         self._expire_calls()
         self._expire_notification()
         self._expire_escape()
@@ -2659,7 +2669,7 @@ class App(ModesMixin, AgentViewMixin):
             due.append(self.ambient_at + WALLPAPER_TICK_SECONDS)
         if self.path_due is not None and self.sid:
             due.append(self.path_due)
-        if self.auto_continue is not None:
+        if self.auto_continue is not None and not self.decoder.holding:  # a held Esc has its own deadline above
             due.append(self.auto_continue[1])
         tail = self._tail_due_at()
         if tail is not None:
@@ -2933,8 +2943,8 @@ class App(ModesMixin, AgentViewMixin):
         # On a shared gateway the turn may run on without this child: it stays open until the resume says (`running`).
         kept = busy and self.shared_gateway
         # What the kept turn carries over a reconnect: its clock, and a stop the person already asked for.
-        epoch, since, waited, stopping = self.authority_epoch, self.busy_since, self.turn_waited, (
-            self.interrupting, self.stop_asked)
+        epoch, since, waited, stopping, ours = self.authority_epoch, self.busy_since, self.turn_waited, (
+            self.interrupting, self.stop_asked), self.turn_ours
 
         def lose(why: str) -> None:
             if kept:  # the live block goes to the scrollback as it stands
@@ -2954,7 +2964,7 @@ class App(ModesMixin, AgentViewMixin):
         # old one's admission goes with it, as its running turn does. The next send stages from the TUI's bytes.
         self._reset_staging(UNSENT_BACK_RESPAWN)
         if self.starting is not None:  # the prompt it held never went: back to the draft, never sent again
-            self._give_back(self.starting[0], self.starting_images)
+            self._give_back_prompt(self.starting[0], self.starting_images)
             self.starting, self.starting_images = None, ()
         self._give_back_tell()
         old: GatewayClient | None = self.client
@@ -3015,9 +3025,10 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.fail_turn(TURN_LOST_NOTICE)
         elif kept and not self.turn_pending:  # the resume says it no longer runs: it ended while this screen was away
             self.transcript.fail_turn(TURN_ENDED_UNSEEN_NOTICE)
-        elif kept:  # it runs on: the same turn, so the same clock and the stop the person asked for
+        elif kept:  # it runs on: the same turn, so the same clock, the stop the person asked for and whose it is
             self.busy_since, self.turn_waited = since, waited
             self.interrupting, self.stop_asked = stopping
+            self.turn_ours = ours
         self.transcript.add_notice(
             (RECONNECTED_NOTICE if reconnected else RESPAWNED_NOTICE).format(session=self.stored_id), NOTICE_OK
         )
@@ -3306,6 +3317,9 @@ class App(ModesMixin, AgentViewMixin):
                 if self.claim == CLAIM_SUBMITTED:
                     self._claimed()  # Hermes admitted the turn, so it took what was staged for it
                 self.bg_done = None  # the session is awake: the row's offer was for an idle one
+                # A turn started (this TUI's prompt, another client's): a `continue` that waited is not sent into it.
+                self.auto_continue, self.auto_continue_out = None, False
+                self.turn_ours = self.turn_pending
                 if not self.turn_pending:  # a turn this TUI did not start (a resumed one, a server queue)
                     self.busy_since = self.clock()
                     self.turn_waited = 0.0
@@ -4084,6 +4098,8 @@ class App(ModesMixin, AgentViewMixin):
             self.composer.handle(event)
             self.path_items = []
             self.escape_armed = None
+            if self.auto_continue is not None:  # one Esc cancels the wait in INSERT too
+                self._hold_auto_continue(AUTO_CONTINUE_ESCAPED)
             return True
         if self.path_items:
             self.path_items = []
@@ -4832,6 +4848,8 @@ class App(ModesMixin, AgentViewMixin):
         if not text.strip():
             return
         self.auto_continues = 0  # the person sent something: the next turn Hermes interrupts may go on by itself again
+        self._cancel_auto_continue(AUTO_CONTINUE_SENT)  # whatever it is (a prompt, `/stop`, `/help`, `/new`)
+        self.auto_continue_out = False  # a `continue` given back from here on may be the person's own
         seen = shown or text
         if self._switching():  # never into the session being left: what goes to a session goes where the switch lands
             invocation = None if seen.startswith(SHELL_PREFIX) else parse_slash(seen)
@@ -5115,7 +5133,7 @@ class App(ModesMixin, AgentViewMixin):
         unsent, self.unsent = [prompt for prompt in self.unsent if not prompt.cancelled], []
         for prompt in unsent:
             prompt.cancelled = True
-            self._give_back(prompt.text, prompt.images)
+            self._give_back_prompt(prompt.text, prompt.images)
         return self._give_back_held() or bool(unsent)
 
     def _give_back_held(self) -> bool:
@@ -5133,6 +5151,7 @@ class App(ModesMixin, AgentViewMixin):
         out = [intake for intake in self.intakes if intake.held is None]
         if not out and not self.held_submits:
             return False
+        self._cancel_auto_continue(AUTO_CONTINUE_SENT)  # a submit, though it waits for its pastes
         held = HeldSubmit(action.text, action.shown, action.chips, images, steer, self.clock())
         for intake in out:
             intake.held = held
@@ -5246,12 +5265,14 @@ class App(ModesMixin, AgentViewMixin):
 
         Hermes' frame names no cause (tui_gateway/prompt_turn.py `_result_status`), so the cause is what the TUI
         did not do: no Esc, `/stop` or interrupting prompt was asked for the turn (`Transcript.hermes_interrupted`).
+        Only a turn this TUI submitted (`turn_ours`) counts: another client's stop looks the same from here.
         An end carrying an error is not one, nor one past AUTO_CONTINUE_LIMIT. Nor is one the person has moved past
         already: a draft, a queued line (it goes now, `_turn_ended`), a picked rewind or agent steer, an open
         question; then the notice asks for `continue` as before.
         """
         self.auto_continue = None
-        if not isinstance(payload, Mapping) or as_text(payload.get("status")) != "interrupted":
+        ours, self.turn_ours, self.auto_continue_out = self.turn_ours, False, False
+        if not ours or not isinstance(payload, Mapping) or as_text(payload.get("status")) != "interrupted":
             return 0.0
         if not self.transcript.hermes_interrupted or as_text(payload.get("error")).strip():
             return 0.0
@@ -5264,7 +5285,7 @@ class App(ModesMixin, AgentViewMixin):
         """Why the person's own state holds a `continue` the TUI would send itself; "" when nothing does."""
         if self._draft().text.strip() or self.agent_steer is not None or self.rewind is not None:
             return AUTO_CONTINUE_DRAFTED
-        if self.queued:
+        if self.queued or self.starting is not None or self.held_submits:
             return AUTO_CONTINUE_QUEUED
         if self.slot is not None or self.tell_draft is not None:
             return AUTO_CONTINUE_ASKED
@@ -5279,8 +5300,9 @@ class App(ModesMixin, AgentViewMixin):
     def _auto_continue_when_due(self) -> None:
         """Send the waiting `continue` once its wait is over, as the person's typed `continue` goes (`_send_typed`).
 
-        A turn running by then (the person sent a prompt, another client started one) or another session open
-        drops it silently: the session has moved on. A draft, a queued line or an open question typed meanwhile
+        A turn that started (`message.start`), a submit of the person's (`_submit`, `_hold_submit`) and another
+        session opened (`_adopt_session`) have dropped it before this; a turn still running or another session
+        open by then drops it silently all the same. A draft, a queued line or an open question typed meanwhile
         holds it, said in a notice. A reconnect to the same session keeps it (its stored id is the same).
         """
         if self.auto_continue is None or self.clock() < self.auto_continue[1]:
@@ -5289,8 +5311,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         session, _due = self.auto_continue
         self.auto_continue = None
-        if (self.stored_id or self.sid) != session or not self.sid or self._busy() or self._switching() \
-                or self.starting is not None or self.held_submits:
+        if (self.stored_id or self.sid) != session or not self.sid or self._busy() or self._switching():
             return
         why = self._auto_continue_held()
         if why:
@@ -5299,6 +5320,21 @@ class App(ModesMixin, AgentViewMixin):
         self.auto_continues += 1
         self.dirty = True
         self._send_typed(AUTO_CONTINUE_TEXT)
+        self.auto_continue_out = True
+
+    def _cancel_auto_continue(self, why: str) -> None:
+        """The person did something that moves past the waiting `continue`: it is not sent, and a notice says why."""
+        if self.auto_continue is not None:
+            self._hold_auto_continue(why)
+
+    def _give_back_prompt(self, text: str, images: Sequence[Attachment] = ()) -> None:
+        """A prompt that never went goes back to the draft (`_give_back`); the TUI's own `continue` is no draft of the
+        person's, so it is dropped instead and a notice says to send it."""
+        if self.auto_continue_out and text == AUTO_CONTINUE_TEXT and not images:
+            self.auto_continue_out = False
+            self.transcript.add_notice(AUTO_CONTINUE_HELD_NOTICE.format(why=AUTO_CONTINUE_UNSENT), NOTICE_WARN)
+            return
+        self._give_back(text, images)
 
     def _drain_queue(self) -> None:
         """Send the next queued line: a prompt starts the next turn; a `!` line runs, and the one after waits for it.

@@ -9,10 +9,13 @@ All notable changes will be documented here.
   turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
   on." It now says it sends that `continue` in 3 s, with Esc to cancel, and then
   sends it as a typed `continue` goes. It never does so for the person's own Esc,
-  `/stop` or interrupting prompt, nor for a turn that ended with an error. A
-  draft, a queued line or an open question holds it, and a notice says to send
-  `continue`. At most 2 go between two prompts of the person's own; past that
-  the old notice asks.
+  `/stop` or interrupting prompt, for a turn that ended with an error, or for a
+  turn this TUI did not send (another client's on a shared gateway, whose stop
+  looks the same from here). Anything the person sends in the wait (a prompt,
+  `/stop`, `/help`, `/new`), a turn that starts, or another session opened
+  cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
+  or an open question holds it, and a notice says to send `continue`. At most 2
+  go between two prompts of the person's own; past that the old notice asks.
 - **The OMH TUI's working glow is removed.** The light that went round the
   screen's edge while a turn ran read as too big and uncomfortable, and its
   trail framed the screen so the terminal's padding outside it looked like a

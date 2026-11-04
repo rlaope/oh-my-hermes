@@ -19,15 +19,19 @@ import unittest
 
 from _tui_lines import line_text
 from test_tui_app import FakePoller, ScriptedTerminal
-from test_tui_modes import SID, make_app, notices, type_text
+from test_tui_modes import SID, answer, make_app, notices, type_text
 from test_tui_respawn import ENVIRON, STORED, RespawnClient, Spawner, crash, crashing
 from omh.tui.app import (
     AUTO_CONTINUE_ASKED,
     AUTO_CONTINUE_DRAFTED,
     AUTO_CONTINUE_ESCAPED,
     AUTO_CONTINUE_HELD_NOTICE,
+    AUTO_CONTINUE_LEFT,
     AUTO_CONTINUE_LIMIT,
+    AUTO_CONTINUE_QUEUED,
     AUTO_CONTINUE_SECONDS,
+    AUTO_CONTINUE_SENT,
+    AUTO_CONTINUE_UNSENT,
     CALL_ANSWER_SECONDS,
     GATEWAY_SILENCE_SECONDS,
     RECONNECTED_NOTICE,
@@ -42,10 +46,12 @@ from omh.tui.app import (
     TURN_LEFT_RUNNING_NOTICE,
     TURN_LOST_NOTICE,
     TURN_MOVED_NOTICE,
+    HeldSubmit,
     QueuedLine,
     _run,
     _Told,
 )
+from omh.tui.composer import VIM_NORMAL, Composer
 from omh.tui.gateway import Event, GatewayCallError, Response
 from omh.tui.keys import ENTER, ESCAPE, Key
 from omh.tui.launch import FALLBACK_EXIT
@@ -70,8 +76,10 @@ class TimedClient(RespawnClient):
         return super().call(method, params, timeout, cancel)
 
 
-def streaming(app: object) -> None:
-    """The live session's turn is under way, its reply half streamed."""
+def streaming(app: object, ours: bool = False) -> None:
+    """The live session's turn is under way, its reply half streamed; `ours`: a turn this TUI's prompt started."""
+    if ours:
+        app.turn_pending = True  # type: ignore[attr-defined]  # a prompt out, as `_send_submit` leaves it
     app._on_event(Event("message.start", SID, {}))  # type: ignore[attr-defined]
     app._on_event(Event("message.delta", SID, {"text": "half of the reply"}))  # type: ignore[attr-defined]
 
@@ -519,7 +527,7 @@ class HermesInterruptTests(unittest.TestCase):
 
     def ended_interrupted(self, interrupting: bool) -> list[str]:
         app, _client = make_app()
-        streaming(app)
+        streaming(app, ours=True)
         app.interrupting = interrupting
         app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
         return notices(app)
@@ -595,10 +603,10 @@ class HermesInterruptTests(unittest.TestCase):
 
     def test_the_stop_asked_is_for_one_turn_only(self) -> None:
         app, _client = make_app()
-        streaming(app)
+        streaming(app, ours=True)
         app.stop_asked = True
         app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
-        streaming(app)
+        streaming(app, ours=True)
         app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
         self.assertEqual(notices(app), [INTERRUPTED_NOTICE, RESUMING])
 
@@ -608,7 +616,7 @@ def interrupted_by_hermes(**options: object) -> tuple[object, object, list[float
     now = [100.0]
     app, client = make_app(clock=lambda: now[0], **options)
     app.stored_id = STORED
-    streaming(app)
+    streaming(app, ours=True)
     app._on_event(Event("message.complete", SID, dict(HERMES_STOPPED)))
     return app, client, now
 
@@ -649,7 +657,7 @@ class AutoContinueTests(unittest.TestCase):
     def test_the_persons_esc_is_never_resumed(self) -> None:
         now = [100.0]
         app, client = make_app(clock=lambda: now[0])
-        streaming(app)
+        streaming(app, ours=True)
         app._on_input(Key(ESCAPE))  # the person's interrupt
         self.assertTrue(app.interrupting)
         app._on_event(Event("message.complete", SID, dict(HERMES_STOPPED)))
@@ -660,7 +668,7 @@ class AutoContinueTests(unittest.TestCase):
     def test_the_persons_stop_is_never_resumed(self) -> None:
         now = [100.0]
         app, client = make_app(clock=lambda: now[0])
-        streaming(app)
+        streaming(app, ours=True)
         type_text(app, "/stop")
         app._on_input(Key(ENTER))
         app._on_event(Event("message.complete", SID, dict(HERMES_STOPPED)))
@@ -674,7 +682,7 @@ class AutoContinueTests(unittest.TestCase):
             with self.subTest(payload=payload):
                 now = [100.0]
                 app, client = make_app(clock=lambda: now[0])
-                streaming(app)
+                streaming(app, ours=True)
                 app._on_event(Event("message.complete", SID, payload))
                 self.assertNotIn(RESUMING, notices(app))
                 self.assertIsNone(app.auto_continue)
@@ -684,7 +692,7 @@ class AutoContinueTests(unittest.TestCase):
     def test_a_turn_that_completed_is_never_resumed(self) -> None:
         now = [100.0]
         app, client = make_app(clock=lambda: now[0])
-        streaming(app)
+        streaming(app, ours=True)
         app._on_event(Event("message.complete", SID, {"text": "done", "status": "complete"}))
         wait_out(app, now)
         self.assertEqual(sent(client), [])
@@ -716,7 +724,7 @@ class AutoContinueTests(unittest.TestCase):
     def test_a_draft_in_the_composer_asks_the_person_instead(self) -> None:
         now = [100.0]
         app, client = make_app(clock=lambda: now[0])
-        streaming(app)
+        streaming(app, ours=True)
         type_text(app, "half a thought")
         app._on_event(Event("message.complete", SID, dict(HERMES_STOPPED)))
         self.assertEqual(notices(app), [HERMES_INTERRUPTED_NOTICE])
@@ -734,7 +742,7 @@ class AutoContinueTests(unittest.TestCase):
     def test_a_queued_line_goes_instead(self) -> None:
         now = [100.0]
         app, client = make_app(clock=lambda: now[0])
-        streaming(app)
+        streaming(app, ours=True)
         app.busy_mode = "queue"
         app._send_prompt("after this")
         app._on_event(Event("message.complete", SID, dict(HERMES_STOPPED)))
@@ -825,7 +833,7 @@ class AutoContinueTests(unittest.TestCase):
         app, old, _spawner, now = crashing(spawner=spawner)
         app.sid = SID
         app.shared_gateway = True
-        streaming(app)
+        streaming(app, ours=True)
         app._on_event(Event("message.complete", SID, dict(HERMES_STOPPED)))
         self.assertIn(RESUMING, notices(app))
         crash(app, old, 1)
@@ -834,6 +842,183 @@ class AutoContinueTests(unittest.TestCase):
         self.assertEqual(sent(new), ["continue"])
         self.assertEqual(new.named("prompt.submit")[0]["session_id"], "live-2")
         self.assertEqual(old.named("prompt.submit"), [])
+
+    def test_esc_after_a_prompt_sent_during_the_wait_interrupts_its_turn(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        type_text(app, "do this instead")
+        app._on_input(Key(ENTER))
+        self.assertIsNone(app.auto_continue)  # the person's prompt took its place
+        self.assertIn(AUTO_CONTINUE_HELD_NOTICE.format(why=AUTO_CONTINUE_SENT), notices(app))
+        app._on_event(Event("message.start", SID, {}))
+        now[0] += 1.0
+        app._on_input(Key(ESCAPE))
+        self.assertTrue(app.interrupting)
+        self.assertEqual(len(client.named("session.interrupt")), 1)
+        self.assertEqual(sent(client), ["do this instead"])
+
+    def test_esc_after_another_clients_turn_started_interrupts_it(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        app._on_event(Event("message.start", SID, {}))  # no prompt of this TUI's: another client's turn
+        self.assertIsNone(app.auto_continue)
+        app._on_input(Key(ESCAPE))
+        self.assertTrue(app.interrupting)
+        self.assertEqual(len(client.named("session.interrupt")), 1)
+        wait_out(app, now)
+        self.assertEqual(sent(client), [])
+
+    def test_one_esc_in_vim_insert_cancels_the_wait(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        app.composer = Composer(vim=True)  # INSERT
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(app.composer.vim_label, VIM_NORMAL)  # the press still leaves INSERT
+        self.assertIsNone(app.auto_continue)
+        self.assertEqual(notices(app)[-1], AUTO_CONTINUE_HELD_NOTICE.format(why=AUTO_CONTINUE_ESCAPED))
+        wait_out(app, now)
+        self.assertEqual(sent(client), [])
+
+    def test_a_local_command_during_the_wait_cancels_it(self) -> None:
+        for command in ("/stop", "/help"):
+            with self.subTest(command=command):
+                app, client, now = interrupted_by_hermes()
+                type_text(app, command)
+                app._on_input(Key(ENTER))
+                self.assertIsNone(app.auto_continue)
+                self.assertIn(AUTO_CONTINUE_HELD_NOTICE.format(why=AUTO_CONTINUE_SENT), notices(app))
+                wait_out(app, now)
+                self.assertEqual(sent(client), [])
+                self.assertEqual(app.auto_continues, 0)
+
+    def test_a_submit_held_for_its_paste_cancels_the_wait(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        held = HeldSubmit("look at this", "", (), (), False, now[0])
+        app.held_submits.append(held)  # one already held: the next submit waits behind it (`_hold_submit`)
+        type_text(app, "and this")
+        app._on_input(Key(ENTER))
+        self.assertIsNone(app.auto_continue)
+        self.assertIn(AUTO_CONTINUE_HELD_NOTICE.format(why=AUTO_CONTINUE_SENT), notices(app))
+        wait_out(app, now)
+        self.assertEqual(sent(client), [])
+
+    def test_another_clients_interrupted_turn_is_not_resumed(self) -> None:
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        streaming(app)  # a turn this TUI never submitted: another client's on the shared gateway
+        app._on_event(Event("message.complete", SID, dict(HERMES_STOPPED)))
+        self.assertIsNone(app.auto_continue)
+        self.assertNotIn(RESUMING, notices(app))
+        wait_out(app, now)
+        self.assertEqual(sent(client), [])
+
+    def test_the_turn_is_the_tuis_own_only_until_it_ends(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        wait_out(app, now)
+        self.assertEqual(sent(client), ["continue"])
+        streaming(app)  # the `continue`'s own turn: its prompt was out at its start
+        app._on_event(Event("message.complete", SID, {"text": "done", "status": "complete"}))
+        streaming(app)  # then another client's
+        app._on_event(Event("message.complete", SID, dict(HERMES_STOPPED)))
+        self.assertIsNone(app.auto_continue)
+        wait_out(app, now)
+        self.assertEqual(sent(client), ["continue"])
+
+    def test_new_during_the_wait_cancels_it(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        type_text(app, "/new")
+        app._on_input(Key(ENTER))
+        self.assertIsNone(app.auto_continue)
+        answer(app, client, {"session_id": "live-2", "stored_session_id": "stored-2", "info": {}})
+        self.assertEqual(app.stored_id, "stored-2")
+        wait_out(app, now)
+        self.assertEqual(sent(client), [])
+
+    def test_resume_during_the_wait_cancels_it(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        type_text(app, "/sessions another-stored-id")
+        app._on_input(Key(ENTER))
+        self.assertIsNone(app.auto_continue)
+        answer(app, client, {"session_id": "live-3", "stored_session_id": "another-stored-id", "info": {},
+                                    "messages": []})
+        self.assertEqual(app.stored_id, "another-stored-id")
+        wait_out(app, now)
+        self.assertEqual(sent(client), [])
+
+    def test_another_session_adopted_during_the_wait_drops_it_and_says_so(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        app._adopt_session({"session_id": "live-2", "stored_session_id": "stored-rotated", "info": {}})
+        self.assertIsNone(app.auto_continue)
+        self.assertEqual(notices(app)[-1], AUTO_CONTINUE_HELD_NOTICE.format(why=AUTO_CONTINUE_LEFT))
+        wait_out(app, now)
+        self.assertEqual(sent(client), [])
+
+    def test_a_prompt_waiting_to_start_at_the_due_time_holds_it_and_says_so(self) -> None:
+        for state in ("starting", "held_submits"):
+            with self.subTest(state=state):
+                app, client, now = interrupted_by_hermes()
+                if state == "starting":
+                    app.starting = ("mine", lambda: None, SID)
+                else:
+                    app.held_submits.append(HeldSubmit("mine", "", (), (), False, now[0]))
+                wait_out(app, now)
+                self.assertEqual(sent(client), [])
+                self.assertEqual(notices(app)[-1], AUTO_CONTINUE_HELD_NOTICE.format(why=AUTO_CONTINUE_QUEUED))
+
+    def test_a_turn_start_read_in_the_step_that_makes_it_due_drops_it(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        events = [[Event("message.start", SID, {})]]
+        app.client.poll = lambda: events.pop(0) if events else []  # type: ignore[attr-defined]
+
+        def read(timeout: float, wake: int | None = None) -> bytes:
+            now[0] += AUTO_CONTINUE_SECONDS
+            return b""
+
+        app.terminal.read = read  # type: ignore[method-assign]
+        app._step()
+        self.assertEqual(sent(client), [])
+        self.assertIsNone(app.auto_continue)
+
+    def test_a_held_esc_past_the_due_time_does_not_spin_the_loop(self) -> None:
+        app, _client, now = interrupted_by_hermes()
+        app._take_input(b"\x1b")  # a lone Esc, held until input is quiet
+        self.assertTrue(app.decoder.holding)
+        now[0] = app.auto_continue[1] + 0.001
+        self.assertGreater(app._read_timeout(), 0.0)
+
+    def test_its_own_continue_never_comes_back_into_the_draft(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        app.default_route = ("some/model", "provider")  # the prompt waits in `starting` for the default check
+        wait_out(app, now)
+        self.assertEqual(app.starting[0], "continue")
+        app._adopt_session({"session_id": "live-2", "stored_session_id": STORED, "info": {}})  # it never went
+        self.assertIsNone(app.starting)
+        self.assertEqual(app.composer.text, "")
+        self.assertEqual(notices(app)[-1], AUTO_CONTINUE_HELD_NOTICE.format(why=AUTO_CONTINUE_UNSENT))
+
+    def test_the_persons_own_continue_still_comes_back_into_the_draft(self) -> None:
+        app, client, now = interrupted_by_hermes()
+        wait_out(app, now)
+        answer(app, client, error={"code": 5000, "message": "busy"})  # Hermes refused the TUI's `continue`
+        self.assertFalse(app._busy())
+        app.default_route = ("some/model", "provider")
+        type_text(app, "continue")  # the person's own, which waits in `starting`
+        app._on_input(Key(ENTER))
+        self.assertEqual(app.starting[0], "continue")
+        app._adopt_session({"session_id": "live-2", "stored_session_id": STORED, "info": {}})
+        self.assertEqual(app.composer.text, "continue")
+
+    def test_a_reconnect_mid_turn_keeps_the_turn_the_tuis_own(self) -> None:
+        # The machine sleeps with the turn running: the attach connection drops, the gateway takes the session back
+        # still running, and then Hermes interrupts the turn (its lease lost): the `continue` goes on the new one.
+        new = RespawnClient(resume={**SHARED_RESUMED, "session_id": SID, "running": True})
+        app, old, _spawner, now = crashing(spawner=Spawner(new))
+        app.sid = SID
+        app.shared_gateway = True
+        streaming(app, ours=True)
+        crash(app, old, 1)
+        self.assertTrue(app._busy())
+        app._on_event(Event("message.complete", SID, dict(HERMES_STOPPED)))
+        self.assertIn(RESUMING, notices(app))
+        wait_out(app, now)
+        self.assertEqual(sent(new), ["continue"])
 
 
 class GatewaySilenceTests(unittest.TestCase):
