@@ -20,6 +20,7 @@ from ..jev_consent import arm_tool_call as arm_jev_tool_call
 from ..jev_consent import disarm_tool_call as disarm_jev_tool_call
 from ..native_todo import project_native_todo
 from ..plan_stage_gate import plan_stage_edit_directive
+from ..research_receipts import record_fetch_receipts
 from ..skill_ownership import managed_skill_edit_directive
 from ..team_gate import team_start_directive
 from ..tool_bursts import (
@@ -419,6 +420,10 @@ def post_tool_call(**kwargs: object) -> dict[str, object] | None:
     one checklist for the HUD and the plan guards whichever tool holds the
     steps. The projection writes only OMH's own record and never touches
     the tool result.
+
+    A successful ``web_extract``, ``browser_navigate`` or ``web_search``
+    leaves one fetch receipt per URL (`research_receipts`): hashes, lengths
+    and a query-free display URL, never page text, titles or arguments.
     """
     if str(kwargs.get("tool_name", "") or "") == "omh_jev_ask":
         # First, before any early return: the call is finished, so its arm
@@ -441,6 +446,15 @@ def post_tool_call(**kwargs: object) -> dict[str, object] | None:
         tool_name=kwargs.get("tool_name"), args=_tool_arguments(kwargs),
         result=kwargs.get("result"), status=kwargs.get("status"),
         session_ref=host_session_id(kwargs), omh_home=omh_home, hermes_home=hermes_home,
+    )
+    # Each URL a successful web tool opened or listed leaves a metadata-only
+    # receipt under the dispatching session (`research_receipts`), so a cited
+    # URL can later be matched against what this session tree really fetched.
+    _ = record_fetch_receipts(
+        tool_name=kwargs.get("tool_name"), args=_tool_arguments(kwargs),
+        result=kwargs.get("result"), status=kwargs.get("status"),
+        session_id=host_session_id(kwargs), tool_call_id=kwargs.get("tool_call_id"),
+        turn_id=kwargs.get("turn_id"), omh_home=omh_home,
     )
     bridge = _agent_board_bridge()
     if bridge is not None:
