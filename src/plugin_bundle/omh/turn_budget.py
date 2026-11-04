@@ -125,6 +125,12 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # (-81 on the routed request's largest role, `handoff-guide`), and a
 # fallback label that only respells the action's underscores is dropped
 # (-73). Re-derived from the producer.
+# 5632 unchanged: the `plan_acceptance` scenario joins the set so the plan
+# follow-on line (`plan_follow_on`, 479 with its join) is measured on the turn
+# that accepts a plan Hermes' `/plan` just wrote, beside the route hint and
+# the active plan line (2759). It rides at most once per plan made, and on
+# `/plan`'s own turn (410 fenced alone), so it is under `all_surfaces`, which still sets the maximum,
+# and the fallback maximum is unchanged with it. Re-derived from the producer.
 PRE_LLM_CALL_CONTEXT_CHAR_LIMIT = 5632
 # The same scenario set on the fallback: a session the awareness section did
 # not render for (a restart resume, a legacy id-rotating compaction, a refused

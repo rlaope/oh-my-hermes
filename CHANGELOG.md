@@ -17,6 +17,24 @@ All notable changes will be documented here.
   changed no Python file, and every turn that used `patch` or `write_file`,
   is left as before.
 
+- **`dag-ulw` is offered where a plan's follow-on is chosen.** On Hermes'
+  own `/plan` turn, whose reply offers to carry the plan out, the model is
+  asked to also name `dag-ulw` as one option when the plan's tasks form a
+  graph (some can run apart, with disjoint write scopes) ending in a
+  verification task, with the fit reason in one line. On the turn right after
+  a plan was made, a short go ("구현하기", "looks good, implement the plan",
+  "플랜 승인. 진행해") gets a conditional note: if the message accepts the
+  plan without choosing how to run it, the model may name the same option;
+  if it declined, held, edited, asked or changed topic, the note is ignored.
+  Neither line starts anything. "Just made" is read from structure, once per
+  plan: the turn before was `/plan`'s, invoked or loaded a planning skill, or
+  wrote a plan file under `.hermes/plans/` or `.omh/plans/`, or this is the
+  first turn to see a `plan`, `ralplan` or `refactor-plan` state active.
+  Reading or mentioning a plan file does not reopen it, so carrying a plan
+  out never brings the note back. Before, none of the six acceptance messages
+  measured saw `dag-ulw`: four got no OMH context at all after `/plan`. A
+  turn with no plan just made renders the same bytes as before, and routing
+  is unchanged.
 ## 4.0.6 - 2026-11-04
 
 - **After a plan is accepted, the planning skills offer `dag-ulw` beside the
