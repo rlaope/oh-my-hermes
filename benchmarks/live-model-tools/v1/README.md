@@ -574,7 +574,7 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
-### 2026-11-04 round end after shell-only edits: base vs on (`transform_tool_result`)
+### 2026-11-04 round end after shell-only edits: base vs on (`transform_tool_result`), gate failed
 
 Pre-registered before its first live run.
 
@@ -782,6 +782,53 @@ defect was found, not gated) were luna 3/5 -> 5/5 and sol 3/3 -> 3/3.
 **Fallback:** as above. If a clause fails, the branch does not merge. If a review again finds a
 note naming a line that is not broken when the model reads it, that shape is made silent and the
 branch does not merge on this measurement.
+
+#### Measurement 2 result (2026-11-05): gate failed on clause 1, by two Haiku I-KWARG runs; the branch does not merge
+
+Counted runs 2026-11-05 02:19-03:08 KST: s55 and h45 in D and S, luna and sol in S. 372 runs, 0
+crashes or incomplete runs, so the strict and re-run readings are the same. Recomputed by
+`OPT/opt-m/gate.py` (`gate-strict.json`) and recounted from the raw records by separate code;
+the two agree.
+
+| Clause | Result |
+| --- | --- |
+| 1. No template loses a pass, pooled | **FAIL**: I-KWARG 24 -> 22. Every other template equal or higher: I-SIGNATURE 17 -> 24, L-RENAME-ALIAS 22 -> 24 |
+| 2. Shell notes on controls | PASS: 0 |
+| 3. Continues on controls, on <= base | PASS: 12 -> 12 |
+| 4. No on run above 3x its cell's base median tokens | PASS: none |
+| 5a. Coverage and fidelity against the replay | PASS: 84 on-arm shell-only runs, each on its recorded tree digest, live notes equal replayed notes |
+| 5b. Shell-only positives | PASS: 30/39 -> 38/39 |
+
+Totals: 177/186 -> 184/186 passes, 15.43M -> 14.92M tokens. 14 shell notes in 14 runs, all on
+positives:
+- Haiku in condition S: 9;
+- gpt-6-luna in condition S: 5.
+
+Where the shell route acted, the cells moved:
+- h45 S I-SIGNATURE: 0/4 -> 4/4;
+- luna S I-SIGNATURE: 1/4 -> 4/4;
+- luna S L-RENAME-ALIAS: 2/4 -> 4/4.
+
+**The two I-KWARG losses.**
+- **h45 D `I-KWARG-290999`: the shell route did not act.** No `shell_round_end` line was logged;
+  Haiku edited with `patch`, so the turn ended through `pre_verify`, the same code as base.
+- **h45 S `I-KWARG-733331`: the note was true, and a later test rewrite was not named.**
+  1. The caller note named `health.py:5` and `sync.py:5`, broken after a single-command message,
+     and the model fixed both.
+  2. It then rewrote the existing test's expected key (`"timeout"` -> `"timeout_s"`), the known
+     Haiku I-KWARG shape, and failed.
+  3. The test check would have named that line, but the turn's one shell note was already spent
+     on the caller note.
+
+One correction to the recompute, made before clause 5a was read and kept in `replay_shell.py`:
+the live terminal had a `python` on its path and the replay did not, so luna's `python -c` edits
+(exit 127) were not applied. The replay now puts its test environment's `bin` first. Before
+this correction, 20 luna sessions missed their digest and 3 notes did not match; after it, none.
+
+**Next candidate** (not built, not measured): let each of the three checks speak once per turn,
+instead of one shell note per turn. In `I-KWARG-733331` the test check would then have named the
+rewritten expectation, which is the line that failed the run. Under the fallback, it needs its own
+pre-registration.
 
 ### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
 
