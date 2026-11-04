@@ -187,6 +187,13 @@ class SteerTests(unittest.TestCase):
         self.assertEqual(client.named("prompt.submit"), [])
         self.assertFalse(app.queued)
 
+    def test_ctrl_enter_non_vim_with_trailing_backslash_adds_newline_during_turn(self) -> None:
+        app, client = make_app(busy=True)
+        type_text(app, "keep this\\")
+        app._on_input(CTRL_ENTER)
+        self.assertEqual(client.calls, [])
+        self.assertEqual(app.composer.text, "keep this\n")
+
     def test_ctrl_enter_in_vim_steers_during_a_turn_in_either_mode(self) -> None:
         for normal_mode in (False, True):
             for text in ("use the other file", "keep this\\"):

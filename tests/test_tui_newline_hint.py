@@ -72,6 +72,20 @@ class NewlineHintTests(unittest.TestCase):
         row = re.split(r" {3,}", "".join(span.text for span in app._info_line(20)).strip())[0]
         self.assertEqual(row, NEWLINE_KEYS[-1])
 
+    def test_vim_insert_suppresses_newline_keys_hint(self) -> None:
+        app, _client = make_app()
+        app.composer.set_vim(True)
+        two_lines(app)
+        self.assertEqual(mode_row(app), "INSERT")
+        self.assertNotIn(NEWLINE_KEYS[-1], "".join(span.text for span in app._info_line(100)))
+
+    def test_vim_normal_retains_newline_keys_hint(self) -> None:
+        app, _client = make_app()
+        app.composer.set_vim(True)
+        two_lines(app)
+        app._on_input(Key("escape"))
+        self.assertEqual(mode_row(app), f"NORMAL · {NEWLINE_KEYS[0]}")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1074,7 +1074,7 @@ class Composer:
             return NOTHING
         if event.name == ENTER:
             # The app opts a running turn into Ctrl+Enter steering; idle keeps normal editing rules.
-            if submit_now and event.ctrl and not (event.alt or event.shift):
+            if self.vim and submit_now and event.ctrl and not (event.alt or event.shift):
                 return self._submit()
             adds_line = event.alt or event.shift
             continues = not self.masked and not self.normal and self.text[self.caret - 1 : self.caret] == "\\"

@@ -7663,6 +7663,7 @@ class App(ModesMixin, AgentViewMixin):
         return (
             not self.keyboard_protocol and self._composer_open() and not self._busy()
             and self._display_mode() == MODE_NORMAL and "\n" in self.composer.expanded()
+            and not (self.composer.vim and not self.composer.normal)
         )
 
     def _slot_caret(self) -> tuple[int, int] | None:
