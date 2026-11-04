@@ -107,10 +107,9 @@ from .gateway_contract import TOOL_CALL_BRIDGE
 from .markdown import (
     GrowingLine,
     MarkdownState,
-    is_table_divider_cells,
-    split_table_row,
-    table_block,
     clean_text,
+    opens_table,
+    table_block,
     render_growing,
     render_lines,
     wrap_prefixed,
@@ -422,16 +421,18 @@ def _display_lines(text: str) -> list[str]:
     return _without_trailing_blanks(_source_lines(text))
 
 
-def _stable_lines(text: str) -> list[str]:
+def _stable_lines(text: str, final: bool = False) -> list[str]:
     """The source lines that can no longer change: complete ones, minus trailing blanks.
 
     A trailing run of `|` lines is held back too: a header is decided only
     once its divider has arrived, and taken rows are never repainted.
     """
     lines = _without_trailing_blanks(_source_lines(text)[:-1])
+    if final:  # the last take, at exit: nothing is left to wait for, so a complete `|` row goes out
+        return lines
     while lines and lines[-1].strip().startswith("|"):
         lines.pop()
-    return lines
+    return _without_trailing_blanks(lines)
 
 
 def _extension(streamed: str, text: str) -> str | None:
@@ -1855,9 +1856,6 @@ class Transcript:
         self.activity = ""
         self.status = ""
         self.moa = ""
-        # Guarantee the done block re-renders rather than serving a
-        # streaming-era live cache row.
-        self._version += 1
 
     def _on_thinking_delta(self, payload: dict[str, Any]) -> None:
         self.activity = _first_line(as_text(payload.get("text")))
@@ -1945,10 +1943,11 @@ class Transcript:
 
     # ── output ──
 
-    def take_stable_lines(self, width: int, theme: Theme) -> list[Line]:
+    def take_stable_lines(self, width: int, theme: Theme, final: bool = False) -> list[Line]:
         """Lines that will never change, each returned once: print them above the live region.
 
         `prompt_row` says where among them the newest prompt's first row is.
+        `final` is the take at exit: it also releases the `|` rows held back for a divider.
         """
         taken: list[Line] = []
         start = (self._cursor, self._cursor_lines)
@@ -1970,7 +1969,7 @@ class Transcript:
             block = self.blocks[self._cursor]
             index = self._cursor - first
             if isinstance(block, AssistantBlock) and not (block.done and index < len(held)):
-                taken.extend(self._take_assistant(block, width, theme))
+                taken.extend(self._take_assistant(block, width, theme, final))
             elif block.done:
                 # A done reply taken from its first line is the rows `block_rows` gives it, as measured.
                 rows = held[index] if index < len(held) else block_rows(block, width, theme)
@@ -1987,8 +1986,8 @@ class Transcript:
         self._drop_past_cap()
         return taken
 
-    def _take_assistant(self, block: AssistantBlock, width: int, theme: Theme) -> list[Line]:
-        sources = _display_lines(block.text) if block.done else _stable_lines(block.text)
+    def _take_assistant(self, block: AssistantBlock, width: int, theme: Theme, final: bool = False) -> list[Line]:
+        sources = _display_lines(block.text) if block.done else _stable_lines(block.text, final)
         fresh = sources[self._cursor_lines :]
         if not fresh:
             return []
@@ -2167,9 +2166,7 @@ class Transcript:
             run_at -= 1
         if run_at < len(sources):
             rows, state = render_lines(sources[:run_at], self._cursor_state, width, theme)
-            if not state.in_fence and run_at + 1 < len(sources) and is_table_divider_cells(
-                split_table_row(sources[run_at + 1])
-            ):
+            if not state.in_fence and run_at + 1 < len(sources) and opens_table(sources[run_at], sources[run_at + 1]):
                 table_rows, consumed = table_block(sources[run_at:], 0, width, theme)
                 rows.extend(table_rows)
                 rest = sources[run_at + consumed :]

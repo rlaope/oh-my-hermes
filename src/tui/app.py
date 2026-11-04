@@ -2707,7 +2707,7 @@ class App(ModesMixin, AgentViewMixin):
                     self._full_redraw()
             cols = self.size[0]
             try:
-                stable = self.transcript.take_stable_lines(cols, self.theme)
+                stable = self.transcript.take_stable_lines(cols, self.theme, final=True)
                 if stable:
                     self.region.flush_above(stable, cols)
             finally:

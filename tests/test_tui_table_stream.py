@@ -15,8 +15,9 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _tui_lines import lines_text
+from test_tui_modes import make_app
 from omh.tui.gateway import Event
-from omh.tui.markdown import MarkdownState, render_lines
+from omh.tui.markdown import MarkdownState, opens_table, render_lines
 from omh.tui.theme import DEFAULT_THEME as THEME
 from omh.tui.transcript import Transcript
 
@@ -159,6 +160,68 @@ class TableStreamingTests(unittest.TestCase):
     def test_pipe_lines_inside_a_code_fence_stay_code(self) -> None:
         rows = self.render("```\n| a | b |\n|---|---|\n```")
         self.assertEqual(rows[:2], ["| a | b |", "|---|---|"])
+
+
+    # (e) Review follow-ups: exit, control characters, partial dividers, plain fallback.
+
+    def test_exit_take_releases_held_table_rows(self) -> None:
+        self.step(ev("message.start"))
+        self.step(ev("message.delta", text="| X | Y |\n| --- | --- |\n| 1 | a |\n| 2 | b |"))
+        self.assertEqual(lines_text(self.transcript.take_stable_lines(WIDTH, THEME)), [])
+        final = lines_text(self.transcript.take_stable_lines(WIDTH, THEME, final=True))
+        joined = "\n".join(final)
+        self.assertIn("X", joined)
+        self.assertIn("1  ", joined)
+        self.assertNotIn("| --- |", joined)
+
+    def test_quitting_mid_reply_flushes_the_held_table_rows(self) -> None:
+        app, _client = make_app(busy=True)
+        flushed: list[str] = []
+        app.region.flush_above = lambda lines, cols: flushed.extend(lines_text(lines))  # type: ignore[method-assign]
+        app.transcript.apply(ev("message.start"))
+        app.transcript.apply(ev("message.delta", text="| X | Y |\n| --- | --- |\n| 1 | a |\n| 2 | b |"))
+        app._shutdown()
+        self.assertTrue(any("X" in row for row in flushed), flushed)
+        self.assertTrue(any("1" in row and "a" in row for row in flushed), flushed)
+
+    def test_control_characters_do_not_shift_columns(self) -> None:
+        rows = self.render("| \x1b[1ma\x1b[0m | b |\n|---|---|\n| \x1b[31mred\x1b[0m | x |\n| t\tz | y |")
+        self.assertTrue(rows[2].startswith("red"))
+        self.assertEqual(rows[2].index("x"), rows[0].index("b"))
+        self.assertEqual(rows[3].index("y"), rows[0].index("b"))
+
+    def test_divider_with_escape_sequences_still_opens_the_table(self) -> None:
+        self.assertTrue(opens_table("| a | b |", "|\x1b[2m---\x1b[0m|---|"))
+
+    def test_divider_needs_as_many_cells_as_the_header(self) -> None:
+        for divider in ("| ---", "| --- | -", "|---|---|---|"):
+            self.assertEqual(self.render(f"| a | b |\n{divider}")[0], "| a | b |", divider)
+        self.assertNotEqual(self.render("| a | b |\n| --- | ---")[0], "| a | b |")
+
+    def test_partial_divider_never_flips_back_to_a_table_then_raw(self) -> None:
+        shown = []
+        for tail in ("| -", "| --- | -", "| --- | ---", "| --- | --- |"):
+            self.transcript = Transcript(clock=lambda: 100.0)
+            self.step(ev("message.start"))
+            self.step(ev("message.delta", text=f"| X | Y |\n{tail}"))
+            shown.append(any("─" in row for row in self.live()))
+        self.assertEqual(shown, sorted(shown))
+
+    def test_indented_overwide_table_stays_plain_text(self) -> None:
+        cell = "a" * 17
+        source = f"  | {cell} | {cell} |\n  |---|---|\n  | 1 | 2 |"
+        rows = self.render(source, width=37)  # the columns fit (36) but not behind the indent
+        self.assertFalse(any("─" in row for row in rows))
+
+    def test_overwide_table_rows_equal_the_plain_text_render(self) -> None:
+        wide = "a" * 30
+        lines = [f"| {wide} | **b** |", "|---|---|", "| 1 | 2 |"]
+        plain = []
+        for line in lines:
+            rows, _state = render_lines([line], MarkdownState(), 30, THEME)
+            plain.extend(rows)
+        rows, _state = render_lines(lines, MarkdownState(), 30, THEME)
+        self.assertEqual(rows, plain)
 
 
 if __name__ == "__main__":
