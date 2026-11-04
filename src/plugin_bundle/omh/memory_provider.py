@@ -113,7 +113,7 @@ from .memory_prefetch_receipt import (
 )
 from .memory_principals import principal_recall_decision
 from .memory_query_sanitizer import sanitize_memory_query
-from .memory_recall_settings import configured_recall_line, configured_recall_mode, recall_line_shown
+from .memory_recall_settings import configured_recall_line, configured_recall_mode, per_turn_recall_enabled, recall_line_shown
 from .memory_recall_selector import recall_revision, resolve_scope_allowlist
 from .memory_recall_support import _memory_query_split, _record_perspective_matches
 from .memory_session_digest import (
@@ -306,11 +306,17 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._project_home: Path | None = None
         self._project_cwd: str | None = None
         self._project_resolution = ProjectIdentityResolution()
-        # prefetch() is called before every API call and the base class asks for
-        # it to be fast, so the pack is rendered off the hot path and served
-        # from here. `_query` is what the pack was ranked for; `_pack_count`
-        # is how many memories it carries in full that this conversation did
-        # not already hold (`_recalled`).
+        # The pack `prefetch()` serves. It is NOT rendered off the hot path:
+        # Hermes calls `on_turn_start` and then `prefetch` before the turn's
+        # API call, and `on_turn_start` renders for the new message there, so
+        # a render is turn latency. `queue_prefetch` renders again on Hermes'
+        # worker after a turn, for that turn's message; the next
+        # `on_turn_start` replaces it, and what it leaves behind is the record
+        # safety verdicts it cached (`_governance_safety`), which the next
+        # render reuses. `prefetch` re-renders only when its query, principal
+        # or session differs from the pack's. `_query` is what the pack was
+        # ranked for; `_pack_count` is how many memories it carries in full
+        # that this conversation did not already hold (`_recalled`).
         self._pack = ""
         self._query = ""
         self._query_sanitized = sanitize_memory_query("")
@@ -693,6 +699,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
             "homes": [str(home) for home in self._record_homes()],
             "project_identity": resolve_project_identity(self._project_cwd).identity if self._project_cwd is not None else "",
             "executor_target": PREFETCH_EXECUTOR_TARGET,
+            # The profile whose `recall_mode` this provider reads, so tool
+            # recall reads the same one rather than the process's Hermes home.
+            "profile_home": str(self._profile_home),
         }
         looser_foreign: dict[str, Any] | None = None
         if not reset:
@@ -900,6 +909,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
 
         Hermes queues with the turn that just finished, so the records are
         ranked for the conversation as it stands, not for the next message.
+        Hermes' next `on_turn_start` re-renders for that message before the
+        pack is served; this render serves a host that prefetches without it.
         """
         # Hermes runs this on its memory-sync worker thread while the next
         # turn's `on_turn_start`/`prefetch` run on the main thread; the lock
@@ -1288,7 +1299,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # no blocks, and so no recall line; the brief and the digest are not
         # recall and keep their own rules. Tool recall decides for itself.
         policy, policy_unreadable = self._recall_policy()
-        if policy.get("recall_enabled", True) and configured_recall_mode(self._profile_home) != "auto":
+        if policy.get("recall_enabled", True) and not per_turn_recall_enabled(policy, self._profile_home):
             policy = {**policy, "recall_enabled": False}
         console = self._surface_class in OWNER_SURFACE_CLASSES and bool(policy.get("recall_enabled", True))
         blocks = read_memory_blocks(self._omh_home) if console else ()

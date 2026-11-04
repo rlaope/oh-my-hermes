@@ -3052,6 +3052,26 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
             provider.on_turn_start(5, "hello")
             self.assertIn('raised_at="2099-01-01T00:00:00Z"', provider.prefetch("hello"))
 
+    def test_a_brief_raised_in_the_same_second_by_another_trigger_is_served_again(self) -> None:
+        # `raised_at` has second precision, so two briefs can share it; the
+        # trigger is the other half of what identifies one (`_brief_key`).
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_hermes_memory(root / ".hermes", "one fact")
+            provider = self._provider(root)
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
+            provider.on_session_end()
+            provider.on_turn_start(2, "hello")
+            self.assertIn("<memory_consolidation", provider.prefetch("hello"))
+            brief_path = consolidation_path(root / ".omh", root / ".hermes")
+            raised = json.loads(brief_path.read_text(encoding="utf-8"))
+            self.assertNotEqual(raised["trigger"], "turn_interval")
+            raised["trigger"] = "turn_interval"
+            brief_path.write_text(json.dumps(raised), encoding="utf-8")
+            provider.on_turn_start(3, "hello")
+            served = provider.prefetch("hello")
+            self.assertIn(f'<memory_consolidation trigger="turn_interval" raised_at="{raised["raised_at"]}"', served)
+
     def test_a_brief_that_was_not_served_is_not_marked_served(self) -> None:
         # A render nobody served (a queued re-render) must not spend the brief.
         with TemporaryDirectory() as tmp:

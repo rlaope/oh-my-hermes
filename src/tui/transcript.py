@@ -49,8 +49,8 @@ at `message.complete`, as one row per call (`● name(argument summary)`, the
 mark a shape and a colour per state, `TOOL_MARKS`, and the name bold in its
 tool family's hue, `TOOL_FAMILIES`) with what it printed under `⎿`, a blank row
 between two calls, no header over them; a read or a load says in one line what
-it read instead (`_read_summary`), and an `omh_memory` recall that found
-records lists them, a line each (`_recall_lines`), which one band of the
+it read instead (`_read_summary`), and an `omh_memory` or `omh_remember` recall that
+found records lists them, a line each (`_recall_lines`), which one band of the
 dag-ulw aura sweeps as the call completes, while its group is live and only
 where the aura moves (`_glint_band`). A run of consecutive plumbing calls
 (`PLUMBING_TOOLS`: loading a skill, reading tool details) folds into one row,
@@ -207,10 +207,10 @@ GUTTER = Style(gutter=True)  # a rail's or a reply margin's cells, which the pag
 # A running tool's mark alternates the running blue and dim this often, counted from its own start, so calls that run
 # side by side pulse each on its own. Only the live region is drawn with a clock; scrollback gets the settled mark.
 PULSE_SECONDS = 0.5
-# An `omh_memory` call that recalled something sweeps one band of the dag-ulw aura across its output rows as it
-# completes, while its group is still live; it moves only where the aura does (`Transcript.live_lines`'s `glint`), and
-# a row in scrollback is drawn as it always is.
-MEMORY_TOOL = "omh_memory"
+# An `omh_memory` or `omh_remember` call that recalled something sweeps one band of the dag-ulw aura across its output
+# rows as it completes, while its group is still live; it moves only where the aura does (`Transcript.live_lines`'s
+# `glint`), and a row in scrollback is drawn as it always is. Both tools return the same recall result.
+MEMORY_TOOLS = ("omh_memory", "omh_remember")
 RECALL_GLINT_SECONDS = 0.9
 RECALL_GLINT_CELLS = 8
 RECALL_TYPE_CELLS = 12  # a recalled record's type column at most: its summary is what the row is for
@@ -325,7 +325,7 @@ class ToolRow:
     # An interpreter fed its script through a heredoc, `python3 script · 23 lines` (`_heredoc_summary`): shown in its
     # row instead of `args_summary`, which the details view shows.
     script: str = ""
-    # When an `omh_memory` recall that found records completed (`_recall`), on the transcript's clock; else None.
+    # When a memory recall that found records completed (`_recall`), on the transcript's clock; else None.
     recalled_at: float | None = None
 
     def diff_lines(self, hold: bool = False) -> tuple[DiffLine, ...]:
@@ -462,10 +462,10 @@ def tool_result_status(result: object) -> str:
 
 
 def _recall(name: str, result: object) -> dict[str, Any] | None:
-    """The result of a completed call that recalled something, else None: an `omh_memory` recall whose result says it
-    found records, read from the fields the tool writes (`action`, `status`, `record_count`), never from its words.
-    Hermes hands a plugin tool's JSON over decoded; a string is decoded here."""
-    if name != MEMORY_TOOL:
+    """The result of a completed call that recalled something, else None: an `omh_memory` or `omh_remember` recall
+    whose result says it found records, read from the fields the tool writes (`action`, `status`, `record_count`),
+    never from its words. Hermes hands a plugin tool's JSON over decoded; a string is decoded here."""
+    if name not in MEMORY_TOOLS:
         return None
     try:
         found = json.loads(result) if isinstance(result, str) else result
