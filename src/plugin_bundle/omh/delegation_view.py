@@ -321,7 +321,8 @@ def _status_parts(node: Mapping[str, Any]) -> tuple[str, float | None]:
     word = clean_text(node.get("status")) or _state(node)
     elapsed = node.get("elapsed_seconds")
     if isinstance(elapsed, (int, float)) and not isinstance(elapsed, bool) and 0 <= elapsed < ELAPSED_LIMIT:
-        if _state(node) in ("running", "stuck", "done", "failed", "interrupted"):
+        # A parked node's figure is the time since it parked (`delegation_graph._parked_fields`).
+        if _state(node) in ("running", "stuck", "done", "failed", "interrupted") or node.get("parked") is True:
             return word, float(elapsed)
     return word, None
 

@@ -197,13 +197,14 @@ from .model_picker import KEYS as MODEL_PICKER_KEYS
 from .model_picker import PICK as MODEL_PICK
 from .model_picker import ModelPicker, model_rows, typed_switch_value
 from . import dag_block
-from .dag_tree import TreeState
+from .dag_tree import TreeState, run_key
 from .panels import (
     CATCH_MARK,
     HudPoller,
     HudSnapshot,
     catch_lines,
     dag_page_lines,
+    graph_is_dag,
     hud_chips,
     panel_lines,
     plan_room_collapsed,
@@ -1970,6 +1971,7 @@ class App(ModesMixin, AgentViewMixin):
         self.panel_shown = False  # the plan panel was in the slot `_slot_lines` last made: it gets its blank rows
         self.plan_folded = False  # Ctrl+P: the plan is its header alone, for the rest of the session
         self.plan_room_collapsed = False  # the plan the slot drew last was its header alone for want of rows
+        self.plan_on_tree = False  # the plan the slot drew last was one line over its dag run's tree (`_plan_on_tree`)
         self.tail_spacer = False  # `_tail` put a blank row above the working row, the first row to give way
         self.badge_cache: tuple[object, tuple[Line, ...]] = (None, ())  # `_badge_forms`' last forms and their key
         self.pager: Pager | None = None
@@ -2634,7 +2636,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.redraw_at is not None:
             due.append(self.redraw_at)
         elif self._busy() or self._compressing_since() is not None or self._panel_live() or self._aura_live() \
-                or self.held_submits:
+                or self._tree_spins() or self.held_submits:
             due.append(self.last_render + self._tick_seconds())
         if self.redraw_at is None and (background := self._background_due_at()) is not None:
             due.append(background)  # the background row's clock: once a second, on the second
@@ -3858,7 +3860,7 @@ class App(ModesMixin, AgentViewMixin):
         payload = self.hud.payload if self.hud is not None else None
         if plan_state(payload) != "open" or not self.panel_shown:  # a menu over the plan: nothing to fold where seen
             return False
-        if self.plan_room_collapsed:
+        if self.plan_room_collapsed or self.plan_on_tree:
             return False
         self.plan_folded = not self.plan_folded
         self.dirty = True
@@ -7090,6 +7092,11 @@ class App(ModesMixin, AgentViewMixin):
         payload = self.hud.payload if self.hud is not None else None
         return isinstance(payload, Mapping) and bool(payload.get("active"))
 
+    def _tree_spins(self) -> bool:
+        """Whether the dag tree the last frame drew shows a spinner (a running or parked node, `dag_tree._spins`) that
+        turns: with motion on, also between turns while the run waits."""
+        return self.motion and self.tree_state is not None and self.tree_state.spins
+
     def _aura_live(self) -> bool:
         """Whether the composer's `dag-ulw` aura moves now (`aura`): a token in the draft it draws, at the truecolor
         depth, with motion on, on a background its band shows on (`theme.aura_moves`), and while no list or tree
@@ -7274,7 +7281,7 @@ class App(ModesMixin, AgentViewMixin):
             return  # the screen is mid-reflow; the settled redraw paints it
         now = self.clock()
         due = (self._busy() or self._compressing_since() is not None or self._panel_live() or self._aura_live()
-               or bool(self.held_submits)) and now - self.last_render >= self._tick_seconds()
+               or self._tree_spins() or bool(self.held_submits)) and now - self.last_render >= self._tick_seconds()
         if not (self.dirty or due or self._background_due()):
             if self._wallpaper_moves() and now - self.ambient_at >= WALLPAPER_TICK_SECONDS:
                 self.ambient_at = now  # only the wallpaper's cells that moved: no frame is built
@@ -7838,18 +7845,32 @@ class App(ModesMixin, AgentViewMixin):
         if payload is None:
             return []
         show_plan = not self.retired_plan or plan_text(payload) != self.retired_plan
+        on_tree = show_plan and self._plan_on_tree(payload)
         lines = panel_lines(
             payload, cols, cap, self.theme, self.wall_clock(), received_at=self.hud.received_at,
             show_agents=False, show_graph=False,  # the agent view under the info line draws them
             show_plan=show_plan,
             motion=self.motion,
             color_depth=self.color_depth,
-            plan_folded=self.plan_folded,
-            fold_key=PLAN_FOLD_KEY,
+            plan_folded=self.plan_folded or on_tree,
+            fold_key="" if on_tree else PLAN_FOLD_KEY,  # one line while the tree under it shows the run
         )
         self.panel_shown = bool(lines)
         self.plan_room_collapsed = show_plan and plan_room_collapsed(payload, cap)
+        self.plan_on_tree = on_tree
         return lines
+
+    def _plan_on_tree(self, payload: Mapping[str, Any]) -> bool:
+        """Whether the plan is the dag run the agent view draws as its tree: its list was declared while that run was
+        open (`todo.dag_run`, the run's id, stamped by OMH as the list was written) and the view still draws the run
+        (`_run_gone`). Then it is one line (`[Plan] 4/6 ▸ <current item>`), since the tree under the composer shows
+        the same work; a plan of no run, or of another, is drawn as it always was."""
+        todo = payload.get("todo")
+        run = todo.get("dag_run") if isinstance(todo, Mapping) else None
+        if not isinstance(run, str) or not run or payload.get("error") or not graph_is_dag(payload):
+            return False
+        graph = payload["delegation_graph"]
+        return f"d:{run}" in run_key(graph).split() and not self._run_gone(graph)
 
     def _context_style(self) -> Style:
         percent = self.context_percent if self.context_percent is not None else 0.0

@@ -802,6 +802,18 @@ def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now
     return base
 
 
+def open_run(omh_home: Path, session_id: str, now: float) -> str:
+    """The newest run stored under ``session_id`` that is not over (`run_state` ``running``), or "".
+
+    Read without the children: a node out with a child and one handed out with
+    none are both open, so the run's state does not depend on them.
+    """
+    for record, _path in session_runs(omh_home, session_id) if session_id else []:
+        if run_state(record, derive(record, (), now)) == "running":
+            return str(record["run"])
+    return ""
+
+
 def cycles_left(record: Mapping[str, Any], node_id: str) -> int:
     nodes = {str(node["id"]): node for node in record["nodes"]}
     root = _root(nodes[node_id]) if node_id in nodes else node_id

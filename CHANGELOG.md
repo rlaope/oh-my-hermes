@@ -4,6 +4,27 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A dag-ulw run that waits takes fewer rows under the composer, and its
+  waiting node says what it waits on.** The live tree is at most 8 rows. That
+  is a third of a 24-row terminal, the size it was there before, and it no
+  longer grows on a taller one. Consecutive layers whose every node is done
+  fold into one `✓ layers 1–3 · 3 done` row, which opens to its layers. Only
+  a layer with a running, stuck, failed, handed-out or parked node opens by
+  default, with the layer after it. No blank row stands between two layers,
+  and rows that do not fit become one `+N more · /dag` row. A parked node was
+  drawn `?` and counted `unknown`, because the graph reader had no entry for
+  the `parked` outcome. It is now a waiting node with the status `parked` and
+  the time since it parked, and its layer row counts it as `parked`. One row
+  under it names what its park recorded it waits on, and nothing else: the
+  handle, named by its call (`terminal(uv run …)`) when it is one of the
+  session's background processes, then `until HH:MM` from its `wake_at`, then
+  its reason. The spinner turns on a running or parked node's row and nowhere
+  else, and between turns too while the run waits. An `unspecified-*` or
+  unknown category no longer draws a cell. A plan written by `omh_todo set`
+  or `todo_list` while the session's dag run is open now records that run's
+  id (`dag_run`; an advance keeps it). While that run's tree is drawn under the
+  composer, the plan is one line, `[Plan] 4/6 ▸ <current item>`, and Ctrl+P
+  leaves it as it is. Any other plan is drawn as before.
 - **The OMH TUI's working glow is removed.** The light that went round the
   screen's edge while a turn ran read as too big and uncomfortable, and its
   trail framed the screen so the terminal's padding outside it looked like a
