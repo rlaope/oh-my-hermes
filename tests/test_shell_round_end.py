@@ -219,6 +219,84 @@ class OncePerTurn(_ShellTurn):
         self.assertIn("api.py:3", self.note(self.command("sed ... quota.py api.py", STALE_RENAME)))
 
 
+class WaitsForTheMessagesLastCommand(_ShellTurn):
+    """Hermes hands each command's result to the hook as it lands, but the model reads a message's results
+    together. Measured (OPT-M, Haiku, I-KWARG-583919): a note computed after the first of four `sed` calls
+    named two callers the next calls of the same message had already updated."""
+
+    def batch(self, *calls: tuple[str, str]) -> None:
+        verify_hooks.post_api_request(session_id=SESSION, response={"assistant_message": {"tool_calls": [
+            {"id": call_id, "type": "function", "function": {"name": name, "arguments": "{}"}}
+            for call_id, name in calls]}})
+
+    def call(self, call_id: str, edits: dict[str, str]) -> str | None:
+        self.before("terminal", {"command": "sed ..."})
+        self.fixture(edits)
+        return verify_hooks.annotate_shell_round_end(tool_name="terminal", result=RESULT, session_id=SESSION,
+                                                     turn_id="t1", tool_call_id=call_id)
+
+    def test_a_note_a_later_command_of_the_message_makes_stale_is_not_given(self):
+        self.fixture(RENAME)
+        self.batch(("c1", "terminal"), ("c2", "terminal"))
+        with self.assertNoLogs("omh.verify_hooks", level="INFO"):  # not even looked at
+            self.assertIsNone(self.call("c1", STALE_RENAME))
+        fixed = 'from .quota import allocate_quota\n\n__all__ = ["allocate_quota"]\n'
+        self.assertIsNone(self.call("c2", {"src/benchapp/api.py": fixed}))
+
+    def test_the_last_command_sees_every_change_of_the_message(self):
+        self.fixture(RENAME)
+        self.batch(("c1", "terminal"), ("c2", "terminal"))
+        self.assertIsNone(self.call("c1", {"src/benchapp/quota.py": STALE_RENAME["src/benchapp/quota.py"]}))
+        self.assertIn("api.py:3", self.note(self.call("c2", {"src/benchapp/api.py": STALE_RENAME["src/benchapp/api.py"]})))
+
+    def test_reads_after_the_last_command_do_not_hold_the_note_back(self):
+        self.fixture(RENAME)
+        self.batch(("c1", "terminal"), ("c2", "read_file"), ("c3", "search_files"))
+        self.assertIn("api.py:3", self.note(self.call("c1", STALE_RENAME)))
+
+    def test_a_call_id_the_message_does_not_hold_is_looked_at(self):
+        self.fixture(RENAME)
+        self.batch(("c1", "terminal"), ("c2", "terminal"))
+        self.assertIn("api.py:3", self.note(self.call("other", STALE_RENAME)))
+
+    def test_a_codex_call_is_matched_by_its_call_id(self):
+        self.fixture(RENAME)
+        verify_hooks.post_api_request(session_id=SESSION, response={"assistant_message": {"tool_calls": [
+            {"call_id": "call_a", "name": "terminal"}, {"call_id": "call_b", "name": "terminal"}]}})
+        self.assertIsNone(self.call("call_a", STALE_RENAME))
+
+    def test_a_payload_without_tool_calls_keeps_nothing(self):
+        self.fixture(RENAME)
+        verify_hooks.post_api_request(session_id=SESSION, response=None)
+        verify_hooks.post_api_request(session_id=SESSION, response={"assistant_message": {"tool_calls": None}})
+        self.assertIn("api.py:3", self.note(self.call("c1", STALE_RENAME)))
+
+
+class AfterTheTurnsRoundEnd(_ShellTurn):
+    """`pre_verify` consumes the turn's state at its first stop. Measured (OPT-M, Haiku, I-KWARG-347911):
+    the state rebuilt after that continue took the mid-turn text as the turn's start, and the test check
+    then asked to put back the model's own first-round edit."""
+
+    def test_the_same_turn_gets_no_second_shell_round_end_after_pre_verify(self):
+        self.fixture(RENAME)
+        self.before("terminal", {"command": "ls"})
+        ct.discard_snapshots(SESSION)  # pre_verify, attempt 0
+        with self.assertNoLogs("omh.verify_hooks", level="INFO"):
+            self.assertIsNone(self.command("sed ... quota.py api.py", STALE_RENAME))
+
+    def test_the_trigger_verdict_ends_the_turn_too(self):
+        self.fixture(RENAME)
+        self.before("terminal", {"command": "ls"})
+        ct.round_end_trigger(SESSION, ("src/benchapp/quota.py",))
+        self.assertIsNone(self.command("sed ... quota.py api.py", STALE_RENAME))
+
+    def test_the_next_turn_starts_over(self):
+        self.fixture(RENAME)
+        self.before("terminal", {"command": "ls"})
+        ct.discard_snapshots(SESSION)
+        self.assertIn("api.py:3", self.note(self.command("sed ... quota.py api.py", STALE_RENAME, turn="t2")))
+
+
 class ComposesWithTheOtherTerminalPass(_ShellTurn):
     def setUp(self):
         super().setUp()
@@ -240,6 +318,17 @@ class ComposesWithTheOtherTerminalPass(_ShellTurn):
         self.assertIn(REMOTE_WAIT_NUDGE_KEY, payload)
         self.assertIn("api.py:3", payload[KEY])
         self.assertEqual(payload["exit_code"], 0)
+
+    def test_the_hook_passes_the_call_id_through(self):
+        self.fixture(RENAME)
+        verify_hooks.post_api_request(session_id=SESSION, response={"assistant_message": {"tool_calls": [
+            {"id": "c1", "function": {"name": "terminal"}}, {"id": "c2", "function": {"name": "terminal"}}]}})
+        self.before("terminal", {"command": "sed ..."})
+        self.fixture(STALE_RENAME)
+        carried = transform_tool_result(tool_name="terminal", args={"command": "sed ..."}, result=RESULT,
+                                        session_id=SESSION, turn_id="t1", tool_call_id="c1",
+                                        hermes_home=self.home, duration_ms=3, status="ok")
+        self.assertNotIn(KEY, json.loads(str(carried)) if carried else {})
 
 
 if __name__ == "__main__":

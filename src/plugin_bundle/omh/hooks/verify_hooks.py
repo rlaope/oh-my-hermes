@@ -12,8 +12,8 @@ from typing import Final, TypeGuard
 from .. import runtime_paths
 from ..caller_check import round_end_note as caller_note
 from ..catch_log import PLAN_CONTINUED, record_catch
-from ..consistency_trigger import (discard_snapshots, round_end_trigger, shell_changed_files, spend_shell_round_end,
-                                   turn_root)
+from ..consistency_trigger import (discard_snapshots, note_tool_batch, round_end_trigger, shell_changed_files,
+                                   spend_shell_round_end, turn_root)
 from ..export_check import round_end_note as export_note
 from ..host_observation import observe_plugin_hook_call
 from ..impact_check import round_end_note
@@ -292,7 +292,9 @@ def reset_stashed_answers() -> None:
 # Hermes calls `pre_verify` only after a `patch` / `write_file` landed this turn, so a turn that edits
 # only through a command (`sed -i`, a heredoc script) never reaches it. The round end's structural notes
 # (export, test, caller: each names a line that is broken now, and is empty otherwise) ride the result of
-# the command that changed a Python file instead, once per turn, under their own key. The consistency
+# the command that changed a Python file instead, once per turn, under their own key. The model reads a
+# message's results together, so of a message's commands only its last one is looked at; and a turn whose
+# round end `pre_verify` already ran gets none, since its turn-start text is gone. The consistency
 # checklist does not: it needs the coding posture, which this seam is not given, and alone it names no
 # line. The impact note does not either: its baseline is taken only before a `patch` / `write_file`.
 SHELL_ROUND_END_TOOLS: Final = frozenset({"terminal", "execute_code"})
@@ -301,7 +303,7 @@ _LOG = logging.getLogger("omh.verify_hooks")
 
 
 def annotate_shell_round_end(*, tool_name: object, result: object, session_id: object,
-                             turn_id: object) -> str | None:
+                             turn_id: object, tool_call_id: object = "") -> str | None:
     """`transform_tool_result`: the command's result with the round-end notes for the Python files this
     turn changed, when the command just changed one and a note names something; None otherwise."""
     if tool_name not in SHELL_ROUND_END_TOOLS or not isinstance(result, str) or not result:
@@ -312,7 +314,7 @@ def annotate_shell_round_end(*, tool_name: object, result: object, session_id: o
         parsed = None
     if parsed is not None and (not isinstance(parsed, dict) or SHELL_ROUND_END_KEY in parsed):
         return None
-    note = shell_round_end_note(session_id, turn_id)
+    note = shell_round_end_note(session_id, turn_id, tool_call_id)
     if not note:
         return None
     if not isinstance(parsed, dict):
@@ -321,10 +323,17 @@ def annotate_shell_round_end(*, tool_name: object, result: object, session_id: o
     return json.dumps(parsed, ensure_ascii=False)
 
 
-def shell_round_end_note(session_id: object, turn_id: object) -> str:
+def post_api_request(session_id: object = "", response: object = None, **_kwargs: object) -> None:
+    """Keep the model message's tool-call ids, so the shell round end looks at a message's commands only
+    after its last one (`consistency_trigger.note_tool_batch`). An observer: returns nothing."""
+    message = response.get("assistant_message") if isinstance(response, dict) else None
+    note_tool_batch(session_id, message.get("tool_calls") if isinstance(message, dict) else None)
+
+
+def shell_round_end_note(session_id: object, turn_id: object, tool_call_id: object = "") -> str:
     """The export, test and caller notes `pre_verify` would give at attempt 0, for a turn that changed
     Python files only through commands; ``""`` when the last command changed none or no note names a line."""
-    paths = shell_changed_files(session_id, turn_id)
+    paths = shell_changed_files(session_id, turn_id, tool_call_id)
     if not paths or not isinstance(session_id, str):
         return ""
     root = turn_root(session_id)

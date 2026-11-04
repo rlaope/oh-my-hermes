@@ -30,6 +30,8 @@ result transforms in a fixed order:
    Python file, in a turn with no ``patch`` / ``write_file`` call, gets the
    round-end export, test and caller notes under its own JSON key, once per
    turn, when one of them names a line (``verify_hooks.annotate_shell_round_end``).
+   Only the last call of a model message that is not a read is looked at:
+   ``post_api_request`` keeps the message's call ids.
    Hermes calls ``pre_verify`` only after those two tools, so without this a
    shell-only edit gets no round-end check.
 7. Full-width diff band padding — tool-result diffs get their painted lines
@@ -181,6 +183,7 @@ def transform_tool_result(**kwargs: Any) -> str | None:
         result=kwargs.get("result"),
         session_id=session_id,
         turn_id=kwargs.get("turn_id"),
+        tool_call_id=kwargs.get("tool_call_id"),
     )
     if round_end is not None:
         annotated = round_end

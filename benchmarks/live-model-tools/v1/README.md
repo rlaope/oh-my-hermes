@@ -696,6 +696,93 @@ clause fails on runs where the note arrived mid-edit (a later command of the sam
 named line on its own), the next candidate is a note that waits for a command that changed no
 Python file, under its own pre-registration.
 
+#### Measurement 1 result (2026-11-05): every clause passed; review found two wrong-note shapes, so it does not carry the merge
+
+Counted runs 2026-11-05 00:12-01:42 KST, s55 and h45, conditions D and S: 264 runs, 0 crashes or
+incomplete runs, so the strict and re-run readings are the same. Recomputed by `OPT/opt-m/gate.py`
+(`gate-strict-claude.json`):
+
+| Clause | Result |
+| --- | --- |
+| 1. No template loses a pass, pooled | PASS: no template lower; I-SIGNATURE 13 -> 15, L-RENAME-EXPORTS 15 -> 16, every other template equal |
+| 2. Shell notes on controls | PASS: 0 |
+| 3. Continues on controls, on <= base | PASS: 8 -> 8 |
+| 4. No on run above 3x its cell's base median tokens | PASS: none |
+| 5a. Coverage and fidelity against the replay | PASS: 56 on-arm shell-only runs, each on its recorded tree digest, live notes equal replayed notes |
+| 5b. Shell-only positives | PASS: 22/26 -> 24/27 |
+
+Totals: 125/132 -> 128/132 passes, 11.32M -> 11.18M tokens. 14 shell notes in 13 runs, all
+on positives; 12 of the 13 runs are Haiku in condition S. Sonnet in condition D edited
+shell-only in 22 of 39 base runs and 19 of 39 on runs.
+
+Two corrections to the recompute, made before the clause was read and kept in
+`replay_shell.py`:
+- an on-arm session's recorded tool result already carries the live note, and the annotator
+  declines a result with that key, so the replay removes the key first;
+- a command that names a file by its absolute workspace path is rewritten to the replay root
+  before the snapshot step too, as the live run resolved it.
+
+Before these corrections, clause 5a showed 4 mismatches, and after them 0.
+
+**Why it does not merge.** The review of the noted sessions found two notes that named a line
+which was not broken when the model read it:
+- **Haiku `I-KWARG-583919`, stale within a message.** Hermes hands each command's result to
+  `transform_tool_result` as it lands, but the model reads a message's results together. The
+  caller note was computed after the first of four `sed` calls, and named the two callers that the
+  next two calls of the same message had already updated. The run then rewrote the returned key
+  and the test, and failed. The same cell went 4/4 -> 2/4.
+- **Haiku `I-KWARG-347911`, a mid-turn baseline.** Haiku wrote its answer file with `write_file`,
+  so `pre_verify` ran and continued the turn. `pre_verify` consumes the turn's state at attempt 0,
+  and the state rebuilt after the continue took mid-turn text as the turn's start. Its test note
+  then asked to restore the model's own first-round edit.
+
+By the fallback written above, both shapes are made silent and the branch merges only on a new
+measurement. The partial GPT runs in condition S (16 records, stopped between instances when the
+defect was found, not gated) were luna 3/5 -> 5/5 and sol 3/3 -> 3/3.
+
+#### Measurement 2, pre-registered before its first run (2026-11-05)
+
+**The change since measurement 1** (v2):
+- **The message's last command.** A new `post_api_request` observer keeps the ids of the model
+  message's tool calls (`consistency_trigger.note_tool_batch`; ids and tool names only). The shell
+  round end looks only at the message's last call that is not a read. An id the latest message
+  does not hold is looked at, as every call was in v1.
+- **No second round end in a turn.** A turn whose state `pre_verify` already consumed
+  (`discard_snapshots`, `round_end_trigger`) gets no shell round end afterwards.
+
+**Offline replay of v2** (`replay_shell.py --batches`):
+- The 445 OPT-K / OPT-L sessions get the same 2 notes as v1.
+- On measurement 1's on-arm sessions, 3 notes change, all Haiku in condition S:
+  - `I-KWARG-583919`: the stale caller note is gone; a test note at the message's end names
+    the rewritten expectation (`tests/test_http_client.py:5`), the defect the run failed on;
+  - `L-RENAME-ALIAS-347911` and `L-RENAME-ALIAS-815473`: a mid-message export note is gone,
+    because the same message fixed `api.py:3`.
+
+  The post-continue case is not replayed (the replay stops at a session's first `patch` /
+  `write_file`); it is pinned by `tests/test_shell_round_end.py`.
+
+**Setup.** As in measurement 1, except:
+- **Arms:** `base` origin/main `225f62ff2` (unchanged); `on` this branch at the commit that adds
+  this section.
+- **Seeds:** none appears under `.omc/research`, `docs` or the bench before this section. 290999,
+  668893 and 733331 for every template; 197711 also for the three positives and their three
+  controls.
+- **Panel:** s55 and h45 in D and S as before. `gpt-6-luna` and `gpt-6.1-sol` through
+  `openai-codex` in condition S, run in parallel with the Claude lanes under the same load gate,
+  and gated.
+- **Size:** 132 instances per arm on s55 + h45, plus 27 per GPT lane per arm: 186 per arm, 372
+  runs.
+- **Records:** measurement 1's records and profile snapshots move to `OPT/opt-m/m1/`;
+  measurement 2 writes `runs/` and `hermes-db/` afresh. The profiles are reused; the on-arm bundle
+  link moves to the new commit's snapshot.
+
+**The gate:** clauses 1-5 above, unchanged, over all lanes run, recomputed by
+`OPT/opt-m/gate.py`.
+
+**Fallback:** as above. If a clause fails, the branch does not merge. If a review again finds a
+note naming a line that is not broken when the model reads it, that shape is made silent and the
+branch does not merge on this measurement.
+
 ### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
 
 Pre-registered before its first live run.

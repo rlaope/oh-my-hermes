@@ -1181,6 +1181,7 @@ print(json.dumps(observed, ensure_ascii=False))
                 [
                     "on_session_end",
                     "on_session_start",
+                    "post_api_request",
                     "post_tool_call",
                     "pre_llm_call",
                     "pre_tool_call",

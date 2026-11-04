@@ -170,6 +170,16 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
             "a Hermes tool call"
         ),
     },
+    "post_api_request": {
+        "source_path": "hooks/verify_hooks.py",
+        "event_scope": ("post_api_request",),
+        "reviewed_timeout_ms": 1000,
+        "capability": (
+            "keeping the tool-call ids of the model's latest message (ids and "
+            "tool names only), so the shell round end looks at a message's "
+            "commands only after its last one"
+        ),
+    },
     "post_tool_call": {
         "source_path": "hooks/tool_hooks.py",
         "event_scope": ("post_tool_call",),
