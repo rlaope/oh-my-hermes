@@ -197,14 +197,13 @@ from .model_picker import KEYS as MODEL_PICKER_KEYS
 from .model_picker import PICK as MODEL_PICK
 from .model_picker import ModelPicker, model_rows, typed_switch_value
 from . import dag_block
-from .dag_tree import TreeState, run_key
+from .dag_tree import TreeState
 from .panels import (
     CATCH_MARK,
     HudPoller,
     HudSnapshot,
     catch_lines,
     dag_page_lines,
-    graph_is_dag,
     hud_chips,
     panel_lines,
     plan_room_collapsed,
@@ -212,9 +211,7 @@ from .panels import (
     plan_text,
 )
 from .dag_pager import DagPager
-from .background import (
-    ALERT_GLYPHS, BackgroundProcess, alert_wait, askable, finished_forms, report_prompt, running_forms, tool_call,
-)
+from .background import BackgroundProcess, askable, finished_forms, report_prompt, running_forms, tool_call
 from .clipboard import COPY_OSC52, COPY_PBCOPY, SSH_VARIABLES, copy_route, pbcopy, tmux_client_over_ssh
 from .prompts import CLOSED_CHOICES, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
 from .faults import FaultLog
@@ -522,6 +519,10 @@ COMPRESS_STARTED_NOTICE = "Compressing: Hermes summarizes the older turns with a
 # The working row's verb while a `/compress` is out and no turn runs (`App._compressing_since`). It offers no Esc:
 # with no turn running Esc arms the rewind and sends no interrupt, so it does not stop a compression.
 COMPRESSING_VERB = "Compressing"
+# Between turns, while a background process Hermes will wake the session for still runs, the working row says the
+# session waits on it, as the working row says a turn runs (the owner, 2026-11-05: "걍 Musing마냥 … 계속 나오게"):
+# `✻ Waiting… (10m 06s · terminal(uv run …))`.
+ALERT_WAIT_VERB = "Waiting"
 # How long a `/compress` is waited for: Hermes' own budget for it (`hermes_cli/gateway_client.py` COMPRESS_RPC_TIMEOUT,
 # the compression ceiling plus slack), in place of `CALL_ANSWER_SECONDS`.
 COMPRESS_ANSWER_SECONDS = 660.0
@@ -1973,7 +1974,6 @@ class App(ModesMixin, AgentViewMixin):
         self.panel_shown = False  # the plan panel was in the slot `_slot_lines` last made: it gets its blank rows
         self.plan_folded = False  # Ctrl+P: the plan is its header alone, for the rest of the session
         self.plan_room_collapsed = False  # the plan the slot drew last was its header alone for want of rows
-        self.plan_on_tree = False  # the plan the slot drew last was one line over its dag run's tree (`_plan_on_tree`)
         self.tail_spacer = False  # `_tail` put a blank row above the working row, the first row to give way
         self.badge_cache: tuple[object, tuple[Line, ...]] = (None, ())  # `_badge_forms`' last forms and their key
         self.pager: Pager | None = None
@@ -2067,6 +2067,7 @@ class App(ModesMixin, AgentViewMixin):
         self.tree_folds: dict[str, bool] = {}  # the dag tree's rows the person folded (False) or opened (True)
         self.tree_run = ""  # the run those folds belong to (`dag_tree.run_key`); a new run, or session, starts none
         self.tree_second = -1  # the whole wall second the tree's clocks were last drawn at (`_tree_second_due`)
+        self.alert_second = -1  # the same for the wait's row (`_alert_process`)
         self.tree_state: TreeState | None = None  # what the tree's keys need, as the agent view last drew it
         # The dag run that is over, which the view no longer draws, and when its graph had last moved (`_run_gone`)
         self.retired_run: tuple[str, float] | None = None
@@ -3865,7 +3866,7 @@ class App(ModesMixin, AgentViewMixin):
         payload = self.hud.payload if self.hud is not None else None
         if plan_state(payload) != "open" or not self.panel_shown:  # a menu over the plan: nothing to fold where seen
             return False
-        if self.plan_room_collapsed or self.plan_on_tree:
+        if self.plan_room_collapsed:
             return False
         self.plan_folded = not self.plan_folded
         self.dirty = True
@@ -7025,9 +7026,6 @@ class App(ModesMixin, AgentViewMixin):
         # The glyph steps with the clock beside it, on the same second, so the row alone never needs a faster frame.
         step = max(0, int(self.wall_clock() - shown.started_at)) if self.motion else 0
         glyph = WORKING_GLYPHS[step % len(WORKING_GLYPHS)]
-        if alert_wait(shown, self._busy()):
-            # The wait's clock hand: a quarter each second, held while the window is unfocused (#2542's ambience).
-            glyph = ALERT_GLYPHS[int(self._ambient_clock()) % len(ALERT_GLYPHS)] if self.motion else ALERT_GLYPHS[0]
         return running_forms(
             shown, more=len(self.bg_running) - 1, now=self.wall_clock(), glyph=glyph, turn_runs=self._busy(),
             theme=self.theme,
@@ -7102,20 +7100,23 @@ class App(ModesMixin, AgentViewMixin):
 
     def _tree_spins(self) -> bool:
         """Whether the dag tree the last frame drew moves (a running or parked node's spinner, a waiting row's dots,
-        `dag_tree.TreeState.moves`): with motion on and the window focused, also between turns while the run waits.
-        Unfocused its motion holds (`_ambient_clock`), so nothing ticks for it at the spinner's pace."""
-        return (self.motion and self.decoder.unfocused_at is None and self.tree_state is not None
-                and self.tree_state.moves)
+        `dag_tree.TreeState.moves`), or the wait's row turns (`_alert_process`): with motion on and the window
+        focused, also between turns. Unfocused their motion holds (`_ambient_clock`), so nothing ticks for it at the
+        spinner's pace."""
+        return self.motion and self.decoder.unfocused_at is None and (
+            self.tree_state is not None and self.tree_state.moves or self._alert_process() is not None)
 
     def _tree_second_due_at(self) -> float | None:
-        """When, on the loop's clock, a time on the tree's rows next shows another second (`TreeState.clocks`, the
-        content that counts on focused or not); None without one."""
-        if self.tree_state is None or not self.tree_state.clocks:
+        """When, on the loop's clock, a time on the tree's rows or the wait's row next shows another second
+        (`TreeState.clocks`, `_alert_process`: content that counts on focused or not); None without one."""
+        if not (self.tree_state is not None and self.tree_state.clocks) and self._alert_process() is None:
             return None
         return self.clock() + 1.0 - self.wall_clock() % 1.0
 
     def _tree_second_due(self) -> bool:
-        return self.tree_state is not None and self.tree_state.clocks and int(self.wall_clock()) != self.tree_second
+        second = int(self.wall_clock())
+        return (self.tree_state is not None and self.tree_state.clocks and second != self.tree_second
+                or self._alert_process() is not None and second != self.alert_second)
 
     def _aura_live(self) -> bool:
         """Whether the composer's `dag-ulw` aura moves now (`aura`): a token in the draft it draws, at the truecolor
@@ -7715,8 +7716,10 @@ class App(ModesMixin, AgentViewMixin):
         if not lines and self.transcript.taken_any:
             lines = [()]  # the spacer a block opens with, here between the transcript and the region under it
         compressing = self._compressing_since()
+        alert = self._alert_process() if compressing is None else None
         # A blank row above the working row, as between two blocks; the frame drops it first when rows are short.
-        self.tail_spacer = (self._busy() or compressing is not None) and bool(lines) and bool(lines[-1])
+        self.tail_spacer = (self._busy() or compressing is not None or alert is not None) and bool(lines) and bool(
+            lines[-1])
         if self.tail_spacer:
             lines.append(())
         if self._busy() and self.waiting_since is not None:
@@ -7775,14 +7778,33 @@ class App(ModesMixin, AgentViewMixin):
                    *working_spans(f"{COMPRESSING_VERB}…", frame, self.theme),
                    Span(f" ({elapsed_text(now - compressing)})", self.theme.muted))
             lines.append(truncate_line(row, cols))
+        elif alert is not None:
+            # The session waits on a process Hermes will wake it for: the working row's spinner and words, its clock,
+            # then the call. The spinner holds while the window is unfocused (#2542); the clock counts on.
+            frame, waited = self._held_frame(), elapsed_text(self.wall_clock() - alert.started_at)
+            row = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
+                   *working_spans(f"{ALERT_WAIT_VERB}…", frame, self.theme),
+                   Span(f" ({waited} · {tool_call(alert)})", self.theme.muted))
+            lines.append(truncate_line(row, cols))
+            self.alert_second = int(self.wall_clock())
         return lines
+
+    def _alert_process(self) -> BackgroundProcess | None:
+        """The background process the session waits on: between turns, the newest one still running that Hermes will
+        wake the session for (`notify_on_complete`, or `watch_patterns` on a match), as its checkpoint records; None
+        during a turn, once one ended unreported (the info line offers its result), and with none. Never read from
+        what the model said."""
+        if self._busy() or self.bg_done is not None or not self._background_live():
+            return None
+        waking = [process for process in self.bg_running if process.notify or process.watched]
+        return waking[-1] if waking else None
 
     def _working_rows(self) -> int:
         """The tail's last rows that say a turn runs, as `_tail` draws them: the working (or waiting, or
         interrupting) row, and the tip under the working row from TIP_MIN_ROWS rows. The agent view leaves the tail
         these (`layout.allocate`'s `tail_floor`), so a short terminal never loses the row saying a turn runs."""
-        if not self._busy():
-            return int(self._compressing_since() is not None)  # the compression's row, with no tip
+        if not self._busy():  # the compression's row, or the wait's, with no tip
+            return int(self._compressing_since() is not None or self._alert_process() is not None)
         return 1 + int(self.size[1] >= TIP_MIN_ROWS and self.waiting_since is None and not self.interrupting)
 
     def _tip_line(self, cols: int) -> Line | None:
@@ -7870,32 +7892,18 @@ class App(ModesMixin, AgentViewMixin):
         if payload is None:
             return []
         show_plan = not self.retired_plan or plan_text(payload) != self.retired_plan
-        on_tree = show_plan and self._plan_on_tree(payload)
         lines = panel_lines(
             payload, cols, cap, self.theme, self.wall_clock(), received_at=self.hud.received_at,
             show_agents=False, show_graph=False,  # the agent view under the info line draws them
             show_plan=show_plan,
             motion=self.motion,
             color_depth=self.color_depth,
-            plan_folded=self.plan_folded or on_tree,
-            fold_key="" if on_tree else PLAN_FOLD_KEY,  # one line while the tree under it shows the run
+            plan_folded=self.plan_folded,
+            fold_key=PLAN_FOLD_KEY,
         )
         self.panel_shown = bool(lines)
         self.plan_room_collapsed = show_plan and plan_room_collapsed(payload, cap)
-        self.plan_on_tree = on_tree
         return lines
-
-    def _plan_on_tree(self, payload: Mapping[str, Any]) -> bool:
-        """Whether the plan is the dag run the agent view draws as its tree: its list was declared while that run was
-        open (`todo.dag_run`, the run's id, stamped by OMH as the list was written) and the view still draws the run
-        (`_run_gone`). Then it is one line (`[Plan] 4/6 ▸ <current item>`), since the tree under the composer shows
-        the same work; a plan of no run, or of another, is drawn as it always was."""
-        todo = payload.get("todo")
-        run = todo.get("dag_run") if isinstance(todo, Mapping) else None
-        if not isinstance(run, str) or not run or payload.get("error") or not graph_is_dag(payload):
-            return False
-        graph = payload["delegation_graph"]
-        return f"d:{run}" in run_key(graph).split() and not self._run_gone(graph)
 
     def _context_style(self) -> Style:
         percent = self.context_percent if self.context_percent is not None else 0.0

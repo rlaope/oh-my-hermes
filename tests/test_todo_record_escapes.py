@@ -64,14 +64,11 @@ class WholeSequenceTest(unittest.TestCase):
             "plan_stage": (PLAN_STAGE_ACCEPTED, f"\x1b[2m{PLAN_STAGE_ACCEPTED}\x1b[0m"),
         }
         template = sorted(TODO_TEMPLATES)[0]
-        # `dag_run` is no text either: a run id, stored only when it is one whole (`TODO_DAG_RUN_PATTERN`).
         self.assertEqual(
-            set(inspect.signature(build_todo_record).parameters) - {"items", "dropped", "dag_run"},
-            {*wrapped, "template"},
+            set(inspect.signature(build_todo_record).parameters) - {"items", "dropped"}, {*wrapped, "template"}
         )
         # The item's own text fields are keys `validate_todo_items` reads; there is no list to derive them from.
         item = {"text": "\x1b[31mx\x1b[0m", "phase": "\x1b[2mphase\x1b[0m", "blocked_reason": "\x1b[33mwaiting\x1b[0m"}
-        self.assertNotIn("dag_run", build_todo_record("t", [item], source="cli", dag_run="\x1b[1mfeat\x1b[0m"))
         record = build_todo_record(
             wrapped["title"][1], [item], **{name: raw for name, (_clean, raw) in wrapped.items() if name != "title"}
         )

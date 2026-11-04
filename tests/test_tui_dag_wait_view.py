@@ -21,14 +21,13 @@ the parked node in layer 4 (`owners_run`).
 
 from __future__ import annotations
 
-import json
 import re
 import time
 import unittest
 from unittest.mock import patch
 
 from _delegation_graphs import graph, lane, root
-from test_tui_agent_view import view_text, with_graph
+from test_tui_agent_view import mode_row, view_text, with_graph
 from test_tui_modes import drawn, make_app
 from omh.tui.background import BackgroundProcess, tool_call
 from omh.tui.keys import CHAR, Key
@@ -421,51 +420,91 @@ class SpinnerTests(unittest.TestCase):
         self.assertFalse(reduced._tree_spins(), "with reduced motion nothing turns, so nothing ticks")
 
 
-class PlanOnTreeTests(unittest.TestCase):
-    """A plan declared while the run was open is one line over the run's tree; any other plan is drawn whole."""
+class PlanTests(unittest.TestCase):
+    """The plan over a run's tree is drawn whole, as on main, and Ctrl+P folds and opens it (the owner, 2026-11-05: a
+    plan folded on its own was confusing)."""
 
     PLAN = [{"text": "PR A: T1 receipts", "state": "done"}, {"text": "PR A: T2 citations", "state": "done"},
             {"text": "PR A: T3 skills", "state": "done"}, {"text": "PR A: baseline", "state": "active"},
             {"text": "PR A: T4 wire", "state": "pending"}, {"text": "PR A: verify", "state": "pending"}]
 
-    def plan_app(self, run: str | None, built: dict | None = None):
-        app, client = make_app(rows=50, cols=120, clock=lambda: 0.0)
-        with_graph(app, owners_run() if built is None else built, self.PLAN)
-        if run is not None:
-            app.hud.payload["todo"]["dag_run"] = run
-        return app, client
-
     def plan_rows(self, app) -> list[str]:
         return [row.strip() for row in drawn(app) if "[Plan]" in row or re.match(r"^\s*\[[ ✓•]\] ", row)]
 
-    def test_the_runs_own_plan_is_one_line_naming_the_item_it_is_on(self) -> None:
-        app, _client = self.plan_app(RUN)
-        self.assertEqual(self.plan_rows(app), ["[Plan] Plan │ 3/6 ▸ PR A: baseline"])
-
-    def test_another_runs_plan_or_a_plan_of_no_run_is_drawn_whole(self) -> None:
-        for run in (None, "pr-b"):
-            with self.subTest(run=run):
-                app, _client = self.plan_app(run)
-                shown = self.plan_rows(app)
-                self.assertGreater(len(shown), 1, shown)
-                self.assertIn("[•] PR A: baseline", shown)
-
-    def test_without_the_runs_tree_the_plan_is_drawn_whole(self) -> None:
-        over = owners_run()
-        for item in over["nodes"][1:]:
-            item.update(state="done", status="accepted")
-            item.pop("parked", None)
-        over["dag_open"] = False
-        app, _client = self.plan_app(RUN, over)  # the run is over and no turn runs: no tree
-        self.assertEqual(rows_of(app), [])
-        self.assertGreater(len(self.plan_rows(app)), 1)
-
-    def test_ctrl_p_does_nothing_to_the_one_line_plan(self) -> None:
-        app, _client = self.plan_app(RUN)
-        before = self.plan_rows(app)
+    def test_the_plan_over_a_runs_tree_is_whole_and_ctrl_p_folds_it(self) -> None:
+        app, _client = make_app(rows=50, cols=120, clock=lambda: 0.0)
+        with_graph(app, owners_run(), self.PLAN)
+        self.assertTrue(rows_of(app), "the run's tree is drawn")
+        whole = self.plan_rows(app)
+        self.assertEqual(len(whole), 7, whole)
         app._on_input(Key(CHAR, "p", ctrl=True))
-        self.assertEqual(self.plan_rows(app), before)
-        self.assertFalse(app.plan_folded)
+        self.assertEqual(len(self.plan_rows(app)), 1, "folded to its header")
+        app._on_input(Key(CHAR, "p", ctrl=True))
+        self.assertEqual(self.plan_rows(app), whole)
+
+
+class WaitingRowTests(unittest.TestCase):
+    """Between turns, a background process Hermes will wake the session for is shown as the working row shows a turn
+    (the owner, 2026-11-05: "걍 Musing마냥 … 계속 나오게"): `✻ Waiting… (10m 6s · terminal(…))`, in the working
+    row's place, with its spinner and its clock; the info line is main's."""
+
+    def app(self, *, notify: bool = True, watched: bool = False, busy: bool = False, tree: bool = True):
+        clock, wall = [100.0], [PARKED_AT + 606]
+        app, _client = make_app(busy=busy, rows=50, cols=150, clock=lambda: clock[0], wall_clock=lambda: wall[0])
+        app.bg_session = app.stored_id
+        app.bg_running = (BackgroundProcess(PROC, None, False, None, "uv run python -m unittest discover -s tests",
+                                            PARKED_AT, notify, watched),)
+        with_graph(app, owners_run() if tree else None)
+        return app, clock, wall
+
+    @staticmethod
+    def waiting(app) -> list[str]:
+        return [row for row in drawn(app) if "Waiting…" in row]
+
+    def test_it_shows_in_the_working_rows_place_while_the_process_runs(self) -> None:
+        from omh.tui.app import WORKING_GLYPHS
+
+        for fields in ({"notify": True}, {"notify": False, "watched": True}):
+            with self.subTest(**fields):
+                app, _clock, _wall = self.app(**fields)
+                screen = drawn(app)
+                rule = next(at for at, row in enumerate(screen) if row.startswith("─"))
+                (row,) = self.waiting(app)
+                self.assertEqual(row[2:], f"Waiting… (10m 6s · {CALL})")
+                self.assertIn(row[0], WORKING_GLYPHS)
+                self.assertLess(screen.index(row), rule, "above the composer, where the working row stands")
+                self.assertEqual(app._working_rows(), 1)
+                self.assertIn("🔔 will ping you", mode_row(app), "the info line says what main says")
+
+    def test_not_during_a_turn_not_for_a_process_that_wakes_nothing_and_gone_when_it_ends(self) -> None:
+        app, _clock, _wall = self.app(busy=True)
+        self.assertEqual(self.waiting(app), [], "during a turn the working row is the turn's")
+        app, _clock, _wall = self.app(notify=False)
+        self.assertEqual(self.waiting(app), [])
+        self.assertEqual(app._working_rows(), 0)
+        app, _clock, _wall = self.app()
+        self.assertTrue(self.waiting(app))
+        app.bg_running = ()
+        self.assertEqual(self.waiting(app), [], "the process ended: the row goes")
+
+    def test_the_spinner_turns_and_the_clock_ticks_and_unfocused_the_spinner_holds(self) -> None:
+        from omh.tui.app import IDLE_READ_SECONDS, TICK_SECONDS
+
+        app, clock, wall = self.app(tree=False)  # no tree's spinner to tick for: only the wait's row
+        first = self.waiting(app)[0]
+        self.assertLessEqual(app._read_timeout(), TICK_SECONDS, "focused: the spinner's pace")
+        clock[0] += TICK_SECONDS * 1.5  # one spinner step on (a whole TICK_SECONDS can land a hair short in floats)
+        self.assertNotEqual(self.waiting(app)[0][0], first[0], "the spinner turned")
+        clock[0] += 1
+        wall[0] += 1
+        self.assertIn("(10m 7s ·", self.waiting(app)[0], "the clock ticked")
+        app.decoder.unfocused_at = clock[0]
+        held = self.waiting(app)[0]
+        clock[0] += 0.5
+        self.assertEqual(self.waiting(app)[0][0], held[0], "unfocused: the spinner holds")
+        wall[0] += 0.25  # a quarter into the second: the next frame is due at the next second, no sooner
+        self.assertAlmostEqual(app._read_timeout(), 0.75, places=6, msg="the clock asks for a frame each second")
+        self.assertLess(app._read_timeout(), IDLE_READ_SECONDS)
 
 
 class ParkedGraphTests(unittest.TestCase):
@@ -496,62 +535,6 @@ class ParkedGraphTests(unittest.TestCase):
         self.assertTrue(built["dag_open"])
         self.assertNotIn("unknown", header_text(built))
         self.assertIn("Parked 1m 27s", render_delegation_view(built, width=120).text())  # the box view too
-
-
-class TodoStampTests(unittest.TestCase):
-    """`omh_todo set` and the `todo_list` projection stamp the run open in the session; an advance keeps it."""
-
-    def test_a_list_declared_while_a_run_is_open_names_it_and_the_hud_projects_it(self) -> None:
-        from _delegation_state import PARENT, homes
-        from test_dag_tool import call, node, slots_table
-        from omh.plugin_bundle.omh.runtime_reader import read_omh_todo
-        from omh.plugin_bundle.omh.todo_store import read_todo_record
-        from omh.plugin_bundle.omh.tools.todo_tool import omh_todo_handler
-
-        items = [{"text": "Layer 1", "state": "active"}, {"text": "Layer 2", "state": "pending"}]
-        advance = {"action": "advance", "item": 2, "item_text": "Layer 2", "state": "active"}
-        with homes() as home:
-            omh_todo_handler({"action": "set", "title": "before", "items": items}, session_id=PARENT)
-            self.assertNotIn("dag_run", read_todo_record(home.omh, PARENT), "no run open: no stamp")
-            slots_table(home)
-            call(action="define", run="feat", nodes=[node("a")])
-            omh_todo_handler(advance, session_id=PARENT)
-            self.assertEqual(read_todo_record(home.omh, PARENT)["items"][1]["state"], "active", "the advance landed")
-            self.assertNotIn("dag_run", read_todo_record(home.omh, PARENT), "an advance stamps no run")
-            omh_todo_handler({"action": "set", "title": "run", "items": items}, session_id=PARENT)
-            self.assertEqual(read_todo_record(home.omh, PARENT)["dag_run"], "feat")
-            omh_todo_handler(advance, session_id=PARENT)
-            self.assertEqual(read_todo_record(home.omh, PARENT)["items"][1]["state"], "active", "the advance landed")
-            self.assertEqual(read_todo_record(home.omh, PARENT)["dag_run"], "feat", "an advance keeps it")
-            self.assertEqual(read_omh_todo(session_ref=PARENT)["dag_run"], "feat")
-            call(action="cancel", run="feat")
-            omh_todo_handler({"action": "set", "title": "after", "items": items}, session_id=PARENT)
-            self.assertNotIn("dag_run", read_todo_record(home.omh, PARENT), "a run that is over is no plan's")
-
-    def test_the_todo_list_projection_stamps_the_open_run(self) -> None:
-        from _delegation_state import PARENT, homes
-        from test_dag_tool import call, node, slots_table
-        from omh.plugin_bundle.omh.native_todo import project_native_todo
-        from omh.plugin_bundle.omh.todo_store import read_todo_record
-
-        todos = [{"id": "1", "content": "Layer 1", "status": "in_progress"}]
-        with homes() as home:
-            slots_table(home)
-            call(action="define", run="feat", nodes=[node("a")])
-            said = project_native_todo(tool_name="todo_list", args={"todos": todos},
-                                       result=json.dumps({"todos": todos}), status="ok", session_ref=PARENT,
-                                       omh_home=str(home.omh), hermes_home=str(home.hermes))
-            self.assertEqual(said, "projected")
-            self.assertEqual(read_todo_record(home.omh, PARENT)["dag_run"], "feat")
-
-    def test_a_stamp_that_is_not_a_run_id_is_not_stored(self) -> None:
-        from omh.plugin_bundle.omh.todo_store import build_todo_record
-
-        items = [{"text": "one", "state": "pending"}]
-        for value in ("", "Feat", "a/b", "x" * 40, 7, None):
-            with self.subTest(value=value):
-                self.assertNotIn("dag_run", build_todo_record("t", items, source="omh_todo", dag_run=value))
-        self.assertEqual(build_todo_record("t", items, source="omh_todo", dag_run="feat-2")["dag_run"], "feat-2")
 
 
 if __name__ == "__main__":

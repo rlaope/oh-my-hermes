@@ -94,12 +94,10 @@ from __future__ import annotations
 
 import json
 import threading
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .dag_run import open_run
 from .native_tools import NATIVE_CANCELLED_REASON, NATIVE_TODO_TOOL
 from .todo_store import (
     MAX_TODO_DEPTH,
@@ -290,8 +288,7 @@ def project_native_todo(
             _ = write_todo(home, {**prior, "source": NATIVE_TODO_SOURCE})
             return "adopted"
         record = build_todo_record(
-            "", bound, source=NATIVE_TODO_SOURCE, session_ref=session_ref, dropped=dropped,
-            dag_run=open_run(home, session_ref, time.time()),
+            "", bound, source=NATIVE_TODO_SOURCE, session_ref=session_ref, dropped=dropped
         )
         _ = write_todo(home, record)
     except _PROJECTION_FAILURES:

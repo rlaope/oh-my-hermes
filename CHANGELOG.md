@@ -31,18 +31,14 @@ All notable changes will be documented here.
   the run waits. While the terminal window is unfocused, the spinner and the
   dots hold, as the wallpaper does (#2542), while the times keep counting,
   redrawn once a second. An `unspecified-*` or unknown category no longer
-  draws a cell. A plan written by `omh_todo set` or `todo_list` while the
-  session's dag run is open now records that run's id (`dag_run`; an advance
-  keeps it). While that run's tree is drawn under the composer, the plan is
-  one line, `[Plan] 4/6 ▸ <current item>`, and Ctrl+P leaves it as it is. Any
-  other plan is drawn as before. Between turns, a background process Hermes
-  will wake the session for (`notify_on_complete`, or `watch_patterns` on a
-  match) is shown on the info line as what the session waits on:
-  `◜ waiting on  terminal(<command>)  21m 04s`. The arc turns a quarter
-  every second and the clock ticks. It replaces `🔔 will ping you when done`
-  and `🔔 will ping you on a match`. A process that wakes nothing keeps its
-  `🔕` wording, and the state is read from the process's flags, never from
-  what the model said.
+  draws a cell. Between turns, while a background process Hermes will wake
+  the session for still runs (`notify_on_complete`, or `watch_patterns` on a
+  match), the working row's place above the composer says the session waits
+  on it, as the working row says a turn runs: `✻ Waiting… (10m 6s ·
+  terminal(<command>))`. It has the working row's own spinner and clock. A
+  turn's working row takes over when a turn starts, and the row goes when
+  the process ends. The state is read from the process's flags, never from
+  what the model said, and the info line is unchanged.
 - **The OMH TUI's working glow is removed.** The light that went round the
   screen's edge while a turn ran read as too big and uncomfortable, and its
   trail framed the screen so the terminal's padding outside it looked like a

@@ -513,11 +513,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   repository, or on a terminal too small for the rules), read by `git status`
   off the screen's thread after each tool, each turn and every 15 seconds,
   then, while the session owns a process Hermes runs in the background, its
-  row: `✳ background  terminal(<command>)  8s`, its clock ticking each second;
-  after the turn, a process Hermes wakes the session for is what it waits on,
-  `◜ waiting on  terminal(<command>)  21m 04s`, the arc turning a quarter each
-  second, and one it does not says so (`🔕 Hermes won't be pinged · OMH is
-  watching it`); once one ends
+  row: `✳ background  terminal(<command>)  8s`, its clock ticking each second,
+  and after the turn who will be told when it ends (`🔔 will ping you when
+  done`, or `🔕 Hermes won't be pinged · OMH is watching it`); once one ends
   unreported, `✓ background  terminal(<command>)  finished 0:12 ago  ↵ report
   result`, and Enter on an empty composer asks the session for the results.
   A question, a picker or the history search hides the row while it has the

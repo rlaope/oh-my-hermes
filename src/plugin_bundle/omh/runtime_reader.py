@@ -99,7 +99,6 @@ from .todo_store import (
     MAX_TODO_TEMPLATE_CHARS,
     MAX_TODO_TEXT_CHARS,
     MAX_TODO_TITLE_CHARS,
-    TODO_DAG_RUN_PATTERN,
     TODO_ITEM_STATES,
     TODO_PLAN_STAGES,
     TODO_SCHEMA_VERSION,
@@ -2661,11 +2660,6 @@ def _todo_summary(
             dropped.append({**checked, "dropped_at": strip_control_characters(stamp)[:40]})
     if dropped:
         summary["dropped_bindings"] = dropped
-    # The dag-ulw run the list was declared under (`todo_store.TODO_DAG_RUN_PATTERN`), only when the record names one:
-    # the TUI folds the plan to one line while that run's own tree is drawn under the composer.
-    dag_run = record.get("dag_run")
-    if isinstance(dag_run, str) and TODO_DAG_RUN_PATTERN.fullmatch(dag_run):
-        summary["dag_run"] = dag_run
     # Ownership, stated as a fact about WHICH RECORD this is rather than as a
     # verdict about whether to show it. `status` cannot answer it: the
     # identity rule behind `established` reads an unanswerable case as

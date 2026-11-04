@@ -81,12 +81,6 @@ MAX_TODO_SOURCE_CHARS = 80
 # is the same identifier. A record without it is a legacy or CLI write, and
 # readers scope it by write time instead of by identity.
 MAX_TODO_SESSION_REF_CHARS = 160
-# Optional: the dag-ulw run that was open in the declaring session when a whole
-# list was declared (`dag_run.open_run`). The dag-ulw skill keeps the run's
-# layers as the plan, so a list declared while a run is open is that run's;
-# the TUI folds such a plan to one line under the run's own tree. A run id's
-# shape (`dag_run._ID`); anything else is not stored.
-TODO_DAG_RUN_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 # Optional phase label per item ("Internal Context", "Delivery", ...). A
 # phase-structured plan declared BEFORE engine work bounds the run: progress
 # is a checklist walked phase by phase, not an open-ended reasoning loop.
@@ -551,7 +545,6 @@ def build_todo_record(
     template: object = "",
     plan_stage: object = "",
     dropped: object = (),
-    dag_run: object = "",
 ) -> dict[str, Any]:
     """Build the on-disk todo record.
 
@@ -595,9 +588,6 @@ def build_todo_record(
     ``dropped`` is the plan's ``dropped_bindings`` (`dropped_bindings`),
     written only when non-empty, so a plan that never dropped a binding is
     byte-identical to one written before the field existed.
-
-    ``dag_run`` is the dag-ulw run open in the declaring session
-    (`TODO_DAG_RUN_PATTERN`), written only when it is one, on the same terms.
     """
     safe_title = strip_control_characters(title)
     if len(safe_title) > MAX_TODO_TITLE_CHARS:
@@ -638,8 +628,6 @@ def build_todo_record(
         record["plan_stage"] = safe_plan_stage
     if safe_dropped:
         record["dropped_bindings"] = safe_dropped
-    if isinstance(dag_run, str) and TODO_DAG_RUN_PATTERN.fullmatch(dag_run):
-        record["dag_run"] = dag_run
     return record
 
 
@@ -1120,9 +1108,6 @@ def advance_todo_item(
                 # An advance moves one item and drops none, so it carries the
                 # plan's dropped bindings exactly as they were.
                 dropped=record.get("dropped_bindings", ()),
-                # It annotates the plan it found, so the run that plan was
-                # declared under stays its run; an advance stamps no new one.
-                dag_run=record.get("dag_run", ""),
             )
         except TodoValidationError as error:
             raise _advance_template_error(stored_template, error) from error
