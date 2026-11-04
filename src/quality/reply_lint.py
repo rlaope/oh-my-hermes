@@ -167,6 +167,7 @@ _SCHEMA_ID_TERMS: tuple[str, ...] = (
     "omh_dag/v1",
     "omh_dag_result/v1",
     "omh_degradation/v1",
+    "omh_desktop_dag/v1",
     "omh_desktop_hud/v1",
     "omh_dispatch_outcome/v1",
     "omh_document_plan_result/v1",
