@@ -396,7 +396,7 @@ class FailingShutdownTests(unittest.TestCase):
     def test_last_lines_that_fail_to_render_still_leave_the_region_erased(self) -> None:
         app, _client, terminal = self.leaving()
 
-        def broken(cols: int, theme: object) -> list:
+        def broken(cols: int, theme: object, final: bool = False) -> list:
             raise ValueError("a block that cannot render")
 
         app.transcript.take_stable_lines = broken  # type: ignore[method-assign]

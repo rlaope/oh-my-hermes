@@ -183,7 +183,12 @@ class ObserveRealLoaderRegistrationTest(unittest.TestCase):
         self.assertEqual(result["reason"], "registration_mismatch")
 
     def test_windows_baseline_reaches_the_probe(self):
-        baseline = {"SystemRoot": r"C:\Windows", "windir": r"C:\Windows", "TEMP": r"C:\Temp"}
+        baseline = {
+            "SystemRoot": r"C:\Windows",
+            "windir": r"C:\Windows",
+            "TEMP": r"C:\Temp",
+            "LOCALAPPDATA": r"C:\Users\tester\AppData\Local",
+        }
         with mock.patch.dict(os.environ, baseline, clear=False):
             self.observe()
 
@@ -196,6 +201,7 @@ class ObserveRealLoaderRegistrationTest(unittest.TestCase):
 
         self.assertNotIn("SystemRoot", self.env_seen)
         self.assertNotIn("windir", self.env_seen)
+        self.assertNotIn("LOCALAPPDATA", self.env_seen)
 
     def test_a_failed_probe_reports_a_bounded_detail(self):
         result = self.observe(returncode=1, stderr="x" * 4000)

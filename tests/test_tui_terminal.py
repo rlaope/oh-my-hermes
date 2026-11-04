@@ -23,6 +23,7 @@ from unittest.mock import patch
 
 from omh.tui import terminal as terminal_module
 from omh.tui.keys import BUTTON_LEFT, KeyDecoder, Mouse
+from omh.tui.screen import CURSOR_SHAPE_BEAM, CURSOR_SHAPE_BLOCK, CURSOR_SHAPE_DEFAULT
 from omh.tui.terminal import (
     BRACKETED_PASTE_OFF,
     BRACKETED_PASTE_ON,
@@ -415,6 +416,34 @@ class TerminalPtyTests(unittest.TestCase):
             self.master_output()
         self.assertFalse(term.mouse_reporting)
         self.assertTrue(self.master_output().endswith(RESTORE_SEQUENCE.encode()))
+
+    def test_the_shells_cursor_shape_is_put_back_only_where_this_run_changed_it(self) -> None:
+        with Terminal(self.slave, self.slave) as term:
+            self.master_output()
+            term.set_cursor_shape(CURSOR_SHAPE_BEAM)
+            self.assertEqual(self.master_output(), CURSOR_SHAPE_BEAM.encode())
+            term.set_cursor_shape(CURSOR_SHAPE_BEAM)
+            self.assertEqual(self.master_output(), b"")
+            term.set_cursor_shape(CURSOR_SHAPE_BLOCK)
+            self.assertEqual(self.master_output(), CURSOR_SHAPE_BLOCK.encode())
+        written = self.master_output()
+        self.assertTrue(written.endswith(RESTORE_SEQUENCE.encode()), written)
+        self.assertTrue(written.startswith(CURSOR_SHAPE_DEFAULT.encode()), written)
+        self.assertIsNone(term.cursor_shape)
+
+    def test_a_run_that_never_set_a_cursor_shape_leaves_the_shells_alone(self) -> None:
+        self.assertNotIn(CURSOR_SHAPE_DEFAULT, RESTORE_SEQUENCE)
+        with Terminal(self.slave, self.slave) as term:
+            self.master_output()
+            term.set_cursor_shape(None)
+            self.assertEqual(self.master_output(), b"")
+        self.assertEqual(self.master_output(), RESTORE_SEQUENCE.encode())
+
+    def test_a_cursor_shape_set_outside_the_with_block_is_refused(self) -> None:
+        term = Terminal(self.slave, self.slave)
+        term.set_cursor_shape(CURSOR_SHAPE_BEAM)
+        self.assertEqual(self.master_output(), b"")
+        self.assertIsNone(term.cursor_shape)
 
     def test_a_drag_turns_on_over_the_reports_and_off_without_them(self) -> None:
         term = Terminal(self.slave, self.slave)

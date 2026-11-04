@@ -65,7 +65,7 @@ OMH is Hermes-native workflow guidance, not a hidden executor or core patch. Her
 
 Compact lane map:
 
-- Intent -> plan: `deep-interview`, `ralplan`, `plan`, `loop`.
+- Intent -> plan: `deep-interview`, `ralplan`, `plan`, `dag-ulw`, `loop`.
 - Research and company ops: `research`, `source-finder`, `research-department`, `paper-learning`, `feedback-triage`, `strategy-brief`, `meeting-brief`.
 - Retained knowledge: `wiki`.
 - Materials and visual summaries: `design-quality-gate`, `frontend`, `accessibility-audit`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`.
@@ -78,7 +78,7 @@ Treat OMH as the operating layer above individual Hermes-native skills. For a wo
 
 - On an unfamiliar or first-use pattern, briefly recommend the OMH-led route: explain that OMH can structure the problem, select the needed skills, and keep evidence boundaries clear.
 - After repeated accepted local patterns for the same user and workflow, continue OMH-led exploration, problem framing, skill composition, and prepared planning automatically. Keep the current workflow, next action, and prepared-versus-observed boundary visible.
-- Never let that autonomy bypass existing confirmation gates for destructive changes, credentials, external writes, deployment, executor dispatch, or starting a follow-on workflow engine (`ultrawork` — including its coordinated-scope, single-owner-persistence, delivery-boundary, and durable-checkpoint capabilities — `loop`, `ultraqa`) from another skill's output: an accepted plan or clarified brief is planning evidence, not permission — recommend the engine that fits the work's shape and wait for the user's explicit go-ahead. Do not claim that a native skill, subagent, review, CI, or merge ran unless matching observation exists.
+- Never let that autonomy bypass existing confirmation gates for destructive changes, credentials, external writes, deployment, executor dispatch, or starting a follow-on workflow engine (`dag-ulw`, `ultrawork` — including its coordinated-scope, single-owner-persistence, delivery-boundary, and durable-checkpoint capabilities — `loop`, `ultraqa`) from another skill's output: an accepted plan or clarified brief is planning evidence, not permission — recommend the engine that fits the work's shape and wait for the user's explicit go-ahead. Do not claim that a native skill, subagent, review, CI, or merge ran unless matching observation exists.
 - If a native Hermes capability is relevant, present it as an optional subordinate capability under the selected OMH workflow. OMH policy remains responsible for selecting and governing the workflow.
 
 ## Priority Rules

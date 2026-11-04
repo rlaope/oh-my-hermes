@@ -574,6 +574,205 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
+
+Pre-registered before its first live run.
+
+**Diagnosis** (research folder `OPT/opt-k/DIAGNOSIS.md`, from the H2H2 and H2H3 raw records,
+profile `state.db` snapshots and logs, with each session's edits replayed onto its fixture):
+- Every OMH `I-SIGNATURE` failure in both head-to-heads (gpt-6-luna 5, Haiku 4.5 1) left
+  `src/benchapp/cli.py:5` broken: `fee(int(argv[0]), 50)`, which reaches `compute_fee` through the
+  package re-export `from .pricing import compute_fee as fee`. One also left the alias caller
+  `invoices.py:5`.
+- The round-end trigger fired in every one (`reason=signature`), but the model was given only the
+  generic consistency checklist. It searched for `compute_fee`, saw the re-export, and stopped. No
+  run was ever shown `cli.py` by OMH.
+- 9 sessions reached the first stop with a broken caller; the generic continue fixed 3.
+- Haiku's `I-KWARG` failures are a different shape: every caller is consistent, and the returned
+  dict key and the existing test were both renamed. That is the test check's target (#2494); this
+  change cannot see it.
+
+**The change** (`caller_check.py`, `verify_hooks.py`): at the turn's first stop, for each
+module-level function of an edited file whose parameters changed (turn-start text from
+`consistency_trigger`), find its importers with `impact_check.find_importers` (package re-exports
+included), and bind each call against the old and the new parameters. Name `path:line`, the call,
+why it no longer binds and the new signature, only for a call that bound before and does not now.
+Silent on anything it cannot prove (see the module docstring). The note continues the turn on its
+own, the consistency check rides along, and the closing asks for the full final answer (no
+sentinel).
+
+**Offline replay, before this registration** (`OPT/opt-k/replay_caller.py`, the 198 H2H2/H2H3
+OMH sessions up to their first stop, `replay-h2h.txt`): a note on exactly the 9 `I-SIGNATURE`
+sessions that stopped with a broken caller, and on no other replayed session. 19 sessions edited
+by shell commands were not replayed. A first version also named 5 passing gpt-6.1-sol `I-KWARG`
+sessions, on a new test that calls `fetch(..., timeout=...)` inside `pytest.raises(TypeError)`;
+calls written to fail are now skipped.
+
+**The new control, `I-DEFAULTED`** (impact-ab split, this branch only). A keyword-only parameter
+`handling_cents: int = 0` is added to `ship_cost`, which is called directly, through an alias,
+through the module by a `*args` forwarder, and through a package re-export under another name.
+Every existing call stays valid, so a correct edit changes only the definition (and its tests),
+and the caller check must say nothing.
+
+The setup, fixed before the first live run:
+
+- **Arms.** Each arm links its OMH plugin bundle from a source snapshot (`git archive`):
+  - `base`: origin/main `3ad772371`;
+  - `on`: this branch at the commit that adds this section. Its bundle differs from base in
+    `caller_check.py` (new) and `hooks/verify_hooks.py` only.
+- **Profiles.** `optk-<lane>-<arm>`, the H2H3 OMH-arm configuration, product default:
+  - Hermes's default `tools.tool_search`;
+  - plugin settings `omh_home` and `lsp_tools: true`; `impact_check` not set, so off;
+  - `pyright` pinned by an absolute `lsp.servers.pyright.command`;
+  - `agent.max_turns: 120` and `agent.run_budget_seconds: 600`;
+  - the observer-only meter plugin, whose `omh_pkg` field records the load path.
+
+  Edit surface `lsp`, the `baseline` prompt with no edit directive, `--git-init-workspace`,
+  `--test-env`, effort `medium`.
+- **Panel.** Subscription routes only:
+
+  | Lane | Model | Route |
+  | --- | --- | --- |
+  | h45 | `claude-haiku-4-5-20251001` | `claude-proxy` (CPA) |
+  | s55 | `claude-sonnet-5-5` | `claude-proxy` (CPA) |
+  | luna | `gpt-6-luna` | `openai-codex` |
+  | sol | `gpt-6.1-sol` | `openai-codex` |
+
+- **Templates.** Twelve:
+  - positives: `I-SIGNATURE`, `I-KWARG`, `I-RETURN-SHAPE`;
+  - controls: `I-CONTROL`, `I-DEFAULTED`;
+  - no-regression: `C-DECOY`, `C-DUPLICATE`, `C-SCOPE-TRAP`, `E-BUGFIX`, `E-RENAME`,
+    `L-RENAME-ALIAS`, `L-RENAME-SHADOW`.
+- **Seeds.** None appears under `.omc/research` or in the bench before this section.
+  - 857137, 964009 and 1000003 for every template;
+  - also 618841, 742297 and 1299709 for the three positives and `I-DEFAULTED`, so each has
+    n = 24 per arm (6 per model);
+  - 48 instances per lane per arm, 192 per arm, 384 runs.
+- **Order.** Per instance the two arms run back to back on identical fresh workspaces, in
+  alternating order. Lanes run in parallel, under a load gate (1-min load at most 20) and a disk
+  gate (wait below 8 GB free, stop below 5 GB).
+- **Retries.** A run classified `rate_limited`, `provider_error` or `model_unavailable`, or a
+  client the gateway refused within seconds, is retried on the same route. Any other outcome is
+  final. A run with no completed record is a fail.
+- **Crashes.** The 2026-11-02 rule, fixed here in advance: the records as run are the **strict
+  reading**. After the lanes finish, each instance whose last record is a `process_crash` in
+  either arm is run once more in both arms, back to back, into `runs-rerun/`; the **re-run
+  reading** replaces both records of those instances. Every clause is reported under both
+  readings; the branch asks to merge only if both pass, or states which one fails and why.
+
+Definitions:
+- A **continue** is a session with at least one assistant row whose `finish_reason` is
+  `verify_hook_continue`, from the session DB.
+- A **caller note** is a `caller_check round_end session=<id> ... rows=N` line with N > 0 in the
+  on arm's profile log. Every on-arm first stop logs that line, with rows=0 when there is
+  nothing to name; a counted on-arm run with no line is reported as missing.
+- **Tokens** are the run record's `observation.tokens`; a cell is one model and one template.
+
+The gate, `on` against `base`:
+
+1. **Positives, pooled** (`I-SIGNATURE` + `I-KWARG` + `I-RETURN-SHAPE`, 72 runs per arm): on
+   passes at least base + 3.
+2. **No template loses a pass, pooled over the four models:** for each of the twelve templates,
+   on passes at least base passes.
+3. **Controls stay silent:** 0 caller notes on `I-CONTROL` and `I-DEFAULTED` in the on arm, and
+   continues on those two templates: on at most base. (The literal "0 continues" is not a
+   clause: the existing trigger fires on `I-DEFAULTED`'s signature change in both arms, by
+   design, and that is not this change.)
+4. **No token blow-up:** no on-arm run above 3x the median tokens of the base arm in its cell.
+
+Reported, not gated: per lane and template, passes, continues, caller notes, median calls,
+median tokens and median wall; caller notes on every template; the rows each note named;
+`mutation_outside_scope`; final answer kept; the load path; tokens and money by route.
+
+Recomputed from the raw run records, the session-DB snapshots and the profile logs by
+`OPT/opt-k/gate.py`, not from the driver log.
+
+**Fallback.** If any clause fails, the failure is recorded here and the branch does not ask to
+merge; nothing from it ships. If a fresh review finds a call the note names that would not fail
+at runtime, that shape is made silent and this run's sessions are replayed offline with the fix;
+a fix that would change any on-arm note in this run is reported, and the branch then asks to
+merge only on a new measurement. The next candidate after a failed gate is `impact_check` on by
+default (the language-server path), under its own pre-registration against the same base.
+
+#### Amendment 1 (2026-11-03 14:30 KST, during the counted runs, before any result was computed)
+
+From 14:25:36 KST every `openai-codex` call failed with HTTP 401 `token_revoked` (the profile logs
+also show `refresh_token_invalidated`). The owner's own `kami` profile logged the same error, so it
+is the shared Hermes Codex credential, not the bench. The bench classified these runs as
+`process_crash` (exit 2, about 3 s, no model call completed). They are harness failures, not model
+outcomes:
+- The 36 records (9 per arm on luna and on sol, every one after 14:25:36) are moved, unread, to
+  `runs/discarded-auth/` and are not counted in either reading.
+- Every luna / sol instance recorded before 14:25:36 completed in both arms (4 pairs on luna,
+  3 on sol) and stays counted.
+- The two GPT lanes were stopped (driver processes only) and resume from the first missing
+  instance once the credential works again, with the same driver, arms, seeds and order. Nothing
+  was logged in, refreshed or re-authenticated by the bench.
+- The Claude lanes (CPA) were not affected and kept running.
+
+#### Result: gate failed on one clause, by one run in which the change said nothing; the branch does not ask to merge
+
+The run:
+- **Counted runs:** 2026-11-03 14:17 to 19:39 KST. The GPT lanes were paused from 14:25 to 14:41 for
+  the revoked credential (Amendment 1).
+- **Volume:** 384 counted runs, 192 per arm. 0 crashes, 0 timeouts, 0 retries, nothing unpaired,
+  so the strict and the re-run readings are the same.
+- **Recompute:** the research folder's `OPT/opt-k/gate.py`, from the raw records, the session-DB
+  snapshots and the profile logs (`gate.txt`, `gate.json`).
+- **Load path:** the meter recorded `omh_pkg: true` on every call in both arms (the shared
+  gateway holds an installed OMH package). The on arm's bundle-local check ran: every on-arm first
+  stop that `pre_verify` reached logged its `caller_check` line.
+
+| Clause | Result |
+| --- | --- |
+| 1. Positives pooled: on at least base + 3 | pass: 65/72 to 72/72 |
+| 2. No template loses a pass, pooled | **fail: `L-RENAME-ALIAS` 12/12 to 11/12** |
+| 3a. Caller notes on `I-CONTROL` and `I-DEFAULTED`, on arm: 0 | pass: 0 |
+| 3b. Continues on those two: on at most base | pass: 24 to 24 |
+| 4. No on run above 3x its cell's base median tokens | pass: none |
+
+**Where the passes moved.**
+
+| `I-SIGNATURE` | base | on | caller notes |
+| --- | --- | --- | --- |
+| Haiku 4.5 | 5/6 | 6/6 | 6 |
+| Sonnet 5.5 | 6/6 | 6/6 | 0 |
+| gpt-6-luna | 0/6 | 6/6 | 6 |
+| gpt-6.1-sol | 6/6 | 6/6 | 0 |
+
+- Every other template has the same pooled passes in both arms, except `L-RENAME-ALIAS`.
+- Total passes: 185/192 base, 191/192 on.
+- Caller notes fired on `I-SIGNATURE` only: 12 sessions, the 12 in which Haiku or Luna stopped
+  with a caller still broken. There were 0 notes on any other template, controls included.
+- `I-KWARG` stayed 24/24 in both arms. Haiku 4.5 passed 6/6 in both, so the test check (#2494)
+  already covers the H2H2 failure shape; nothing was left for this change to move there.
+
+**The failing clause.** The one lost pass is Haiku 4.5 `L-RENAME-ALIAS` seed 857137, on arm.
+- In `tests/test_quota.py` Haiku wrote `from benchapp.api import allocate_quota as compute_quota`,
+  which keeps the old name. In the base arm, on the same seed, it renamed the name everywhere.
+- In that session the caller check logged `functions=0 files=0 rows=0` (a rename changes no
+  parameters). The consistency trigger logged `fire=False reason=no_copy_or_reference`, and the turn
+  ended at its first stop with no continue.
+- With an empty caller note, `pre_verify` computes exactly what base computes. Nothing else in the
+  two bundles differs. So the model saw the same OMH output in both arms in that turn, and the miss
+  is model variance on n = 3.
+- The clause was registered without that exception, so it fails as registered.
+
+**Cost.**
+- Total tokens: base 18.90M, on 18.88M.
+- `I-SIGNATURE` pooled median tokens: 113.6k base, 123.4k on. That is Luna's and Haiku's extra fix
+  round. Sonnet's median fell from 97k to 55k, with continues dropping from 5 to 1.
+- The highest on-arm run against its cell's base median was 2.17x: Haiku `L-RENAME-SHADOW` 964009,
+  203.6k against 93.8k. That session got no caller note.
+
+**Not counted:** an on-arm "missing" `caller_check` line on 24 Sonnet runs. In each, the model
+edited only through shell commands, so `pre_verify` received no changed paths and returned before
+any note, in both arms. No `export_check` line exists for those sessions either.
+
+**Decision, as pre-registered:** the gate failed, so the branch does not ask to merge. The PR
+stays open with this result for the owner's call. The pre-registered next candidate (`impact_check`
+on by default) was not run.
+
 ### 2026-11-02 round-end check: declared look-alikes and rewritten test expectations, base vs new
 
 Pre-registered before its first live run.

@@ -15,7 +15,10 @@ repaints. So the model answers three questions for the app loop:
 
 The invariant the tests hold: at any moment, the lines already taken followed
 by `live_lines()` equal `history_lines(details=False)` at the same width
-(unless `toggle_details` expanded the live block, or the cap dropped blocks).
+(unless `toggle_details` expanded the live block, or the cap dropped blocks,
+or a Markdown table taller than the live region was released as it grew: those
+rows keep the column widths they had when released, while `/history` and a
+redraw recompute the widths over the whole table; no cell is lost or repeated).
 Only the LAST block can still change; appending any block first closes the
 one before it, so a block is flushed only after every block above it.
 
@@ -104,7 +107,16 @@ from .diff_view import DIFF_FILE, FILE_ARROW, DiffLine, diff_rows, parse_inline_
 from .gateway import Event
 from . import gateway_contract as contract
 from .gateway_contract import TOOL_CALL_BRIDGE
-from .markdown import GrowingLine, MarkdownState, clean_text, render_growing, render_lines, wrap_prefixed
+from .markdown import (
+    GrowingLine,
+    MarkdownState,
+    clean_text,
+    opens_table,
+    table_block,
+    render_growing,
+    render_lines,
+    wrap_prefixed,
+)
 from .style import NO_COLOR, Line, Span, Style, fill
 from .slash import slash_spans, slash_token_ranges
 from .theme import TOOL_FAMILIES, Theme, kind_style, on_band
@@ -412,9 +424,21 @@ def _display_lines(text: str) -> list[str]:
     return _without_trailing_blanks(_source_lines(text))
 
 
-def _stable_lines(text: str) -> list[str]:
-    """The source lines that can no longer change: complete ones, minus trailing blanks."""
-    return _without_trailing_blanks(_source_lines(text)[:-1])
+def _stable_lines(text: str, final: bool = False, cap: int | None = None) -> list[str]:
+    """The source lines that can no longer change: complete ones, minus trailing blanks.
+
+    A trailing run of `|` lines is held back too: a header is decided only
+    once its divider has arrived, and taken rows are never repainted.
+    """
+    lines = _without_trailing_blanks(_source_lines(text)[:-1])
+    if final:  # the last take, at exit: nothing is left to wait for, so a complete `|` row goes out
+        return lines
+    held = len(lines)
+    while held and lines[held - 1].strip().startswith("|"):
+        held -= 1
+    if cap is not None and len(lines) - held > cap and opens_table(lines[held], lines[held + 1]):
+        return lines  # a table taller than the live region is released as it grows, on the columns it has
+    return _without_trailing_blanks(lines[:held])
 
 
 def _extension(streamed: str, text: str) -> str | None:
@@ -1925,10 +1949,16 @@ class Transcript:
 
     # ── output ──
 
-    def take_stable_lines(self, width: int, theme: Theme) -> list[Line]:
+    def take_stable_lines(
+        self, width: int, theme: Theme, final: bool = False, live_rows: int | None = None
+    ) -> list[Line]:
         """Lines that will never change, each returned once: print them above the live region.
 
         `prompt_row` says where among them the newest prompt's first row is.
+        `final` is the take at exit: it also releases the `|` rows held back for a divider.
+        `live_rows` is the height of the live region: a held table taller than half of it is released as it grows.
+        A table released that way keeps the column widths it had when released; `/history` and redraws
+        recompute them over the whole table.
         """
         taken: list[Line] = []
         start = (self._cursor, self._cursor_lines)
@@ -1950,7 +1980,7 @@ class Transcript:
             block = self.blocks[self._cursor]
             index = self._cursor - first
             if isinstance(block, AssistantBlock) and not (block.done and index < len(held)):
-                taken.extend(self._take_assistant(block, width, theme))
+                taken.extend(self._take_assistant(block, width, theme, final, live_rows))
             elif block.done:
                 # A done reply taken from its first line is the rows `block_rows` gives it, as measured.
                 rows = held[index] if index < len(held) else block_rows(block, width, theme)
@@ -1967,8 +1997,11 @@ class Transcript:
         self._drop_past_cap()
         return taken
 
-    def _take_assistant(self, block: AssistantBlock, width: int, theme: Theme) -> list[Line]:
-        sources = _display_lines(block.text) if block.done else _stable_lines(block.text)
+    def _take_assistant(
+        self, block: AssistantBlock, width: int, theme: Theme, final: bool = False, live_rows: int | None = None
+    ) -> list[Line]:
+        cap = max(live_rows // 2, 4) if live_rows else None
+        sources = _display_lines(block.text) if block.done else _stable_lines(block.text, final, cap)
         fresh = sources[self._cursor_lines :]
         if not fresh:
             return []
@@ -2136,7 +2169,34 @@ class Transcript:
 
     def _growing_rows(self, sources: list[str], width: int, theme: Theme) -> list[Line]:
         """The rows of a reply's untaken `sources`, the last of them the line still streaming: drawn through
-        `_growing`, so a frame wraps only that line's last rows (`render_growing`)."""
+        `_growing`, so a frame wraps only that line's last rows (`render_growing`).
+
+        A trailing run of `|` lines whose next line is its divider renders as
+        the table it is, re-derived from `sources` every frame.
+        """
+        if self._cursor_state.table and sources and sources[-1].strip().startswith("|"):
+            # a table released to scrollback as it grew: the line still streaming hangs on the columns it was given
+            return render_lines(sources, self._cursor_state, width, theme)[0]
+        # The maximal trailing run of `|` lines, in source order.
+        run_at = len(sources)
+        while run_at > 0 and sources[run_at - 1].strip().startswith("|"):
+            run_at -= 1
+        if run_at < len(sources):
+            rows, state = render_lines(sources[:run_at], self._cursor_state, width, theme)
+            if not state.in_fence and run_at + 1 < len(sources) and opens_table(sources[run_at], sources[run_at + 1]):
+                table_rows, consumed = table_block(sources[run_at:], 0, width, theme)
+                rows.extend(table_rows)
+                rest = sources[run_at + consumed :]
+                if rest:
+                    extra, _state = render_lines(rest, replace(state, list_indent=0), width, theme)
+                    rows.extend(extra)
+                return rows
+            # Not decidable as a table yet (no divider behind the header, or
+            # inside a fence): fall through to the normal growing render.
+            rows, state = render_lines(sources[:-1], self._cursor_state, width, theme)
+            if sources:
+                rows += render_growing(sources[-1], state, width, theme, self._growing)[0]
+            return rows
         rows, state = render_lines(sources[:-1], self._cursor_state, width, theme)
         if sources:
             rows += render_growing(sources[-1], state, width, theme, self._growing)[0]

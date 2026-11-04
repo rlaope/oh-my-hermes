@@ -134,16 +134,19 @@ from ..memory_recall_support import (
     _record_staleness,
     _retention_class,
     normalize_memory_subject,
+    point_in_time_cue,
     record_subject,
 )
 from ..memory_records import (
     DEFAULT_RECORD_LIMIT,
     PREFETCH_EXECUTOR_TARGET,
+    SNAPSHOT_RULE,
     prefetch_required_scope_kinds,
     prefetch_scope_allowlist,
     read_record_store_snapshot,
     record_used,
     select_prefetch_records,
+    snapshot_marked,
 )
 from ..memory_store_io import (
     assert_under_memory_root,
@@ -359,7 +362,7 @@ def omh_memory_handler(args: dict, **kwargs) -> str:
     elif action == "read":
         payload, backend = _read_block(str((args or {}).get("label", "") or ""), kwargs), "bundle_memory"
     elif action == "consolidation":
-        payload, backend = _consolidation()
+        payload, backend = _consolidation(kwargs)
     elif action == "capture":
         payload, backend = _capture(args or {}, kwargs), "bundle_memory"
     elif action == "demote":
@@ -505,18 +508,19 @@ def _public_replay(evaluation: dict[str, object]) -> dict[str, object]:
     }
 
 
-def _consolidation() -> tuple[dict[str, object], str]:
+def _consolidation(kwargs: dict) -> tuple[dict[str, object], str]:
     """Read the latest reminder and counters without entering a provider session.
 
     Like `omh memory dream` without `--evaluate`, this is a status query, not
     a scheduler trigger. Keep a recorded due brief visible even when its
     reasons are suppressed for the next evaluation. No brief means unknown,
     not a fresh evaluation that found nothing due. Both are the calling
-    profile's: another profile on the same store keeps its own.
+    profile's (the session lens's profile home, else this process's Hermes
+    home): another profile on the same store keeps its own.
     """
     omh_home = _home("OMH_HOME", "~/.omh")
     try:
-        hermes_home = _home("HERMES_HOME", "~/.hermes")
+        hermes_home = _session_lens(kwargs).settings_home()
         payload = dict(read_latest_consolidation(omh_home, hermes_home) or {})
         payload["state"] = read_dreaming_state(omh_home, hermes_home)
         payload["evaluated"] = False
@@ -602,7 +606,22 @@ def _capture(args: dict, kwargs: dict) -> dict[str, object]:
             reason=_safe_error_type(type(exc).__name__),
             next_action="Nothing is confirmed saved. Tell the user the capture failed; call action='status' to see what is held.",
         )
-    return _map_capture_payload(payload, lens)
+    result = _map_capture_payload(payload, lens)
+    if result["status"] == "remembered" and result.get("record_id") and point_in_time_cue(summary, record_type):
+        result["point_in_time"] = _point_in_time_advice(str(result["record_id"]))
+    return result
+
+
+def _point_in_time_advice(record_id: str) -> dict[str, object]:
+    return {
+        "record_id": record_id,
+        "next_action": (
+            f"Saved as lasting. It states how one thing stands at one point in time: when that same thing changes, "
+            f"save its new state with replaces='{record_id}' so this one leaves recall instead of being served beside "
+            "it. Something newly added (another feature, a later release's change) is its own record: save it "
+            "without replaces."
+        ),
+    }
 
 
 def _bound_capture_scope(lens: "_SessionLens", requested: str) -> dict[str, object] | tuple[str, str] | None:
@@ -1296,6 +1315,10 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             row["resolution_marker"] = item["resolution_marker"]
         if item.get("subject"):
             row["subject"] = item["subject"]
+        # The same mark the live pack carries: a later session learns here
+        # that saving this thing's changed state should name it in `replaces`.
+        if snapshot_marked(item):
+            row["snapshot"] = "as-of"
         rows.append(row)
     has_origin = _attach_origins(rows, snapshot.records, lens)
     if rows:
@@ -1312,6 +1335,8 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
     )
     if has_origin:
         next_action += " " + RECALL_ORIGIN_NEXT_ACTION
+    if any("snapshot" in row for row in rows):
+        next_action += " " + SNAPSHOT_RULE
     return _lifecycle_result(
         "recall",
         "found" if rows else "nothing_found",
@@ -1656,6 +1681,12 @@ def _correct(home: Path, record: dict, summary: str, tags: object, lens: _Sessio
         receipt_state=str(payload.get("receipt_state", "") or "") or None,
         display_line=_display_line("✏️ OMH corrected: ", str(successor.get("summary", "") or summary), 80),
         next_action=f"The old revision is kept under history/ and no longer recalls; {new_id} replaces it.",
+        # A corrected snapshot is still a snapshot: the chain continues from the new id.
+        **(
+            {"point_in_time": _point_in_time_advice(new_id)}
+            if new_id and point_in_time_cue(summary, str(record.get("record_type", "") or "fact"))
+            else {}
+        ),
     )
 
 

@@ -83,7 +83,7 @@ def _load() -> dict:
 
 def make_app(rows: int = 40, cols: int = 120, environ: dict | None = None, **options):
     n = _load()
-    env = {"OMH_TUI_GLOW": "0", "OMH_TUI_WALLPAPER": "0", "OMH_TUI_UPDATE_CHECK": "0", "HOME": n["tmp"],
+    env = {"OMH_TUI_WALLPAPER": "0", "OMH_TUI_UPDATE_CHECK": "0", "HOME": n["tmp"],
            "HERMES_HOME": os.environ["HERMES_HOME"], "OMH_HOME": os.environ["OMH_HOME"],
            "COLORTERM": "truecolor", "TERM": "xterm-256color", **(environ or {})}
     term = n["CountingTerminal"](rows, cols)
@@ -254,13 +254,13 @@ def case_keystroke(size: dict) -> list[dict]:
 
 def case_idle(size: dict) -> list[dict]:
     seconds = size["idle_seconds"]
-    off = {"OMH_TUI_GLOW": "0", "OMH_TUI_WALLPAPER": "0"}
-    on = {"OMH_TUI_GLOW": "1", "OMH_TUI_WALLPAPER": "1"}
+    off = {"OMH_TUI_WALLPAPER": "0"}
+    on = {"OMH_TUI_WALLPAPER": "1"}
     rows = []
-    for label, env, busy, look in (("idle, glow and wallpaper off", off, False, None),
-                                   ("busy, glow and wallpaper off", off, True, None),
-                                   ("idle, glow on, look=aurora", on, False, "aurora"),
-                                   ("busy, glow on, look=aurora", on, True, "aurora")):
+    for label, env, busy, look in (("idle, wallpaper off", off, False, None),
+                                   ("busy, wallpaper off", off, True, None),
+                                   ("idle, wallpaper on, look=aurora", on, False, "aurora"),
+                                   ("busy, wallpaper on, look=aurora", on, True, "aurora")):
         app, term = make_app(environ=env)
         for i in range(20 if seconds >= 1 else 3):
             add_turn(app, i)

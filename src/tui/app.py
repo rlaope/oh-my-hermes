@@ -123,7 +123,6 @@ from ..skin_pack import (
     default_theme,
     effective_theme,
     hex_to_rgb,
-    read_glow_choice,
     read_launch_choice,
     read_wallpaper_choice,
     skin_colors,
@@ -131,12 +130,11 @@ from ..skin_pack import (
     theme_for_skin_name,
     theme_names,
     theme_store_path,
-    write_glow_choice,
     write_launch_choice,
     write_wallpaper_choice,
 )
 from . import gateway_contract as contract
-from .composer import COMPLETE, EXIT, IMAGE_LABEL, INTERRUPT, SUBMIT, Composer, ComposerAction
+from .composer import COMPLETE, EXIT, IMAGE_LABEL, INTERRUPT, SUBMIT, VIM_INSERT, VIM_NORMAL, Composer, ComposerAction
 from .frame import INFO_INSET, MODE_NORMAL, MODE_SHELL, Frame, badge_forms, branch_forms, build_frame, sticky_line
 from .git_status import GitWatcher
 from .history import SEARCH_ACCEPT, SEARCH_CANCEL, SEARCH_HINTS, HistorySearch, append_entry, history_path, load_history
@@ -217,13 +215,13 @@ from .dag_pager import DagPager
 from .background import BackgroundProcess, askable, finished_forms, report_prompt, running_forms, tool_call
 from .clipboard import COPY_OSC52, COPY_PBCOPY, SSH_VARIABLES, copy_route, pbcopy, tmux_client_over_ssh
 from .prompts import CLOSED_CHOICES, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
-from .edge_glow import EDGE_MARGIN, Edge, edge, edge_fits
-from .edge_glow import TICK_SECONDS as EDGE_TICK_SECONDS
 from .faults import FaultLog
 from .screen import (
     CARRIAGE_RETURN,
     CLEAR_SCREEN_AND_SCROLLBACK,
     CURSOR_HOME,
+    CURSOR_SHAPE_BEAM,
+    CURSOR_SHAPE_BLOCK,
     ERASE_SCROLLBACK,
     HIDE_CURSOR,
     SHOW_CURSOR,
@@ -623,12 +621,6 @@ UPDATE_NOTICE = "v{latest} available"
 UPDATE_NOTICE_HOW = " · omh update"
 UPDATE_NOTICE_SHORT = "↑ v{latest}"  # what stays beside the version once the line narrows
 WHATS_NEW_NONE_NOTICE = "There is no What's new written for v{version}."
-GLOW_KEPT_NOTICE = "Working glow {state}, kept in {path}."
-GLOW_SESSION_NOTICE = "Working glow {state} for this session; there is no OMH home to keep it in."
-GLOW_SAVE_FAILED_NOTICE = "Working glow {state} for this session; it could not be saved to {path}: {error}"
-GLOW_ENV_NOTICE = "Working glow kept {state}; OMH_TUI_GLOW=0 holds it off in this terminal."
-GLOW_UNAVAILABLE_NOTICE = "Working glow kept {state}; it shows only with motion on, at truecolor, on a screen 20×8 or larger."
-GLOW_USAGE_NOTICE = "Use /glow on or /glow off; /glow alone switches it."
 WALLPAPER_KEPT_NOTICE = "Living wallpaper {state}, kept in {path}."
 WALLPAPER_SESSION_NOTICE = "Living wallpaper {state} for this session; there is no OMH home to keep it in."
 WALLPAPER_SAVE_FAILED_NOTICE = "Living wallpaper {state} for this session; it could not be saved to {path}: {error}"
@@ -839,10 +831,6 @@ BELL = "\a"
 QUESTION_ALERT_CHARS = 80  # the most of what Hermes asks that a question's notification says
 BELL_ENV = "OMH_TUI_BELL"
 BELL_OFF = "0"
-# The working glow round the screen (`edge_glow`) is on wherever it can move; `/glow off` (kept under the OMH home) or
-# OMH_TUI_GLOW=0 turns it off, and with it the margin and the blank last row it keeps.
-GLOW_ENV = "OMH_TUI_GLOW"
-GLOW_OFF = "0"
 # The living wallpaper (`wallpaper`): the launch look's ground as the terminal's background (OSC 11) and its scene
 # moving in the blank cells, wherever the terminal reported its background at truecolor; `/wallpaper off` (kept under
 # the OMH home) or OMH_TUI_WALLPAPER=0 turns it off, and the terminal's own background comes back at once.
@@ -1023,6 +1011,7 @@ class TerminalLike(Protocol):
     def read(self, timeout: float, wake: int | None = None) -> bytes: ...
     def write(self, text: str) -> None: ...
     def set_mouse(self, enabled: bool, drag: bool = False) -> None: ...
+    def set_cursor_shape(self, shape: str | None) -> None: ...
     def suspend(self) -> bool: ...
 
 
@@ -1879,7 +1868,6 @@ class App(ModesMixin, AgentViewMixin):
         remote = over_ssh or any(environ.get(name) for name in WSL_VARIABLES)
         self.flush_silence = REMOTE_FLUSH_SILENCE_SECONDS if remote else FLUSH_SILENCE_SECONDS
         self.decoder = KeyDecoder(clock, SSH_BURST_SECONDS if over_ssh else BURST_SECONDS)
-        self.glow = self._saved_glow()  # the working glow is wanted (`/glow`); `_edged` says whether it can show
         # The living wallpaper is wanted (`/wallpaper`); `_wallpaper_shown` says whether it can show. It needs the
         # background the terminal answered the startup query with (`background_answered`), which it puts back on the
         # way out; `ground_set` is the colour it set the terminal's background to, None while the terminal has its own.
@@ -2482,7 +2470,7 @@ class App(ModesMixin, AgentViewMixin):
         native mode, `display.tui_native`, writes only a line feed). A
         terminal that ignores ED 3 keeps them one scroll up.
         """
-        rows = self.screen[1]
+        rows = self.size[1]
         if rows < 2 or self.region.height:
             return
         push = "" if row == 1 else "\n" * (rows - 1) + cursor_up(rows - 1) + CARRIAGE_RETURN
@@ -2495,7 +2483,7 @@ class App(ModesMixin, AgentViewMixin):
         None (no report) or a row outside the screen leaves the place unknown,
         as without the report, until output has pushed it to certainty.
         """
-        if row is not None and 1 <= row <= self.screen[1] and not self.region.height:
+        if row is not None and 1 <= row <= self.size[1] and not self.region.height:
             self.region = self._new_region(start_row=row - 1)
 
     @property
@@ -2514,10 +2502,10 @@ class App(ModesMixin, AgentViewMixin):
 
     def _themed(self) -> Theme:
         """The skin's theme against the background, with the shown launch look's band behind a sent prompt and the
-        roles it owns (`with_launch_look`), painted."""
+        roles it owns (`with_launch_look`, its bands and footer bar on the ground of a look with a scene), painted."""
         skin, surface, look = self._skin(), self._surface(), self._shown_look()
         banded = with_prompt_band(build_theme(skin, surface), skin, surface, look)
-        looked = with_launch_look(banded, skin, surface, look)
+        looked = with_launch_look(banded, skin, surface, look, scene=look in SCENES and self._ground() is not None)
         if self._ground() is not None and self.background_answered is not None:
             # On the wallpaper's ground: the rows printed now outlive it (they show on the terminal's own background
             # after exit), so every word and mark also keeps its floor against that.
@@ -2694,6 +2682,7 @@ class App(ModesMixin, AgentViewMixin):
         reports_may_arrive = self._reports_may_arrive()  # read before the off below starts a new grace period
         try:
             self._restore_ground()  # first: whatever fails after it, the terminal has its own background back
+            self._restore_cursor_shape()
             self._set_mouse(False)
             if self.pager is not None:
                 self.pager = None
@@ -2704,11 +2693,11 @@ class App(ModesMixin, AgentViewMixin):
                     self._full_redraw()
             cols = self.size[0]
             try:
-                stable = self.transcript.take_stable_lines(cols, self.theme)
+                stable = self.transcript.take_stable_lines(cols, self.theme, final=True)
                 if stable:
                     self.region.flush_above(stable, cols)
             finally:
-                self.region.clear()
+                self.region.clear(self.size[1])  # the rows on the screen on the terminal's own background
             if self.title_pushed:
                 self.terminal.write(TITLE_POP)  # the title the shell had
                 self.title_pushed = False
@@ -3708,7 +3697,7 @@ class App(ModesMixin, AgentViewMixin):
             self.pager.clear_selection()  # it is of the page on the screen, which a key may move
             if self.log_agent and isinstance(event, Key) and event.name in (LEFT, RIGHT):
                 self._step_agent_log(-1 if event.name == LEFT else 1)
-            elif not self.pager.handle_key(event, self.screen[1]):
+            elif not self.pager.handle_key(event, self.size[1]):
                 self._leave_pager()
             return
         if self.slot is None and self._front_picker() is not None:
@@ -4074,8 +4063,12 @@ class App(ModesMixin, AgentViewMixin):
         if getattr(signal, "SIGTSTP", None) is None:
             return
         self._set_mouse(False)
-        self.region.clear()
+        # The session's rows on the screen go back on the terminal's own background (and on a standard terminal follow
+        # OSC 11 again): the region made at the resume has none of them to paint on a new ground.
+        self.region.set_ground(None)
+        self.region.clear(self.size[1])
         self._restore_ground()  # the shell's own background while stopped; the first frame after sets it again
+        self._restore_cursor_shape()  # likewise the shell's own cursor
         if self.title_pushed:
             self.terminal.write(TITLE_POP)
             self.title_pushed, self.shown_title, self.title_words = False, None, ""
@@ -5728,7 +5721,7 @@ class App(ModesMixin, AgentViewMixin):
 
         The tail then draws a working row of its own for it (`_tail`), its
         clock counting from this, until the report or the unanswered notice
-        lands. `_busy` stays False for it, so no glow starts and a prompt
+        lands. `_busy` stays False for it, so a prompt
         still goes out as it did."""
         if self._busy():
             return None
@@ -5928,7 +5921,6 @@ class App(ModesMixin, AgentViewMixin):
             "bots": self._bots,
             "copy": self._copy,
             "theme": self._theme,
-            "glow": self._glow,
             "wallpaper": self._wallpaper_command,
             "omh-model": self._omh_model,
             "reload-skills": self._reload_skills,
@@ -6001,7 +5993,7 @@ class App(ModesMixin, AgentViewMixin):
 
     def _keys(self, arg: str) -> None:
         """The key list on the alternate screen; q or Esc leaves, as in every pager."""
-        self._open_pager("keys", shortcut_lines(self.screen[0], self.theme))
+        self._open_pager("keys", shortcut_lines(self.size[0], self.theme))
 
     def _quit(self, arg: str) -> None:
         """Close the session first, so Hermes ends its runtime before the gateway reads end of input."""
@@ -6483,7 +6475,7 @@ class App(ModesMixin, AgentViewMixin):
         pager = HistoryPager("history", count=len(blocks), render=rows)
         # Stops at the first block with rows, the first one but for a reply that was only a line break, and
         # keeps what it rendered for the first frame.
-        if pager.shows_nothing(self.screen[0], self.theme):
+        if pager.shows_nothing(self.size[0], self.theme):
             transcript.add_notice("Nothing in this session's transcript yet.")
             return
         self._show_pager(pager)
@@ -6492,13 +6484,13 @@ class App(ModesMixin, AgentViewMixin):
         """The whole transcript with every detail (thinking, tool output, whole diffs) in the pager, at its end."""
         self._history("")
         if isinstance(self.pager, HistoryPager):
-            self.pager.handle_key(Key(END), self.screen[1])
+            self.pager.handle_key(Key(END), self.size[1])
 
     def _question_view(self) -> None:
         """The open question in the pager, every row of it (a long command whole); q or Esc goes back to it as it
         was, with nothing answered, and the pager closes with the question (`_close_slot`)."""
         if self.slot is not None:
-            lines = self.slot.whole_lines(self.screen[0], self.theme, len(self.waiting_requests))
+            lines = self.slot.whole_lines(self.size[0], self.theme, len(self.waiting_requests))
             self._show_pager(Pager(QUESTION_VIEW_TITLE, lines))
             self.question_view = self.pager
 
@@ -6527,7 +6519,7 @@ class App(ModesMixin, AgentViewMixin):
     def _dag(self, arg: str) -> None:
         """The session's delegation graph as boxes in the pager (`DagPager`), drawn from the HUD's newest read at
         every frame; it sends nothing anywhere."""
-        if dag_page_lines(self.hud.payload if self.hud is not None else None, self.screen[0], self.theme) is None:
+        if dag_page_lines(self.hud.payload if self.hud is not None else None, self.size[0], self.theme) is None:
             # /dag has no echo: during a turn this waits under what runs
             self.transcript.add_aside(NoticeBlock("No delegation graph: this session has no recent delegated work."))
             return
@@ -6584,7 +6576,7 @@ class App(ModesMixin, AgentViewMixin):
         pager = self.pager
         if pager is None:
             return
-        text = pager.handle_mouse(event, self.screen[1], self.clock())
+        text = pager.handle_mouse(event, self.size[1], self.clock())
         self.dirty = True
         if text:
             pager.note = self._copy_selection(text)
@@ -6696,12 +6688,14 @@ class App(ModesMixin, AgentViewMixin):
 
     def _launch_swatches(self) -> dict[str, tuple[Style, ...]]:
         """Each launch look's colours for its row in the /theme picker, each lifted to a glyph's 3:1; while the living
-        wallpaper shows, on the look's own ground, so each row is a tile of the background that look gives."""
+        wallpaper shows, on the ground that look gives (`_ground`): its own, or the terminal's for the default look."""
         surface = surface_for(self._skin(), self._surface())
         swatches = {}
         for name in LAUNCH_PRESETS:
             palette = launch_palette(name, surface)
-            ground = look_ground(name, self._ground_light()) if self._wallpaper_shown() else None
+            ground = None
+            if self._wallpaper_shown():
+                ground = look_ground(name, self._ground_light()) if name in SCENES else self.background_answered
             behind = ground or surface
             ink = BLACK if is_light(behind) else WHITE
             colours = palette.faces or palette.sweep or (*palette.greys[:1], *palette.whites[:2], palette.spark)
@@ -6804,7 +6798,7 @@ class App(ModesMixin, AgentViewMixin):
         last = self.region.last_row(self.size[1])
         if picker is None or not plain or last is None or self.redraw_at is not None:
             return
-        above, column = last - (event.y - 1), event.x - 1 - self._margin()  # a report counts from 1
+        above, column = last - (event.y - 1), event.x - 1  # a report counts from 1
         target = next((hit.subagent_id for hit in self.clickable.get(above, ()) if hit.start <= column < hit.end), "")
         if target.startswith("launch:") and picker.move_to(int(target.split(":", 1)[1])) == LAUNCH_MOVE:
             self._preview_launch()
@@ -6842,7 +6836,7 @@ class App(ModesMixin, AgentViewMixin):
                 read_key=self._picker_reader(),
                 # Raw mode writes "\n" as a bare line feed; the picker's lines need a carriage return too.
                 write=lambda text: self.terminal.write(text.replace("\n", "\r\n")),
-                width=self.screen[0],
+                width=self.size[0],
             )
         finally:
             self.terminal.write(ALT_SCREEN_OFF + self._caret_visibility())
@@ -7180,61 +7174,8 @@ class App(ModesMixin, AgentViewMixin):
         )
 
     def _take_size(self) -> None:
-        """The terminal's size now (`screen`), and the size the session is laid out for (`size`): the screen less
-        the working glow's margin and footer where it has them (`_edged`)."""
-        self.screen = self.terminal.size()
-        cols, rows = self.screen
-        self.size = (cols - 2 * EDGE_MARGIN, rows - 1) if self._edged() else self.screen
-
-    def _edged(self) -> bool:
-        """Whether the screen keeps its edge for the working glow's frame (`edge_glow`): where it shows
-        (`_glow_shown`), on a screen big enough (`edge_fits`). The rows are then drawn `EDGE_MARGIN` columns in from
-        each side, over a blank last row of the region's own, whether a turn runs or not, so nothing moves as the
-        frame comes and goes."""
-        return self._glow_shown() and edge_fits(*self.screen)
-
-    def _glow_shown(self) -> bool:
-        """Whether the working glow shows on a screen big enough: wanted (`/glow`), not held off by OMH_TUI_GLOW=0,
-        with motion on, at the truecolor depth."""
-        return (self.glow and self.environ.get(GLOW_ENV) != GLOW_OFF and self.motion
-                and self.color_depth == TRUECOLOR)
-
-    def _saved_glow(self) -> bool:
-        """Whether the working glow is wanted: as saved under the OMH home, else on."""
-        home = self._omh_home()
-        saved = read_glow_choice(home) if home is not None else None
-        return True if saved is None else saved
-
-    def _glow(self, arg: str) -> None:
-        """`/glow on|off` turns the working glow on or off and keeps that under the OMH home; alone, switches it.
-
-        The rows move in or out by the margin it takes, so the session is drawn again.
-        """
-        choice = arg.strip().lower()
-        if choice not in ("", "on", "off"):
-            self.transcript.add_notice(GLOW_USAGE_NOTICE, NOTICE_WARN)
-            return
-        self.glow = not self.glow if not choice else choice == "on"
-        state = "on" if self.glow else "off"
-        home = self._omh_home()
-        if home is None:
-            self.transcript.add_notice(GLOW_SESSION_NOTICE.format(state=state))
-        else:
-            try:
-                path = write_glow_choice(home, self.glow)
-            except OSError as error:
-                self.transcript.add_notice(
-                    GLOW_SAVE_FAILED_NOTICE.format(state=state, path=theme_store_path(home), error=error), NOTICE_WARN)
-            else:
-                self.transcript.add_notice(GLOW_KEPT_NOTICE.format(state=state, path=path))
-        if self.glow and self.environ.get(GLOW_ENV) == GLOW_OFF:
-            self.transcript.add_notice(GLOW_ENV_NOTICE.format(state=state))
-        elif self.glow and not self._glow_shown():
-            self.transcript.add_notice(GLOW_UNAVAILABLE_NOTICE.format(state=state))
-        if self._edged() != (self.size != self.screen):  # the margin comes or goes: lay the session out again
-            self._take_size()
-            self._full_redraw()
-        self.dirty = True
+        """The terminal's size now (`size`)."""
+        self.size = self.terminal.size()
 
     def _wallpaper_shown(self) -> bool:
         """Whether the living wallpaper shows: wanted (`/wallpaper`), not held off by OMH_TUI_WALLPAPER=0, at the
@@ -7268,8 +7209,9 @@ class App(ModesMixin, AgentViewMixin):
     def _ground(self) -> str | None:
         """The background the living wallpaper gives the terminal now, the shown look's ground (the /theme picker's
         highlight while it is open), or None where it does not show. A look with no scene (the default look) takes
-        the terminal's own background as its ground (owner, 2026-10-30): Otty took another ground only on the cells
-        written after it, so the launch card showed holes of the terminal's own black."""
+        the terminal's own background as its ground (owner, 2026-10-30). A look with a scene takes its own, and the
+        rows erase on it (`_erase_ground`): Otty gives an OSC 11 background only to the cells written after it, so
+        the cells an erase cleared kept its own black (owner, 2026-11-04: painted on every terminal)."""
         if not self._wallpaper_shown():
             return None
         look = self._shown_look()
@@ -7281,13 +7223,36 @@ class App(ModesMixin, AgentViewMixin):
         ground = self._ground()
         if ground is None:
             self._restore_ground()
-        elif ground != self.ground_set:
+            return
+        if ground != self.ground_set:
             self.terminal.write(background_set(ground))
             self.ground_set = ground
+        self.region.set_ground(self._erase_ground())
+
+    def _erase_ground(self) -> str | None:
+        """The ground the rows erase on (`screen.on_ground`): a look with a scene's, while the terminal's background
+        is set to it, so a terminal that clears a cell with its own colour (Otty) shows the ground there too. None
+        for the default look, whose ground is the terminal's own, and wherever the wallpaper does not show (NO_COLOR,
+        256 and 16 colours, `/wallpaper off`) or the terminal has its own background back (exit, Ctrl+Z). Rows that
+        reached the scrollback keep it after exit, until they are printed again (owner, 2026-11-04)."""
+        ground = self.ground_set
+        return ground if ground is not None and self._shown_look() in SCENES else None
+
+    def _sync_cursor_shape(self) -> None:
+        """Vim mode's cursor: a beam in INSERT, a block in NORMAL (DECSCUSR), written only when it changes. Without
+        vim mode, or where the composer does not have the keys, the terminal's own shape is back."""
+        label = self.composer.vim_label if self._composer_open() else ""
+        shape = CURSOR_SHAPE_BLOCK if label == VIM_NORMAL else CURSOR_SHAPE_BEAM if label == VIM_INSERT else None
+        self.terminal.set_cursor_shape(shape)  # the terminal writes only a change
+
+    def _restore_cursor_shape(self) -> None:
+        """Put the terminal's own cursor shape back (a no-op if vim mode set none): on every way out and at a stop."""
+        self.terminal.set_cursor_shape(None)
 
     def _restore_ground(self) -> None:
         """Put the terminal's own background back if the wallpaper set another: on every way out (`_shutdown`), at a
         stop (`_suspend`, set again by the first frame after), and when the wallpaper goes."""
+        self.region.set_ground(None)  # the rows still to come (the last ones at exit) erase on the terminal's own
         if self.ground_set is not None and self.background_answered is not None:
             self.ground_set = None
             self.terminal.write(background_restore(self.background_answered))
@@ -7298,7 +7263,7 @@ class App(ModesMixin, AgentViewMixin):
         if self._ground() is None:
             return None
         seconds = self._ambient_clock() if self.motion else 0.0
-        return scene(self._shown_look(), *self.screen, seconds, self._ground_light())
+        return scene(self._shown_look(), *self.size, seconds, self._ground_light())
 
     def _wallpaper_moves(self) -> bool:
         """Whether the wallpaper's own tick paints now: it shows, with motion on, the look has a scene (the default
@@ -7311,7 +7276,7 @@ class App(ModesMixin, AgentViewMixin):
                 and self._shown_look() in SCENES)
 
     def _ambient_clock(self) -> float:
-        """The time the ambience (the wallpaper's scene, the working glow's light) is drawn at: the clock's, or, while
+        """The time the ambience (the wallpaper's scene) is drawn at: the clock's, or, while
         the terminal window does not have focus (its focus-out report, `KeyDecoder.unfocused_at`), the moment it
         lost it. So the ambience holds still unseen and no tick wakes the loop for it, and the first frame after
         focus comes back is the one it would have drawn at that time anyway."""
@@ -7355,23 +7320,9 @@ class App(ModesMixin, AgentViewMixin):
         self._full_redraw()
         self.dirty = True
 
-    def _margin(self) -> int:
-        """Columns the rows are drawn in from the screen's left edge."""
-        return EDGE_MARGIN if self._edged() else 0
-
     def _new_region(self, **place: Any) -> LiveRegion:
-        """A live region for the screen as it is now: with the working glow's margin and footer where it has them."""
-        edged = self._edged()
-        return LiveRegion(self.terminal.write, margin=EDGE_MARGIN if edged else 0, footer=edged, **place)
-
-    def _edge_live(self) -> bool:
-        """Whether the working glow's light goes round the screen now (`edge_glow`): while a turn runs, where the
-        screen keeps its edge for it (`_edged`)."""
-        return self._busy() and self._edged() and bool(self.theme.glow_ring)
-
-    def _edge(self) -> Edge | None:
-        """The working glow's light for this frame (owner request 2026-10-28), at the clock's time, or None."""
-        return edge(*self.screen, self.theme, self._ambient_clock()) if self._edge_live() else None
+        """A live region for the screen as it is now."""
+        return LiveRegion(self.terminal.write, **place)
 
     def _aura_moves(self) -> bool:
         """Whether the dag-ulw aura moves on this terminal now: the truecolor depth, motion on, and a background its
@@ -7424,14 +7375,15 @@ class App(ModesMixin, AgentViewMixin):
         self._settle_list()
         self._write_title()
         self._sync_ground()
+        self._sync_cursor_shape()
         if self.pager is not None:
             self.bg_row_shown = False
             self.clickable = {}
             self._set_mouse(True, drag=True)  # the alternate screen has no scrollback to take: the pager scrolls itself
             self._refresh_agent_log()
-            self.terminal.write(self.pager.frame(*self.screen, self.theme))
+            self.terminal.write(self.pager.frame(*self.size, self.theme, self._erase_ground()))
             return
-        stable = self.transcript.take_stable_lines(cols, self.theme)
+        stable = self.transcript.take_stable_lines(cols, self.theme, live_rows=self.size[1])
         prompt_row = self.transcript.prompt_row
         head: list[Line] = []
         if self.banner_facts is not None:
@@ -7557,8 +7509,8 @@ class App(ModesMixin, AgentViewMixin):
         # the frame is drawn under them. Flush and frame are one write, so no screen between them shows.
         # The wallpaper paints the blank tails of the rows above the region too, the transcript's included, so it stays
         # in view over a full session (owner's choice of 2026-10-29; `screen` names what that costs a selection).
-        self.region.render(frame.lines, frame.cursor, cols, flush=stable, screen_rows=rows, edge=self._edge(),
-                           ambient=self._ambient(), ambient_above=True)
+        self.region.render(frame.lines, frame.cursor, cols, flush=stable, screen_rows=rows, ambient=self._ambient(),
+                           ambient_above=True)
         self.ambient_at = self.clock()
         self.frame_budget = frame.budget
         self.bg_row_shown = self.bg_on_info and frame.budget.info > 0  # the row is on the info line (`_info_line`)
@@ -7762,11 +7714,7 @@ class App(ModesMixin, AgentViewMixin):
         return int(self.clock() / TICK_SECONDS) if self.motion else 0
 
     def _tick_seconds(self) -> float:
-        """How often the loop paints while something moves: faster while the working glow's light goes round, so it
-        glides (`edge_glow.TICK_SECONDS`), unless it holds still for a window without focus (`_ambient_clock`); the
-        spinners still step by `TICK_SECONDS`."""
-        if self._edge_live() and self.decoder.unfocused_at is None:
-            return EDGE_TICK_SECONDS
+        """How often the loop paints while something moves: each spinner step, once a second with reduced motion."""
         return TICK_SECONDS if self.motion else REDUCED_TICK_SECONDS
 
     @property

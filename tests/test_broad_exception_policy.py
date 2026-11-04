@@ -79,7 +79,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "exception class and message under `omh_desktop_hud/v1`, and no `display` key; the pane "
         "renders that record as a reader error, so it is never mistaken for a HUD payload; the "
         "route answers 200 because in the pane a thrown error is indistinguishable from a transport "
-        "failure, and the record is what lets it say which one happened.",
+        "failure, and the record is what lets it say which one happened. Its second handler is the "
+        "delegation drawing for the pane: a renderer failure becomes `delegation_drawing` with "
+        "`error` under `omh_desktop_dag/v1` beside the reader's payload, and the pane draws the "
+        "lane rows it drew before the drawing existed.",
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/jev_ask_client.py",
@@ -850,6 +853,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "off. A note is only ever built from fresh server diagnostics, so a failure never claims callers broke.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/caller_check.py",
+        "round_end_note",
+        INTENTIONAL,
+        "An unexpected failure reading the turn's edited module or its importers is logged as a warning naming the "
+        "exception class (`caller_check round_end ... failed=`) and yields no note; the turn ends as it would "
+        "without the check. A note is only ever built from calls that bound to the turn-start signature and no "
+        "longer bind, so a failure never claims a call is broken.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/consistency_trigger.py",
         "snapshot_before_edit",
         INTENTIONAL,
@@ -1021,8 +1033,14 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # (a part of the frame that raises is a warn row naming it, its traceback in /logs).
 # 103 -> 104 / 94 -> 95: `llm_hooks._warm_imports`, the register-time warm-up thread for the
 # first turns' package imports (a failure loads nothing, and the call sites import and report as before).
-EXPECTED_HANDLER_COUNT = 104
-EXPECTED_ANCHOR_COUNT = 95
+# 104 -> 105 / 95 -> 96: `caller_check.round_end_note`, the always-on round-end
+# read of call sites a signature change broke (a failure logs a named warning and
+# adds no note).
+# 105 -> 106 / 96: a second handler inside the classified `plugin_api.hud_payload`, the
+# Desktop pane's delegation drawing (a failure is a record with `error` beside a HUD that
+# still reads, and the pane draws its lane rows instead).
+EXPECTED_HANDLER_COUNT = 106
+EXPECTED_ANCHOR_COUNT = 96
 
 
 class DerivedSite(NamedTuple):

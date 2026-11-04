@@ -633,7 +633,7 @@ class AgentViewMixin:
         last = self.region.last_row(self.size[1])
         if not plain or last is None or self.pager is not None or self.slot is not None or self.redraw_at is not None:
             return
-        above, column = last - (event.y - 1), event.x - 1 - self._margin()  # a report counts from 1
+        above, column = last - (event.y - 1), event.x - 1  # a report counts from 1
         target = next((hit.subagent_id for hit in self.clickable.get(above, ()) if hit.start <= column < hit.end), None)
         if target is None:
             return

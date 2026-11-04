@@ -4,17 +4,163 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **The OMH TUI's wallpaper and working glow hold still while its window is
-  in the background.** The TUI now asks the terminal for focus reports, as
+## 4.0.6 - 2026-11-04
+
+- **After a plan is accepted, the planning skills offer `dag-ulw` beside the
+  usual follow-ons, and taking the offer works.** An accepted `plan` or
+  `ralplan` whose tasks form a graph (ids, dependencies, write scopes and a
+  closing verification task) now names `dag-ulw` with a one-line fit reason,
+  next to carrying the plan out directly or an `ultrawork` cycle.
+  `refactor-plan` names it on a whole-plan go whose phases split into
+  groups with disjoint files: the phase order becomes the graph's order and
+  each phase's check its node's check, while the per-phase commits and
+  rollback points stay with the user.
+  It starts only on the user's go-ahead. Before, the workflow state refused
+  to start `dag-ulw` while `plan`, `ralplan` or `refactor-plan` was active,
+  so the offer could not be taken even when it was made. `dag-ulw` now builds
+  its graph from the plan the user accepted instead of planning a new one.
+  `ralplan`'s recovery note, the `/plan` reference, the router's lane map
+  and engine list, the intent-to-plan card, and the safe-feature and picker
+  hints name it too.
+  Routing is unchanged.
+- **The OMH TUI's working glow is removed.** The light that went round the
+  screen's edge while a turn ran read as too big and uncomfortable, and its
+  trail framed the screen so the terminal's padding outside it looked like a
+  black margin. It is gone, with everything that existed only for it: the
+  `/glow` command, `omh theme glow`, `OMH_TUI_GLOW`, the faster 50 ms paint
+  while it moved, and the column on each side and the blank last row the
+  screen kept free for it, so rows start at the screen's first column again.
+  A `glow` choice an older release saved in `<omh_home>/tui/theme.json` is
+  ignored and dropped the next time a choice is written. The living
+  wallpaper, the working row and its spinner are unchanged.
+- **A look with a scene paints its ground on every terminal.** The eight looks
+  with a scene set their ground only with OSC 11. Otty gives that colour only
+  to cells written after it, so every cell an erase cleared kept the terminal's
+  own black. That covered the chat area, every row's tail, the composer and the
+  blank rows: about 2,500–3,200 of the 6,300 cells on a 150x42 screen. Every
+  erase and blank fill on those looks now carries the ground as its
+  background. A terminal fills those cells with the
+  ground through background colour erase. A move in the /theme picker paints
+  the new ground over the whole visible screen in one synchronized update:
+  the region, the rows above it that are still on screen, and the blank rows
+  under it. Nothing is written into the scrollback. Pagers (/logs, /dag,
+  Ctrl+S) erase on the ground too. The default look, 256 and 16 colours,
+  NO_COLOR and `/wallpaper off` write the same bytes as before. At exit and
+  at Ctrl+Z, the rows still on screen are painted again on the terminal's own
+  background. One cost, accepted by the owner: rows already in the scrollback
+  keep the look's colour until they are printed again. The session rows left
+  above the prompt after a Ctrl+Z resume are on the terminal's own background
+  again, so Otty shows its own colour in their tails until they are reprinted,
+  as before this change. The background restore at exit is unchanged.
+- **On a dark look with a scene, the OMH TUI's diff and outcome bands and the
+  pager's footer bar follow the look.** These bands were the skin's fixed dark
+  green and maroon on every look, and the red one sank into aurora's teal at
+  1.01:1. Each band now keeps its green or red hue and moves onto the look's
+  ground. It sits 1.27:1 or more against every ground, and its text stays at
+  4.5:1 or better. The footer bar of the pager, /dag and the Ctrl+S bot board
+  takes the sent prompt band's colour instead of the skin's teal-black, with
+  its words re-lifted to 4.5:1. The /theme picker's tile for the default look
+  now shows the terminal's own background, which is what picking it gives.
+  The default look and the light side are unchanged.
+- **The Hermes Desktop pane takes the OMH TUI's mood, and draws the DAG as the TUI does.**
+  The pane stays a Desktop pane: the app's sans, its components and its theme
+  tokens. It takes on the TUI's default launch look as Desktop colour mixes: a rose
+  brand, warm section labels, and muted violet rules and frames. Sections have more
+  room between them, and agent rows get a hover. While a delegation graph runs, the
+  pane shows the box drawing the TUI prints into its transcript, in a card. The
+  backend makes it with the same renderer, at the width the pane measures in cells.
+  A run of up to 12 lanes is drawn as boxes. A bigger run, or a pane too narrow for
+  boxes, gets the tree. Each box takes its state's colour: the accent for running,
+  yellow for stuck, red for failed, grey for done or waiting. Every word the pane
+  colours now reads at 4.5:1 or better on Desktop's light and dark themes; the
+  lowest before was about 2.2:1.
+
+- **The OMH TUI draws Markdown tables as aligned columns while a reply streams.**
+  A `|` header row used to reach scrollback as plain text one delta before its
+  `|---|` divider arrived, so a table could never be drawn properly. The trailing
+  run of `|` lines is now held out of scrollback until the reply moves past it, and
+  shown in the live region as the same table the finished reply draws: bold header,
+  a `─` band, wide characters aligned by cell width, `\|` kept as a literal pipe. A
+  table wider than the row, and a `|` line with no divider under it, stay plain
+  text, quitting mid-reply still prints the rows held back, and a table taller than
+  half the terminal is released to scrollback as it grows, on the columns it
+  has. Carried forward from #2550 by @kfatyuip.
+
+- **The Windows loader probe keeps `LOCALAPPDATA`.** The isolated probe that
+  `omh doctor` runs dropped it, so the Hermes launcher could not find the home
+  directory and doctor reported `hermes_runtime_command_failed` although
+  `hermes --print-runtime-command` worked in a normal shell. The variable is
+  forwarded only when the parent has it. Carries #2548 by @DefinitelyNotSpammy.
+
+- **The `omh_memory` consolidation status reads the session's own profile.**
+  Like tool recall, `demote` and recall origins, it now takes the Hermes
+  profile the memory provider was started with from the session lens, not
+  the tool process's `HERMES_HOME`, so a brief raised in one profile is not
+  reported from another. Tests also pin that those three read the provider's
+  profile.
+- **A changed function's broken callers are named at the turn's first stop.** When a turn changes a
+  Python function's parameters, OMH reads the files that import it, following package re-exports and
+  aliases. It names, by file and line, each call that matched the old parameters and no longer
+  does, with the new signature. It needs no language server and is on by default. It says nothing about
+  a call it cannot prove broken, such as one passing `*args` / `**kwargs` or one written to raise.
+  In the live bench this took gpt-6-luna on a signature change from 0/6 to 6/6, and Haiku 4.5 from
+  5/6 to 6/6.
+
+- **A dated snapshot in memory says how to retire it, in the session that
+  saves it and in later ones.** When the model saves a fact like "As of
+  2026-10-30 (v0.1.7), nanran has ..." or "nanran v0.1.13 added ...", the
+  result tells it to name this memory in `replaces` when it saves the new
+  state. The old memory then leaves recall instead of being served beside the
+  new one. The owner's store held 8 such snapshots side by side, none ever
+  replaced. Because the state usually changes weeks later in another session,
+  recall also marks snapshot facts and decisions: `snapshot="as-of"` on the
+  record in the memory pack, `"snapshot": "as-of"` on a recall tool row, and
+  one shared line per pack. The line says the record still holds until that
+  same thing changes, and only then is it named in `replaces`; something newly
+  added stays its own record. Episodes are not marked, since an event never
+  changes. This reaches snapshots already stored, without a migration. The
+  memory itself is unchanged: it stays permanent and nothing is aged or
+  hidden. Versions stated as rules ("requires Hermes v0.22.5 or newer", "pin
+  Node v20.11"), "Decided <date>:" lines, lessons and procedures get no such
+  note. The mark never costs a record: when it does not fit the pack's bound,
+  the pack renders unmarked, exactly as before. A marked pack is 287
+  characters longer for the line, plus 17 per marked record. The cue is
+  English only.
+- **Vim mode changes the cursor shape.** With `display.vim_mode` on, the
+  terminal's cursor is a steady beam in INSERT and a steady block in NORMAL
+  (DECSCUSR). This is an OMH addition: Hermes keeps a steady block in both
+  modes. It is written only when the mode changes, and the terminal's own
+  shape comes back when a question or picker takes the keys, when vim mode
+  goes off, and on exit or Ctrl+Z. On exit it is the terminal's default
+  shape, not whatever the shell had set before. Carries the cursor part of
+  #2510 by @DanRioDev.
+
+- **Memory recall costs a turn far less.** The memory pack is rendered in
+  `on_turn_start`, before the turn's model call, so its cost is turn latency
+  (a code comment and `docs/MEMORY.md` said it was rendered off the hot path;
+  both now say what happens). Every render ran the credential and safety scan
+  on every stored record again, twice on a console turn, and that scan was
+  most of the render. Each record's verdict is now kept, keyed by the digest
+  of the record's exact content, so an unchanged record is not scanned again
+  and a changed one is scanned on its next render and refused there if it
+  became unsafe. The credential check on the short metadata strings a render
+  redacts is kept per string the same way. A turn also reads each review file
+  once instead of three times and lists the records directory once less.
+  On a read-only copy of the owner's store (39 records), `on_turn_start` plus
+  `prefetch` went from 77-124 ms to 13-17 ms and a repeat render from 42-52
+  ms to 10-14 ms; on a synthetic 500-record store, from 3.0-3.3 s to
+  0.13-0.52 s per turn. The first render in a process still scans every
+  record (measured on a machine under heavy load, two interleaved rounds).
+- **The OMH TUI's living wallpaper holds still while its window is in the
+  background.** The TUI now asks the terminal for focus reports, as
   Hermes' own TUI does. While the window does not have focus, the living
-  wallpaper's scene and the working glow's light stop where they were, and
-  nothing wakes the TUI to paint them. The spinner, streamed text and
+  wallpaper's scene stops where it was, and nothing wakes the TUI to paint
+  it. The spinner, streamed text and
   everything else in a running turn keep updating. When focus comes back,
   the next frame is the one the animation would have drawn at that moment,
   and with focus the look is byte for byte what it was. On an idle screen
   with a scene, an unfocused TUI went from 4 wake-ups and about 6 KiB written
-  a second to 1 wake-up and nothing written; during a turn with the glow,
-  from about 51 to 20 KiB a second. A terminal that does not send focus
+  a second to 1 wake-up and nothing written. A terminal that does not send focus
   reports is treated as focused throughout, so nothing changes there. The
   focus reports type nothing in any mode and are switched off on every exit
   and while the TUI is suspended.
@@ -47,6 +193,7 @@ All notable changes will be documented here.
   message that matches nothing: listing them would make the live recall
   select differently from coding handoffs, which the recall suite and
   incident replay hold equal.
+
 - **Skill hints read the request, not the gateway's busy-path header.** A
   Discord or Slack message sent while the agent is busy reaches the turn with
   Hermes' origin block in front of it: one line of JSON ids between two fixed

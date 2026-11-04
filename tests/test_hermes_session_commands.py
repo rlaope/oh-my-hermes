@@ -32,6 +32,7 @@ from omh.plugin_bundle.omh.hermes_session_commands import (
     LOOP_TIMER_NONE,
     LOOP_TIMERS_ANSWERED_DIRECTLY,
     NATIVE_LOOP_CADENCE_HINT_KEY,
+    handed_on_text,
     host_command_turn,
     loop_timer_verdict,
     native_loop_prompt,
@@ -1064,6 +1065,30 @@ class PersonRequestTextTest(unittest.TestCase):
         ):
             with self.subTest(kept=kept[:40]):
                 self.assertEqual(person_request_text(kept), kept)
+
+    def test_an_origin_block_on_its_own_line_goes_wherever_the_line_is_and_only_from_routing(self):
+        # The cut is by line, not by position: a person who pastes an exact
+        # origin block on a line of its own loses the block from the routing
+        # text, never their other words. What OMH hands on is the whole turn.
+        for name, message, routed in (
+            ("mid message", "look at this:\n" + _BUSY_ORIGIN + "and fix it", "look at this:\nand fix it"),
+            ("two blocks", "one\n" + _BUSY_ORIGIN + "two\n" + _BUSY_ORIGIN + "three", "one\ntwo\nthree"),
+            ("inside a fence", "see\n```\n" + _BUSY_ORIGIN + "```\nfix it", "see\n```\n```\nfix it"),
+        ):
+            with self.subTest(name):
+                self.assertEqual(person_request_text(message), routed)
+                self.assertEqual(person_request_text(message, messaging=True), routed)
+                self.assertEqual(handed_on_text(message), message)
+                self.assertNotIn("Gateway message origin", routed)
+
+    def test_an_origin_block_after_a_sender_prefix_is_not_cut(self):
+        # Pinned as observed (0 such rows in the owner's data): the opening
+        # line must start a line, and `[name] ` is on it. Not a promise;
+        # change it only with a row that shows the shape.
+        message = "[bob] " + _BUSY_ORIGIN + "fix it"
+        self.assertIn("Gateway message origin", person_request_text(message))
+        self.assertIn("Gateway message origin", person_request_text(message, messaging=True))
+        self.assertEqual(handed_on_text(message), message)
 
     def test_a_quoted_message_block_cannot_be_split(self):
         # QQ writes `[Quoted message]:` and the quote with no close of its own,

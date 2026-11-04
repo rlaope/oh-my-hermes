@@ -4863,7 +4863,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Start from observed repo facts and source/web evidence when freshness or external behavior matters.
   - Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.
   - Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.
-  - List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `ultrawork` can prepare board rows from the plan without re-planning; planning itself stays a bounded in-session lane.
+  - List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `dag-ulw` nodes or `ultrawork` board rows come from the plan without re-planning; planning itself stays a bounded in-session lane.
   - When adapting an existing capability, load `skill_view(name='omh-verification-gate', file_path='references/adaptation-quality.md')` before accepting a plan, dispatching work, or claiming completion; carry its criteria and comparisons into tasks and evidence.
   - Before comparing options, write the target state: name each consumer of the result (a person, a maintainer, or a program reading its output), their current workflow on this surface, the state in which that workflow keeps working with no new friction or loss, and every difference between current and target, each with why it matters.
   - Record a `Success criteria` table with columns `Criterion | Task | Verification scenario`, one row per target-state difference naming its owning task and the scenario that shows the difference closed; these rows are the acceptance criteria above, extended to the target state.
@@ -4893,7 +4893,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If requirements are still fuzzy, route back to deep-interview before planning.
   - If current-source evidence is missing, route a `research` step before accepting the plan.
-  - If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
+  - If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
 - Required inputs:
   - requirements
   - codebase facts
@@ -5184,7 +5184,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Ship the files table with the plan: one row per file with action, phase, and blocks/blocked-by; a row without a phase is unplanned work.
   - Size verification to the blast radius, not to optimism: a phase touching public surfaces or persisted shapes carries the full gate, not the fast one.
   - For a dependency or framework upgrade, read four inputs before ordering phases — advisory and end-of-life intake, the licence delta at the target version, the upstream migration guide item by item against this codebase, and lockfile handling in the same commit as the manifest; a breaking change nobody checked is a gap, not a pass. The full contract is `omh-refactor-plan/references/dependency-upgrade.md`.
-  - Stop at the approval gate and hand the user the go/no-go, whole plan or first phase.
+  - Stop at the approval gate and hand the user the go/no-go, whole plan or first phase; when the approved phases split into groups with disjoint files plus a verification step, a whole-plan go may also name `dag-ulw` with the fit reason in one line, started only on the user's explicit go-ahead: the phase order becomes `depends_on` and each phase's verification command its node's VERIFY. `dag-ulw` runs without pausing between phases and neither commits nor rolls back, so say the per-phase commits are cut after the run and the rollback points stay with the user, or take the first-phase path.
 - Completion checklist:
   - Reconnaissance names affected files, boundaries, coupling, and blast radius from observed evidence.
   - Every phase carries its verification command and its rollback point, and ends at a shippable commit.
@@ -7795,6 +7795,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Why this exists: `dag-ulw` exists so a big job runs end to end without the person driving it: the parent plans a graph OMH can validate and draw, runs the ready nodes in parallel on Hermes' own children, verifies the goal with a separate node, and repairs before it reports.
 - First steps:
   - Start at once; there is no plan approval. Write the goal criteria in one line.
+  - When the conversation holds a plan the user accepted (from `plan`, `ralplan` or `refactor-plan`), build the graph from it instead of re-planning: each task becomes a node with its id, depends_on and write scope, its done check goes into VERIFY and STOP WHEN, and its closing verification task becomes the `role: verify` node; plan only what it leaves open.
   - Plan the graph and call `omh_dag action=define` with the complete run `goal` and each node's id, label, category, prompt, depends_on, write_scope and role (`build` by default; `baseline`, `verify`, `review`); fix every refusal and read the lint before going on. Never `delegate_task` before `define` returns its calls. The saved goal reaches every native task; local VERIFY does not replace goal acceptance.
   - Keep the plan todo as the run's layers in ONE tool: `todo_list` when `todo_list` is in your tool list or tool_search finds it (OMH mirrors it), else `omh_todo`. One item per layer, named for what it delivers, never a list of its nodes (the panel draws those); advance it as each layer settles.
   - For each call `omh_dag` returns, run its route (`omh_delegate_route`, set or fallback as given), then `delegate_task` with the tasks unchanged; never more calls than it returned. A call whose route names a `backend` (Hermes' model_map or profile_routes) runs no route tool: its tasks already carry what that backend takes. Then end the turn with one status line; never wait or poll.

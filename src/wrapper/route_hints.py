@@ -163,7 +163,7 @@ def _route_hint_with_catalog_picker(route_hint: dict[str, object], message: str)
         "fallback_action": "show_workflow_picker_or_capability_summary",
         "fallback_action_label": next_action_label("show_workflow_picker"),
         "matched_cues": ["catalog_question"],
-        "adjacent_workflows": ["deep-interview", "ralplan", "loop", "ultrawork"],
+        "adjacent_workflows": ["deep-interview", "ralplan", "dag-ulw", "loop", "ultrawork"],
         "workflow_context_card": {
             "id": "intent_to_plan",
             "label": "Intent to plan",
