@@ -4,6 +4,8 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+## 4.0.6 - 2026-11-04
+
 - **`dag-ulw` is offered where a plan's follow-on is chosen.** On Hermes'
   own `/plan` turn, whose reply offers to carry the plan out, the model is
   asked to also name `dag-ulw` as one option when the plan's tasks form a
@@ -22,8 +24,6 @@ All notable changes will be documented here.
   measured saw `dag-ulw`: four got no OMH context at all after `/plan`. A
   turn with no plan just made renders the same bytes as before, and routing
   is unchanged.
-## 4.0.6 - 2026-11-04
-
 - **After a plan is accepted, the planning skills offer `dag-ulw` beside the
   usual follow-ons, and taking the offer works.** An accepted `plan` or
   `ralplan` whose tasks form a graph (ids, dependencies, write scopes and a
@@ -110,17 +110,13 @@ All notable changes will be documented here.
   `hermes --print-runtime-command` worked in a normal shell. The variable is
   forwarded only when the parent has it. Carries #2548 by @DefinitelyNotSpammy.
 
-- **The `omh_memory` consolidation status reads the session's own profile.**
-  Like tool recall, `demote` and recall origins, it now takes the Hermes
-  profile the memory provider was started with from the session lens, not
-  the tool process's `HERMES_HOME`, so a brief raised in one profile is not
-  reported from another. Tests also pin that those three read the provider's
-  profile.
-- **A changed function's broken callers are named at the turn's first stop.** When a turn changes a
+- **A changed Python function's broken callers are named at the turn's first stop.** When a turn changes a
   Python function's parameters, OMH reads the files that import it, following package re-exports and
   aliases. It names, by file and line, each call that matched the old parameters and no longer
   does, with the new signature. It needs no language server and is on by default. It says nothing about
   a call it cannot prove broken, such as one passing `*args` / `**kwargs` or one written to raise.
+  It runs only after an edit made with a file tool: Hermes does not run the turn-stop check after
+  a shell-only edit.
   In the live bench this took gpt-6-luna on a signature change from 0/6 to 6/6, and Haiku 4.5 from
   5/6 to 6/6.
 
@@ -139,11 +135,11 @@ All notable changes will be documented here.
   changes. This reaches snapshots already stored, without a migration. The
   memory itself is unchanged: it stays permanent and nothing is aged or
   hidden. Versions stated as rules ("requires Hermes v0.22.5 or newer", "pin
-  Node v20.11"), "Decided <date>:" lines, lessons and procedures get no such
-  note. The mark never costs a record: when it does not fit the pack's bound,
-  the pack renders unmarked, exactly as before. A marked pack is 287
-  characters longer for the line, plus 17 per marked record. The cue is
-  English only.
+  Node v20.11"), a "Decided <date>:" line with no version change in it,
+  lessons and procedures get neither the note nor the mark. The mark never
+  costs a record: when it does not fit the pack's bound, the pack renders
+  unmarked, exactly as before. A marked pack is 287 characters longer for the
+  line, plus 17 per marked record. The cue is English only.
 - **Vim mode changes the cursor shape.** With `display.vim_mode` on, the
   terminal's cursor is a steady beam in INSERT and a steady block in NORMAL
   (DECSCUSR). This is an OMH addition: Hermes keeps a steady block in both
@@ -170,18 +166,17 @@ All notable changes will be documented here.
   0.13-0.52 s per turn. The first render in a process still scans every
   record (measured on a machine under heavy load, two interleaved rounds).
 - **The OMH TUI's living wallpaper holds still while its window is in the
-  background.** The TUI now asks the terminal for focus reports, as
-  Hermes' own TUI does. While the window does not have focus, the living
-  wallpaper's scene stops where it was, and nothing wakes the TUI to paint
-  it. The spinner, streamed text and
-  everything else in a running turn keep updating. When focus comes back,
-  the next frame is the one the animation would have drawn at that moment,
-  and with focus the look is byte for byte what it was. On an idle screen
-  with a scene, an unfocused TUI went from 4 wake-ups and about 6 KiB written
-  a second to 1 wake-up and nothing written. A terminal that does not send focus
-  reports is treated as focused throughout, so nothing changes there. The
-  focus reports type nothing in any mode and are switched off on every exit
-  and while the TUI is suspended.
+  background.** The TUI now asks the terminal for focus reports, as Hermes'
+  own TUI does. While the window does not have focus, the living wallpaper's
+  scene stops where it was, and nothing wakes the TUI to paint it. The
+  spinner, streamed text and everything else in a running turn keep updating.
+  When focus comes back, the next frame is the one the animation would have
+  drawn at that moment, and with focus the look is byte for byte what it was.
+  On an idle screen with a scene, an unfocused TUI went from 4 wake-ups and
+  about 6 KiB written a second to 1 wake-up and nothing written. A terminal
+  that does not send focus reports is treated as focused throughout, so
+  nothing changes there. The focus reports type nothing in any mode and are
+  switched off on every exit and while the TUI is suspended.
 
 - **A full redraw keeps 4,000 rows of the session, up from 3,000.** A
   resize, a tab switch, Ctrl+L, `/redraw` and a resumed session erase the
@@ -198,19 +193,20 @@ All notable changes will be documented here.
   in `/history`. A terminal's own scrollback limit can keep fewer rows than
   this.
 
-- **The recall switches and records say what they do.** Under
-  `recall_mode: on_demand` or `off`, a save that resembles a held memory no
-  longer tells the model that either one "recalls": no turn is served
-  memories unasked there, and the hint now says so. Tool recall reads
-  `recall_mode` from the profile the memory provider was started with rather
-  than the process's `HERMES_HOME`, so the two cannot disagree about whether
-  recall is off. In the TUI, an `omh_remember` recall that found memories
-  lists them and gets the same sweep as an `omh_memory` one. A test now pins
-  that a consolidation brief raised in the same second by another trigger is
-  served. A pinned memory still suppresses the list of the rest's names on a
-  message that matches nothing: listing them would make the live recall
-  select differently from coding handoffs, which the recall suite and
-  incident replay hold equal.
+- **The recall switches and records say what they do.** Under `recall_mode:
+  on_demand` or `off`, a save that resembles a held memory no longer tells the
+  model that either one "recalls": no turn is served memories unasked there,
+  and the hint now says so. Tool recall's `recall_mode`, `demote`, recall
+  origins and the `omh_memory` consolidation status read the profile the
+  memory provider was started with, rather than the process's `HERMES_HOME`,
+  so the two cannot disagree about whether recall is off, and a brief raised
+  in one profile is not reported from another. In the TUI, an `omh_remember`
+  recall that found memories lists them and gets the same sweep as an
+  `omh_memory` one. A test now pins that a consolidation brief raised in the
+  same second by another trigger is served. A pinned memory still suppresses
+  the list of the rest's names on a message that matches nothing: listing them
+  would make the live recall select differently from coding handoffs, which
+  the recall suite and incident replay hold equal.
 
 - **Skill hints read the request, not the gateway's busy-path header.** A
   Discord or Slack message sent while the agent is busy reaches the turn with

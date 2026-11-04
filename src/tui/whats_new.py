@@ -37,7 +37,7 @@ WHATS_NEW: dict[str, tuple[str, ...]] = {
     "4.0.6": (
         "The working glow around the screen's edge is gone",
         "Markdown tables are drawn as columns while a reply streams",
-        "Looks with a scene paint their ground on every terminal",
+        "Scene looks colour the whole screen, chat area and composer included",
         "Vim mode changes the cursor shape: beam in INSERT, block in NORMAL",
         "After a plan is accepted, dag-ulw is offered and can start",
     ),
