@@ -1001,6 +1001,12 @@ class CursorShapeTests(unittest.TestCase):
         app._render()
         return [shape for text in app.terminal.writes for shape in re.findall(r"\x1b\[\d q", text)]
 
+    def test_the_escape_bytes_are_steady_beam_steady_block_and_default(self) -> None:
+        self.assertEqual(
+            (CURSOR_SHAPE_BEAM, CURSOR_SHAPE_BLOCK, CURSOR_SHAPE_DEFAULT),
+            ("\x1b[6 q", "\x1b[2 q", "\x1b[0 q"),
+        )
+
     def test_the_shape_follows_insert_and_normal_and_is_written_only_when_it_changes(self) -> None:
         app, _client = make_app()
         app._take_settings({"config": {"display": {"vim_mode": True}}})
