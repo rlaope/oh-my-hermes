@@ -77,8 +77,7 @@ class _Workspace(unittest.TestCase):
         return str(self.root / self.write(relative, text))
 
     def verdict(self, *paths: str) -> ct.Verdict:
-        """The verdict without its evidence lines; `EvidenceTest` reads those."""
-        return ct.round_end_trigger(SESSION, tuple(paths))._replace(evidence="")
+        return ct.round_end_trigger(SESSION, tuple(paths))
 
 
 class CopySignalTest(_Workspace):
@@ -870,24 +869,10 @@ class PreVerifyGateTest(_Workspace):
         self.assertIsNone(self.fire(self.edit("src/app/units.py", '{"s": 60,', '{"s": 1,')))
         self.assertNotIn(SESSION, ct._sessions)
 
-    def test_alone_with_a_copy_the_check_shows_the_copy(self):
+    def test_alone_with_a_copy_the_check_fires_unchanged(self):
         self.write("src/app/invoice.py", INVOICE)
         self.write("src/app/receipt.py", RECEIPT)
         result = self.fire(self.edit("src/app/invoice.py", "ROUND_HALF_EVEN)\n\n\n", "ROUND_HALF_UP)\n\n\n"))
-        evidence = ("src/app/receipt.py:\n"
-                    '   1| """Receipt totals."""\n'
-                    "   5| def _to_cents(amount: str) -> decimal.Decimal:\n"
-                    '   6|     return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)')
-        self.assertEqual(result["message"], (
-            "OMH round-end consistency check, once per turn: outside the files you edited this turn, OMH found "
-            f"another definition of `_to_cents`, a name your edit changed:\n{evidence}\n"
-            f"{verify_hooks.ROUND_END_EVIDENCE_TAIL}\n{verify_hooks.ROUND_END_CLOSING}"))
-
-    def test_a_fire_without_evidence_keeps_the_generic_checklist(self):
-        self.write("src/app/units.py", UNITS)
-        changed = self.edit("src/app/units.py", '{"s": 60,', '{"s": 1,')
-        with mock.patch.object(verify_hooks, "round_end_trigger", lambda session_id, paths: ct.Verdict(True, "opaque_edit")):
-            result = self.fire(changed)
         self.assertEqual(result["message"], f"{verify_hooks.ROUND_END_CHECKLIST}\n{verify_hooks.ROUND_END_CLOSING}")
 
     def test_beside_another_nudge_the_check_rides_along_without_a_verdict(self):
@@ -1056,47 +1041,6 @@ class SettledReferenceTest(_Workspace):
         first = self.rename_timeout()
         second = self.edit("src/app/mirror.py", "timeout: float = 5.0", "timeout_s: float = 5.0")
         self.assertEqual(self.verdict(first, second)[:2], (True, "signature"))
-
-
-class EvidenceTest(_Workspace):
-    def test_a_copy_shows_its_module_docstring_comments_and_definition(self):
-        self.write("src/app/invoice.py", INVOICE)
-        self.write("src/app/duty.py", RECEIPT.replace('"""Receipt totals."""', '"""Duty amounts.\n\nKept apart."""').replace(
-            "def _to_cents", "# Banker's rounding.\ndef _to_cents"))
-        changed = self.edit("src/app/invoice.py", "ROUND_HALF_EVEN)\n\n\n", "ROUND_HALF_UP)\n\n\n")
-        self.assertEqual(ct.round_end_trigger(SESSION, (changed,)).evidence, (
-            "src/app/duty.py:\n"
-            '   1| """Duty amounts.\n'
-            "   2| \n"
-            '   3| Kept apart."""\n'
-            "   7| # Banker's rounding.\n"
-            "   8| def _to_cents(amount: str) -> decimal.Decimal:\n"
-            '   9|     return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)'))
-
-    def test_a_long_copy_is_cut(self):
-        self.write("src/app/invoice.py", INVOICE)
-        body = "".join(f"    step_{index} = {index}\n" for index in range(40))
-        self.write("src/app/duty.py", f"def _to_cents(amount):\n{body}    return amount\n")
-        changed = self.edit("src/app/invoice.py", "ROUND_HALF_EVEN)\n\n\n", "ROUND_HALF_UP)\n\n\n")
-        lines = ct.round_end_trigger(SESSION, (changed,)).evidence.splitlines()
-        self.assertEqual(len(lines), 1 + ct.MAX_EVIDENCE_LINES + 1)
-        self.assertEqual(lines[-1], "    | ...")
-
-    def test_a_reference_shows_its_matching_lines(self):
-        self.write("src/app/units.py", TO_CENTS)
-        self.write("src/app/cart.py", CART)
-        changed = self.edit("src/app/units.py", "def to_cents(", "def amount_to_cents(")
-        self.assertEqual(ct.round_end_trigger(SESSION, (changed,)).evidence, (
-            "src/app/cart.py:\n   1| from benchapp.units import to_cents\n   5|     return sum(map(to_cents, prices))"))
-
-    def test_a_replaced_line_shows_where_it_appears(self):
-        self.write("src/app/units.py", UNITS)
-        self.write("src/app/other.py", 'def table():\n    _DURATION_SECONDS = {"s": 60, "m": 60, "h": 3600}\n'
-                                       "    return _DURATION_SECONDS\n")
-        changed = self.edit("src/app/units.py", '{"s": 60,', '{"s": 1,')
-        verdict = ct.round_end_trigger(SESSION, (changed,))
-        self.assertEqual((verdict.reason, verdict.evidence), (
-            "line_copy", 'src/app/other.py:\n   2|     _DURATION_SECONDS = {"s": 60, "m": 60, "h": 3600}'))
 
 
 if __name__ == "__main__":

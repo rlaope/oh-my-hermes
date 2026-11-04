@@ -4,13 +4,10 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **The round-end check continues a turn less often, and shows what it found.**
-  A changed function's name in another file no longer continues the turn when
-  every mention there is proven to need no change: another object's method of
-  the same name, or an import whose calls bind the same way before and after the
-  edit. When the check does fire alone on a copy or a reference, the note now
-  shows those lines (a copy with its module docstring), so the model can decide
-  without searching for them first.
+- **The round-end check continues a turn less often.** A changed function's
+  name in another file no longer continues the turn when every mention there
+  is proven to need no change: another object's method of the same name, or
+  an import whose calls bind the same way before and after the edit.
 - **The OMH TUI's working glow is removed.** The light that went round the
   screen's edge while a turn ran read as too big and uncomfortable, and its
   trail framed the screen so the terminal's padding outside it looked like a

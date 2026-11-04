@@ -46,7 +46,6 @@ deterministically and from the disk alone, whether such a thing exists:
      that file is proven to need no change (``_settled``): another object's member (``param.name``),
      or an import of it from the edited module used only in calls that bind the same way before and
      after the edit. Anything unproven keeps the hit.
-   - A fire carries the matched lines (``Verdict.evidence``), which the note shows.
 
 No signal means the check is skipped. Every other outcome fires it as it fired before this module:
 
@@ -162,9 +161,6 @@ class Verdict(NamedTuple):
     fire: bool
     reason: str
     detail: str = ""
-    # For a `copy`, `renamed`, `signature` or `line_copy` fire: the lines the scan matched, numbered,
-    # under their workspace-relative path (`_evidence`), so the note can show what was found.
-    evidence: str = ""
 
 
 class _Budget(Exception):
@@ -520,11 +516,11 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
             if not python:
                 for name, pattern in renamed.items():
                     if name in text and pattern.search(text):
-                        return Verdict(True, "renamed", f"{name} in {where}", _evidence(where, text, pattern))
+                        return Verdict(True, "renamed", f"{name} in {where}")
                 continue
             for name, pattern in defined.items():
                 if name in text and pattern.search(text):
-                    return Verdict(True, "copy", f"{name} in {where}", _definition_evidence(where, text, name, pattern))
+                    return Verdict(True, "copy", f"{name} in {where}")
             for name, pattern in named.items():
                 if name in text and pattern.search(text):
                     if name not in needles.renamed and _settled(name, needles.callables.get(name), path, text, root,
@@ -532,65 +528,16 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
                         settled.add(name)
                         continue
                     reason = "renamed" if name in needles.renamed else "signature"
-                    return Verdict(True, reason, f"{name} in {where}", _evidence(where, text, pattern))
+                    return Verdict(True, reason, f"{name} in {where}")
             if needles.lines:
                 lines = {" ".join(line.split()) for line in text.splitlines()}
                 if any(line in lines for line in needles.lines):
-                    return Verdict(True, "line_copy", where, _evidence(where, text, needles.lines))
+                    return Verdict(True, "line_copy", where)
     except _Budget as exc:
         return Verdict(True, "scan_budget", str(exc))
     except _OutsideLink as exc:
         return Verdict(True, "outside_link", str(exc))
     return Verdict(False, "no_copy_or_reference", f"settled {','.join(sorted(settled))}" if settled else "")
-
-
-# Evidence shown in the note: at most this many lines, each cut to this many characters.
-MAX_EVIDENCE_LINES: Final = 14
-MAX_EVIDENCE_CHARS: Final = 160
-MAX_EVIDENCE_MATCHES: Final = 3
-# Lines of a copy's module docstring, and of the comment block right above it, shown before the copy.
-MAX_EVIDENCE_PREAMBLE: Final = 4
-
-
-def _evidence(where: str, text: str, match: "re.Pattern[str] | set[str]") -> str:
-    """The first ``MAX_EVIDENCE_MATCHES`` lines of ``text`` that ``match`` (a pattern, or a set of
-    whitespace-collapsed lines), numbered, under ``where``."""
-    numbered = [(number, line) for number, line in enumerate(text.splitlines(), 1)
-                if (match.search(line) if isinstance(match, re.Pattern) else " ".join(line.split()) in match)]
-    return _render(where, numbered[:MAX_EVIDENCE_MATCHES])
-
-
-def _definition_evidence(where: str, text: str, name: str, pattern: "re.Pattern[str]") -> str:
-    """The other definition of ``name`` whole, as far as ``MAX_EVIDENCE_LINES`` allows, after the
-    module docstring and the comment lines right above it: what documents whether the copy is meant
-    to follow the edit. The first matching line alone when the file's definition cannot be located."""
-    lines = text.splitlines()
-    tree = _parse(text)
-    spans = [(start, end) for start, end, _node in _definitions(tree).get(name, [])] if tree is not None else []
-    match = pattern.search(text)
-    if not spans or match is None:
-        return _evidence(where, text, re.compile(rf"\b{re.escape(name)}\b"))
-    first = text.count("\n", 0, match.start()) + 1
-    start, end = min(spans, key=lambda span: abs(span[0] - first))
-    numbered: list[tuple[int, str]] = []
-    body = getattr(tree, "body", [])
-    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
-            and isinstance(body[0].value.value, str) and body[0].end_lineno and body[0].end_lineno < start:
-        numbered += [(number, lines[number - 1]) for number in range(body[0].lineno, body[0].end_lineno + 1)
-                     ][:MAX_EVIDENCE_PREAMBLE]
-    above = start - 1
-    while above > 0 and lines[above - 1].lstrip().startswith("#") and start - above <= MAX_EVIDENCE_PREAMBLE:
-        above -= 1
-    numbered += [(number, lines[number - 1]) for number in range(above + 1, end + 1) if number <= len(lines)]
-    return _render(where, numbered)
-
-
-def _render(where: str, numbered: list[tuple[int, str]]) -> str:
-    shown = numbered[:MAX_EVIDENCE_LINES]
-    rows = [f"{number:>4}| {line[:MAX_EVIDENCE_CHARS]}" for number, line in shown]
-    if len(numbered) > len(shown):
-        rows.append("    | ...")
-    return "\n".join([f"{where}:"] + rows) if rows else ""
 
 
 def _settled(name: str, changed: tuple[str, ast.AST, ast.AST] | None, path: str, text: str, root: str,
