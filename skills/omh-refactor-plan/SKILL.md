@@ -84,7 +84,7 @@ Quality bar:
 - Ship the files table with the plan: one row per file with action, phase, and blocks/blocked-by; a row without a phase is unplanned work.
 - Size verification to the blast radius, not to optimism: a phase touching public surfaces or persisted shapes carries the full gate, not the fast one.
 - For a dependency or framework upgrade, read four inputs before ordering phases — advisory and end-of-life intake, the licence delta at the target version, the upstream migration guide item by item against this codebase, and lockfile handling in the same commit as the manifest; a breaking change nobody checked is a gap, not a pass. The full contract is `omh-refactor-plan/references/dependency-upgrade.md`.
-- Stop at the approval gate and hand the user the go/no-go, whole plan or first phase.
+- Stop at the approval gate and hand the user the go/no-go, whole plan or first phase; when the approved phases split into groups with disjoint files plus a verification step, name `dag-ulw` as the way to run them with that fit reason, and start it only on the user's explicit go-ahead.
 
 Handoff policy:
 

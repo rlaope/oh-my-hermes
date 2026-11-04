@@ -695,7 +695,7 @@ LANE_CROSS_LANE_EXAMPLES = {
         "new repo -> codebase-onboarding -> reading path -> first-task runway",
         "stale code index -> codegraph-refresh -> summary or task-scoped handoff",
         "show me the codebase -> codebase-uml -> one rendered package or focus diagram -> legend read back",
-        "fuzzy feature request -> deep-interview -> ralplan -> accepted plan",
+        "fuzzy feature request -> deep-interview -> ralplan -> accepted plan -> dag-ulw or ultrawork on go-ahead",
     ],
     "research_and_ops": [
         "customer signal -> feedback-triage -> investigation plan -> coding handoff -> status",
@@ -754,11 +754,12 @@ WORKFLOW_CONTEXT_CARDS = (
         "id": "intent_to_plan",
         "label": "Intent to plan",
         "user_signal": "fuzzy goal, ambitious target, safe feature, or one-cycle delivery request",
-        "omh_pattern": "clarify or plan first, then move to an ultrawork delivery cycle, loop, or handoff only when concrete and only after the user confirms the recommended follow-on path",
+        "omh_pattern": "clarify or plan first, then move to a dag-ulw task graph, an ultrawork delivery cycle, loop, or handoff only when concrete and only after the user confirms the recommended follow-on path",
         "representative_workflows": (
             "context",
             "deep-interview",
             "ralplan",
+            "dag-ulw",
             "codebase-onboarding",
             "codegraph-refresh",
             "codebase-uml",
@@ -4841,7 +4842,7 @@ _ROUTE_HINT_RULES = (
             "show oh-my-hermes menu",
         ),
         "tokens": (),
-        "adjacent_workflows": ("deep-interview", "ralplan", "loop", "ultrawork"),
+        "adjacent_workflows": ("deep-interview", "ralplan", "dag-ulw", "loop", "ultrawork"),
     },
     {
         "id": "hermes_coding_team_path",
@@ -4989,7 +4990,7 @@ _ROUTE_HINT_RULES = (
             "기능 안전하게",
         ),
         "tokens": (),
-        "adjacent_workflows": ("deep-interview", "ultrawork", "code-review"),
+        "adjacent_workflows": ("deep-interview", "dag-ulw", "ultrawork", "code-review"),
     },
     {
         "id": "risky_refactor_plan",

@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **After a plan is accepted, the planning skills offer `dag-ulw` beside the
+  usual follow-ons, and taking the offer works.** An accepted `plan` or
+  `ralplan` whose tasks form a graph (ids, dependencies, write scopes and a
+  closing verification task) now names `dag-ulw` with a one-line fit reason,
+  next to carrying the plan out directly or an `ultrawork` cycle. It starts
+  only on the user's go-ahead. Before, the workflow state refused to start
+  `dag-ulw` while `plan` or `ralplan` was active, so the offer could not be
+  taken even when it was made. `ralplan`'s recovery note, `refactor-plan`'s
+  approval gate, the `/plan` reference, the router's lane map and engine list,
+  the intent-to-plan card and the safe-feature and picker hints now name it
+  too. Routing is unchanged.
 - **On a dark look with a scene, the OMH TUI's diff and outcome bands and the
   pager's footer bar follow the look.** These bands were the skin's fixed dark
   green and maroon on every look, and the red one sank into aurora's teal at

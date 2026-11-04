@@ -9,8 +9,8 @@ from typing import Final
 
 ALLOWED_TRANSITIONS: Final[dict[str, tuple[str, ...]]] = {
     "deep-interview": ("plan", "ralplan"),
-    "plan": ("ultrawork", "ultraqa"),
-    "ralplan": ("ultrawork", "ultraqa"),
+    "plan": ("dag-ulw", "ultrawork", "ultraqa"),
+    "ralplan": ("dag-ulw", "ultrawork", "ultraqa"),
 }
 
 

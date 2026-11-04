@@ -1504,7 +1504,7 @@ _PLAYBOOKS = (
                 "plan",
                 "Draft execution plan",
                 "hermes",
-                "Produce a reviewable plan and only expose handoff actions after acceptance.",
+                "Produce a reviewable plan and only expose handoff actions after acceptance; when its tasks form a graph with a verification task, name dag-ulw among them, started only on the user's go-ahead.",
                 "hermes_plan/v1",
                 ("accept_plan", "revise_plan"),
                 ("plan artifact",),
