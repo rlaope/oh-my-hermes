@@ -35,7 +35,16 @@ All notable changes will be documented here.
   session's dag run is open now records that run's id (`dag_run`; an advance
   keeps it). While that run's tree is drawn under the composer, the plan is
   one line, `[Plan] 4/6 ▸ <current item>`, and Ctrl+P leaves it as it is. Any
-  other plan is drawn as before.
+  other plan is drawn as before. Under the composer the region is now exactly
+  the info line and the tree's rows. When the tree gives rows up on the
+  screen's bottom rows (a layer settles or folds, or the run ends and the
+  tree goes), the composer moves down by them and the output above is
+  painted again that many rows lower, in the same synchronized update. No
+  row stays blank under the tree or above the composer. This replaces the
+  tree's high-water hold during a turn and the blank rows a finished run left
+  under the info line. The lines painted again on the screen's first rows are
+  also still in the terminal's scrollback, so they show twice there once they
+  scroll off again.
 - **The OMH TUI's working glow is removed.** The light that went round the
   screen's edge while a turn ran read as too big and uncomfortable, and its
   trail framed the screen so the terminal's padding outside it looked like a
