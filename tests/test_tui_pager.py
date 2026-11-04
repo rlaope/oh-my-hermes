@@ -42,6 +42,20 @@ class PagerFrameTests(unittest.TestCase):
         self.assertNotIn("row 2", changed)
         self.assertNotIn("log ·", changed)  # the footer says the same
 
+    def test_every_row_erases_on_a_looks_ground_and_a_new_ground_paints_every_row_again(self) -> None:
+        from omh.tui.screen import ERASE_TO_LINE_END, on_ground
+
+        ground = "#211538"
+        self.assertEqual(Pager("log", rows("row 0")).frame(30, 6, THEME, None), Pager("log", rows("row 0")).frame(
+            30, 6, THEME), "no ground: the bytes as without one")
+        pager = Pager("log", rows("row 0", "row 1"))
+        plain = pager.frame(30, 6, THEME)
+        grounded = pager.frame(30, 6, THEME, ground)
+        self.assertIn("row 0", grounded, "a new ground paints every row again")
+        self.assertEqual(grounded.count(on_ground(ERASE_TO_LINE_END, ground)), 5)  # each page row
+        self.assertNotIn(on_ground(ERASE_TO_LINE_END, ground), plain)
+        self.assertEqual(pager.frame(30, 6, THEME, ground), "")
+
     def test_a_new_size_or_an_invalidate_paints_every_row_again(self) -> None:
         pager = Pager("log", rows("row 0", "row 1"))
         pager.frame(30, 6, THEME)
