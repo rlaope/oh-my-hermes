@@ -13,6 +13,13 @@ All notable changes will be documented here.
   it stays permanent and nothing is aged or hidden. Versions stated as rules
   ("requires Hermes v0.22.5 or newer", "pin Node v20.11"), "Decided <date>:" lines,
   lessons and procedures get no such note.
+- **Vim mode changes the cursor shape.** With `display.vim_mode` on, the
+  terminal's cursor is a steady beam in INSERT and a steady block in NORMAL
+  (DECSCUSR). This is an OMH addition: Hermes keeps a steady block in both
+  modes. It is written only when the mode changes, and the terminal's own
+  shape comes back when a question or picker takes the keys, when vim mode
+  goes off, and on exit or Ctrl+Z. On exit it is the terminal's default
+  shape, not whatever the shell had set before.
 
 - **Memory recall costs a turn far less.** The memory pack is rendered in
   `on_turn_start`, before the turn's model call, so its cost is turn latency
@@ -73,6 +80,7 @@ All notable changes will be documented here.
   message that matches nothing: listing them would make the live recall
   select differently from coding handoffs, which the recall suite and
   incident replay hold equal.
+
 - **Skill hints read the request, not the gateway's busy-path header.** A
   Discord or Slack message sent while the agent is busy reaches the turn with
   Hermes' origin block in front of it: one line of JSON ids between two fixed
