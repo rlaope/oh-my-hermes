@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **After a plan is accepted, the planning skills offer `dag-ulw` beside the
+  usual follow-ons, and taking the offer works.** An accepted `plan` or
+  `ralplan` whose tasks form a graph (ids, dependencies, write scopes and a
+  closing verification task) now names `dag-ulw` with a one-line fit reason,
+  next to carrying the plan out directly or an `ultrawork` cycle.
+  `refactor-plan` names it on a whole-plan go whose phases split into
+  groups with disjoint files: the phase order becomes the graph's order and
+  each phase's check its node's check, while the per-phase commits and
+  rollback points stay with the user.
+  It starts only on the user's go-ahead. Before, the workflow state refused
+  to start `dag-ulw` while `plan`, `ralplan` or `refactor-plan` was active,
+  so the offer could not be taken even when it was made. `dag-ulw` now builds
+  its graph from the plan the user accepted instead of planning a new one.
+  `ralplan`'s recovery note, the `/plan` reference, the router's lane map
+  and engine list, the intent-to-plan card, and the safe-feature and picker
+  hints name it too.
+  Routing is unchanged.
 - **The OMH TUI's working glow is removed.** The light that went round the
   screen's edge while a turn ran read as too big and uncomfortable, and its
   trail framed the screen so the terminal's padding outside it looked like a

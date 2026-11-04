@@ -50,6 +50,22 @@ class WorkflowStateCliTests(unittest.TestCase):
             self.assertEqual(deep["transition_target"], "ralplan")
             self.assertTrue(ralplan["active"])
 
+    def test_accepted_plan_can_start_dag_ulw(self) -> None:
+        # The planning skills offer dag-ulw after acceptance; taking the offer must not be refused.
+        for planner in ("plan", "ralplan", "refactor-plan"):
+            with self.subTest(planner=planner), TemporaryDirectory() as tmp:
+                omh_home = Path(tmp) / ".omh"
+
+                self.assertEqual(run_cli(["--omh-home", str(omh_home), "state", "start", "--workflow", planner])[0], 0)
+                status, _, stderr = run_cli(["--omh-home", str(omh_home), "state", "start", "--workflow", "dag-ulw"])
+
+                self.assertEqual((status, stderr), (0, ""))
+                source = json.loads((omh_home / "state" / f"{planner}-state.json").read_text(encoding="utf-8"))
+                dag = json.loads((omh_home / "state" / "dag-ulw-state.json").read_text(encoding="utf-8"))
+                self.assertFalse(source["active"])
+                self.assertEqual(source["transition_target"], "dag-ulw")
+                self.assertTrue(dag["active"])
+
     def test_conflicting_transition_is_denied_with_diagnostic(self) -> None:
         with TemporaryDirectory() as tmp:
             omh_home = Path(tmp) / ".omh"
