@@ -2711,7 +2711,7 @@ class App(ModesMixin, AgentViewMixin):
                 if stable:
                     self.region.flush_above(stable, cols)
             finally:
-                self.region.clear()
+                self.region.clear(self.size[1])  # the rows on the screen on the terminal's own background
             if self.title_pushed:
                 self.terminal.write(TITLE_POP)  # the title the shell had
                 self.title_pushed = False
@@ -4012,7 +4012,10 @@ class App(ModesMixin, AgentViewMixin):
         if getattr(signal, "SIGTSTP", None) is None:
             return
         self._set_mouse(False)
-        self.region.clear()
+        # The session's rows on the screen go back on the terminal's own background (and on a standard terminal follow
+        # OSC 11 again): the region made at the resume has none of them to paint on a new ground.
+        self.region.set_ground(None)
+        self.region.clear(self.size[1])
         self._restore_ground()  # the shell's own background while stopped; the first frame after sets it again
         self._restore_cursor_shape()  # likewise the shell's own cursor
         if self.title_pushed:

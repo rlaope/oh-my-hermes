@@ -951,15 +951,22 @@ class WriteTimeGround(VTScreen):
         return (colour, True) if colour else (self.cell_bg[row][col], False)
 
     def holes(self, ground: str) -> list[tuple[int, int]]:
-        others = {look_ground(name, light).upper() for name in LAUNCH_PRESETS for light in (False, True)}
         found = []
         for row in range(self.rows):
             for col in range(self.cols):
                 colour, explicit = self.shown_bg(row, col)
-                stale = explicit and colour in others and not self.line(row)[col:col + 1].strip()
-                if colour != ground.upper() and (stale or not explicit):
+                if colour != ground.upper() and not explicit:
                     found.append((row, col))
-        return found
+        return sorted(found + self.stale(ground))
+
+    def stale(self, ground: str) -> list[tuple[int, int]]:
+        """Blank cells erased on another look's ground than `ground` (explicitly, so no OSC 11 recolours them on any
+        terminal): a picker's swatch tiles are glyphs, not blanks."""
+        others = {look_ground(name, light).upper() for name in LAUNCH_PRESETS for light in (False, True)}
+        others.discard(ground.upper())
+        return [(row, col) for row in range(self.rows) for col in range(self.cols)
+                if self.shown_bg(row, col) in {(colour, True) for colour in others}
+                and not self.line(row)[col:col + 1].strip()]
 
 
 class GroundPaintTests(unittest.TestCase):
@@ -1020,6 +1027,56 @@ class GroundPaintTests(unittest.TestCase):
                     app._render()
                     self.assertEqual(screen.holes(app._ground()), [], "the look kept")
 
+    def test_a_walk_over_every_look_with_the_glow_on_leaves_no_cell_of_an_earlier_ground(self) -> None:
+        # The default look erases on the terminal's own background: a scene look's margins must not outlive the move.
+        screen = WriteTimeGround(42, 150)
+        app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "1"}, screen)
+        self.session(app)
+        app._theme("")
+        app._render()
+        names = list(LAUNCH_PRESETS)
+        for key in [UP] * names.index("moonlit") + [DOWN] * (len(names) - 1):
+            app._on_input(Key(key))
+            app._render()
+            with self.subTest(previewing=app._shown_look()):
+                self.assertEqual(screen.holes(app._ground()), [])
+
+    def test_esc_from_a_preview_leaves_no_cell_of_the_previewed_ground(self) -> None:
+        screen = WriteTimeGround(42, 150)
+        app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "1"}, screen)
+        self.session(app)
+        app._theme("")
+        app._render()
+        app._on_input(Key(DOWN))
+        app._render()
+        self.assertEqual(app._shown_look(), "aurora")
+        app._on_input(Key(ESCAPE))
+        app._render()
+        self.assertEqual(screen.holes(app._ground()), [])
+
+    def test_a_preview_after_ctrl_z_leaves_no_row_on_the_old_ground(self) -> None:
+        # The region made at the resume knows none of the session's rows above it: they go back on the terminal's own
+        # background at the stop, so OSC 11 recolours them again (a standard terminal), and none keeps the old ground.
+        for glow in ("1", "0"):
+            with self.subTest(glow=glow):
+                screen = WriteTimeGround(42, 150)
+                app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": glow}, screen)
+                self.session(app)
+                with mock.patch.object(app_module.signal, "SIGTSTP", 20, create=True):
+                    app.terminal.cursor_row = None
+                    original = app.terminal.query_cursor_row
+                    app.terminal.query_cursor_row = lambda: (b"", screen.cursor[0] + 1)  # type: ignore[method-assign]
+                    app._suspend()
+                    app.terminal.query_cursor_row = original  # type: ignore[method-assign]
+                self.assertEqual(screen.stale(TERMINAL_BLACK), [], "while stopped: the shell's own background")
+                app._render()
+                app._theme("")
+                app._render()
+                for _ in range(2):
+                    app._on_input(Key(DOWN))
+                    app._render()
+                    self.assertEqual(screen.stale(app._ground()), [], app._shown_look())
+
     def test_a_pager_on_a_look_with_a_scene_erases_on_its_ground(self) -> None:
         screen = WriteTimeGround(42, 150)
         app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "0"}, screen)
@@ -1039,15 +1096,27 @@ class GroundPaintTests(unittest.TestCase):
             self.assertTrue(any(MARK in screen.line(row) for row in range(top, 42)), "on the region's rows too")
             self.assertEqual(screen.holes(app._ground()), [])
 
-    def test_exit_erases_the_last_rows_on_the_terminals_own_background(self) -> None:
-        app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "0"})
-        self.session(app)
-        ground_sgr = Style(bg=look_ground("moonlit", False)).sgr()
-        app.terminal.writes.clear()
-        app._shutdown()
-        written = "".join(app.terminal.writes)
-        self.assertIn(background_restore(TERMINAL_BLACK), written)
-        self.assertNotIn(ground_sgr, written[written.index(background_restore(TERMINAL_BLACK)):])
+    def test_exit_puts_the_rows_on_the_screen_back_on_the_terminals_own_background(self) -> None:
+        # Rows already in the scrollback keep the look's ground (owner, 2026-11-04); the screen's do not, the rows a
+        # reply still streaming flushes at exit included.
+        from test_tui_modes import SID
+
+        for glow in ("1", "0"):
+            with self.subTest(glow=glow):
+                screen = WriteTimeGround(42, 150)
+                app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": glow}, screen)
+                self.session(app)
+                app.transcript.apply(Event("message.start", SID, {}))
+                app.transcript.apply(Event("message.delta", SID, {"text": "half a reply\n\nand its second paragraph"}))
+                app._render()
+                app.terminal.writes.clear()
+                app._shutdown()
+                written = "".join(app.terminal.writes)
+                self.assertIn(background_restore(TERMINAL_BLACK), written)
+                self.assertIn("half a reply", written[written.index(background_restore(TERMINAL_BLACK)):])
+                self.assertEqual(screen.stale(TERMINAL_BLACK), [])
+                self.assertFalse(any(screen.shown_bg(row, col) == (look_ground("moonlit", False).upper(), True)
+                                     for row in range(42) for col in range(150)))
 
     def test_the_default_look_and_every_depth_without_the_wallpaper_write_the_bytes_they_always_did(self) -> None:
         cases = {

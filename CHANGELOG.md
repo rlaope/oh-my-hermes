@@ -16,11 +16,13 @@ All notable changes will be documented here.
   the region, the rows above it that are still on screen, and the blank rows
   under it. Nothing is written into the scrollback. Pagers (/logs, /dag,
   Ctrl+S) erase on the ground too. The default look, 256 and 16 colours,
-  NO_COLOR and `/wallpaper off` write the same bytes as before. One cost,
-  accepted by the owner: after exit, or while Ctrl+Z has the session stopped,
-  the session's rows still on screen or in the scrollback keep the look's
-  colour until they are printed again. The background restore at exit is
-  unchanged.
+  NO_COLOR and `/wallpaper off` write the same bytes as before. At exit and
+  at Ctrl+Z, the rows still on screen are painted again on the terminal's own
+  background. One cost, accepted by the owner: rows already in the scrollback
+  keep the look's colour until they are printed again. The session rows left
+  above the prompt after a Ctrl+Z resume are on the terminal's own background
+  again, so Otty shows its own colour in their tails until they are reprinted,
+  as before this change. The background restore at exit is unchanged.
 
 - **The OMH TUI draws Markdown tables as aligned columns while a reply streams.**
   A `|` header row used to reach scrollback as plain text one delta before its

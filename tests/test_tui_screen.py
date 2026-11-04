@@ -404,6 +404,45 @@ class GroundTests(unittest.TestCase):
         self.assertEqual(blank_backgrounds(harness.screen, range(8)), {OTHER_GROUND})
         self.assertEqual((harness.screen.scrollback, harness.screen.lines()), (history, shown))
 
+    def test_a_new_ground_reaches_the_glows_top_row_and_the_wallpaper_comes_back_on_it(self) -> None:
+        from omh.tui.edge_glow import Edge
+        from omh.tui.wallpaper import Cell
+
+        lit = Style(fg="#ff8800")
+        # The frame's top row unlit: what shows there is the flushed row under it, painted again from its kept bytes.
+        edge = Edge(20, (Span(" " * 20),), (Span("*" * 20, lit),), ((Span("|", lit),),) * 6, ((Span("|", lit),),) * 6)
+        harness = Harness(rows=8, at_top=True)
+        harness.region = LiveRegion(harness._write, at_top=True, margin=1, footer=True, ground=GROUND)
+        glyph = (Cell(1, 15, "@", "#445566"),)
+        harness.region.render(plain("live"), (0, 0), 18, flush=plain("done-0", "done-1"), screen_rows=7, edge=edge,
+                              ambient=glyph, ambient_above=True)
+        self.assertEqual(harness.screen.line(1)[15], "@")
+        harness.region.set_ground(OTHER_GROUND)
+        harness.region.render(plain("live"), (0, 0), 18, screen_rows=7, edge=edge, ambient=glyph, ambient_above=True)
+        self.assertEqual(blank_backgrounds(harness.screen, range(1)), {OTHER_GROUND}, "the top row, under the frame")
+        self.assertEqual(harness.screen.line(1)[15], "@", "the wallpaper's cell on a row painted again")
+
+    def test_a_frame_that_shrinks_on_a_new_ground_leaves_no_margin_cell_of_the_old_one(self) -> None:
+        # Esc from a /theme preview: the picker's rows go in the same frame the look's ground comes back.
+        harness = Harness(rows=10, at_top=True)
+        harness.region = LiveRegion(harness._write, at_top=True, margin=1, ground=GROUND)
+        harness.region.render(plain("one", "two"), (0, 0), 18, screen_rows=10)
+        harness.region.set_ground(OTHER_GROUND)
+        harness.region.render(plain("one", "two", "pick 1", "pick 2"), (0, 0), 18, screen_rows=10)
+        harness.region.set_ground(GROUND)
+        harness.region.render(plain("one", "two"), (0, 0), 18, screen_rows=10)
+        self.assertEqual(blank_backgrounds(harness.screen, range(10)), {GROUND})
+
+    def test_clear_after_a_new_ground_paints_the_rows_on_the_screen_on_it(self) -> None:
+        harness = Harness(rows=8, at_top=True)
+        harness.region = LiveRegion(harness._write, at_top=True, margin=1, ground=GROUND)
+        harness.region.render(plain("live"), (0, 0), 18, flush=plain("done-0", "done-1"), screen_rows=8)
+        harness.region.set_ground(None)
+        harness.region.flush_above(plain("last"), 18)  # as at exit: a frame with no height keeps the new ground owed
+        harness.region.clear(8)
+        self.assertEqual(blank_backgrounds(harness.screen, range(8)), {None})
+        self.assertEqual(harness.screen.lines()[:3], [" done-0", " done-1", " last"])
+
     def test_clear_erases_on_the_terminals_own_background(self) -> None:
         harness = Harness(rows=10, history=4)
         harness.region = LiveRegion(harness._write, ground=GROUND)

@@ -106,10 +106,11 @@ writes the same bytes as without one. With a margin, both margins are erased
 on the ground beside every row, and blanks written over a wallpaper cell or the
 glow's side cells are written on it. A new ground (a /theme preview) is painted
 over the whole screen in the next frame, inside its synchronized update: the
-region's rows, the rows it flushed that are still on the screen above it, and
-the screen under it (`_reground`); nothing is written into the scrollback.
-`clear` erases with no ground: it hands the screen back to the shell, whose own
-background is back by then.
+screen is erased on it from the first row the region flushed that is still on
+it, and those rows and the region's are painted again (`_reground`); nothing is
+written into the scrollback. `clear` erases with no ground: it hands the screen
+back to the shell, whose own background is back by then, and given the screen's
+height it first paints the region's rows still on the screen on no ground.
 
 Precondition: the region is never taller than the terminal. Cursor-up stops
 at the top of the screen, so a taller region would lose its relative
@@ -457,7 +458,6 @@ class LiveRegion:
         """
         width = max(width, 1)
         repaint_all = width != self._width or self._regrounded
-        self._regrounded = False
         if not repaint_all:
             self._insert_rows(lines, screen_rows, ops)
         last_rows, last_lines = self._rows, self._lines
@@ -548,12 +548,15 @@ class LiveRegion:
         elif flush or grows:
             moving, lifting = self._before_moving(rows, len(flush), len(lines))
             ops = lifting + ops
-        if self._regrounded and rows is not None:
+        regrounding = self._regrounded and rows is not None
+        if regrounding:
             ops += self._reground(rows)
         self._inserted = None
         if flush:
             ops += self._flush(flush, width)
         written, painted = self._compose(lines, cursor, width, ops, rows)
+        if regrounding:  # the frame painted every row again (`_compose`); else the next one with a height does
+            self._regrounded = False
         if moving is not None and rows is not None:
             self._carry(moving, rows)
         self._forget_painted_over(rows)
@@ -793,25 +796,24 @@ class LiveRegion:
 
     def _reground(self, rows: int) -> list[str]:
         """The bytes that put a new ground under the whole screen, queued before a frame (which paints the region's
-        own rows again): the rows this region flushed that are still on the screen above it painted again, and the
-        screen under it erased, on the new ground; the cursor then back on the region's row. Nothing is written
-        into the scrollback, and nothing moves. The wallpaper's cells on those rows go with them (the frame paints
-        them again). Nothing where the region's place is not certain."""
+        own rows again) or a `clear`: the screen erased on it from the first row this region flushed that is still on
+        the screen, so no cell keeps an earlier ground (a margin, a tail), and those flushed rows painted again on it;
+        the cursor then back on the region's row. Nothing is written into the scrollback, and nothing moves. The
+        wallpaper's cells there go with them (the frame paints them again). Where the region's place is not certain,
+        only the region and the screen under it are erased."""
         top = self._top(rows)
-        if top is None:
-            return []
-        first, below = max(top - len(self._above_lines), 0), top + len(self._rows)
         ops: list[str] = []
+        if top is None:
+            self._move_to(0, ops)
+            return [*ops, CARRIAGE_RETURN + on_ground(ERASE_BELOW, self._ground)]
+        first = max(top - len(self._above_lines), 0)
+        ops.append(cursor_at(first, 0) + on_ground(ERASE_BELOW, self._ground))
         for row in range(first, top):
             line, width = self._above_lines[row - top]
             painted, blank = _flushed_row(line, width, self._margin, self._ground)
             self._above[row - top], self._above_blank[row - top] = painted, blank
             ops.append(cursor_at(row, 0) + cursor_forward(self._margin) + painted)
-        if below < rows:
-            ops.append(cursor_at(below, 0) + on_ground(ERASE_BELOW, self._ground))
-        self._paper = {at: cell for at, cell in self._paper.items() if not first <= at[0] < top and at[0] < below}
-        if not ops:
-            return []
+        self._paper = {at: cell for at, cell in self._paper.items() if at[0] < first}
         self._parked = None  # the frame these go out in has autowrap off around them
         return [*ops, cursor_at(top + self._row, self._margin)]
 
@@ -847,14 +849,23 @@ class LiveRegion:
         self._lines = self._lines[len(lines) :]
         return ops
 
-    def clear(self) -> None:
-        """Erase the region and leave the cursor at column 0 of its top row (resize, exit)."""
+    def clear(self, screen_rows: int | None = None) -> None:
+        """Erase the region and leave the cursor at column 0 of its top row (resize, exit).
+
+        Where the ground changed since the last frame (`set_ground(None)` as
+        the screen goes back to the shell) and `screen_rows`, the terminal's
+        height less the footer, is given, the rows this region flushed that are
+        still on the screen are painted again on the new one first (`_reground`).
+        """
         lead, self._lead = self._lead, ""
         if lead:
             self._write(lead)
         if not self._rows and self._parked == (0, 0):
             return
         ops: list[str] = self._unframe() + self._unpaper()  # cells above the region's top survive the erase below
+        if self._regrounded and screen_rows is not None:
+            ops += self._reground(screen_rows + self._footer)
+        self._regrounded = False
         self._move_to(0, ops)
         ops.append(ERASE_BELOW)
         self._write("".join(ops))
