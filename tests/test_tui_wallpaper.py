@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 from pathlib import Path
 import random
 import tempfile
@@ -21,6 +22,7 @@ from omh.skin_pack import (
     THEME_STORE_SCHEMA,
     default_theme,
     read_wallpaper_choice,
+    skin_colors,
     theme_store_path,
     write_glow_choice,
     write_launch_choice,
@@ -57,6 +59,7 @@ from omh.tui.wallpaper import (
 )
 from omh.tui.width import cell_width
 from test_tui_modes import make_app, notices, type_text
+from test_tui_theme import oklab
 import test_tui_working_glow as glow_tests
 
 ANSWERED = "#1E1E1E"  # what the terminal answered the startup background query with
@@ -253,6 +256,75 @@ class GroundContrastTests(unittest.TestCase):
                               for role, fg, floor in inks if contrast_ratio(fg, ground) < floor]
                     self.assertIsNotNone(theme.prompt_band.bg, "the ground is known, so bands paint")
         self.assertEqual(short[:12], [], f"{len(short)} inks under their floor")
+
+
+def _hue(colour: str) -> tuple[float, float]:
+    """`colour`'s OKLCH chroma and hue in degrees."""
+    _lightness, a, b = oklab(colour)
+    return math.hypot(a, b), math.degrees(math.atan2(b, a)) % 360
+
+
+class SceneBandTests(unittest.TestCase):
+    """On a dark scene look's ground (owner, 2026-11-04) the diff and outcome bands sit on the look with their hue
+    kept, and the pager's footer bar takes the prompt band's colour; the default look keeps the skin's own."""
+
+    BANDS = {"ok_band": "diff_added_word", "diff_add": "diff_added_word", "diff_add_word": "diff_added_word",
+             "error_band": "diff_removed_word", "diff_remove": "diff_removed_word",
+             "diff_remove_word": "diff_removed_word"}
+
+    def themed(self, skin, look: str, answered: str = ANSWERED, environ=WALLPAPER_ON):
+        app, _client = make_app(environ=environ)
+        app.adopt_background(answered)
+        app.theme = build_theme(skin, answered)
+        app.launch_look = look
+        return app._themed(), app._ground()
+
+    def test_every_band_and_the_footer_bar_follow_a_dark_scene_ground_and_keep_their_floors_and_hue(self) -> None:
+        short = []
+        for skin in SKIN_THEMES:
+            colours = skin_colors(skin.skin_name)
+            for look in SCENES:
+                theme, ground = self.themed(skin, look)
+                self.assertEqual(ground, look_ground(look, False))
+                for role, word in self.BANDS.items():
+                    style = getattr(theme, role)
+                    where = (skin.short_name, look, role, style.bg)
+                    if contrast_ratio(style.bg, ground) < 1.2:
+                        short.append((*where, "bg vs ground", round(contrast_ratio(style.bg, ground), 2)))
+                    ink = style.fg or "#C0C0C0"  # an outcome band's words are the terminal's own foreground
+                    if contrast_ratio(ink, style.bg) < TEXT_CONTRAST:
+                        short.append((*where, "text", round(contrast_ratio(ink, style.bg), 2)))
+                    (chroma, hue), (_word_chroma, word_hue) = _hue(style.bg), _hue(colours[word])
+                    gap = min(abs(hue - word_hue), 360 - abs(hue - word_hue))
+                    if gap > 10 or chroma < 0.02:
+                        short.append((*where, "hue", round(gap, 1), round(chroma, 3)))
+                self.assertEqual(theme.status.bg, theme.prompt_band.bg, (skin.short_name, look))
+                if contrast_ratio(theme.status.fg, theme.status.bg) < TEXT_CONTRAST:
+                    short.append((skin.short_name, look, "status",
+                                  round(contrast_ratio(theme.status.fg, theme.status.bg), 2)))
+        self.assertEqual(short[:12], [], f"{len(short)} under their floor or out of their hue")
+
+    def test_the_default_look_a_light_ground_and_no_wallpaper_keep_the_skins_own_bands_and_bar(self) -> None:
+        for skin in SKIN_THEMES:
+            colours = skin_colors(skin.skin_name)
+            fixed = {"ok_band": Style(bg=colours["diff_added"]), "error_band": Style(bg=colours["diff_removed"]),
+                     "diff_add": Style(fg=colours["banner_text"], bg=colours["diff_added"]),
+                     "diff_add_word": Style(fg=colours["diff_added_word"], bg=colours["diff_added"]),
+                     "diff_remove": Style(fg=colours["banner_text"], bg=colours["diff_removed"]),
+                     "diff_remove_word": Style(fg=colours["diff_removed_word"], bg=colours["diff_removed"])}
+            theme, _ground = self.themed(skin, DEFAULT_LAUNCH)
+            plain = build_theme(skin, ANSWERED)
+            for role, style in fixed.items():
+                self.assertEqual(getattr(theme, role), style, (skin.short_name, role))
+            self.assertEqual(theme.status, plain.status, skin.short_name)
+            self.assertEqual(theme.status.bg, colours["status_bar_bg"], skin.short_name)
+            for look in SCENES:
+                off, _ground = self.themed(skin, look, environ={**WALLPAPER_ON, "OMH_TUI_WALLPAPER": "0"})
+                light, _ground = self.themed(skin, look, answered="#FAFAFA")
+                light_plain = build_theme(skin, look_ground(look, True))
+                for role in (*fixed, "status"):
+                    self.assertEqual(getattr(off, role), getattr(plain, role), (skin.short_name, look, role))
+                    self.assertEqual(getattr(light, role), getattr(light_plain, role), (skin.short_name, look, role))
 
 
 class RegionTests(unittest.TestCase):
@@ -521,7 +593,9 @@ class AppWallpaperTests(unittest.TestCase):
         self.assertIn(background_set(look_ground("aurora", False)), self.writes(app))
         swatches = app._launch_swatches()
         for look in LAUNCH_PRESETS:
-            self.assertEqual({style.bg for style in swatches[look]}, {look_ground(look, False)}, look)
+            # Each tile is the ground picking it gives (`_ground`): the default look keeps the terminal's own.
+            ground = look_ground(look, False) if look in SCENES else ANSWERED
+            self.assertEqual({style.bg for style in swatches[look]}, {ground}, look)
 
     def test_exit_puts_the_terminals_background_back(self) -> None:
         app, _clock = self.app()
