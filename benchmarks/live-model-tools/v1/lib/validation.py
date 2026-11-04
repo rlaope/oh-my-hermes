@@ -350,11 +350,32 @@ def _control_ok(workspace: Path, golden: dict[str, Any]) -> bool:
     return _behaviour_ok(workspace, _NO_TESTS, checks, 0)
 
 
+def _defaulted_ok(workspace: Path, golden: dict[str, Any]) -> bool:
+    per_kg = golden["per_kg"]
+    weight = 1234
+    checks = (
+        "import inspect\n"
+        "from benchapp.shipping import ship_cost\n"
+        "parameter = inspect.signature(ship_cost).parameters['handling_cents']\n"
+        "assert parameter.kind is inspect.Parameter.KEYWORD_ONLY and parameter.default == 0\n"
+        f"assert ship_cost(1000, 2) == {2 * per_kg}\n"
+        f"assert ship_cost(1000, 2, handling_cents=30) == {2 * per_kg + 30}\n"
+        "from benchapp.orders import order_total\nfrom benchapp.labels import label_cost\n"
+        "from benchapp.express import express_cost\nfrom benchapp.cli import cli_cost\n"
+        f"assert order_total(500, {weight}) == {500 + weight * 2 * per_kg // 1000}\n"
+        f"assert label_cost({weight}) == {weight * 3 * per_kg // 1000}\n"
+        f"assert express_cost({weight}, 2) == {2 * (weight * 2 * per_kg // 1000)}\n"
+        f"assert cli_cost(['{weight}']) == {weight * per_kg // 1000}\n"
+    )
+    return _behaviour_ok(workspace, _NO_TESTS, checks, 0)
+
+
 _IMPACT_AB_VALIDATORS = {
     "SIGNATURE": _signature_ok,
     "RETURN-SHAPE": _return_shape_ok,
     "KWARG": _kwarg_ok,
     "CONTROL": _control_ok,
+    "DEFAULTED": _defaulted_ok,
 }
 
 

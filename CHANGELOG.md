@@ -14,6 +14,15 @@ All notable changes will be documented here.
   snapshots on the owner's store without a migration. What recall selects is
   unchanged. A pack holding a snapshot is 224 characters longer for the
   line, plus 17 per marked record.
+
+- **A changed function's broken callers are named at the turn's first stop.** When a turn changes a
+  function's parameters, OMH reads the files that import it, following package re-exports and
+  aliases. It names, by file and line, each call that matched the old parameters and no longer
+  does, with the new signature. It needs no language server and is always on. It says nothing about
+  a call it cannot prove broken, such as one passing `*args` / `**kwargs` or one written to raise.
+  In the live bench this took gpt-6-luna on a signature change from 0/6 to 6/6, and Haiku 4.5 from
+  5/6 to 6/6.
+
 - **Saving a dated snapshot now says how to retire it later.** When the
   model saves a fact like "As of 2026-10-30 (v0.1.7), nanran has ..." or
   "nanran v0.1.13 added ...", the result tells it to name this memory in

@@ -81,6 +81,10 @@ IMPACT_EDITS = {
     "CONTROL": [
         ("src/benchapp/units.py", r"    return int\(round", "    if amount < 0:\n        raise ValueError('negative amount')\n    return int(round"),
     ],
+    "DEFAULTED": [
+        ("src/benchapp/shipping.py", r"zone: int\) -> int:", "zone: int, *, handling_cents: int = 0) -> int:"),
+        ("src/benchapp/shipping.py", r"(    return weight_g \* zone \* \d+ // 1000)", r"\1 + handling_cents"),
+    ],
 }
 
 

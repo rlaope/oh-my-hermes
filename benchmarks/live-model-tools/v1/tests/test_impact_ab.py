@@ -35,11 +35,11 @@ def _apply(workspace: Path, edits: list[tuple[str, str, str]], only: tuple[str, 
 
 
 class ImpactSplitTests(unittest.TestCase):
-    def test_split_has_four_templates_three_seeds(self) -> None:
+    def test_split_has_five_templates_three_seeds(self) -> None:
         specs = corpus.all_specs(corpus.IMPACT_AB_SPLIT)
-        self.assertEqual(len(specs), 12)
+        self.assertEqual(len(specs), 15)
         self.assertEqual(sorted({spec[0] for spec in specs}),
-                         ["I-CONTROL", "I-KWARG", "I-RETURN-SHAPE", "I-SIGNATURE"])
+                         ["I-CONTROL", "I-DEFAULTED", "I-KWARG", "I-RETURN-SHAPE", "I-SIGNATURE"])
         self.assertIn(corpus.IMPACT_AB_SPLIT, corpus.SPLITS)
 
     def test_pinned_corpus_is_unchanged(self) -> None:
@@ -61,7 +61,7 @@ class ImpactSplitTests(unittest.TestCase):
             return validate(template, "edit", workspace, golden, answer, [], initial)
 
     def test_reference_edit_passes_every_template(self) -> None:
-        for template in ("I-SIGNATURE", "I-RETURN-SHAPE", "I-KWARG", "I-CONTROL"):
+        for template in ("I-SIGNATURE", "I-RETURN-SHAPE", "I-KWARG", "I-CONTROL", "I-DEFAULTED"):
             grade = self._grade(template, lambda workspace, name: _apply(workspace, IMPACT_EDITS[name]))
             self.assertTrue(grade["pass"], (template, grade["failure_codes"]))
 
@@ -77,7 +77,7 @@ class ImpactSplitTests(unittest.TestCase):
         self.assertIn("semantic_validator_failed", grade["failure_codes"])
 
     def test_untouched_workspace_fails(self) -> None:
-        for template in ("I-SIGNATURE", "I-RETURN-SHAPE", "I-KWARG", "I-CONTROL"):
+        for template in ("I-SIGNATURE", "I-RETURN-SHAPE", "I-KWARG", "I-CONTROL", "I-DEFAULTED"):
             grade = self._grade(template, lambda workspace, name: None)
             self.assertFalse(grade["pass"], template)
 
@@ -103,7 +103,7 @@ class ImpactSplitTests(unittest.TestCase):
     def test_fake_matrix_passes(self) -> None:
         with TemporaryDirectory() as root:
             receipt = run_matrix(BASE, corpus_manifest(), corpus.IMPACT_AB_SPLIT, "baseline", Path(root) / "r.jsonl")
-        self.assertEqual((receipt["scheduled"], receipt["passed"]), (12, 12))
+        self.assertEqual((receipt["scheduled"], receipt["passed"]), (15, 15))
 
 
 def corpus_manifest() -> dict:
