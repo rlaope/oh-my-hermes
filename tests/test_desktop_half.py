@@ -923,7 +923,25 @@ class DesktopBackendTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"HERMES_HOME": str(self.hermes_home)}):
                 self.assertEqual(plugin_api.resolve_hermes_home(), self.hermes_home)
             with mock.patch.dict(os.environ, {"HERMES_HOME": ""}):
-                self.assertEqual(plugin_api.resolve_hermes_home(), Path.home() / ".hermes")
+                expected = (
+                    Path(os.environ["LOCALAPPDATA"]) / "hermes"
+                    if os.name == "nt"
+                    else Path.home() / ".hermes"
+                )
+                self.assertEqual(plugin_api.resolve_hermes_home(), expected)
+
+    def test_resolve_hermes_home_uses_windows_default_without_host_or_env(self) -> None:
+        local_appdata = self.root / "local-appdata"
+        with patch_modules({"hermes_constants": None}):
+            with mock.patch.dict(
+                os.environ,
+                {"HERMES_HOME": "", "LOCALAPPDATA": str(local_appdata), "HERMES_DATA_DIR_SUFFIX": "-test"},
+            ):
+                with mock.patch.object(plugin_api.sys, "platform", "win32"):
+                    self.assertEqual(
+                        plugin_api.resolve_hermes_home(),
+                        local_appdata / "hermes-test",
+                    )
 
     def test_router_exists_exactly_when_fastapi_does(self) -> None:
         # OMH declares no dependency on FastAPI; the route is the host's
