@@ -35,6 +35,7 @@ TOUCHED_SKILLS = (*CITATION_SKILLS, "research-department", "source-finder", "pap
 BUNDLED_SKILLS_NAMED_AS_OWNERS = ("grounded-citations", "competitor-news-monitor", "arxiv")
 PORTABLE_BODIES = ("omh-web-research", "omh-research-brief", "ulw-research", "omh-source-finder", "omh-paper-learning")
 # The field of the script's `info: stats:` line that shows a run checked nothing.
+CITATION_PORTABLE = ("omh-web-research", "omh-research-brief", "ulw-research")
 EMPTY_CHECK_FIELD = "`0 distinct source(s) cited`"
 
 
@@ -102,6 +103,23 @@ class ResearchCitationLedgerTests(unittest.TestCase):
                     "as `not_observed`",
                     self.hermes[name],
                 )
+
+    def test_the_receipts_verify_follows_the_ledger_verify(self) -> None:
+        """A receipt proves the page was opened, never that it supports the claim."""
+        clause = (
+            "After that verify, run `omh research receipts verify --citations <ledger> --draft <draft>` and report its "
+            "fetched coverage from the run, or as `not_observed`; a receipt proves only that the page was opened in "
+            "this session tree, never that it supports the claim"
+        )
+        bodies = {name: self.hermes[name] for name in CITATION_SKILLS}
+        bodies.update({name: self.portable[name] for name in PORTABLE_BODIES if name in CITATION_PORTABLE})
+        for name, body in bodies.items():
+            with self.subTest(skill=name):
+                self.assertIn(clause, body)
+                self.assertLess(body.index("sources.py verify <draft>"), body.index(clause))
+        for name in set(PORTABLE_BODIES) - set(CITATION_PORTABLE):
+            with self.subTest(skill=name, absent=True):
+                self.assertNotIn("omh research receipts verify", self.portable[name])
 
     def test_a_chat_only_answer_is_not_observed(self) -> None:
         self.assertIn(

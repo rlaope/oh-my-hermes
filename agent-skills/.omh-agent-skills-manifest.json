@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "70c9834af50e0b00cb63897e1cc2419e1ebe4c4f2da2acbf420407d5179a023d",
+  "catalog_revision": "fc0136a3cb2dbace2f28d52e70e7d7f7a2db3ed02d66d564482733bbd8a9493d",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -203,7 +203,7 @@
     "omh-reliability-review/SKILL.md": "b87f335690ae9cef1aeb92fe842cc02dcdc7eb97fd670c518e43728f3b33b7a2",
     "omh-report-package/SKILL.md": "4faa69f1aa84a833c8d53176ac8c391f5b7a385cff159f16b3992ffc564548d7",
     "omh-repro-audit/SKILL.md": "d474dcb6efbc5a1fa02bb855b5065a296cc1205f2c488604d9251adeaeff31b4",
-    "omh-research-brief/SKILL.md": "a5924913dc8a5a4f05880a3b8803a000bb4dec362452f94d5c40962e6f4ab8d3",
+    "omh-research-brief/SKILL.md": "52242f7e43c3f02656324557e03c3254d851ffdff068bd4a9acb73f185f327ef",
     "omh-rules-distill/SKILL.md": "10abb099dab5c43fdcaa7be599aed45115bd793497ffb7fc4234d9bb0829dcd3",
     "omh-run-efficiency/SKILL.md": "cd9b28c343aa07310ddc0bc93360658089df1d7b1f0e9716ece8621f5630d98f",
     "omh-running-work-board/SKILL.md": "76267c0cc095f044e658b95c3befbd7b5f3f3d55f357aa6066f9332179038286",
@@ -305,7 +305,7 @@
     "omh-visual-qa/references/playable-check.md": "e57e81a353a53e92fe2bfa317ef393901d68d7bc6f3ed1dc5ad700f00ba41842",
     "omh-visual-qa/references/visual-verdict-contract.md": "7c803a3997dc58be0a4b88f2d7aa081cc5cac49a227d0cc19437cd1aad420759",
     "omh-voice-input/SKILL.md": "a33db05e027bea567331eea3cf48435c4b774819b4f98b8419fc812567799172",
-    "omh-web-research/SKILL.md": "dfc6c38146103d70b7e201eafe07fad3b2f9aafc4bd61f6815e321b98589b472",
+    "omh-web-research/SKILL.md": "10befc4fca63fbbe55e1459a8f43493fe5ea9e911d6ca9ea1e3f30d067b2bfb6",
     "omh-web-research/references/search-examples.md": "2dd2c4cb91f0388a3fcf5ba6fb13094bbc6234edab6dce28ac036334d3718821",
     "omh-web-research/references/search-fields.md": "a237da3fc2ab1db91f86056bd53e95e860e130255d4461888607d7f4295e526f",
     "omh-web-research/references/search-method.md": "1280b6c6a72bb4bc2c1428001f2c58ca3cf01b25fc83a1b0f95795c934c0cc4e",
@@ -326,7 +326,7 @@
     "ulw-perf/SKILL.md": "dc30678d5e28b4f00b6706e4659245624331cd6753aad246d4222aded0c14ebc",
     "ulw-plan/SKILL.md": "1ae38e6400d623a389add7dd6ac17f814b39eba7f072b2ec541e36c344fe3d08",
     "ulw-qa/SKILL.md": "a38eaa1b23a4a7cf4f1dfbfca4003de5e8e63ec2dd68ea2716906d7adf0c088b",
-    "ulw-research/SKILL.md": "24f153fe4fb8fb7dde20b0a2f319f123547eacc9ec5bb52691029cd44b29948b",
+    "ulw-research/SKILL.md": "696b52b0548a5e016c1323e233ecc162a7a66e1564b71b101f3418f3d9627008",
     "ulw-research/references/briefing-format.md": "32c2fc92b8ff37877b623d30f79697a015c7be139121f60bac9de82f6bedfdcc",
     "ulw-research/references/evidence-records.md": "0cfeb3c0fcc99cc78d0d8e8a14fae833f97ac48bbef29b20f8cbe94fedc9aa11",
     "ulw-research/references/search-examples.md": "2dd2c4cb91f0388a3fcf5ba6fb13094bbc6234edab6dce28ac036334d3718821",
