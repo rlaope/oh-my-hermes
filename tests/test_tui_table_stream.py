@@ -291,7 +291,7 @@ class TableStreamingTests(unittest.TestCase):
         text = " ".join(rows).split()
         for cell in ("a", "b", "1", "2", "c", "d", "e", "x", "y", "z"):
             self.assertEqual(sum(1 for word in text if word == cell), 1, cell)
-        self.assertTrue(any("─" in row for row in rows))
+        self.assertEqual(sum(1 for row in rows if "─" in row), 2, "each table has its own band")
         streamed = Transcript(clock=lambda: 100.0)
         streamed.apply(ev("message.start"))
         streamed.apply(ev("message.delta", text=source))
@@ -349,6 +349,105 @@ class TableStreamingTests(unittest.TestCase):
                     self.assertNotIn("|---", row)
                 for cell in ("1", "2"):
                     self.assertEqual(sum(1 for row in history for word in row.split() if word == cell), 1, cell)
+
+    # (i) Third review round: the same document must keep every cell however it streams.
+
+    def tokens(self, rows: list[str]) -> list[str]:
+        return [word for row in rows for word in row.split()]
+
+    def test_a_table_cut_by_a_release_before_the_next_divider_loses_no_cell(self) -> None:
+        source = "\n".join([
+            "| ah1 | ah2 |", "|---|---|", "| a0c1 | a0c2 |", "| a1c1 | a1c2 |",
+            "| bh0 | bh1 | bh2 |", "|---|---|---|", "| b0c0 | b0c1 | b0c2 |", "| b1c0 | b1c1 | b1c2 |",
+        ])
+        words = self.tokens(self.stream_released(source))
+        for cell in ["ah1", "ah2", "a0c1", "a0c2", "a1c1", "a1c2", "bh0", "bh1", "bh2", "b0c2", "b1c2"]:
+            self.assertEqual(words.count(cell), 1, cell)
+
+    def test_a_continued_row_with_escapes_and_tabs_stays_on_the_frozen_columns(self) -> None:
+        head = ["| hh1 | hh2 |", "|---|---|"] + [f"| r{i}q | s{i}q |" for i in range(8)]
+        rows = self.stream_released("\n".join([*head, "| \x1b[31mcc\x1b[0m | x\tz |", "| dd | ee |"]))
+        cc = next(row for row in rows if "cc" in row)
+        dd = next(row for row in rows if "dd" in row)
+        self.assertEqual(cc.index("cc"), dd.index("dd"))
+        self.assertEqual(cc.index("x"), dd.index("ee"))
+
+    def test_streaming_never_loses_a_cell_or_draws_a_raw_divider(self) -> None:
+        import random
+        import re
+
+        rng = random.Random(2551)
+        counter = 0
+
+        def token() -> str:
+            nonlocal counter
+            counter += 1
+            return f"k{counter}z"
+
+        def document() -> tuple[str, list[str]]:
+            lines: list[str] = []
+            cells: list[str] = []
+            for _ in range(rng.randint(1, 3)):
+                kind = rng.choice(["table", "table", "table", "prose", "fence"])
+                if kind == "prose":
+                    word = token()
+                    cells.append(word)
+                    lines.append(f"prose {word} here")
+                elif kind == "fence":
+                    a, b = token(), token()
+                    cells += [a, b]
+                    lines += ["```", f"| {a} | {b} |", "```"]
+                else:
+                    cols = rng.randint(2, 4)
+                    header = [token() for _ in range(cols)]
+                    cells += header
+                    lines.append("| " + " | ".join(header) + " |")
+                    lines.append("|" + "---|" * cols)
+                    for _ in range(rng.randint(0, 9)):
+                        row = [token() for _ in range(rng.choice([cols, cols, cols + 1, max(2, cols - 1)]))]
+                        cells += row
+                        lines.append("| " + " | ".join(row) + " |")
+                if rng.random() < 0.5:
+                    lines.append("")
+            return "\n".join(lines) + "\n", cells
+
+        for case in range(60):
+            text, cells = document()
+            history_view = Transcript(clock=lambda: 100.0)
+            history_view.apply(ev("message.start"))
+            history_view.apply(ev("message.delta", text=text))
+            history_view.apply(ev("message.complete", text=text, status="complete"))
+            history = lines_text(history_view.history_lines(80, THEME, details=False))
+            for live_rows in (None, 6, 8):
+                for chunked in (False, True):
+                    for ending in ("complete", "final"):
+                        transcript = Transcript(clock=lambda: 100.0)
+                        transcript.apply(ev("message.start"))
+                        pieces = []
+                        position = 0
+                        while position < len(text):
+                            size = rng.randint(1, 25) if chunked else len(text.split("\n")[0]) + 1
+                            end = text.index("\n", position) + 1 if not chunked else position + size
+                            pieces.append(text[position:end])
+                            position = end
+                        taken: list[str] = []
+                        for piece in pieces:
+                            transcript.apply(ev("message.delta", text=piece))
+                            taken += lines_text(transcript.take_stable_lines(80, THEME, live_rows=live_rows))
+                        if ending == "complete":
+                            transcript.apply(ev("message.complete", text=text, status="complete"))
+                            taken += lines_text(transcript.take_stable_lines(80, THEME, live_rows=live_rows))
+                            taken += lines_text(transcript.live_lines(80, THEME))
+                        else:
+                            taken += lines_text(transcript.take_stable_lines(80, THEME, final=True, live_rows=live_rows))
+                        label = (case, live_rows, chunked, ending)
+                        for where, rows in (("taken", taken), ("history", history)):
+                            words = self.tokens(rows)
+                            for cell in cells:
+                                self.assertEqual(words.count(cell), 1, (label, where, cell, text))
+                            for row in rows:
+                                if "```" not in text or not re.search(r"\|\s*:?-{3,}", row):
+                                    self.assertIsNone(re.search(r"\|\s*:?-{3,}", row), (label, where, row, text))
 
 if __name__ == "__main__":
     unittest.main()

@@ -419,16 +419,13 @@ def is_table_divider_cells(cells: list[str]) -> bool:
     """`|---|---|`: every cell is dashes alone (colons at the edges allowed)."""
     return len(cells) > 0 and all(TABLE_DIVIDER_RE.match(cell) for cell in cells)
 
-def _table_cells(rows: list[list[str]], num_cols: int) -> list[list[str]]:
-    """`rows` padded or sliced to the header's column count (`num_cols`)."""
-    table_rows = []
-    for cells in rows:
-        if len(cells) < num_cols:
-            cells = cells + [""] * (num_cols - len(cells))
-        elif len(cells) > num_cols:
-            cells = cells[:num_cols]
-        table_rows.append(cells)
-    return table_rows
+def _table_row_text(cells: list[str], widths: Sequence[int]) -> str:
+    """One row's text on the columns `widths`: short rows padded, cells past the last column kept at their own width."""
+    cells = cells + [""] * (len(widths) - len(cells))
+    return (" " * TABLE_GAP).join(
+        cell + " " * max(0, (widths[ci] if ci < len(widths) else 0) - cell_width(cell)) for ci, cell in enumerate(cells)
+    )
+
 
 def table_block(sources: Sequence[str], first: int, width: int, theme: Theme) -> tuple[list[Line], int]:
     """`_table_block` without the column widths."""
@@ -443,7 +440,6 @@ def table_rows_on(
 
     A cell wider than its column, or a cell past the last column, pushes its own row wider; no cell is cut or lost.
     """
-    gap = " " * TABLE_GAP
     indent = _leading_spaces(sources[first])
     rows: list[Line] = []
     index = first
@@ -454,13 +450,9 @@ def table_rows_on(
             continue
         if len(cells) < 2:
             break
-        cells = cells + [""] * (len(widths) - len(cells))
-        # a row with more cells than the columns keeps them, each as wide as itself
-        padded = [
-            cell + " " * max(0, (widths[ci] if ci < len(widths) else 0) - cell_width(cell))
-            for ci, cell in enumerate(cells)
-        ]
-        rows.extend(wrap_prefixed((Span(gap.join(padded), theme.text),), (Span(" " * indent),), (Span(" " * indent),), width))
+        rows.extend(wrap_prefixed(
+            (Span(_table_row_text(cells, widths), theme.text),), (Span(" " * indent),), (Span(" " * indent),), width
+        ))
         index += 1
     return rows, index - first
 
@@ -499,10 +491,11 @@ def _table_block(
         index += 1
     # the header row and the body rows, every row on the header's columns; the
     # `|---|` row between them is the divider, not a cell of the table
-    table_rows = _table_cells([header, *body], len(header))
-    # the columns' width: the widest cell of the column, at least the minimum
+    table_rows = [header, *body]
+    # the columns' width: the widest cell of the header's columns, at least the minimum
     column_width = [
-        max(TABLE_MIN_COL_WIDTH, max(cell_width(cells[ci]) for cells in table_rows)) for ci in range(len(header))
+        max(TABLE_MIN_COL_WIDTH, max((cell_width(cells[ci]) for cells in table_rows if ci < len(cells)), default=0))
+        for ci in range(len(header))
     ]
     indent = _leading_spaces(sources[first])
     gap = " " * TABLE_GAP
@@ -511,15 +504,11 @@ def _table_block(
         plain = [row for source in sources[first:index] for row in render_line(source, MarkdownState(), width, theme)[0]]
         return plain, index - first, ()
     header_style = replace(theme.text, bold=True, fg=theme.brand.fg or theme.accent.fg)
-    # the cells of every row, padded to their column so the columns line up
-    padded = [
-        [cell + " " * max(0, column_width[ci] - cell_width(cell)) for ci, cell in enumerate(cells)]
-        for cells in table_rows
-    ]
 
     def row_lines(cells: list[str], style: Style) -> list[Line]:
         """One table row (a list of cells) wrapped to `width`, behind the row's indent."""
-        return wrap_prefixed((Span(gap.join(cells), style),), (Span(" " * indent),), (Span(" " * indent),), width)
+        text = _table_row_text(cells, column_width)
+        return wrap_prefixed((Span(text, style),), (Span(" " * indent),), (Span(" " * indent),), width)
 
     def sep_lines() -> list[Line]:
         """The `─` band of the divider row, hard-wrapped so every row fills the width.
@@ -537,8 +526,8 @@ def _table_block(
             return [prefix + row for row in rows]
         return rows
 
-    header_lines = row_lines(padded[0], header_style)
-    body_lines = [row for cells in padded[1:] for row in row_lines(cells, theme.text)]
+    header_lines = row_lines(header, header_style)
+    body_lines = [row for cells in body for row in row_lines(cells, theme.text)]
     return [*header_lines, *sep_lines(), *body_lines], index - first, tuple(column_width)
 
 
