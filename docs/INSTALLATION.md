@@ -1268,6 +1268,11 @@ Esc closes it):
 | j / k, Space / b, g / G, q or Esc | In a pager (`/history`, `/logs`, an agent's log, this list), move a line, a page, or to either end, or leave |
 | Drag, double click, triple click, wheel | In a pager (`/dag` and the bot board too), select text and copy it when you let go (without the rails), copy a word, copy a row, or scroll three lines; the footer says what the copy did |
 
+In Vim NORMAL, Esc cancels a pending Space leader and discards any earlier
+Escape confirmation without clearing the draft, interrupting a turn or opening
+rewind. The next Esc starts a fresh confirmation; another Esc within 0.8 s
+completes it. Ordinary Esc Esc still confirms as before.
+
 Ctrl+Enter and Shift+Enter reach the OMH TUI as keys of their own only where
 the terminal reports them. On start it asks iTerm2, kitty, WezTerm, tmux, VS
 Code's terminal and Windows Terminal (under WSL) for the kitty keyboard

@@ -13,6 +13,7 @@ the picked prompt's place; one that only prints leaves the rewind picked.
 
 from __future__ import annotations
 
+import math
 import unittest
 from dataclasses import replace
 
@@ -94,6 +95,94 @@ class PickerTests(unittest.TestCase):
 
 
 class DoubleEscapeTests(unittest.TestCase):
+    def test_escape_after_leader_cancel_arms_fresh_before_completing(self) -> None:
+        for text, busy, kind in (("draft", False, "clear"), ("", True, "interrupt"), ("", False, "rewind")):
+            with self.subTest(kind=kind):
+                clock = Clock()
+                app, client = make_app(busy=busy, clock=clock)
+                app.composer.set_vim(True)
+                type_text(app, text)
+                esc(app)
+                before = (app.composer.text, app.composer.caret, app.composer.normal, list(app.composer.history))
+                esc(app)
+                self.assertEqual(app.escape_armed, (kind, 100.0))
+                clock.now = 100.1
+                app._on_input(Key(CHAR, " "))
+                self.assertEqual(app.escape_armed, (kind, 100.0))
+                clock.now = 100.2
+                esc(app)
+                self.assertIsNone(app.escape_armed)
+                self.assertFalse(app.composer.pending)
+                self.assertEqual(client.calls, [])
+                clock.now = 100.3
+                esc(app)  # Esc Space Esc Esc must only arm a fresh confirmation.
+                self.assertEqual(app.escape_armed, (kind, 100.3))
+                self.assertEqual(
+                    (app.composer.text, app.composer.caret, app.composer.normal, app.composer.history), before,
+                )
+                self.assertEqual(client.calls, [])
+                self.assertIsNone(app.rewind_picker)
+                clock.now = 100.4
+                esc(app)
+                self.assertIsNone(app.escape_armed)
+                if kind == "clear":
+                    self.assertEqual(app.composer.text, "")
+                    self.assertEqual(app.composer.history, [text])
+                    self.assertEqual(client.calls, [])
+                else:
+                    method = "session.interrupt" if busy else "session.history"
+                    self.assertEqual(client.calls, [(method, {"session_id": SID})])
+                    self.assertEqual(app.composer.history, [])
+                    if kind == "rewind":
+                        answer(app, client, HISTORY)
+                        self.assertIsNotNone(app.rewind_picker)
+                        self.assertEqual(len(app.rewind_picker.rows), 2)
+
+    def test_vim_double_escape_preserves_the_exact_inclusive_timeout(self) -> None:
+        self.assertEqual(DOUBLE_ESCAPE_SECONDS, 0.8)
+        for text, busy, kind in (("draft", False, "clear"), ("", True, "interrupt"), ("", False, "rewind")):
+            for canceled in (False, True):
+                for delta in (DOUBLE_ESCAPE_SECONDS, math.nextafter(DOUBLE_ESCAPE_SECONDS, math.inf)):
+                    with self.subTest(kind=kind, canceled=canceled, delta=delta):
+                        clock = Clock()
+                        clock.now = -0.3
+                        app, client = make_app(busy=busy, clock=clock)
+                        app.composer.set_vim(True)
+                        type_text(app, text)
+                        esc(app)
+                        if canceled:
+                            esc(app)
+                            clock.now = -0.2
+                            app._on_input(Key(CHAR, " "))
+                            clock.now = -0.1
+                            esc(app)
+                            self.assertIsNone(app.escape_armed)
+                        clock.now = 0.0  # Avoid rounding a tiny delta added to a large timestamp.
+                        esc(app)
+                        self.assertEqual(app.escape_armed, (kind, 0.0))
+                        self.assertEqual(client.calls, [])
+                        clock.now = delta
+                        esc(app)
+                        if delta > DOUBLE_ESCAPE_SECONDS:
+                            self.assertEqual(app.escape_armed, (kind, delta))
+                            self.assertEqual(app.composer.text, text)
+                            self.assertEqual(app.composer.history, [])
+                            self.assertEqual(client.calls, [])
+                            self.assertIsNone(app.rewind_picker)
+                            esc(app)  # The re-armed confirmation still works within its fresh window.
+                        self.assertIsNone(app.escape_armed)
+                        if kind == "clear":
+                            self.assertEqual(app.composer.text, "")
+                            self.assertEqual(app.composer.history, [text])
+                            self.assertEqual(client.calls, [])
+                        else:
+                            method = "session.interrupt" if busy else "session.history"
+                            self.assertEqual(client.calls, [(method, {"session_id": SID})])
+                            self.assertEqual(app.composer.history, [])
+                            if kind == "rewind":
+                                answer(app, client, HISTORY)
+                                self.assertIsNotNone(app.rewind_picker)
+
     def test_esc_twice_with_text_clears_it_into_the_history_and_once_keeps_it(self) -> None:
         clock = Clock()
         app, client = make_app(clock=clock)

@@ -886,6 +886,56 @@ class LeaderShortcutTests(unittest.TestCase):
         app._on_input(Key(CHAR, " "))
         self.assertTrue(app.composer.leader)
 
+    def test_leader_escape_discards_confirmation_without_changing_the_draft(self) -> None:
+        from test_tui_rewind import Clock
+
+        for text, busy, kind in (("draft", False, "clear"), ("", True, "interrupt"), ("", False, "rewind")):
+            for prior in ("none", "current", "expired"):
+                with self.subTest(kind=kind, prior=prior):
+                    clock = Clock()
+                    app, client = make_app(busy=busy, clock=clock)
+                    app.composer.set_vim(True)
+                    type_text(app, text)
+                    app._on_input(Key(ESCAPE))  # INSERT -> NORMAL is not a confirmation.
+                    self.assertIsNone(app.escape_armed)
+                    if prior != "none":
+                        app._on_input(Key(ESCAPE))
+                        self.assertEqual(app.escape_armed, (kind, clock.now))
+                        if prior == "expired":
+                            clock.now += 1.0
+                    armed = app.escape_armed
+                    before = (app.composer.text, app.composer.caret, app.composer.normal, list(app.composer.history))
+                    self.arm(app)
+                    self.assertEqual(app.escape_armed, armed)  # Space alone must not reset it.
+                    self.assertTrue(app.composer.pending)
+                    app._on_input(Key(ESCAPE))
+                    self.assertIsNone(app.escape_armed)
+                    self.assertFalse(app.composer.leader)
+                    self.assertFalse(app.composer.pending)
+                    self.assertEqual(
+                        (app.composer.text, app.composer.caret, app.composer.normal, app.composer.history), before,
+                    )
+                    self.assertEqual(client.calls, [])
+                    self.assertIsNone(app.rewind_picker)
+
+    def test_non_escape_leader_followers_preserve_confirmation(self) -> None:
+        for event in (Key(CHAR, "?"), Key(CHAR, "m", ctrl=True), Key(DOWN)):
+            with self.subTest(event=event):
+                app, client = self.normal_app()
+                app._on_input(Key(ESCAPE))
+                armed = app.escape_armed
+                self.assertIsNotNone(armed)
+                before = (app.composer.text, app.composer.caret, app.composer.normal, list(app.composer.history))
+                self.arm(app)
+                self.assertEqual(app.escape_armed, armed)
+                app._on_input(event)
+                self.assertEqual(app.escape_armed, armed)
+                self.assertFalse(app.composer.pending)
+                self.assertEqual(
+                    (app.composer.text, app.composer.caret, app.composer.normal, app.composer.history), before,
+                )
+                self.assertEqual(client.calls, [])
+
     def test_leader_s_opens_sessions(self) -> None:
         app, client = self.normal_app()
         self.arm(app)

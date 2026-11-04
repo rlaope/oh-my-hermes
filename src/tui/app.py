@@ -3881,6 +3881,8 @@ class App(ModesMixin, AgentViewMixin):
             else:
                 self._on_composer(self._edit(self.composer, event), event, steer=True)
             return True
+        if isinstance(event, Key) and event.name == ESCAPE:
+            return self._escape(event)
         if not isinstance(event, Key) or event.name != CHAR or event.ctrl or event.alt or event.shift or event.reported_shift:
             self._on_composer(self._edit(self.composer, event), event)
             return True
@@ -3898,7 +3900,7 @@ class App(ModesMixin, AgentViewMixin):
                 self.composer.record(self.composer.expanded(), sent=False)
                 self._set_composer("")
         else:
-            # Composer consumes every unmatched Key (Esc and modified keys included); Paste keeps its usual behavior.
+            # Composer consumes every unmatched Key (modified keys included); Paste keeps its usual behavior.
             self._on_composer(self._edit(self.composer, event), event)
         return True
 
