@@ -450,6 +450,9 @@ def post_tool_call(**kwargs: object) -> dict[str, object] | None:
     # Each URL a successful web tool opened or listed leaves a metadata-only
     # receipt under the dispatching session (`research_receipts`), so a cited
     # URL can later be matched against what this session tree really fetched.
+    # A `refused` label is not dropped: the writer counts it in
+    # `receipt_declines` and the session's `.refused` sidecar, which
+    # `omh research receipts verify` reports as `receipt_refusals`.
     _ = record_fetch_receipts(
         tool_name=kwargs.get("tool_name"), args=_tool_arguments(kwargs),
         result=kwargs.get("result"), status=kwargs.get("status"),

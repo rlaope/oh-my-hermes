@@ -34,8 +34,8 @@ CITATION_SKILLS = ("web-research", "research-brief", "research")
 TOUCHED_SKILLS = (*CITATION_SKILLS, "research-department", "source-finder", "paper-learning")
 BUNDLED_SKILLS_NAMED_AS_OWNERS = ("grounded-citations", "competitor-news-monitor", "arxiv")
 PORTABLE_BODIES = ("omh-web-research", "omh-research-brief", "ulw-research", "omh-source-finder", "omh-paper-learning")
-# The field of the script's `info: stats:` line that shows a run checked nothing.
 CITATION_PORTABLE = ("omh-web-research", "omh-research-brief", "ulw-research")
+# The field of the script's `info: stats:` line that shows a run checked nothing.
 EMPTY_CHECK_FIELD = "`0 distinct source(s) cited`"
 
 

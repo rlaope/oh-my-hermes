@@ -8,6 +8,7 @@ this command.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -55,25 +56,39 @@ def _receipts_verify_exit_code(payload: Any) -> int:
     return 0
 
 
-def _session_from_args(args: argparse.Namespace) -> str:
-    session = str(args.session or "").strip() or _command_hermes_session_id()
+def _session_from_args(args: argparse.Namespace) -> tuple[str, str, bool]:
+    """``(session, source, override)``: the session checked, ``flag`` or ``env``, and whether
+    ``--session`` names a session other than this command's own ``HERMES_SESSION_ID``."""
+    flag = str(args.session or "").strip()
+    env = _command_hermes_session_id()
+    session = flag or env
     if not session:
         raise OmhError("no session: pass --session ID or run inside a Hermes session that sets HERMES_SESSION_ID")
-    return session
+    return session, ("flag" if flag else "env"), bool(flag and env and flag != env)
 
 
 def cmd_research_receipts_verify(args: argparse.Namespace) -> int:
-    session = _session_from_args(args)
+    session, source, override = _session_from_args(args)
     paths = _paths(args)
     try:
         payload = check_draft_receipts(
             omh_home=Path(paths.omh_home),
+            hermes_home=Path(paths.hermes_home),
             session_id=session,
             citations_path=Path(args.citations).expanduser(),
             draft_path=Path(args.draft).expanduser(),
         )
     except ReceiptCheckInputError as exc:
         raise OmhError(str(exc)) from exc
+    payload["session_source"] = source
+    if override:
+        # Read-only, but it lets a draft pass on another session's receipts: say so where a reader looks.
+        payload["session_override"] = True
+        print(
+            f"omh: note: --session {session} is not this command's HERMES_SESSION_ID; "
+            "checking another session's receipts",
+            file=sys.stderr,
+        )
     if _wants_json(args):
         _print_json(payload)
     else:
@@ -90,10 +105,16 @@ def _render_text(payload: dict[str, Any]) -> str:
         denominator_of=coverage["denominator_of"],
         excluded=coverage["excluded"],
     )
+    segments = "resolved" if payload["segments_resolved"] else "unresolved"
     lines = [
         f"fetched coverage: {format_reported_rate(rate)}",
-        f"sessions checked: {len(payload['sessions_checked'])} (delegation ledger {payload['delegation_ledger']})",
+        f"sessions checked: {len(payload['sessions_checked'])} (delegation ledger {payload['delegation_ledger']}; "
+        f"{len(payload['segments'])} conversation segment(s), walk {segments})",
     ]
+    refused = {sid: n for sid, n in payload["receipt_refusals"].items() if n != 0}
+    if refused:
+        shown = ", ".join(f"{sid} {'unreadable' if n is None else n}" for sid, n in refused.items())
+        lines.append(f"receipt writes refused: {shown}")
     counts = payload["counts"]
     lines.append("counts: " + ", ".join(f"{status} {counts[status]}" for status in CITATION_STATUSES))
     for row in payload["citations"]:
@@ -126,7 +147,8 @@ def _add_research_commands(sub) -> None:
         help="Check every citation in a draft against the session tree's fetch receipts; exit 0 only when all were fetched.",
         description=(
             "Match each [n] the draft cites, through the grounded-citations ledger, against fetch receipts in the "
-            "session and every subagent session its delegation ledger names. Statuses: fetched, search_only, missing, "
+            "session, its earlier compaction segments, and every subagent session their delegation ledgers name. "
+            "Statuses: fetched, search_only, missing, "
             "child_unresolved, not_in_ledger. Exit 0 only when every cited source was fetched; 1 for any other status "
             "or a draft with no citations; 2 for a usage or read error. A receipt proves the URL was opened in this "
             "session tree, not that the page supports the claim."

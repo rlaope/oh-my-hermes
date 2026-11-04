@@ -9,7 +9,13 @@ These pin:
 
 * each status (`fetched`, `search_only`, `missing`, `child_unresolved`,
   `not_in_ledger`) from receipts written by the real writer;
-* that a missing delegation ledger never passes silently;
+* that a session that never delegated (no delegation ledger file) reads
+  `missing`, while a ledger that exists but cannot be read never passes
+  silently (`child_unresolved`);
+* the session tree: earlier compaction segments and their children are
+  checked, and an unresolved segment walk is `child_unresolved`;
+* the ASCII form Hermes requests a non-ASCII URL in matches its ledger entry,
+  and refused receipt writes are reported per session;
 * the grounded-citations citation grammar (links, labels and fenced code are
   not citations) and URL identity (an arXiv abstract is not its PDF);
 * coverage as an `omh_reported_rate/v1`, with zero citations as `percent: null`;
@@ -35,17 +41,22 @@ from omh.commands.research import _receipts_verify_exit_code  # noqa: E402
 from omh.plugin_bundle.omh.delegation_ledger import LEDGER_SCHEMA_VERSION, ledger_path  # noqa: E402
 from omh.plugin_bundle.omh.research_receipts import record_fetch_receipts  # noqa: E402
 from omh.quality.reported_rate import reported_rate_shape_errors  # noqa: E402
+from omh.plugin_bundle.omh.research_receipts import receipt_path, refusal_path  # noqa: E402
 from omh.workflows.research_receipt_check import (  # noqa: E402
     CITATION_RECEIPT_CHECK_SCHEMA_VERSION,
     CLAIM_BOUNDARY,
     check_draft_receipts,
     cited_ids,
+    request_normalized_url,
 )
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "research_receipt_check"
 CITATIONS = FIXTURES / "citations.json"
 PARENT = "20261104_120000_parent"
 CHILD = "20261104_120001_child"
+EARLIER = "20261104_110000_earlier"
+EARLIER_CHILD = "20261104_110001_earlier_child"
+ANCESTORS = "omh.workflows.research_receipt_check.compaction_ancestors"
 URL_ONE = "https://example.org/paper/one"
 URL_TWO = "https://example.org/paper/two?section=results"
 
@@ -57,6 +68,8 @@ class _ReceiptTree(unittest.TestCase):
         self.root = Path(self._tmp.name)
         self.home = self.root / "omh"
         self.home.mkdir()
+        self.hermes = self.root / "hermes"  # no state.db: no rotation happened, the walk resolves empty
+        self.hermes.mkdir()
         self._call = 0
 
     def fetch(self, *urls: str, session: str = PARENT) -> None:
@@ -79,16 +92,16 @@ class _ReceiptTree(unittest.TestCase):
         )
         self.assertEqual(label, "recorded")
 
-    def delegation_ledger(self, *children: str) -> None:
-        """The parent's `delegation_ledger/v1`, naming each child the way `subagent_start` records it."""
-        path = ledger_path(self.home, PARENT)
+    def delegation_ledger(self, *children: str, session: str = PARENT) -> None:
+        """A session's `delegation_ledger/v1`, naming each child the way `subagent_start` records it."""
+        path = ledger_path(self.home, session)
         path.parent.mkdir(parents=True, exist_ok=True)
         record = {
             "schema_version": LEDGER_SCHEMA_VERSION,
-            "session_id": PARENT,
+            "session_id": session,
             "calls": [],
             "children": [
-                {"subagent_id": f"sa-{index}", "child_session_id": child, "parent_session_id": PARENT, "started_at": 1.0}
+                {"subagent_id": f"sa-{index}", "child_session_id": child, "parent_session_id": session, "started_at": 1.0}
                 for index, child in enumerate(children)
             ],
             "updated_at": 1.0,
@@ -101,7 +114,9 @@ class _ReceiptTree(unittest.TestCase):
         return path
 
     def check(self, draft: Path, *, citations: Path = CITATIONS) -> dict:
-        return check_draft_receipts(omh_home=self.home, session_id=PARENT, citations_path=citations, draft_path=draft)
+        return check_draft_receipts(
+            omh_home=self.home, hermes_home=self.hermes, session_id=PARENT, citations_path=citations, draft_path=draft
+        )
 
     @staticmethod
     def statuses(payload: dict) -> dict[int, str]:
@@ -135,20 +150,39 @@ class CitationStatusTests(_ReceiptTree):
         self.assertEqual(payload["coverage"]["percent"], 100.0)
         self.assertEqual(_receipts_verify_exit_code(payload), 0)
 
-    def test_c_no_delegation_ledger_and_not_in_parent_is_child_unresolved(self) -> None:
+    def test_c_n6_no_delegation_ledger_file_means_no_child_and_reads_missing(self) -> None:
+        """No ledger file: `subagent_start` never ran for this session, so there is no child to miss."""
         self.fetch(URL_ONE)
-        self.fetch(URL_TWO, session=CHILD)  # opened by a child the parent cannot name without its ledger
         payload = self.check(FIXTURES / "draft_two_cited.md")
-        self.assertEqual(payload["delegation_ledger"], "unreadable")
+        self.assertEqual(payload["delegation_ledger"], "absent")
+        self.assertEqual(payload["delegation_ledgers"], {PARENT: "absent"})
         self.assertEqual(payload["sessions_checked"], [PARENT])
-        self.assertEqual(self.statuses(payload), {1: "fetched", 2: "child_unresolved"})
+        self.assertEqual(self.statuses(payload), {1: "fetched", 2: "missing"})
         self.assertEqual(_receipts_verify_exit_code(payload), 1)
 
-    def test_c_an_unparseable_delegation_ledger_is_child_unresolved_too(self) -> None:
+    def test_c_n6_an_unparseable_delegation_ledger_is_child_unresolved(self) -> None:
         path = ledger_path(self.home, PARENT)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{not json", encoding="utf-8")
+        self.fetch(URL_TWO, session=CHILD)  # opened by a child the parent cannot name without its ledger
         payload = self.check(FIXTURES / "draft_two_cited.md")
+        self.assertEqual(payload["delegation_ledger"], "unreadable")
+        self.assertEqual(self.statuses(payload), {1: "child_unresolved", 2: "child_unresolved"})
+        self.assertEqual(_receipts_verify_exit_code(payload), 1)
+
+    def test_c_n6_a_symlinked_or_oversize_delegation_ledger_is_child_unresolved(self) -> None:
+        path = ledger_path(self.home, PARENT)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        target = self.root / "real-ledger.json"
+        target.write_text("{}", encoding="utf-8")
+        path.symlink_to(target)
+        self.assertEqual(self.statuses(self.check(FIXTURES / "draft_two_cited.md")),
+                         {1: "child_unresolved", 2: "child_unresolved"})
+        path.unlink()
+        self.delegation_ledger()
+        with patch("omh.plugin_bundle.omh.delegation_ledger.LEDGER_MAX_BYTES", 8):
+            payload = self.check(FIXTURES / "draft_two_cited.md")
+        self.assertEqual(payload["delegation_ledger"], "unreadable")
         self.assertEqual(self.statuses(payload), {1: "child_unresolved", 2: "child_unresolved"})
         self.assertEqual(_receipts_verify_exit_code(payload), 1)
 
@@ -218,6 +252,90 @@ class CitationStatusTests(_ReceiptTree):
         payload = self.check(self.draft("Method one improves recall here [1].\n"))
         self.assertEqual(self.statuses(payload), {1: "fetched"})
 
+    def test_n3_a_receipt_for_the_percent_encoded_form_covers_a_non_ascii_ledger_url(self) -> None:
+        url = "https://ko.wikipedia.org/wiki/대한민국"
+        encoded = "https://ko.wikipedia.org/wiki/%EB%8C%80%ED%95%9C%EB%AF%BC%EA%B5%AD"
+        self.assertEqual(request_normalized_url(url), encoded)
+        ledger = self.root / "ko-citations.json"
+        ledger.write_text(json.dumps({"version": 1, "sources": [{"id": 1, "url": url, "title": "t"}]}), encoding="utf-8")
+        self.fetch(encoded)  # what web_extract reports after normalize_url_for_request
+        payload = self.check(self.draft("대한민국 claim [1].\n"), citations=ledger)
+        self.assertEqual(self.statuses(payload), {1: "fetched"})
+        self.assertEqual(_receipts_verify_exit_code(payload), 0)
+
+    def test_n3_request_normalization_matches_hermes_url_safety(self) -> None:
+        """Pinned against `tools/url_safety.normalize_url_for_request` outputs observed in the Hermes venv."""
+        cases = {
+            "https://bücher.example/a b?q=가 나#프": "https://xn--bcher-kva.example/a%20b?q=%EA%B0%80%20%EB%82%98#%ED%94%84",
+            "https:// docs.example/x": "https://docs.example/x",
+            "ftp://x/가": "ftp://x/가",
+            "https://example.org/paper/one": "https://example.org/paper/one",
+            "https://example.org/a%20b": "https://example.org/a%20b",
+        }
+        for raw, expected in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(request_normalized_url(raw), expected)
+
+    def test_n3_a_redirect_target_never_covers_the_url_that_redirected(self) -> None:
+        self.fetch("https://example.org/paper/one-final")
+        payload = self.check(self.draft("Method one improves recall here [1].\n"))
+        self.assertEqual(self.statuses(payload), {1: "missing"})
+        self.assertIn("redirect", payload["claim_boundary"])
+
+    def test_n1_refused_receipt_writes_are_reported_per_session(self) -> None:
+        self.delegation_ledger(CHILD)
+        self.fetch(URL_ONE)
+        blocked = receipt_path(self.home, CHILD)
+        blocked.symlink_to(self.root / "elsewhere.jsonl")
+        label = record_fetch_receipts(
+            tool_name="web_extract", args={}, result=json.dumps({"results": [{"url": URL_TWO, "content": "x"}]}),
+            status="ok", session_id=CHILD, tool_call_id="c", turn_id="t", omh_home=str(self.home),
+        )
+        self.assertEqual(label, "refused")
+        blocked.unlink()  # the store recovered; the refusal still shows
+        payload = self.check(FIXTURES / "draft_two_cited.md")
+        self.assertEqual(payload["receipt_refusals"], {CHILD: 1, PARENT: 0})
+        self.assertEqual(self.statuses(payload), {1: "fetched", 2: "missing"})
+        self.assertEqual(_receipts_verify_exit_code(payload), 1)
+        refusal_path(self.home, PARENT).write_text("not a number\n", encoding="ascii")
+        self.assertEqual(self.check(FIXTURES / "draft_two_cited.md")["receipt_refusals"][PARENT], None)
+
+    def test_n5_earlier_compaction_segments_and_their_children_are_checked(self) -> None:
+        self.delegation_ledger()
+        self.delegation_ledger(EARLIER_CHILD, session=EARLIER)
+        self.fetch(URL_ONE, session=EARLIER)  # fetched before the rotation moved the conversation to PARENT
+        self.fetch(URL_TWO, session=EARLIER_CHILD)
+        with patch(ANCESTORS, return_value={"status": "resolved", "ancestors": [EARLIER]}) as walk:
+            payload = self.check(FIXTURES / "draft_two_cited.md")
+        walk.assert_called_once_with(str(self.hermes), PARENT)
+        self.assertEqual(payload["segments"], [PARENT, EARLIER])
+        self.assertTrue(payload["segments_resolved"])
+        self.assertEqual(payload["delegation_ledgers"], {EARLIER: "read", PARENT: "read"})
+        self.assertEqual(payload["sessions_checked"], sorted([PARENT, EARLIER, EARLIER_CHILD]))
+        self.assertEqual(self.statuses(payload), {1: "fetched", 2: "fetched"})
+        self.assertEqual(payload["citations"][1]["sessions"], [EARLIER_CHILD])
+        self.assertEqual(_receipts_verify_exit_code(payload), 0)
+
+    def test_n5_an_unresolved_segment_walk_with_no_match_is_child_unresolved(self) -> None:
+        self.delegation_ledger()
+        self.fetch(URL_ONE)
+        answer = {"status": "unverified", "reason": "state_db_unavailable", "ancestors": []}
+        with patch(ANCESTORS, return_value=answer):
+            payload = self.check(FIXTURES / "draft_two_cited.md")
+        self.assertFalse(payload["segments_resolved"])
+        self.assertEqual(self.statuses(payload), {1: "fetched", 2: "child_unresolved"})
+        self.assertEqual(_receipts_verify_exit_code(payload), 1)
+        with patch(ANCESTORS, side_effect=OSError("state.db")):
+            payload = self.check(FIXTURES / "draft_two_cited.md")
+        self.assertFalse(payload["segments_resolved"])
+        self.assertEqual(self.statuses(payload), {1: "fetched", 2: "child_unresolved"})
+
+    def test_n5_no_state_db_resolves_with_the_session_alone(self) -> None:
+        self.delegation_ledger()
+        self.fetch(URL_ONE)
+        payload = self.check(FIXTURES / "draft_two_cited.md")
+        self.assertEqual((payload["segments"], payload["segments_resolved"]), ([PARENT], True))
+
     def test_unparseable_and_foreign_receipt_lines_are_skipped(self) -> None:
         self.delegation_ledger()
         self.fetch(URL_ONE)
@@ -232,7 +350,7 @@ class CitationStatusTests(_ReceiptTree):
 
 class ReceiptsVerifyCliTests(_ReceiptTree):
     def run_verify(self, draft: Path, *extra: str, env: dict | None = None) -> tuple[int, str, str]:
-        argv = ["--omh-home", str(self.home), "research", "receipts", "verify",
+        argv = ["--omh-home", str(self.home), "--hermes-home", str(self.hermes), "research", "receipts", "verify",
                 "--citations", str(CITATIONS), "--draft", str(draft), *extra]
         with patch.dict(os.environ, env or {}, clear=False):
             if env is None:
@@ -258,7 +376,29 @@ class ReceiptsVerifyCliTests(_ReceiptTree):
         self.fetch(URL_ONE, URL_TWO)
         status, stdout, stderr = self.run_verify(FIXTURES / "draft_two_cited.md", "--json", env={"HERMES_SESSION_ID": PARENT})
         self.assertEqual(status, 0, stderr)
-        self.assertEqual(json.loads(stdout)["session_id"], PARENT)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["session_id"], PARENT)
+        self.assertEqual(payload["session_source"], "env")
+        self.assertNotIn("session_override", payload)
+        self.assertEqual(stderr, "")
+
+    def test_j_n5_a_session_flag_other_than_hermes_session_id_is_recorded_and_noted(self) -> None:
+        self.delegation_ledger()
+        self.fetch(URL_ONE, URL_TWO)
+        status, stdout, stderr = self.run_verify(
+            FIXTURES / "draft_two_cited.md", "--session", PARENT, "--json", env={"HERMES_SESSION_ID": CHILD}
+        )
+        self.assertEqual(status, 0, stderr)
+        payload = json.loads(stdout)
+        self.assertEqual((payload["session_source"], payload.get("session_override")), ("flag", True))
+        self.assertIn("not this command's HERMES_SESSION_ID", stderr)
+        status, stdout, stderr = self.run_verify(
+            FIXTURES / "draft_two_cited.md", "--session", PARENT, "--json", env={"HERMES_SESSION_ID": PARENT}
+        )
+        payload = json.loads(stdout)
+        self.assertEqual(payload["session_source"], "flag")
+        self.assertNotIn("session_override", payload)
+        self.assertEqual(stderr, "")
 
     def test_j_no_session_is_a_usage_error(self) -> None:
         status, _stdout, stderr = self.run_verify(FIXTURES / "draft_two_cited.md", "--json")
@@ -285,8 +425,8 @@ class ReceiptsVerifyCliTests(_ReceiptTree):
     def test_j_text_output_names_coverage_and_boundary(self) -> None:
         self.delegation_ledger()
         self.fetch(URL_ONE)
-        argv = ["--omh-home", str(self.home), "research", "receipts", "verify", "--citations", str(CITATIONS),
-                "--draft", str(FIXTURES / "draft_two_cited.md"), "--session", PARENT]
+        argv = ["--omh-home", str(self.home), "--hermes-home", str(self.hermes), "research", "receipts", "verify",
+                "--citations", str(CITATIONS), "--draft", str(FIXTURES / "draft_two_cited.md"), "--session", PARENT]
         status, stdout, stderr = run_cli(argv, output_json=False)
         self.assertEqual(status, 1, stderr)
         self.assertIn("fetched coverage: 50.0% — 1/2 cited_sources (fetched)", stdout)
