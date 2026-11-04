@@ -388,7 +388,9 @@ def _category(node: Mapping[str, Any]) -> str:
     return f"@{label}" if label else UNKNOWN_FIELD
 
 
-STATE_ORDER: Final = ("running", "stuck", "failed", "dispatched", "waiting", "interrupted", "unknown", "done")
+STATE_ORDER: Final = (
+    "running", "stuck", "failed", "dispatched", "parked", "waiting", "interrupted", "unknown", "done",
+)
 
 
 def header_parts(graph: Mapping[str, Any], charset: Charset = UNICODE) -> tuple[str, str]:
@@ -402,7 +404,8 @@ def header_parts(graph: Mapping[str, Any], charset: Charset = UNICODE) -> tuple[
     sep = charset.separator
     counts: dict[str, int] = {}
     for node in lanes:
-        state = _state(node)
+        # A parked node is a waiting one (`delegation_graph._parked_fields`), counted apart as its layer counts it.
+        state = "parked" if node.get("parked") is True else _state(node)
         counts[state] = counts.get(state, 0) + 1
     tally = [f"{counts[state]:,} {state}" for state in STATE_ORDER if counts.get(state)]
     hidden = graph.get("hidden_nodes")

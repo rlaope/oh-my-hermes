@@ -10,16 +10,24 @@ All notable changes will be documented here.
   longer grows on a taller one. Consecutive layers whose every node is done
   fold into one `✓ layers 1–3 · 3 done` row, which opens to its layers. Only
   a layer with a running, stuck, failed, handed-out or parked node opens by
-  default, with the layer after it. No blank row stands between two layers,
+  default, with the next layer still to come after it (done layers skipped),
+  which fitting never shuts. No blank row stands between two layers,
   and rows that do not fit become one `+N more · /dag` row. A parked node was
   drawn `?` and counted `unknown`, because the graph reader had no entry for
   the `parked` outcome. It is now a waiting node with the status `parked` and
-  the time since it parked, and its layer row counts it as `parked`. One row
+  the time since it parked, and the header and its layer row count it as
+  `parked`. One row
   under it names what its park recorded it waits on, and nothing else: the
   handle, named by its call (`terminal(uv run …)`) when it is one of the
   session's background processes, then `until HH:MM` from its `wake_at`, then
-  its reason. The spinner turns on a running or parked node's row and nowhere
-  else, and between turns too while the run waits. An `unspecified-*` or
+  its reason, and the process's own running time when the handle is one. The
+  parked and running times count on every second. The spinner turns on a
+  running or parked node's row. A waiting row, and a shut layer of waiting
+  nodes, carries a slow, faint dot cycle (`·` `··` `···`, one step a second).
+  Done rows, the done layers' row and a run that is not alive stay still.
+  This motion runs between turns too while the run waits. While the terminal
+  window is unfocused, the spinner and the dots hold, as the wallpaper does
+  (#2542), while the times keep counting, redrawn once a second. An `unspecified-*` or
   unknown category no longer draws a cell. A plan written by `omh_todo set`
   or `todo_list` while the session's dag run is open now records that run's
   id (`dag_run`; an advance keeps it). While that run's tree is drawn under the

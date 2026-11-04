@@ -130,13 +130,19 @@ def left(row: str) -> str:
     """A row up to its right-hand figures (two spaces or more after its text starts: the figure columns start two
     cells after the title column), its indent kept; the highlighted row's pointer stands in its indent."""
     row = row.replace(CHOICE_MARK, " " * len(CHOICE_MARK), 1) if row.startswith(CHOICE_MARK) else row
+    row = undotted(row)
     body = row.lstrip(" ")
     return row[: len(row) - len(body)] + re.split(r" {2,}", body.rstrip())[0] if body else ""
 
 
 def right(row: str) -> str:
-    parts = re.split(r" {2,}", row.strip(), maxsplit=1)
+    """A row's right-hand figures, the waiting dots after them (`dag_tree.WAIT_DOTS`) left off."""
+    parts = re.split(r" {2,}", undotted(row).strip(), maxsplit=1)
     return parts[-1] if len(parts) > 1 else ""
+
+
+def undotted(row: str) -> str:
+    return re.sub(r" ·{1,3}$", "", row.rstrip())
 
 
 def accounted(shown: list[str]) -> int:
@@ -199,7 +205,7 @@ class DefaultFoldTests(unittest.TestCase):
         # The owner's GIF review (2026-10-23): figures pushed to the right edge, each row's own width, read as a
         # ragged column. They start at one column two cells after the widest title, each padded to its widest value.
         app, _client = tree_app()
-        headers = [row for row in view_text(app) if right(row)]
+        headers = [undotted(row) for row in view_text(app) if right(row)]
         separators = [[at for at, char in enumerate(row) if char == "·" and at > len(left(row))] for row in headers]
         self.assertEqual(len({row.index(right(row)) for row in headers}), 1, headers)  # one start column
         self.assertEqual(len({tuple(found[:3]) for found in separators if len(found) >= 3}), 1, headers)  # aligned
@@ -501,8 +507,9 @@ class RepairTests(unittest.TestCase):
     def test_a_failed_node_over_a_running_repair_stays_open_when_rows_run_short(self) -> None:
         app, _client = tree_app(rows=39)  # a cap of 13: open nodes shut from the bottom up, but not this one
         shown = [left(row) for row in view_text(app)]
-        self.assertEqual(len(shown), 13)
+        self.assertLessEqual(len(shown), 13)
         self.assertIn("    ▾ ✗ PR group 3: #127631 #58015", shown)
+        self.assertIn("  ▾ layer 3 · 1 node · 1 waiting", shown, "the layer that comes next stays open")
         self.assertIn("        ▸ ⠋ ↻ repair 1 · Resolve the registry conflict", shown)
         self.assertIn("    ▸ ⠋ PR group 2: #128662 #99354", shown)
 

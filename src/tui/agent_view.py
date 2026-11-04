@@ -242,13 +242,17 @@ class AgentViewMixin:
         self.tree_size = (cols, cap)
         folds = self._tree_folds(graph)
 
-        processes = {process.proc_id: tool_call(process) for process in self.bg_running}
+        processes = {process.proc_id: (tool_call(process), process.started_at) for process in self.bg_running}
+        # The spinner and the waiting dots are the tree's motion: held while the window is unfocused, as the
+        # ambience is (`_ambient_clock`, #2542). The times on its rows are content and count on at `wall`.
+        frame, beat, wall = self._held_frame(), int(self._ambient_clock()) if self.motion else None, self.wall_clock()
 
         def draw() -> tuple[list[Line], TreeState]:
             return tree_lines(graph, self.roster, cols, cap, self.theme, frame, folds, self.tree_selected,
-                              self.color_depth, now, self._aura_phase(), processes)
+                              self.color_depth, now, self._aura_phase(), processes, wall, self.hud.received_at, beat)
 
         lines, self.tree_state = draw()
+        self.tree_second = int(wall)
         if self.tree_selected is not None and self.tree_selected not in self.tree_state.order:
             # A fold hid the highlighted row, or its node left the graph: the nearest row above it still shown.
             self.tree_selected = _nearest_shown(self.tree_state, self.tree_selected)

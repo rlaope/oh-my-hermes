@@ -99,14 +99,14 @@ class OwnersCaseTests(unittest.TestCase):
             with self.subTest(busy=busy):
                 app, _client = waiting_app(busy=busy)
                 self.assertEqual(rows_of(app), [
-                    "  DAG · citation receipts (PR A) · 6 nodes · 6 edges · 3 waiting · 3 done",
+                    "  DAG · citation receipts (PR A) · 6 nodes · 6 edges · 1 parked · 2 waiting · 3 done",
                     "  ▸ ✓ layers 1–3 · 3 done",
                     "  ▾ layer 4 · 1 node · 1 parked",
                     "    ▾ ⠋ Full baseline check (before change)  quick · sonnet-5-5:medium · parked 1m 27s   · ↓4.3k",
                     f"        › waits on {CALL} · until {until()}",
                     "  ▾ layer 5 · 2 nodes · 2 waiting",
-                    "      · Wire the receipts check                                          waits on 1 lane",
-                    "      · Verify the run                                                   waits on 1 lane",
+                    "      · Wire the receipts check                                          waits on 1 lane ·",
+                    "      · Verify the run                                                   waits on 1 lane ·",
                 ])
 
     def test_the_parked_node_is_not_unknown(self) -> None:
@@ -126,7 +126,8 @@ class OwnersCaseTests(unittest.TestCase):
             baseline.pop(key)
         app, _client = waiting_app(built)
         shown = rows_of(app)
-        self.assertIn("      ⠋ Full baseline check (before change)", [re.split(r"(?<=\S) {2,}", row)[0] for row in shown])
+        titles = [re.split(r"(?<=\S) {2,}", row)[0] for row in shown]
+        self.assertIn("      ⠋ Full baseline check (before change)", titles)
         self.assertFalse([row for row in shown if "›" in row], "nothing guessed")
 
     def test_no_category_cell_for_unspecified_or_unknown(self) -> None:
@@ -139,7 +140,46 @@ class OwnersCaseTests(unittest.TestCase):
         self.assertEqual(_figure_parts({"category": "deep", "model": "glm-5.3", "state": "done"})[0], "deep")
 
 
+def screenshot_run() -> dict:
+    """The owner's screenshots: layer 1 the parked baseline beside the done hook, layers 2 and 3 done, the closing
+    gate in layer 4 and the review in layer 5, each waiting on 1 lane."""
+    nodes = [root(SONNET, "high")]
+    baseline = lane(node_id("baseline"), "기준선 전체 검사 (변경 전)", "quick", SONNET, "medium", "waiting", order=1,
+                    group="layer 1", status="parked")
+    baseline.update(parked=True, parked_at=PARKED_AT, elapsed_seconds=87.0, wake_at=WAKE_AT, wait_handle=PROC,
+                    output_tokens=4300)
+    nodes.append(baseline)
+    for order, (key, title, layer) in enumerate((("t1", "웹 도구 영수증 자동 기록 (훅)", 1),
+                                                 ("t2", "omh research receipts verify 명령", 2),
+                                                 ("t3", "리서치 스킬 지침 + 재생성", 3)), start=2):
+        nodes.append(lane(node_id(key), title, "unspecified-high", SONNET, "medium", "done", elapsed=60,
+                          order=order, group=f"layer {layer}", status="accepted"))
+    nodes.append(lane(node_id("gate"), "닫는 게이트: 전체 검사 + 스모크", "unspecified-low", "?", "", "waiting", order=5,
+                      group="layer 4", waits=1))
+    nodes.append(lane(node_id("review"), "코드 리뷰", "review", "?", "", "waiting", order=6, group="layer 5", waits=1))
+    edges = [("root", node_id("baseline"), "dispatch"), ("root", node_id("t1"), "dispatch"),
+             (node_id("t1"), node_id("t2"), "depends_on"), (node_id("t2"), node_id("t3"), "depends_on"),
+             (node_id("baseline"), node_id("gate"), "depends_on"), (node_id("t3"), node_id("gate"), "depends_on"),
+             (node_id("gate"), node_id("review"), "depends_on")]
+    built = graph(nodes, edges, name="인용 영수증 (PR A)", source="dag")
+    built["dag_open"] = True
+    return built
+
+
 class FoldTests(unittest.TestCase):
+    def test_the_layer_that_comes_next_opens_past_the_done_layers_within_the_cap(self) -> None:
+        from omh.tui.agent_view import TREE_ROWS
+
+        app, _client = waiting_app(screenshot_run(), cols=150)
+        shown = [re.sub(r" ·{1,3}$", "", row) for row in rows_of(app)]
+        self.assertLessEqual(len(shown), TREE_ROWS)
+        self.assertEqual(shown[0], "  DAG · 인용 영수증 (PR A) · 6 nodes · 5 edges · 1 parked · 2 waiting · 3 done")
+        self.assertEqual(shown[-1], "  +3 more · /dag", "the done layers' row gave way first, then layer 5")
+        self.assertIn("  ▾ layer 4 · 1 node · 1 waiting", shown, "layer 2 and 3 are done: layer 4 comes next")
+        self.assertTrue([row for row in shown if row.startswith("      · 닫는 게이트: 전체 검사 + 스모크")], shown)
+        self.assertFalse([row for row in shown if "코드 리뷰" in row], "layer 5 stays shut or is counted")
+        self.assertTrue([row for row in rows_of(app) if "닫는 게이트" in row and row.endswith("·")], "and it moves")
+
     """Settled layers fold into one row; only the live layers and the next one open; no blank rows; a cap."""
 
     def big(self) -> dict:
@@ -166,7 +206,9 @@ class FoldTests(unittest.TestCase):
                 self.assertTrue([row for row in shown if "▾ ⠋ Full baseline check" in row], shown)
                 self.assertIn(f"        › waits on {CALL} · until {until()}", shown,
                               "the parked node keeps its wait row; the cut takes the rows after it")
-                self.assertEqual(shown[-1], "  +15 more · /dag", "the 11 done nodes' row gave way first, then layer 8")
+                self.assertEqual(shown[-1], "  +23 more · /dag", "the 11 done nodes gave way first, then layers 6–8")
+                self.assertIn("  ▾ layer 5 · 2 nodes · 2 waiting", [re.sub(r" ·{1,3}$", "", row) for row in shown],
+                              "the layer that comes next stays open")
                 self.assertNotIn("", shown, "no blank row")
 
     def test_a_row_of_done_nodes_gives_way_before_the_parked_nodes_wait(self) -> None:
@@ -183,12 +225,12 @@ class FoldTests(unittest.TestCase):
         shown = rows_of(app)
         self.assertIn(f"        › waits on {CALL} · until {until()}", shown)
         self.assertFalse([row for row in shown if "6 more · 6 done" in row], shown)
-        self.assertEqual(shown[-1], "  +9 more · /dag", "the 3 done layers and the 6 done nodes")
+        self.assertEqual(shown[-1], "  +11 more · /dag", "the 3 done layers, the 6 done nodes, layer 5's 2")
 
     def test_layers_past_the_one_after_a_live_layer_stay_shut(self) -> None:
         app, _client = waiting_app(self.big(), rows=72, cols=160)
         with patch("omh.tui.agent_view.TREE_ROWS", 40):  # room for every row the defaults open
-            shown = rows_of(app)
+            shown = [re.sub(r" ·{1,3}$", "", row) for row in rows_of(app)]  # the waiting dots left off
         self.assertIn("  ▾ layer 5 · 2 nodes · 2 waiting", shown)
         self.assertIn("  ▸ layer 6 · 4 nodes · 4 waiting", shown)
         self.assertIn("  ▸ layer 8 · 4 nodes · 4 waiting", shown)
@@ -210,6 +252,91 @@ class FoldTests(unittest.TestCase):
         self.assertEqual(app.tree_selected, "settled:layer 1")
         app._on_input(Key(LEFT))
         self.assertIn("▸ ✓ layers 1–3 · 3 done", " ".join(rows_of(app)))
+
+
+def tree_text(built: dict, app, folds: dict | None = None, **live: object) -> list[str]:
+    from omh.tui.dag_tree import tree_lines
+
+    lines, _state = tree_lines(built, app.roster, 120, 20, app.theme, 0, folds or {}, None, **live)
+    return ["".join(span.text for span in line).rstrip() for line in lines]
+
+
+class MotionTests(unittest.TestCase):
+    """The owner's second screenshot (the same run 10 minutes on, nothing changed): the rows under a live run move.
+    A waiting row and a shut layer of waiting nodes carry slow dots; the parked and running times count on; done
+    rows, the done layers' row and a run that is not alive stay still."""
+
+    def test_only_waiting_rows_and_shut_waiting_layers_take_the_dots(self) -> None:
+        app, _client = waiting_app()
+        built = owners_run()
+        steps = [tree_text(built, app, beat=beat) for beat in range(3)]
+        moved = [at for at in range(len(steps[0])) if len({step[at] for step in steps}) > 1]
+        waiting = ["      · Wire the receipts check                                          waits on 1 lane ·",
+                   "      · Verify the run                                                   waits on 1 lane ·"]
+        self.assertEqual([steps[0][at] for at in moved], waiting)
+        self.assertEqual([steps[2][at][-4:] for at in moved], [" ···", " ···"], "one to three dots")
+        shut = tree_text(built, app, {"layer:layer 5": False}, beat=1)
+        self.assertIn("  ▸ layer 5 · 2 nodes · 2 waiting ··", shut, "a shut layer of waiting nodes moves too")
+        self.assertIn("  ▸ ✓ layers 1–3 · 3 done", shut, "the done layers' row stays still")
+
+    def test_a_run_that_is_not_alive_draws_no_dots(self) -> None:
+        app, _client = waiting_app()
+        over = owners_run(parked=False)
+        over["dag_open"] = False
+        self.assertEqual(tree_text(over, app, beat=2), tree_text(over, app, beat=None))
+        self.assertFalse([row for row in tree_text(over, app, beat=2) if row.endswith("·")])
+
+    def test_the_parked_and_running_times_count_on_and_the_process_time_shows(self) -> None:
+        app, _client = waiting_app()
+        built = owners_run()
+        running = lane(node_id("t5"), "Draft the docs", "writing", SONNET, "low", "running", elapsed=40, order=9,
+                       group="layer 4")
+        built["nodes"].append(running)
+        built["edges"].append({"from": node_id("t3"), "to": node_id("t5"), "kind": "depends_on"})
+        processes = {PROC: (CALL, PARKED_AT - 519)}
+
+        def at(wall: float, read: float = PARKED_AT + 87) -> str:
+            return "\n".join(tree_text(built, app, wall=wall, received_at=read, processes=processes))
+
+        first, later = at(PARKED_AT + 87), at(PARKED_AT + 88)
+        self.assertIn("parked 1m 27s", first)
+        self.assertIn("parked 1m 28s", later)
+        self.assertIn("running 40s", first)
+        self.assertIn("running 41s", later)
+        self.assertIn(f"waits on {CALL} 10m 06s · until {until()}", first)
+        self.assertIn(f"waits on {CALL} 10m 07s", later)
+        self.assertIn("running 40s", at(PARKED_AT + 88, read=0.0), "a read without its time adds nothing")
+
+    def test_unfocused_the_motion_holds_and_the_times_redraw_once_a_second(self) -> None:
+        from omh.tui.app import IDLE_READ_SECONDS, TICK_SECONDS
+        from omh.tui.panels import HudSnapshot
+
+        clock, wall = [100.0], [PARKED_AT + 87]
+        app, _client = make_app(rows=50, cols=120, clock=lambda: clock[0], wall_clock=lambda: wall[0])
+        app.bg_running = ()
+        with_graph(app, owners_run())
+        app.hud = HudSnapshot(app.hud.session_id, app.hud.payload, PARKED_AT + 87)
+        drawn(app)
+        self.assertTrue(app.tree_state.moves and app.tree_state.clocks)
+        self.assertLessEqual(app._read_timeout(), TICK_SECONDS, "focused: the spinner's pace")
+        app.decoder.unfocused_at = clock[0]
+        before = rows_of(app)
+        clock[0] += 0.5  # half a second: no new second, and the motion holds
+        wall[0] += 0.5
+        self.assertEqual(rows_of(app), before, "unfocused: spinner and dots hold")
+        self.assertFalse(app._tree_spins())
+        timeout = app._read_timeout()
+        self.assertGreater(timeout, TICK_SECONDS, "no wake-up at the spinner's pace while unfocused")
+        self.assertLessEqual(timeout, 1.0)
+        self.assertLess(timeout, IDLE_READ_SECONDS)
+        clock[0] += 0.6
+        wall[0] += 0.6
+        after = rows_of(app)
+        self.assertEqual([row.replace("1m 27s", "1m 28s") for row in before], after,
+                         "only the time moved: the spinner frame and the dots held")
+        app.decoder.unfocused_at = None
+        clock[0] += 0.1
+        self.assertNotEqual(rows_of(app), after, "focus back: the motion goes on")
 
 
 class SpinnerTests(unittest.TestCase):
@@ -245,12 +372,14 @@ class SpinnerTests(unittest.TestCase):
         app.bg_running = ()  # the background row's clock would make a frame due on its own
         drawn(app)
         self.assertFalse(app._busy())
-        self.assertTrue(app.tree_state.spins)
+        self.assertTrue(app.tree_state.moves)
         self.assertLess(app._read_timeout(), IDLE_READ_SECONDS, "the spinner's tick is due")
-        still, _client = waiting_app(owners_run(parked=False))
+        over = owners_run(parked=False)
+        over["dag_open"] = False  # nothing live and the run not open: nothing moves, nothing counts
+        still, _client = waiting_app(over)
         still.bg_running = ()
         drawn(still)
-        self.assertFalse(still.tree_state.spins)
+        self.assertFalse(still.tree_state.moves or still.tree_state.clocks)
         self.assertEqual(still._read_timeout(), IDLE_READ_SECONDS, "nothing turns: no tick")
         reduced, _client = waiting_app(environ={"OMH_TUI_REDUCED_MOTION": "1"})
         self.assertFalse(reduced.motion)

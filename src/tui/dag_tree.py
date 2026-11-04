@@ -30,8 +30,18 @@ thinking line or its reply (`Agent.said`), or Hermes' progress line
 last name is the call the first row already shows gives way to the thinking
 or reply line, or, with none, drops that name (`_second_row`). A parked
 node's one detail row is what its park recorded it waits on (`wait_text`:
-`waits on terminal(uv run …) · until 14:05 · <reason>`), and none when it
-recorded nothing. A node
+`waits on terminal(uv run …) 10m 06s · until 14:05 · <reason>`, the
+process's own running time when the handle is one), and none when it
+recorded nothing.
+
+Motion (the owner, 2026-11-04: the rows under a waiting run sat still for ten
+minutes). The spinner turns on a running or parked node's row; a waiting
+row, and a shut layer of waiting nodes, carries slow faint dots (`·` `··`
+`···`, a step a second), quieter than the spinner; while the window is
+unfocused both hold (`App._held_frame`, #2542's ambience rule). The times on
+a parked or running row count on between two HUD reads (`_ticked`), focused
+or not, so a frame is due each second. Done rows, the done layers' row and a
+run that is not alive (no live node, not `dag_open`) stay still. A node
 a repair or an extend added hangs under the node it came from, as the tree's
 nesting edges say (`delegation_view._tree_structure`), led by `↻ repair N`
 (`+ extend`): N is the node's repair cycle (`cycle`, which the graph copies
@@ -108,6 +118,8 @@ MORE_KEY = "more:"  # + a layer's label: the row that layer's quiet nodes fold i
 SETTLED_KEY = "settled:"  # + the first label of a run of settled layers: the one row they fold into
 OPEN_STATES = frozenset({"running", "stuck", "failed"})  # open by default; a layer holding one is never shut to fit
 LIVE_STATES = OPEN_STATES | {"dispatched"}  # with a parked node: a layer holding one opens, and so does the next
+WAITING_STATES = frozenset({"waiting", "dispatched"})  # a row that waits: the dots after it, while the run is alive
+WAIT_DOTS = 3  # the dot cycle after a waiting row's figures: `·`, `··`, `···`, one step a second (`beat`)
 MIN_TITLE_CELLS = 12
 TITLE_CAP = 52  # a node title's cells at most: a PR title's length, with room left for the figure columns
 SHORT_LABEL = 24  # a label narrower than this reads with its prompt's first clause after it (`node_title`)
@@ -144,7 +156,8 @@ class TreeState:
     agents: Mapping[str, str] = field(default_factory=dict)  # a node's key -> its child's subagent id
     reveals: Mapping[str, str] = field(default_factory=dict)  # a `more` row -> the first node opening it shows
     rows: tuple[str, ...] = ()  # the key each drawn row selects, top to bottom; "" for a row a click does nothing on
-    spins: bool = False  # a drawn row shows the spinner (`_spins`): the loop ticks for it
+    moves: bool = False  # a drawn row shows the spinner or the waiting dots: a tick at the spinner's pace
+    clocks: bool = False  # a drawn row's time counts on (`_ticked`): a frame is due each second
 
 
 def run_key(graph: Mapping[str, Any]) -> str:
@@ -202,16 +215,21 @@ def _parked(node: Mapping[str, Any] | None) -> bool:
     return node is not None and node.get("parked") is True
 
 
-def wait_text(node: Mapping[str, Any], processes: Mapping[str, str]) -> str:
+def wait_text(node: Mapping[str, Any], processes: Mapping[str, tuple[str, float]], wall: float | None = None) -> str:
     """What a parked node waits on, from what its park recorded and nothing else: `waits on <handle>`, the handle
-    named by its call (`terminal(uv run …)`) when it is a background process of the session's (`processes`, by proc
-    id), then `until HH:MM` (its `wake_at`, local time) and its reason; "" when the park recorded none of them."""
+    named by its call and its running time (`terminal(uv run …) 10m 06s`) when it is a background process of the
+    session's (`processes`, by proc id: its call and when it started, at `wall`), then `until HH:MM` (its `wake_at`,
+    local time) and its reason; "" when the park recorded none of them."""
+    from .background import running_text
+
     handle = node.get("wait_handle")
     wake_at = node.get("wake_at")
     reason = node.get("wait_reason")
     said = []
     if isinstance(handle, str) and handle:
-        said.append(f"waits on {processes.get(handle, handle)}")
+        call, started = processes.get(handle, (handle, None))
+        ran = f" {running_text(wall - started)}" if started is not None and wall is not None and wall >= started else ""
+        said.append(f"waits on {call}{ran}")
     if isinstance(wake_at, int | float) and not isinstance(wake_at, bool) and wake_at > 0:
         said.append(f"until {time.strftime('%H:%M', time.localtime(wake_at))}")
     if isinstance(reason, str) and reason:
@@ -220,16 +238,42 @@ def wait_text(node: Mapping[str, Any], processes: Mapping[str, str]) -> str:
 
 
 def _details(agent: Agent | None, node: Mapping[str, Any] | None = None,
-             processes: Mapping[str, str] | None = None) -> tuple[LogRow, ...]:
+             processes: Mapping[str, tuple[str, float]] | None = None, wall: float | None = None) -> tuple[LogRow, ...]:
     """A node's detail rows: what a parked node waits on, alone (its child has finished), else its child's latest
     call and its newest other line."""
     if _parked(node):
-        waits = wait_text(node or {}, processes or {})
+        waits = wait_text(node or {}, processes or {}, wall)
         if waits:
             return (LogRow(LOG_PROGRESS, waits),)  # muted, as Hermes' progress line
     if agent is None:
         return ()
     return tuple(row for row in (agent.last_call, _second_row(agent)) if row is not None)[:DETAIL_ROWS]
+
+
+def _number(value: object) -> float | None:
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+
+
+def _ticked(node: Mapping[str, Any], wall: float | None, received_at: float | None) -> Mapping[str, Any]:
+    """`node` with its time as of `wall` (epoch seconds), so the clock on its row counts on between two HUD reads: a
+    parked node's since it parked, a running or stuck one's as the read gave it plus the time since that read
+    (`received_at`). Any other node, or no `wall`, as the graph has it."""
+    if wall is None:
+        return node
+    parked_at, elapsed = _number(node.get("parked_at")), _number(node.get("elapsed_seconds"))
+    if _parked(node) and parked_at is not None and wall >= parked_at:
+        return {**node, "elapsed_seconds": wall - parked_at}
+    if node.get("state") in ("running", "stuck") and elapsed is not None and received_at and 0 < received_at <= wall:
+        return {**node, "elapsed_seconds": elapsed + wall - received_at}
+    return node
+
+
+def _clocked(item: _Item) -> bool:
+    """Whether a node row's time counts on (`_ticked`)."""
+    node = item.node or {}
+    if _parked(node):
+        return _number(node.get("parked_at")) is not None
+    return item.state in ("running", "stuck") and _number(node.get("elapsed_seconds")) is not None
 
 
 def _agent_node(agent: Agent, now: float) -> dict[str, Any]:
@@ -240,7 +284,8 @@ def _agent_node(agent: Agent, now: float) -> dict[str, Any]:
             "elapsed_seconds": agent.elapsed(now), "output_tokens": agent.output_tokens}
 
 
-def _items(graph: Mapping[str, Any], roster: Roster, now: float, processes: Mapping[str, str]) -> list[_Item]:
+def _items(graph: Mapping[str, Any], roster: Roster, now: float, processes: Mapping[str, tuple[str, float]],
+           wall: float | None = None, received_at: float | None = None) -> list[_Item]:
     from ..plugin_bundle.omh.delegation_view import _state, _tree_structure
 
     _root, groups, nested, by_id = _tree_structure(graph)
@@ -250,8 +295,9 @@ def _items(graph: Mapping[str, Any], roster: Roster, now: float, processes: Mapp
 
     def node_item(node_id: str, depth: int, parent: str, origin: str = "") -> _Item:
         agent = agents.get(node_id)
-        item = _Item(node_id, depth, parent, by_id[node_id], _state(by_id[node_id]), origin=origin, agent=agent,
-                     details=_details(agent, by_id[node_id], processes))
+        node = _ticked(by_id[node_id], wall, received_at)
+        item = _Item(node_id, depth, parent, node, _state(node), origin=origin, agent=agent,
+                     details=_details(agent, node, processes, wall))
         repairs = 0
         for kid in nested.get(node_id, []):
             kind = kinds.get((node_id, kid))
@@ -330,16 +376,27 @@ def _settled_runs(layers: Sequence[_Item]) -> list[_Item]:
     return runs
 
 
-def _opened_layers(layers: Sequence[_Item]) -> set[str]:
-    """The layers open by default: each holding a live node (running, stuck, failed, handed out or parked) and the
-    layer after it, else the first unsettled layer; and the `other agents` group."""
-    live = [at for at, layer in enumerate(layers) if layer.key != OTHERS_KEY and any(
-        each.state in LIVE_STATES or _parked(each.node) for each in _walk(layer.kids))]
-    opened = {layers[at].key for at in live}
-    opened |= {layers[at + 1].key for at in live if at + 1 < len(layers) and not layers[at + 1].settled}
+def _next_layers(layers: Sequence[_Item]) -> set[str]:
+    """The layer that comes next after each layer holding a live node (running, stuck, failed, handed out or
+    parked): the first one after it neither settled nor live itself, so what waits next is in sight; with no live
+    layer, the first unsettled one."""
+    live = [at for at, layer in enumerate(layers) if layer.key != OTHERS_KEY and _live_layer(layer)]
+    found = {next((layer.key for layer in layers[at + 1:] if not layer.settled and layer.key != OTHERS_KEY
+                   and not _live_layer(layer)), "") for at in live}
     if not live:
-        opened |= {next((layer.key for layer in layers if not layer.settled), OTHERS_KEY)}
-    return opened | {OTHERS_KEY}
+        found.add(next((layer.key for layer in layers if not layer.settled and layer.key != OTHERS_KEY), ""))
+    return found - {""}
+
+
+def _live_layer(layer: _Item) -> bool:
+    return any(each.state in LIVE_STATES or _parked(each.node) for each in _walk(layer.kids))
+
+
+def _opened_layers(layers: Sequence[_Item]) -> set[str]:
+    """The layers open by default: each holding a live node, the layer that comes next after them
+    (`_next_layers`), and the `other agents` group."""
+    return {layer.key for layer in layers if layer.key != OTHERS_KEY and _live_layer(layer)} | _next_layers(layers) | {
+        OTHERS_KEY}
 
 
 def _quiet(layer: _Item) -> list[_Item]:
@@ -404,8 +461,9 @@ def _fitted(layers: Sequence[_Item], overrides: Mapping[str, bool], cap: int) ->
     if fits():
         return expanded
     labelled = _labelled(layers)
+    nexts = _next_layers(layers)  # what waits next stays open: the cut takes the rows below it instead
     quiet = [layer for layer in layers if labelled and layer.key not in overrides and expanded[layer.key]
-             and not _active(layer)]
+             and not _active(layer) and layer.key not in nexts]
     quiet.sort(key=lambda layer: not all(item.state == "done" for item in _walk(layer.kids)))  # all-done ones first
     for layer in quiet:
         expanded[layer.key] = False
@@ -499,8 +557,14 @@ def _columns(rows: Sequence[tuple[_Item, bool]], width: int) -> _Columns:
     return _Columns(min(title, width), (), ())
 
 
+def _waits(item: _Item) -> bool:
+    """Whether a node row waits (on its dependencies, or for its child to start): the dots go after it."""
+    return item.node is not None and item.state in WAITING_STATES and not _parked(item.node)
+
+
 def _node_row(
     item: _Item, expanded: bool, width: int, theme: Theme, frame: int, columns: _Columns, aura: int | None = None,
+    beat: int | None = None,
 ) -> list[Span]:
     from ..plugin_bundle.omh.delegation_view import UNICODE
 
@@ -527,9 +591,12 @@ def _node_row(
     pad = " " * max(room - cell_width(title), 0)
     shown = (aura_text(title, theme.aura, theme.aura_glint, aura) if aura is not None and item.state == "running"
              else [Span(title, dag_style("title", theme))])
+    # A waiting row's slow dots, quieter than the spinner: one to three, a step a second, in the faint tone.
+    dots = "·" * (beat % WAIT_DOTS + 1) if beat is not None and _waits(item) else ""
     return [
         Span(lead), Span(triangle, theme.muted), Span(glyph, dag_style(f"glyph:{item.state}", theme)), Span(" "),
         Span(origin, theme.muted), *shown, Span(f"{pad}  {figure}" if figure else "", theme.muted),
+        *([Span(f" {dots}" if figure else f"{pad}  {dots}", theme.faint)] if dots else []),
     ]
 
 
@@ -542,9 +609,10 @@ def _detail_row(item: _Item, row: LogRow, theme: Theme) -> list[Span]:
     return [*lead, Span(row.text, style)]
 
 
-def _layer_row(item: _Item, expanded: bool, theme: Theme, hidden: int = 0) -> list[Span]:
+def _layer_row(item: _Item, expanded: bool, theme: Theme, hidden: int = 0, beat: int | None = None) -> list[Span]:
     """`▾ layer 2 · 4 nodes · 2 running`; `hidden` nodes the graph reader left out of the layer read as
-    `28 of 640 nodes`, so a capped graph's counts are not taken for the layer's."""
+    `28 of 640 nodes`, so a capped graph's counts are not taken for the layer's. A shut layer whose nodes wait
+    carries the waiting dots (`beat`), as their own rows would."""
     counts: dict[str, int] = {}
     for kid in item.kids:
         word = "running" if kid.state in ("running", "stuck") else "parked" if _parked(kid.node) else kid.state
@@ -556,8 +624,11 @@ def _layer_row(item: _Item, expanded: bool, theme: Theme, hidden: int = 0) -> li
     said = [f"{shown} {noun}{'' if total == 1 else 's'}"]
     said += [f"{counts[word]:,} {word}" for word in ("running", "parked", "failed", "waiting", "done")
              if counts.get(word)]
+    dots = "·" * (beat % WAIT_DOTS + 1) if beat is not None and not expanded and any(
+        _waits(kid) for kid in _walk(item.kids)) else ""
     return [Span(DAG_INDENT), Span(OPEN if expanded else SHUT, theme.muted),
-            Span(FACT_SEPARATOR.join([item.label or "lanes", *said]), theme.muted)]
+            Span(FACT_SEPARATOR.join([item.label or "lanes", *said]), theme.muted),
+            *([Span(f" {dots}", theme.faint)] if dots else [])]
 
 
 def _settled_row(run: _Item, expanded: bool, theme: Theme) -> list[Span]:
@@ -614,17 +685,25 @@ def tree_lines(
     depth: str = TRUECOLOR,
     now: float = 0.0,
     aura: int | None = None,
-    processes: Mapping[str, str] | None = None,
+    processes: Mapping[str, tuple[str, float]] | None = None,
+    wall: float | None = None,
+    received_at: float | None = None,
+    beat: int | None = None,
 ) -> tuple[list[Line], TreeState]:
     """The tree in `cap` rows at most, none wider than `width`, painted at `depth` as the graph is everywhere
     (`style.color_depth`), and what the keys need from it; `selected` (a key of the state's `order`) is the
     row marked with the menus' pointer and drawn in `menu_current` while the tree has the keys, else None. `aura` is the phase a running node's
     title stands at in the dag-ulw aura; None (the aura does not move here) draws it as every title is drawn.
-    `processes` names the session's running background processes by proc id (`terminal(uv run …)`), for what a parked
-    node waits on."""
+    `processes` names the session's running background processes by proc id, their call (`terminal(uv run …)`) and
+    when they started, for what a parked node waits on. With `wall` (epoch seconds) a parked or running node's time
+    counts on from the HUD read at `received_at` (`_ticked`). `beat` is the waiting dots' step (whole seconds; None:
+    no dots), drawn only while the run is alive (a node live, or `dag_open`)."""
     from ..plugin_bundle.omh.delegation_view import header_text
 
-    layers = _items(graph, roster, now, processes or {})
+    layers = _items(graph, roster, now, processes or {}, wall, received_at)
+    alive = graph.get("dag_open") is True or any(
+        item.state in LIVE_STATES or _parked(item.node) for item in _walk(layers) if item.node is not None)
+    beat = beat if alive else None
     runs = _settled_runs(layers)
     expanded = _fitted(layers, overrides, cap)
     specs = list(_specs(layers, expanded))
@@ -640,9 +719,9 @@ def tree_lines(
             spans = _settled_row(item, expanded[item.key], theme)
         elif kind == "layer":
             hidden = hidden_by_group.get(item.label, 0)
-            spans = _layer_row(item, expanded[item.key], theme, hidden if isinstance(hidden, int) else 0)
+            spans = _layer_row(item, expanded[item.key], theme, hidden if isinstance(hidden, int) else 0, beat)
         elif kind == "node":
-            spans = _node_row(item, expanded[item.key], width, theme, frame, columns, aura)
+            spans = _node_row(item, expanded[item.key], width, theme, frame, columns, aura, beat)
         elif kind == "more":
             spans = _more_row(detail, theme)
         else:
@@ -677,8 +756,12 @@ def tree_lines(
     )
     shown = _window(rows, cap, selected, partial(_more, theme=theme, depth=depth))
     keys = tuple(key for _line, key in shown)
-    spins = any(_spins(item) for item in every if item.key in keys)
-    return [line for line, _key in shown], replace(state, rows=keys, spins=spins)
+    drawn = [item for item in every if item.node is not None and item.key in keys]
+    shut = [item for item in every if item.node is None and item.key in keys and not expanded.get(item.key)]
+    moves = any(_spins(item) or beat is not None and _waits(item) for item in drawn) or beat is not None and any(
+        _waits(kid) for layer in shut for kid in _walk(layer.kids))
+    return [line for line, _key in shown], replace(state, rows=keys, moves=moves,
+                                                   clocks=any(_clocked(item) for item in drawn))
 
 
 # A row as `_window` cuts it: (line, the key it selects or "", the nodes it stands for, `YIELDS` or "").
@@ -691,8 +774,9 @@ def _counted(rows: Sequence[_Row]) -> int:
 
 def _window(rows: list[_Row], cap: int, selected: str | None, more: Callable[..., Line]) -> list[tuple[Line, str]]:
     """`rows` in `cap` rows, each with the key it selects: all of them when they fit. Else the done rows (a shut
-    all-done layer, a run of settled layers, a `more` row of done nodes) yield first, wherever they stand, with the keys or without (the
-    highlighted row itself never does), so running and failed nodes keep the rows and Down moves nothing. Then, without
+    all-done layer, a run of settled layers, a `more` row of done nodes) yield first, wherever they stand, with the
+    keys or without (the highlighted row itself never does), so running and failed nodes keep the rows and Down moves
+    nothing. Then, without
     the keys, the rows from the bottom, a last row counting what is cut (`+N more · /dag`); with them, the same rows
     while they show the highlight, else the rows around it between counts of what is above and below. A count that
     holds a yielded row from the other side of it, or from between the rows shown, says `↑↓ to browse`."""

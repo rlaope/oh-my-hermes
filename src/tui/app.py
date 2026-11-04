@@ -2064,6 +2064,7 @@ class App(ModesMixin, AgentViewMixin):
         self.tree_selected: str | None = None  # the dag tree's highlighted row while the tree has the keys
         self.tree_folds: dict[str, bool] = {}  # the dag tree's rows the person folded (False) or opened (True)
         self.tree_run = ""  # the run those folds belong to (`dag_tree.run_key`); a new run, or session, starts none
+        self.tree_second = -1  # the whole wall second the tree's clocks were last drawn at (`_tree_second_due`)
         self.tree_state: TreeState | None = None  # what the tree's keys need, as the agent view last drew it
         # The dag run that is over, which the view no longer draws, and when its graph had last moved (`_run_gone`)
         self.retired_run: tuple[str, float] | None = None
@@ -2640,6 +2641,8 @@ class App(ModesMixin, AgentViewMixin):
             due.append(self.last_render + self._tick_seconds())
         if self.redraw_at is None and (background := self._background_due_at()) is not None:
             due.append(background)  # the background row's clock: once a second, on the second
+        if self.redraw_at is None and (tree := self._tree_second_due_at()) is not None:
+            due.append(tree)  # the times on the dag tree's rows, the same way
         if self.redraw_at is None and self._wallpaper_moves():
             due.append(self.ambient_at + WALLPAPER_TICK_SECONDS)
         if self.path_due is not None and self.sid:
@@ -7093,9 +7096,21 @@ class App(ModesMixin, AgentViewMixin):
         return isinstance(payload, Mapping) and bool(payload.get("active"))
 
     def _tree_spins(self) -> bool:
-        """Whether the dag tree the last frame drew shows a spinner (a running or parked node, `dag_tree._spins`) that
-        turns: with motion on, also between turns while the run waits."""
-        return self.motion and self.tree_state is not None and self.tree_state.spins
+        """Whether the dag tree the last frame drew moves (a running or parked node's spinner, a waiting row's dots,
+        `dag_tree.TreeState.moves`): with motion on and the window focused, also between turns while the run waits.
+        Unfocused its motion holds (`_ambient_clock`), so nothing ticks for it at the spinner's pace."""
+        return (self.motion and self.decoder.unfocused_at is None and self.tree_state is not None
+                and self.tree_state.moves)
+
+    def _tree_second_due_at(self) -> float | None:
+        """When, on the loop's clock, a time on the tree's rows next shows another second (`TreeState.clocks`, the
+        content that counts on focused or not); None without one."""
+        if self.tree_state is None or not self.tree_state.clocks:
+            return None
+        return self.clock() + 1.0 - self.wall_clock() % 1.0
+
+    def _tree_second_due(self) -> bool:
+        return self.tree_state is not None and self.tree_state.clocks and int(self.wall_clock()) != self.tree_second
 
     def _aura_live(self) -> bool:
         """Whether the composer's `dag-ulw` aura moves now (`aura`): a token in the draft it draws, at the truecolor
@@ -7282,7 +7297,7 @@ class App(ModesMixin, AgentViewMixin):
         now = self.clock()
         due = (self._busy() or self._compressing_since() is not None or self._panel_live() or self._aura_live()
                or self._tree_spins() or bool(self.held_submits)) and now - self.last_render >= self._tick_seconds()
-        if not (self.dirty or due or self._background_due()):
+        if not (self.dirty or due or self._background_due() or self._tree_second_due()):
             if self._wallpaper_moves() and now - self.ambient_at >= WALLPAPER_TICK_SECONDS:
                 self.ambient_at = now  # only the wallpaper's cells that moved: no frame is built
                 self.region.paint_ambient(self._ambient() or (), self.size[1])
@@ -7651,6 +7666,11 @@ class App(ModesMixin, AgentViewMixin):
     def _spinner_frame(self) -> int:
         """The frame every spinner and sweep shows now; the first, always, with reduced motion."""
         return int(self.clock() / TICK_SECONDS) if self.motion else 0
+
+    def _held_frame(self) -> int:
+        """The spinner's frame at `_ambient_clock`: as `_spinner_frame` while the window has focus, held at the
+        moment it lost it while not (the dag tree's motion, `agent_view._tree_view`)."""
+        return int(self._ambient_clock() / TICK_SECONDS) if self.motion else 0
 
     def _tick_seconds(self) -> float:
         """How often the loop paints while something moves: each spinner step, once a second with reduced motion."""
