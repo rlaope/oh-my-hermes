@@ -104,7 +104,17 @@ from .diff_view import DIFF_FILE, FILE_ARROW, DiffLine, diff_rows, parse_inline_
 from .gateway import Event
 from . import gateway_contract as contract
 from .gateway_contract import TOOL_CALL_BRIDGE
-from .markdown import GrowingLine, MarkdownState, clean_text, render_growing, render_lines, wrap_prefixed
+from .markdown import (
+    GrowingLine,
+    MarkdownState,
+    is_table_divider_cells,
+    split_table_row,
+    table_block,
+    clean_text,
+    render_growing,
+    render_lines,
+    wrap_prefixed,
+)
 from .style import NO_COLOR, Line, Span, Style, fill
 from .slash import slash_spans, slash_token_ranges
 from .theme import TOOL_FAMILIES, Theme, kind_style, on_band
@@ -406,8 +416,15 @@ def _display_lines(text: str) -> list[str]:
 
 
 def _stable_lines(text: str) -> list[str]:
-    """The source lines that can no longer change: complete ones, minus trailing blanks."""
-    return _without_trailing_blanks(_source_lines(text)[:-1])
+    """The source lines that can no longer change: complete ones, minus trailing blanks.
+
+    A trailing run of `|` lines is held back too: a header is decided only
+    once its divider has arrived, and taken rows are never repainted.
+    """
+    lines = _without_trailing_blanks(_source_lines(text)[:-1])
+    while lines and lines[-1].strip().startswith("|"):
+        lines.pop()
+    return lines
 
 
 def _extension(streamed: str, text: str) -> str | None:
@@ -1798,6 +1815,9 @@ class Transcript:
         self.activity = ""
         self.status = ""
         self.moa = ""
+        # Guarantee the done block re-renders rather than serving a
+        # streaming-era live cache row.
+        self._version += 1
 
     def _on_thinking_delta(self, payload: dict[str, Any]) -> None:
         self.activity = _first_line(as_text(payload.get("text")))
@@ -2089,7 +2109,33 @@ class Transcript:
 
     def _growing_rows(self, sources: list[str], width: int, theme: Theme) -> list[Line]:
         """The rows of a reply's untaken `sources`, the last of them the line still streaming: drawn through
-        `_growing`, so a frame wraps only that line's last rows (`render_growing`)."""
+        `_growing`, so a frame wraps only that line's last rows (`render_growing`).
+
+        A trailing run of `|` lines whose next line is its divider renders as
+        the table it is, re-derived from `sources` every frame.
+        """
+        # The maximal trailing run of `|` lines, in source order.
+        run_at = len(sources)
+        while run_at > 0 and sources[run_at - 1].strip().startswith("|"):
+            run_at -= 1
+        if run_at < len(sources):
+            rows, state = render_lines(sources[:run_at], self._cursor_state, width, theme)
+            if not state.in_fence and run_at + 1 < len(sources) and is_table_divider_cells(
+                split_table_row(sources[run_at + 1])
+            ):
+                table_rows, consumed = table_block(sources[run_at:], 0, width, theme)
+                rows.extend(table_rows)
+                rest = sources[run_at + consumed :]
+                if rest:
+                    extra, _state = render_lines(rest, replace(state, list_indent=0), width, theme)
+                    rows.extend(extra)
+                return rows
+            # Not decidable as a table yet (no divider behind the header, or
+            # inside a fence): fall through to the normal growing render.
+            rows, state = render_lines(sources[:-1], self._cursor_state, width, theme)
+            if sources:
+                rows += render_growing(sources[-1], state, width, theme, self._growing)[0]
+            return rows
         rows, state = render_lines(sources[:-1], self._cursor_state, width, theme)
         if sources:
             rows += render_growing(sources[-1], state, width, theme, self._growing)[0]
