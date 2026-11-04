@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+from unittest.mock import patch
 
 from _cli_harness import run_cli
 from _local_package import load_local_package
@@ -33,6 +34,7 @@ from omh.plugin_bundle.omh.memory_recall_settings import (  # noqa: E402
     read_recall_line_setting,
     read_recall_mode_setting,
 )
+from omh.plugin_bundle.omh.memory_session_lens import lens_profile_home, session_lens_path  # noqa: E402
 from omh.plugin_bundle.omh.tools.memory_tool import omh_remember_handler  # noqa: E402
 from test_memory_messenger import DISCORD_OWNER, SLACK_DM, SLACK_OWNER, TELEGRAM_OWNER, _Messenger  # noqa: E402
 from test_memory_prefetch_canonical import rendered_ids  # noqa: E402
@@ -204,6 +206,106 @@ class RecallModeTests(_Switches):
         from omh.plugin_bundle.omh.memory_dreaming import configured_dreaming_mode
 
         self.assertEqual(configured_dreaming_mode(self.hermes), "reminder")
+
+
+class ToolRecallProfileHomeTests(_Switches):
+    """Tool recall reads `recall_mode` where the provider does: the profile home it was given.
+
+    Before, the tool read the process's `HERMES_HOME`, so a provider bound to
+    one profile and a tool reading another disagreed about whether recall was
+    off (rev-2534).
+    """
+
+    def recall(self, session_id: str) -> dict:
+        return json.loads(omh_remember_handler({"action": "recall", "query": "billing service deploy"}, session_id=session_id, cwd=str(self.workspace)))
+
+    def test_tool_recall_follows_the_providers_profile_not_the_process_home(self) -> None:
+        records = self.seed()
+        launch = self.hermes.parent / "launch-home"
+        launch.mkdir()
+        for profile_mode, launch_mode in (("off", "auto"), ("auto", "off")):
+            with self.subTest(profile=profile_mode, launch=launch_mode):
+                self.settings(recall_mode=profile_mode)
+                (launch / "config.yaml").write_text(
+                    f"plugins:\n  entries:\n    omh:\n      settings:\n        recall_mode: {launch_mode}\n", encoding="utf-8", newline="\n"
+                )
+                session_id = f"tui-profile-{profile_mode}"
+                with patch.dict(os.environ, {"HERMES_HOME": str(launch)}):
+                    self.on("tui", session_id)
+                    recalled = self.recall(session_id)
+                if profile_mode == "off":
+                    self.assertEqual((recalled["status"], recalled["reason"]), ("refused", "recall_disabled"), recalled)
+                else:
+                    self.assertEqual(recalled["status"], "found", recalled)
+                    self.assertEqual([row["record_id"] for row in recalled["records"]], [records["tui"]])
+
+    def test_a_profile_home_that_is_not_an_absolute_path_is_not_read(self) -> None:
+        self.assertEqual(lens_profile_home({"profile_home": str(self.hermes)}), self.hermes)
+        for written in ("relative/hermes-home", "", None, 7, f"{self.hermes}\x00x"):
+            with self.subTest(profile_home=written):
+                self.assertIsNone(lens_profile_home({"profile_home": written}))
+        self.assertIsNone(lens_profile_home({}))
+
+    def test_a_lens_that_names_no_profile_home_keeps_the_process_home(self) -> None:
+        self.seed()
+        self.on("tui", "tui-old-lens")
+        path = session_lens_path(self.home, "tui-old-lens")
+        lens = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(lens["profile_home"], str(self.hermes))
+        del lens["profile_home"]  # as a provider before this field wrote it
+        path.write_text(json.dumps(lens), encoding="utf-8", newline="\n")
+        self.settings(recall_mode="off")
+        self.assertEqual(self.recall("tui-old-lens")["reason"], "recall_disabled", "HERMES_HOME is this profile in the harness")
+
+
+class CaptureHintRecallSettingTests(_Switches):
+    """A capture hint says a record "recalls" only where a turn is served records unasked (rev-2531)."""
+
+    OLD, NEW = "The staging database runs postgres 16", "The staging database runs postgres 17"
+
+    def hinted(self, session_id: str) -> tuple[str, dict]:
+        self.on("tui", session_id)
+        held = str(self.capture(session_id, self.OLD)["record_id"])
+        result = self.capture(session_id, self.NEW)
+        self.assertEqual(result["similar_record_id"], held, result)
+        return held, result
+
+    def test_under_auto_the_hint_names_what_recalls(self) -> None:
+        held, result = self.hinted("tui-hint-auto")
+        self.assertEqual(sorted(result["recalls_now"]), sorted([held, result["record_id"]]))
+        self.assertIn(f"{result['record_id']} recalls, {held} recalls.", result["next_action"])
+
+    def test_with_per_turn_recall_off_nothing_is_said_to_recall(self) -> None:
+        # The last case puts the process's Hermes home on a profile at `auto`
+        # while the provider's profile says `on_demand`: the hint must read
+        # the provider's, as tool recall does (`ToolRecallProfileHomeTests`).
+        launch = self.hermes.parent / "launch-home"
+        launch.mkdir()
+        (launch / "config.yaml").write_text(
+            "plugins:\n  entries:\n    omh:\n      settings:\n        recall_mode: auto\n", encoding="utf-8", newline="\n"
+        )
+        for mode, process_home in (("on_demand", self.hermes), ("off", self.hermes), ("on_demand", launch)):
+            with self.subTest(recall_mode=mode, process_home=process_home.name):
+                self.settings(recall_mode=mode)
+                try:
+                    with patch.dict(os.environ, {"HERMES_HOME": str(process_home)}):
+                        held, result = self.hinted(f"tui-hint-{mode}-{process_home.name}")
+                    self.assertEqual(result["recalls_now"], [])
+                    self.assertIn("per-turn recall is off for this profile, so neither recalls.", result["next_action"])
+                    self.assertNotIn(f"{held} recalls", result["next_action"])
+                    self.assertIn(f"record_id='{held}'", result["next_action"], "the correct instruction is unchanged")
+                finally:
+                    # Each case starts from an empty store, so one failure cannot hint at the next case's records.
+                    for path in (self.home / "memory" / "records").glob("*.json"):
+                        path.unlink()
+
+    def test_correcting_to_the_held_record_still_works_under_on_demand(self) -> None:
+        # The hint's wording follows the setting; whether the held record can
+        # stand in for the corrected one does not (`_held_replacement_refusal`).
+        self.settings(recall_mode="on_demand")
+        held, result = self.hinted("tui-hint-correct")
+        corrected = self.tool("correct", "tui-hint-correct", record_id=held, summary=self.NEW)
+        self.assertEqual((corrected["status"], corrected["replacement"]), ("corrected", "already_held"), corrected)
 
 
 class MemoryModeOffTests(_Switches):
