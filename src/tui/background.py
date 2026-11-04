@@ -98,8 +98,13 @@ TOOL_NAME = "terminal"  # the tool that starts a background process
 DONE_GLYPH = "✓"
 REPORT_KEY = "↵"
 REPORT_WORDS = " report result"
-WILL_PING = "🔔 will ping you when done"
-WILL_PING_MATCH = "🔔 will ping you on a match"
+# Between turns, a process Hermes will wake the session for is what the session waits on (the owner, 2026-11-05:
+# "알람기다린다는거를 표현할게 있냐"): `◜ waiting on  terminal(…)  21m 04s`, a quarter arc going round, a quarter on
+# each second. One cell, in the row's own colour (an alarm emoji takes two and no theme colour), and the four come
+# from one font: JetBrains Mono, the owner's, has none of them, where it has only one of the clock faces `◴◷◶◵`, and
+# a cycle drawn from two fonts jumps in weight.
+ALERT_GLYPHS = "◜◝◞◟"
+WAITING_WORDS = "waiting on"
 NO_PING = "🔕 "
 NO_PING_WORDS = "Hermes won't be pinged · "
 WATCHER = "OMH"
@@ -339,30 +344,35 @@ def _watching(theme: Theme) -> tuple[Span, ...]:
     return (*mark, Span(WATCHER_WORDS, words))
 
 
+def alert_wait(process: BackgroundProcess, turn_runs: bool) -> bool:
+    """Whether the session waits on `process` for its alert: no turn runs and Hermes wakes the session when it ends
+    (`notify_on_complete`) or on a matching line (`watch_patterns`), as its checkpoint recorded. Never read from what
+    the model said."""
+    return not turn_runs and (process.notify or process.watched)
+
+
 def running_forms(
     process: BackgroundProcess, *, more: int, now: float, glyph: str, turn_runs: bool, theme: Theme
 ) -> tuple[Line, ...]:
     """`<glyph> background  terminal(<label>)  1h 07m 13s`, then who will be told when it ends: nothing while a turn
-    runs (the model may be waiting on it), `🔔 will ping you…` when Hermes will wake the session, else
+    runs (the model may be waiting on it). Between turns, a process Hermes will wake the session for is the wait
+    itself (`alert_wait`): `◜ waiting on  terminal(<label>)  21m 04s`, `glyph` one of `ALERT_GLYPHS`. Else
     `🔕 Hermes won't be pinged · OMH is watching it`, or, where OMH cannot ask whether it still runs (`askable`),
     `🔕 won't ping you · ask Hermes for the result`. `more` counts the session's other running processes. Its forms,
     longest first (`_forms`)."""
     word = theme.background_word
+    waits = alert_wait(process, turn_runs)
 
     def left(label: str | None) -> Line:
         return (
-            Span(glyph, word), Span(" "), Span(BACKGROUND_WORD, word),
+            Span(glyph, word), Span(" "), Span(WAITING_WORDS if waits else BACKGROUND_WORD, word),
             *((Span("  "), *_call(label, theme)) if label is not None else ()),
             Span(f"  {running_text(now - process.started_at)}", theme.faint),
             *((Span(f"  +{more} more", theme.muted),) if more else ()),
         )
 
-    if turn_runs:
+    if turn_runs or waits:
         right: Line = ()
-    elif process.notify:
-        right = (Span(WILL_PING, theme.ok),)
-    elif process.watched:
-        right = (Span(WILL_PING_MATCH, theme.ok),)
     elif askable(process):
         right = (Span(NO_PING, theme.warn), Span(NO_PING_WORDS, theme.warn), *_watching(theme))
     else:

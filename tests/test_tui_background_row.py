@@ -29,6 +29,7 @@ from _tui_lines import badge_text, line_text
 from test_tui_modes import SID, drawn, make_app, type_text
 
 from omh.tui.app import IDLE_READ_SECONDS, WORKING_GLYPHS
+from omh.tui.background import ALERT_GLYPHS
 from omh.tui.background import (
     LABEL_CELLS, PROCESSES_FILE, PROCESSES_MAX_BYTES, BackgroundProcess, finished_forms, process_label,
     read_processes, report_prompt, running_forms, still_running,
@@ -868,13 +869,47 @@ class RowTests(unittest.TestCase):
                                                      "terminal(uv run python -m unittest tests…)",
                                                      "1h 07m 13s"])
 
-    def test_after_the_turn_it_says_hermes_will_ping_when_notify_is_on(self) -> None:
-        self.deliver(process(notify=True))
-        self.assertTrue(self.shown().endswith("  🔔 will ping you when done"), self.shown())
+    def test_after_the_turn_a_process_that_wakes_the_session_is_what_it_waits_on(self) -> None:
+        # The owner, 2026-11-05 ("알람기다린다는거를 표현할게 있냐"): between turns, a process Hermes wakes the session
+        # for (`notify_on_complete`, or `watch_patterns` on a match) is the wait itself, from the checkpoint's flags
+        # alone: one indicator, its arc turning, its clock ticking, and no words after it.
+        for fields in ({"notify": True}, {"watched": True}):
+            with self.subTest(**fields):
+                self.deliver(process(**fields))
+                glyph = ALERT_GLYPHS[int(self.clock.at) % len(ALERT_GLYPHS)]
+                call = "terminal(uv run python -m unittest tests…)"
+                self.assertEqual(self.shown(), f"{glyph} waiting on  {call}  1h 07m 13s")
 
-    def test_watch_patterns_wake_the_session_on_a_match_not_on_exit(self) -> None:
-        self.deliver(process(watched=True))
-        self.assertTrue(self.shown().endswith("  🔔 will ping you on a match"), self.shown())
+    def test_the_wait_turns_a_quarter_each_second_and_its_clock_ticks(self) -> None:
+        self.deliver(process(notify=True))
+        seen = []
+        for _second in range(len(ALERT_GLYPHS)):
+            shown = self.shown()
+            seen.append((shown[0], shown.rsplit("  ", 1)[-1]))
+            self.clock.at += 1
+            self.wall.at += 1
+            self.deliver(process(notify=True))
+        self.assertEqual({glyph for glyph, _clock in seen}, set(ALERT_GLYPHS), "the arc goes round")
+        self.assertEqual([clock for _glyph, clock in seen], ["1h 07m 13s", "1h 07m 14s", "1h 07m 15s", "1h 07m 16s"])
+
+    def test_unfocused_the_arc_holds_and_the_clock_keeps_counting(self) -> None:
+        self.deliver(process(notify=True))
+        self.app.decoder.unfocused_at = self.clock.at
+        first = self.shown()
+        self.clock.at += 2
+        self.wall.at += 2
+        self.deliver(process(notify=True))
+        later = self.shown()
+        self.assertEqual(later[0], first[0], "the arc holds")
+        self.assertTrue(later.endswith("1h 07m 15s"), later)
+
+    def test_during_a_turn_and_for_a_process_that_wakes_nothing_the_row_is_as_before(self) -> None:
+        self.app.turn_pending = True
+        self.deliver(process(notify=True))
+        self.assertTrue(self.shown().startswith(f"{GLYPH} background  terminal("), self.shown())
+        self.app.turn_pending = False
+        self.deliver(process())
+        self.assertTrue(self.shown().endswith("  🔕 Hermes won't be pinged · OMH is watching it"), self.shown())
 
     def test_with_nothing_to_wake_the_session_it_says_omh_is_watching(self) -> None:
         self.deliver(process())
@@ -913,8 +948,8 @@ class RowTests(unittest.TestCase):
         self.app.git = SimpleNamespace(state=GitState("main", 0, 0), refresh=lambda: None, stop=lambda: None)
         self.deliver(process(notify=True))
         info = info_row(drawn(self.app))
-        self.assertTrue(info.startswith(f"  {badge_text()}  branch:main  {GLYPH} background  terminal("), info)
-        self.assertIn("  🔔 will ping you when done", info)
+        glyph = ALERT_GLYPHS[int(self.clock.at) % len(ALERT_GLYPHS)]
+        self.assertTrue(info.startswith(f"  {badge_text()}  branch:main  {glyph} waiting on  terminal("), info)
 
     def test_the_finished_row_offers_enter_on_the_info_line(self) -> None:
         self.wide()
@@ -1353,9 +1388,11 @@ class StyleTests(unittest.TestCase):
         with patch("omh.tui.background.ON_POSIX", False):  # off POSIX no host process can be asked either
             self.assertIn("ask Hermes for the result", text(self.running()))
 
-    def test_will_ping_is_ok(self) -> None:
-        styles = {span.text: span.style for span in self.running(notify=True)}
-        self.assertEqual(styles["🔔 will ping you when done"], self.theme.ok)
+    def test_the_wait_is_in_the_rows_own_colour(self) -> None:
+        line = self.running(notify=True)
+        styles = {span.text: span.style for span in line}
+        self.assertEqual(styles["waiting on"], self.theme.background_word)
+        self.assertFalse([span for span in line if "🔔" in span.text or "will ping" in span.text])
 
     def test_the_finished_row_is_ok_and_its_key_bold(self) -> None:
         line = self.finished()[0]

@@ -212,7 +212,9 @@ from .panels import (
     plan_text,
 )
 from .dag_pager import DagPager
-from .background import BackgroundProcess, askable, finished_forms, report_prompt, running_forms, tool_call
+from .background import (
+    ALERT_GLYPHS, BackgroundProcess, alert_wait, askable, finished_forms, report_prompt, running_forms, tool_call,
+)
 from .clipboard import COPY_OSC52, COPY_PBCOPY, SSH_VARIABLES, copy_route, pbcopy, tmux_client_over_ssh
 from .prompts import CLOSED_CHOICES, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
 from .faults import FaultLog
@@ -7023,6 +7025,9 @@ class App(ModesMixin, AgentViewMixin):
         # The glyph steps with the clock beside it, on the same second, so the row alone never needs a faster frame.
         step = max(0, int(self.wall_clock() - shown.started_at)) if self.motion else 0
         glyph = WORKING_GLYPHS[step % len(WORKING_GLYPHS)]
+        if alert_wait(shown, self._busy()):
+            # The wait's clock hand: a quarter each second, held while the window is unfocused (#2542's ambience).
+            glyph = ALERT_GLYPHS[int(self._ambient_clock()) % len(ALERT_GLYPHS)] if self.motion else ALERT_GLYPHS[0]
         return running_forms(
             shown, more=len(self.bg_running) - 1, now=self.wall_clock(), glyph=glyph, turn_runs=self._busy(),
             theme=self.theme,

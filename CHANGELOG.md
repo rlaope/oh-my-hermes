@@ -35,7 +35,14 @@ All notable changes will be documented here.
   session's dag run is open now records that run's id (`dag_run`; an advance
   keeps it). While that run's tree is drawn under the composer, the plan is
   one line, `[Plan] 4/6 ▸ <current item>`, and Ctrl+P leaves it as it is. Any
-  other plan is drawn as before.
+  other plan is drawn as before. Between turns, a background process Hermes
+  will wake the session for (`notify_on_complete`, or `watch_patterns` on a
+  match) is shown on the info line as what the session waits on:
+  `◜ waiting on  terminal(<command>)  21m 04s`. The arc turns a quarter
+  every second and the clock ticks. It replaces `🔔 will ping you when done`
+  and `🔔 will ping you on a match`. A process that wakes nothing keeps its
+  `🔕` wording, and the state is read from the process's flags, never from
+  what the model said.
 - **The OMH TUI's working glow is removed.** The light that went round the
   screen's edge while a turn ran read as too big and uncomfortable, and its
   trail framed the screen so the terminal's padding outside it looked like a
