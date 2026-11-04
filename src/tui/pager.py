@@ -81,6 +81,8 @@ class Pager:
     # What the last frame left on each screen row (the line and its bytes), and the size it was drawn at.
     _painted: dict[int, tuple[Line, str]] = field(default_factory=dict, init=False, repr=False, compare=False)
     _size: tuple[int, int] | None = field(default=None, init=False, repr=False, compare=False)
+    # The look's ground the last frame erased on (`screen.on_ground`), None for none.
+    _ground: str | None = field(default=None, init=False, repr=False, compare=False)
     _shown: list[Line] = field(default_factory=list, init=False, repr=False, compare=False)  # the last frame's page
     # The selection's first and last cell as the mouse made them (either can be the earlier one), whether a drag is
     # still making it, the press the button is still down for (its cell and its click count) and whether the
@@ -217,14 +219,15 @@ class Pager:
         position = f"{self.top + 1 if self.lines else 0}-{last}/{len(self.lines)}"
         return list(self.lines[self.top : self.top + body]), position
 
-    def frame(self, cols: int, rows: int, theme: Theme) -> str:
+    def frame(self, cols: int, rows: int, theme: Theme, ground: str | None = None) -> str:
         """The alternate screen's rows for the current page that differ from the last frame, footer on the last row.
 
-        "" when no row changed.
+        Each row erases on `ground`, a scene look's ground (`screen.on_ground`). "" when no row changed.
         """
-        if self._size != (cols, rows):
+        if self._size != (cols, rows) or ground != self._ground:
             self.invalidate()
             self._size = (cols, rows)
+            self._ground = ground
         shown, position = self._page(cols, rows, theme)
         self._shown = shown
         parts: list[str] = []
@@ -249,7 +252,7 @@ class Pager:
         held = self._painted.get(row)
         if held is not None and held[0] == line:
             return
-        painted = paint_line(line, cols)
+        painted = paint_line(line, cols, self._ground)
         self._painted[row] = (line, painted)
         parts.append(_move_to(row) + painted)
 
@@ -376,7 +379,7 @@ class HistoryPager(Pager):
     jumping to either end render only the blocks the page and the last page
     reach, at the frame's width. A move asked for before the first frame is
     made at it; after that each move is made at once, as `Pager` makes it.
-    The footer counts messages (blocks), not rows. At most
+    The footer counts entries (blocks), not rows. At most
     `HISTORY_BLOCKS_KEPT` blocks' rows are kept, for one width and theme, the
     last block's always once drawn (with a cap of one, it and one other).
     """
@@ -495,4 +498,4 @@ class HistoryPager(Pager):
             shown.extend(self._rows(index, cols, theme)[skip:])
             index, skip = index + 1, 0
         first = self.item + 1 if self.count else 0
-        return shown[:body], f"{first}-{index}/{self.count} messages"
+        return shown[:body], f"{first}-{index}/{self.count} entries"

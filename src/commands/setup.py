@@ -548,6 +548,13 @@ def cmd_update(args: argparse.Namespace) -> int:
     if code:
         return code
     failures: list[dict[str, object]] = []
+    from ..install.agent_skills_projection import agent_skills_user_home, refresh_installed_agent_skills
+
+    payload["agent_skills"] = None
+    try:
+        payload["agent_skills"] = refresh_installed_agent_skills(agent_skills_user_home(), dry_run=bool(args.dry_run))
+    except (OSError, ValueError) as exc:
+        failures.append({"phase": "agent_skills", "error": f"{type(exc).__name__}: {_bounded_command_error(str(exc))}"})
     primary_registration: dict[str, object] | None = None
     try:
         if _paths(args).hermes_plugin_dir.is_dir():
@@ -591,6 +598,11 @@ def cmd_update(args: argparse.Namespace) -> int:
     else:
         if payload.get("skills") is not None:
             _print_install_summary(payload, command="update", language=_resolve_language(args))
+        agent_skills = payload.get("agent_skills")
+        if agent_skills and "refreshed_files" in agent_skills:
+            count = agent_skills["refreshed_files"]
+            print(f"Agent Skills (Codex/.agents): refreshed {count} files" if count
+                  else "Agent Skills (Codex/.agents): already up to date")
         _print_display_release_lines(primary_registration, profile_results)
         _print_registration_migrations(primary_registration, profile_results)
         _print_omh_home_reclaims(profile_results)
@@ -2166,7 +2178,7 @@ def _doctor_operator_summary(checks: list[object]) -> dict[str, object]:
             _doctor_group("command", check_dicts, ("command_path",)),
             _doctor_group("managed_skills", check_dicts, ("manifest", "manifest_skills_dir", "local_modifications", "skill_freshness", "skills_dir", "skill:", "route_hint_skills", "guidance_projection", "hermes_skill_edits", "missing_managed_skills")),
             _doctor_group("runtime", check_dicts, ("runtime_artifacts", "workflow_state", "runtime_state")),
-            _doctor_group("hermes_registration", check_dicts, ("hermes_config", "external_dir", "identity_conflicts", "runtime_context")),
+            _doctor_group("hermes_registration", check_dicts, ("hermes_config", "external_dir", "identity_conflicts", "runtime_context", "hermes_skill_visibility")),
             _doctor_group("targets", check_dicts, ("target_registry", "target_topology")),
             _doctor_group("model_routing", check_dicts, ("hermes_model_routing", "provider_entitlements")),
             _doctor_group("optional_surfaces", check_dicts, ("plugin_", "team_profile_packs", "structural_search", "trigger_language_packs")),

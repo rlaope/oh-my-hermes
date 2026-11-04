@@ -38,7 +38,7 @@ from ..dag_open_run_nudge import open_run_line
 from ..hermes_session_commands import host_command_turn, host_context_removed, person_request_text
 from ..host_context import record_active_main_agent_model
 from ..host_observation import observe_plugin_hook_call
-from ..installed_skills import installed_skill_names
+from ..installed_skills import hermes_loadable_skill_names
 from ..kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
 from ..native_todo import held_native_write_note
 from ..omh_roles import extract_role_marker, role_context_payload
@@ -512,6 +512,44 @@ def _reset_board_card_state() -> None:
         _board_card_sessions.clear()
 
 
+# The package modules a session's first turns import: the capability families the first turn's
+# brief reads (`context_brief._capability_family_cards`) and the router a later turn's route hint
+# asks (`awareness._user_trigger_pack_route_decision`). Importing them costs 80-300 ms, paid by the
+# first user turn that reaches each. `register()` starts this thread so they load while the person
+# types; `pre_llm_call` waits for it before doing anything, so no turn imports the same modules from
+# another thread at the same time (two threads entering one import cycle from different sides is
+# what CPython's deadlock detection fails one of). Both call sites keep their own guarded import,
+# so a host without `omh`, or an import that fails here, is still reported where it was before.
+_import_warmup: threading.Thread | None = None
+
+
+def _warm_imports() -> None:
+    try:
+        from omh.capabilities.families import capability_family_cards  # noqa: F401
+        from omh.routing.chat import user_trigger_pack_route_hint  # noqa: F401
+    except Exception:  # noqa: BLE001 - the call sites import again and report the failure themselves
+        return
+
+
+def start_import_warmup() -> None:
+    """`register()`: import the first turns' package modules on a daemon thread, once per process copy."""
+    global _import_warmup
+    if _import_warmup is not None:
+        return
+    thread = threading.Thread(target=_warm_imports, name="omh-import-warmup", daemon=True)
+    try:
+        thread.start()
+    except RuntimeError:  # no thread to spare: the first turns import as they did
+        return
+    _import_warmup = thread
+
+
+def _await_import_warmup() -> None:
+    thread = _import_warmup
+    if thread is not None:
+        thread.join()
+
+
 def _tracker_event_is_present(kwargs: dict) -> bool:
     """Recognize a host-labelled tracker event without inspecting its text."""
     for key in ("tracker_event", "github_event"):
@@ -569,6 +607,8 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     # forks never reach this line, so a background review cannot clear the
     # live turn's stash.
     clear_round_end_answer(kwargs.get("session_id"))
+    # Only after both clears: a wait the host abandons at its hook timeout must not keep either.
+    _await_import_warmup()
     # Whether this session's platform can get the round-end check at all: one that cannot (a
     # delegated child) takes no workspace index in `pre_tool_call`, which is given no platform.
     note_turn_posture(kwargs.get("session_id"), kwargs.get("platform"))
@@ -667,13 +707,16 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     )
     message_matches_awareness = False
     degraded: list[tuple[str, str]] = []
-    # The skills this home installed. The route hint and the candidate line
-    # rank the whole catalog, and a `--core` home holds ten of its skills, so
-    # both are cut to this set before they are rendered (#1954). `None` --
-    # the set could not be read -- renders the whole catalog, as before.
-    # `route_hint_payload` itself stays unfiltered: its direct-invocation
-    # hint records that the person named a workflow, installed or not.
-    installed_skills = installed_skill_names(omh_home) if include_awareness else None
+    # The skills this home installed and this Hermes can load by name. The
+    # route hint and the candidate line rank the whole catalog, and a
+    # `--core` home holds ten of its skills, so both are cut to this set
+    # before they are rendered (#1954); a skill Hermes resolves to no
+    # directory, or to two, is cut too, since `skill_view` answers it "not
+    # found" or refuses it. `None` -- the set could not be read -- renders
+    # the whole catalog, as before. `route_hint_payload` itself stays
+    # unfiltered: its direct-invocation hint records that the person named a
+    # workflow, installed or not.
+    installed_skills = hermes_loadable_skill_names(omh_home) if include_awareness else None
     rendered_route_hint: dict[str, object] = {}
     if include_awareness:
         if is_first_turn:

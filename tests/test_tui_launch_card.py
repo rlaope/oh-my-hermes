@@ -219,6 +219,27 @@ class SkillRowTests(unittest.TestCase):
         self.assertNotIn("…", "".join(rows))
         self.assertEqual({line_width(line) for line in grid([("plan", names)], 120, 2, paint())}, {120})
 
+    def test_every_family_is_named_as_the_catalog_names_it_and_every_look_draws_the_same_card(self) -> None:
+        # The card names skills through `omh.catalogs.skill_display_names`, not the skill catalog's package: the
+        # catalog's own path, over the families' producer rather than the sidecar, must give the same names and card.
+        from omh.capabilities.families import capability_family_projection
+        from omh.skills.catalog import omh_skill_display_name
+        from omh.tui.launch_card import FAMILIES
+
+        families = {family["id"]: family for family in capability_family_projection()["families"]}
+        catalog = tuple((label, tuple(omh_skill_display_name(name) for name in families[family]["primary_workflows"]))
+                        for family, label in FAMILIES)
+        self.assertEqual(family_members(), catalog)
+        self.assertTrue(all(names for _label, names in catalog))
+        installed = {"general": [name for _label, names in catalog for name in names], "devops": ["docker"]}
+        ours, theirs = skill_rows(installed), skill_rows(installed, members=lambda: catalog)
+        self.assertEqual(ours, theirs)
+        for look in LAUNCH_PRESETS:
+            for width, room in ((150, 40), (120, 30), (100, 12)):
+                with self.subTest(look=look, width=width, room=room):
+                    self.assertEqual(launch_card(look, CardTests.FACTS, paint(look), width, room, ours),
+                                     launch_card(look, CardTests.FACTS, paint(look), width, room, theirs))
+
 
 class CardTests(unittest.TestCase):
     FACTS = Facts(model="openai/gpt-6.1-sol", effort="high", session="20261023_000000_aaaaaaaa",
@@ -529,6 +550,28 @@ class SnapshotTests(unittest.TestCase):
                               text=True, timeout=120, env={**os.environ, "PYTHONPATH": tests})
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(done.stdout.split(), ["False", "False"])
+
+    def test_the_first_frame_with_the_create_answer_s_skills_imports_no_skill_package(self) -> None:
+        # A shared gateway's session.create names every skill, so the card regroups them before the first frame:
+        # naming them must not import `omh.skills`, whose package `__init__` imports the whole catalog.
+        code = (
+            "import sys; sys.path[:0] = [sys.argv[1]]\n"
+            "from test_tui_launch_card import Launched, SKILLS\n"
+            "from omh.tui.launch_card import family_members\n"
+            "def skill_modules(): return [m for m in sys.modules if m == 'omh.skills' or m.startswith('omh.skills.')]\n"
+            "before = skill_modules()\n"
+            "run = Launched(env={'HERMES_HOME': '/home/one/.hermes'}, profile='default', skills=SKILLS)\n"
+            "screen = '\\n'.join(run.screen())\n"
+            "assert 'ulw-plan' in screen and 'loading…' not in screen, screen\n"
+            "assert len(family_members()) == 6 and all(names for _label, names in family_members())\n"
+            "print(before, skill_modules())\n"
+        )
+        tests = Path(__file__).resolve().parent
+        path = os.pathsep.join((str(tests), str(tests.parent)))  # the checkout's `omh` shim: this tree, not an install
+        done = subprocess.run([sys.executable, "-P", "-c", code, str(tests)], capture_output=True,
+                              text=True, timeout=120, env={**os.environ, "PYTHONPATH": path})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.split(), ["[]", "[]"])
 
 
 class SwitchTests(unittest.TestCase):

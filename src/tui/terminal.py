@@ -34,6 +34,13 @@ adds the motion of a held button (the pager's drag to select); motion with no
 button held is never asked for. Every exit turns both off again
 (`mouse_reporting` and `mouse_drag` say whether they are on).
 
+Focus reports are asked for on every terminal, as Hermes' own TUI asks
+(hermes-ink `App.tsx`, DECSET 1004): one that speaks them sends `ESC [ I`
+when the window gains focus and `ESC [ O` when it loses it, which the key
+decoder reads as no key (`KeyDecoder.unfocused_at`); one that does not
+ignores the request and sends nothing, and the TUI then counts the window as
+focused throughout. Every exit turns them off again.
+
 `query_background` asks the terminal for its background colour once, before
 the first frame, so the theme can be measured against the background the
 person really has (`theme.build_theme`), and in the same write for the row
@@ -78,7 +85,7 @@ import time
 from types import FrameType, TracebackType
 from typing import Protocol
 
-from .screen import AUTOWRAP_ON, SHOW_CURSOR
+from .screen import AUTOWRAP_ON, CURSOR_SHAPE_DEFAULT, SHOW_CURSOR
 from .style import CSI, SGR_RESET
 
 try:  # pragma: no cover - exercised by platform, not by a branch test
@@ -88,6 +95,9 @@ except ImportError:  # pragma: no cover - Windows ships no termios
 
 BRACKETED_PASTE_ON = f"{CSI}?2004h"
 BRACKETED_PASTE_OFF = f"{CSI}?2004l"
+# Focus reports (xterm mode 1004): `ESC [ I` when the window gains focus, `ESC [ O` when it loses it.
+FOCUS_REPORTING_ON = f"{CSI}?1004h"
+FOCUS_REPORTING_OFF = f"{CSI}?1004l"
 # Richer key reports, so Ctrl+Enter and Shift+Enter differ from Enter: the kitty
 # keyboard protocol (push flag 1, "disambiguate") and xterm modifyOtherKeys level 2.
 KITTY_KEYBOARD_PUSH = f"{CSI}>1u"
@@ -107,12 +117,13 @@ MOUSE_DRAG_OFF = f"{CSI}?1002l"
 MOUSE_REPORTING_OFF = f"{CSI}?1006l{MOUSE_DRAG_OFF}{CSI}?1000l"
 # Written on exit even after a crash mid-frame: the screen hides the cursor and
 # turns autowrap off while it paints, and a shell must not inherit either. The
-# key and mouse reports are switched off whether or not they were asked for, as
+# key, mouse and focus reports are switched off whether or not they were asked for, as
 # Hermes' own TUI does on every exit (hermes-ink `ink.tsx`, its signal-exit path
-# too), so no exit path depends on remembering whether they were asked for.
+# too), so no exit path depends on remembering whether they were asked for. The cursor shape is the exception: it
+# is the shell's own unless `set_cursor_shape` changed it, so it is put back only then (`Terminal._restore`).
 RESTORE_SEQUENCE = (
     f"{SGR_RESET}{AUTOWRAP_ON}{SHOW_CURSOR}{MODIFY_OTHER_KEYS_OFF}{KITTY_KEYBOARD_POP}"
-    f"{MOUSE_REPORTING_OFF}{BRACKETED_PASTE_OFF}"
+    f"{MOUSE_REPORTING_OFF}{FOCUS_REPORTING_OFF}{BRACKETED_PASTE_OFF}"
 )
 
 # Terminals asked for the richer key reports, by the name Hermes' own TUI gives
@@ -352,6 +363,7 @@ class Terminal:
         # True while mouse reports are on (`set_mouse`), and while they include a held button's motion.
         self.mouse_reporting = False
         self.mouse_drag = False
+        self.cursor_shape: str | None = None  # the DECSCUSR shape `set_cursor_shape` set; None while the shell's own
 
     def __enter__(self) -> Terminal:
         if termios is None:
@@ -363,7 +375,7 @@ class Terminal:
         entered = False
         try:
             self._install_winch()
-            self.write(BRACKETED_PASTE_ON + self._keyboard_request)
+            self.write(BRACKETED_PASTE_ON + FOCUS_REPORTING_ON + self._keyboard_request)
             self.keyboard_protocol = bool(self._keyboard_request)
             entered = True
         finally:
@@ -388,9 +400,11 @@ class Terminal:
             return
         self.keyboard_protocol = False
         self.mouse_reporting = self.mouse_drag = False
+        # The shell's own cursor shape comes back only where this run changed it: a shell that chose one keeps it.
+        reset, self.cursor_shape = (CURSOR_SHAPE_DEFAULT if self.cursor_shape is not None else ""), None
         hung_up = False
         try:
-            self.write(RESTORE_SEQUENCE)
+            self.write(reset + RESTORE_SEQUENCE)
         except OSError as error:
             if error.errno != errno.EIO:
                 raise
@@ -431,6 +445,14 @@ class Terminal:
             switch = "" if drag == self.mouse_drag else MOUSE_DRAG_ON if drag else MOUSE_DRAG_OFF
             self.write(("" if self.mouse_reporting else MOUSE_REPORTING_ON) + switch)
         self.mouse_reporting, self.mouse_drag = enabled, drag
+
+    def set_cursor_shape(self, shape: str | None) -> None:
+        """Set the cursor's DECSCUSR shape, or with None give the terminal's own back; writes nothing when it already
+        is so. Only inside the `with` block, which puts the terminal's own shape back on every way out if this changed it."""
+        if shape == self.cursor_shape or (shape is not None and self._saved is None):
+            return
+        self.write(shape or CURSOR_SHAPE_DEFAULT)
+        self.cursor_shape = shape
 
     def query_background(self, timeout: float = BACKGROUND_QUERY_SECONDS) -> tuple[str | None, bytes, int | None]:
         """The background colour (`#RRGGBB`, or None), the input that arrived meanwhile, and the cursor's 1-based row.

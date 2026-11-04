@@ -8,6 +8,7 @@ import time
 from typing import Final, TypeGuard
 
 from .. import runtime_paths
+from ..caller_check import round_end_note as caller_note
 from ..catch_log import PLAN_CONTINUED, record_catch
 from ..consistency_trigger import discard_snapshots, round_end_trigger, turn_root
 from ..export_check import round_end_note as export_note
@@ -162,6 +163,12 @@ def pre_verify(
     # asked for behaviour to stay the same and did not ask for that test to change. Like the export
     # note it continues the turn on its own: putting the expectation back is the work.
     test_message = test_note(session_id, turn_root(session_id)) if attempt_value == 0 else ""
+    # The caller check names a call this turn's signature change broke: one that bound to the
+    # function's turn-start parameters and no longer binds, found with `ast` through the importer scan
+    # (package re-exports included). It also continues the turn on its own, and a line the impact or
+    # export note already names is not named again.
+    caller_message = (caller_note(session_id, turn_root(session_id), f"{impact_message}\n{export_message}")
+                      if attempt_value == 0 else "")
     surface_message = checklist_message = plan_message = ""
     open_items = 0
     if valid_coding:
@@ -193,7 +200,8 @@ def pre_verify(
             # out (`consistency_trigger`). Beside another nudge it rides along,
             # the export note included: that note continues the turn on its own
             # whatever the trigger says, because fixing the line it names is the work.
-            alone = not (surface_message or impact_message or export_message or test_message or plan_message)
+            alone = not (surface_message or impact_message or export_message or test_message or caller_message
+                          or plan_message)
             verdict = round_end_trigger(session_id, code_paths) if alone else None
             if verdict is not None and verdict.fire and verdict.evidence:
                 checklist_message = round_end_evidence_note(verdict)
@@ -206,22 +214,25 @@ def pre_verify(
         # The turn's snapshots are spent at its first stop, read or not.
         discard_snapshots(session_id)
     # One directive, in a fixed order: the served-surface gate, the impact
-    # note, the export note, the test note, the round-end check, the plan directive. Each can
+    # note, the export note, the test note, the caller note, the round-end check, the plan directive. Each can
     # be true of the same turn, and dropping one because another fired would
     # lose exactly the case it was written for. One closing final-answer
     # sentence goes last, for the notes and the check together, and only
     # without a plan directive: an open plan means the turn goes on, so there
     # is no final answer to ask for yet.
     closing = ""
-    if (impact_message or export_message or test_message or checklist_message) and not plan_message:
+    if (impact_message or export_message or test_message or caller_message or checklist_message) and not plan_message:
         # A delegated child's reply is its parent's tool result: it returns
         # its full answer, never a sentinel, so nothing is stashed for it.
-        if str(platform) in _NO_CHECKLIST_PLATFORMS or not _stash_answer(session_id, final_response):
+        # A broken call is a change the turn still has to make, so no
+        # "nothing more changed" line is offered beside the caller note.
+        if str(platform) in _NO_CHECKLIST_PLATFORMS or caller_message \
+                or not _stash_answer(session_id, final_response):
             closing = ROUND_END_CLOSING_UNSTASHED
         else:
             closing = ROUND_END_CLOSING
-    messages = [text for text in (surface_message, impact_message, export_message, test_message, checklist_message,
-                                  plan_message, closing) if text]
+    messages = [text for text in (surface_message, impact_message, export_message, test_message, caller_message,
+                                  checklist_message, plan_message, closing) if text]
     if not messages:
         return None
     # Recorded for the person once per turn. `attempt` is the only turn

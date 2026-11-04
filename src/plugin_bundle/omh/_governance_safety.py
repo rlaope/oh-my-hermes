@@ -20,6 +20,8 @@ openings, and an anchored role marker.
 
 from __future__ import annotations
 
+import hashlib
+import marshal
 import re
 import unicodedata
 from collections.abc import Iterator, Mapping
@@ -698,10 +700,37 @@ def _looks_like_opaque_token(content: str) -> bool:
     return False
 
 
+# `contains_credential_like_material` verdicts for short strings. A live recall
+# render redacts every string of every candidate record's evaluation metadata
+# (ids, digests, timestamps, tags: about 400 strings for 39 records), the same
+# strings every turn, and once the record verdicts below were cached this scan
+# was a third of a render. The verdict is a function of the string alone, so
+# the string itself is the key: exact, and an exact `str` only. Only clean
+# strings are kept, so a secret is never held for the life of the process (it
+# is rescanned each time, as before). Longer text is scanned every time, so
+# what this keeps stays small; cleared whole when full.
+_CREDENTIAL_MEMO_MAX_CHARS = 256
+_CREDENTIAL_MEMO_LIMIT = 8192
+_credential_clean: set[str] = set()
+
+
 def contains_credential_like_material(content: str) -> bool:
     """Return whether a value must be masked before it can serialize."""
     if not isinstance(content, str):
         return True
+    if type(content) is not str or len(content) > _CREDENTIAL_MEMO_MAX_CHARS:
+        return _credential_like(content)
+    if content in _credential_clean:
+        return False
+    if _credential_like(content):
+        return True
+    if len(_credential_clean) >= _CREDENTIAL_MEMO_LIMIT:
+        _credential_clean.clear()
+    _credential_clean.add(content)
+    return False
+
+
+def _credential_like(content: str) -> bool:
     return (
         any(pattern.search(content) for pattern in _BLOCKED_PATTERNS)
         or _has_separator_split_blocked_credential(content)
@@ -762,12 +791,48 @@ def classify_memory_admission(content: str) -> dict[str, object]:
     return {"status": "safe"}
 
 
+# Verdicts of `evaluate_renderable_strings`, keyed by the digest of the
+# artifact's `marshal` bytes. Live recall evaluates every record at every render
+# (twice on an attended turn: the selector, then the consolidation check's
+# expiry count), and this scan was most of that time; an unchanged record now
+# costs one digest of about 2 KB. The key is exact: marshal takes only exact
+# builtin types (a str or dict subclass, any other Mapping, raises and is
+# scanned uncached) and decodes its bytes one way, so equal bytes are equal
+# content -- every key, string, type and order the scan reads. Any change is a
+# new key, so a record edited to unsafe text is scanned, and refused, on its
+# next render. Version 2 writes no back-references, whose placement follows
+# reference counts rather than content and would only cost hits. Cleared
+# whole when full: a store past the bound rescans, as before.
+_VERDICT_KEY_MARSHAL_VERSION = 2
+_RENDERABLE_VERDICT_LIMIT = 8192
+_renderable_verdicts: dict[bytes, dict[str, object]] = {}
+
+
 def evaluate_renderable_strings(artifact: dict[str, object]) -> dict[str, object]:
     """Evaluate every artifact field that can reach a memory render surface.
 
     Returns worst-case result with status and reason_code.
     Fail-closed: any blocked field blocks, any needs_review field needs review.
     """
+    try:
+        blob = marshal.dumps(artifact, _VERDICT_KEY_MARSHAL_VERSION)
+    except ValueError:
+        return _renderable_verdict(artifact)
+    key = hashlib.sha256(blob).digest()
+    verdict = _renderable_verdicts.get(key)
+    if verdict is None:
+        # The decoded bytes are scanned, not the live dict, so the verdict is
+        # for exactly the text the key names even if the artifact changes
+        # after it was keyed.
+        verdict = _renderable_verdict(marshal.loads(blob))
+        if len(_renderable_verdicts) >= _RENDERABLE_VERDICT_LIMIT:
+            _renderable_verdicts.clear()
+        _renderable_verdicts[key] = verdict
+    return dict(verdict)
+
+
+def _renderable_verdict(artifact: Mapping[str, object]) -> dict[str, object]:
+    """The worst classification over the field names and their renderable strings, in scan order."""
     prioritized_fields = (
         "summary",
         "value",

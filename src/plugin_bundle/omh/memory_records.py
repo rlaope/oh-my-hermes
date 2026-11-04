@@ -27,6 +27,7 @@ to beside the control plane's handoff attachments.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -36,14 +37,32 @@ import re
 from typing import Any
 
 from .awareness_delivery import _awareness_delivery_lock
-from .hermes_memory import RECORDS_DIRECTORY_LABEL, REVIEWS_DIRECTORY_LABEL, _read_reviews, read_reviewed_records
+from .hermes_memory import RECORDS_DIRECTORY_LABEL, REVIEWS_DIRECTORY_LABEL, _read_reviews, _reviewed_records, read_reviewed_records
 from .memory_recall_selector import MemoryRecallSelection, select_memory_recall
-from .memory_recall_support import PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION
+from .memory_recall_support import PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION, point_in_time_cue
 from .memory_store_io import atomic_write_json, guard_store_write
 
 DEFAULT_RECORD_RENDER_BUDGET_CHARS = 2400
 DEFAULT_RECORD_LIMIT = 6
 RECORD_SUMMARY_LIMIT_CHARS = 500
+# A recalled point-in-time snapshot ("As of 2026-10-30 (v0.1.7), nanran has
+# ...") is marked on its element, with one shared line per section saying what
+# the mark asks. Capture's `point_in_time` advice reaches only the session that
+# saved the record; the state usually changes weeks later in another session,
+# which sees the record only here. The cue is capture's own
+# (`point_in_time_cue`), narrowed to facts and decisions: an episode is an
+# event, which never changes, so a mark there would invite a wrong `replaces`.
+# Every byte is replayed per turn, so the mark is one attribute and the rule is
+# one line, never per record. The mark is advisory: records are admitted
+# exactly as without it, and it is added only when the whole section still fits.
+SNAPSHOT_RECORD_ATTRIBUTE = ' snapshot="as-of"'
+SNAPSHOT_RECORD_TYPES = ("fact", "decision")
+SNAPSHOT_RULE = (
+    'Records marked snapshot="as-of" describe something as it stood on a date or version, and still hold until it '
+    "changes. When that same thing changes, save its new state with replaces set to that id; something newly added "
+    "is its own record, saved without replaces."
+)
+SNAPSHOT_RECALL_LINE = f"  <snapshots>{SNAPSHOT_RULE}</snapshots>"
 # The live provider serves the Hermes session itself, so the perspective lens
 # is Hermes: records observed about another executor stay out of the turn.
 PREFETCH_EXECUTOR_TARGET = "hermes"
@@ -95,6 +114,7 @@ class RenderedRecordSection:
     rendered: tuple[dict[str, str], ...]
     omissions: dict[str, int]
     budget_chars: int = DEFAULT_RECORD_RENDER_BUDGET_CHARS
+    indexed: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -138,16 +158,24 @@ def read_record_store_snapshot(homes: list[Path] | tuple[Path, ...]) -> RecordSt
     `read_project_memory_records`; pins are a union because a pin in either
     store is a delivery-priority hint, never an eligibility input.
     """
-    # Reviews are read twice below; only this pass collects, so a corrupt
-    # review is named once.
+    # Each home's reviews are read once, for its records' review check and for
+    # the snapshot (a live turn renders from this, so a second read of every
+    # review cost every turn); records are `read_project_memory_records`'.
     unreadable: list[str] = []
-    records = read_project_memory_records(homes, unreadable=unreadable)
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
     reviews: dict[str, dict[str, object]] = {}
     usage: dict[str, dict[str, object]] = {}
     pins: set[str] = set()
     for home in homes:
         memory_dir = Path(home).expanduser() / "memory"
-        for review_id, review in _read_reviews(memory_dir / "reviews").items():
+        home_reviews = _read_reviews(memory_dir / "reviews", unreadable=unreadable)
+        for record in _reviewed_records(memory_dir, home_reviews, unreadable=unreadable):
+            record_id = str(record.get("record_id", "") or "")
+            if record_id and record_id not in seen:
+                seen.add(record_id)
+                records.append(record)
+        for review_id, review in home_reviews.items():
             reviews.setdefault(review_id, review)
         for record_id, entry in _read_usage(memory_dir / "usage.json").items():
             usage.setdefault(record_id, entry)
@@ -226,6 +254,8 @@ def select_prefetch_records(
     principal_context: dict[str, object] | None = None,
     shared_surface: bool = False,
     required_scope_kinds: tuple[str, ...] = ("project",),
+    query_fallback: bool = True,
+    session_served: Mapping[str, str] | None = None,
 ) -> MemoryRecallSelection:
     """The canonical selection for a live prefetch: delivery mode, never inspection."""
     return select_memory_recall(
@@ -247,6 +277,8 @@ def select_prefetch_records(
         query_intent=query_intent,
         principal_context=principal_context,
         shared_surface=shared_surface,
+        query_fallback=query_fallback,
+        session_served=session_served,
     )
 
 
@@ -266,6 +298,11 @@ def prepare_prefetch_records(
     principal_context: dict[str, object] | None = None,
     shared_surface: bool = False,
     required_scope_kinds: tuple[str, ...] = ("project",),
+    query_fallback: bool = True,
+    session_served: Mapping[str, str] | None = None,
+    index_fallback: bool = False,
+    full_text_ids: frozenset[str] | set[str] = frozenset(),
+    index_unqueried: bool = False,
 ) -> PreparedPrefetch:
     """Select, then render, under one clock. The receipt is built from this."""
     clock = now if now is not None else _utc_now()
@@ -283,8 +320,13 @@ def prepare_prefetch_records(
         principal_context=principal_context,
         shared_surface=shared_surface,
         required_scope_kinds=required_scope_kinds,
+        query_fallback=query_fallback,
+        session_served=session_served,
     )
-    return PreparedPrefetch(selection, render_selected_memory_records(selection, snapshot.records, budget_chars=budget_chars), clock)
+    return PreparedPrefetch(selection, render_selected_memory_records(
+        selection, snapshot.records, budget_chars=budget_chars, index_fallback=index_fallback, full_text_ids=full_text_ids,
+        index_unqueried=index_unqueried,
+    ), clock)
 
 
 def render_selected_memory_records(
@@ -292,6 +334,9 @@ def render_selected_memory_records(
     records: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     *,
     budget_chars: int = DEFAULT_RECORD_RENDER_BUDGET_CHARS,
+    index_fallback: bool = False,
+    full_text_ids: frozenset[str] | set[str] = frozenset(),
+    index_unqueried: bool = False,
 ) -> RenderedRecordSection:
     """Render the canonical selection in its order, bounded by the section budget.
 
@@ -301,6 +346,11 @@ def render_selected_memory_records(
     count so the pack can still say "this is not everything". The rendered
     tuple names exactly the records inside the returned text, each with the
     digest of its stored summary -- the same digest an incident anchors on.
+
+    With ``index_fallback``, a pack the active-tier fallback served lists its
+    records by name except ``full_text_ids``. ``index_unqueried`` does the
+    same for a pack whose query had no terms at all, which selects every
+    in-scope record unranked: the caller says so, since the pack cannot.
     """
     pack = selection.pack
     if pack.get("schema_version") != PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION:
@@ -317,13 +367,23 @@ def render_selected_memory_records(
         if record_id not in by_id:
             raise ValueError("incompatible recall pack: selected record is absent from the snapshot")
         items.append(item)
-    text, rendered_items = _render_bounded(
-        items,
-        budget_chars=budget_chars,
-        limit=None,
-        omissions={"render_budget_exhausted": 0, "over_budget": int(selection.exclusion_reason_counts.get("over_budget", 0))},
-        preserve_prefix=True,
-    )
+    indexed: tuple[str, ...] = ()
+    if index_fallback and ("query_fallback" in pack or index_unqueried):
+        full_items = [item for item in items if str(item["record_id"]) in full_text_ids]
+        index_items = [by_id[str(item["record_id"])] for item in items if str(item["record_id"]) not in full_text_ids]
+        text, rendered_items, indexed = _render_indexed_bounded(
+            full_items, index_items, budget_chars=budget_chars,
+            over_budget=int(selection.exclusion_reason_counts.get("over_budget", 0)),
+            full_prefix_limit=next((index for index, item in enumerate(items) if str(item["record_id"]) not in full_text_ids), len(items)),
+        )
+    else:
+        text, rendered_items = _render_bounded(
+            items,
+            budget_chars=budget_chars,
+            limit=None,
+            omissions={"render_budget_exhausted": 0, "over_budget": int(selection.exclusion_reason_counts.get("over_budget", 0))},
+            preserve_prefix=True,
+        )
     rendered = tuple(
         {
             "record_id": str(item.get("record_id", "")),
@@ -332,10 +392,72 @@ def render_selected_memory_records(
         for item in rendered_items
     )
     omissions = {
-        "render_budget_exhausted": len(items) - len(rendered_items),
+        "render_budget_exhausted": len(items) - len(rendered_items) - len(indexed),
         "over_budget": int(selection.exclusion_reason_counts.get("over_budget", 0)),
     }
-    return RenderedRecordSection(text=text, rendered=rendered, omissions=omissions, budget_chars=max(budget_chars, 0))
+    return RenderedRecordSection(text=text, rendered=rendered, omissions=omissions, budget_chars=max(budget_chars, 0), indexed=indexed)
+
+
+def _record_index_line(records: list[dict[str, Any]]) -> str:
+    labels = [str(record.get("subject") or f'{record.get("record_type", "")} {record["record_id"]}') for record in records[:8]]
+    if len(records) > 8:
+        labels.append(f"+{len(records) - 8} more")
+    count = len(records)
+    return (
+        f'  <record_index count="{_attribute(count)}" reason="no_query_overlap">'
+        f'{count} stored records did not match this message and are listed, not shown: '
+        f'{_text(", ".join(labels))}. Read one with omh_remember recall when it bears on the request.</record_index>'
+    )
+
+
+def _render_indexed_bounded(
+    full_items: list[dict[str, Any]], index_items: list[dict[str, Any]], *, budget_chars: int, over_budget: int,
+    full_prefix_limit: int,
+) -> tuple[str, list[dict[str, Any]], tuple[str, ...]]:
+    """Prefer a full-text prefix, then one all-or-nothing index within the same bound."""
+    if not full_items and not index_items:
+        return "", [], ()
+    index_line = _record_index_line(index_items) if index_items else ""
+
+    def section(count: int, include_index: bool, mark: bool = False) -> str:
+        lines = ["<memory_records>", *(_render_record(record, mark=mark) for record in full_items[:count])]
+        if include_index:
+            lines.append(index_line)
+        unresolved = sum(1 for record in full_items[:count] if _is_open(record))
+        if unresolved:
+            lines.append(_unresolved_line(unresolved))
+        if mark and any(snapshot_marked(record) for record in full_items[:count]):
+            lines.append(SNAPSHOT_RECALL_LINE)
+        omitted = len(full_items) - count + (0 if include_index else len(index_items))
+        if omitted:
+            lines.append(f'  <omitted count="{omitted}" reason="render_budget_exhausted" />')
+        if over_budget:
+            lines.append(f'  <omitted count="{over_budget}" reason="over_budget" />')
+        lines.append("</memory_records>")
+        return "\n".join(lines)
+
+    # Work backwards so the first fit is the longest full-text prefix. Index
+    # inclusion never promotes a later full-text record over an earlier one.
+    for count in range(len(full_items), -1, -1):
+        for include_index in ((True, False) if index_items else (False,)):
+            # Once the index is dropped, its ids cannot exempt a gap from
+            # the receipt's selected-minus-indexed prefix rule.
+            if not include_index and count > full_prefix_limit:
+                continue
+            text = section(count, include_index)
+            if len(text) <= max(budget_chars, 0):
+                indexed = tuple(str(record["record_id"]) for record in index_items) if include_index else ()
+                marked = section(count, include_index, mark=True)
+                return (marked if len(marked) <= max(budget_chars, 0) else text), full_items[:count], indexed
+    return "", [], ()
+
+
+def origin_record_ids(
+    records: list[dict[str, Any]] | tuple[dict[str, Any], ...], session_ids: set[str] | frozenset[str] | list[str] | tuple[str, ...],
+) -> frozenset[str]:
+    """Records captured in these conversation segments, never inferred from scope."""
+    sources = {f"hermes-session:{session_id}" for session_id in session_ids if session_id}
+    return frozenset(str(record["record_id"]) for record in records if record.get("source_ref") in sources)
 
 
 def render_memory_records(
@@ -370,10 +492,10 @@ def _render_bounded(
 ) -> tuple[str, list[dict[str, Any]]]:
     if not records:
         return "", []
-    lines, rendered = ["<memory_records>"], []
+    rendered: list[dict[str, Any]] = []
     omissions = dict(omissions)
     closing = "</memory_records>"
-    used = len(lines[0]) + 1 + len(closing)
+    used = len("<memory_records>") + 1 + len(closing)
     # Reserve every possible report once, at the largest count it can carry,
     # not an unbounded line per record.
     reserve = sum(
@@ -402,18 +524,33 @@ def _render_bounded(
             continue
         used += 1 + len(element)
         rendered.append(record)
-        lines.append(element)
-    unresolved = sum(1 for record in rendered if _is_open(record))
-    if unresolved:
-        lines.append(_unresolved_line(unresolved))
-    lines.extend(f'  <omitted count="{count}" reason="{reason}" />' for reason, count in omissions.items() if count)
-    lines.append(closing)
-    text = "\n".join(lines)
-    return (text, rendered) if len(text) <= max(budget_chars, 0) else ("", [])
+
+    def section(mark: bool) -> str:
+        lines = ["<memory_records>", *(_render_record(record, mark=mark) for record in rendered)]
+        unresolved = sum(1 for record in rendered if _is_open(record))
+        if unresolved:
+            lines.append(_unresolved_line(unresolved))
+        if mark and any(snapshot_marked(record) for record in rendered):
+            lines.append(SNAPSHOT_RECALL_LINE)
+        lines.extend(f'  <omitted count="{count}" reason="{reason}" />' for reason, count in omissions.items() if count)
+        lines.append(closing)
+        return "\n".join(lines)
+
+    text = section(False)
+    if len(text) > max(budget_chars, 0):
+        return "", []
+    marked = section(True)
+    return (marked if len(marked) <= max(budget_chars, 0) else text), rendered
 
 
 def _is_open(record: dict[str, Any]) -> bool:
     return str(record.get("resolution", "") or "") == "open"
+
+
+def snapshot_marked(record: Mapping[str, Any]) -> bool:
+    """Whether recall marks this record as a point-in-time snapshot (pack and tool recall alike)."""
+    record_type = str(record.get("record_type", "") or "")
+    return record_type in SNAPSHOT_RECORD_TYPES and point_in_time_cue(str(record.get("summary", "") or ""), record_type)
 
 
 def _unresolved_line(count: int) -> str:
@@ -421,7 +558,7 @@ def _unresolved_line(count: int) -> str:
     return f'  <unresolved count="{count}">{count} unresolved records delivered</unresolved>'
 
 
-def _render_record(record: dict[str, Any]) -> str:
+def _render_record(record: dict[str, Any], *, mark: bool = False) -> str:
     summary = str(record.get("summary", "") or "")[:RECORD_SUMMARY_LIMIT_CHARS]
     approved = str(record.get("approved_at", "") or "")[:10]
     # An open record carries its delivery marker on the element itself, so a
@@ -430,9 +567,10 @@ def _render_record(record: dict[str, Any]) -> str:
     # exactly as before.
     marker = str(record.get("resolution_marker", "") or "") if _is_open(record) else ""
     resolution = f' resolution="{_attribute(marker)}"' if marker else ""
+    snapshot = SNAPSHOT_RECORD_ATTRIBUTE if mark and snapshot_marked(record) else ""
     return (
         f'  <record id="{_attribute(record.get("record_id", ""))}" type="{_attribute(record.get("record_type", ""))}"'
-        f' approved="{_attribute(approved)}"{resolution}>{_text(summary)}</record>'
+        f' approved="{_attribute(approved)}"{resolution}{snapshot}>{_text(summary)}</record>'
     )
 
 
@@ -596,6 +734,8 @@ __all__ = [
     "RECORD_SUMMARY_LIMIT_CHARS",
     "RecordStoreSnapshot",
     "RenderedRecordSection",
+    "SNAPSHOT_RULE",
+    "origin_record_ids",
     "prefetch_required_scope_kinds",
     "prefetch_scope_allowlist",
     "prepare_prefetch_records",
@@ -607,4 +747,5 @@ __all__ = [
     "render_memory_records",
     "render_selected_memory_records",
     "select_prefetch_records",
+    "snapshot_marked",
 ]

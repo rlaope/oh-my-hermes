@@ -40,7 +40,7 @@ class SearchHookTests(unittest.TestCase):
 
         request = "find datasets for browser agent benchmarks"
         self.assertNotIn("[OMH Search]", self.hook(request, include_omh_awareness=False).get("context", ""))
-        with patch.object(llm_hooks, "installed_skill_names", return_value=frozenset()):
+        with patch.object(llm_hooks, "hermes_loadable_skill_names", return_value=frozenset()):
             self.assertNotIn("[OMH Search]", self.hook(request).get("context", ""))
         for request in ("관련 자료와 데이터를 찾아줘", "문제 해결에 참고할 자료/데이터 찾아줘"):
             self.assertNotIn("[OMH Search]", self.hook(request).get("context", ""))

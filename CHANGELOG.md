@@ -11,6 +11,351 @@ All notable changes will be documented here.
   edit. When the check does fire alone on a copy or a reference, the note now
   shows those lines (a copy with its module docstring), so the model can decide
   without searching for them first.
+- **The OMH TUI's working glow is removed.** The light that went round the
+  screen's edge while a turn ran read as too big and uncomfortable, and its
+  trail framed the screen so the terminal's padding outside it looked like a
+  black margin. It is gone, with everything that existed only for it: the
+  `/glow` command, `omh theme glow`, `OMH_TUI_GLOW`, the faster 50 ms paint
+  while it moved, and the column on each side and the blank last row the
+  screen kept free for it, so rows start at the screen's first column again.
+  A `glow` choice an older release saved in `<omh_home>/tui/theme.json` is
+  ignored and dropped the next time a choice is written. The living
+  wallpaper, the working row and its spinner are unchanged.
+- **A look with a scene paints its ground on every terminal.** The eight looks
+  with a scene set their ground only with OSC 11. Otty gives that colour only
+  to cells written after it, so every cell an erase cleared kept the terminal's
+  own black. That covered the chat area, every row's tail, the composer and the
+  blank rows: about 2,500–3,200 of the 6,300 cells on a 150x42 screen. Every
+  erase and blank fill on those looks now carries the ground as its
+  background. A terminal fills those cells with the
+  ground through background colour erase. A move in the /theme picker paints
+  the new ground over the whole visible screen in one synchronized update:
+  the region, the rows above it that are still on screen, and the blank rows
+  under it. Nothing is written into the scrollback. Pagers (/logs, /dag,
+  Ctrl+S) erase on the ground too. The default look, 256 and 16 colours,
+  NO_COLOR and `/wallpaper off` write the same bytes as before. At exit and
+  at Ctrl+Z, the rows still on screen are painted again on the terminal's own
+  background. One cost, accepted by the owner: rows already in the scrollback
+  keep the look's colour until they are printed again. The session rows left
+  above the prompt after a Ctrl+Z resume are on the terminal's own background
+  again, so Otty shows its own colour in their tails until they are reprinted,
+  as before this change. The background restore at exit is unchanged.
+- **On a dark look with a scene, the OMH TUI's diff and outcome bands and the
+  pager's footer bar follow the look.** These bands were the skin's fixed dark
+  green and maroon on every look, and the red one sank into aurora's teal at
+  1.01:1. Each band now keeps its green or red hue and moves onto the look's
+  ground. It sits 1.27:1 or more against every ground, and its text stays at
+  4.5:1 or better. The footer bar of the pager, /dag and the Ctrl+S bot board
+  takes the sent prompt band's colour instead of the skin's teal-black, with
+  its words re-lifted to 4.5:1. The /theme picker's tile for the default look
+  now shows the terminal's own background, which is what picking it gives.
+  The default look and the light side are unchanged.
+- **The Hermes Desktop pane takes the OMH TUI's mood, and draws the DAG as the TUI does.**
+  The pane stays a Desktop pane: the app's sans, its components and its theme
+  tokens. It takes on the TUI's default launch look as Desktop colour mixes: a rose
+  brand, warm section labels, and muted violet rules and frames. Sections have more
+  room between them, and agent rows get a hover. While a delegation graph runs, the
+  pane shows the box drawing the TUI prints into its transcript, in a card. The
+  backend makes it with the same renderer, at the width the pane measures in cells.
+  A run of up to 12 lanes is drawn as boxes. A bigger run, or a pane too narrow for
+  boxes, gets the tree. Each box takes its state's colour: the accent for running,
+  yellow for stuck, red for failed, grey for done or waiting. Every word the pane
+  colours now reads at 4.5:1 or better on Desktop's light and dark themes; the
+  lowest before was about 2.2:1.
+
+- **The OMH TUI draws Markdown tables as aligned columns while a reply streams.**
+  A `|` header row used to reach scrollback as plain text one delta before its
+  `|---|` divider arrived, so a table could never be drawn properly. The trailing
+  run of `|` lines is now held out of scrollback until the reply moves past it, and
+  shown in the live region as the same table the finished reply draws: bold header,
+  a `─` band, wide characters aligned by cell width, `\|` kept as a literal pipe. A
+  table wider than the row, and a `|` line with no divider under it, stay plain
+  text, quitting mid-reply still prints the rows held back, and a table taller than
+  half the terminal is released to scrollback as it grows, on the columns it
+  has. Carried forward from #2550 by @kfatyuip.
+
+- **The Windows loader probe keeps `LOCALAPPDATA`.** The isolated probe that
+  `omh doctor` runs dropped it, so the Hermes launcher could not find the home
+  directory and doctor reported `hermes_runtime_command_failed` although
+  `hermes --print-runtime-command` worked in a normal shell. The variable is
+  forwarded only when the parent has it. Carries #2548 by @DefinitelyNotSpammy.
+- **A recalled dated snapshot is marked for later sessions.** The advice to
+  name an old snapshot in `replaces` used to reach only the session that saved
+  it, and the state usually changes weeks later in another session. Now recall
+  marks snapshot facts and decisions: `snapshot="as-of"` on the record in the
+  memory pack, `"snapshot": "as-of"` on a recall tool row, and one shared line
+  per pack. The line says the record still holds until that same thing
+  changes, and only then is it named in `replaces`; something newly added
+  stays its own record. Episodes are not marked, since an event never
+  changes. This reaches the 7 existing snapshots on the owner's store without
+  a migration. The mark never costs a record: when it does not fit the pack's
+  bound, the pack renders unmarked, exactly as before. A marked pack is 287
+  characters longer for the line, plus 17 per marked record. The cue is
+  English only.
+
+- **The `omh_memory` consolidation status reads the session's own profile.**
+  Like tool recall, `demote` and recall origins, it now takes the Hermes
+  profile the memory provider was started with from the session lens, not
+  the tool process's `HERMES_HOME`, so a brief raised in one profile is not
+  reported from another. Tests also pin that those three read the provider's
+  profile.
+- **A changed function's broken callers are named at the turn's first stop.** When a turn changes a
+  function's parameters, OMH reads the files that import it, following package re-exports and
+  aliases. It names, by file and line, each call that matched the old parameters and no longer
+  does, with the new signature. It needs no language server and is always on. It says nothing about
+  a call it cannot prove broken, such as one passing `*args` / `**kwargs` or one written to raise.
+  In the live bench this took gpt-6-luna on a signature change from 0/6 to 6/6, and Haiku 4.5 from
+  5/6 to 6/6.
+
+- **Saving a dated snapshot now says how to retire it later.** When the
+  model saves a fact like "As of 2026-10-30 (v0.1.7), nanran has ..." or
+  "nanran v0.1.13 added ...", the result tells it to name this memory in
+  `replaces` when it saves the new state. The old memory then leaves recall
+  instead of being served beside the new one. The owner's store held 8 such
+  snapshots side by side, none ever replaced. The memory itself is unchanged:
+  it stays permanent and nothing is aged or hidden. Versions stated as rules
+  ("requires Hermes v0.22.5 or newer", "pin Node v20.11"), "Decided <date>:" lines,
+  lessons and procedures get no such note.
+- **Vim mode changes the cursor shape.** With `display.vim_mode` on, the
+  terminal's cursor is a steady beam in INSERT and a steady block in NORMAL
+  (DECSCUSR). This is an OMH addition: Hermes keeps a steady block in both
+  modes. It is written only when the mode changes, and the terminal's own
+  shape comes back when a question or picker takes the keys, when vim mode
+  goes off, and on exit or Ctrl+Z. On exit it is the terminal's default
+  shape, not whatever the shell had set before.
+
+- **Memory recall costs a turn far less.** The memory pack is rendered in
+  `on_turn_start`, before the turn's model call, so its cost is turn latency
+  (a code comment and `docs/MEMORY.md` said it was rendered off the hot path;
+  both now say what happens). Every render ran the credential and safety scan
+  on every stored record again, twice on a console turn, and that scan was
+  most of the render. Each record's verdict is now kept, keyed by the digest
+  of the record's exact content, so an unchanged record is not scanned again
+  and a changed one is scanned on its next render and refused there if it
+  became unsafe. The credential check on the short metadata strings a render
+  redacts is kept per string the same way. A turn also reads each review file
+  once instead of three times and lists the records directory once less.
+  On a read-only copy of the owner's store (39 records), `on_turn_start` plus
+  `prefetch` went from 77-124 ms to 13-17 ms and a repeat render from 42-52
+  ms to 10-14 ms; on a synthetic 500-record store, from 3.0-3.3 s to
+  0.13-0.52 s per turn. The first render in a process still scans every
+  record (measured on a machine under heavy load, two interleaved rounds).
+- **The OMH TUI's wallpaper and working glow hold still while its window is
+  in the background.** The TUI now asks the terminal for focus reports, as
+  Hermes' own TUI does. While the window does not have focus, the living
+  wallpaper's scene and the working glow's light stop where they were, and
+  nothing wakes the TUI to paint them. The spinner, streamed text and
+  everything else in a running turn keep updating. When focus comes back,
+  the next frame is the one the animation would have drawn at that moment,
+  and with focus the look is byte for byte what it was. On an idle screen
+  with a scene, an unfocused TUI went from 4 wake-ups and about 6 KiB written
+  a second to 1 wake-up and nothing written; during a turn with the glow,
+  from about 51 to 20 KiB a second. A terminal that does not send focus
+  reports is treated as focused throughout, so nothing changes there. The
+  focus reports type nothing in any mode and are switched off on every exit
+  and while the TUI is suspended.
+
+- **A full redraw keeps 4,000 rows of the session, up from 3,000.** A
+  resize, a tab switch, Ctrl+L, `/redraw` and a resumed session erase the
+  terminal's scrollback and print the session's last rows again, because a
+  tab switch can reach the TUI as one same-size signal after the terminal
+  has already reflowed its rows. After that, a 1,100-turn session's
+  scrollback went from 27,504 rows to 3,006; it now keeps 4,006. The count
+  was chosen by measurement on a session of distinct replies. A redraw at
+  the width the session was printed at takes 13 to 18 ms instead of 11 to
+  14 ms. The first redraw at a new width takes about 235 to 290 ms instead
+  of 170 to 240 ms, and holding what that redraw reuses takes 1.2 to 1.5 MiB
+  more. Raising the count further made both slower in proportion: 6,000
+  rows took 23 to 29 ms and 375 to 450 ms. The rows above the cut are still
+  in `/history`. A terminal's own scrollback limit can keep fewer rows than
+  this.
+
+- **The recall switches and records say what they do.** Under
+  `recall_mode: on_demand` or `off`, a save that resembles a held memory no
+  longer tells the model that either one "recalls": no turn is served
+  memories unasked there, and the hint now says so. Tool recall reads
+  `recall_mode` from the profile the memory provider was started with rather
+  than the process's `HERMES_HOME`, so the two cannot disagree about whether
+  recall is off. In the TUI, an `omh_remember` recall that found memories
+  lists them and gets the same sweep as an `omh_memory` one. A test now pins
+  that a consolidation brief raised in the same second by another trigger is
+  served. A pinned memory still suppresses the list of the rest's names on a
+  message that matches nothing: listing them would make the live recall
+  select differently from coding handoffs, which the recall suite and
+  incident replay hold equal.
+
+- **Skill hints read the request, not the gateway's busy-path header.** A
+  Discord or Slack message sent while the agent is busy reaches the turn with
+  Hermes' origin block in front of it: one line of JSON ids between two fixed
+  lines. OMH read that block as the request. The router then dispatched
+  gateway-intent-card at high confidence whatever the person wrote, and the
+  per-turn "Skills that may fit this request" line named gateway-intent-card,
+  backend and llm-app-dev on every such turn. Because those words are ASCII,
+  the block also kept a Korean request off the Korean line. OMH now cuts the
+  block, in its exact shape and only at the start of the turn, the same way
+  it cuts the other gateway material. The fix was replayed on a frozen,
+  hand-labelled set of the owner's turns since 10-15. On the held-out 40%,
+  turns given a wrong line went from 49 to 26, and the share of offered
+  skills that were right went from 3.3% to 5.3%. Recall did not change.
+
+## 4.0.5 - 2026-11-03
+
+- **Matching a coding handoff to a specialist domain is about 2.7 times
+  faster on English text.** Preparing a handoff folds the task message and the
+  plan text before it matches specialist domains, and ran the full Unicode
+  normalisation on every pass even for plain ASCII, which that work cannot
+  change. ASCII text now takes a direct lowercase fold, and text that is still
+  ASCII after the first normalisation step returns early. Other text keeps the
+  original steps in the original order, so routing decisions, exclusions and
+  errors are identical. On the domain-routing benchmark 772.81 ms fell to
+  290.94 ms (median of three runs). Contributed by @dexhunter (#2536).
+
+- **Memory recall shows what the turn asked for, once per conversation.**
+  A message with nothing to search for (an empty turn, "야") used to get every
+  saved memory in full; it now gets pinned ones in full and the rest as the
+  one-line list of names a non-matching message already gets. A
+  background-process or delegation notice that nobody typed gets nothing at
+  all. A memory the conversation already holds is not sent again until it
+  changes or a compaction drops it, and a list of names it was already shown
+  is not repeated. The recall line counts only what is new, so a turn that
+  adds nothing posts no line. `omh_remember` and `omh_memory` recall return
+  `nothing_found` for a query that matches nothing instead of unrelated
+  memories, and look up a memory by the id or subject a list names. Coding
+  handoffs and `omh memory recall` are unchanged. Replaying stored turns on
+  read-only copies of the owner's stores, the largest per-session memory text
+  went from 111,665 to 6,649 characters on the console profile, repeats from
+  91% to 0%, and messenger recall lines from 447 to 61.
+- **Turns that only read, and a session's first turns, are faster.** The
+  round-end consistency check indexed every Python file in the workspace at a
+  turn's first tool call, which cost about 110-175 ms in a checkout of a few
+  thousand files even when the turn only read files or searched. The index is
+  now taken at the turn's first call that can change a file (an edit, a
+  command, a delegated child, any tool that is not a read), still before that
+  call runs, so a read-only turn pays nothing and the check decides as it did
+  for the turn's own edits; a file changed by something else (an editor, a
+  background process) before the turn's first non-read call is now part of
+  the baseline. The capability families and the router, which a session's first
+  user turns imported on the spot (about 60 ms on the first turn and 70-100 ms
+  on the next new kind of request), are now imported on a background thread
+  when the plugin loads, so after a normal pause before the first message the
+  first turn takes about 25-40 ms and the second about 2 ms. Plugin load time is
+  unchanged. A first message sent the moment the plugin loads waits for the
+  remaining imports.
+
+- **One broken part of the OMH TUI's screen no longer ends the session.** If
+  the info line, the live transcript, a picker, the plan or HUD panel, the
+  agent view or the sticky prompt fails to draw, that part becomes one row in
+  the warning colour that names it, and the rest of the screen and your keys
+  keep working. Its traceback is kept once, and `/logs` shows it after the
+  gateway's lines. While the TUI runs, a background thread's traceback, a
+  Python warning or a stray print now goes to the same in-memory log instead
+  of landing on the screen and shifting every later frame. A crash that does
+  end the TUI still prints its traceback once your terminal is restored.
+
+- **OMH notices when Hermes cannot load its skills.** Skills could be
+  installed while Hermes could not load them by name: a stale
+  generation directory registered beside the pointer made every name
+  ambiguous, and then a cached path to a deleted generation left none. The
+  launch card still said "skills 89 installed", and the skill suggestion
+  kept telling the model to load skills that came back "not found". The
+  suggestion and the route hint now name only skills Hermes resolves to one
+  copy, read from the skill directories Hermes itself cached, so they go
+  quiet instead of steering into a failed load. When a profile that
+  registers OMH's skills sees fewer than half of them, the launch card says
+  how many Hermes sees and suggests a gateway restart, or `/new` for an
+  older session. `omh doctor` has a new `hermes_skill_visibility` row, per
+  profile, that reports an ambiguous registration and a missing directory
+  separately. A healthy install shows the same suggestion and the same card
+  as before.
+
+- **The OMH recall line stays off Discord and Slack, and recall can be turned
+  off.** `🧠 OMH — recalled N memories` now shows on the CLI, TUI and Desktop
+  only; on a messenger the memory is still used, with no line posted. The new
+  profile setting `recall_line` (`console` by default, `all`, `off`) chooses
+  where it shows, and `recall_mode` (`auto` by default, `on_demand`, `off`)
+  chooses whether memory is recalled every turn, only when the model asks, or
+  not at all. Set them with `omh memory recall-line` and `omh memory
+  recall-mode`; `omh memory status` shows both. A `memory_mode` of `off`, or a
+  disabled `retain_knowledge` family, now actually stops recall: before, the
+  provider and the recall tool kept serving records under it. It also stops
+  the consolidation brief and the save reminder, which asked for saves that
+  `off` refuses.
+- **The OMH TUI's first frame no longer waits on the skill catalog.** When the
+  shared gateway names every skill in its first answer, the launch card used to
+  import the whole skill catalog to label them before the first frame was
+  drawn; it now takes the labels from a small module of their own. The card is
+  drawn the same, byte for byte. In a clean process, starting up against a
+  shared gateway went from about 55 ms to 7 ms and imports 24 modules instead
+  of 114. On a stdio gateway, the first regrouping of the skills when they
+  arrive went from about 50 ms to under 1 ms.
+
+- **The memory consolidation brief no longer rides almost every console turn.** A session that ended with one to
+  four unconsolidated turns used to raise a brief at its end and again as a recovery at the next start, so 213 of 216
+  console turns on one machine carried the capture request (153 briefs came from session-start recovery), and every
+  capture grew the store that recall draws from. The session-ending reasons now need the same five turns as the turn
+  interval, and a given brief is shown once per session instead of on every later turn. Headroom, duplicate and
+  expiring-record reasons keep their own thresholds, `dreaming_mode` is unchanged, and the model still captures
+  through its own tool with no approve step.
+
+- **The `omh_recommend` tool result is about 12% smaller.** The handoff policy
+  used to ride on every recommended skill, and one policy can run past 1 KB.
+  It now stays on the top recommendation and on the skills the route selects,
+  which are the skills the agent acts on. When the top row is a router
+  (`meta-router`, `oh-my-hermes`), the first concrete skill below it keeps
+  its policy too. Every other row leaves it out, and the result says that
+  `omh_capabilities` `inspect` with section `skills` returns it for any skill.
+  The ranking, the top skill, the route and every other field are unchanged.
+  Over the routing corpus the mean result drops from 6,794 to 5,985 bytes.
+
+- **A multi-line paste no longer sends half a prompt where the terminal strips
+  paste markers, and arrows hold together over SSH and WSL.** When tmux, SSH
+  or the terminal itself drops bracketed-paste markers, the OMH TUI now reads
+  a burst of pasted lines as one paste: the lines land in the composer (as a
+  chip when the paste is long) instead of the first line break submitting the
+  first line. Over SSH the burst may arrive in chunks up to 100 ms apart. An
+  Enter pressed on its own still sends at once, and so does an Enter followed
+  by the next key typed. Two or more prompts typed ahead into one read while
+  the TUI was stalled now arrive as a draft in the composer instead of being
+  sent, since those bytes are the same as a paste. Over SSH and in WSL a lone Esc
+  now waits 100 ms instead of 40 ms for the rest of its sequence, so an arrow
+  key split by a slow link is the arrow and not Esc and two letters, which
+  could clear the draft or open rewind. Locally nothing changes.
+
+- **Typing in a long message no longer slows down.** The input box measured the
+  whole text again on every key, so a key cost about 5 ms at 5,000 characters
+  and about 17 ms at 20,000, longer than a frame. It now measures only the
+  words and lines an edit touched, which brings the 20,000-character key to
+  about 5 ms and the 5,000-character one to under 2 ms. This holds for text
+  with spaces between words (English, Korean and so on); a long line of
+  unspaced or Cyrillic text is still measured whole. What is drawn, the
+  caret, wrapping, wide characters, paste chips and image tokens are unchanged.
+
+- **Running work survives a context compaction.** When Hermes compacts a
+  session, OMH now hands its summarizer the work this conversation still has
+  open, stated as facts: each unfinished dag-ulw run (its goal, run state,
+  nodes done, and the open nodes with their states) and the session's open
+  `omh_todo` plan items. The summary that replaces the old turns then still
+  knows about the run and the plan, so the model picks them up instead of
+  re-deriving them from scratch. It is bounded (at most 3 runs, 6 nodes a run,
+  10 plan items, 1,500 characters in all), adds nothing to a session with no
+  open work, and leaves a plan written by Hermes' own `todo_list` to Hermes,
+  which already carries that list across compaction.
+
+- **A redraw at an unchanged width no longer stalls the TUI.** Switching
+  tabs, Ctrl+L, `/redraw` and every other full redraw at the width the
+  session was printed at reprinted the session by wrapping every finished
+  reply's markdown and painting every row again: 119 ms for a 1,100-turn
+  session, 109 ms for a 100-turn one. A finished reply in the redraw's tail
+  now keeps its rows for the width and theme it was drawn at, and a row printed above the live
+  region keeps its bytes, so the second and later redraws take 6 to 9 ms and
+  the first after a reply streamed about half what it did. What is written is
+  unchanged, byte for byte. A redraw still erases the terminal's
+  scrollback and prints the last 3,000 rows, because a tab switch can reach
+  the TUI as one same-size signal after the terminal has already reflowed
+  its rows. The row over the rest, and the `/history` footer, now count
+  "entries" (`⋯ 2940 earlier entries`): the number counts prompts, replies,
+  tool groups, notices and done lines one each, which is not what
+  "messages" said.
 
 - **A TUI performance bench lives in the repo.** `tools/benchmarks/tui_perf.py`
   measures frame cost by transcript size, full redraw, streaming per chunk,
@@ -29,44 +374,14 @@ All notable changes will be documented here.
   end of the line (Alt+Enter or Shift+Enter still add a line, Esc closes the
   menu). With no list or menu open, Ctrl+J keeps its newline and steer
   behaviour, Ctrl+K deletes to the end of the line and Ctrl+P folds the plan.
+  A Shift-reported Ctrl+N/P/J/K does not move a list; terminals without key
+  reporting cannot tell Shift apart. Contributed by @DanRioDev (#2513; #2524, carried by #2525).
 
 - **A running turn with the glow and a living wallpaper uses less CPU.** The same frames are drawn, byte for byte,
   but the colours the glow and the wallpaper scenes mix are no longer parsed again for every cell, and the loop no
   longer wakes a second time per frame to wait out the frame interval when nothing arrives from the
   gateway. On a 60x200 screen with the aurora look, a busy frame went from about 9.9 ms to 5.6 ms and
   the loop from 38 to 19 wake-ups a second.
-
-- **Code-skill round follow-ups.** Seven review findings from the last round,
-  fixed in OMH's own words. Commit-pr-authoring says where the reversibility
-  line goes when the PR template has no risk or rollout section: one sentence
-  at the end of its summary section. App-debugging names what the loop-cost
-  filter checks before `competing_hypotheses/v1` exists, and lets
-  `regression_seam: none_correct` name the verifying reproduction loop in
-  place of a regression test. Plan's append-only-file task keeps a generated,
-  drift-gated file's gate out of each slice's done check. Verification-gate
-  says a fix recorded with `regression_seam: none_correct` has no fix test, so
-  the regression-witness rule does not apply. Frontend's support-target
-  paragraph is reflowed to 80 columns, and backend's thin-handler paragraph
-  gets its own heading inside section 7. Two Korean negative controls pin that
-  a dress code or a QR code in the architecture request form never dispatches
-  `tech-debt-audit`; they still name it as a clarify candidate, the accepted
-  cost of the clarify-only cap, as the English cases do.
-
-- **Ctrl+J and Ctrl+K navigate lists across the OMH TUI.** Complementing
-  Ctrl+N and Ctrl+P, Ctrl+J moves down and Ctrl+K moves up across all picker
-  dialogs (`/model`, `/sessions`, `/rewind`, `/theme`), the agent view list
-  and tree, history search, and open slash and @ completion menus, matching
-  Down and Up arrow navigation. When no list or menu is open, Ctrl+J keeps its
-  newline and steer behaviors and Ctrl+K keeps delete-to-end-of-line. A
-  Shift-reported Ctrl+N/P/J/K does not move a list; terminals without key
-  reporting cannot tell Shift apart.
-
-- **Ctrl+N and Ctrl+P navigate lists across the OMH TUI.** In the `/model`,
-  `/sessions`, `/rewind` and `/theme` pickers, the agent list (ordinary roster
-  and DAG tree modes), history search, and slash and `@` path completion menus,
-  Ctrl+N moves down and Ctrl+P moves up by one row, matching Down and Up arrow
-  navigation. On an open completion menu, Ctrl+P navigates the menu rather than
-  folding the plan.
 
 - **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
   architecture-deepening reading: it looks for shallow modules (an interface
@@ -83,7 +398,7 @@ All notable changes will be documented here.
   architecture", "improve the architecture of this repo", "find deepening
   opportunities in this codebase", "shallow modules in this codebase",
   "코드베이스 아키텍처 개선해줘") now name the audit in the clarifying
-  question, where main named codebase onboarding or unrelated lanes; they
+  question, where 4.0.4 named codebase onboarding or unrelated lanes; they
   dispatch it only beside its own words, such as "tech debt". An
   architecture that is not code (a model, cloud infra, an org chart, a
   building) routes exactly as before.
@@ -128,9 +443,10 @@ All notable changes will be documented here.
   coupled to internals (own-module fakes, call-count assertions, side-channel
   reads), fakes only at system boundaries chosen by dependency category, and a
   `regression_seam: none_correct` outcome when no seam can run the pattern
-  that produced a bug. `omh-backend`, `omh-frontend` and `omh-app-debugging`
-  load it when a handoff asks for tests, and `ulw-work`'s TDD page points at it
-  instead of keeping a second copy. `omh-backend` also gains
+  that produced a bug, where the verifying reproduction loop stands in place
+  of a regression test. `omh-backend`, `omh-frontend` and `omh-app-debugging`
+  load it when a handoff asks for tests, and `ulw-work`'s TDD page points at
+  it instead of keeping a second copy. `omh-backend` also gains
   `references/contract-tests.md`: one negative test per auth row and per
   error-table row, the same database engine in tests, writes read back through
   the interface, and migrations run on populated data.
@@ -178,13 +494,17 @@ All notable changes will be documented here.
   `*STANDARDS*.md`, linter and formatter configuration) before the smell
   baseline applies, hands that list to a dispatched reviewer, and skips
   smells the configured tooling already enforces on the diff.
-  `omh-commit-pr-authoring`'s no-template fallback says whether a revert undoes the change or what it
-  leaves behind, and a structural change shows the smallest file tree, call
-  tree or diff sketch of its new shape. `omh-rules-distill` classes each
-  recurring miss as mechanical (it becomes a check, proven by failing on an
-  injected violation) or judgement (prose). `omh-codebase-onboarding` checks
-  its own repo map, reading path, glossary, risk map and first-task runway
-  instead of a generic planning checklist.
+  `omh-commit-pr-authoring` has every PR body say whether a revert undoes
+  the change or what it leaves behind, and which surfaces a bad merge would
+  reach. Without a PR template that goes in the fallback body; with one, it
+  goes under the template's risk or rollout section, or, when the template
+  has neither, in one sentence at the end of its summary or description
+  section. A structural change's PR body shows the smallest file tree, call
+  tree or diff sketch of its new shape.
+  `omh-rules-distill` classes each recurring miss as mechanical (it becomes a
+  check, proven by failing on an injected violation) or judgement (prose).
+  `omh-codebase-onboarding` checks its own repo map, reading path, glossary,
+  risk map and first-task runway instead of a generic planning checklist.
 
 - **A green regression test no longer proves a fix on its own, and a
   reproduction has to be the reported bug.** `omh-verification-gate` now asks,
@@ -193,18 +513,20 @@ All notable changes will be documented here.
   worktree run, a CI job, or the debugging session's own pre-fix run, recorded
   with its source); an intermittent fault or a test-only fix is witnessed by a
   failure rate beside 0/N at the same N. A fix test only ever seen green holds
-  the claim with `regression_witness_missing`.
-  `omh-app-debugging`'s reproduction record gains `symptom_match` (the
-  observed failure beside the reported one; a nearby failure is another bug),
-  `loop_cost` (time per run and what was pinned), and `minimised` (the
-  reproduction cut down until every element is load-bearing). Its method
-  reference gains a ladder for faults no test reaches, ending in numbered
-  steps for a person with named fields to report, and a session tag on every
-  temporary probe with an observed search for it before handover. Commands
-  read credentials from environment variables and quoted output is redacted.
-  The confirmed hypothesis and its eliminated rivals go into the fix's commit
-  or PR body. `omh-native-debugging`'s fault statement takes the symptom
-  match, the minimise step and the probe tag too.
+  the claim with `regression_witness_missing`. A fix recorded with
+  `regression_seam: none_correct` has no fix test, so the witness rule does
+  not apply. `omh-app-debugging`'s reproduction record gains `symptom_match`
+  (the observed failure beside the reported one; a nearby failure is another
+  bug), `loop_cost` (time per run and what was pinned, which is only what
+  neither the report nor a hypothesis already written implicates), and
+  `minimised` (the reproduction cut down until every element is load-bearing).
+  Its method reference gains a ladder for faults no test reaches, ending in
+  numbered steps for a person with named fields to report, and a session tag
+  on every temporary probe with an observed search for it before handover.
+  Commands read credentials from environment variables and quoted output is
+  redacted. The confirmed hypothesis and its eliminated rivals go into the
+  fix's commit or PR body. `omh-native-debugging`'s fault statement takes the
+  symptom match, the minimise step and the probe tag too.
 
 - **`plan` cuts code tasks as vertical slices, and `decision-prototype` says
   what a good prototype looks like.** A plan's code tasks each deliver one
@@ -214,17 +536,17 @@ All notable changes will be documented here.
   Slices that write the same file are ordered rather than re-cut by layer,
   each later slice listing every earlier one that writes it as a direct
   dependency; a file every slice only appends to (a changelog, a generated
-  index) may instead be written by one task after them. A layer-only task is
-  a prefactor placed first, or a wide mechanical change handed to
-  `refactor-plan` (the new form beside the old, callers moved in groups while
-  both stay green, the old form deleted last). `decision-prototype` gains
-  `references/artifact-shapes.md`:
-  a logic or state question gets a pure module a later plan can lift, with the
-  full state shown after each action; an interaction or layout question gets
-  structurally different variants mounted in the real host page inside a
-  temporary worktree, with writes stubbed; and prototype code the receipt
-  lets later work reference is kept on a named throwaway ref the receipt
-  cites.
+  index) may instead be written by one task after them. That task keeps a
+  generated, drift-gated file's gate out of each slice's done check. A
+  layer-only task is a prefactor placed first, or a wide mechanical change
+  handed to `refactor-plan` (the new form beside the old, callers moved in
+  groups while both stay green, the old form deleted last).
+  `decision-prototype` gains `references/artifact-shapes.md`: a logic or state
+  question gets a pure module a later plan can lift, with the full state shown
+  after each action; an interaction or layout question gets structurally
+  different variants mounted in the real host page inside a temporary
+  worktree, with writes stubbed; and prototype code the receipt lets later
+  work reference is kept on a named throwaway ref the receipt cites.
 
 - **The round-end check names a test whose expectation a keep-behaviour turn
   rewrote, and diffs a Python file a command names.** A new always-on test
@@ -451,7 +773,7 @@ All notable changes will be documented here.
   material-credibility axis.
 
 - **The info line's badge carries the version.** It reads
-  `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
+  `[⚚ OMH Native v4.0.5]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before
   the branch name is cut and before the badge shortens.
 
@@ -461,8 +783,8 @@ All notable changes will be documented here.
   version and keeps only that and the time of the ask in
   `<omh_home>/tui/update-check.json`. While it is newer than the one running,
   the info line says so beside the badge:
-  `[⚚ OMH Native v4.0.4]  v4.0.5 available · omh update`. On a narrower
-  line it is the first thing to shorten, to `↑ v4.0.5`, which stays beside
+  `[⚚ OMH Native v4.0.5]  v4.0.6 available · omh update`. On a narrower
+  line it is the first thing to shorten, to `↑ v4.0.6`, which stays beside
   the version until the version itself goes. Offline, a timeout or a bad reply
   says nothing. `OMH_TUI_UPDATE_CHECK=0` holds it off in one terminal,
   `omh theme update-check off` in every later session, and so does an
@@ -475,12 +797,6 @@ All notable changes will be documented here.
   `<omh_home>/tui/whats-new.json` so they are not shown again. An install
   that ran the OMH TUI before this release is told too; a new install shows
   nothing. `/whats-new` shows them whenever you ask.
-
-- **A plan's done check for a code task is a command.** `plan` accepted a
-  done check such as "an exact signature and its file", which a converter to
-  `dag-ulw` had to turn into a command by guesswork. For a code task the done
-  check is now a command with the result that counts as passing (the
-  test's run command, a gate, a grep for the signature); a task that is not code may keep an observable check.
 
 - **The composer's rules are violet in the default look.** The lines above
   and below the composer, and the launch card's frames, were spectrum's
@@ -534,25 +850,26 @@ All notable changes will be documented here.
   `--verification-command`, which implies `--run-verification`, so the
   shorthand can reach `verified`.
 
-- **In a chat with many loaded tools, Hermes can save a stated preference or
-  decision to OMH memory without searching for a tool first. On Discord, a
-  fact saved in one conversation thread can be recalled in the next thread
-  Hermes starts in the same channel.** The memory provider exposes the small
-  `omh_remember` save/recall tool outside Hermes' deferred plugin-tool catalog,
-  using the existing admission and session-lens gates. Discord threads Hermes
-  auto-created from channel messages use their parent channel's memory scope;
-  other threads keep their own.
-- **Hermes saves a stated preference or decision in the same turn, even when
-  the message also asks for other work.** The `omh_remember` description and
-  its one-line prompt now ask for the save before other tools, limit it to the
-  user's own words, and exclude pasted text and facts that only matter for the
-  current task.
-- **A rule the user restates in other words updates the saved record instead
-  of adding a second one.** `omh_remember(action="save")` takes `replaces`,
-  the id of a record already shown to the conversation; the merged summary
-  goes through the correction path, the old record moves to history, and only
-  the merged record recalls. An id outside the session's lens still saves the
-  fact as a new record.
+- **Hermes can save a stated preference or decision to OMH memory in the same
+  turn, and a rule the user restates updates its record instead of adding a
+  second one.** The memory provider now exposes a small `omh_remember` tool
+  with `save` and `recall` actions outside Hermes' deferred plugin-tool
+  catalog, so a chat with many loaded tools no longer has to search for a tool
+  before it can save. `save` runs the existing capture path (admission, the
+  session lens, surface refusals, bound channel scope, duplicate skip) and
+  `recall` the existing recall path. The tool description and its one-line
+  prompt ask for the save before other tools, even when the message also asks
+  for other work, limit it to the user's own words, and exclude pasted text and
+  facts that only matter for the current task. `save` takes `replaces`, the id
+  of a record already shown to the conversation: the merged summary goes
+  through the correction path, the old record moves to history, and only the
+  merged record recalls; an id outside the session's lens still saves the fact
+  as a new record. It also takes `tags`, a few topic words in the user's own
+  language, so a later message in that language can match a record whose
+  summary is written in another. On Discord, a thread Hermes auto-created from
+  a channel message uses its parent channel's memory scope, so a fact saved in
+  one conversation thread can be recalled in the next thread started in the
+  same channel; other threads keep their own. `omh_memory` is unchanged.
 - **omher.app pages carry X's full share-card tag set.** Every indexable site page now
   carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
   `og:image:type` beside the existing share card, and `test_site_seo` pins
@@ -561,14 +878,19 @@ All notable changes will be documented here.
 - **A code-change plan from `plan` carries its execution order.** Each task
   now has an id, the tasks it depends on, the files it may write and its done
   check: the dependency and write-scope fields a `dag-ulw` node takes, and the
-  check its VERIFY and STOP WHEN come from. Of two tasks that write the same
-  file, one lists the other directly as a dependency, as `dag-ulw` requires.
-  Converting a plan to a graph still adds each node's label, category and full
-  prompt. The last task is a closing gate, named as the verification task:
-  real verification commands run by someone other than the builder, then a
-  review, and an unclean review adds a fix task (at most two rounds) instead
-  of ending the plan. After acceptance, `plan` and `ulw-plan` now offer
-  `dag-ulw` for a plan whose tasks form a graph.
+  check its VERIFY and STOP WHEN come from. For a code task the done check is
+  a command with the result that counts as passing (the test's run command, a
+  gate, a grep for the signature), not a description such as "an exact
+  signature and its file", which a converter to `dag-ulw` had to turn into a
+  command by guesswork; a task that is not code may keep an observable check.
+  Of two tasks that write the same file, one lists the other directly as a
+  dependency, as `dag-ulw` requires. Converting a plan to a graph still adds
+  each node's label, category and full prompt. The last task is a closing
+  gate, named as the verification task: real verification commands run by
+  someone other than the builder, then a review, and an unclean review adds a
+  fix task (at most two rounds) instead of ending the plan. After acceptance,
+  `plan` and `ulw-plan` now offer `dag-ulw` for a plan whose tasks form a
+  graph.
 
 - **A dag-ulw run that finished without a passing check no longer reads as a
   verified goal.** Each node now declares a `role` (`build` by default,
@@ -579,23 +901,20 @@ All notable changes will be documented here.
   under a verify node that was accepted with its handoff checked, otherwise
   `unverified` (with the reason) or `verify_failed`. `omh_dag`, the run
   summary, the messenger end block and the TUI end view all show it, and an
-  unverified done run is told to add a verify node through `extend`. Runs
-  stored before this update keep reading their nodes as before.
-
-- **A dag-ulw writer sent with no role that reads like a check stays native.**
-  A node with no `role` and a `write_scope` whose label reads like a check
-  past its first word ("Re-verify the fix", "Final verification pass",
-  "Re-review the diff", "Double-check the migration") ran as a build node and
-  could go to the external coding owner, where the builder approves itself.
-  It still runs as a build node and still counts as a producer, but it now
-  stays on `delegate_task`; the lint names the role it reads like, and
-  `role=build` sends it to the owner. Build work that reads the same way
-  ("Add input validation to the API") stays native too until the parent
-  names its role. When such a node reads like a verify node and fails, it
-  runs again after its repair, the way a verify node does. A new advisory
-  lint, `no_review_node`, names a run whose build nodes write more than docs
-  with no `review` node; it never refuses a run or moves its state or goal
-  verdict.
+  unverified done run is told to add a verify node through `extend`. A node
+  with no `role` and a `write_scope` whose label reads like a check past its
+  first word ("Re-verify the fix", "Final verification pass", "Re-review the
+  diff", "Double-check the migration") still runs as a build node and still
+  counts as a producer, but it stays on `delegate_task` instead of going to
+  the external coding owner, where the builder would approve itself; the lint
+  names the role it reads like, and `role=build` sends it to the owner. Build
+  work that reads the same way ("Add input validation to the API") stays
+  native too until the parent names its role. Such a node that reads like a
+  verify node and fails runs again after its repair, the way a verify node
+  does. An advisory lint, `no_review_node`, names a run whose build nodes
+  write more than docs with no `review` node; it never refuses a run or moves
+  its state or goal verdict. Runs stored before this update keep reading their
+  nodes as before.
 
 - **`omh_jev_ask` can reach a TypeSafe endpoint you configure.** It honors
   `TYPESAFE_BASE_URL`, the API-root variable TypeSafe's own SDKs read: an
@@ -615,8 +934,8 @@ All notable changes will be documented here.
   prices go in the post body), one number smaller than the logo, and the
   official logo at 25% or more of the frame height, checked on a still sheet
   before the render. `design-quality-gate` scores the same items as a
-  Short-clip discipline axis. Generalized from six review rounds on one
-  launch clip. (#2488)
+  Short-clip discipline axis. Generalized from six review rounds on one launch
+  clip. Contributed by @bellman-sionic (#2488, carried by #2490).
 
 - **Codex handoffs on native Windows can write (#2471).** Four changes:
   - The child environment now passes `SYSTEMDRIVE` with the other Windows
@@ -662,13 +981,15 @@ All notable changes will be documented here.
   action=cancel` now lists each node whose delegate child is still out, with its
   subagent id and how long it has been open, under `still_running`, and the reply
   names each one with its `delegate_task action=stop` route. A repeated cancel
-  names the same children instead of saying none are left. (#2512)
+  names the same children instead of saying none are left. Contributed by
+  @ryanrodrigues25200525-svg (#2512, carried by #2515).
 - **The LSP opt-in has a visible enable path.** When the impact check finds new
   errors and the `omh-lsp` toolset is off, its note says `lsp_diagnostics`
   re-checks directly once `OMH_LSP_TOOLS=1` or the `lsp_tools` setting is on and
   Hermes restarted; with the toolset on it no longer repeats that. `omh doctor`
   advisories gain `lsp_tools_disabled` (advice when unset or off, unobserved
-  when the config shape cannot be read). (#2511)
+  when the config shape cannot be read). Contributed by
+  @ryanrodrigues25200525-svg (#2511, carried by #2515).
 
 - **Korean requests that mention OMH by name stop drawing unrelated skill
   suggestions.** The per-turn "skills that may fit" line ranked Korean on
@@ -678,6 +999,50 @@ All notable changes will be documented here.
   the request verb "확인" now count as filler. Replayed over 722 Korean owner
   messages, lines naming those three skills fall from 24 to 11; each skill still
   matches its own nouns ("병렬 도구", "코덱스", "기억 점검").
+
+- **Codex fanout units get OMH's own skills, and can edit, commit and reach
+  the network inside the fence.** OMH looked for Codex skills only in
+  `~/.codex/skills`, while Codex also loads `~/.agents/skills`, where
+  `.codex/install.sh` puts OMH's pack. On a Mac with six personal skills
+  there, every Codex unit was told to start with `$generate2dsprite` and
+  `$game-video-feedback-loop` (11 of 11 units in a real run, about 32k
+  characters of unrelated skill text each). Discovery now reads the repo
+  `.agents/skills`, `$CODEX_HOME` and `~/.agents/skills` too, so the same unit
+  gets `$omh-plan`, `$omh-build-failure-triage`, `$omh-code-review`; a name
+  found in two roots is never suggested, since Codex refuses a plain `$name`
+  that matches two skills. Inside the macOS fence, zsh heredocs and `uv` now
+  work: `TMPPREFIX` and `UV_CACHE_DIR` point into the unit's scratch dir
+  (before, every `git commit -F - <<EOF` failed with "can't create temp file
+  for here document" and `uv run` could not open its cache). The fence's write
+  boundary is unchanged. On macOS the fence also allows the two `trustd` mach
+  lookups (`com.apple.trustd.agent`, `com.apple.trustd`), so Codex's TLS
+  certificate check can ask the trust daemon; before, a unit connected, could
+  not verify the certificate, and ended with `workspace routing discovery
+  failed` or retried until its timeout. They are lookup rules only: no file or
+  preference write is allowed (#2456).
+- **A stale Codex skill pack is now reported and refreshed.** `omh update`
+  refreshes an installed `~/.agents/skills` pack in its recorded layout (it
+  never creates one), `omh doctor` warns with `omh update` when that pack is
+  stale or edited, and `omh install --target agents --scope user --status`
+  reports the pack's real state instead of `missing` when only the unused
+  `~/.claude/skills` mirror is absent.
+
+- **Memory that does not match a message is listed, not injected; a stuck run changes approach before it stops.**
+  When a chat message shares no word with any stored record, the memory pack used to serve every active
+  record in full, and Hermes frames that pack as reference data for the reply, so rules about unrelated work
+  steered it. Those records now arrive as one `<record_index>` line naming each record's subject (at most
+  eight, then `+K more`), and `omh_remember recall` reads one in full when it bears on the request. Records
+  saved in the same conversation still arrive in full, a matching message gets the same pack as before, and
+  CLI recall, `omh_memory recall` and coding handoffs are unchanged. In
+  dag-ulw, a node's last repair cycle is now a re-plan: its tasks carry the
+  earlier failure reasons and ask for two or three approaches that differ in
+  kind before any edit, unless every failure was an infrastructure cut. The
+  loop stop ladder's first no-progress stop now asks for one re-plan from the
+  goal ledger (`replan_stuck_loop_once`) and resets the window; only a stop
+  after that names the blocker step. The dag-ulw run loop reference gains a
+  "When the path is unknown" section (cheap scout nodes on different
+  hypotheses first, then `extend` with the build layer), and the interview
+  skill keeps at least one answer candidate from outside recalled memory.
 
 ## 4.0.4 - 2026-11-01
 

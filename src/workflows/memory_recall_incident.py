@@ -124,7 +124,14 @@ def _receipt_stage(receipt: dict[str, Any], record_id: str, claim_digest: str) -
             model_use_observed=receipt['model_use_observed'],
         )
     if record_id in selected:
-        return recall_delivery_stage(rendered=False, delivery_observed=None, model_use_observed=None)
+        return recall_delivery_stage(
+            rendered=False, indexed=record_id in receipt['rendering'].get('indexed_records', []),
+            delivery_observed=None, model_use_observed=None,
+        )
+    if record_id in receipt['selection'].get('served_this_session', []):
+        # An earlier turn of this conversation carried it; that turn's receipt
+        # is gone, so delivery stays unproven, but the case has a name.
+        return 'served_this_session', 'selected'
     return 'live_selection_excluded', 'selected'
 
 

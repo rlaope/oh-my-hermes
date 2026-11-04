@@ -79,7 +79,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "exception class and message under `omh_desktop_hud/v1`, and no `display` key; the pane "
         "renders that record as a reader error, so it is never mistaken for a HUD payload; the "
         "route answers 200 because in the pane a thrown error is indistinguishable from a transport "
-        "failure, and the record is what lets it say which one happened.",
+        "failure, and the record is what lets it say which one happened. Its second handler is the "
+        "delegation drawing for the pane: a renderer failure becomes `delegation_drawing` with "
+        "`error` under `omh_desktop_dag/v1` beside the reader's payload, and the pane draws the "
+        "lane rows it drew before the drawing existed.",
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/jev_ask_client.py",
@@ -138,6 +141,12 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "rather than losing the whole consolidation request.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/memory_provider.py", "_conversation_session_ids", INTENTIONAL,
+        "A lineage failure withholds ancestors and preserves only this session's origin records. "
+        "The receipt reports op compaction_ancestors and its error class through the provider's "
+        "bounded failure counter; failed discovery never admits another conversation's full text.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/memory_provider.py",
         "_guard_digest",
         INTENTIONAL,
@@ -145,6 +154,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "Whatever its stores hold, a fault costs only the digest: it is counted and recorded as op "
         "`session_digest` with its error class in the write failures the next receipt reports, and "
         "the session gets no digest rather than a failed hook or a blank pack.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/memory_provider.py",
+        "_work_state_facts",
+        INTENTIONAL,
+        "The unfinished-work facts are read inside `on_pre_compress`, where Hermes drops the provider's "
+        "whole return on a raise. A fault costs only the facts: it is counted and recorded as op "
+        "`work_state` with its error class in the write failures the next receipt reports, and the "
+        "compaction keeps its memory blocks rather than losing them with the facts.",
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/memory_provider.py",
@@ -327,6 +345,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "`runtime_status_read` plus a sanitized error type before returning a bounded "
         "`omh_degradation` block. A genuinely idle host still returns None, while either "
         "projection failing remains distinguishable from absence.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/hooks/llm_hooks.py",
+        "_warm_imports",
+        INTENTIONAL,
+        "The register-time warm-up only pre-loads modules; it computes and returns nothing. A failed import "
+        "leaves the modules unloaded, and each call site (`context_brief._capability_family_cards`, "
+        "`awareness._user_trigger_pack_route_decision`) imports them again and takes its own guarded, "
+        "reported path, exactly as it did with no warm-up.",
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/host_observation.py",
@@ -652,6 +679,18 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "end, and the thread reads again instead of dying for the rest of the session.",
     ),
     ClassifiedSite(
+        "src/tui/app.py",
+        "_drawn",
+        INTENTIONAL,
+        "Only in the launched TUI (`contain_faults`, which `_run` sets and no test-built App does, so a "
+        "render bug still raises in tests): a part of the frame whose producer raises (the info line, the "
+        "live transcript, the rows above the composer, the menu or HUD panel, the agent view, the sticky "
+        "prompt) is drawn as one warning-colour row saying that part could not be drawn and the "
+        "exception's class, and its traceback is kept once in the TUI's `FaultLog`, which /logs shows. "
+        "It is never drawn as the part's normal rows or as nothing; catching it keeps one part's bug "
+        "from ending the session.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/host_process.py",
         "this_process",
         INTENTIONAL,
@@ -814,6 +853,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "off. A note is only ever built from fresh server diagnostics, so a failure never claims callers broke.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/caller_check.py",
+        "round_end_note",
+        INTENTIONAL,
+        "An unexpected failure reading the turn's edited module or its importers is logged as a warning naming the "
+        "exception class (`caller_check round_end ... failed=`) and yields no note; the turn ends as it would "
+        "without the check. A note is only ever built from calls that bound to the turn-start signature and no "
+        "longer bind, so a failure never claims a call is broken.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/consistency_trigger.py",
         "snapshot_before_edit",
         INTENTIONAL,
@@ -874,6 +922,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         INTENTIONAL,
         "Handlers must not raise into the host: an unexpected failure is `ok: false`, error "
         "`unexpected_error` with the exception class, never a diagnostics list or a file reported checked.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/installed_skills.py",
+        "hermes_skill_search_roots",
+        INTENTIONAL,
+        "Hermes' own skill-root reader runs inside `pre_llm_call` and must not raise into the host; a failure "
+        "means 'resolution unknown' and the hint keeps the manifest's installed set, which is exactly what it "
+        "named before this check existed. The same question is answered independently, and surfaced, by "
+        "the `hermes_skill_visibility` doctor row and the launch card's count warning.",
     ),
 )
 
@@ -963,8 +1020,27 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 97 -> 99 / 88 -> 90: `test_expectation_check.note_request` and `round_end_note`,
 # the round-end test check: a pre_llm_call body that records nothing on a failure,
 # and a note that says nothing on one.
-EXPECTED_HANDLER_COUNT = 99
-EXPECTED_ANCHOR_COUNT = 90
+# 99 -> 100 / 90 -> 91: `memory_provider._work_state_facts`, the unfinished-work
+# facts at compaction (a fault is recorded as a write failure and costs only the
+# facts, never the memory blocks).
+# 100 -> 101 / 91 -> 92: `memory_provider._conversation_session_ids`, the
+# compaction-lineage read that decides which records stay in full on a no-match
+# turn (a fault keeps only this session and is reported on the receipt).
+# 101 -> 102 / 92 -> 93: `installed_skills.hermes_skill_search_roots`, Hermes' own
+# skill-root reader inside `pre_llm_call` (a failure keeps the manifest's
+# installed set, what the hint named before the check, never a raise into the host).
+# 102 -> 103 / 93 -> 94: `app.App._drawn`, the launched OMH TUI's render containment
+# (a part of the frame that raises is a warn row naming it, its traceback in /logs).
+# 103 -> 104 / 94 -> 95: `llm_hooks._warm_imports`, the register-time warm-up thread for the
+# first turns' package imports (a failure loads nothing, and the call sites import and report as before).
+# 104 -> 105 / 95 -> 96: `caller_check.round_end_note`, the always-on round-end
+# read of call sites a signature change broke (a failure logs a named warning and
+# adds no note).
+# 105 -> 106 / 96: a second handler inside the classified `plugin_api.hud_payload`, the
+# Desktop pane's delegation drawing (a failure is a record with `error` beside a HUD that
+# still reads, and the pane draws its lane rows instead).
+EXPECTED_HANDLER_COUNT = 106
+EXPECTED_ANCHOR_COUNT = 96
 
 
 class DerivedSite(NamedTuple):

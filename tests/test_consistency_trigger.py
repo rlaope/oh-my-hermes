@@ -483,7 +483,57 @@ class NamedFileSnapshotTest(_Workspace):
 
 class IndexCostTest(_Workspace):
     def first_call(self, session: str = SESSION) -> None:
-        ct.snapshot_before_edit({"tool_name": "read_file", "session_id": session, "turn_id": self.turn}, {"path": "x"})
+        """A call that can change a file (a command naming none): the turn's first one takes the index."""
+        ct.snapshot_before_edit({"tool_name": "terminal", "session_id": session, "turn_id": self.turn}, {"command": "ls"})
+
+    def read(self, tool: str = "read_file") -> None:
+        ct.snapshot_before_edit({"tool_name": tool, "session_id": SESSION, "turn_id": self.turn},
+                                {"path": "src/app/a.py", "pattern": "a"})
+
+    def test_a_turn_that_only_reads_takes_no_index(self):
+        self.write("src/app/a.py", "def a():\n    return 1\n")
+        with mock.patch.object(ct, "_index", wraps=ct._index) as walks:
+            for tool in sorted(ct._READ_TOOLS):
+                self.read(tool)
+        walks.assert_not_called()
+        self.assertEqual(ct.turn_root(SESSION), str(self.root))
+        # Nothing this turn could change a file; a reported one still fires, as it did with an index.
+        self.assertEqual(self.verdict(str(self.root / "src/app/a.py")),
+                         ct.Verdict(True, "opaque_edit", "src/app/a.py"))
+
+    def test_the_index_is_taken_at_the_first_call_after_the_reads_and_only_once(self):
+        self.write("src/app/a.py", "def a():\n    return 1\n")
+        self.write("src/app/b.py", "def b():\n    return a()\n")
+        with mock.patch.object(ct, "_index", wraps=ct._index) as walks:
+            self.read()
+            self.read("search_files")
+            walks.assert_not_called()
+            changed = self.edit("src/app/a.py", "return 1", "return 2")
+            self.first_call()
+            walks.assert_called_once()
+        self.assertEqual(self.verdict(changed)[:2], (False, "no_copy_or_reference"))
+
+    def test_a_file_changed_outside_the_tools_before_the_first_non_read_call_is_baseline(self):
+        # The admitted cost of deferring the index past reads: an editor or a background process that
+        # writes during the read-only stretch is part of the turn's baseline, not an opaque edit.
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.write("src/app/b.py", "def helper():\n    return 1\n")
+        self.read()
+        self.write("src/app/b.py", "def helper():\n    return 3\n")
+        changed = self.edit("src/app/a.py", "return 1", "return 2")
+        verdict = self.verdict(changed)
+        self.assertNotEqual(verdict.reason, "opaque_edit")
+        self.assertEqual(verdict[:2], (False, "no_copy_or_reference"))
+
+    def test_a_call_that_is_not_a_read_indexes_before_it_runs(self):
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.write("src/app/b.py", "def helper():\n    return 1\n")
+        self.read()
+        ct.snapshot_before_edit({"tool_name": "delegate_task", "session_id": SESSION, "turn_id": self.turn},
+                                {"goal": "x"})
+        self.edit("src/app/b.py", "return 1", "return 3", session="child-session")
+        changed = self.edit("src/app/a.py", "return 1", "return 2")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "opaque_edit", "src/app/b.py"))
 
     def test_an_over_budget_root_is_not_walked_again_within_the_ttl(self):
         self.write("src/app/a.py", "def a():\n    return 1\n")

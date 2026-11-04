@@ -85,8 +85,9 @@ def _provider_pack(paths, context: dict[str, Any] | None) -> tuple[str, dict[str
     try:
         provider.initialize("shared_fixture", cwd=paths.omh_home.parent, principal_context=_context(PRINCIPAL_A), shared_surface=True)
         provider.on_turn_start(1, "fixture", principal_context=context)
-        provider.queue_prefetch("", session_id="shared_fixture", now=NOW)
-        text = provider.prefetch("", session_id="shared_fixture")
+        # A live turn serves only what its query matches; this one names every fixture record.
+        provider.queue_prefetch("preference project fact", session_id="shared_fixture", now=NOW)
+        text = provider.prefetch("preference project fact", session_id="shared_fixture")
         return text, provider.latest_prefetch_receipt() or {}
     finally:
         provider.shutdown()

@@ -11,6 +11,7 @@ import random
 import unittest
 
 from omh.tui.keys import (
+    BURST_SECONDS,
     BUTTON_LEFT,
     BUTTON_MIDDLE,
     BUTTON_RIGHT,
@@ -18,6 +19,7 @@ from omh.tui.keys import (
     NO_BUTTON,
     PASTE_LATE_SECONDS,
     PASTE_SETTLE_SECONDS,
+    SSH_BURST_SECONDS,
     WHEEL_DOWN,
     WHEEL_LEFT,
     WHEEL_RIGHT,
@@ -785,6 +787,160 @@ class PausedInput:
             self.now += READ_SECONDS
             self.events += self.decoder.flush(self.reporting, self.off_at)
         self.now = end
+
+
+class UnmarkedPasteTests(unittest.TestCase):
+    """A paste the terminal sent without its markers (tmux or SSH stripped them): its line breaks are no Enter."""
+
+    def paused(self, burst_seconds: float = BURST_SECONDS) -> PausedInput:
+        paused = PausedInput(reporting=False)
+        paused.decoder = KeyDecoder(lambda: paused.now, burst_seconds)
+        return paused
+
+    def test_a_read_of_lines_is_held_and_settles_as_one_paste(self) -> None:
+        for data, text in (
+            (b"line one\rline two\rline three", "line one\nline two\nline three"),
+            (b"line one\nline two", "line one\nline two"),  # a terminal that pastes line feeds
+            (b"one\r\ntwo\r\n", "one\ntwo\n"),
+            (b"line one\rtwo", "line one\ntwo"),  # one line break in a read longer than typing brings
+            ("한국어 줄\r둘째 줄".encode(), "한국어 줄\n둘째 줄"),
+        ):
+            with self.subTest(data=data):
+                paused = self.paused()
+                paused.feed(data)
+                self.assertEqual(paused.events, [])  # no Enter, and nothing typed yet
+                paused.pause(READ_SECONDS)
+                self.assertEqual(paused.events, [Paste(text)])
+
+    def test_a_lone_enter_and_bare_line_breaks_are_keys_at_once(self) -> None:
+        paused = self.paused()
+        paused.feed(b"h")
+        paused.now += 0.001  # a key right after another
+        paused.feed(b"\r")
+        paused.feed(b"\r\r")  # a run of bare Enters stays keystrokes
+        paused.feed(b"\n")  # Ctrl+J, a bare line feed
+        self.assertEqual(paused.events, [char("h"), Key("enter"), Key("enter"), Key("enter"), char("j", ctrl=True)])
+
+    def test_text_and_enter_in_one_read_after_a_pause_submit_at_once(self) -> None:
+        # An input method commits the syllable and the Enter that ended it in one read.
+        paused = self.paused()
+        paused.feed("안녕하세".encode())
+        paused.pause(0.15)
+        paused.feed("요\r".encode())
+        self.assertEqual(paused.events, [*map(char, "안녕하세요"), Key("enter")])
+
+    def test_a_read_with_a_control_key_in_it_is_typed(self) -> None:
+        paused = self.paused()
+        paused.feed(b"\x15first\rsecond\r")  # Ctrl+U: no paste holds one
+        self.assertEqual(
+            paused.events, [char("u", ctrl=True), *map(char, "first"), Key("enter"), *map(char, "second"), Key("enter")]
+        )
+
+    def test_chunks_less_than_the_window_apart_are_one_paste(self) -> None:
+        paused = self.paused()
+        for chunk in (b"first line\rsec", b"ond line\rthi", b"rd line\r"):
+            paused.feed(chunk)
+            paused.now += BURST_SECONDS / 2
+        paused.pause(READ_SECONDS)
+        self.assertEqual(paused.events, [Paste("first line\nsecond line\nthird line\n")])
+
+    def test_a_line_break_ending_text_right_after_the_read_before_waits_for_the_next_chunk(self) -> None:
+        paused = self.paused()
+        paused.feed(b"line one\r")  # after a pause: Enter at once
+        paused.pause(0.2)
+        paused.feed(b"x")
+        paused.now += BURST_SECONDS / 2
+        paused.feed(b"line two\r")  # text and a line break right after a read: the line break waits
+        self.assertEqual(paused.events, [*map(char, "line one"), Key("enter"), char("x"), *map(char, "line two")])
+        paused.now += BURST_SECONDS / 2
+        paused.feed(b"line three")  # the next chunk: it was a newline
+        paused.pause(READ_SECONDS)
+        self.assertEqual(paused.events[-1:], [Paste("\nline three")])
+        # Nothing joins it: after the window it is the Enter it was.
+        paused.feed(b"y")
+        paused.now += BURST_SECONDS / 2
+        paused.feed(b"z\r")
+        paused.pause(READ_SECONDS)
+        self.assertEqual(paused.events[-3:], [char("y"), char("z"), Key("enter")])
+
+    def test_one_typed_key_after_a_held_line_break_makes_it_its_key(self) -> None:
+        paused = self.paused()
+        paused.feed(b"hel")
+        paused.now += 0.01
+        paused.feed(b"lo\r")  # right after the read before: the Enter waits for the window
+        paused.now += 0.01
+        paused.feed(b"x")  # one key, not a paste's next chunk
+        self.assertEqual(paused.events, [*map(char, "hello"), Key("enter"), char("x")])
+
+    def test_over_ssh_an_input_method_commit_with_enter_then_the_next_syllable_sends(self) -> None:
+        paused = self.paused(SSH_BURST_SECONDS)
+        paused.feed("안녕하세".encode())
+        paused.pause(0.08)
+        paused.feed("요\r".encode())  # the commit and its Enter in one write, 80 ms on
+        paused.pause(0.06)
+        paused.feed("다".encode())
+        self.assertEqual(paused.events, [*map(char, "안녕하세요"), Key("enter"), char("다")])
+
+    def test_over_ssh_a_backslash_enter_then_a_key_is_the_continuation_and_the_key(self) -> None:
+        paused = self.paused(SSH_BURST_SECONDS)
+        paused.feed(b"a")
+        paused.now += 0.03
+        paused.feed(b"\\\r")
+        paused.now += 0.03
+        paused.feed(b"b")
+        self.assertEqual(paused.events, [char("a"), char("\\"), Key("enter"), char("b")])
+
+    def test_a_held_line_feed_then_a_key_is_ctrl_j_and_the_key(self) -> None:
+        paused = self.paused(SSH_BURST_SECONDS)
+        paused.feed(b"/")
+        paused.now += 0.03
+        paused.feed(b"o\n")
+        paused.now += 0.03
+        paused.feed(b"d")
+        self.assertEqual(paused.events, [char("/"), char("o"), char("j", ctrl=True), char("d")])
+
+    def test_one_line_break_between_short_text_is_typed(self) -> None:
+        # A stalled loop hands over a prompt, its Enter and the next key in one read; text only after a line
+        # break is Enter and the text.
+        for data, events in (
+            (b"fix A\rt", [*map(char, "fix A"), Key("enter"), char("t")]),
+            (b"\rafter a break", [Key("enter"), *map(char, "after a break")]),
+        ):
+            with self.subTest(data=data):
+                paused = self.paused()
+                paused.feed(data)
+                self.assertEqual(paused.events, events)
+
+    def test_a_read_after_the_window_ends_the_paste_and_is_read_alone(self) -> None:
+        paused = self.paused()
+        paused.feed(b"one\rtwo\r")
+        paused.now += BURST_SECONDS  # no flush ran meanwhile: the clock decides, not the flush
+        paused.feed(b"\r")
+        self.assertEqual(paused.events, [Paste("one\ntwo\n"), Key("enter")])
+
+    def test_a_key_that_is_not_plain_ends_the_paste_first(self) -> None:
+        paused = self.paused()
+        paused.feed(b"alpha\rbeta")
+        paused.feed(b"\x1b[A")
+        paused.feed(b"\x03")
+        self.assertEqual(paused.events, [Paste("alpha\nbeta"), Key("up"), char("c", ctrl=True)])
+
+    def test_over_ssh_chunks_further_apart_still_join(self) -> None:
+        local, ssh = self.paused(), self.paused(SSH_BURST_SECONDS)
+        for paused in (local, ssh):
+            paused.feed(b"one\rtwo\r")
+            paused.pause(0.06)  # a flush runs at 50 ms
+            paused.feed(b"three")
+            paused.pause(SSH_BURST_SECONDS + READ_SECONDS)
+        self.assertEqual(local.events, [Paste("one\ntwo\n"), *map(char, "three")])
+        self.assertEqual(ssh.events, [Paste("one\ntwo\nthree")])
+
+    def test_a_held_paste_keeps_the_decoder_holding(self) -> None:
+        paused = self.paused()
+        paused.feed(b"alpha\rbeta")
+        self.assertTrue(paused.decoder.holding)  # the loop comes back to settle it
+        paused.pause(READ_SECONDS)
+        self.assertFalse(paused.decoder.holding)
 
 
 class SplitReportTests(unittest.TestCase):

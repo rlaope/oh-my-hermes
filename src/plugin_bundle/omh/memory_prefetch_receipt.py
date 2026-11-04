@@ -45,6 +45,7 @@ MAX_UNREADABLE_NAMES = 16
 # Records a newer same-subject record replaced, named by id; the count in
 # `exclusion_reason_counts` is never cut.
 MAX_SUBJECT_SUPERSEDED = 16
+MAX_SERVED_THIS_SESSION = 16
 
 
 def build_prefetch_receipt(
@@ -82,8 +83,10 @@ def build_prefetch_receipt(
     pack = selection.pack
     selected_ids = [str(item.get("record_id", "")) for item in pack.get("included_records", []) if isinstance(item, dict)]
     rendered_ids = [str(item.get("record_id", "")) for item in section.rendered]
-    if rendered_ids != selected_ids[: len(rendered_ids)]:
-        raise ValueError("incompatible prefetch rendering: rendered records are not the selected prefix")
+    indexed_ids = list(section.indexed)
+    unindexed_ids = [record_id for record_id in selected_ids if record_id not in indexed_ids]
+    if not _indexed_ids_ok(indexed_ids, selected_ids) or rendered_ids != unindexed_ids[: len(rendered_ids)]:
+        raise ValueError("incompatible prefetch rendering: rendered records are not the selected prefix excluding indexed records")
     for item in section.rendered:
         digest = str(item.get("content_digest", ""))
         if len(digest) != 64 or set(digest) - _HEX64:
@@ -138,6 +141,13 @@ def build_prefetch_receipt(
                 for item in pack.get("excluded_records", [])
                 if isinstance(item, dict) and item.get("reason") == "superseded_by_subject"
             ][:MAX_SUBJECT_SUPERSEDED],
+            # Records left out because this conversation already holds them
+            # from an earlier turn, so an incident names that case. Ids only.
+            "served_this_session": [
+                str(item.get("record_id", ""))
+                for item in pack.get("excluded_records", [])
+                if isinstance(item, dict) and item.get("reason") == "served_this_session"
+            ][:MAX_SERVED_THIS_SESSION],
         },
         "rendering": {
             "rendered_records": [
@@ -145,8 +155,9 @@ def build_prefetch_receipt(
                 for item in section.rendered
             ],
             "rendered_count": len(section.rendered),
+            "indexed_records": indexed_ids,
             "selected_not_rendered": [
-                {"record_id": record_id, "reason": "render_budget_exhausted"} for record_id in selected_ids[len(rendered_ids) :]
+                {"record_id": record_id, "reason": "render_budget_exhausted"} for record_id in unindexed_ids[len(rendered_ids) :]
             ],
             "omission_counts": {str(key): int(value) for key, value in section.omissions.items()},
             "rendered_block_count": max(int(rendered_block_count), 0),
@@ -258,6 +269,8 @@ def validate_prefetch_receipt(value: object) -> list[str]:
         errors.append("selection.selected_count")
     elif "subject_superseded" in selection and not _subject_superseded_ok(selection["subject_superseded"]):
         errors.append("selection.subject_superseded")
+    elif "served_this_session" in selection and not _held_ids_ok(selection["served_this_session"]):
+        errors.append("selection.served_this_session")
     if not isinstance(rendering, dict) or not isinstance(rendering.get("rendered_records"), list):
         errors.append("rendering")
     else:
@@ -271,8 +284,16 @@ def validate_prefetch_receipt(value: object) -> list[str]:
             errors.append("rendering.rendered_records")
         if isinstance(selection, dict) and isinstance(selection.get("selected_record_ids"), list):
             rendered_ids = [item.get("record_id") for item in rendered if isinstance(item, dict)]
-            if rendered_ids != selection["selected_record_ids"][: len(rendered_ids)]:
+            indexed = rendering.get("indexed_records", [])
+            selected_ids = selection["selected_record_ids"]
+            if not _indexed_ids_ok(indexed, selected_ids):
+                errors.append("rendering.indexed_records")
+                indexed = []
+            unindexed_ids = [record_id for record_id in selected_ids if record_id not in indexed]
+            if rendered_ids != unindexed_ids[: len(rendered_ids)]:
                 errors.append("rendering.selected_prefix")
+            if any(isinstance(item, dict) and item.get("record_id") in indexed for item in rendering.get("selected_not_rendered", [])):
+                errors.append("rendering.selected_not_rendered")
     if value.get("delivery_observed") is not None or value.get("model_use_observed") is not None:
         errors.append("observation_claims")
     # Absent on a receipt an earlier bundle wrote.
@@ -337,6 +358,16 @@ def read_prefetch_receipt(omh_home: str | Path) -> dict[str, Any] | None:
     return value
 
 
+def _indexed_ids_ok(value: object, selected_ids: list[str]) -> bool:
+    """Index ids are a unique, selection-ordered subset; older receipts omit them."""
+    return (
+        isinstance(value, list)
+        and all(isinstance(record_id, str) for record_id in value)
+        and len(value) == len(set(value))
+        and value == [record_id for record_id in selected_ids if record_id in value]
+    )
+
+
 def _object(value: object) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
@@ -352,6 +383,15 @@ def _subject_superseded_ok(value: object) -> bool:
             and all(isinstance(item[key], str) and item[key] for key in item)
             for item in value
         )
+    )
+
+
+def _held_ids_ok(value: object) -> bool:
+    """A bounded list of non-empty record ids; absent on older receipts."""
+    return (
+        isinstance(value, list)
+        and len(value) <= MAX_SERVED_THIS_SESSION
+        and all(isinstance(item, str) and item for item in value)
     )
 
 

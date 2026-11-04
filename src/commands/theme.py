@@ -11,9 +11,8 @@ the report only, because the TUI falls back to an OMH palette it names
 (`skin_pack.effective_theme`).
 
 `omh theme use <name>` is the one writer of the theme, and running it is the
-consent; `omh theme glow on|off` writes the OMH TUI's working glow choice in
-the same record, as `/glow` inside the TUI does, and `omh theme wallpaper
-on|off` its living wallpaper choice, as `/wallpaper` does, and `omh theme
+consent; `omh theme wallpaper on|off` writes the OMH TUI's living wallpaper
+choice in the same record, as `/wallpaper` inside the TUI does, and `omh theme
 update-check on|off` whether the TUI asks npm once a day for a newer release.
 The TUI reads the choice when it opens, so a change lands on the next
 `omh`; `/theme` inside the TUI switches the open session only.
@@ -39,14 +38,12 @@ from ..skin_pack import (
     SkinTheme,
     default_theme,
     effective_theme,
-    read_glow_choice,
     read_theme_choice,
     read_update_check_choice,
     read_wallpaper_choice,
     theme_for_name,
     theme_names,
     theme_store_path,
-    write_glow_choice,
     write_theme_choice,
     write_update_check_choice,
     write_wallpaper_choice,
@@ -63,7 +60,6 @@ THEME_LIST_SCHEMA_VERSION = "omh_theme_list/v2"
 THEME_CHANGE_SCHEMA_VERSION = "omh_theme_change/v2"
 THEME_STATUS_SCHEMA_VERSION = "omh_theme_status/v2"
 THEME_REPAIR_SCHEMA_VERSION = "omh_theme_repair/v2"
-THEME_GLOW_SCHEMA_VERSION = "omh_theme_glow/v1"
 THEME_WALLPAPER_SCHEMA_VERSION = "omh_theme_wallpaper/v1"
 THEME_UPDATE_CHECK_SCHEMA_VERSION = "omh_theme_update_check/v1"
 
@@ -200,11 +196,6 @@ def _apply_theme(args: argparse.Namespace, theme: SkinTheme, *, dry_run: bool) -
     }
 
 
-def cmd_theme_glow(args: argparse.Namespace) -> int:
-    """`omh theme glow on|off` saves whether the OMH TUI's working glow is on; alone, reports it."""
-    return _theme_switch(args, GLOW_SWITCH)
-
-
 def cmd_theme_wallpaper(args: argparse.Namespace) -> int:
     """`omh theme wallpaper on|off` saves whether the OMH TUI's living wallpaper is on; alone, reports it."""
     return _theme_switch(args, WALLPAPER_SWITCH)
@@ -229,12 +220,6 @@ class _Switch(NamedTuple):
     held_off: Callable[[Path], str] | None = None
 
 
-GLOW_SWITCH = _Switch(
-    "glow", THEME_GLOW_SCHEMA_VERSION, "OMH TUI working glow", "the working glow",
-    read_glow_choice, write_glow_choice,
-    "The OMH TUI reads it when it opens; `/glow on|off` switches it inside a session. "
-    "OMH_TUI_GLOW=0 holds it off in one terminal.",
-)
 WALLPAPER_SWITCH = _Switch(
     "wallpaper", THEME_WALLPAPER_SCHEMA_VERSION, "OMH TUI living wallpaper", "the living wallpaper",
     read_wallpaper_choice, write_wallpaper_choice,
@@ -417,14 +402,6 @@ def _add_theme_commands(sub) -> None:
     )
     _add_shared_theme_arguments(theme_status, "Print the full machine-readable status payload.")
     theme_status.set_defaults(func=cmd_theme_status)
-
-    theme_glow = theme_sub.add_parser(
-        "glow",
-        help="Turn the OMH TUI's working glow (a light round the screen while a turn runs) on or off; alone, show it.",
-    )
-    theme_glow.add_argument("state", nargs="?", help="on or off; omit to show the saved choice.")
-    _add_shared_theme_arguments(theme_glow, "Print the machine-readable glow payload.")
-    theme_glow.set_defaults(func=cmd_theme_glow)
 
     theme_wallpaper = theme_sub.add_parser(
         "wallpaper",

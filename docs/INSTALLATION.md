@@ -412,9 +412,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   (and each page of a pager) one synchronized update (DECSET 2026), so a terminal that
   supports it shows it whole and nothing flickers. A full redraw (a resize,
   Ctrl+L, `/redraw`, switching or resuming a session) prints the session's
-  last 3,000 rows again under one row such as `⋯ 412 earlier messages ·
+  last 4,000 rows again under one row such as `⋯ 412 earlier entries ·
   /history shows all`; `/history` pages through the whole session. The OMH
-  TUI holds a session's last 2,000 messages (a prompt, a reply, its
+  TUI holds a session's last 2,000 entries (a prompt, a reply, its
   thinking, the tool calls between two replies, a notice, a command with its output, a
   steer and a turn's done line are one each); older ones are
   left to the terminal's scrollback until a full redraw clears it, and from
@@ -907,16 +907,6 @@ run and approval decision stays Hermes'; the screen is OMH's.
   terminal's own notification: OSC 9 in iTerm2, WezTerm and Ghostty, OSC 777
   in foot and rxvt, the bell elsewhere (tmux among them, which flags the
   window); `OMH_TUI_BELL=0` keeps all of it quiet.
-- While a turn runs, a light goes round the screen's edge, clockwise, once
-  every four seconds, in the launch look's colours, and it is gone when the
-  turn ends. To keep the edge free, the rows are drawn one column in from
-  each side and the screen's last row stays blank, whether a turn runs or
-  not. It shows with motion on, at truecolor, on a screen 20×8 or larger.
-  `/glow off` turns it off and `/glow on` back on (`/glow` alone switches
-  it); the choice is saved beside the theme, as `glow` in
-  `<omh_home>/tui/theme.json`; `omh theme glow on|off` saves the same choice
-  from the shell. `OMH_TUI_GLOW=0` holds it off in one terminal whatever is
-  saved.
 - Each launch look has a living wallpaper: the TUI sets the terminal's
   background to the look's own colour (OSC 11) while it runs and keeps a
   scene moving in the screen's blank cells, drawn as pixel art in the
@@ -979,7 +969,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   `read_file`, `12 matches` for
   `search_files` (`3 files` when it listed files, `50+ matches` when Hermes
   stopped counting, and Hermes' warning on the line under it when it gave
-  one, such as why nothing matched). An `omh_memory` recall that found
+  one, such as why nothing matched). An `omh_memory` or `omh_remember` recall that found
   records lists them from its own result, a line each, type then summary
   (`decision  rotate refresh tokens per session`), so a found recall prints
   your memory's summaries into the local transcript; as the call lands, one
@@ -1304,6 +1294,14 @@ a true turns it on (a number other than 0 too, or, written by hand as a
 string, `true`, `yes`, `on` or `1`); off or absent, every key does what the
 rest of this page says.
 
+- The terminal's cursor follows the mode, an OMH addition (Hermes keeps a
+  steady block in both modes): a steady beam in INSERT, a steady block in
+  NORMAL (DECSCUSR, `CSI Ps SP q`). It is written only when the mode
+  changes. The terminal's own shape is back while a question or picker has
+  the keys, when vim mode goes off, and on exit or Ctrl+Z. On exit it is
+  the terminal's default shape (`CSI 0 SP q`), not whatever your shell had
+  set before the TUI started, the same compromise Vim and Neovim make. A
+  terminal that ignores the sequence keeps its own shape.
 - The composer starts in INSERT, and the info line says `INSERT` or `NORMAL`
   first on its left, before accept or plan. In INSERT every key does what it
   does without vim mode except Esc: it goes to NORMAL, steps the caret back
@@ -1374,8 +1372,9 @@ rest of this page says.
   (`iw`), search or find (`/`, `f`, `t`), `.` repeat, `~`, `J`, `>>` or
   mark; `w` `b` `e` move by words between blanks (Vim's `W` `B` `E`, not
   stopping at punctuation); `j` and `k` move a row on the screen, as ↑ and
-  ↓ do; a count does not repeat an insert; and the caret keeps its shape in
-  NORMAL.
+  ↓ do; a count does not repeat an insert; and Hermes keeps the cursor a
+  steady block in both modes, where OMH changes its shape with the mode (see
+  the first item above).
 
 Shift+Tab cycles three input modes, and the info line shows the one that is
 on. Accept all turns off Hermes' approval prompts for that
@@ -1473,7 +1472,7 @@ and Shift+Tab move the highlight, Space folds a box, d shows or hides Node
 details; it sends nothing anywhere; q or Esc closes it), `/bots` (the bot
 board, also Ctrl+S, described below), `/copy`, `/image`,
 `/paste` (the clipboard
-image), `/theme`, `/glow`, `/wallpaper`, `/omh-model`, `/rewind`, `/todos` (the session's whole
+image), `/theme`, `/wallpaper`, `/omh-model`, `/rewind`, `/todos` (the session's whole
 plan), `/whats-new` (this version's What's new, also `/whatsnew`), `/model` (alone, a picker of the models Hermes offers this session,
 from Hermes' `model.options`, opened on the session's model, marked `●`, which
 comes first when no provider lists it, and with the highlight's place in the
@@ -1644,8 +1643,7 @@ below), `aurora` (emerald and teal into violet, a box per section), `ember`
 tints the chrome: the composer's rules and the frames drawn like them take
 its card-edge colour, and a tool call's rail and the working row's spinner
 its label colour (a failed or denied call's rail stays red), as do a sent
-prompt's band, the catch rows, the `[⚚ OMH Native]` badge and the working
-glow. Body text, the grey details, the reply's rail and the state colours
+prompt's band, the catch rows and the `[⚚ OMH Native]` badge. Body text, the grey details, the reply's rail and the state colours
 (running blue, done green, warning amber, failure red) keep the theme's
 colours, so a look never changes what a colour says. The card sits under the banner until your first
 prompt, then stays in scrollback above it. It names the model and effort,
@@ -1857,9 +1855,17 @@ it ready. The pane shows OMH catches, the plan checklist, the active delegation
 graph, board or route summaries, and the active fanout DAG as they become
 available. It reads idle when nothing is running, keeps the plan and status bar
 in agreement, and leaves individual subagent rows to Desktop's Agents panel.
-A failed lane reads as failed (red), apart from blocked (yellow). At the
-default pane width a delegation row stacks its model under the title.
-It uses calmer colours and follows Desktop's language when Korean is selected.
+A failed lane reads as failed (red), apart from blocked (yellow).
+The pane keeps Desktop's own look (its sans, components and theme tokens) with the
+OMH TUI's colour character: a rose brand, warm section labels and muted violet
+frames. While a delegation graph runs, the pane shows it as the box drawing the
+TUI prints into its transcript, made by the same renderer at the pane's width,
+in a card: boxes for a run of up to 12 lanes, the tree for a bigger run or a
+pane too narrow for boxes. The drawing scrolls sideways rather than wrap, and a
+settled run reads as one summary line. Without a drawing (an older backend, or
+one that failed to draw), a delegation row stacks its model under the title at the
+default pane width. It uses calmer colours and follows Desktop's language when
+Korean is selected; the drawing's own words are the TUI's, in English.
 `omh uninstall --registration-only` does not disable the plugin or
 change `plugins.enabled`. Desktop mounting must be observed separately.
 
@@ -3233,7 +3239,6 @@ omh theme list               # plain listing, always (the scriptable surface)
 omh theme use crimson        # select one directly (also accepts omh-crimson)
 omh theme use crimson --dry-run
 omh theme status             # the active theme, which source decided it, and where it is saved
-omh theme glow off           # the working glow off in every later OMH TUI session (on, or alone to show it)
 omh theme wallpaper off      # the living wallpaper off in every later OMH TUI session (on, or alone to show it)
 omh theme update-check off   # no once-a-day ask of npm for a newer release (on, or alone to show it)
 ```
@@ -3264,8 +3269,7 @@ Rules worth knowing:
   the open session (see [The OMH TUI](#the-omh-tui)).
 - **The launch look is saved in the same record.** `/theme` in the OMH TUI
   writes `launch` beside `theme` in `<omh_home>/tui/theme.json`, and
-  `/glow` or `omh theme glow` writes `glow` there, `/wallpaper` or
-  `omh theme wallpaper` writes `wallpaper`, and `omh theme update-check`
+  `/wallpaper` or `omh theme wallpaper` writes `wallpaper` there, and `omh theme update-check`
   writes `update_check`; each write keeps the others.
 - **Bare `hermes` keeps its own skin.** `display.skin` is yours; OMH reads it
   only for the fallback above and never writes it.
@@ -3350,6 +3354,25 @@ until `omh uninstall` collects the generations. Doctor reports it as
 unregistered but retained (`external_dir_unregistered_copy`), and only a
 copy that no home registers and no generation links is named, with its
 directory mtime, as safe to delete.
+
+Whether Hermes can load each installed skill by name is its own doctor row,
+`hermes_skill_visibility`, one for the primary home and one per bot profile
+with a finding (`hermes_skill_visibility:<profile>`). For each home that
+registers an OMH skills directory, it takes the home's own `skills`,
+`skills.create_dir` and `skills.external_dirs` in Hermes' precedence,
+resolved the way Hermes resolves them, and counts each skill the install
+manifest records. A skill two directories of one tier hold is reported as
+ambiguous, since Hermes refuses it in both, and the row says whether the
+other copy is in a directory OMH does not manage. An OMH entry whose path is
+gone is reported as dangling, since Hermes lists nothing from it. Doctor
+reads `config.yaml`, not a running gateway, and Hermes keeps a resolved path
+until `config.yaml` changes, so a gateway started before a repair can still
+hold the old path while doctor reports healthy. The TUI launch card is what
+says so: when a profile that registers OMH's skills sees fewer than half of
+them, the card names both counts and suggests a gateway restart, or `/new`
+for an older session. The per-turn skill suggestion and route hint name only
+skills that Hermes, from the directories it cached, resolves to one copy, so
+neither tells the model to load a skill that would come back "not found".
 
 `omh uninstall` is symmetric with the sync. A full uninstall from the primary
 home (`omh uninstall`, `--all`, or `--purge`) clears its bot profiles'

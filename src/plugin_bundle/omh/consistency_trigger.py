@@ -5,10 +5,12 @@ off only when something outside the edited files has to change with the edit. Th
 deterministically and from the disk alone, whether such a thing exists:
 
 1. ``snapshot_before_edit`` (``pre_tool_call``, before any gate):
-   - At the turn's first tool call of any kind, it records a bounded ``(mtime, size)`` index of the
-     workspace's ``.py`` / ``.pyi`` files. A file modified within ``RACY_WINDOW_NS`` of the index is
-     also given a digest of its bytes: a same-size rewrite inside one tick of the filesystem's clock
-     keeps its ``(mtime, size)``, so only its bytes can show it changed.
+   - At the turn's first tool call that is not a read (``_READ_TOOLS``), it records a bounded
+     ``(mtime, size)`` index of the workspace's ``.py`` / ``.pyi`` files. A read changes no file, so
+     the index taken after one is the index the turn started with, and a turn that only reads pays
+     for no walk. A file modified within ``RACY_WINDOW_NS`` of the index is also given a digest of its
+     bytes: a same-size rewrite inside one tick of the filesystem's clock keeps its
+     ``(mtime, size)``, so only its bytes can show it changed.
    - Before each ``patch`` / ``write_file`` of such a file, it keeps the file's text, once per turn
      (``""`` for a file that does not exist yet). Before each ``terminal`` / ``execute_code`` call it
      does the same for every such file the call's arguments name (``printf ... >> tests/test_x.py``,
@@ -21,8 +23,10 @@ deterministically and from the disk alone, whether such a thing exists:
    - Residual: Hermes blocks a tool call whose ``pre_tool_call`` times out, so no call this hook
      missed that way runs, and an index missed at one call is taken at the next. The one gap is a
      host-internal exception in ``_dispatch_pre_tool_call_hooks``, which never blocks the call. If it
-     hits the turn's first tool call and that tool changes a Python file, the index is taken at the
-     next call, after the change, and the change is not seen.
+     hits the turn's first call that is not a read (``_READ_TOOLS``) and that tool changes a Python
+     file, the index is taken at the next call, after the change, and the change is not seen. A file
+     changed by something other than the turn's tools (an editor, a background process) before that
+     first call is part of the index, not a change of the turn.
 2. ``round_end_trigger`` (``pre_verify``, attempt 0):
    - It re-indexes the workspace to find every Python file the turn changed, by any tool.
    - It diffs each kept snapshot against the disk, and finds the definitions the changed lines touch
@@ -120,6 +124,10 @@ _MAX_SESSIONS: Final = 64
 _EDIT_TOOLS: Final = frozenset({"patch", "write_file"})
 # Tools that run a command or code, and so can change any file they name (`_named_python_files`).
 _COMMAND_TOOLS: Final = frozenset({"terminal", "execute_code"})
+# Tools that write no workspace file: the index is put off past them, to the turn's first other call.
+# Closed on purpose: a tool not listed here (a delegated child, an MCP tool) may change a file, so it
+# takes the index before it runs, as every call did.
+_READ_TOOLS: Final = frozenset({"read_file", "search_files", "web_search", "web_extract"})
 _V4A_HEADER: Final = re.compile(r"^\*\*\*\s*(?:Update|Add|Delete)\s+File:\s*(.+)$", re.MULTILINE)
 _V4A_MOVE: Final = re.compile(r"^\*\*\*\s*Move\s+File:\s*(.+?)\s*->\s*(.+)$", re.MULTILINE)
 # A Python file named in a non-edit call's argument (a shell command, a code string): a whole run of
@@ -145,8 +153,8 @@ _lock = threading.Lock()
 _over_budget: "OrderedDict[str, tuple[float, tuple[str, str]]]" = OrderedDict()
 # session -> False when the session's platform never gets the check (`note_turn_posture`).
 _posture: "OrderedDict[str, bool]" = OrderedDict()
-# session -> {"turn", "root", "index": {realpath: (mtime_ns, size[, digest])} | None, "before": {realpath: str},
-#             "opaque": set[str], "bytes": int}
+# session -> {"turn", "root", "indexed": bool, "index": {realpath: (mtime_ns, size[, digest])} | None,
+#             "before": {realpath: str}, "opaque": set[str], "bytes": int}
 _sessions: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 
 
@@ -168,14 +176,17 @@ class _OutsideLink(Exception):
 
 
 def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
-    """``pre_tool_call``: index the workspace at the turn's first call; snapshot Python files before edits."""
+    """``pre_tool_call``: index the workspace at the turn's first call that is not a read (``_READ_TOOLS``);
+    snapshot Python files before edits."""
     try:
         session_id = str(kwargs.get("session_id", "") or kwargs.get("task_id", "") or "")
         if not session_id:
             return
         state = _turn_state(session_id, kwargs)
-        _prune_named(state)
         tool_name = kwargs.get("tool_name")
+        if tool_name not in _READ_TOOLS:
+            _take_index(session_id, state)
+        _prune_named(state)
         if not isinstance(tool_input, dict):
             return
         if tool_name in _EDIT_TOOLS:
@@ -308,17 +319,37 @@ def reset() -> None:
 
 
 def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """The session's state for this turn, started over when a new turn id arrives. Its index is not
+    taken here: `_take_index` takes it at the turn's first call that is not a read."""
     turn = str(kwargs.get("turn_id", "") or "")
     with _lock:
         state = _sessions.get(session_id)
         if state is not None and state["turn"] == turn:
             return state
     root = os.path.realpath(_workspace_root(kwargs.get("task_id")) or os.getcwd())
+    with _lock:
+        state = _sessions.get(session_id)
+        if state is not None and state["turn"] == turn:  # a parallel first call got here first
+            return state
+        state = {"turn": turn, "root": root, "indexed": False, "index": None, "unindexed": ("", ""), "before": {},
+                 "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": []}
+        _sessions.pop(session_id, None)
+        _sessions[session_id] = state
+        while len(_sessions) > _MAX_SESSIONS:
+            _sessions.popitem(last=False)
+        return state
+
+
+def _take_index(session_id: str, state: dict[str, Any]) -> None:
+    """Index the turn's root once, before the turn's first call that can change a file runs."""
+    with _lock:
+        if state["indexed"]:
+            return
+        eligible = _posture.get(session_id, True)
+        cached = _over_budget.get(state["root"])
+    root = state["root"]
     index: dict[str, tuple[Any, ...]] | None = None
     unindexed: tuple[str, str] = ("", "")
-    with _lock:
-        eligible = _posture.get(session_id, True)
-        cached = _over_budget.get(root)
     if not eligible:
         unindexed = ("no_check_session", "")
     elif cached is not None and time.monotonic() - cached[0] < OVER_BUDGET_SECONDS:
@@ -334,16 +365,8 @@ def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
                 while len(_over_budget) > _MAX_SESSIONS:
                     _over_budget.popitem(last=False)
     with _lock:
-        state = _sessions.get(session_id)
-        if state is not None and state["turn"] == turn:  # a parallel first call got here first
-            return state
-        state = {"turn": turn, "root": root, "index": index, "unindexed": unindexed, "before": {},
-                 "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": []}
-        _sessions.pop(session_id, None)
-        _sessions[session_id] = state
-        while len(_sessions) > _MAX_SESSIONS:
-            _sessions.popitem(last=False)
-        return state
+        if not state["indexed"]:  # a parallel call may have indexed first; the first index stands
+            state["indexed"], state["index"], state["unindexed"] = True, index, unindexed
 
 
 def _decide(state: dict[str, Any] | None, code_paths: tuple[str, ...], deadline: float) -> Verdict:
@@ -356,6 +379,11 @@ def _decide(state: dict[str, Any] | None, code_paths: tuple[str, ...], deadline:
         if not path.endswith(PYTHON_SUFFIXES):
             return Verdict(True, "not_python", os.path.basename(path))
         reported.add(path)
+    if not state["indexed"]:
+        # Only reads ran this turn, so no tool changed a file and none has a snapshot: a reported
+        # file fires as opaque, as it did when the index was taken at the turn's first call.
+        return Verdict(True, "opaque_edit", _relative(min(reported), root)) if reported \
+            else Verdict(False, "nothing_changed")
     if state["index"] is None:
         reason, detail = state["unindexed"]
         return Verdict(True, reason or "index_budget", detail)

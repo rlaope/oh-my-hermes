@@ -109,6 +109,11 @@ NO_DEFAULT = ("model.options", {"result": {"model": "", "provider": ""}})
 UNREAD_DEFAULT = ("model.options", {"error": {"code": 4001, "message": "no default"}})
 
 
+# Ctrl+U, a no-op on the empty composer, in front of prompts typed ahead in one read. A read of plain lines is an
+# unmarked paste (`KeyDecoder`) and stays in the composer; a read with a control key in it is typed, so its Enters send.
+TYPED_AHEAD = b"\x15"
+
+
 def startup_answers(default: tuple[str, dict] = NO_DEFAULT) -> tuple[tuple[str, dict], ...]:
     return (
         ("config.get", {"result": {"config": {}}}),
@@ -154,6 +159,7 @@ class ScriptedTerminal:
         self.exited_at = 0.0
         self.mouse_reporting = False
         self.mouse_drag = False  # reports include a held button's motion (the pager's drag)
+        self.cursor_shape: str | None = None
         self.mouse_calls: list[bool] = []  # every `set_mouse` that changed the state, in order
         self.background: str | None = None  # what the background query answers
         self.cursor_row: int | None = None  # the 1-based cursor row the same query reports
@@ -213,6 +219,12 @@ class ScriptedTerminal:
         self.mouse_reporting = enabled
         self.mouse_calls.append(enabled)
         self.write(terminal_module.MOUSE_REPORTING_ON if enabled else terminal_module.MOUSE_REPORTING_OFF)
+
+    def set_cursor_shape(self, shape: str | None) -> None:
+        """As `Terminal.set_cursor_shape`: written only when the shape changes."""
+        if shape != self.cursor_shape:
+            self.cursor_shape = shape
+            self.write(shape or terminal_module.CURSOR_SHAPE_DEFAULT)
 
     def _wait(self, what: str) -> bytes:
         if time.monotonic() > self.deadline:
@@ -357,7 +369,6 @@ class AppTestCase(unittest.TestCase):
             "HERMES_HOME": str(root),
             "TERM": "xterm-256color",
             FALLBACK_SENTINEL_ENV: str(root / "fallback"),
-            "OMH_TUI_GLOW": "0",  # the working glow's margin moves every row; its own tests turn it on
             "OMH_TUI_WALLPAPER": "0",  # the living wallpaper paints the blank cells; its own tests turn it on
             "OMH_TUI_UPDATE_CHECK": "0",  # the update notice asks npm; its own tests turn it on, with the fetch injected
             **(env or {}),
@@ -383,6 +394,7 @@ class AppTestCase(unittest.TestCase):
             open_terminal=lambda: run.terminal,
             make_client=self.make_client(run),
             make_poller=lambda omh_home, hermes_home: run.poller,
+            contain_faults=False,  # a render bug raises here (`App.contain_faults`)
         )
         return run
 
@@ -414,6 +426,7 @@ class StartupRefusalTests(AppTestCase):
             open_terminal=lambda: run.terminal,
             make_client=self.make_client(run),
             make_poller=lambda omh_home, hermes_home: run.poller,
+            contain_faults=False,  # a render bug raises here (`App.contain_faults`)
         )
         self.assert_fell_back(run)
         self.assertIn("cannot run the OMH TUI", run.stderr.getvalue())
@@ -472,6 +485,20 @@ class StartupRefusalTests(AppTestCase):
         self.assert_clean_run(run)
         self.assertNotIn("this Hermes refused config.get", run.stderr.getvalue())
 
+    def test_a_render_bug_in_a_session_main_runs_here_raises(self) -> None:
+        # The harness passes `contain_faults=False`: a part of the frame that raises fails the test that drives
+        # `main`, where the launched TUI would draw it as a warn row (`App._drawn`).
+        answers = (
+            ("commands.catalog", recorded_answer("session", "commands_catalog")),
+            ("session.list", recorded_answer("session", "session_list")),
+            NO_DEFAULT,
+        )
+        run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=answers))
+        run.terminal.script(Step(b"\x04", when=run.terminal.idle, label="the idle info line"))
+        with patch.object(App, "_info_line", side_effect=RuntimeError("a render bug")):
+            with self.assertRaisesRegex(RuntimeError, "a render bug"):
+                self.run_main(run)
+
     def test_the_gateway_stderr_printed_at_a_failed_start_carries_no_escape_sequence(self) -> None:
         run = self.prepare(
             Scenario("session", (), stderr=("\x1b[31mboom\x1b[0m: no provider\x1b]0;title\x07",), after=EXIT, exit_code=1)
@@ -519,6 +546,7 @@ class StartupRefusalTests(AppTestCase):
             open_terminal=lambda: run.terminal,
             make_client=interrupted,
             make_poller=lambda omh_home, hermes_home: run.poller,
+            contain_faults=False,  # a render bug raises here (`App.contain_faults`)
         )
         self.assertEqual(run.code, 130)
         self.assertIn("interrupted", run.stderr.getvalue())
@@ -646,7 +674,7 @@ class SessionTests(AppTestCase):
         )
         run.terminal.script(
             # One read: the second Enter lands while the first prompt's turn is pending.
-            Step(b"first prompt\rsecond prompt\r", when=run.terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"first prompt\rsecond prompt\r", when=run.terminal.idle, label="idle"),
             Step(b"\x04", when=lambda: "cleanly)." in run.terminal.history() and run.terminal.idle(), label="turn 2"),
         )
         self.run_main(run)
@@ -765,6 +793,7 @@ class SessionTests(AppTestCase):
                 stderr=run.stderr,
                 make_client=self.make_client(run),
                 make_poller=lambda omh_home, hermes_home: run.poller,
+                contain_faults=False,  # a render bug raises here (`App.contain_faults`)
             )
         self.assert_clean_run(run)
         self.assertEqual(given, [run.environ])
@@ -829,7 +858,7 @@ class SessionTests(AppTestCase):
         terminal = run.terminal
         terminal.script(
             # One read: the second prompt queues behind the first, whose turn the error ends.
-            Step(b"first prompt\rsecond prompt\r", when=terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"first prompt\rsecond prompt\r", when=terminal.idle, label="idle"),
             Step(b"\x04", when=lambda: len(run.calls("prompt.submit")) == 2, label="the queued prompt sent"),
         )
         self.run_main(run)
@@ -849,7 +878,7 @@ class SessionTests(AppTestCase):
         run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=answers))
         terminal = run.terminal
         terminal.script(
-            Step(b"first prompt\rsecond prompt\r", when=terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"first prompt\rsecond prompt\r", when=terminal.idle, label="idle"),
             Step(b"\x04", when=lambda: len(run.calls("prompt.submit")) == 2, label="the queued prompt sent"),
         )
         self.run_main(run)
@@ -2042,7 +2071,7 @@ class LocalCommandTests(AppTestCase):
         startup, turn = spans("approval", "startup", "approval_turn")
         run = self.prepare(Scenario("approval", (startup, turn), answers=answers))
         run.terminal.script(
-            Step(b"Run rm -rf ./omh-m0-probe-dir\r/fresh\r", when=run.terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"Run rm -rf ./omh-m0-probe-dir\r/fresh\r", when=run.terminal.idle, label="idle"),
             Step(b"\x04", when=run.terminal.shows(f"New session {FRESH_STORED_ID}."), label="the new session"),
         )
         self.run_main(run)
@@ -2285,7 +2314,7 @@ class LocalCommandTests(AppTestCase):
         terminal = run.terminal
         terminal.script(
             self.submit(run, "/queue"),
-            Step(b"first prompt\rsecond prompt\r/queue\r", when=terminal.shows("Nothing is queued."), label="empty"),
+            Step(TYPED_AHEAD + b"first prompt\rsecond prompt\r/queue\r", when=terminal.shows("Nothing is queued."), label="empty"),
             Step(b"\x04", when=lambda: "cleanly)." in terminal.history() and terminal.idle(), label="turn 2"),
         )
         self.run_main(run)
@@ -2788,13 +2817,39 @@ class KeyTests(AppTestCase):
         )
         terminal = run.terminal
         terminal.script(
-            Step(b"line one\\\rline two\r", when=terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"line one\\\rline two\r", when=terminal.idle, label="idle"),
             Step(b"\x04", when=lambda: "later." in terminal.history() and terminal.idle(), label="the reply"),
         )
         self.run_main(run)
         self.assert_clean_run(run)
         (submitted,) = run.calls("prompt.submit")
         self.assertEqual(submitted["params"], {"session_id": LIVE_ID, "text": "line one\nline two"})
+
+
+class TallTableCapTests(unittest.TestCase):
+    def test_the_frame_path_gives_the_transcript_the_live_region_height(self) -> None:
+        from test_tui_modes import drawn, make_app
+        from _tui_lines import lines_text
+        from omh.tui.gateway import Event
+
+        app, _client = make_app(busy=True, rows=12)
+        seen: list[int | None] = []
+        flushed: list[str] = []
+        take = app.transcript.take_stable_lines
+
+        def spy(*args: object, **kwargs: int) -> list:
+            seen.append(kwargs.get("live_rows"))
+            lines = take(*args, **kwargs)
+            flushed.extend(lines_text(lines))
+            return lines
+
+        app.transcript.take_stable_lines = spy  # type: ignore[method-assign]
+        app.transcript.apply(Event(type="message.start", session_id=LIVE_ID, payload={}))
+        body = "| N | Value |\n| --- | --- |\n" + "".join(f"| {n} | v{n} |\n" for n in range(1, 16))
+        app.transcript.apply(Event(type="message.delta", session_id=LIVE_ID, payload={"text": body}))
+        drawn(app)
+        self.assertEqual(set(seen), {app.size[1]})
+        self.assertTrue(any("Value" in row for row in flushed), "a tall table was still held at the first frame")
 
 
 if __name__ == "__main__":

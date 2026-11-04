@@ -36,7 +36,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from .iso_datetime import strict_fromisoformat
 
 # Hermes' own entry separator: ENTRY_DELIMITER in its memory store
@@ -338,6 +338,7 @@ def _reviewed_records(
     reviews: dict[str, dict[str, object]],
     *,
     unreadable: list[str] | None = None,
+    legacy_approved: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     try:
@@ -355,6 +356,8 @@ def _reviewed_records(
             if unreadable is not None:
                 unreadable.append(path.name)
             continue
+        if legacy_approved is not None and _legacy_approved(data):
+            legacy_approved.append(data)
         if not isinstance(data, dict) or data.get("schema_version") not in {
             PROJECT_MEMORY_RECORD_SCHEMA_VERSION,
             PRINCIPAL_PROJECT_MEMORY_RECORD_SCHEMA_VERSION,
@@ -380,7 +383,21 @@ def _json_candidates(directory: Path) -> list[Path]:
             names = [entry.name for entry in entries if fnmatch.fnmatch(entry.name, "*.json")]
     except FileNotFoundError:
         return []
-    return sorted(directory / name for name in names)
+    # The order `sorted()` gives these paths, which differ only in their name,
+    # without comparing `Path` objects: that comparison re-derives both
+    # paths' parts every time, and a live turn lists the records and reviews
+    # directories several times.
+    return [directory / name for name in sorted(names, key=_name_sort_key())]
+
+
+def _name_sort_key() -> Callable[[str], str] | None:
+    """The key that orders file names the way `sorted()` orders paths of one directory.
+
+    A case-insensitive flavour (Windows) orders by `str.lower()`, which is not
+    what `os.path.normcase` does there for every non-ASCII name, so the key is
+    `str.lower` itself; a case-sensitive one needs none.
+    """
+    return None if os.path.normcase("Aa") == "Aa" else str.lower
 
 
 def _read_reviews(directory: Path, *, unreadable: list[str] | None = None) -> dict[str, dict[str, object]]:
@@ -465,11 +482,21 @@ def count_record_expiry(
     retirement report is where an unreadable deadline is surfaced, per file,
     with its reason.
     """
+    evaluate_memory_replay = _memory_governance.evaluate_memory_replay
+
     counts = {"expired": 0, "expiring_soon": 0}
     # Legacy expiry totals are metadata-only reminder evidence; they never make
-    # a v1 summary eligible for bridge, provider, or tool replay.
-    records = [*read_approved_records(omh_home), *_legacy_expiry_records(omh_home)]
-    for record in records:
+    # a v1 summary eligible for bridge, provider, or tool replay. One pass over
+    # the records directory finds both: this runs on every attended turn.
+    home = Path(omh_home).expanduser() / "memory"
+    reviews = _read_reviews(home / "reviews")
+    legacy: list[dict[str, Any]] = []
+    approved = [
+        record
+        for record in _reviewed_records(home, reviews, legacy_approved=legacy)
+        if evaluate_memory_replay(record, review_resolver=reviews or None).get("eligible")
+    ]
+    for record in (*approved, *legacy):
         state = classify_record_expiry(record, now=now, window_days=window_days)
         if state == "expired":
             counts["expired"] += 1
@@ -478,29 +505,13 @@ def count_record_expiry(
     return counts
 
 
-def _legacy_expiry_records(omh_home: str | Path) -> list[dict[str, Any]]:
-    directory = Path(omh_home).expanduser() / "memory" / "records"
-    records: list[dict[str, Any]] = []
-    # Listed the same way as the v2 reader: `Path.glob` turned an unreadable
-    # directory into [] and the `except OSError` here never ran.
-    try:
-        candidates = _json_candidates(directory)
-    except OSError:
-        return records
-    for path in candidates:
-        try:
-            if path.is_symlink() or not path.is_file():
-                continue
-            record = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, ValueError):
-            continue
-        if (
-            isinstance(record, dict)
-            and record.get("schema_version") == "project_memory_record/v1"
-            and record.get("review_status") == "approved"
-        ):
-            records.append(record)
-    return records
+def _legacy_approved(record: object) -> bool:
+    """An approved v1 record: counted for expiry, never replayed."""
+    return (
+        isinstance(record, dict)
+        and record.get("schema_version") == "project_memory_record/v1"
+        and record.get("review_status") == "approved"
+    )
 
 
 def build_hermes_memory_bridge(omh_home: str | Path, hermes_home: str | Path) -> dict[str, object]:

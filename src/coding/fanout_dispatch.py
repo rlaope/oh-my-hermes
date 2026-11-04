@@ -1018,8 +1018,8 @@ def _owner_skill_discoveries(
     Only owners that actually spawn are probed — a prepared-prompt fallback
     owner never reaches `build_unit_prompt`, so scanning for it would be IO
     nobody reads. `project_root` is the dispatch target repo, so repo-local
-    `.claude/skills` definitions are discovered alongside the operator-level
-    ones.
+    definitions (`.claude/skills` for Claude Code, `.agents/skills` for
+    Codex) are discovered alongside the operator-level ones.
     """
     from .executor_skill_discovery import discovered_executor_skills
 

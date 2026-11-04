@@ -1969,7 +1969,8 @@ mid-interview check now and continue from Round {soft_round}.
 Give every question two to four real candidates, the one you recommend first: answers the user
 could actually pick, drawn from the request, repo evidence, or the tradeoff the question is
 really about, never filler to reach a count, and never a candidate whose text is itself a bare
-number (a reply by number would collide with it, in the list below and in a messaging picker).
+number (a reply by number would collide with it). If memory suggests candidates, draw one
+from the request or repository, so memory never fills every slot.
 
 - **With Hermes' `clarify` tool**, when {native_tool_presence_clause('clarify', code=True)}: keep the header in your
   message and ask through `clarify` — one `questions` entry, the sentence as `question`, the

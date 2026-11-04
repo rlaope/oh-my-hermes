@@ -15,7 +15,10 @@ repaints. So the model answers three questions for the app loop:
 
 The invariant the tests hold: at any moment, the lines already taken followed
 by `live_lines()` equal `history_lines(details=False)` at the same width
-(unless `toggle_details` expanded the live block, or the cap dropped blocks).
+(unless `toggle_details` expanded the live block, or the cap dropped blocks,
+or a Markdown table taller than the live region was released as it grew: those
+rows keep the column widths they had when released, while `/history` and a
+redraw recompute the widths over the whole table; no cell is lost or repeated).
 Only the LAST block can still change; appending any block first closes the
 one before it, so a block is flushed only after every block above it.
 
@@ -49,8 +52,8 @@ at `message.complete`, as one row per call (`● name(argument summary)`, the
 mark a shape and a colour per state, `TOOL_MARKS`, and the name bold in its
 tool family's hue, `TOOL_FAMILIES`) with what it printed under `⎿`, a blank row
 between two calls, no header over them; a read or a load says in one line what
-it read instead (`_read_summary`), and an `omh_memory` recall that found
-records lists them, a line each (`_recall_lines`), which one band of the
+it read instead (`_read_summary`), and an `omh_memory` or `omh_remember` recall that
+found records lists them, a line each (`_recall_lines`), which one band of the
 dag-ulw aura sweeps as the call completes, while its group is live and only
 where the aura moves (`_glint_band`). A run of consecutive plumbing calls
 (`PLUMBING_TOOLS`: loading a skill, reading tool details) folds into one row,
@@ -104,7 +107,16 @@ from .diff_view import DIFF_FILE, FILE_ARROW, DiffLine, diff_rows, parse_inline_
 from .gateway import Event
 from . import gateway_contract as contract
 from .gateway_contract import TOOL_CALL_BRIDGE
-from .markdown import GrowingLine, MarkdownState, clean_text, render_growing, render_lines, wrap_prefixed
+from .markdown import (
+    GrowingLine,
+    MarkdownState,
+    clean_text,
+    opens_table,
+    table_block,
+    render_growing,
+    render_lines,
+    wrap_prefixed,
+)
 from .style import NO_COLOR, Line, Span, Style, fill
 from .slash import slash_spans, slash_token_ranges
 from .theme import TOOL_FAMILIES, Theme, kind_style, on_band
@@ -207,10 +219,10 @@ GUTTER = Style(gutter=True)  # a rail's or a reply margin's cells, which the pag
 # A running tool's mark alternates the running blue and dim this often, counted from its own start, so calls that run
 # side by side pulse each on its own. Only the live region is drawn with a clock; scrollback gets the settled mark.
 PULSE_SECONDS = 0.5
-# An `omh_memory` call that recalled something sweeps one band of the dag-ulw aura across its output rows as it
-# completes, while its group is still live; it moves only where the aura does (`Transcript.live_lines`'s `glint`), and
-# a row in scrollback is drawn as it always is.
-MEMORY_TOOL = "omh_memory"
+# An `omh_memory` or `omh_remember` call that recalled something sweeps one band of the dag-ulw aura across its output
+# rows as it completes, while its group is still live; it moves only where the aura does (`Transcript.live_lines`'s
+# `glint`), and a row in scrollback is drawn as it always is. Both tools return the same recall result.
+MEMORY_TOOLS = ("omh_memory", "omh_remember")
 RECALL_GLINT_SECONDS = 0.9
 RECALL_GLINT_CELLS = 8
 RECALL_TYPE_CELLS = 12  # a recalled record's type column at most: its summary is what the row is for
@@ -273,6 +285,10 @@ class AssistantBlock:
     text: str = ""
     done: bool = False
     model: str | None = ""  # the session's model as it began (`Transcript.model`); None: not known (a resumed reply)
+    # The rows the last full redraw measured for it once done, with what they were drawn from: (text, model, width,
+    # theme, rows), while it is inside that redraw's tail (`Transcript._measure_tail`). The next redraw at that width
+    # and theme takes them as they are instead of wrapping the reply again.
+    kept: tuple[str, str | None, int, Theme, tuple[Line, ...]] | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass
@@ -321,7 +337,7 @@ class ToolRow:
     # An interpreter fed its script through a heredoc, `python3 script · 23 lines` (`_heredoc_summary`): shown in its
     # row instead of `args_summary`, which the details view shows.
     script: str = ""
-    # When an `omh_memory` recall that found records completed (`_recall`), on the transcript's clock; else None.
+    # When a memory recall that found records completed (`_recall`), on the transcript's clock; else None.
     recalled_at: float | None = None
 
     def diff_lines(self, hold: bool = False) -> tuple[DiffLine, ...]:
@@ -408,9 +424,21 @@ def _display_lines(text: str) -> list[str]:
     return _without_trailing_blanks(_source_lines(text))
 
 
-def _stable_lines(text: str) -> list[str]:
-    """The source lines that can no longer change: complete ones, minus trailing blanks."""
-    return _without_trailing_blanks(_source_lines(text)[:-1])
+def _stable_lines(text: str, final: bool = False, cap: int | None = None) -> list[str]:
+    """The source lines that can no longer change: complete ones, minus trailing blanks.
+
+    A trailing run of `|` lines is held back too: a header is decided only
+    once its divider has arrived, and taken rows are never repainted.
+    """
+    lines = _without_trailing_blanks(_source_lines(text)[:-1])
+    if final:  # the last take, at exit: nothing is left to wait for, so a complete `|` row goes out
+        return lines
+    held = len(lines)
+    while held and lines[held - 1].strip().startswith("|"):
+        held -= 1
+    if cap is not None and len(lines) - held > cap and opens_table(lines[held], lines[held + 1]):
+        return lines  # a table taller than the live region is released as it grows, on the columns it has
+    return _without_trailing_blanks(lines[:held])
 
 
 def _extension(streamed: str, text: str) -> str | None:
@@ -458,10 +486,10 @@ def tool_result_status(result: object) -> str:
 
 
 def _recall(name: str, result: object) -> dict[str, Any] | None:
-    """The result of a completed call that recalled something, else None: an `omh_memory` recall whose result says it
-    found records, read from the fields the tool writes (`action`, `status`, `record_count`), never from its words.
-    Hermes hands a plugin tool's JSON over decoded; a string is decoded here."""
-    if name != MEMORY_TOOL:
+    """The result of a completed call that recalled something, else None: an `omh_memory` or `omh_remember` recall
+    whose result says it found records, read from the fields the tool writes (`action`, `status`, `record_count`),
+    never from its words. Hermes hands a plugin tool's JSON over decoded; a string is decoded here."""
+    if name not in MEMORY_TOOLS:
         return None
     try:
         found = json.loads(result) if isinstance(result, str) else result
@@ -658,7 +686,9 @@ def _duration(payload: dict[str, Any], row: ToolRow, now: float, waited: float =
 
 
 def _earlier(count: int) -> str:
-    return f"{count} earlier {'message' if count == 1 else 'messages'}"
+    """`count` blocks, named for what they are: a prompt, a reply, a tool group, a notice and a turn's done line are
+    an entry each, so a reply with its calls and its done line is several, and "messages" would count them wrong."""
+    return f"{count} earlier {'entry' if count == 1 else 'entries'}"
 
 
 # Where a tool's printed text is in its result, in order; a failed tool's error first.
@@ -1031,6 +1061,19 @@ def _reply_width(width: int) -> int:
 def _assistant_rows(block: AssistantBlock, width: int, theme: Theme) -> list[Line]:
     rows = render_lines(_display_lines(block.text), MarkdownState(), _reply_width(width), theme)[0]
     return _marked(rows, True, theme, width, block.model)
+
+
+def _tail_rows(block: Block, width: int, theme: Theme) -> list[Line]:
+    """`block_rows` as a full redraw measures it: a finished reply's rows are kept on it (`AssistantBlock.kept`) and
+    taken again while its text, model, width and theme are the ones they were drawn from."""
+    if not (isinstance(block, AssistantBlock) and block.done):
+        return block_rows(block, width, theme)
+    kept = block.kept
+    if kept is not None and kept[0] == block.text and kept[1] == block.model and kept[2] == width and kept[3] is theme:
+        return list(kept[4])
+    rows = block_rows(block, width, theme)
+    block.kept = (block.text, block.model, width, theme, tuple(rows))
+    return rows
 
 
 def _seconds(value: float) -> str:
@@ -1906,10 +1949,16 @@ class Transcript:
 
     # ── output ──
 
-    def take_stable_lines(self, width: int, theme: Theme) -> list[Line]:
+    def take_stable_lines(
+        self, width: int, theme: Theme, final: bool = False, live_rows: int | None = None
+    ) -> list[Line]:
         """Lines that will never change, each returned once: print them above the live region.
 
         `prompt_row` says where among them the newest prompt's first row is.
+        `final` is the take at exit: it also releases the `|` rows held back for a divider.
+        `live_rows` is the height of the live region: a held table taller than half of it is released as it grows.
+        A table released that way keeps the column widths it had when released; `/history` and redraws
+        recompute them over the whole table.
         """
         taken: list[Line] = []
         start = (self._cursor, self._cursor_lines)
@@ -1931,7 +1980,7 @@ class Transcript:
             block = self.blocks[self._cursor]
             index = self._cursor - first
             if isinstance(block, AssistantBlock) and not (block.done and index < len(held)):
-                taken.extend(self._take_assistant(block, width, theme))
+                taken.extend(self._take_assistant(block, width, theme, final, live_rows))
             elif block.done:
                 # A done reply taken from its first line is the rows `block_rows` gives it, as measured.
                 rows = held[index] if index < len(held) else block_rows(block, width, theme)
@@ -1948,8 +1997,11 @@ class Transcript:
         self._drop_past_cap()
         return taken
 
-    def _take_assistant(self, block: AssistantBlock, width: int, theme: Theme) -> list[Line]:
-        sources = _display_lines(block.text) if block.done else _stable_lines(block.text)
+    def _take_assistant(
+        self, block: AssistantBlock, width: int, theme: Theme, final: bool = False, live_rows: int | None = None
+    ) -> list[Line]:
+        cap = max(live_rows // 2, 4) if live_rows else None
+        sources = _display_lines(block.text) if block.done else _stable_lines(block.text, final, cap)
         fresh = sources[self._cursor_lines :]
         if not fresh:
             return []
@@ -2012,11 +2064,15 @@ class Transcript:
         return self._measure_tail(width, theme, max_rows)[0]
 
     def _measure_tail(self, width: int, theme: Theme, max_rows: int) -> tuple[int, list[list[Line]]]:
-        """`_tail_start`, and the rows of each block from there to the live one, in order, as measuring rendered them."""
+        """`_tail_start`, and the rows of each block from there to the live one, in order, as measuring rendered them.
+
+        A reply above the cut lets go of the rows it kept, so what replies keep is about this tail's rows, not the
+        session's (`/history` pages through `block_rows`, which keeps nothing).
+        """
         end = len(self.blocks) - (1 if self.blocks and not self.blocks[-1].done else 0)
         cut, rows, kept = end, 0, []
         while cut > 0:
-            block_lines = block_rows(self.blocks[cut - 1], width, theme)
+            block_lines = _tail_rows(self.blocks[cut - 1], width, theme)
             height = len(block_lines) + 1
             if rows + height > max_rows and cut < end:
                 break
@@ -2024,6 +2080,9 @@ class Transcript:
             cut -= 1
             kept.append(block_lines)
         kept.reverse()
+        for block in self.blocks[:cut]:
+            if isinstance(block, AssistantBlock):
+                block.kept = None
         return cut, kept
 
     def live_lines(
@@ -2110,7 +2169,34 @@ class Transcript:
 
     def _growing_rows(self, sources: list[str], width: int, theme: Theme) -> list[Line]:
         """The rows of a reply's untaken `sources`, the last of them the line still streaming: drawn through
-        `_growing`, so a frame wraps only that line's last rows (`render_growing`)."""
+        `_growing`, so a frame wraps only that line's last rows (`render_growing`).
+
+        A trailing run of `|` lines whose next line is its divider renders as
+        the table it is, re-derived from `sources` every frame.
+        """
+        if self._cursor_state.table and sources and sources[-1].strip().startswith("|"):
+            # a table released to scrollback as it grew: the line still streaming hangs on the columns it was given
+            return render_lines(sources, self._cursor_state, width, theme)[0]
+        # The maximal trailing run of `|` lines, in source order.
+        run_at = len(sources)
+        while run_at > 0 and sources[run_at - 1].strip().startswith("|"):
+            run_at -= 1
+        if run_at < len(sources):
+            rows, state = render_lines(sources[:run_at], self._cursor_state, width, theme)
+            if not state.in_fence and run_at + 1 < len(sources) and opens_table(sources[run_at], sources[run_at + 1]):
+                table_rows, consumed = table_block(sources[run_at:], 0, width, theme)
+                rows.extend(table_rows)
+                rest = sources[run_at + consumed :]
+                if rest:
+                    extra, _state = render_lines(rest, replace(state, list_indent=0), width, theme)
+                    rows.extend(extra)
+                return rows
+            # Not decidable as a table yet (no divider behind the header, or
+            # inside a fence): fall through to the normal growing render.
+            rows, state = render_lines(sources[:-1], self._cursor_state, width, theme)
+            if sources:
+                rows += render_growing(sources[-1], state, width, theme, self._growing)[0]
+            return rows
         rows, state = render_lines(sources[:-1], self._cursor_state, width, theme)
         if sources:
             rows += render_growing(sources[-1], state, width, theme, self._growing)[0]
