@@ -60,9 +60,11 @@ class PlanOffersDagUlwTests(unittest.TestCase):
 
     def test_refactor_plan_approval_gate_names_dag_ulw_in_hermes_only(self) -> None:
         body = _hermes_body("refactor-plan")
-        self.assertIn("on a whole-plan go, also name `dag-ulw` as a way to run it", body)
-        self.assertIn("each phase's verification command its node's VERIFY and its rollback point its node's STOP WHEN", body)
-        self.assertIn("neither commits nor rolls back", body)
+        self.assertIn("when the approved phases split into groups with disjoint files plus a verification step", body)
+        self.assertIn("a whole-plan go may also name `dag-ulw` with the fit reason in one line", body)
+        self.assertIn("the phase order becomes `depends_on` and each phase's verification command its node's VERIFY.", body)
+        self.assertIn("per-phase commits are cut after the run and the rollback points stay with the user", body)
+        self.assertNotIn("STOP WHEN", body.split("Stop at the approval gate", 1)[1].split("\n", 1)[0])
         self.assertNotIn("dag-ulw", _portable_body("omh-refactor-plan/SKILL.md"))
 
     def test_hermes_plan_reference_points_the_carry_out_offer_at_dag_ulw(self) -> None:

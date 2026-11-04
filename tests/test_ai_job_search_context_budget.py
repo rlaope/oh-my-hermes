@@ -335,7 +335,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # engine gate), ralplan (recovery note, node-prompt line), refactor-plan (whole-plan
         # go) and dag-ulw (graph from an accepted plan) move; nothing else. Re-derived on the
         # tree merged with main; the pin before it was 2050e228...df6b.
-        self.assertEqual(_digest(legacy_hashes), '354f7cf25d40e8e492300d12585b54297e25384f667423377c2e6fcaa9ef5e6b')
+        # Its delta review rewords refactor-plan's dag-ulw line (fit condition back, no
+        # rollback in STOP WHEN); only refactor-plan moves, and the pin before it was 354f7cf2...5e6b.
+        self.assertEqual(_digest(legacy_hashes), 'ab8d58ad765a67cd85c4892379fecd72382cdd788b384995171e6b5b6a6258e7')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
