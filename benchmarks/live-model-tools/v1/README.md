@@ -748,6 +748,43 @@ A re-measure after any drop is a new pre-registration with new seeds.
   the comment above it. Its wording is the same for every copy, and it never says a copy may be
   skipped. Clause 3 (`C-DUPLICATE` on at least base) stays a hard clause.
 
+#### Result (2026-11-05): the gate failed in both readings
+
+264 counted runs and 8 crash re-runs (4 instances, both arms; one, `sol` base
+`I-RETURN-SHAPE-778469`, crashed again and stays a fail). Recomputed by `OPT/opt-l/gate.py` and
+again by an independent script (`recompute.py`); the two agree on every clause.
+
+| Clause | Strict (on vs base) | | Re-run (on vs base) | |
+| --- | --- | --- | --- | --- |
+| 1. Total passes, on >= base | 123 vs 126 | **fail** | 126 vs 126 | pass |
+| 2. Per template, on >= base - 1 | worst `I-SIGNATURE` 7 vs 9 | **fail** | worst `I-SIGNATURE` 7 vs 9 | **fail** |
+| 3. `C-DUPLICATE` passes | 12 vs 11 | pass | 12 vs 11 | pass |
+| 3. `L-RENAME-ALIAS` passes | 12 vs 11 | pass | 12 vs 11 | pass |
+| 3. `I-SIGNATURE` passes | 7 vs 9 | **fail** | 7 vs 9 | **fail** |
+| 4. `mutation_outside_scope`, on <= base | 2 vs 1 | **fail** | 0 vs 1 | pass |
+| 5. Pooled median tokens, on <= 0.95x | 78,716 vs 83,704 (0.940x) | pass | 79,847 vs 83,704 (0.954x) | **fail** |
+| 6. Sol median tokens, on <= 0.95x | 82,255 vs 90,984 (0.904x) | pass | 83,432 vs 90,984 (0.917x) | pass |
+| 7. `I-KWARG` + `I-SIGNATURE` continues, on < base | 8 vs 19 | pass | 8 vs 19 | pass |
+| 8a. `C-DECOY` continues, on <= base | 11 vs 11 | pass | 12 vs 11 | **fail** |
+| 8b. `C-DECOY` median tokens, on <= 0.90x | 84,078 vs 100,656 (0.835x) | pass | 85,710 vs 100,656 (0.852x) | pass |
+| 8c. `C-DECOY` median calls, on <= base - 1 | 10 vs 11 | pass | 10 vs 11 | pass |
+
+Tokens by route, re-run reading (base / on): `claude-proxy` h45 4,660,327 / 3,906,467 and s55
+1,722,343 / 1,628,489; `openai-codex` luna 2,952,549 / 2,804,460 and sol 3,024,138 / 2,790,203. Total
+12,359,357 / 11,129,619 (0.901x). Continues 40 / 31. Money $0 (subscription routes only). Median
+wall 43.1 s / 40.2 s.
+
+**Where it failed.** Both `I-SIGNATURE` losses are Haiku runs (h45 base 3 of 3, on 1 of 3). In each,
+the trigger fired alone on `signature compute_fee in src/benchapp/__init__.py`, and the on arm sent
+the evidence note. That note shows only `from .pricing import compute_fee as fee`. The model judged
+that an import needs no change and stopped, leaving `cli.py`'s `fee(...)` call broken. On base, the
+generic checklist sent it to search; it fixed `cli.py` and passed. None of the 12 on-arm `settled`
+verdicts failed.
+
+**Fallback, as pre-registered.** A quality clause failed on runs where the on arm sent an evidence
+note. So the evidence note is dropped and the settled references stay. Re-measuring that is a new
+pre-registration with new seeds. The branch does not ask to merge on this run.
+
 ### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
 
 Pre-registered before its first live run.
