@@ -184,12 +184,12 @@ LAUNCH_PRESETS = ("spectrum", "violet", "gold", "graphite", "sakura", "moonlit",
 DEFAULT_LAUNCH = LAUNCH_PRESETS[0]
 # The roles a launch look owns beyond the logo and the card (`with_launch_look`): the composer's rules and every frame
 # in `rule` (its card-edge colour), a tool call's rail and the working row's spinner (`accent`, its label colour), a
-# sent prompt's band (`with_prompt_band`), a catch row and the working glow (`with_catch_colours`). Body text, the
+# sent prompt's band (`with_prompt_band`) and a catch row (`with_catch_colours`). Body text, the
 # neutral greys, the state colours (`running`, `ok`, `warn`, `error`), the kind hues and the skin's own roles
 # (`brand`, `heading`, syntax, diff) keep the skin's hues, so a look never changes what a colour says. Only where a
 # band is drawn moves: on a dark scene look's ground the diff and outcome bands are the skin's diff hues set onto the
 # look (`DARK_SCENE_BAND_SHARE`), and the pager's footer bar (`status`) takes the prompt band's colour.
-LOOK_ROLES = ("rule", "accent", "prompt_band", "catch_mark", "catch_words", "glow_ring")
+LOOK_ROLES = ("rule", "accent", "prompt_band", "catch_mark", "catch_words")
 
 
 @dataclass(frozen=True)
@@ -343,11 +343,6 @@ class Theme:
     accent: Style = Style()  # a tool call's rail (but a failed or denied one's) and the working row's spinner: the
     # launch look's label colour lifted to 3:1 (`with_launch_look`); `build_theme` paints it from the default look
     look: str = DEFAULT_LAUNCH  # the launch look the look's roles (`LOOK_ROLES`) are from, kept by `on_band`
-    # The working glow round the screen while a turn runs (`edge_glow`): the launch look's logo colours stepped once
-    # round a ring, first back to first (`with_catch_colours`), and the colour they are mixed into toward their dim
-    # ends: its `bg` where the terminal reported it, so the glow may paint cells' backgrounds, else its `fg`, a guess.
-    glow_ring: tuple[Style, ...] = ()
-    glow_surface: Style = Style()
     # An approval's highlighted choice, bold in its tone (deny `error`, an allow `ok`, always `warn`, the tell row
     # `muted`) on a band of that tone mixed into the background (`PICK_BAND_SHARE`); no band when no background was
     # reported. `build_theme` paints all four.
@@ -642,8 +637,6 @@ def look_ground(name: str, light: bool) -> str:
 CATCH_MARK = "✦ OMH"
 # The cells of a catch row's mark (`CATCH_MARK`) the logo's colours are stepped across.
 CATCH_MARK_CELLS = 5
-# The colours the working glow's ring is stepped through (`Theme.glow_ring`, owner request 2026-10-28).
-GLOW_RING_STEPS = 36
 
 
 def _logo_stops(palette: LogoPalette) -> list[str]:
@@ -659,24 +652,20 @@ def _logo_stops(palette: LogoPalette) -> list[str]:
 def with_catch_colours(theme: Theme, skin: SkinTheme, background: str | None, look: str) -> Theme:
     """`theme` with a catch row's colours from launch look `look` (owner's pick of 2026-10-28): the `✦ OMH` mark
     stepped through the logo's colours (`CATCH_MARK_CELLS`), the words in the look's label colour, so the row reads
-    as OMH's own and changes with `/theme`. The working glow (`glow_ring`) takes the same logo colours, round a
-    ring that comes back to its first, mixed into the background toward its dim ends."""
+    as OMH's own and changes with `/theme`."""
     surface = surface_for(skin, background)
     palette = launch_palette(look, surface)
     stops = _logo_stops(palette)
     mark = tuple(Style(fg=colour, bold=True) for colour in _gradient(stops, CATCH_MARK_CELLS))
-    ring = tuple(Style(fg=colour) for colour in _gradient([*stops, stops[0]], GLOW_RING_STEPS + 1)[:-1])
-    reported = surface == background
     ink = BLACK if is_light(surface) else _palette(skin)["banner_text"]
     words = Style(fg=_lifted(palette.label, ink, surface, TEXT_CONTRAST))
-    return replace(theme, catch_mark=mark, catch_words=words, glow_ring=ring,
-                   glow_surface=Style(bg=surface) if reported else Style(fg=surface))
+    return replace(theme, catch_mark=mark, catch_words=words)
 
 
 def with_launch_look(theme: Theme, skin: SkinTheme, background: str | None, look: str, scene: bool = False) -> Theme:
     """`theme` with the roles launch look `look` owns (`LOOK_ROLES`, owner's pick of 2026-10-29), measured against
     `background`: `rule` from its card-edge colour and `accent` from its label colour, each lifted to the 3:1 a glyph
-    needs, then a catch row's and the working glow's colours (`with_catch_colours`). A name OMH does not have is the
+    needs, then a catch row's colours (`with_catch_colours`). A name OMH does not have is the
     default look, as `launch_palette` reads it. The band behind a sent prompt is `with_prompt_band`'s.
 
     `scene`: `background` is the ground of the look's living wallpaper (owner, 2026-11-04). On a dark one the diff
