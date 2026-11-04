@@ -33,6 +33,9 @@ from omh.paths import resolve_paths
 from omh.plugin_bundle.omh import runtime_reader, subagent_graph
 from omh.plugin_bundle.omh.dashboard import plugin_api
 from _module_patch import patch_modules
+from _delegation_graphs import nested, owner_mock, parallel
+from _delegation_state import PARENT, homes
+from omh.tui import dag_block
 
 NODE = shutil.which("node")
 
@@ -180,7 +183,7 @@ const structures = (node, out = []) => {
   if (!node || typeof node !== 'object') return out
   if (Array.isArray(node)) { node.forEach(child => structures(child, out)); return out }
   const props = node.props || {}
-  if (props.className) out.push({ className: props.className, text: text(node).join(''), state: props['data-state'], done: props['data-done'], style: props.style,
+  if (props.className) out.push({ className: props.className, text: text(node).join(''), state: props['data-state'], done: props['data-done'], live: props['data-live'], style: props.style,
     cells: (Array.isArray(props.children) ? props.children : [props.children]).filter(child => child && child.props).map(child => ({ className: child.props.className, text: text(child).join('') })) })
   return structures(props.children, out)
 }
@@ -254,7 +257,23 @@ for (const [name, scenario] of Object.entries(scenarios)) {
 }
 const formatterCases = JSON.parse(readFileSync(formatterCasesPath, 'utf8'))
 const formatters = {}
-const local = { koreanStates: states => states.map(state => [state, mod.stateWord(state, 'en'), mod.stateWord(state, 'ko')]) }
+const local = {
+  koreanStates: states => states.map(state => [state, mod.stateWord(state, 'en'), mod.stateWord(state, 'ko')]),
+  // The pane body as the browser measures it: `clientWidth` px wide, one cell of the drawing's font `cell` px.
+  measureCellsAt: (clientWidth, cell) => {
+    const made = globalThis.document.createElement
+    const probes = []
+    globalThis.document.createElement = tag => {
+      const probe = { tagName: tag, className: '', textContent: '', getBoundingClientRect() { return { width: cell * this.textContent.length } }, remove() { probes.push(this.className) } }
+      return probe
+    }
+    try {
+      return [mod.measureCells({ clientWidth, append() {} }), probes]
+    } finally {
+      globalThis.document.createElement = made
+    }
+  }
+}
 for (const [name, cases] of Object.entries(formatterCases)) {
   formatters[name] = cases.map(args => {
     const answer = (local[name] || mod[name])(...args)
@@ -606,6 +625,22 @@ for _name, _data in {
     "failed_row": {**ESTABLISHED_PAYLOAD, "todo": {"status": "absent"}, "subagents": {"rows": [{**RUNNING_ROW, "state": "failed"}, {**RUNNING_ROW, "task_id": "b2", "state": "blocked"}]}},
 }.items():
     SCENARIOS[_name] = {**SCENARIOS["open_with_payload"], "data": _data}
+# The same live graph with the drawing the backend sends for it (`plugin_api.delegation_drawing`), an error
+# record in its place, and a settled graph that still carries one.
+DRAWN_GRAPH = {**NATIVE_GRAPH, "nodes": [*NATIVE_GRAPH["nodes"], {"id": "held", "kind": "lane", "title": "Stuck child",
+                                                                  "state": "stuck", "model": "openai/gpt-5.6"}],
+               "edges": [*NATIVE_GRAPH["edges"], {"from": "root", "to": "held"}]}
+DRAWING = plugin_api.delegation_drawing(DRAWN_GRAPH, 43)
+WIDE_GRAPH = {**DRAWN_GRAPH, "nodes": [*DRAWN_GRAPH["nodes"][:2], {**DRAWN_GRAPH["nodes"][2], "title": "인증 모듈"}]}
+WIDE_DRAWING = plugin_api.delegation_drawing(WIDE_GRAPH, 43)
+for _name, _data in {
+    "drawn_graph": {**ESTABLISHED_PAYLOAD, "delegation_graph": DRAWN_GRAPH, "delegation_drawing": DRAWING},
+    "wide_drawn": {**ESTABLISHED_PAYLOAD, "delegation_graph": WIDE_GRAPH, "delegation_drawing": WIDE_DRAWING},
+    "drawing_error": {**ESTABLISHED_PAYLOAD, "delegation_graph": DRAWN_GRAPH,
+                      "delegation_drawing": {"error": "ValueError: no", "schema_version": "omh_desktop_dag/v1"}},
+    "settled_drawn": {**ESTABLISHED_PAYLOAD, "delegation_graph": SETTLED_GRAPH, "delegation_drawing": DRAWING},
+}.items():
+    SCENARIOS[_name] = {**SCENARIOS["open_with_payload"], "data": _data}
 SCENARIOS["busy"] = {**SCENARIOS["open_with_payload"], "busy": True}
 # A fresh run with nothing counted yet: live, so not grey.
 SCENARIOS["runtime_only"] = {
@@ -627,6 +662,11 @@ FANOUT_AND_STUCK_STATES = {
 # carries the answers in this order.
 FORMATTER_CASES = {
     "pollInterval": [[True], [False]],
+    "hudPath": [[None, 44], ["s 1", 0], [None, None], ["s", 61]],
+    "segmentTone": [["node:running"], ["node:done"], ["node-title:done"], ["node-word:waiting"], ["glyph:failed"],
+                    ["status:stuck"], ["node:interrupted"], ["edge"], ["connector"], ["connector:running"], ["header"],
+                    ["frontier"], ["model"], ["something"], [""]],
+    "measureCellsAt": [[320, 6.6], [420, 6.6], [320, 0]],
     "rowFigures": [[{"state": "running", "tool_count": count}, 0] for count in (0, 1, 2)],
     "stateWord": [["running"], ["blocked_by_dependency"], ["review"], ["some_new_state"], [""], ["failed", "ko"], ["review", "ko"]],
     # Every fanout status the reader accepts and every stuck unit state, read in Korean.
@@ -737,6 +777,74 @@ class DesktopBackendTests(unittest.TestCase):
         self.assertEqual(sys.modules["omh_desktop_bundle"].__path__, [str(BUNDLE)])
         self.assertIn("omh_desktop_bundle.runtime_paths", sys.modules)
         self.assertIs(plugin_api.load_reader(BUNDLE), reader)
+
+    def test_a_running_dag_ulw_run_is_drawn_as_the_boxes_the_tui_prints(self) -> None:
+        """The real store-to-REST path: a defined dag-ulw run, read for its session at 60 cells.
+
+        Mutation: draw with Dependencies (`sections=1`), or through `render_delegation_view`'s own choice.
+        """
+        from test_dag_tool import call, node as dag_node, slots_table
+        from test_tui_panels import THEME
+
+        nodes = [dag_node("api", scope=("src/api.py",), label="Export API"),
+                 dag_node("ui", scope=("src/ui.py",), label="Export button"),
+                 dag_node("verify", depends_on=("api", "ui"), label="Verify export", role="verify")]
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="export", name="export feature", nodes=nodes)
+            payload = plugin_api.hud_payload(home.hermes, PARENT, cols=60)
+            bare = plugin_api.hud_payload(home.hermes, PARENT)
+        self.assertNotIn("error", payload)
+        self.assertEqual(payload["delegation_graph"]["status"], "active")
+        drawing = payload["delegation_drawing"]
+        self.assertEqual((drawing["schema_version"], drawing["layout"], drawing["cols"]), ("omh_desktop_dag/v1", "box", 60))
+        printed = dag_block.rows(dag_block.DagBlock("plan", payload["delegation_graph"]), 60 + len(dag_block.INDENT), THEME)
+        self.assertEqual(
+            ["".join(segment["text"] for segment in line) for line in drawing["lines"]],
+            ["".join(span.text for span in line)[len(dag_block.INDENT):] for line in printed[1:]],
+            "the pane's drawing is the TUI's transcript print, line for line",
+        )
+        roles = {segment["role"] for line in drawing["lines"] for segment in line}
+        self.assertTrue({"header", "node:dispatched", "node-title:dispatched"} & roles, roles)
+        self.assertNotIn("dependency", roles, "no Dependencies section, as the TUI prints it")
+        # Without `cols` the payload is the reader's alone.
+        self.assertNotIn("delegation_drawing", bare)
+
+    def test_a_big_run_or_a_narrow_pane_is_drawn_as_the_tree(self) -> None:
+        self.assertEqual(plugin_api.SMALL_GRAPH_LANES, dag_block.SMALL_GRAPH_LANES)
+        small = plugin_api.delegation_drawing(parallel(plugin_api.SMALL_GRAPH_LANES), 60)
+        big = plugin_api.delegation_drawing(parallel(plugin_api.SMALL_GRAPH_LANES + 1), 60)
+        narrow = plugin_api.delegation_drawing(owner_mock(), 20)
+        self.assertEqual((small["layout"], big["layout"], narrow["layout"]), ("box", "tree", "tree"))
+        self.assertTrue(all(len("".join(seg["text"] for seg in line)) <= 20 for line in narrow["lines"]))
+        self.assertLessEqual(len(big["lines"]), plugin_api.TREE_MAX_LINES)
+        # The width asked for is kept inside the renderer's floor and a ceiling no pane reaches.
+        self.assertEqual(plugin_api.delegation_drawing(owner_mock(), 2)["cols"], plugin_api.MIN_COLS)
+        self.assertEqual(plugin_api.delegation_drawing(owner_mock(), 10_000)["cols"], plugin_api.MAX_COLS)
+
+    def test_a_wide_character_segment_carries_the_cells_the_renderer_gave_it(self) -> None:
+        """Mutation: drop `cells`, or send it for every segment."""
+        drawing = plugin_api.delegation_drawing(nested(), 43)
+        segments = [segment for line in drawing["lines"] for segment in line]
+        wide = [segment for segment in segments if "cells" in segment]
+        self.assertEqual([(segment["text"], segment["cells"]) for segment in wide], [("인증 모듈 문서 정리", 19)])
+        self.assertTrue(all("cells" not in segment for segment in segments if segment["text"].isascii()))
+
+    def test_a_drawing_that_fails_is_a_record_beside_a_hud_that_still_reads(self) -> None:
+        graph = {**owner_mock(), "status": "active"}
+        reader = plugin_api.load_reader()
+        # A fresh payload per read, as the reader answers: the route adds the drawing to the one it is handed.
+        with mock.patch.object(reader, "read_omh_hud", side_effect=lambda *_a, **_k: {"active": True, "delegation_graph": graph}):
+            drawn = plugin_api.hud_payload(self.hermes_home, "s", cols=44)
+            with mock.patch.object(plugin_api, "delegation_drawing", side_effect=ValueError("bad graph")):
+                failed = plugin_api.hud_payload(self.hermes_home, "s", cols=44)
+            inactive = {"active": True, "delegation_graph": {**graph, "status": "inactive"}}
+            with mock.patch.object(reader, "read_omh_hud", side_effect=lambda *_a, **_k: dict(inactive)):
+                quiet = plugin_api.hud_payload(self.hermes_home, "s", cols=44)
+        self.assertEqual(drawn["delegation_drawing"].get("layout"), "box", drawn["delegation_drawing"])
+        self.assertEqual(failed["delegation_drawing"], {"error": "ValueError: bad graph", "schema_version": "omh_desktop_dag/v1"})
+        self.assertTrue(failed["active"])
+        self.assertNotIn("delegation_drawing", quiet)
 
     def test_hud_payload_reads_an_empty_hermes_home_without_raising_or_writing(self) -> None:
         before = sorted(str(path) for path in self.root.rglob("*"))
@@ -979,8 +1087,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(render["refetchInterval"], 5000)
         self.assertTrue(render["enabled"])
         self.assertTrue(render["keepsPreviousData"])
-        self.assertEqual(render["queryKey"], ["omh", "hud", "20260924_101010_abc123"])
-        self.assertEqual(render["restCalls"], ["/hud?session=20260924_101010_abc123"])
+        self.assertEqual(render["queryKey"], ["omh", "hud", "20260924_101010_abc123", 41])
+        self.assertEqual(render["restCalls"], ["/hud?session=20260924_101010_abc123&cols=41"])
 
     def test_the_pane_draws_the_plan_and_the_agent_rows_structurally(self) -> None:
         pane = self._pane("open_with_payload")
@@ -1077,7 +1185,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(render["byId"]["hud"], [
             "OMH", "reader error", "all sessions", "OMH backend: RuntimeBindingError: OMH home is not configured",
         ])
-        self.assertEqual(render["restCalls"], ["/hud"])
+        self.assertEqual(render["restCalls"], ["/hud?cols=41"])
 
     def test_a_transport_error_degrades_to_backend_unavailable(self) -> None:
         render = self._drive()["renders"]["transport_error"]
@@ -1181,8 +1289,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
         bars = [node for node in structure if node["className"] == "omh-pane-bar-fill"]
         self.assertEqual([(node["style"], node["done"]) for node in bars], [({"width": "50%"}, "true")])
         css = report["style"]["css"]
-        self.assertIn(".omh-pane-bar-fill[data-done=true]{background:var(--ui-text-quaternary)}", css)
-        self.assertIn(".omh-pane-item[data-state=skipped] .omh-pane-item-label{color:var(--ui-text-quaternary)}", css)
+        self.assertIn(".omh-pane-bar-fill[data-done=true]{background:var(--omh-mark)}", css)
+        self.assertIn(".omh-pane-item[data-state=skipped] .omh-pane-item-label{color:var(--omh-text-readable)}", css)
         self.assertEqual(report["formatters"]["foldLabels"], [{"earlier": "✓ 3 done", "later": "… 1 later task"}])
 
     def test_neutral_telemetry_is_muted_and_only_yolo_on_is_destructive(self) -> None:
@@ -1233,6 +1341,66 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertNotIn("Failed child", settled)
         self.assertIn("Pane refresh · 1 running", self._pane("catches_and_lanes"))
         self.assertIn("Graph-drawn child", self._pane("catches_and_lanes"))
+
+    def test_a_running_graph_is_the_backend_drawing_coloured_by_its_roles(self) -> None:
+        """Mutation: draw the lane rows beside the drawing, wrap it, or drop a segment's tone."""
+        render = self._drive()["renders"]["drawn_graph"]
+        pane = self._pane("drawn_graph")
+        drawn = [node for node in render["structure"] if node["className"] == "omh-pane-dag"]
+        self.assertEqual(len(drawn), 1)
+        self.assertEqual(drawn[0]["text"], "".join("".join(seg["text"] for seg in line) or " " for line in DRAWING["lines"]))
+        self.assertNotIn("omh-pane-lane", {node["className"] for node in render["structure"]})
+        self.assertIn("DELEGATION", pane)
+        titles = {node["text"]: node["className"] for node in render["structure"] if "omh-pane-dag-title" in node["className"]}
+        self.assertEqual(titles["Graph-drawn child"], "omh-pane-accent omh-pane-dag-title")
+        self.assertEqual(titles["Stuck child"], "omh-pane-warn omh-pane-dag-title")
+        self.assertIn("omh-pane-dag-card", {node["className"] for node in render["structure"]}, "the drawing sits in a card")
+        css = self._drive()["style"]["css"]
+        self.assertIn("white-space:pre;overflow-x:auto", css[css.index(".omh-pane-dag{"):])
+
+    def test_a_wide_segment_is_held_to_the_renderers_cells(self) -> None:
+        structure = self._drive()["renders"]["wide_drawn"]["structure"]
+        wide = [node for node in structure if "omh-pane-dag-wide" in node["className"]]
+        self.assertEqual([(node["text"], node["style"]) for node in wide], [("인증 모듈", {"width": "9ch"})])
+        css = self._drive()["style"]["css"]
+        self.assertIn(".omh-pane-dag-wide{display:inline-block;overflow:hidden;vertical-align:top}", css)
+
+    def test_without_a_usable_drawing_the_lanes_are_rows_and_a_settled_run_is_one_line(self) -> None:
+        failed = self._drive()["renders"]["drawing_error"]["structure"]
+        self.assertNotIn("omh-pane-dag", {node["className"] for node in failed})
+        self.assertIn("Stuck child", {node["text"] for node in failed if node["className"] == "omh-pane-lane-title"})
+        settled = self._drive()["renders"]["settled_drawn"]["structure"]
+        self.assertNotIn("omh-pane-dag", {node["className"] for node in settled})
+        self.assertIn("DAG · Pane refresh · done 1/2 · 1 failed", self._pane("settled_drawn"))
+
+    def test_the_drawing_width_is_measured_and_sent_as_cols(self) -> None:
+        formatters = self._drive()["formatters"]
+        self.assertEqual(formatters["hudPath"], ["/hud?cols=44", "/hud?session=s%201", "/hud", "/hud?session=s&cols=61"])
+        # (320 - 46) / 6.6 and (420 - 46) / 6.6 cells; nothing measured is no width; the probe is removed each time.
+        self.assertEqual(formatters["measureCellsAt"], [[41, ["omh-pane-dag-probe"]], [56, ["omh-pane-dag-probe"]],
+                                                        [0, ["omh-pane-dag-probe"]]])
+        self.assertIn("export const DEFAULT_DRAWING_CELLS = 41", PLUGIN_JS.read_text(encoding="utf-8"))
+
+    def test_drawing_roles_take_the_tui_meaning_of_each_state(self) -> None:
+        self.assertEqual(self._drive()["formatters"]["segmentTone"], [
+            "accent", "mark", "tertiary", "muted", "error", "warn", "error", "mark", "mark", "accent", "secondary",
+            "mark", "tertiary", "", "",
+        ])
+
+    def test_the_pane_keeps_desktops_sans_and_takes_the_tui_mood_from_tokens(self) -> None:
+        """Mutation: set the pane in monospace, drop a mood token, or let a word take the faintest text token."""
+        css = self._drive()["style"]["css"]
+        pane = css[css.index(".omh-pane{") : css.index("}", css.index(".omh-pane{"))]
+        self.assertIn("font-family:var(--font-sans", pane)
+        for token in ("--omh-warn:color-mix(in srgb,var(--ui-yellow) 72%,var(--ui-text-primary))",
+                      "--omh-edge:color-mix(in srgb,var(--ui-purple) 55%,var(--background))",
+                      "--omh-label:color-mix(in srgb,var(--ui-orange) 65%,var(--ui-text-primary))"):
+            self.assertIn(token, css)
+        self.assertIn(".omh-pane-warn{color:var(--omh-warn)}", css)
+        self.assertIn(".omh-pane-muted{color:var(--omh-text-readable)}", css)
+        pane_rules = css[: css.index(".omh-bar{")]
+        self.assertNotIn("color:var(--ui-text-quaternary)", pane_rules, "no pane word takes the faintest token")
+        self.assertNotRegex(css, r"gradient|box-shadow|text-shadow|filter:")
 
     def test_route_and_state_are_separate_fixed_grid_cells(self) -> None:
         report = self._drive()

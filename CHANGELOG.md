@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The Hermes Desktop pane takes the OMH TUI's mood, and draws the DAG as the TUI does.**
+  The pane stays a Desktop pane: the app's sans, its components and its theme
+  tokens. It takes on the TUI's default launch look as Desktop colour mixes: a rose
+  brand, warm section labels, and muted violet rules and frames. Sections have more
+  room between them, and agent rows get a hover. While a delegation graph runs, the
+  pane shows the box drawing the TUI prints into its transcript, in a card. The
+  backend makes it with the same renderer, at the width the pane measures in cells.
+  A run of up to 12 lanes is drawn as boxes. A bigger run, or a pane too narrow for
+  boxes, gets the tree. Each box takes its state's colour: the accent for running,
+  yellow for stuck, red for failed, grey for done or waiting. Every word the pane
+  colours now reads at 4.5:1 or better on Desktop's light and dark themes; the
+  lowest before was about 2.2:1.
 - **The `omh_memory` consolidation status reads the session's own profile.**
   Like tool recall, `demote` and recall origins, it now takes the Hermes
   profile the memory provider was started with from the session lens, not
