@@ -1038,7 +1038,17 @@ class LeaderShortcutTests(unittest.TestCase):
             "model_picker": lambda: ModelPicker([ModelRow("m1", "p1", "Provider 1", True)], current="m1"),
         }
         picker = pickers[kind]()
-        setattr(app, kind, picker)
+        # Explicit assignments: the CI sharding inventory rejects non-literal setattr.
+        if kind == "launch_picker":
+            app.launch_picker = picker
+        elif kind == "picker":
+            app.picker = picker
+        elif kind == "search":
+            app.search = picker
+        elif kind == "rewind_picker":
+            app.rewind_picker = picker
+        else:
+            app.model_picker = picker
         return picker
 
     def sessions_answer(self, app: App, request_id: int) -> None:
