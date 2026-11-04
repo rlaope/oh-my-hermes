@@ -63,6 +63,14 @@ _CANDIDATE_REQUEST = (
 
 # The row Hermes writes when a background process it was told to watch exits.
 _PROCESS_COMPLETE_NOTICE = "[Background process proc_scenario finished with exit code 0]"
+# The turn after Hermes' `/plan` wrote a plan, accepting it in words the router
+# also routes, so the route hint, the active plan line and the plan follow-on
+# line ride one turn (`plan_follow_on`).
+_PLAN_ACCEPTANCE = "looks good, implement the plan"
+_PLAN_TURN_HISTORY = (
+    {"role": "user", "content": "[/plan \u2014 plan mode]\n\nFor this turn, you are in PLAN MODE \u2014 planning only.\n"},
+    {"role": "assistant", "content": "Saved the plan to .hermes/plans/2026-11-04_101500-export.md. Carry it out?"},
+)
 
 
 class _RecordingPluginContext:
@@ -295,10 +303,13 @@ def pre_llm_call_context_scenario_chars() -> dict[str, int]:
     - `held_native_write`: a later turn after a todo_list write that an open
       accepted plan's hold kept out of the record, so the plan line and the
       one-time held-write line ride together.
+    - `plan_acceptance`: a later turn accepting the plan Hermes' `/plan` wrote
+      the turn before, while a plan workflow is active, so the route hint,
+      the active plan line and the plan follow-on line ride together.
     - `all_surfaces_without_section`: `all_surfaces` on the fallback, primer
       included; the fallback's maximum.
     - `all_surfaces`: the route hint, candidate line, largest role, active
-      workflow and running board in one first turn (the two plan scenarios
+      workflow and running board in one first turn (the three plan scenarios
       above need a later turn and are not part of it). The parts add, so
       this is the largest of the seeded scenarios; it is not a bound on every
       turn, because the parts listed below are not seeded. The routed request
@@ -353,6 +364,12 @@ def pre_llm_call_context_scenario_chars() -> dict[str, int]:
         ),
         "held_native_write": _run_pre_llm_call(
             (_seed_held_native_write,), user_message="continue", **later
+        ),
+        "plan_acceptance": _run_pre_llm_call(
+            (_seed_active_workflow,),
+            user_message=_PLAN_ACCEPTANCE,
+            conversation_history=[*_PLAN_TURN_HISTORY, {"role": "user", "content": _PLAN_ACCEPTANCE}],
+            **later,
         ),
         "all_surfaces": _largest_role(
             _ROUTED_REQUEST,

@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`dag-ulw` is offered on the turns where a plan's follow-on is chosen.**
+  On Hermes' own `/plan` turn, whose reply offers to carry the plan out, the
+  model is told to offer `dag-ulw` beside carrying it out directly when the
+  plan has several ordered tasks and a verification step. On the next turn,
+  a message that accepts the plan without saying how to run it ("구현하기",
+  "looks good, implement the plan", "플랜 승인. 진행해") gets one line naming
+  the same offer, unless the person already picked from an offer that named
+  it. "Just made" is read from the conversation's structure: the turn before
+  was `/plan`'s, invoked or loaded a planning skill, or wrote a plan file
+  under `.hermes/plans/` or `.omh/plans/`, or a `plan`, `ralplan` or
+  `refactor-plan` workflow is active. A change, a question, a hold, or a
+  message that names a way to run it (`dag-ulw`, `ultrawork`, subagents,
+  "직접") gets nothing. Before, none of the six acceptance messages measured
+  saw `dag-ulw`: four got no OMH context at all after `/plan`. A turn with no
+  plan just made renders the same bytes as before. Nothing starts on its
+  own, and routing is unchanged.
 - **After a plan is accepted, the planning skills offer `dag-ulw` beside the
   usual follow-ons, and taking the offer works.** An accepted `plan` or
   `ralplan` whose tasks form a graph (ids, dependencies, write scopes and a
