@@ -58,6 +58,15 @@ def configured_recall_mode(hermes_home: str | Path | None) -> str:
     return str(read_recall_mode_setting(hermes_home)["value"])
 
 
+def per_turn_recall_enabled(policy: dict[str, object], hermes_home: str | Path | None) -> bool:
+    """Whether a turn is served records unasked: the policy allows recall and `hermes_home`'s `recall_mode` is `auto`.
+
+    The one rule for the provider's per-turn render and for the capture hint's
+    "recalls"; tool recall refuses only under `off`, which it checks itself.
+    """
+    return bool(policy.get("recall_enabled", True)) and configured_recall_mode(hermes_home) == "auto"
+
+
 def recall_line_shown(recall_line: str, platform: str, console_platforms: frozenset[str]) -> bool:
     """Whether Hermes may show the recall line on `platform` under `recall_line`."""
     if recall_line == "all":

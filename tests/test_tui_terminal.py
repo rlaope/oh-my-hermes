@@ -26,6 +26,8 @@ from omh.tui.keys import BUTTON_LEFT, KeyDecoder, Mouse
 from omh.tui.terminal import (
     BRACKETED_PASTE_OFF,
     BRACKETED_PASTE_ON,
+    FOCUS_REPORTING_OFF,
+    FOCUS_REPORTING_ON,
     KITTY_KEYBOARD_POP,
     KITTY_KEYBOARD_PUSH,
     KITTY_KEYBOARD_QUERY,
@@ -287,6 +289,13 @@ class MouseReportingSequenceTests(unittest.TestCase):
         self.assertIn(MOUSE_REPORTING_OFF, RESTORE_SEQUENCE)
         self.assertNotIn(MOUSE_REPORTING_ON, RESTORE_SEQUENCE)
 
+    def test_focus_reports_are_mode_1004_and_every_exit_switches_them_off(self) -> None:
+        # Asked on entry on every terminal (the pty cases below: an allowlisted one, Apple Terminal, legacy keys),
+        # and switched off on every exit, a crash, a signal and a stop included, so no shell is sent `ESC[I`.
+        self.assertEqual((FOCUS_REPORTING_ON, FOCUS_REPORTING_OFF), ("\x1b[?1004h", "\x1b[?1004l"))
+        self.assertIn(FOCUS_REPORTING_OFF, RESTORE_SEQUENCE)
+        self.assertNotIn(FOCUS_REPORTING_ON, RESTORE_SEQUENCE)
+
 
 @unittest.skipUnless(pty is not None and termios is not None, "needs a POSIX pty")
 class TerminalPtyTests(unittest.TestCase):
@@ -344,7 +353,7 @@ class TerminalPtyTests(unittest.TestCase):
 
     def test_bracketed_paste_is_switched_on_and_back_off(self) -> None:
         with Terminal(self.slave, self.slave):
-            self.assertEqual(self.master_output(), BRACKETED_PASTE_ON.encode())
+            self.assertEqual(self.master_output(), (BRACKETED_PASTE_ON + FOCUS_REPORTING_ON).encode())
         tail = self.master_output()
         self.assertTrue(tail.endswith(BRACKETED_PASTE_OFF.encode()), tail)
 
@@ -358,7 +367,7 @@ class TerminalPtyTests(unittest.TestCase):
                 term = Terminal(self.slave, self.slave, environ={"TERM_PROGRAM": program})
                 self.assertFalse(term.keyboard_protocol)
                 with term:
-                    self.assertEqual(self.master_output(), (BRACKETED_PASTE_ON + request).encode())
+                    self.assertEqual(self.master_output(), (BRACKETED_PASTE_ON + FOCUS_REPORTING_ON + request).encode())
                     self.assertTrue(term.keyboard_protocol)
                 self.assertFalse(term.keyboard_protocol)
                 self.assertTrue(self.master_output().endswith(RESTORE_SEQUENCE.encode()))
@@ -368,7 +377,7 @@ class TerminalPtyTests(unittest.TestCase):
             with self.subTest(environ=environ):
                 term = Terminal(self.slave, self.slave, environ=environ)
                 with term:
-                    self.assertEqual(self.master_output(), BRACKETED_PASTE_ON.encode())
+                    self.assertEqual(self.master_output(), (BRACKETED_PASTE_ON + FOCUS_REPORTING_ON).encode())
                     self.assertFalse(term.keyboard_protocol)
                 # Released anyway: harmless where nothing was asked.
                 self.assertTrue(self.master_output().endswith(RESTORE_SEQUENCE.encode()))
@@ -388,7 +397,7 @@ class TerminalPtyTests(unittest.TestCase):
     def test_mouse_reporting_is_off_on_entry_and_set_mouse_writes_only_on_a_change(self) -> None:
         term = Terminal(self.slave, self.slave)
         with term:
-            self.assertEqual(self.master_output(), BRACKETED_PASTE_ON.encode())
+            self.assertEqual(self.master_output(), (BRACKETED_PASTE_ON + FOCUS_REPORTING_ON).encode())
             self.assertFalse(term.mouse_reporting)
             term.set_mouse(False)
             self.assertEqual(self.master_output(), b"")
@@ -552,7 +561,7 @@ class TerminalPtyTests(unittest.TestCase):
                 self.assertTrue(term.suspend())
             written = self.master_output().decode()
             self.assertIn(RESTORE_SEQUENCE, written)
-            self.assertTrue(written.endswith(BRACKETED_PASTE_ON + KITTY_KEYBOARD_PUSH), written)
+            self.assertTrue(written.endswith(BRACKETED_PASTE_ON + FOCUS_REPORTING_ON + KITTY_KEYBOARD_PUSH), written)
         self.assertTrue(self.master_output().endswith(RESTORE_SEQUENCE.encode()))  # KITTY_KEYBOARD_POP among it
 
     def test_a_terminal_that_answers_no_kitty_query_gets_no_push(self) -> None:

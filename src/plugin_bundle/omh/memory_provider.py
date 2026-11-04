@@ -113,7 +113,7 @@ from .memory_prefetch_receipt import (
 )
 from .memory_principals import principal_recall_decision
 from .memory_query_sanitizer import sanitize_memory_query
-from .memory_recall_settings import configured_recall_line, configured_recall_mode, recall_line_shown
+from .memory_recall_settings import configured_recall_line, configured_recall_mode, per_turn_recall_enabled, recall_line_shown
 from .memory_recall_selector import recall_revision, resolve_scope_allowlist
 from .memory_recall_support import _memory_query_split, _record_perspective_matches
 from .memory_session_digest import (
@@ -699,6 +699,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
             "homes": [str(home) for home in self._record_homes()],
             "project_identity": resolve_project_identity(self._project_cwd).identity if self._project_cwd is not None else "",
             "executor_target": PREFETCH_EXECUTOR_TARGET,
+            # The profile whose `recall_mode` this provider reads, so tool
+            # recall reads the same one rather than the process's Hermes home.
+            "profile_home": str(self._profile_home),
         }
         looser_foreign: dict[str, Any] | None = None
         if not reset:
@@ -1296,7 +1299,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # no blocks, and so no recall line; the brief and the digest are not
         # recall and keep their own rules. Tool recall decides for itself.
         policy, policy_unreadable = self._recall_policy()
-        if policy.get("recall_enabled", True) and configured_recall_mode(self._profile_home) != "auto":
+        if policy.get("recall_enabled", True) and not per_turn_recall_enabled(policy, self._profile_home):
             policy = {**policy, "recall_enabled": False}
         console = self._surface_class in OWNER_SURFACE_CLASSES and bool(policy.get("recall_enabled", True))
         blocks = read_memory_blocks(self._omh_home) if console else ()

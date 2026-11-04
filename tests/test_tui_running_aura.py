@@ -302,6 +302,24 @@ class RecallGlintTests(unittest.TestCase):
                 self.assertEqual(len(rows), 1, [text(line) for line in rows])
                 self.assertEqual(self.transcript.blocks[-1].tools[-1].output, ())
 
+    def test_an_omh_remember_recall_lists_and_glints_like_omh_memory(self) -> None:
+        # The audit's LOW #10: the band matched `omh_memory` only, while the
+        # model's own recall tool is `omh_remember`, with the same result shape.
+        self.complete("omh_remember", {**recall_result(), "plugin_tool": "omh_remember"})
+        self.assertEqual([text(line) for line in self.transcript.live_lines(80, self.theme)][1:], [
+            "┃   ⎿  decision  rotate refresh tokens per session", "┃      fact      the guard lives in src/auth/guard.py"])
+        self.assertTrue(self.glinting(self.rows(100.0 + RECALL_GLINT_SECONDS / 2)))
+        for name, result in {
+            "a save": {"status": "remembered", "action": "save", "plugin_tool": "omh_remember", "record_id": "r1"},
+            "a recall that found nothing": {**recall_result([], status="nothing_found"), "plugin_tool": "omh_remember"},
+            "a refused recall": {"status": "refused", "action": "recall", "reason": "recall_disabled", "plugin_tool": "omh_remember"},
+        }.items():
+            with self.subTest(name):
+                self.setUp()
+                self.complete("omh_remember", result)
+                self.assertFalse(self.glinting(self.rows(100.0 + RECALL_GLINT_SECONDS / 2)))
+                self.assertIsNone(self.transcript.blocks[-1].tools[-1].recalled_at)
+
     def test_a_json_string_result_reads_the_same(self) -> None:
         import json
 
