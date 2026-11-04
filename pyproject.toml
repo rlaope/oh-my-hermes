@@ -147,7 +147,7 @@ packages = [
 
 [dependency-groups]
 dev = [
-    "pytest==9.1.1",
+    "pytest==9.2.0",
 ]
 lint = [
     "ruff==0.17.2",
