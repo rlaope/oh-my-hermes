@@ -1164,12 +1164,11 @@ class RunEndTests(unittest.TestCase):
         with_graph(app, reopened)
         self.assertGreater(len(view_text(app)), 1, "a run that moved on after its end is drawn again")
 
-    def test_on_the_bottom_rows_the_rows_the_tree_frees_go_and_the_composer_moves_down(self):
+    def test_on_the_bottom_rows_the_freed_rows_go_under_the_info_line_not_between_the_output_and_the_composer(self):
         # 150x42, the region on the screen's last row. The end print of a run of 20 lanes is condensed (a few rows),
-        # shorter than the tree it replaces. The bottom is as tall as what it draws (the owner, 2026-11-04): the
-        # region's top moves down by the rows the tree gave up, the output above painted again lower, so the info
-        # line is the screen's last row, no blank band stands between the turn's last lines and the composer, and no
-        # blank row is kept under the info line (2026-10-26 kept them there).
+        # shorter than the tree it replaces: the rows it leaves over stay blank under the info line, so no blank band
+        # stands between the turn's last lines and the composer, and the composer never moves up. Output that comes
+        # after takes them.
         from test_dag_transcript import big_run
         from test_tui_agent_view import box_top, pinned
 
@@ -1184,17 +1183,18 @@ class RunEndTests(unittest.TestCase):
         app._on_event(dag_end(run="r1"))
         turn_end(app)
         screen = drawn(app)
-        self.assertGreater(box_top(screen), top, "the composer moved down by the rows the tree gave up")
+        self.assertGreaterEqual(box_top(screen), top, "the composer does not move up")
         info = box_top(screen) + 3
-        self.assertEqual(info, 41, "the info line is the screen's last row: nothing is kept under it")
+        # The tree's rows are blank under the info line, down to the region's last row.
+        self.assertEqual(screen[info + 1 : 42], [""] * (41 - info), "the tree's rows are blank under the info line")
         self.assertIn(badge_text(), screen[info])
         above = screen[box_top(screen) - 2 : box_top(screen)]
         self.assertTrue(above[0].strip().startswith("✻"), screen)  # the turn's summary line, then one spacer row
         self.assertEqual(drawn(app), screen, "the next frame keeps them")
+        held = app.frame_budget.agents
         app.transcript.add_notice("one\ntwo\nthree")
-        after = drawn(app)
-        self.assertEqual(after[box_top(after) - 2].strip(), "three", "the output stands right over the composer")
-        self.assertEqual(box_top(after), box_top(screen), "and the composer stays on the bottom rows")
+        self.assertLess((after := (drawn(app), app.frame_budget.agents))[1], held, after[0])
+        self.assertEqual(after[0][box_top(after[0]) - 2].strip(), "three", "the output stands right over the composer")
 
     def test_another_run_is_drawn_after_one_ended(self) -> None:
         app, _client = tree_app(nodes=OVER)

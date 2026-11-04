@@ -2068,6 +2068,7 @@ class App(ModesMixin, AgentViewMixin):
         self.tree_state: TreeState | None = None  # what the tree's keys need, as the agent view last drew it
         # The dag run that is over, which the view no longer draws, and when its graph had last moved (`_run_gone`)
         self.retired_run: tuple[str, float] | None = None
+        self.tree_freed = 0  # the rows that run's tree gave up, kept blank under the info line (`_render`)
         self.tree_size = (0, 0)  # the width and the rows the agent view last drew the tree in
         self.log_agent = ""  # the agent whose log the pager shows; "" for every other pager
         self.tail_asked_at: float | None = None  # when the last `subagent.tail` went out
@@ -2080,6 +2081,7 @@ class App(ModesMixin, AgentViewMixin):
         # The rows the agent view wanted, the rows it got and the tail's working rows in the last frame drawn while a
         # turn ran (`_held_view_rows`).
         self.view_hold: tuple[int, int, int] | None = None
+        self.tree_hold = 0  # the most rows the dag tree took this turn on the bottom rows (`_tree_held_rows`)
         # Until the first prompt the region reaches the screen's last row (`_render`): the launch's logo and banner on
         # top, the composer on the bottom rows, the rows between them empty.
         self.launch_layout = True
@@ -6011,6 +6013,7 @@ class App(ModesMixin, AgentViewMixin):
         self._clear_roster()
         self.tree_folds, self.tree_run = {}, ""  # a run of the same name in the next session starts unfolded
         self.retired_run = None  # a run of the same name in the next session is drawn
+        self.tree_freed = 0
         self._adopt_session(result, fallback_stored)
         return declined
 
@@ -7430,19 +7433,15 @@ class App(ModesMixin, AgentViewMixin):
             agents = self._drawn("the agent view", lambda: self._agent_view(cols, rows, room), cols)
             build = partial(build, agents=agents)
             frame = build()
-        # The agent view gave rows up on the bottom rows (a dag run's layer folded or settled, its run ended and the
-        # tree went): the bottom is exactly as tall as what it draws (the owner, 2026-11-04). The region's top moves
-        # down by them, the rows above it painted again that much lower (`screen.LiveRegion._lower`), so no row
-        # stays blank under the view or between the transcript and the composer, and the composer moves down. Where
-        # the region
-        # cannot (its place not certain, or it did not flush every row above it), they stay pad rows as before.
-        padded = None  # the frame as it would be with its pad rows, should the region turn out unable to lower
-        if pinned and self.frame_budget is not None and frame.budget.agents < self.frame_budget.agents:
-            given = self.frame_budget.agents - frame.budget.agents
-            smaller = partial(build, min_height=max(min_height - given, 0))
-            shrunk = smaller()
-            if self.region.can_lower(rows, max(self.region.height - len(stable) - shrunk.height, 0)):
-                padded, build, frame = build, smaller, shrunk
+        # A dag run's tree that left the view as its run ended (`_retire_finished_run`) gives its rows up on the bottom
+        # rows as blank rows under the info line, not as pad above the composer: what the run's end print and the
+        # turn's last lines did not fill would be a blank band between them and the composer. The composer stays where
+        # the flush leaves it, as Claude Code's prompt does when the list under it goes, and the rows go as output
+        # fills them (the pad they stand for shrinks), at the next turn, and above the bottom rows.
+        self.tree_freed = min(self.tree_freed, frame.budget.pad) if pinned and not busy else 0
+        if self.tree_freed:
+            build = partial(build, agents=[*build.keywords["agents"], *[()] * self.tree_freed])
+            frame = build()
         if self.card_state == CARD_LIVE and self.launch_layout and min_height > 0:
             # The card goes at the region's top, under what is flushed above it (and the spacer the tail opens with
             # after a notice), and blank rows take the rest down to the composer, so the region still reaches the
@@ -7453,25 +7452,19 @@ class App(ModesMixin, AgentViewMixin):
             if card:
                 build = partial(build, tail=[*build.keywords["tail"], *card, *([()] * (room - len(card)))])
                 frame = build()
-        sticky_row = None
         # The rows above the region once the flush below and this frame are drawn: transcript rows.
         if self._sticky_needed(self.region.rows_above(rows, len(stable), frame.height)):
             sticky = self._drawn(
                 "the sticky prompt", lambda: [sticky_line(self.sticky, cols, self.theme, self.known_slash)], cols
             )
             frame = build(sticky=sticky[0])
-            sticky_row = sticky[0]
         # Flushed before the frame, the lines cover the region's top rows, where the lines leaving
         # the tail were drawn (a settled tool group is those same rows, moved above the region), and
         # the frame is drawn under them. Flush and frame are one write, so no screen between them shows.
         # The wallpaper paints the blank tails of the rows above the region too, the transcript's included, so it stays
         # in view over a full session (owner's choice of 2026-10-29; `screen` names what that costs a selection).
-        lower = max(self.region.height - len(stable) - frame.height, 0) if padded is not None else 0
-        if lower and not self.region.can_lower(rows, lower):  # the frame grew again (a sticky prompt): pad as before
-            frame = padded() if sticky_row is None else padded(sticky=sticky_row)
-            lower = 0
         self.region.render(frame.lines, frame.cursor, cols, flush=stable, screen_rows=rows, ambient=self._ambient(),
-                           ambient_above=True, lower=lower)
+                           ambient_above=True)
         self.ambient_at = self.clock()
         self.frame_budget = frame.budget
         self.bg_row_shown = self.bg_on_info and frame.budget.info > 0  # the row is on the info line (`_info_line`)

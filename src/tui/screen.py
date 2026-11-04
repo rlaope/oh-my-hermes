@@ -480,13 +480,8 @@ class LiveRegion:
     def render(
         self, lines: Sequence[Line], cursor: tuple[int, int] | None, width: int, flush: Sequence[Line] = (),
         screen_rows: int | None = None, ambient: Sequence[Cell] | None = None, ambient_above: bool = False,
-        lower: int = 0,
     ) -> None:
         """Show `lines` as the region and park the cursor at `cursor` = (row, col) within it; None hides it.
-
-        `lower` rows first move the region's top down (`can_lower`, `_lower`): the rows above it are painted again
-        that many rows lower, from the lines it flushed there, so a region on the screen's last row that shrinks
-        keeps its last row there with no blank row left above or under it.
 
         `flush` is flushed above the region first, in the same write: its lines
         cover the top rows of the region on screen, and `lines` are drawn from
@@ -511,8 +506,6 @@ class LiveRegion:
         regrounding = self._regrounded and rows is not None
         if regrounding:
             ops += self._reground(rows)
-        if lower and rows is not None and self.can_lower(rows, lower):
-            ops = self._unpaper() + ops + self._lower(rows, lower)
         self._inserted = None
         if flush:
             ops += self._flush(flush, width)
@@ -689,35 +682,6 @@ class LiveRegion:
         self._paper = {at: cell for at, cell in self._paper.items() if at[0] < first}
         self._parked = None  # the frame these go out in has autowrap off around them
         return [*ops, cursor_at(top + self._row, 0)]
-
-    def can_lower(self, screen_rows: int, count: int) -> bool:
-        """Whether the region's top can move `count` rows down (`_lower`): its place is certain, its last row is the
-        screen's last row, it holds more rows than that, and it flushed every row that would then be above it, so each
-        one can be painted again (none is lost from the screen that this region did not write)."""
-        top = self._top(screen_rows)
-        return (count > 0 and top is not None and self._last(screen_rows) == screen_rows - 1
-                and len(self._rows) > count and len(self._above_lines) >= top + count)
-
-    def _lower(self, rows: int, count: int) -> list[str]:
-        """The bytes that move the region's top `count` rows down: every screen row above the new top painted again
-        with the line flushed that many rows nearer the region (the last flushed line right over it), and the region's
-        first `count` rows given up, so its rows keep their places under the new top. The terminal's scrollback still
-        holds the lines that come back on the screen's first rows; they are on it twice once they scroll off again."""
-        top = self._top(rows)
-        assert top is not None
-        lowered = top + count
-        ops = [AUTOWRAP_OFF]
-        for row in range(lowered):
-            line, width = self._above_lines[row - lowered]
-            painted, blank = _flushed_row(line, width, self._ground)
-            self._above_blank[row - lowered] = blank
-            ops.append(cursor_at(row, 0) + on_ground(ERASE_LINE, self._ground) + painted)
-        self._shift += count
-        self._floor = max((self._floor or 1) - count, 1)
-        self._rows, self._lines = self._rows[count:], self._lines[count:]
-        self._row, self._parked = 0, None
-        self._painted_over = ([], None)
-        return [*ops, AUTOWRAP_ON, cursor_at(lowered, 0)]
 
     def _cursor_target(self) -> tuple[int, int]:
         """Where the last frame parked the cursor, within the region."""
