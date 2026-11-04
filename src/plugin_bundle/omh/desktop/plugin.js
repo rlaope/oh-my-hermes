@@ -1,6 +1,11 @@
 // The OMH desktop half: the HUD the OMH TUI draws (src/tui/panels.py),
-// redrawn for Hermes Desktop as a right-hand pane and a status-bar item, in
-// the app's own visual language rather than the terminal's.
+// redrawn for Hermes Desktop as a right-hand pane and a status-bar item. It
+// is a Desktop pane with the TUI's mood, not a terminal in a window (the
+// owner's call of 2026-11-04): the app's sans for words, its components,
+// spacing and radii, and its theme tokens, with the TUI's calm hierarchy,
+// density and colour character brought over -- the default launch look
+// ('spectrum': a muted violet for frames, a rose brand, a warm label) mapped
+// onto Desktop's own colour tokens, so it holds in light and dark.
 //
 // The pane reads top to bottom: one line of state (`OMH  2 running`), the
 // scope it covers (`this session` or `all sessions`), the few findings worth
@@ -8,7 +13,14 @@
 // something to say: CATCHES (the mistakes OMH caught in this session, worded
 // as the TUI words them), PLAN, DELEGATION (the delegation graph while one is
 // active), ROUTES (the Maestro and Kanban lanes OMH dispatched) and the
-// fanout DAG. Hermes Desktop lists every delegate_task child in its own
+// fanout DAG. While a delegation graph runs, DELEGATION shows it as the box
+// drawing the TUI prints into its transcript, made by the backend with the
+// TUI's own renderer (`delegation_view`) at the pane's width in cells, which
+// the pane measures and sends as `cols`; the backend draws the tree where
+// the boxes do not fit. The drawing is the one place set in monospace art:
+// a preformatted block in a card, scrolling sideways and never wrapping,
+// each segment coloured by the state its renderer role carries.
+// Hermes Desktop lists every delegate_task child in its own
 // Agents panel and in the composer's status stack, so a row per native
 // subagent here was a second copy of that list; the pane keeps one summary
 // line for them and names that panel in its tooltip. Maestro and Kanban rows
@@ -18,7 +30,10 @@
 // what is running, yellow for waiting, blocked or a warning, red for failed
 // (and for yolo, shown only while it is on), and the text greys for done,
 // skipped and everything neutral. Monospace is kept for ids, model and route
-// names and figures; words are set in the app's sans.
+// names and figures, and the drawing; words are set in the app's sans. Every
+// word the pane colours reads at 4.5:1 or better on Desktop's light and dark
+// panes: the yellow for words is the theme's yellow mixed toward the primary
+// text, and no word takes the faintest text token. No gradient, glow or band.
 //
 // Plain ESM, loaded uncompiled through the app's disk-plugin door: only
 // '@hermes/plugin-sdk', 'react' and 'react/jsx-runtime' resolve, and JSX
@@ -74,11 +89,46 @@ export const PANE_WIDTH = '320px'
 export const PLAN_WINDOW_ROWS = 8
 export const GRAPH_NODE_LIMIT = 8
 export const LANE_LIMIT = 8
+// The drawing's width in cells before the pane has measured itself: the
+// default 320 px pane, less the card's insets, in 11 px JetBrains Mono.
+export const DEFAULT_DRAWING_CELLS = 41
+// The px the drawing's card takes off the body's width before its first
+// cell: the section block's two side paddings, then the card's two borders
+// and two paddings (PANE_CSS).
+export const DRAWING_INSET_PX = 46
+// The longest drawing the pane keeps, in lines and in segments per line.
+export const DRAWING_LINE_LIMIT = 160
+const DRAWING_SEGMENT_LIMIT = 64
 
 // Bound in register(); ctx.rest is scoped to this plugin's namespace.
 let rest = null
 // Bound in register() when the host offers ctx.i18n; the local table otherwise.
 let pluginI18n = null
+
+// The drawing's width in cells, measured by the pane and read by every
+// `useHud`, so the status item and the pane keep asking one query.
+let drawingCells = DEFAULT_DRAWING_CELLS
+const cellListeners = new Set()
+
+export function setDrawingCells(cells) {
+  if (!Number.isInteger(cells) || exceeds(8, cells) || cells === drawingCells) return
+  drawingCells = cells
+  cellListeners.forEach(function (listener) {
+    listener(cells)
+  })
+}
+
+function useDrawingCells() {
+  const [cells, setCells] = useState(drawingCells)
+  useEffect(function () {
+    cellListeners.add(setCells)
+    setCells(drawingCells)
+    return function () {
+      cellListeners.delete(setCells)
+    }
+  }, [])
+  return cells
+}
 
 // Every comparison in the file goes through these two, so neither angle
 // bracket appears in it. NaN answers false, as the operators would.
@@ -107,15 +157,20 @@ function countOf(list, predicate) {
   return list.filter(predicate).length
 }
 
-export function hudPath(sessionId) {
-  return sessionId ? `/hud?session=${encodeURIComponent(sessionId)}` : '/hud'
+// `cols` asks the backend to draw an active delegation graph that many
+// cells wide; without it the payload carries no drawing.
+export function hudPath(sessionId, cols) {
+  const query = []
+  if (sessionId) query.push(`session=${encodeURIComponent(sessionId)}`)
+  if (Number.isInteger(cols) && exceeds(cols, 0)) query.push(`cols=${cols}`)
+  return query.length ? `/hud?${query.join('&')}` : '/hud'
 }
 
-function fetchHud(sessionId) {
+function fetchHud(sessionId, cols) {
   if (!rest) {
     return Promise.reject(new Error('omh plugin context is not registered'))
   }
-  return rest(hudPath(sessionId))
+  return rest(hudPath(sessionId, cols))
 }
 
 // ---------------------------------------------------------------------------
@@ -1133,6 +1188,86 @@ export function delegationView(payload) {
 }
 
 // ---------------------------------------------------------------------------
+// The drawing: the backend's `delegation_drawing`, the TUI's own boxes or
+// tree as lines of `{text, role}` segments. The pane never lays a cell out
+// again; it only colours each segment by the state its role carries, with
+// the TUI's meaning (`panels.dag_style`): a box's border, glyph, title and
+// status words in its node's state colour, edges and the frontier label as
+// quiet marks, an edge into a running frontier in the accent.
+// ---------------------------------------------------------------------------
+
+const DRAWING_STATE_TONES = {
+  root: 'accent',
+  selected: 'accent',
+  running: 'accent',
+  stuck: 'warn',
+  failed: 'error',
+  interrupted: 'error',
+  done: 'tertiary',
+  dispatched: 'tertiary',
+  waiting: 'muted',
+  unknown: 'muted'
+}
+const DRAWING_KIND_TONES = {
+  header: 'secondary',
+  title: 'primary',
+  category: 'tertiary',
+  model: 'tertiary',
+  group: 'tertiary',
+  parents: 'tertiary',
+  dependency: 'tertiary',
+  more: 'tertiary',
+  unknown: 'muted',
+  frontier: 'mark',
+  edge: 'mark'
+}
+const DRAWING_STATE_KINDS = new Set(['node', 'node-title', 'node-word', 'glyph', 'status'])
+
+// The tone a drawing segment is painted in, from its renderer role
+// (`node:running`, `edge`, `header`); a role the pane does not know is plain.
+export function segmentTone(role) {
+  const text = String(role || '')
+  const colon = text.indexOf(':')
+  const kind = colon === -1 ? text : text.slice(0, colon)
+  const state = colon === -1 ? '' : text.slice(colon + 1)
+  if (DRAWING_STATE_KINDS.has(kind)) {
+    const tone = own(DRAWING_STATE_TONES, state) ? DRAWING_STATE_TONES[state] : 'muted'
+    // A border is a mark: a settled or waiting box is drawn in the mark's grey, never the word's.
+    return kind === 'node' && (tone === 'tertiary' || tone === 'muted') ? 'mark' : tone
+  }
+  if (kind === 'connector') return state === 'running' ? 'accent' : 'mark'
+  return own(DRAWING_KIND_TONES, kind) ? DRAWING_KIND_TONES[kind] : ''
+}
+
+// The drawing's text keeps every box-drawing cell; only escapes and control
+// characters are taken out, as `sanitizeText` takes them.
+function drawingText(value) {
+  return String(value ?? '')
+    .replace(ESCAPE_SEQUENCE, '')
+    .replace(/\p{Cc}/gu, '')
+}
+
+// The lines to show, or null where the backend sent no usable drawing (no
+// `cols` asked, an error record, a payload from before the drawing).
+export function drawingLines(payload) {
+  const drawing = payload && payload.delegation_drawing
+  if (!drawing || drawing.error || !Array.isArray(drawing.lines) || !drawing.lines.length) return null
+  return drawing.lines.slice(0, DRAWING_LINE_LIMIT).map(function (line) {
+    return rows(line)
+      .slice(0, DRAWING_SEGMENT_LIMIT)
+      .map(function (segment) {
+        const role = safeText(segment.role)
+        // The renderer's width for a segment holding a wide character: the pane holds it to that many cells.
+        const cells = Number.isInteger(segment.cells) && exceeds(segment.cells, 0) ? Math.min(segment.cells, 4 * DRAWING_SEGMENT_LIMIT) : 0
+        return { text: drawingText(segment.text), role, tone: segmentTone(role), title: role.startsWith('node-title') || role === 'title', cells }
+      })
+      .filter(function (segment) {
+        return segment.text
+      })
+  })
+}
+
+// ---------------------------------------------------------------------------
 // What the pane and the status item render from one poll: the payload when
 // the reader answered, otherwise the one state the surface must say. A
 // transport failure keeps the last payload on screen under a quiet notice.
@@ -1309,86 +1444,101 @@ export function graphNodeView(nodeRecord) {
 // ---------------------------------------------------------------------------
 // Styles. Prefixed classes only; tokens, not literals. Mono cells name the
 // app's bundled 'JetBrains Mono' first (styles.css @font-face), then the
-// theme's mono stack, and are kept for ids, model and route names and
-// figures. One compact layout serves every pane width: a row's long cell
-// truncates with an ellipsis (its tooltip holds the whole text) and a state
-// word keeps its own fixed cell, so nothing wraps onto a line by itself.
+// theme's mono stack, and are kept for ids, model and route names, figures
+// and the drawing. One compact layout serves every pane width: a row's long
+// cell truncates with an ellipsis (its tooltip holds the whole text) and a
+// state word keeps its own fixed cell, so nothing wraps onto a line by
+// itself. The TUI's look arrives as three mixed tokens: `--omh-edge`, a
+// muted violet for frames and rules; `--omh-brand`, a rose for the brand;
+// `--omh-label`, a warm tone for section labels. Each is mixed from
+// Desktop's own colour tokens, so a theme change carries them. Marks in the
+// drawing take one opaque grey, `--omh-mark`: a translucent one doubles where
+// two box-drawing cells meet and a border reads dotted.
 // ---------------------------------------------------------------------------
 
 const MONO = "'JetBrains Mono',var(--font-mono,var(--dt-font-mono,monospace))"
 
 export const PANE_CSS = `
 .omh-pane{display:flex;flex-direction:column;height:100%;min-width:0;container-type:inline-size;font-family:var(--font-sans,var(--dt-font-sans,sans-serif));font-size:12px;line-height:1.4;color:var(--ui-text-primary)}
-.omh-pane,.omh-bar{--omh-text-readable:color-mix(in srgb,var(--ui-text-secondary),var(--ui-text-tertiary))}
+.omh-pane,.omh-bar{--omh-text-readable:color-mix(in srgb,var(--ui-text-secondary),var(--ui-text-tertiary));--omh-warn:color-mix(in srgb,var(--ui-yellow) 72%,var(--ui-text-primary));--omh-edge:color-mix(in srgb,var(--ui-purple) 55%,var(--background));--omh-brand:color-mix(in srgb,color-mix(in srgb,var(--ui-red) 60%,var(--ui-purple)) 85%,var(--ui-text-primary));--omh-label:color-mix(in srgb,var(--ui-orange) 65%,var(--ui-text-primary));--omh-mark:color-mix(in srgb,var(--ui-base) 50%,var(--background))}
 .omh-pane-mono{font-family:${MONO};font-variant-numeric:tabular-nums}
-.omh-pane-head{display:flex;align-items:center;gap:8px;padding:10px 10px 0;min-width:0}
-.omh-pane-brand{font-weight:600;white-space:nowrap;color:var(--ui-text-primary)}
-.omh-pane-state{display:flex;align-items:center;gap:5px;min-width:0;margin-left:auto;font-size:11px;color:var(--ui-text-tertiary);white-space:nowrap}
+.omh-pane-head{display:flex;align-items:center;gap:8px;padding:12px 12px 0;min-width:0}
+.omh-pane-brand{font-weight:700;letter-spacing:.02em;white-space:nowrap;color:var(--omh-brand)}
+.omh-pane-state{display:flex;align-items:center;gap:5px;min-width:0;margin-left:auto;font-size:11px;color:var(--omh-text-readable);white-space:nowrap}
 .omh-pane-state-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .omh-pane-state-seg+.omh-pane-state-seg::before{content:'·';margin:0 3px;color:var(--ui-text-quaternary)}
-.omh-pane-scope{padding:2px 10px 6px;font-size:11px;color:var(--omh-text-readable)}
-.omh-pane-chips{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 8px}
-.omh-pane-rule{flex:none;border-top:1px solid var(--ui-stroke-tertiary)}
-.omh-pane-body{min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;padding-bottom:10px}
-.omh-pane-section{display:flex;align-items:baseline;gap:8px;padding:12px 10px 4px;min-width:0;max-width:640px;box-sizing:border-box}
-.omh-pane-section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ui-text-quaternary);white-space:nowrap}
+.omh-pane-scope{padding:2px 12px 8px;font-size:11px;color:var(--omh-text-readable)}
+.omh-pane-chips{display:flex;flex-wrap:wrap;gap:4px;padding:0 12px 10px}
+.omh-pane-rule{flex:none;border-top:1px solid var(--omh-edge)}
+.omh-pane-body{min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;padding-bottom:12px}
+.omh-pane-section{display:flex;align-items:baseline;gap:8px;padding:16px 12px 6px;min-width:0;max-width:640px;box-sizing:border-box}
+.omh-pane-section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--omh-label);white-space:nowrap}
 .omh-pane-section-title{min-width:0;flex:1;color:var(--ui-text-secondary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.omh-pane-section-count{margin-left:auto;font-size:11px;color:var(--ui-text-tertiary);white-space:nowrap}
-.omh-pane-block{padding:0 10px;min-width:0;max-width:640px;box-sizing:border-box}
+.omh-pane-section-count{margin-left:auto;font-size:11px;color:var(--omh-text-readable);white-space:nowrap}
+.omh-pane-block{padding:0 12px;min-width:0;max-width:640px;box-sizing:border-box}
 .omh-pane-bar{height:2px;margin:2px 0 6px;border-radius:1px;background:var(--ui-stroke-tertiary);overflow:hidden}
 .omh-pane-bar-fill{height:100%;background:var(--ui-accent)}
-.omh-pane-bar-fill[data-done=true]{background:var(--ui-text-quaternary)}
-.omh-pane-phase{display:flex;align-items:baseline;gap:8px;margin-top:6px;font-weight:600;color:var(--ui-text-tertiary);min-width:0}
+.omh-pane-bar-fill[data-done=true]{background:var(--omh-mark)}
+.omh-pane-phase{display:flex;align-items:baseline;gap:8px;margin-top:8px;font-weight:600;color:var(--omh-text-readable);min-width:0}
 .omh-pane-phase[data-current=true]{color:var(--ui-text-primary)}
 .omh-pane-phase-name{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.omh-pane-phase-count{margin-left:auto;font-size:11px;font-weight:400;color:var(--ui-text-quaternary)}
-.omh-pane-phase-items{margin:2px 0 0 6px;padding-left:8px;border-left:1px solid var(--ui-stroke-tertiary)}
+.omh-pane-phase-count{margin-left:auto;font-size:11px;font-weight:400;color:var(--omh-text-readable)}
+.omh-pane-phase-items{margin:2px 0 0 6px;padding-left:8px;border-left:1px solid var(--omh-edge)}
 .omh-pane-plan-items{margin-top:2px}
 .omh-pane-item{display:grid;grid-template-columns:14px minmax(0,1fr);gap:0 4px;align-items:baseline;min-width:0;padding:1px 0}
-.omh-pane-item-glyph{text-align:center;color:var(--ui-text-tertiary)}
+.omh-pane-item-glyph{text-align:center;color:var(--omh-text-readable)}
 .omh-pane-item-text{min-width:0;overflow-wrap:anywhere}
 .omh-pane-item-label{color:var(--ui-text-primary)}
-.omh-pane-item[data-state=done] .omh-pane-item-label{color:var(--ui-text-quaternary);text-decoration:line-through}
-.omh-pane-item[data-state=skipped] .omh-pane-item-label{color:var(--ui-text-quaternary)}
+.omh-pane-item[data-state=done] .omh-pane-item-label{color:var(--omh-text-readable);text-decoration:line-through}
+.omh-pane-item[data-state=skipped] .omh-pane-item-label{color:var(--omh-text-readable)}
 .omh-pane-item[data-state=active] .omh-pane-item-label{font-weight:600}
 .omh-pane-item-note{display:block;margin-top:1px;font-size:11px;color:var(--omh-text-readable);overflow-wrap:anywhere}
-.omh-pane-fold{padding:1px 0 1px 18px;font-size:11px;color:var(--ui-text-quaternary)}
+.omh-pane-fold{padding:1px 0 1px 18px;font-size:11px;color:var(--omh-text-readable)}
 .omh-pane-catch{display:grid;grid-template-columns:20px minmax(0,1fr);gap:0 4px;align-items:baseline;padding:1px 0;color:var(--ui-text-secondary)}
 .omh-pane-catch-text{min-width:0;overflow-wrap:anywhere}
 .omh-pane-summary{display:block;padding:10px 0 0;color:var(--omh-text-readable);overflow-wrap:anywhere}
 .omh-pane-run{padding:0 0 3px;color:var(--ui-text-secondary);overflow-wrap:anywhere}
+.omh-pane-dag-card{margin:2px 0 4px;padding:10px;border:1px solid var(--omh-edge);border-radius:var(--radius-md,6px);background:var(--ui-bg-card)}
+.omh-pane-dag{margin:0;font-family:${MONO};font-size:11px;line-height:1.2;white-space:pre;overflow-x:auto;overflow-y:hidden;color:var(--ui-text-primary)}
+.omh-pane-dag-line{display:block;min-height:1.2em}
+.omh-pane-dag-title{font-weight:700}
+.omh-pane-dag-wide{display:inline-block;overflow:hidden;vertical-align:top}
+.omh-pane-dag-probe{position:absolute;visibility:hidden;white-space:pre;font-family:${MONO};font-size:11px}
 .omh-pane-lane{display:grid;grid-template-columns:14px minmax(0,1fr) auto 64px;gap:0 6px;align-items:baseline;min-width:0;padding:1px 0}
 .omh-pane-lane-glyph{text-align:center}
 .omh-pane-lane-title{min-width:0;padding-left:var(--omh-lane-indent,0);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.omh-pane-lane-model{max-width:96px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:var(--ui-text-quaternary)}
+.omh-pane-lane-model{max-width:96px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:var(--omh-text-readable)}
 .omh-pane-lane-state{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;text-align:right}
 @container (max-width: 420px){.omh-pane-lane{grid-template-columns:14px minmax(0,1fr) 64px}.omh-pane-lane-glyph{grid-row:1}.omh-pane-lane-title{grid-column:2;grid-row:1}.omh-pane-lane-state{grid-column:3;grid-row:1}.omh-pane-lane-model{grid-column:2/-1;grid-row:2;max-width:none;padding-left:var(--omh-lane-indent,0)}}
-.omh-pane-more{padding:2px 0 0 20px;font-size:11px;color:var(--ui-text-quaternary)}
-.omh-agent{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:1px 6px;align-items:baseline;min-width:0;padding:3px 0}
+.omh-pane-more{padding:2px 0 0 20px;font-size:11px;color:var(--omh-text-readable)}
+.omh-agent{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:2px 6px;align-items:baseline;min-width:0;margin:0 -6px;padding:5px 6px;border-radius:var(--radius-sm,4px);transition:background-color .15s}
+.omh-agent:hover{background:var(--chrome-action-hover)}
 .omh-agent-glyph{text-align:center}
 .omh-agent-title{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ui-text-primary)}
-.omh-agent-id{font-size:11px;color:var(--ui-text-quaternary);white-space:nowrap}
-.omh-agent-sub{grid-column:2/-1;display:grid;grid-template-columns:minmax(0,1fr) 64px 52px;gap:0 6px;align-items:baseline;min-width:0;font-size:11px;color:var(--ui-text-tertiary)}
+.omh-agent-id{font-size:11px;color:var(--omh-text-readable);white-space:nowrap}
+.omh-agent-sub{grid-column:2/-1;display:grid;grid-template-columns:minmax(0,1fr) 64px 52px;gap:0 6px;align-items:baseline;min-width:0;font-size:11px;color:var(--omh-text-readable)}
 .omh-agent-route{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .omh-agent-state{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .omh-agent-figure{white-space:nowrap;text-align:right}
-.omh-pane-graph{display:grid;gap:1px;padding:0 10px;font-size:11px;min-width:0;max-width:640px;box-sizing:border-box}
+.omh-pane-graph{display:grid;gap:1px;padding:0 12px;font-size:11px;min-width:0;max-width:640px;box-sizing:border-box}
 .omh-pane-graph-node{display:grid;grid-template-columns:14px auto minmax(0,1fr);gap:0 6px;align-items:baseline;min-width:0}
 .omh-pane-graph-glyph{text-align:center}
 .omh-pane-graph-detail{min-width:0;overflow-wrap:anywhere;color:var(--omh-text-readable)}
-.omh-pane-notice{margin:6px 10px 8px;border-radius:6px;background:var(--chrome-action-hover);padding:6px 8px;font-size:11px;color:var(--omh-text-readable);overflow-wrap:anywhere}
-.omh-pane-skeleton{height:10px;margin:6px 10px}
+.omh-pane-notice{margin:6px 12px 8px;border-radius:6px;background:var(--chrome-action-hover);padding:6px 8px;font-size:11px;color:var(--omh-text-readable);overflow-wrap:anywhere}
+.omh-pane-skeleton{height:10px;margin:6px 12px}
 .omh-bar{display:inline-flex;height:100%;align-items:center;gap:4px;border-radius:0;padding:0 6px;font-size:.6875rem;color:var(--ui-text-tertiary);font-variant-numeric:tabular-nums;white-space:nowrap;transition:background-color .15s,color .15s}
 .omh-bar:hover{background:var(--chrome-action-hover);color:var(--ui-text-primary)}
-.omh-bar-brand{font-weight:600;color:var(--ui-text-secondary)}
+.omh-bar-brand{font-weight:700;color:var(--omh-brand)}
 .omh-bar-seg+.omh-bar-seg::before{content:'·';margin:0 3px;color:var(--ui-text-quaternary)}
 /* Tone classes last: a tone on a cell wins over the cell's own resting colour. */
 .omh-pane-accent{color:var(--ui-accent)}
-.omh-pane-warn{color:var(--ui-yellow)}
+.omh-pane-warn{color:var(--omh-warn)}
 .omh-pane-error{color:var(--ui-red)}
-.omh-pane-muted{color:var(--ui-text-quaternary)}
+.omh-pane-muted{color:var(--omh-text-readable)}
 .omh-pane-tertiary{color:var(--omh-text-readable)}
+.omh-pane-secondary{color:var(--ui-text-secondary)}
 .omh-pane-primary{color:var(--ui-text-primary)}
+.omh-pane-mark{color:var(--omh-mark)}
 `
 
 // Appends the pane's stylesheet once and returns its remover. A host with no
@@ -1431,6 +1581,47 @@ function toneClass(tone) {
   return tone ? `omh-pane-${tone}` : ''
 }
 
+// How many cells of the drawing's font fit the drawing's card in `body`: the
+// body's width less the card's insets, over one cell measured from a probe
+// set in the drawing's own class. Zero where nothing can be measured.
+export function measureCells(body) {
+  if (!body || typeof document === 'undefined' || typeof body.append !== 'function') return 0
+  const probe = document.createElement('span')
+  probe.className = 'omh-pane-dag-probe'
+  probe.textContent = '0'.repeat(40)
+  body.append(probe)
+  const cell = probe.getBoundingClientRect().width / 40
+  probe.remove()
+  return exceeds(cell, 0) ? Math.floor((body.clientWidth - DRAWING_INSET_PX) / cell) : 0
+}
+
+// Measures the pane body whenever it resizes (and once its fonts load), and
+// hands the width in cells to every query through `setDrawingCells`.
+function useMeasuredCells(body) {
+  useEffect(
+    function () {
+      if (!body) return undefined
+      const measure = function () {
+        setDrawingCells(measureCells(body))
+      }
+      measure()
+      let alive = true
+      if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () {
+          if (alive) measure()
+        })
+      }
+      const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null
+      if (observer) observer.observe(body)
+      return function () {
+        alive = false
+        if (observer) observer.disconnect()
+      }
+    },
+    [body]
+  )
+}
+
 function useHud() {
   const gateway = useValue(host.state.gateway)
   const sessionId = useValue(host.state.focusedStoredSessionId)
@@ -1439,10 +1630,11 @@ function useHud() {
   // value is ignored.
   const busyRead = useValue(host.state.busy || host.state.gateway)
   const busy = host.state.busy ? busyRead === true : false
+  const cols = useDrawingCells()
   const query = useQuery({
-    queryKey: [PLUGIN_ID, 'hud', sessionId || ''],
+    queryKey: [PLUGIN_ID, 'hud', sessionId || '', cols],
     queryFn: function () {
-      return fetchHud(sessionId)
+      return fetchHud(sessionId, cols)
     },
     refetchInterval: pollInterval(busy),
     enabled: gateway === 'open',
@@ -1681,10 +1873,39 @@ function PlanSection({ payload }) {
   ]
 }
 
+// The drawing as one preformatted block: one line per row, each segment in
+// its tone, a box's title in bold; it scrolls sideways and never wraps.
+function DagDrawing({ lines }) {
+  return div('omh-pane-dag-card', node(
+    'pre',
+    { className: 'omh-pane-dag', 'data-drawing': 'true' },
+    lines.map(function (line, index) {
+      return node(
+        'span',
+        { className: 'omh-pane-dag-line' },
+        line.length
+          ? line.map(function (segment, at) {
+              const className = `${toneClass(segment.tone)}${segment.title ? ' omh-pane-dag-title' : ''}${segment.cells ? ' omh-pane-dag-wide' : ''}`
+              // A wide character's fallback font is narrower than two cells; the segment keeps the renderer's width.
+              return segment.cells
+                ? node('span', { className, style: { width: `${segment.cells}ch` } }, segment.text, `s-${at}`)
+                : span(className, segment.text, `s-${at}`)
+            })
+          : ' ',
+        `l-${index}`
+      )
+    })
+  ))
+}
+
+// While the graph runs, the TUI's drawing of it when the backend sent one,
+// else a row per lane; once every lane has settled, one summary line, as the
+// TUI's live block keeps.
 function DelegationSection({ payload }) {
   const view = delegationView(payload)
   if (!view) return null
-  const lanes = view.settled
+  const drawing = view.settled ? null : drawingLines(payload)
+  const lanes = view.settled || drawing
     ? []
     : view.lanes.map(function (lane, index) {
         return node(
@@ -1707,9 +1928,10 @@ function DelegationSection({ payload }) {
     div(
       'omh-pane-block',
       [
-        div('omh-pane-run', view.summary, 'run'),
+        // The drawing's own header names the run and its counts; the summary line stands in only without it.
+        drawing ? jsx(DagDrawing, { lines: drawing }, 'drawing') : div('omh-pane-run', view.summary, 'run'),
         ...lanes,
-        !view.settled && view.hidden ? div('omh-pane-more', t('graphMore', { count: view.hidden }), 'more') : null
+        !view.settled && !drawing && view.hidden ? div('omh-pane-more', t('graphMore', { count: view.hidden }), 'more') : null
       ],
       'delegation-body'
     )
@@ -1801,26 +2023,29 @@ function GraphSection({ graph }) {
 
 function HudPane() {
   const hud = useHud()
+  // The body element, kept through a callback ref, is what the drawing's width is measured on.
+  const [body, setBody] = useState(null)
+  useMeasuredCells(body)
   const model = paneModel(hud)
   const payload = model.payload
-  const body = []
+  const sections = []
   if (model.loading) {
-    body.push(jsx(Skeleton, { className: 'omh-pane-skeleton', style: { width: '70%' } }, 'skeleton-1'))
-    body.push(jsx(Skeleton, { className: 'omh-pane-skeleton', style: { width: '45%' } }, 'skeleton-2'))
+    sections.push(jsx(Skeleton, { className: 'omh-pane-skeleton', style: { width: '70%' } }, 'skeleton-1'))
+    sections.push(jsx(Skeleton, { className: 'omh-pane-skeleton', style: { width: '45%' } }, 'skeleton-2'))
   } else if (payload) {
-    body.push(jsx(CatchesSection, { payload }, 'catches'))
-    body.push(jsx(PlanSection, { payload }, 'plan'))
-    body.push(jsx(DelegationSection, { payload }, 'delegation'))
-    body.push(jsx(SubagentSummary, { payload }, 'subagents'))
-    body.push(jsx(RoutesSection, { payload, receivedAt: hud.receivedAt }, 'routes'))
-    body.push(jsx(GraphSection, { graph: payload.graph }, 'graph'))
+    sections.push(jsx(CatchesSection, { payload }, 'catches'))
+    sections.push(jsx(PlanSection, { payload }, 'plan'))
+    sections.push(jsx(DelegationSection, { payload }, 'delegation'))
+    sections.push(jsx(SubagentSummary, { payload }, 'subagents'))
+    sections.push(jsx(RoutesSection, { payload, receivedAt: hud.receivedAt }, 'routes'))
+    sections.push(jsx(GraphSection, { graph: payload.graph }, 'graph'))
   }
   return div('omh-pane', [
     jsx(Header, { model }),
     div('omh-pane-scope', scopeLabel(hud.sessionId)),
     payload ? jsx(Chips, { payload }) : null,
     div('omh-pane-rule', []),
-    div('omh-pane-body', body),
+    node('div', { className: 'omh-pane-body', ref: setBody }, sections),
     model.notice ? div('omh-pane-notice', model.notice) : null
   ])
 }

@@ -636,7 +636,9 @@ PATH_MODULE_LOAD_ALLOWLIST: dict[str, str] = {
         "one file, `<bundle_root>/runtime_reader.py`, under the private parent `omh_desktop_bundle` "
         "whose `__path__` is the bundle root; the one route passes no root at all and takes the "
         "default, `Path(__file__).resolve().parent.parent`, the installed bundle this file ships "
-        "in. Everything the load reaches is a sibling of this file, which `_source_modules()` "
+        "in. `delegation_drawing` then reaches `delegation_view` with a static "
+        "`from omh_desktop_bundle import delegation_view`, through that same package's `__path__`. "
+        "Everything the load reaches is a sibling of this file, which `_source_modules()` "
         "already parses under `src/plugin_bundle/omh/`."
     ),
 }
