@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "sources": [
+    {"id": 1, "url": "https://example.org/paper/one", "title": "Paper one", "accessed": "2026-11-04"},
+    {"id": 2, "url": "https://example.org/paper/two?section=results", "title": "Paper two", "accessed": "2026-11-04"},
+    {"id": 4, "url": "https://arxiv.org/abs/2401.00001", "title": "An arXiv abstract page", "accessed": "2026-11-04"}
+  ]
+}
