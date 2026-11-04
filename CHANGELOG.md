@@ -12,6 +12,22 @@ All notable changes will be documented here.
   In the live bench this took gpt-6-luna on a signature change from 0/6 to 6/6, and Haiku 4.5 from
   5/6 to 6/6.
 
+- **Memory recall costs a turn far less.** The memory pack is rendered in
+  `on_turn_start`, before the turn's model call, so its cost is turn latency
+  (a code comment and `docs/MEMORY.md` said it was rendered off the hot path;
+  both now say what happens). Every render ran the credential and safety scan
+  on every stored record again, twice on a console turn, and that scan was
+  most of the render. Each record's verdict is now kept, keyed by the digest
+  of the record's exact content, so an unchanged record is not scanned again
+  and a changed one is scanned on its next render and refused there if it
+  became unsafe. The credential check on the short metadata strings a render
+  redacts is kept per string the same way. A turn also reads each review file
+  once instead of three times and lists the records directory once less.
+  On a read-only copy of the owner's store (39 records), `on_turn_start` plus
+  `prefetch` went from 77-124 ms to 13-17 ms and a repeat render from 42-52
+  ms to 10-14 ms; on a synthetic 500-record store, from 3.0-3.3 s to
+  0.13-0.52 s per turn. The first render in a process still scans every
+  record (measured on a machine under heavy load, two interleaved rounds).
 - **The OMH TUI's wallpaper and working glow hold still while its window is
   in the background.** The TUI now asks the terminal for focus reports, as
   Hermes' own TUI does. While the window does not have focus, the living
