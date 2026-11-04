@@ -19,9 +19,21 @@ failure is answered with HTTP 200 and an error record: in the pane a thrown
 error is indistinguishable from a transport failure, so the reader's failure
 is returned as a record the pane can label ``reader error`` instead.
 
-The two pure functions, ``load_reader`` and ``hud_payload``, are kept apart
-from the route so OMH's own tests can call them without FastAPI, which is the
-host's dependency and not OMH's.
+``cols`` is the width of the pane's drawing in monospace cells, measured by
+the pane. With it, an active delegation graph comes back drawn as well, under
+``delegation_drawing``: the box drawing the OMH TUI prints into its
+transcript (``src/tui/dag_block.py``), made by the bundle's own
+``delegation_view``, so the pane shows the TUI's drawing rather than an
+imitation of it. A run of up to ``SMALL_GRAPH_LANES`` lanes is drawn as boxes
+with no Dependencies or Node details, as the TUI prints it; where boxes do not
+fit the width, or the run is bigger, the renderer's tree is drawn instead.
+Each segment keeps the role the renderer gave it (``node:running``), which is
+what the pane colours by. A drawing that fails is answered as a record with
+``error`` beside a HUD that still reads.
+
+The pure functions, ``load_reader``, ``delegation_drawing`` and
+``hud_payload``, are kept apart from the route so OMH's own tests can call
+them without FastAPI, which is the host's dependency and not OMH's.
 """
 
 from __future__ import annotations
@@ -42,6 +54,15 @@ except ImportError:  # OMH's own gates import this file on a host without FastAP
     run_in_threadpool = None
 
 DESKTOP_HUD_SCHEMA_VERSION = "omh_desktop_hud/v1"
+DRAWING_SCHEMA_VERSION = "omh_desktop_dag/v1"
+# The lanes a run may have and still print as boxes: `dag_block.SMALL_GRAPH_LANES`, held equal by
+# tests/test_desktop_half.py. A bigger run is drawn as the tree.
+SMALL_GRAPH_LANES = 12
+# The cells a drawing may take: the renderer's own floor, and a ceiling no pane reaches.
+MIN_COLS = 8
+MAX_COLS = 240
+# The tree of a big run is kept to this many lines; the renderer folds the rest into its `+N more` line.
+TREE_MAX_LINES = 48
 
 # The name the bundle is loaded under here. It is neither ``omh`` (the package
 # is not on this interpreter's path and must not be assumed) nor the name
@@ -115,10 +136,62 @@ def resolve_hermes_home() -> Path:
     return Path(configured) if configured else Path.home() / ".hermes"
 
 
+def _lane_count(graph: dict[str, Any]) -> int:
+    """The run's lanes, the ones the graph reader left out (`hidden_nodes`) included, as `dag_block` counts them."""
+    nodes = graph.get("nodes") if isinstance(graph.get("nodes"), list) else []
+    hidden = graph.get("hidden_nodes")
+    lanes = sum(1 for node in nodes if isinstance(node, dict) and node.get("kind") != "root")
+    return lanes + (hidden if isinstance(hidden, int) and not isinstance(hidden, bool) else 0)
+
+
+def delegation_drawing(
+    graph: dict[str, Any], cols: int, *, bundle_root: str | Path = BUNDLE_ROOT
+) -> dict[str, Any]:
+    """``graph`` drawn ``cols`` cells wide, as the TUI prints a dag-ulw run: boxes, else the tree.
+
+    ``layout`` is what was drawn (``box``, ``tree``, or ``header`` when not
+    even the tree fits), and every line is a list of ``{text, role}``
+    segments, the renderer's own, so the pane paints a state where the
+    drawing carries one and never re-lays a cell. A segment whose width in
+    cells is not its length (a wide CJK character counts two) carries
+    ``cells``, since a browser's fallback font draws such a character
+    narrower than two monospace cells.
+    """
+    load_reader(bundle_root)  # registers the private package whose `__path__` is the bundle root
+    from omh_desktop_bundle import delegation_view  # a sibling of the reader, through that package
+
+    width = min(MAX_COLS, max(MIN_COLS, int(cols)))
+    lines: Any = None
+    layout = "box"
+    if _lane_count(graph) <= SMALL_GRAPH_LANES:
+        boxes = delegation_view._box_view(graph, width, delegation_view.UNICODE, sections=0)
+        lines = boxes.lines if boxes is not None else None
+    if lines is None:
+        view = delegation_view.render_delegation_view(graph, width=width, max_lines=TREE_MAX_LINES, layout="tree")
+        lines, layout = view.lines, view.layout
+    return {
+        "schema_version": DRAWING_SCHEMA_VERSION,
+        "layout": layout,
+        "cols": width,
+        "lines": [[_segment(segment, delegation_view.cells) for segment in line] for line in lines],
+    }
+
+
+def _segment(segment: Any, cells: Any) -> dict[str, Any]:
+    """One drawing segment; ``cells``, the renderer's own width for it, only where that is not one per character
+    (a wide CJK character counts two), so the pane can hold the segment to the cells the layout gave it."""
+    drawn = {"text": segment.text, "role": segment.role}
+    width = cells(segment.text)
+    if width != len(segment.text):
+        drawn["cells"] = width
+    return drawn
+
+
 def hud_payload(
     hermes_home: str | Path,
     session: str = "",
     *,
+    cols: int = 0,
     bundle_root: str | Path = BUNDLE_ROOT,
 ) -> dict[str, Any]:
     """The HUD the pane renders, or the error record it shows instead.
@@ -130,7 +203,8 @@ def hud_payload(
     that names no store.
     ``session`` is the focused stored session id the app names, and naming
     one is what makes the plan todo session-scoped rather than a
-    most-recent-TUI guess.
+    most-recent-TUI guess. ``cols``, when positive, adds the active delegation
+    graph's drawing (`delegation_drawing`) under ``delegation_drawing``.
     """
     session_ref = str(session or "").strip()
     try:
@@ -153,6 +227,16 @@ def hud_payload(
             "error": f"reader returned {type(payload).__name__}, not a HUD payload",
             "schema_version": DESKTOP_HUD_SCHEMA_VERSION,
         }
+    graph = payload.get("delegation_graph")
+    if isinstance(cols, int) and not isinstance(cols, bool) and cols > 0 and isinstance(graph, dict) \
+            and graph.get("status") == "active":
+        try:
+            payload["delegation_drawing"] = delegation_drawing(graph, cols, bundle_root=bundle_root)
+        except Exception as exc:  # the HUD still reads; the pane draws its lane rows instead
+            payload["delegation_drawing"] = {
+                "error": f"{type(exc).__name__}: {exc}",
+                "schema_version": DRAWING_SCHEMA_VERSION,
+            }
     return payload
 
 
@@ -160,9 +244,9 @@ if APIRouter is not None:
     router = APIRouter()
 
     @router.get("/hud")
-    async def hud(session: str = "") -> dict[str, Any]:
+    async def hud(session: str = "", cols: int = 0) -> dict[str, Any]:
         # The reader's file and sqlite reads run off the loop so a slow home
         # never stalls the stream. The home is the gateway's own; the
         # ``profile`` query is not read (see the module docstring).
         home = resolve_hermes_home()
-        return await run_in_threadpool(hud_payload, home, session)
+        return await run_in_threadpool(lambda: hud_payload(home, session, cols=cols))

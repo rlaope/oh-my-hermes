@@ -1855,9 +1855,17 @@ it ready. The pane shows OMH catches, the plan checklist, the active delegation
 graph, board or route summaries, and the active fanout DAG as they become
 available. It reads idle when nothing is running, keeps the plan and status bar
 in agreement, and leaves individual subagent rows to Desktop's Agents panel.
-A failed lane reads as failed (red), apart from blocked (yellow). At the
-default pane width a delegation row stacks its model under the title.
-It uses calmer colours and follows Desktop's language when Korean is selected.
+A failed lane reads as failed (red), apart from blocked (yellow).
+The pane keeps Desktop's own look (its sans, components and theme tokens) with the
+OMH TUI's colour character: a rose brand, warm section labels and muted violet
+frames. While a delegation graph runs, the pane shows it as the box drawing the
+TUI prints into its transcript, made by the same renderer at the pane's width,
+in a card: boxes for a run of up to 12 lanes, the tree for a bigger run or a
+pane too narrow for boxes. The drawing scrolls sideways rather than wrap, and a
+settled run reads as one summary line. Without a drawing (an older backend, or
+one that failed to draw), a delegation row stacks its model under the title at the
+default pane width. It uses calmer colours and follows Desktop's language when
+Korean is selected; the drawing's own words are the TUI's, in English.
 `omh uninstall --registration-only` does not disable the plugin or
 change `plugins.enabled`. Desktop mounting must be observed separately.
 

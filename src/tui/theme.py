@@ -47,8 +47,10 @@ command or skill takes the skill hue, bold (`slash`).
 
 Outcomes sit on bands (`ok_band` behind what the person allowed,
 `error_band` behind a denial or a failure): light tints of the palette's diff
-colours on a light background, its dark diff colours on a dark one, and
-none when no background was reported. What is drawn on a band takes
+colours on a light background, its dark diff colours on a dark one (on a
+dark scene look's ground, its word colours held to their hue and moved onto
+the ground, `DARK_SCENE_BAND_SHARE`), and none when no background was
+reported. What is drawn on a band takes
 `on_band(theme, band)`, the roles measured against that band, so its words
 reach 4.5:1 and its marks 3:1 on it.
 
@@ -61,8 +63,9 @@ ink on a dark one, never the other way. `dag_words` are the same steps lifted
 to 4.5:1, for the words a box draws in its state's hue (its title and status).
 
 The pager's footer sits on a bar of its own (`status`): the palette's
-status-bar background on a dark terminal or one that reported none, and on
-a light one a light tint of that colour (`LIGHT_STATUS_SHARE`), so the bar
+status-bar background on a dark terminal or one that reported none, the
+prompt band's colour on a dark scene look's ground (`with_launch_look`), and
+on a light one a light tint of that colour (`LIGHT_STATUS_SHARE`), so the bar
 belongs to a light screen instead of being a dark band across it. Its words
 are measured against that bar instead of the terminal's background. The
 menus (`menu`, `menu_current`: the completion menu, the pickers, choice
@@ -111,6 +114,14 @@ LIGHT_BAND_SHARE = 0.82
 LIGHT_WORD_BAND_SHARE = 0.62
 # A light background's status bar: the palette's status-bar colour moved this far toward the background.
 LIGHT_STATUS_SHARE = 0.85
+# On a dark scene look's ground (`with_launch_look`, `scene`): how far each diff and outcome band moves from the
+# palette's word colour toward the ground, in OKLCH lightness and chroma with the word's hue held. A plain RGB mix
+# greys a red out on aurora's teal and a green on violet's plum. At 0.8 every band clears 1.25:1 against every
+# scene ground (about the default look's own bands), and the palette's light ink 7:1 on it.
+DARK_SCENE_BAND_SHARE = 0.8
+# The OKLCH chroma under which a colour counts as grey for `_hue_held`: an exact grey such as #808080 comes out of
+# OKLab at about 1e-8, not 0, and scaling that noise would give it a random hue.
+ACHROMATIC_CHROMA = 1e-4
 # An approval's highlighted choice: its tone moved this far toward the background for the band behind it (on a dark
 # background, on a light one), so the band is the tone's tint and the tone itself, lifted, still reads on it. On a
 # light background 0.85 left an amber band at 1.08:1, too close to the background to see.
@@ -174,8 +185,10 @@ DEFAULT_LAUNCH = LAUNCH_PRESETS[0]
 # The roles a launch look owns beyond the logo and the card (`with_launch_look`): the composer's rules and every frame
 # in `rule` (its card-edge colour), a tool call's rail and the working row's spinner (`accent`, its label colour), a
 # sent prompt's band (`with_prompt_band`) and a catch row (`with_catch_colours`). Body text, the
-# neutral greys, the state colours (`running`, `ok`, `warn`, `error`) and their bands, the kind hues and the skin's
-# own roles (`brand`, `heading`, syntax, diff) stay the skin's, so a look never changes what a colour says.
+# neutral greys, the state colours (`running`, `ok`, `warn`, `error`), the kind hues and the skin's own roles
+# (`brand`, `heading`, syntax, diff) keep the skin's hues, so a look never changes what a colour says. Only where a
+# band is drawn moves: on a dark scene look's ground the diff and outcome bands are the skin's diff hues set onto the
+# look (`DARK_SCENE_BAND_SHARE`), and the pager's footer bar (`status`) takes the prompt band's colour.
 LOOK_ROLES = ("rule", "accent", "prompt_band", "catch_mark", "catch_words")
 
 
@@ -389,6 +402,40 @@ def _mix(start: str, end: str, share: float) -> str:
     if one is None or two is None:
         return start
     return "#" + "".join(f"{round(a + (b - a) * share):02X}" for a, b in zip(one, two, strict=True))
+
+
+def _oklab(colour: str) -> tuple[float, float, float]:
+    rgb = hex_to_rgb(colour) or (0, 0, 0)
+    r, g, b = (_CHANNELS[value] for value in rgb)
+    l, m, s = ((0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b) ** (1 / 3),
+               (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b) ** (1 / 3),
+               (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b) ** (1 / 3))
+    return (0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+            1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+            0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s)
+
+
+def _from_oklab(lightness: float, a: float, b: float) -> str:
+    l, m, s = ((lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3,
+               (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3,
+               (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3)
+    linear = (4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+              -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+              -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)
+    encoded = (12.92 * v if v <= 0.0031308 else 1.055 * v ** (1 / 2.4) - 0.055 for v in
+               (min(max(value, 0.0), 1.0) for value in linear))
+    return "#" + "".join(f"{round(value * 255):02X}" for value in encoded)
+
+
+@lru_cache(maxsize=256)
+def _hue_held(colour: str, ground: str, share: float) -> str:
+    """`colour` moved `share` of the way to `ground` in OKLCH lightness and chroma, its own hue held, so a band of it
+    sits on `ground` and still reads as `colour`'s hue (`DARK_SCENE_BAND_SHARE`). A grey (chroma under
+    `ACHROMATIC_CHROMA`, rounding noise) has no hue to hold and stays grey."""
+    (light, a, b), (ground_light, ground_a, ground_b) = _oklab(colour), _oklab(ground)
+    chroma, ground_chroma = (a * a + b * b) ** 0.5, (ground_a * ground_a + ground_b * ground_b) ** 0.5
+    scale = (chroma + (ground_chroma - chroma) * share) / chroma if chroma >= ACHROMATIC_CHROMA else 0.0
+    return _from_oklab(light + (ground_light - light) * share, a * scale, b * scale)
 
 
 @lru_cache(maxsize=4096)
@@ -615,17 +662,38 @@ def with_catch_colours(theme: Theme, skin: SkinTheme, background: str | None, lo
     return replace(theme, catch_mark=mark, catch_words=words)
 
 
-def with_launch_look(theme: Theme, skin: SkinTheme, background: str | None, look: str) -> Theme:
+def with_launch_look(theme: Theme, skin: SkinTheme, background: str | None, look: str, scene: bool = False) -> Theme:
     """`theme` with the roles launch look `look` owns (`LOOK_ROLES`, owner's pick of 2026-10-29), measured against
     `background`: `rule` from its card-edge colour and `accent` from its label colour, each lifted to the 3:1 a glyph
     needs, then a catch row's colours (`with_catch_colours`). A name OMH does not have is the
-    default look, as `launch_palette` reads it. The band behind a sent prompt is `with_prompt_band`'s."""
+    default look, as `launch_palette` reads it. The band behind a sent prompt is `with_prompt_band`'s.
+
+    `scene`: `background` is the ground of the look's living wallpaper (owner, 2026-11-04). On a dark one the diff
+    and outcome bands are the palette's word colours held to their hue and moved onto the ground
+    (`DARK_SCENE_BAND_SHARE`), with their words lifted to 4.5:1 there, and the pager's footer bar (`status`) is the
+    prompt band's colour, its words lifted to 4.5:1 on it. The light side already mixes both into the ground."""
+    c = _palette(skin)
     surface = surface_for(skin, background)
-    ink = BLACK if is_light(surface) else _palette(skin)["banner_text"]
+    ink = BLACK if is_light(surface) else c["banner_text"]
     palette = launch_palette(look, surface)
     looked = replace(theme, look=look if look in LAUNCH_PALETTES else DEFAULT_LAUNCH,
                      rule=Style(fg=_lifted(palette.edge, ink, surface, EDGE_CONTRAST)),
                      accent=Style(fg=_lifted(palette.label, ink, surface, EDGE_CONTRAST)))
+    if scene and surface == background and not is_light(surface):
+        added = _hue_held(c["diff_added_word"], surface, DARK_SCENE_BAND_SHARE)
+        removed = _hue_held(c["diff_removed_word"], surface, DARK_SCENE_BAND_SHARE)
+        bar = _mix(palette.edge, surface, PROMPT_BAND_SHARE[0])
+
+        def on(colour: str, band: str) -> str:
+            return _lifted(colour, c["banner_text"], band, TEXT_CONTRAST)
+
+        looked = replace(
+            looked, ok_band=Style(bg=added), error_band=Style(bg=removed),
+            diff_add=Style(fg=on(c["banner_text"], added), bg=added),
+            diff_add_word=Style(fg=on(c["diff_added_word"], added), bg=added),
+            diff_remove=Style(fg=on(c["banner_text"], removed), bg=removed),
+            diff_remove_word=Style(fg=on(c["diff_removed_word"], removed), bg=removed),
+            status=Style(fg=on(c["status_bar_text"], bar), bg=bar))
     return with_catch_colours(looked, skin, background, look)
 
 

@@ -106,7 +106,7 @@ class BlockTests(unittest.TestCase):
                 self.assertEqual(lines_text(render(source, width=12)), ["─" * 12])
         self.assertEqual(lines_text(render("--", width=12)), ["--"])
 
-    def test_tables_pass_through_as_plain_text(self) -> None:
+    def test_pipe_line_without_divider_is_plain_text(self) -> None:
         rows = render("| a | **b** |")
         self.assertEqual(lines_text(rows), ["| a | **b** |"])
         self.assertEqual(rows[0], (Span("| a | **b** |", THEME.text),))

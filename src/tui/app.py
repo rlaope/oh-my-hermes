@@ -2501,10 +2501,10 @@ class App(ModesMixin, AgentViewMixin):
 
     def _themed(self) -> Theme:
         """The skin's theme against the background, with the shown launch look's band behind a sent prompt and the
-        roles it owns (`with_launch_look`), painted."""
+        roles it owns (`with_launch_look`, its bands and footer bar on the ground of a look with a scene), painted."""
         skin, surface, look = self._skin(), self._surface(), self._shown_look()
         banded = with_prompt_band(build_theme(skin, surface), skin, surface, look)
-        looked = with_launch_look(banded, skin, surface, look)
+        looked = with_launch_look(banded, skin, surface, look, scene=look in SCENES and self._ground() is not None)
         if self._ground() is not None and self.background_answered is not None:
             # On the wallpaper's ground: the rows printed now outlive it (they show on the terminal's own background
             # after exit), so every word and mark also keeps its floor against that.
@@ -2692,7 +2692,7 @@ class App(ModesMixin, AgentViewMixin):
                     self._full_redraw()
             cols = self.size[0]
             try:
-                stable = self.transcript.take_stable_lines(cols, self.theme)
+                stable = self.transcript.take_stable_lines(cols, self.theme, final=True)
                 if stable:
                     self.region.flush_above(stable, cols)
             finally:
@@ -6619,12 +6619,14 @@ class App(ModesMixin, AgentViewMixin):
 
     def _launch_swatches(self) -> dict[str, tuple[Style, ...]]:
         """Each launch look's colours for its row in the /theme picker, each lifted to a glyph's 3:1; while the living
-        wallpaper shows, on the look's own ground, so each row is a tile of the background that look gives."""
+        wallpaper shows, on the ground that look gives (`_ground`): its own, or the terminal's for the default look."""
         surface = surface_for(self._skin(), self._surface())
         swatches = {}
         for name in LAUNCH_PRESETS:
             palette = launch_palette(name, surface)
-            ground = look_ground(name, self._ground_light()) if self._wallpaper_shown() else None
+            ground = None
+            if self._wallpaper_shown():
+                ground = look_ground(name, self._ground_light()) if name in SCENES else self.background_answered
             behind = ground or surface
             ink = BLACK if is_light(behind) else WHITE
             colours = palette.faces or palette.sweep or (*palette.greys[:1], *palette.whites[:2], palette.spark)
@@ -7297,7 +7299,7 @@ class App(ModesMixin, AgentViewMixin):
             self._refresh_agent_log()
             self.terminal.write(self.pager.frame(*self.size, self.theme))
             return
-        stable = self.transcript.take_stable_lines(cols, self.theme)
+        stable = self.transcript.take_stable_lines(cols, self.theme, live_rows=self.size[1])
         prompt_row = self.transcript.prompt_row
         head: list[Line] = []
         if self.banner_facts is not None:

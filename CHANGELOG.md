@@ -14,6 +14,39 @@ All notable changes will be documented here.
   A `glow` choice an older release saved in `<omh_home>/tui/theme.json` is
   ignored and dropped the next time a choice is written. The living
   wallpaper, the working row and its spinner are unchanged.
+- **On a dark look with a scene, the OMH TUI's diff and outcome bands and the
+  pager's footer bar follow the look.** These bands were the skin's fixed dark
+  green and maroon on every look, and the red one sank into aurora's teal at
+  1.01:1. Each band now keeps its green or red hue and moves onto the look's
+  ground. It sits 1.27:1 or more against every ground, and its text stays at
+  4.5:1 or better. The footer bar of the pager, /dag and the Ctrl+S bot board
+  takes the sent prompt band's colour instead of the skin's teal-black, with
+  its words re-lifted to 4.5:1. The /theme picker's tile for the default look
+  now shows the terminal's own background, which is what picking it gives.
+  The default look and the light side are unchanged.
+- **The Hermes Desktop pane takes the OMH TUI's mood, and draws the DAG as the TUI does.**
+  The pane stays a Desktop pane: the app's sans, its components and its theme
+  tokens. It takes on the TUI's default launch look as Desktop colour mixes: a rose
+  brand, warm section labels, and muted violet rules and frames. Sections have more
+  room between them, and agent rows get a hover. While a delegation graph runs, the
+  pane shows the box drawing the TUI prints into its transcript, in a card. The
+  backend makes it with the same renderer, at the width the pane measures in cells.
+  A run of up to 12 lanes is drawn as boxes. A bigger run, or a pane too narrow for
+  boxes, gets the tree. Each box takes its state's colour: the accent for running,
+  yellow for stuck, red for failed, grey for done or waiting. Every word the pane
+  colours now reads at 4.5:1 or better on Desktop's light and dark themes; the
+  lowest before was about 2.2:1.
+
+- **The OMH TUI draws Markdown tables as aligned columns while a reply streams.**
+  A `|` header row used to reach scrollback as plain text one delta before its
+  `|---|` divider arrived, so a table could never be drawn properly. The trailing
+  run of `|` lines is now held out of scrollback until the reply moves past it, and
+  shown in the live region as the same table the finished reply draws: bold header,
+  a `─` band, wide characters aligned by cell width, `\|` kept as a literal pipe. A
+  table wider than the row, and a `|` line with no divider under it, stay plain
+  text, quitting mid-reply still prints the rows held back, and a table taller than
+  half the terminal is released to scrollback as it grows, on the columns it
+  has. Carried forward from #2550 by @kfatyuip.
 
 - **The Windows loader probe keeps `LOCALAPPDATA`.** The isolated probe that
   `omh doctor` runs dropped it, so the Hermes launcher could not find the home
