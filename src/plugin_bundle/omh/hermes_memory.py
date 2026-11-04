@@ -36,7 +36,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from .iso_datetime import strict_fromisoformat
 
 # Hermes' own entry separator: ENTRY_DELIMITER in its memory store
@@ -386,10 +386,18 @@ def _json_candidates(directory: Path) -> list[Path]:
     # The order `sorted()` gives these paths, which differ only in their name,
     # without comparing `Path` objects: that comparison re-derives both
     # paths' parts every time, and a live turn lists the records and reviews
-    # directories several times. A case-insensitive flavour (Windows) orders
-    # by `str.lower()`, which is not what `os.path.normcase` does there for
-    # every non-ASCII name, so the key is `str.lower` itself.
-    return [directory / name for name in sorted(names, key=None if os.path.normcase("Aa") == "Aa" else str.lower)]
+    # directories several times.
+    return [directory / name for name in sorted(names, key=_name_sort_key())]
+
+
+def _name_sort_key() -> Callable[[str], str] | None:
+    """The key that orders file names the way `sorted()` orders paths of one directory.
+
+    A case-insensitive flavour (Windows) orders by `str.lower()`, which is not
+    what `os.path.normcase` does there for every non-ASCII name, so the key is
+    `str.lower` itself; a case-sensitive one needs none.
+    """
+    return None if os.path.normcase("Aa") == "Aa" else str.lower
 
 
 def _read_reviews(directory: Path, *, unreadable: list[str] | None = None) -> dict[str, dict[str, object]]:

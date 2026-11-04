@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The `omh_memory` consolidation status reads the session's own profile.**
+  Like tool recall, `demote` and recall origins, it now takes the Hermes
+  profile the memory provider was started with from the session lens, not
+  the tool process's `HERMES_HOME`, so a brief raised in one profile is not
+  reported from another. Tests also pin that those three read the provider's
+  profile.
 - **A changed function's broken callers are named at the turn's first stop.** When a turn changes a
   function's parameters, OMH reads the files that import it, following package re-exports and
   aliases. It names, by file and line, each call that matched the old parameters and no longer
