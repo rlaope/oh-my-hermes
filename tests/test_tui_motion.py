@@ -155,8 +155,8 @@ class PulseTests(unittest.TestCase):
         flushed: list = []
         take = app.transcript.take_stable_lines
 
-        def recorded(*args: object) -> list:
-            lines = take(*args)
+        def recorded(*args: object, **kwargs: object) -> list:
+            lines = take(*args, **kwargs)
             flushed.extend(lines)
             return lines
 

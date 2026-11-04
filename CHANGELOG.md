@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI draws Markdown tables as aligned columns while a reply streams.**
+  A `|` header row used to reach scrollback as plain text one delta before its
+  `|---|` divider arrived, so a table could never be drawn properly. The trailing
+  run of `|` lines is now held out of scrollback until the reply moves past it, and
+  shown in the live region as the same table the finished reply draws: bold header,
+  a `─` band, wide characters aligned by cell width, `\|` kept as a literal pipe. A
+  table wider than the row, and a `|` line with no divider under it, stay plain
+  text, quitting mid-reply still prints the rows held back, and a table taller than
+  half the terminal is released to scrollback as it grows, on the columns it
+  has. Carried forward from #2550 by @kfatyuip.
+
 - **The Windows loader probe keeps `LOCALAPPDATA`.** The isolated probe that
   `omh doctor` runs dropped it, so the Hermes launcher could not find the home
   directory and doctor reported `hermes_runtime_command_failed` although
