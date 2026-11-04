@@ -29,7 +29,7 @@ from omh.skin_pack import (
 )
 from omh.tui import app as app_module
 from omh.tui.gateway import Event
-from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, Key
+from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key
 from omh.tui.screen import TEXT_GAP, LiveRegion
 from omh.tui.style import TRUECOLOR, Span, Style
 from omh.tui.terminal import background_restore, background_set
@@ -890,6 +890,197 @@ class AppWallpaperTests(unittest.TestCase):
         self.assertTrue(any("reported its background" in notice for notice in notices(app)))
         app._wallpaper_command("maybe")
         self.assertTrue(any("/wallpaper on" in notice for notice in notices(app)))
+
+
+TERMINAL_BLACK = "#000000"
+
+
+class WriteTimeGround(VTScreen):
+    """A terminal that gives an OSC 11 background only to the cells written after it, as Otty does (35acded98): a
+    cell written with the default background takes the colour set then, and a cell an erase clears or a scroll
+    brings in keeps the terminal's own. `holes` counts the cells left on the terminal's own black, and the blank
+    cells erased on a ground other than the one set now."""
+
+    def __init__(self, rows: int, cols: int) -> None:
+        super().__init__(rows, cols)
+        self.default_bg = TERMINAL_BLACK
+        self.cell_bg = [[TERMINAL_BLACK] * cols for _ in range(rows)]
+
+    def _escape(self, data: str, index: int) -> int:
+        if data.startswith("\x1b]11;", index) and not data.startswith("\x1b]11;?", index):
+            ends = [end for end in (data.find("\x07", index), data.find("\x1b\\", index)) if end >= 0]
+            self.default_bg = data[index + 5:min(ends)].upper()
+        return super()._escape(data, index)
+
+    def _put(self, cluster: str) -> None:
+        row, col = self._row, self._col
+        super()._put(cluster)
+        for at in range(col, min(col + cell_width(cluster), self.cols)):
+            self.cell_bg[row][at] = self.default_bg
+
+    def _erase(self, row: int, start: int, end: int) -> None:
+        super()._erase(row, start, end)
+        for col in range(start, end):
+            self.cell_bg[row][col] = TERMINAL_BLACK
+
+    def _line_feed(self) -> None:
+        scrolls = self._row >= self.rows - 1
+        super()._line_feed()
+        if scrolls:
+            del self.cell_bg[0]
+            self.cell_bg.append([TERMINAL_BLACK] * self.cols)
+
+    def _switch_screen(self, alternate: bool) -> None:
+        if alternate and self._saved_main is None:
+            self._saved_bg = self.cell_bg
+            self.cell_bg = [[TERMINAL_BLACK] * self.cols for _ in range(self.rows)]
+        elif not alternate and self._saved_main is not None:
+            self.cell_bg = self._saved_bg
+        super()._switch_screen(alternate)
+
+    def shown_bg(self, row: int, col: int) -> tuple[str, bool]:
+        """The background a cell shows, and whether it was written explicitly (an SGR 48)."""
+        params, colour, at = self.attrs_at(row, col), None, 0
+        while at < len(params):
+            if params[at] in (38, 48) and params[at + 1:at + 2] == (2,):
+                colour = "#%02X%02X%02X" % params[at + 2:at + 5] if params[at] == 48 else colour
+                at += 5
+                continue
+            colour = None if params[at] in (0, 49) else colour
+            at += 1
+        return (colour, True) if colour else (self.cell_bg[row][col], False)
+
+    def holes(self, ground: str) -> list[tuple[int, int]]:
+        others = {look_ground(name, light).upper() for name in LAUNCH_PRESETS for light in (False, True)}
+        found = []
+        for row in range(self.rows):
+            for col in range(self.cols):
+                colour, explicit = self.shown_bg(row, col)
+                stale = explicit and colour in others and not self.line(row)[col:col + 1].strip()
+                if colour != ground.upper() and (stale or not explicit):
+                    found.append((row, col))
+        return found
+
+
+class GroundPaintTests(unittest.TestCase):
+    """A look with a scene paints its ground on every erase (owner, 2026-11-04), on every terminal: no cell is left
+    on the terminal's own background where Otty keeps it, a /theme preview puts the highlighted ground under the
+    whole screen, and the default look, and every depth without the wallpaper, write the bytes they always did."""
+
+    def launched(self, look: str, environ: dict[str, str], screen: VTScreen | None = None):
+        from test_tui_app import FakePoller, ScriptedTerminal
+        from test_tui_launch_card import SKILLS, StartClient
+        from test_tui_modes import SID
+
+        client = StartClient()
+        client.skills = SKILLS
+        terminal = ScriptedTerminal(42, 150)
+        if screen is not None:
+            terminal.screen = screen
+        for index in range(39):  # the shell's output before `omh`
+            terminal.screen.feed(f"$ earlier shell line {index}\r\n")
+        app = app_module.App(terminal, client, environ, poller=FakePoller(), clock=Clock(1000.0))  # type: ignore
+        app.launch_look = look
+        app.startup()
+        app.adopt_background(TERMINAL_BLACK, {})
+        app.clear_launch_screen(41)
+        app._on_event(Event("session.info", SID, {"model": "openai/gpt-6.1-sol", "skills": SKILLS}))
+        app._render()
+        return app
+
+    def session(self, app) -> None:
+        from test_tui_modes import SID
+
+        app._submit_prompt("refactor the reader so the PDF path keeps sections")
+        app.transcript.apply(Event("message.start", SID, {}))
+        app.transcript.apply(Event("message.complete", SID, {"text": "Read the reader.\n\n```python\nx = 1\n```"}))
+        app.turn_pending = False
+        app._render()
+
+    def test_no_cell_keeps_the_terminals_own_background_on_any_look_with_a_scene(self) -> None:
+        for look in SCENES:
+            for glow in ("1", "0"):
+                screen = WriteTimeGround(42, 150)
+                app = self.launched(look, {**WALLPAPER_ON, "OMH_TUI_GLOW": glow}, screen)
+                with self.subTest(look=look, glow=glow):
+                    self.assertEqual(screen.holes(app._ground()), [], "the launch screen")
+                    self.session(app)
+                    self.assertEqual(screen.holes(app._ground()), [], "after a reply")
+                    app._theme("")
+                    app._render()
+                    history = list(screen.scrollback)  # the picker opening may scroll; its moves may not
+                    names = list(LAUNCH_PRESETS)
+                    other = names[(names.index(look) + 1) % len(names)] if look != names[-1] else names[-2]
+                    while app._shown_look() != other:
+                        app._on_input(Key(DOWN if names.index(other) > names.index(look) else UP))
+                        app._render()
+                        self.assertEqual(screen.holes(app._ground()), [], f"previewing {app._shown_look()}")
+                    self.assertEqual(screen.scrollback, history, "a preview writes nothing into the scrollback")
+                    app._on_input(Key(ENTER))
+                    app._render()
+                    self.assertEqual(screen.holes(app._ground()), [], "the look kept")
+
+    def test_a_pager_on_a_look_with_a_scene_erases_on_its_ground(self) -> None:
+        screen = WriteTimeGround(42, 150)
+        app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "0"}, screen)
+        app._open_pager("log", [(Span("a logged row"),)] * 3)
+        app._render()
+        self.assertTrue(screen.alternate)
+        self.assertEqual(screen.holes(app._ground()), [])
+
+    def test_the_wallpapers_cells_are_still_drawn_on_the_painted_ground(self) -> None:
+        with mock.patch.object(app_module, "scene", everywhere):
+            screen = WriteTimeGround(42, 150)
+            app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "0"}, screen)
+            self.session(app)
+            top = app.region.top_row(app.size[1])
+            answer = next(row for row in range(top) if "Read the reader." in screen.line(row))
+            self.assertIn("Read the reader." + " " * (TEXT_GAP + 1) + MARK, screen.line(answer))
+            self.assertTrue(any(MARK in screen.line(row) for row in range(top, 42)), "on the region's rows too")
+            self.assertEqual(screen.holes(app._ground()), [])
+
+    def test_exit_erases_the_last_rows_on_the_terminals_own_background(self) -> None:
+        app = self.launched("moonlit", {**WALLPAPER_ON, "OMH_TUI_GLOW": "0"})
+        self.session(app)
+        ground_sgr = Style(bg=look_ground("moonlit", False)).sgr()
+        app.terminal.writes.clear()
+        app._shutdown()
+        written = "".join(app.terminal.writes)
+        self.assertIn(background_restore(TERMINAL_BLACK), written)
+        self.assertNotIn(ground_sgr, written[written.index(background_restore(TERMINAL_BLACK)):])
+
+    def test_the_default_look_and_every_depth_without_the_wallpaper_write_the_bytes_they_always_did(self) -> None:
+        cases = {
+            "default look": (DEFAULT_LAUNCH, WALLPAPER_ON),
+            "256 colours": ("moonlit", {**WALLPAPER_ON, "COLORTERM": ""}),
+            "NO_COLOR": ("moonlit", {**WALLPAPER_ON, "NO_COLOR": "1"}),
+            "wallpaper off": ("moonlit", {**WALLPAPER_ON, "OMH_TUI_WALLPAPER": "0"}),
+        }
+
+        def run(look, environ):
+            from omh.tui import screen as screen_module
+
+            screen_module._flushed_row.cache_clear()
+            app = self.launched(look, {**environ, "OMH_TUI_GLOW": "1"})
+            self.session(app)
+            app._theme("")
+            app._render()
+            app._on_input(Key(ESCAPE))
+            app._render()
+            app._open_pager("log", [(Span("a logged row"),)])
+            app._render()
+            app._leave_pager()
+            app._render()
+            self.assertIsNone(app._erase_ground())
+            self.assertIsNone(app.region._ground)
+            app._shutdown()
+            return "".join(app.terminal.writes)
+
+        for name, (look, environ) in cases.items():
+            with self.subTest(name):
+                painted = run(look, environ)
+                with mock.patch("omh.tui.screen.on_ground", lambda erase, ground: erase):
+                    self.assertEqual(painted, run(look, environ), "on_ground left out: the bytes before it")
 
 
 class WallpaperStoreTests(unittest.TestCase):

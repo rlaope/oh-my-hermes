@@ -4,6 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A look with a scene paints its ground on every terminal.** The eight looks
+  with a scene set their ground only with OSC 11. Otty gives that colour only
+  to cells written after it, so every cell an erase cleared kept the terminal's
+  own black. That covered the chat area, every row's tail, the composer and the
+  blank rows: about 2,500–3,200 of the 6,300 cells on a 150x42 screen. Every
+  erase and blank fill on those looks now carries the ground as its background,
+  and so do the margins beside the glow. A terminal fills those cells with the
+  ground through background colour erase. A move in the /theme picker paints
+  the new ground over the whole visible screen in one synchronized update:
+  the region, the rows above it that are still on screen, and the blank rows
+  under it. Nothing is written into the scrollback. Pagers (/logs, /dag,
+  Ctrl+S) erase on the ground too. The default look, 256 and 16 colours,
+  NO_COLOR and `/wallpaper off` write the same bytes as before. One cost,
+  accepted by the owner: after exit, or while Ctrl+Z has the session stopped,
+  the session's rows still on screen or in the scrollback keep the look's
+  colour until they are printed again. The background restore at exit is
+  unchanged.
+
 - **The OMH TUI draws Markdown tables as aligned columns while a reply streams.**
   A `|` header row used to reach scrollback as plain text one delta before its
   `|---|` divider arrived, so a table could never be drawn properly. The trailing

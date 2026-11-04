@@ -7205,8 +7205,9 @@ class App(ModesMixin, AgentViewMixin):
     def _ground(self) -> str | None:
         """The background the living wallpaper gives the terminal now, the shown look's ground (the /theme picker's
         highlight while it is open), or None where it does not show. A look with no scene (the default look) takes
-        the terminal's own background as its ground (owner, 2026-10-30): Otty took another ground only on the cells
-        written after it, so the launch card showed holes of the terminal's own black."""
+        the terminal's own background as its ground (owner, 2026-10-30). A look with a scene takes its own, and the
+        rows erase on it (`_erase_ground`): Otty gives an OSC 11 background only to the cells written after it, so
+        the cells an erase cleared kept its own black (owner, 2026-11-04: painted on every terminal)."""
         if not self._wallpaper_shown():
             return None
         look = self._shown_look()
@@ -7218,9 +7219,20 @@ class App(ModesMixin, AgentViewMixin):
         ground = self._ground()
         if ground is None:
             self._restore_ground()
-        elif ground != self.ground_set:
+            return
+        if ground != self.ground_set:
             self.terminal.write(background_set(ground))
             self.ground_set = ground
+        self.region.set_ground(self._erase_ground())
+
+    def _erase_ground(self) -> str | None:
+        """The ground the rows erase on (`screen.on_ground`): a look with a scene's, while the terminal's background
+        is set to it, so a terminal that clears a cell with its own colour (Otty) shows the ground there too. None
+        for the default look, whose ground is the terminal's own, and wherever the wallpaper does not show (NO_COLOR,
+        256 and 16 colours, `/wallpaper off`) or the terminal has its own background back (exit, Ctrl+Z). Rows that
+        reached the scrollback keep it after exit, until they are printed again (owner, 2026-11-04)."""
+        ground = self.ground_set
+        return ground if ground is not None and self._shown_look() in SCENES else None
 
     def _sync_cursor_shape(self) -> None:
         """Vim mode's cursor: a beam in INSERT, a block in NORMAL (DECSCUSR), written only when it changes. Without
@@ -7236,6 +7248,7 @@ class App(ModesMixin, AgentViewMixin):
     def _restore_ground(self) -> None:
         """Put the terminal's own background back if the wallpaper set another: on every way out (`_shutdown`), at a
         stop (`_suspend`, set again by the first frame after), and when the wallpaper goes."""
+        self.region.set_ground(None)  # the rows still to come (the last ones at exit) erase on the terminal's own
         if self.ground_set is not None and self.background_answered is not None:
             self.ground_set = None
             self.terminal.write(background_restore(self.background_answered))
@@ -7378,7 +7391,7 @@ class App(ModesMixin, AgentViewMixin):
             self.clickable = {}
             self._set_mouse(True, drag=True)  # the alternate screen has no scrollback to take: the pager scrolls itself
             self._refresh_agent_log()
-            self.terminal.write(self.pager.frame(*self.screen, self.theme))
+            self.terminal.write(self.pager.frame(*self.screen, self.theme, self._erase_ground()))
             return
         stable = self.transcript.take_stable_lines(cols, self.theme, live_rows=self.size[1])
         prompt_row = self.transcript.prompt_row
