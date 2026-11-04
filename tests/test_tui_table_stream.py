@@ -300,5 +300,55 @@ class TableStreamingTests(unittest.TestCase):
         for cell in ("a", "b", "1", "2", "c", "d", "e", "x", "y", "z"):
             self.assertEqual(sum(1 for row in history for word in row.split() if word == cell), 1, cell)
 
+    # (h) Second review round: no cell lost behind a release, no raw divider.
+
+    def stream_released(self, source: str, live_rows: int = 8) -> list[str]:
+        self.step(ev("message.start"))
+        for line in source.split("\n"):
+            self.transcript.apply(ev("message.delta", text=line + "\n"))
+            self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=live_rows)))
+        self.transcript.apply(ev("message.complete", text="", status="complete"))
+        self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=live_rows)))
+        return self.taken + lines_text(self.transcript.live_lines(WIDTH, THEME, max_rows=live_rows))
+
+    def test_a_three_column_table_after_a_released_two_column_one_loses_no_cell(self) -> None:
+        first = ["| ah1 | ah2 |", "|---|---|"] + [f"| a{i}c1 | a{i}c2 |" for i in range(10)]
+        second = ["| bh0 | bh1 | bh2 |", "|---|---|---|"] + [f"| b{i}c0 | b{i}c1 | b{i}c2 |" for i in range(2)]
+        rows = self.stream_released("\n".join([*first, *second]))
+        words = [word for row in rows for word in row.split()]
+        cells = ["ah1", "ah2", "bh0", "bh1", "bh2"]
+        cells += [f"a{i}c{j}" for i in range(10) for j in (1, 2)] + [f"b{i}c{j}" for i in range(2) for j in range(3)]
+        for cell in cells:
+            self.assertEqual(words.count(cell), 1, cell)
+        self.assertGreater(len(self.taken), 8, "the first table was never released")
+
+    def test_a_three_column_table_after_a_short_two_column_one_loses_no_cell(self) -> None:
+        source = "\n".join(
+            ["| ah1 | ah2 |", "|---|---|", "| a0c1 | a0c2 |"]
+            + ["| bh0 | bh1 | bh2 |", "|---|---|---|"]
+            + [f"| b{i}c0 | b{i}c1 | b{i}c2 |" for i in range(10)]
+        )
+        words = [word for row in self.stream_released(source) for word in row.split()]
+        for cell in ["ah1", "ah2", "a0c1", "a0c2", "bh0", "bh1", "bh2"] + [f"b{i}c{j}" for i in range(10) for j in range(3)]:
+            self.assertEqual(words.count(cell), 1, cell)
+
+    def test_malformed_dividers_are_never_drawn_raw(self) -> None:
+        cases = {
+            "wider divider in a two-column body": "| a | b |\n|---|---|\n| 1 | 2 |\n|---|---|---|\n| 3 | 4 |",
+            "second divider right after the first": "| a | b |\n|---|---|\n|---|---|\n| 1 | 2 |",
+        }
+        for label, source in cases.items():
+            with self.subTest(label):
+                shown = self.render(source)
+                streamed = Transcript(clock=lambda: 100.0)
+                streamed.apply(ev("message.start"))
+                streamed.apply(ev("message.delta", text=source))
+                streamed.apply(ev("message.complete", text=source, status="complete"))
+                history = lines_text(streamed.history_lines(WIDTH, THEME, details=False))
+                for row in shown + history:
+                    self.assertNotIn("|---", row)
+                for cell in ("1", "2"):
+                    self.assertEqual(sum(1 for row in history for word in row.split() if word == cell), 1, cell)
+
 if __name__ == "__main__":
     unittest.main()

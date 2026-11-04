@@ -441,7 +441,7 @@ def table_rows_on(
 ) -> tuple[list[Line], int]:
     """Body rows from `sources[first]` on columns already given: (rows, count of lines consumed).
 
-    A cell wider than its column pushes its own row wider; no row is cut or lost.
+    A cell wider than its column, or a cell past the last column, pushes its own row wider; no cell is cut or lost.
     """
     gap = " " * TABLE_GAP
     indent = _leading_spaces(sources[first])
@@ -450,14 +450,16 @@ def table_rows_on(
     while index < len(sources) and sources[index].strip().startswith("|"):
         cells = split_table_row(clean_text(sources[index]))
         if is_table_divider_cells(cells):
-            if index == first:
-                index += 1
-                continue
-            break  # the next table's divider; the row before it is already out
+            index += 1  # the row before it is already out: a next table goes on these columns, dividers dropped
+            continue
         if len(cells) < 2:
             break
-        cells = _table_cells([cells], len(widths))[0]
-        padded = [cell + " " * max(0, widths[ci] - cell_width(cell)) for ci, cell in enumerate(cells)]
+        cells = cells + [""] * (len(widths) - len(cells))
+        # a row with more cells than the columns keeps them, each as wide as itself
+        padded = [
+            cell + " " * max(0, (widths[ci] if ci < len(widths) else 0) - cell_width(cell))
+            for ci, cell in enumerate(cells)
+        ]
         rows.extend(wrap_prefixed((Span(gap.join(padded), theme.text),), (Span(" " * indent),), (Span(" " * indent),), width))
         index += 1
     return rows, index - first
@@ -484,11 +486,13 @@ def _table_block(
                 # the `|---|` row between header and body: one `─` band, no cells of the table
                 index += 1
                 continue
-            # a later divider opens the next table: its header is the row before, which is not ours
-            if body:
+            if body and opens_table(sources[index - 1], sources[index]):
+                # this divider opens the next table: its header is the row before, which is not ours
                 body.pop()
                 index -= 1
-            break
+                break
+            index += 1  # a divider-shaped row that opens nothing is dropped, never drawn raw
+            continue
         if len(cells) < 2:
             break  # a `|` line that is not a table row closes the table here
         body.append(cells)
