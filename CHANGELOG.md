@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The Windows loader probe keeps `LOCALAPPDATA`.** The isolated probe that
+  `omh doctor` runs dropped it, so the Hermes launcher could not find the home
+  directory and doctor reported `hermes_runtime_command_failed` although
+  `hermes --print-runtime-command` worked in a normal shell. The variable is
+  forwarded only when the parent has it. Carries #2548 by @DefinitelyNotSpammy.
 - **A recalled dated snapshot is marked for later sessions.** The advice to
   name an old snapshot in `replaces` used to reach only the session that saved
   it, and the state usually changes weeks later in another session. Now recall
