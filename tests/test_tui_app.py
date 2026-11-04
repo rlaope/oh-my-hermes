@@ -2827,5 +2827,31 @@ class KeyTests(AppTestCase):
         self.assertEqual(submitted["params"], {"session_id": LIVE_ID, "text": "line one\nline two"})
 
 
+class TallTableCapTests(unittest.TestCase):
+    def test_the_frame_path_gives_the_transcript_the_live_region_height(self) -> None:
+        from test_tui_modes import drawn, make_app
+        from _tui_lines import lines_text
+        from omh.tui.gateway import Event
+
+        app, _client = make_app(busy=True, rows=12)
+        seen: list[int | None] = []
+        flushed: list[str] = []
+        take = app.transcript.take_stable_lines
+
+        def spy(*args: object, **kwargs: int) -> list:
+            seen.append(kwargs.get("live_rows"))
+            lines = take(*args, **kwargs)
+            flushed.extend(lines_text(lines))
+            return lines
+
+        app.transcript.take_stable_lines = spy  # type: ignore[method-assign]
+        app.transcript.apply(Event(type="message.start", session_id=LIVE_ID, payload={}))
+        body = "| N | Value |\n| --- | --- |\n" + "".join(f"| {n} | v{n} |\n" for n in range(1, 16))
+        app.transcript.apply(Event(type="message.delta", session_id=LIVE_ID, payload={"text": body}))
+        drawn(app)
+        self.assertEqual(set(seen), {app.size[1]})
+        self.assertTrue(any("Value" in row for row in flushed), "a tall table was still held at the first frame")
+
+
 if __name__ == "__main__":
     unittest.main()
