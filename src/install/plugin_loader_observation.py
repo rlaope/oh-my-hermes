@@ -153,7 +153,7 @@ def resolve_hermes_code_root(hermes_home: Path) -> Path:
 # `SystemRoot` a socket provider cannot initialize, and `import asyncio` dies
 # with WinError 10106 before the plugin is ever reached -- which reads as a
 # load failure the plugin never caused.
-_BASELINE_ENV = ("SystemRoot", "SYSTEMDRIVE", "windir", "TEMP", "TMP")
+_BASELINE_ENV = ("SystemRoot", "SYSTEMDRIVE", "windir", "TEMP", "TMP", "LOCALAPPDATA")
 
 
 def _probe_env(hermes_home: Path, hermes_code_root: Path | None) -> dict[str, str]:
