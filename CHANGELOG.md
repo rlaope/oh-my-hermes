@@ -89,6 +89,10 @@ All notable changes will be documented here.
   terminal's own selection is still there with its bypass modifier (Shift,
   Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
   terminal's own wheel and selection on the main screen, as before.
+- **The round-end check continues a turn less often.** A changed function's
+  name in another file no longer continues the turn when every mention there
+  is proven to need no change: another object's method of the same name, or
+  an import whose calls bind the same way before and after the edit.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check
@@ -161,6 +165,16 @@ All notable changes will be documented here.
   an extend, is checked only for pairs with one of its own new nodes, so two
   earlier nodes it cannot change never refuse it. The coding fanout
   contract's boundary check still compares as written.
+- **The area under the composer is exactly as tall as what it draws.** On the
+  screen's bottom rows, when the agent view gives rows up (a dag-ulw layer
+  settles or folds, or the run ends and its tree goes), the composer moves
+  down by them and the output above is painted again that many rows lower,
+  in the same synchronized update. No row stays blank under the tree or
+  above the composer. This replaces the tree's high-water hold during a turn
+  and the blank rows a finished run left under the info line. The lines
+  painted again on the screen's first rows are also still in the terminal's
+  scrollback, one per row given up, so they show twice there once they
+  scroll off again.
 - **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
   of the hollow `○`.** Four finished agents in a row looked the same as four
   that had not started. A completed agent now leads with `✓` in the done
@@ -174,6 +188,41 @@ All notable changes will be documented here.
   Procedure steps name what survives each failure, Recovery Notes cover each
   skill's own blockers, and catalog checks keep both in place. The idea comes
   from PortSwigger Burp AT research skills.
+- **A bot profile that fails its refresh no longer rolls `omh update` back,
+  and a pending restore no longer blocks every later update.** On 2026-11-04
+  four bench profiles whose `plugins/omh` links pointed at deleted worktrees
+  made the re-entered update exit 1. The staged update rolled back, the
+  restore failed on the same profiles, and from then on every `omh update`
+  only retried that restore and staged nothing, while the report read "the
+  known-good generation remains active". Now an update whose only failures
+  are bot profiles exits `3`: the staged update keeps the activated
+  generation and names the profiles to repair. A run that finishes a pending
+  restore goes on to stage the update it was asked for. A failed restore
+  leads its report with "could not restore the previous generation: recovery
+  is required" and says no update installs until it succeeds. A rollback
+  names the generation it restored, with its commit. `omh doctor` reports an
+  open marker as `staged_update_recovery`. A `plugins/omh` link whose
+  target is gone is now replaced with the released bundle without `--force`,
+  and the update prints a `Repaired …` line naming where it pointed; a link
+  to an existing tree OMH did not write still needs `--force`.
+- **`omh update` names the commit it moved between, and `omh --version` names
+  the commit it runs.** A generation built from one of this repository's
+  GitHub archives (the installer's `main.zip`, and tag or commit archives)
+  now knows its commit: `src/omh/_archive_commit.txt` is marked
+  `export-subst`, so `git archive` writes the commit into it, and the ref
+  comes from pip's PEP 610 record. `omh --version` prints
+  `omh 4.0.6 (main@1a2b3c4d)`. An installer-managed update ends with
+  `oh-my-hermes 4.0.6 main@1a2b3c4d → main@5e6f7a8b`, or `already at
+  main@5e6f7a8b` when `main` has not moved, even when the release version did
+  not change; release wheels still name versions only. `omh update --json`
+  carries the same facts as `identity_change`. EN, KO, JA and ZH rows. No new
+  network call: the commit is read from the archive pip already downloads.
+- **`--channel main` names the channel that tracks `main`.** It is another
+  spelling of `--channel preview`, which a plain installer-managed
+  `omh update` already uses. The re-entry into a restored, older generation
+  spells it `preview`. npm, Bun and Homebrew installs now refuse
+  `--channel preview` instead of updating to a release and recording it as a
+  `main` build.
 - **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
   the machine sleeps past the session's turn lease, Hermes stops the running
   turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
@@ -186,6 +235,20 @@ All notable changes will be documented here.
   cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
   or an open question holds it, and a notice says to send `continue`. At most 2
   go between two prompts of the person's own; past that the old notice asks.
+- **`/gateway restart` restarts Hermes' gateway from inside the OMH TUI and
+  picks the session back up.** After `omh update` the running gateway kept
+  the old OMH code until someone ran `hermes gateway restart` in another
+  terminal and came back. Now the TUI first names what a restart affects
+  (the profiles the gateway serves, its connected messenger bots, its running
+  work, this session's own), runs Hermes' own restart only once you pick
+  Restart, and reattaches to the same session with your draft kept and
+  nothing sent again. A gateway a service runs lets running work finish
+  first, up to Hermes' `restart_after_turn_timeout`, and the TUI waits for
+  it. Once the gateway is back it says so, and that it now runs the newer OMH
+  when its files show it was behind. In a named profile the shared gateway
+  serves you pick that profile alone, which does not load new OMH code, or
+  the whole gateway, which does. A refused or failed restart says why and the
+  command to run instead. Bare `/gateway` is still Hermes' platform status.
 - **A resumed session with work left goes on by itself in the OMH TUI.**
   `omh --resume <id>`, `/resume` and the session picker opened the session
   and waited for the person to write, so an interrupted turn or an open

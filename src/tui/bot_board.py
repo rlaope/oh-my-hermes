@@ -142,6 +142,7 @@ TOOL_CALLS_CHARS_READ = 4000
 MESSAGE_SHOWN_CHARS = 400
 MESSAGE_SHOWN_ROWS = 3
 GATEWAY_STATE_FILE = "gateway_state.json"
+SUPERVISED_FLAG = "--external-supervisor"  # in a record's `argv`: a gateway a service manager runs
 GATEWAY_STATE_BYTES = 1 << 20
 STATE_DB = "state.db"
 STATE_DB_BUSY_SECONDS = 0.25
@@ -251,6 +252,9 @@ class Gateway:
     updated: float | None = None  # the record's `updated_at` (epoch seconds)
     restart_requested: bool = False
     rss: int | None = None  # its live process's resident bytes, where the OS tells without a signal
+    # Run with `--external-supervisor` (what Hermes' generated launchd and systemd services start): a restart then
+    # drains, letting running work finish first (`gateway/run_shutdown.py` `_await_active_work_before_restart`).
+    supervised: bool = False
 
 
 @dataclass(frozen=True)
@@ -560,6 +564,7 @@ def read_gateway(home: Path, now: float | None = None) -> Gateway:
         updated=_record_time(record.get("updated_at")),
         restart_requested=record.get("restart_requested") is True,
         rss=resident_bytes(pid) if live and pid is not None else None,
+        supervised=isinstance(argv := record.get("argv"), list) and SUPERVISED_FLAG in argv,
     )
 
 
