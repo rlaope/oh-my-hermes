@@ -73,6 +73,7 @@ from .dag_run import (
     derive,
     goal_verdict,
     handoff_unchecked,
+    node_role,
     run_state,
     session_runs,
 )
@@ -945,7 +946,10 @@ def _dag_nodes(
 
     A node a repair or an extend round added also gets an edge from where it
     came from (`dag_origin`) when nothing else of its own group leads to it,
-    so the drawing shows it below that node. A parked node is a waiting one
+    so the drawing shows it below that node. Each node carries its role (`role`, `dag_run.node_role`: build,
+    baseline, verify or review), which the TUI names a finished child's briefing by, and its place in the run's
+    definition order (`node_index`: superseded and added nodes keep theirs), which picks its handle's hue. A parked
+    node is a waiting one
     marked `parked`, with what its attempt recorded it waits on (`parked_at`,
     `wake_at`, `wait_handle`, `wait_reason`); its elapsed time is the time
     since it parked.
@@ -955,6 +959,7 @@ def _dag_nodes(
     # A held node of a run that is not moving (stopped, cancelled, or waiting on a repair) will not run on its own.
     stopped = dag["state"] not in DAG_OPEN_STATES
     drawn = {str(node["id"]) for node in record["nodes"] if derived[str(node["id"])]["state"] != "superseded"}
+    defined = {str(node["id"]): index for index, node in enumerate(record["nodes"])}
     for node_id, layer in _dag_layers(record, drawn).items():
         node = next(item for item in record["nodes"] if item["id"] == node_id)
         info = derived[node_id]
@@ -975,7 +980,7 @@ def _dag_nodes(
             "category": _text(node.get("category"), 40) or "?", "category_source": "dag_plan", "model": "?",
             "effort": "", "state": state, "status": status, "elapsed_seconds": None, "order": order,
             "group": group, "waits_on": len(info["waits_on"]) if info["state"] == "waiting" else 0,
-            "dag_node": node_id, "dag_origin": origin,
+            "dag_node": node_id, "dag_origin": origin, "role": node_role(node), "node_index": defined[node_id],
         }
         summary = _prompt_summary(node.get("prompt"))
         if summary:

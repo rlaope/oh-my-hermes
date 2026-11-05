@@ -772,7 +772,10 @@ GATEWAY_REATTACH_SECONDS = 60.0
 GATEWAY_RESTART_QUESTION = "Restart Hermes' gateway?"
 GATEWAY_RESTART_CHOICE = "Restart"
 # A named profile the shared gateway serves: Hermes' restart of that profile alone, or of the whole gateway.
-GATEWAY_PROFILE_CHOICE = "Restart this profile ({profile}) — only {profile} reconnects; new OMH code is not loaded"
+# Hermes re-serves the profile without waiting (`unserve_profile` does not drain), so its running turns stop at once.
+GATEWAY_PROFILE_CHOICE = (
+    "Restart this profile ({profile}) — its running turns stop now; only {profile} reconnects; no new OMH code"
+)
 GATEWAY_WHOLE_CHOICE = "Restart the whole gateway — every profile and bot reconnects; loads new OMH code"
 GATEWAY_CANCEL_CHOICE = "Cancel"
 GATEWAY_RESTART_CANCELLED = "Hermes' gateway was not restarted."
@@ -820,7 +823,7 @@ GATEWAY_RESTARTING_SAY = ("restarting Hermes' gateway… {seconds}s", "restartin
 # the TUI's own commands except the ones that call the gateway.
 GATEWAY_RESTART_PASSES = frozenset({"stop"})
 GATEWAY_RESTART_HELD_LOCAL = frozenset({"gateway", "new", "sessions", "steer", "model", "effort", "reload-skills",
-                                        "topup", "export", "rewind"})
+                                        "topup", "export", "rewind", "image", "paste"})
 # The attach child's connection to Hermes' shared gateway ended (`gateway_attach.relay` exits 1): the gateway may still
 # be running the session's turn, so a respawn resumes the session and reads whether it still runs before saying more.
 CONNECTION_DROPPED_REASON = "the connection to Hermes' gateway dropped"

@@ -340,14 +340,18 @@ typed. It is offered only attached to a shared gateway, with a session to
 reattach to. It first asks in the slot, naming what the gateway's record
 (`gateway_state.json`, read as the bot board reads it) says the restart
 affects: the profiles it serves, the messenger platforms connected to it, the
-work it runs (turns and cron jobs), and this session's own turn; for a gateway
-a service runs (`--external-supervisor` in its recorded argv) that running
-work finishes first, up to `agent.restart_after_turn_timeout` read from the
-gateway home's `config.yaml`, and otherwise it is interrupted; without a live
-record it says who else uses the gateway is unknown. In a named profile the
-shared gateway serves it offers two restarts: that profile alone (Hermes
-re-serves it inside the shared process; new OMH code is not loaded) and the
-whole gateway (`-p default`, as Hermes' Desktop addresses that process).
+work it runs (turns and cron jobs), and this session's own turn. For a gateway
+a custom supervisor runs (`--external-supervisor` in its recorded argv) that
+running work finishes first, up to `agent.restart_after_turn_timeout` read
+from the gateway home's `config.yaml`; any other gateway drains the same way
+if Hermes' own systemd or launchd service runs it (Hermes sends it SIGUSR1,
+which its argv does not show), so the slot says the drain depends on a service
+running it, and otherwise the work is interrupted. Without a live record it
+says who else uses the gateway is unknown. In a named profile the shared
+gateway serves it offers two restarts: that profile alone (Hermes re-serves it
+inside the shared process at once, so the profile's running turns stop now;
+new OMH code is not loaded) and the whole gateway (`-p default`, as Hermes'
+Desktop addresses that process), which the drain line names.
 Nothing runs unless the person picks one. Then it runs Hermes' own command as
 Hermes' updater runs it, `<HERMES_PYTHON> -m hermes_cli.main -p <profile>
 gateway restart --yes --detach`, with the interpreter and import path the

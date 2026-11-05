@@ -14,7 +14,9 @@ cases drive `App` over the recording client and the recorded relay frames
 
 from __future__ import annotations
 
+import math
 import unittest
+from unittest.mock import patch
 
 from _delegation_graphs import dag_export_run, graph, lane, root
 from _tui_lines import line_text
@@ -22,10 +24,27 @@ from test_tui_agent_view import agent_event, agent_app
 from test_tui_delegation_block import with_hud
 from test_tui_modes import SID, drawn, make_app
 from test_tui_subagents import FIRST, SECOND, feed
+from omh.skin_pack import SKIN_THEMES
+from omh.tui import transcript as transcript_module
 from omh.tui.gateway import Event
 from omh.tui.style import NO_COLOR
 from omh.tui.subagents import Roster
-from omh.tui.theme import DEFAULT_THEME, look_ground, without_colour
+from omh.tui.theme import (
+    AGENT_HUES,
+    DEFAULT_THEME,
+    LAUNCH_PRESETS,
+    TEXT_CONTRAST,
+    _oklab,
+    agent_style,
+    build_theme,
+    contrast_ratio,
+    look_ground,
+    readable_on,
+    surface_for,
+    with_launch_look,
+    with_prompt_band,
+    without_colour,
+)
 from omh.tui.transcript import (
     AGENT_CANCELLED,
     AGENT_FAILED,
@@ -256,9 +275,10 @@ class AppBriefingTests(unittest.TestCase):
         agent_event(app, "complete", FIRST, goal="implement the export button in the toolbar [dag:r1/button]",
                     status="completed", summary="Button added.")
         [block] = blocks_of(app, AgentDoneBlock)
-        self.assertEqual((block.name, block.title), ("button", "Export button"), "its handle, then its label")
+        self.assertEqual((block.name, block.title, block.handle), ("button", "Export button", True),
+                         "its handle, then its label")
         rows = [row.rstrip() for row in drawn(app)]
-        head = next(index for index, row in enumerate(rows) if row.startswith("● button finished"))
+        head = next(index for index, row in enumerate(rows) if row.startswith("● @button finished"))
         self.assertEqual(rows[head + 1 : head + 3], ["  Export button", "  Button added."])
 
     def test_a_node_whose_label_is_its_id_or_empty_has_no_title_row(self) -> None:
@@ -293,7 +313,7 @@ class AppBriefingTests(unittest.TestCase):
         agent_event(app, "start", FIRST, **node_goal)
         agent_event(app, "complete", FIRST, **node_goal, status="completed", summary="Button added.")
         screen = drawn(app)
-        row = next(index for index, line in enumerate(screen) if line.startswith("● Export button finished"))
+        row = next(index for index, line in enumerate(screen) if line.startswith("● @button finished"))
         red, green, blue = (int(look_ground("moonlit", False)[at : at + 2], 16) for at in (1, 3, 5))
         for at in (row, row + 1):
             self.assertEqual(app.terminal.screen.attrs_at(at, 149), (48, 2, red, green, blue))
@@ -327,10 +347,6 @@ class AppBriefingTests(unittest.TestCase):
         agent_event(roster_app, "thinking", FIRST, text="hm")
         agent_event(roster_app, "complete", "never-started", status="completed")
         self.assertEqual(blocks_of(roster_app, AgentDoneBlock), [])
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class HeldBriefingFoldTests(unittest.TestCase):
@@ -367,8 +383,8 @@ class HeldBriefingFoldTests(unittest.TestCase):
                 self.assertEqual(len(more), 1, screen)
                 live = app.transcript.live_lines(150, DEFAULT_THEME, max_rows=rows)
                 self.assertLessEqual(len(live), 2 + rows // 4 + 2, [line_text(row) for row in live])
-                newest = "● p19 " if dag else "● lane 19"
-                whole = [row for row in screen if row.startswith("● lane") or row.startswith("● p")]
+                newest = "● @p19 " if dag else "● lane 19"
+                whole = [row for row in screen if row.startswith("● lane") or row.startswith("● @p")]
                 self.assertTrue(whole and whole[-1].startswith(newest), "the newest is drawn whole")
                 if dag:
                     self.assertIn("  lane 19: check part 19", screen, "with its title row")
@@ -402,3 +418,298 @@ class HeldBriefingFoldTests(unittest.TestCase):
         screen = [row.rstrip() for row in drawn(app)]
         self.assertFalse([row for row in screen if " more " in row and row.startswith("● ")], screen)
         self.assertEqual(len([row for row in screen if row.startswith("● lane")]), 3)
+
+
+MODULES = ("auth", "billing", "search", "upload", "export", "notify", "audit", "admin")
+DARK = ("#0D1117", "#1E1E1E", "#000000")
+LIGHT = ("#FFFFFF", "#F6F8FA")
+
+
+def oklch_hue(colour: str) -> float:
+    _lightness, a, b = _oklab(colour)
+    return math.degrees(math.atan2(b, a)) % 360
+
+
+def hue_gap(first: float, second: float) -> float:
+    return min(abs(first - second), 360 - abs(first - second))
+
+
+class HandleColourTests(unittest.TestCase):
+    """A dag child's handle, `@<node id>`, in a hue of its own (`theme.agent_style`), after Claude Code's coloured
+    `● Teammate @x finished` (the owner's ask of 2026-11-05: each agent its own colour)."""
+
+    def test_a_handle_is_at_its_id_in_its_own_hue_whatever_the_outcome_and_the_mark_keeps_the_outcomes(self) -> None:
+        theme = DEFAULT_THEME
+        marks = {AGENT_FINISHED: theme.ok, AGENT_FAILED: theme.error, AGENT_INTERRUPTED: theme.muted,
+                 AGENT_CANCELLED: theme.muted}
+        for outcome, mark_style in marks.items():
+            with self.subTest(outcome=outcome):
+                head = block_rows(AgentDoneBlock("button", outcome, ("3s",), ("why",), handle=True), 80, theme)[0]
+                self.assertEqual(head[1].text, "@button")
+                self.assertEqual(head[1].style, agent_style("button", theme))
+                self.assertTrue(head[1].style.bold)
+                self.assertEqual(head[0].style, mark_style, "the mark is the outcome's, not the agent's")
+        plain = block_rows(AgentDoneBlock("Check the docs", AGENT_FINISHED, ("3s",)), 80, theme)[0]
+        self.assertEqual((plain[1].text, plain[1].style.fg), ("Check the docs", None), "no handle: no @, no hue")
+
+    def test_the_hue_is_stable_across_calls_redraws_and_processes(self) -> None:
+        # A literal, not re-derived: Python's `hash` is salted per process, so a colour picked by it would move.
+        self.assertEqual(agent_style("auth", DEFAULT_THEME), DEFAULT_THEME.agents[5])
+        self.assertEqual(agent_style("button", DEFAULT_THEME), agent_style("button", DEFAULT_THEME))
+        block = AgentDoneBlock("auth", AGENT_FINISHED, ("3s",), ("Ported.",), handle=True)
+        first, again = (block_rows(block, 120, DEFAULT_THEME)[0][1] for _ in range(2))
+        self.assertEqual(first, again)
+        transcript = transcript_module.Transcript()
+        transcript.add_aside(block)
+        history = transcript.history_lines(120, DEFAULT_THEME)
+        self.assertEqual(next(row for row in history if line_text(row).startswith("● @auth"))[1], first)
+
+    def test_different_handles_spread_over_the_hues(self) -> None:
+        styles = {name: agent_style(name, DEFAULT_THEME) for name in MODULES}
+        self.assertNotEqual(styles["auth"], styles["billing"])
+        self.assertGreaterEqual(len({style.fg for style in styles.values()}), 5, styles)
+        self.assertEqual(len({style.fg for style in DEFAULT_THEME.agents}), len(AGENT_HUES))
+
+    def test_the_hues_keep_clear_of_every_state_hue_and_of_each_other(self) -> None:
+        for skin in SKIN_THEMES:
+            for background in (*DARK, *LIGHT):
+                theme = build_theme(skin, background)
+                states = {"ok": theme.ok.fg, "error": theme.error.fg, "running": theme.running.fg}
+                for style in theme.agents:
+                    for state, colour in states.items():
+                        with self.subTest(theme=skin.short_name, background=background, hue=style.fg, state=state):
+                            self.assertGreaterEqual(hue_gap(oklch_hue(style.fg), oklch_hue(colour)), 23)
+        for side in (0, 1):
+            hues = sorted(oklch_hue(pair[side]) for pair in AGENT_HUES)
+            gaps = [hue_gap(first, second) for first, second in zip(hues, hues[1:] + hues[:1])]
+            self.assertGreaterEqual(min(gaps), 25, (side, hues))
+
+    def test_every_hue_reads_at_text_contrast_on_every_background_and_every_looks_ground(self) -> None:
+        short = []
+        for skin in SKIN_THEMES:
+            for background in (*DARK, *LIGHT, None):
+                surface = surface_for(skin, background)
+                for look in LAUNCH_PRESETS:
+                    theme = with_launch_look(build_theme(skin, background), skin, background, look)
+                    short += [(skin.short_name, look, surface, style.fg) for style in theme.agents
+                              if contrast_ratio(style.fg, surface) < TEXT_CONTRAST]
+            for look in LAUNCH_PRESETS:  # a scene look's ground, as `App._themed` builds on it
+                for light, after in ((False, "#0D1117"), (True, "#FFFFFF")):
+                    ground = look_ground(look, light)
+                    banded = with_prompt_band(build_theme(skin, ground), skin, ground, look)
+                    theme = readable_on(with_launch_look(banded, skin, ground, look, scene=True), skin, ground, after)
+                    short += [(skin.short_name, look, where, style.fg) for style in theme.agents
+                              for where in (ground, after) if contrast_ratio(style.fg, where) < TEXT_CONTRAST]
+        self.assertEqual(short, [])
+
+    def test_no_color_is_a_plain_bold_handle(self) -> None:
+        theme = without_colour(DEFAULT_THEME)
+        head = block_rows(AgentDoneBlock("button", AGENT_FINISHED, ("3s",), handle=True), 80, theme)[0]
+        self.assertEqual(line_text(head), "● @button finished  3s")
+        self.assertTrue(head[1].style.bold)
+        self.assertEqual(head[1].style.depth, NO_COLOR)
+        self.assertEqual(agent_style("x", theme).depth, NO_COLOR)
+
+    def test_a_narrow_row_cuts_the_handle_in_cells_and_keeps_the_word(self) -> None:
+        block = AgentDoneBlock("a-rather-long-node-id", AGENT_FINISHED, ("2m 14s",), handle=True)
+        self.assertEqual(texts(block, 24)[0], "● @a-rather-lo… finished")
+        for width in range(1, 50):
+            with self.subTest(width=width):
+                self.assertTrue(all(line_width(row) <= width for row in block_rows(block, width, DEFAULT_THEME)))
+
+
+class HandleNamingTests(unittest.TestCase):
+    """Which agents get a handle: a dag node's child, bound by the HUD's graph or, before it binds, by its goal's
+    marker; nothing else, since Hermes' subagent frames carry no name or role."""
+
+    def test_a_dag_child_the_hud_has_not_bound_is_named_by_its_markers_node_with_its_short_title_under_it(self) -> None:
+        for hud in (None, dag_export_run()):  # no HUD read yet; a graph that has no such node yet
+            with self.subTest(hud=hud is not None):
+                app, _client = make_app(busy=False, clock=lambda: 0.0)
+                if hud is not None:
+                    with_hud(app, hud, received_at=0.0)
+                goal = "Write the release notes [dag:r1/notes]"
+                agent_event(app, "start", FIRST, goal=goal)
+                agent_event(app, "complete", FIRST, goal=goal, status="completed", summary="Done.")
+                [block] = blocks_of(app, AgentDoneBlock)
+                self.assertEqual((block.name, block.handle, block.title), ("notes", True, "Write the release notes"))
+                rows = [row.rstrip() for row in drawn(app)]
+                head = next(index for index, row in enumerate(rows) if row.startswith("● @notes finished"))
+                self.assertEqual(rows[head + 1], "  Write the release notes")
+
+    def test_an_agent_with_no_dag_node_keeps_its_short_title_without_a_handle(self) -> None:
+        app, _client = agent_app(busy=False)
+        agent_event(app, "complete", FIRST, status="completed", summary="Found 3 call sites.")
+        [block] = blocks_of(app, AgentDoneBlock)
+        self.assertFalse(block.handle)
+        self.assertTrue(any(row.startswith("● find usages") for row in drawn(app)))
+
+
+def dag_app(role: object = None, *, bind: bool = True):
+    """An app whose HUD graph holds node `button` (its `role` set unless None), and a child of it that finished."""
+    run = dag_export_run()
+    node = next(item for item in run["nodes"] if item["id"] == "d:r1:button")
+    if role is not None:
+        node["role"] = role
+    app, _client = make_app(busy=False, cols=120, clock=lambda: 0.0)
+    with_hud(app, run if bind else None, received_at=0.0)
+    goal = "implement the export button in the toolbar [dag:r1/button]"
+    agent_event(app, "start", FIRST, goal=goal)
+    agent_event(app, "complete", FIRST, goal=goal, status="failed" if role == "verify" else "completed",
+                duration_seconds=95.0, output_tokens=2000, summary="Done.")
+    [block] = blocks_of(app, AgentDoneBlock)
+    return app, block
+
+
+class RoleTests(unittest.TestCase):
+    """The owner's pick of 2026-11-05: the node's role stands where Claude Code writes `Teammate`,
+    `● build @notify finished`, plain; the handle keeps its own hue."""
+
+    def test_each_role_stands_before_the_handle(self) -> None:
+        for role in ("build", "baseline", "verify", "review"):
+            with self.subTest(role=role):
+                app, block = dag_app(role)
+                self.assertEqual((block.role, block.name, block.handle), (role, "button", True))
+                word = "failed" if role == "verify" else "finished"
+                self.assertIn(f"● {role} @button {word}  1m 35s · ↓2k", [row.rstrip() for row in drawn(app)])
+                head = block_rows(block, 120, DEFAULT_THEME)[0]
+                self.assertEqual([span.text for span in head[:3]], ["● ", f"{role} ", "@button"])
+                self.assertEqual(head[1].style, DEFAULT_THEME.text, "the role is plain")
+                self.assertEqual(head[2].style, agent_style("button", DEFAULT_THEME), "the handle keeps its hue")
+
+    def test_a_graph_that_records_no_role_or_another_word_gives_none(self) -> None:
+        # A graph from an OMH before nodes exported their role, or a word that is not a role: nothing is guessed from
+        # the label.
+        for role in (None, "", "tester", 3):
+            with self.subTest(role=role):
+                app, block = dag_app(role)
+                self.assertEqual((block.role, block.name), ("", "button"))
+                self.assertTrue(any(row.startswith("● @button finished") for row in drawn(app)))
+
+    def test_a_child_the_hud_holds_no_node_for_has_no_role(self) -> None:
+        _app, block = dag_app("verify", bind=False)
+        self.assertEqual((block.role, block.name, block.handle), ("", "button", True))
+
+    def test_an_agent_with_no_node_has_no_role_and_no_handle(self) -> None:
+        app, _client = agent_app(busy=False)
+        agent_event(app, "complete", FIRST, status="completed", summary="Found 3 call sites.")
+        [block] = blocks_of(app, AgentDoneBlock)
+        self.assertEqual((block.role, block.handle), ("", False))
+        self.assertTrue(any(row.startswith("● find usages of old_api") for row in drawn(app)))
+
+    def test_no_color_keeps_the_role_and_a_plain_bold_handle(self) -> None:
+        block = AgentDoneBlock("check", AGENT_FAILED, ("2m 10s",), ("boom",), handle=True, role="verify")
+        rows = block_rows(block, 80, without_colour(DEFAULT_THEME))
+        self.assertEqual(line_text(rows[0]), "● verify @check failed  2m 10s")
+        self.assertTrue(rows[0][2].style.bold)
+        self.assertTrue(all(span.style.depth == NO_COLOR or span.style.fg is None for row in rows for span in row))
+
+    def test_a_narrow_row_drops_the_facts_then_cuts_the_handle_and_keeps_role_and_word(self) -> None:
+        block = AgentDoneBlock("a-rather-long-node-id", AGENT_FINISHED, ("2m 14s", "↓1.2k"), handle=True,
+                               role="baseline")
+        self.assertEqual(texts(block, 60)[0], "● baseline @a-rather-long-node-id finished  2m 14s · ↓1.2k")
+        self.assertEqual(texts(block, 50)[0], "● baseline @a-rather-long-node-id finished  2m 14s")
+        self.assertEqual(texts(block, 30)[0], "● baseline @a-rather… finished")
+        for width in range(1, 70):
+            with self.subTest(width=width):
+                self.assertTrue(all(line_width(row) <= width for row in block_rows(block, width, DEFAULT_THEME)))
+        muted = block_rows(AgentDoneBlock("x", AGENT_INTERRUPTED, handle=True, role="review"), 40, DEFAULT_THEME)[0]
+        role_span = next(span for span in muted if "review" in span.text)
+        self.assertEqual(role_span.style, DEFAULT_THEME.muted, "an interrupted node's role is muted, as its word")
+
+
+class RunHueTests(unittest.TestCase):
+    """Within one dag run a handle's hue is its node's place in the run's definition order (`node_index`), so two
+    nodes of a run share a hue only once all seven are used, and neighbours never do."""
+
+    NAMES = ("auth", "billing", "search", "upload", "export", "notify", "audit", "admin")
+
+    def run_app(self, run: str = "r1"):
+        app, _client = make_app(busy=False, cols=150, clock=lambda: 0.0)
+        lanes = [lane(f"d:{run}:{name}", f"Port {name}", "quick", "glm-5.3", "low", "running", order=index + 1)
+                 for index, name in enumerate(self.NAMES)]
+        for index, item in enumerate(lanes):
+            item.update(role="build", node_index=index)
+        edges = [("root", item["id"], "dispatch") for item in lanes] + [(f"d:{run}:auth", f"d:{run}:billing",
+                                                                          "depends_on")]
+        with_hud(app, graph([root(), *lanes], edges), received_at=0.0)
+        for name in self.NAMES:
+            goal = f"Port {name} [dag:{run}/{name}]"
+            agent_event(app, "start", f"sa-{name}", goal=goal)
+            agent_event(app, "complete", f"sa-{name}", goal=goal, status="completed", summary="Ported.")
+        return app
+
+    def handle_styles(self, app) -> list:
+        return [block_rows(block, 150, DEFAULT_THEME)[0][2].style for block in blocks_of(app, AgentDoneBlock)]
+
+    def test_the_first_seven_nodes_of_a_run_differ_and_neighbours_always_do(self) -> None:
+        app = self.run_app()
+        self.assertEqual([block.hue for block in blocks_of(app, AgentDoneBlock)], list(range(8)))
+        styles = self.handle_styles(app)
+        self.assertEqual(len({style.fg for style in styles[:7]}), 7, "auth and admin may share; nothing earlier does")
+        self.assertEqual(styles[7], styles[0], "the eighth starts the hues again")
+        self.assertTrue(all(first != second for first, second in zip(styles, styles[1:])))
+
+    def test_the_hue_holds_across_renders_history_and_a_reload_of_the_run(self) -> None:
+        app = self.run_app()
+        first = self.handle_styles(app)
+        self.assertEqual(self.handle_styles(app), first)
+        history = [row for row in app.transcript.history_lines(150, DEFAULT_THEME)
+                   if line_text(row).startswith("● build @")]
+        self.assertEqual([row[2].style for row in history], first)
+        self.assertEqual(self.handle_styles(self.run_app()), first, "the same run read again keeps every hue")
+        self.assertEqual(self.handle_styles(self.run_app("r2")), first, "another run may reuse the hues")
+
+    def test_without_a_place_the_handle_falls_back_to_its_hash(self) -> None:
+        _app, block = dag_app("build")  # the shared fixture's graph records no node_index
+        self.assertIsNone(block.hue)
+        head = block_rows(block, 120, DEFAULT_THEME)[0]
+        self.assertEqual(head[2].style, agent_style("button", DEFAULT_THEME))
+
+
+class ShortScreenHeldTests(unittest.TestCase):
+    """#2586 review: on a screen whose tail cannot hold the call, a spacer and the fold row, the call still wins."""
+
+    def test_at_twelve_rows_the_call_stays_and_the_fold_row_drops_its_spacer_where_it_must(self) -> None:
+        for dag in (False, True):
+            with self.subTest(dag=dag):
+                app = HeldBriefingFoldTests().run_delegation(12, 2, dag)
+                screen = [row.rstrip() for row in drawn(app)]
+                call = next(index for index, row in enumerate(screen) if "delegate_task(2 tasks)" in row)
+                self.assertIn("● 2 finished", screen[call + 1 : call + 3], screen)
+                self.assertEqual(len(held_of(app, AgentDoneBlock)), 2, "still held, written at the boundary")
+
+    def test_with_room_for_the_call_alone_no_briefing_is_drawn(self) -> None:
+        app = HeldBriefingFoldTests().run_delegation(10, 2, dag=True)
+        screen = [row.rstrip() for row in drawn(app)]
+        self.assertTrue(any("delegate_task(2 tasks)" in row for row in screen), screen)
+        self.assertFalse([row for row in screen if row.startswith("● ")], screen)
+        app._on_event(Event("tool.complete", SID, {"tool_id": "t1", "name": "delegate_task", "result": "{}"}))
+        app._on_event(Event("message.complete", SID, {"text": "", "status": "complete"}))
+        self.assertEqual(len(blocks_of(app, AgentDoneBlock)), 2)
+
+
+class HeldUnderReplyCostTests(unittest.TestCase):
+    def test_a_streaming_reply_is_not_rendered_whole_to_size_held_briefings(self) -> None:
+        # #2586 review: sizing the held briefings rendered the whole live reply (`block_rows`) on every delta.
+        app, _client = agent_app(busy=True, cols=100)
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("message.delta", SID, {"text": "A long reply line.\n" * 200}))
+        agent_event(app, "complete", FIRST, status="completed", summary="Found 3 call sites.")
+        drawn(app)
+        seen: list[type] = []
+        real = transcript_module.block_rows
+
+        def counting(block, *args, **kwargs):
+            seen.append(type(block))
+            return real(block, *args, **kwargs)
+
+        with patch.object(transcript_module, "block_rows", counting):
+            app._on_event(Event("message.delta", SID, {"text": "one more"}))
+            app.transcript.live_lines(100, DEFAULT_THEME, max_rows=40, room=20)
+        self.assertNotIn(AssistantBlock, seen)
+        self.assertIn(AgentDoneBlock, seen)
+
+
+if __name__ == "__main__":
+    unittest.main()

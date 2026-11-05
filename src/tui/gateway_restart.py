@@ -31,11 +31,15 @@ the TUI's profile, whose pid is checked with signal 0 against the start time it
 records. It counts the work the gateway runs (Hermes' `_active_work_count`:
 turns and cron jobs) and names the messenger platforms connected to it; who
 else merely has a session open there is not recorded, and a home with no live
-record is said to be unknown. A gateway a service runs (`--external-supervisor`
-in its recorded argv) drains on a restart: Hermes lets running work finish
-first, up to `agent.restart_after_turn_timeout` from the gateway home's
-config, and new turns wait meanwhile; any other gateway is stopped, which
-interrupts it.
+record is said to be unknown. A gateway a custom supervisor runs
+(`--external-supervisor` in its recorded argv) drains on a restart: Hermes
+lets running work finish first, up to `agent.restart_after_turn_timeout` from
+the gateway home's config, and new turns wait meanwhile. So does one Hermes'
+own systemd or launchd service runs (Hermes sends it SIGUSR1), which its argv
+does not tell, so for any other gateway the drain is said to depend on a
+service running it. Restarting one profile alone does not drain: Hermes
+re-serves it at once, so the profile's running turns stop, and the drain line
+names the whole gateway's restart.
 """
 
 from __future__ import annotations
@@ -257,10 +261,14 @@ def impact_lines(impact: RestartImpact, busy: bool) -> list[str]:
     lines = [" · ".join(parts)]
     if work or busy:
         mine = ", this session's turn included" if busy else ""
-        if gateway.supervised and impact.wait_seconds > 0:
-            lines.append(f"Running work (turns, cron jobs{mine}) finishes first, up to "
-                         f"{_duration(impact.wait_seconds)} (Hermes' restart_after_turn_timeout); new turns wait "
-                         "meanwhile.")
-        else:
-            lines.append(f"Running work (turns, cron jobs{mine}) would be interrupted.")
+        whole = "On a whole-gateway restart, running" if impact.profile else "Running"
+        drain = (f"finishes first, up to {_duration(impact.wait_seconds)} (Hermes' restart_after_turn_timeout); new "
+                 "turns wait meanwhile")
+        if impact.wait_seconds <= 0:
+            lines.append(f"{whole} work (turns, cron jobs{mine}) would be interrupted.")
+        elif gateway.supervised:
+            lines.append(f"{whole} work (turns, cron jobs{mine}) {drain}.")
+        else:  # a systemd or launchd service Hermes installed drains it too, and its argv does not say so
+            lines.append(f"{whole} work (turns, cron jobs{mine}) {drain} if a service (systemd, launchd) runs this "
+                         "gateway; otherwise it is interrupted.")
     return lines
