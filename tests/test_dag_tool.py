@@ -313,8 +313,8 @@ class DefineTests(unittest.TestCase):
                     node("a", scope=(first,)), node("b", depends_on=("a",), scope=(second,))])
             self.assertEqual((refused["status"], refused["reason"]), ("refused", "write_scope_overlap"), refused)
             self.assertEqual(refused["say"],
-                             f"Nodes a and b both write {', '.join(sorted((first, second)))} with no edge between "
-                             "them; make one depend on the other or split the scope.")
+                             f"These nodes write overlapping paths with no edge between them: a writes {first} and "
+                             f"b writes {second}. Make one of each pair depend on the other, or split the scope.")
             self.assertEqual(chained["reason"], "write_scope_overlap", chained)
             self.assertEqual(joined["status"], "ok", joined)
 
@@ -876,6 +876,34 @@ class RepairTests(unittest.TestCase):
         self.assertEqual((refused["status"], refused["reason"]), ("refused", "write_scope_overlap"), refused)
         self.assertEqual(repaired["status"], "ok", repaired)
 
+    def test_a_repair_is_not_refused_over_two_earlier_nodes(self) -> None:
+        """Mutation: check every runnable pair at repair; the model cannot change a and b, and loops until cancel."""
+        with homes() as home:
+            slots_table(home)
+            # A run recorded before scopes were compared as paths: a and b overlap with no edge.
+            path = dag_run.record_path(home.omh, PARENT, "feat")
+            call(action="define", run="feat", nodes=[node("a", scope=("a.py",)), node("b", scope=("src/x.py",)),
+                                                     node("c", scope=("c.py",))])
+            record = dag_run.read_run(path)
+            record["nodes"][0]["write_scope"] = ["src/"]
+            path.write_text(json.dumps(record), encoding="utf-8")
+            call(action="settle", run="feat", node="c", outcome="failed")
+            repaired = call(action="repair", run="feat", node="c", nodes=[node("fix", scope=("z.py",))])
+        self.assertEqual(repaired["status"], "ok", repaired)
+
+    def test_a_second_repair_is_not_refused_over_the_first_repairs_overlap(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[
+                node("r1", scope=("a.py",)), node("d1", depends_on=("r1",), scope=("src/",)), node("r2", scope=("b.py",)),
+                node("verify", role="verify", depends_on=("d1", "r2"), label="Verify")])
+            call(action="settle", run="feat", node="r1", outcome="failed")
+            first = call(action="repair", run="feat", node="r1", nodes=[node("fix1", scope=("src/x.py",))])
+            call(action="settle", run="feat", node="r2", outcome="failed")
+            second = call(action="repair", run="feat", node="r2", nodes=[node("fix2", scope=("z.py",))])
+        self.assertEqual(first["status"], "ok", first)
+        self.assertEqual(second["status"], "ok", second)
+
     def test_a_repair_node_may_not_wait_on_an_open_node(self) -> None:
         with homes() as home:
             slots_table(home)
@@ -1276,6 +1304,21 @@ class ExtendTests(unittest.TestCase):
         for entry, result in refused.items():
             self.assertEqual((entry, result.get("reason")), (entry, "write_scope_overlap"), result)
         self.assertEqual(extended["status"], "ok", extended)
+
+    def test_one_refusal_names_every_overlapping_pair(self) -> None:
+        """Mutation: raise on the first pair; a directory entry then costs one refused round per node it covers."""
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node(name, scope=(f"src/{name}.py",)) for name in "abc"])
+            for name in "abc":
+                handoff(home, "feat", name)
+                call(action="settle", run="feat", node=name, outcome="accepted")
+            refused = call(action="extend", run="feat", nodes=[node("x", scope=("src/",))])
+        self.assertEqual(refused.get("reason"), "write_scope_overlap", refused)
+        self.assertEqual(refused["say"], "These nodes write overlapping paths with no edge between them: "
+                                         "a writes src/a.py and x writes src/; b writes src/b.py and x writes src/; "
+                                         "c writes src/c.py and x writes src/. "
+                                         "Make one of each pair depend on the other, or split the scope.")
 
     def test_the_new_nodes_are_linted(self) -> None:
         with homes() as home:

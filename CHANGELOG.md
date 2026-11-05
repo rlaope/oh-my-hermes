@@ -9,12 +9,16 @@ All notable changes will be documented here.
   direct edge only when both nodes wrote the same entry character for
   character, so `src/` beside `src/x.py`, `./src/x.py` beside `src/x.py` and
   `src/*.py` beside `src/x.py` ran in parallel and could overwrite each
-  other. Entries are now compared as paths: a leading `./`, repeated or
-  trailing `/` and letter case change nothing, an entry covers every path
-  under it by whole segments (`src/a` and `src/ab` stay apart), and a `*` or
-  `?` glob covers the directory before it. The refusal still reads
-  `write_scope_overlap` and names the entries as each node wrote them. A
-  `[` stays a literal, so `app/[slug]/page.tsx` names one file. The coding
+  other. Entries are now compared as paths: `\` reads as `/`, letter case,
+  `./`, repeated or trailing `/` and `x/..` change nothing, and an entry
+  covers every path under it by whole segments (`src/a` and `src/ab` stay
+  apart). A `*` or `?` glob beside a file name with a suffix must match it
+  (`*.md` meets `docs/a.md`, not `src/x.py`); beside a directory, a name
+  with no suffix or another glob it covers the directory before it. A `[` stays a literal, so `app/[slug]/page.tsx`
+  names one file. The refusal still reads `write_scope_overlap`, now names
+  every overlapping pair at once and which node wrote which entry, and a
+  repair, like an extend, is checked only for pairs with one of its own new
+  nodes, so two earlier nodes it cannot change never refuse it. The coding
   fanout contract's boundary check still compares as written.
 
 ## 4.0.6 - 2026-11-04

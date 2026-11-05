@@ -91,16 +91,21 @@ class SharedScopeTests(unittest.TestCase):
         self.assertEqual(dag_core.shared_scope_pairs([("a", ["src/"]), ("b", ["src/x.py"])], {}), [])
 
     def test_as_paths_entries_written_differently_meet(self) -> None:
-        """Mutation: compare as written, or as a raw string prefix; each row then reads the other way."""
+        """Mutation: compare as written, as a raw string prefix, without the leading `/`, the glob match or the
+        `[` escape; a row then reads the other way."""
         meeting = (
             ("src/", "src/x.py"), ("src", "src/x.py"), ("src/x.py", "./src/x.py"), ("src//x.py", "src/x.py"),
             ("src/x.py/", "src/x.py"), ("src/*.py", "src/x.py"), ("src/*.py", "src/lib/y.py"),
-            ("tests/test_*.py", "tests/test_b.py"), ("*.md", "src/x.py"), (".", "a.py"), ("SRC/X.py", "src/x.py"),
-            ("src/a?.py", "src/a1.py"),
+            ("tests/test_*.py", "tests/test_b.py"), ("*.md", "docs/a.md"), (".", "a.py"), ("SRC/X.py", "src/x.py"),
+            ("src/a?.py", "src/a1.py"), ("src\\x.py", "src/x.py"), ("src/../lib/x.py", "lib/x.py"),
+            ("/src/x.py", "/src/x.py"), ("app/[slug]/*.tsx", "app/[slug]/page.tsx"),
+            # A glob beside a directory or another glob meets by its directory: a name with no suffix may be one.
+            ("src/*.py", "src/lib"), ("src/*.py", "src/"), ("src/*.py", "src/*.md"), ("*.md", "src/"),
         )
         apart = (
             ("src/a", "src/ab"), ("docs/x.md", "docs/xy.md"), ("src/*.py", "lib/x.py"), ("src/a/", "src/ab/c.py"),
-            ("app/[slug]/page.tsx", "app/about/page.tsx"), ("/src/x.py", "lib/x.py"),
+            ("app/[slug]/page.tsx", "app/about/page.tsx"), ("/src/x.py", "lib/x.py"), ("/src/x.py", "src/x.py"),
+            ("*.md", "src/x.py"), ("src/*.py", "src/x.md"), ("tests/test_a*.py", "tests/test_b.py"),
         )
         for first, second in meeting:
             with self.subTest(first=first, second=second):
