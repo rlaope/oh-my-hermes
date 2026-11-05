@@ -3266,7 +3266,9 @@ class App(ModesMixin, AgentViewMixin):
             if self.notification is not None and key and self.notification.key == key:
                 self.notification = None  # a clear for another key, or a late one, leaves a newer notice
         elif event.type.startswith(contract.SUBAGENT_EVENT_PREFIX):
-            self.roster.apply(event.type, payload, self.clock())  # folds what it knows; raises on nothing
+            finished = self.roster.apply(event.type, payload, self.clock())  # folds what it knows; raises on nothing
+            if finished is not None:
+                self._brief_finished(finished)
             if isinstance(payload, Mapping):  # a new frame for an agent: its tail is asked for again
                 self.tail_misses.pop(as_text(payload.get("subagent_id")), None)
         else:

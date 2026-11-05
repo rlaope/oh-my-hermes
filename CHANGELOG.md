@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI briefs each subagent as it finishes, in the transcript.** A
+  finished subagent only changed its mark in the agent list under the
+  composer, so during a long dag-ulw run nobody saw what each child concluded
+  without opening its log. Each `subagent.complete` now writes one block
+  above the composer, as Claude Code does for a teammate: `● <name> finished
+  1m 35s · ↓1.8k`, then the first lines of the child's reply in up to two dim
+  rows, cut with `…`, with the reply's Markdown drawn as the reply is (no
+  `**`, backticks or `#`). A dag node's child is named by its node's label,
+  any other by its short title. Only a completed agent's mark is green: a
+  failure reads `● <name> failed` in red with its error, an interrupted
+  child `▪ <name> interrupted`, a cancelled one `○ <name> cancelled`. A
+  briefing that arrives while a reply streams or a call (`delegate_task`)
+  runs waits under it and is written at the next block boundary, so it never
+  splits a paragraph or a table; parallel children are briefed in the order
+  they finished, and main never is. The rows erase on a scene look's ground
+  and keep every mark and word under `NO_COLOR`. The messenger is unchanged.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check

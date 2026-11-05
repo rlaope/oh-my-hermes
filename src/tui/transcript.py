@@ -72,6 +72,15 @@ an `inline_diff` shows that diff under its row's `⎿` (`diff_view.py`): the fir
 view (and `history_lines` with details) shows in full. Lines rendered at one width stay as they were taken; a
 resize changes only what has not been taken yet.
 
+A subagent that finishes is briefed as a block of its own (`AgentDoneBlock`, the
+owner's ask of 2026-11-05, after Claude Code's `● Teammate @x finished`):
+`● <name> finished  1m 35s · ↓1.8k`, the mark green only for a completed agent
+(`● … failed` in red, `▪ … interrupted` and `○ … cancelled` muted), then the
+first lines of its reply, or its error, in at most two muted rows under the
+name, ending in `…` where it said more. The app writes it as an aside
+(`add_aside`), so it waits under a streaming reply or a running call and is
+written at the next block boundary, in the order the agents finished.
+
 Two events do not mean what their names suggest, measured against Hermes
 6c61c3e27d (the recorded fixtures and the gateway source):
 
@@ -302,6 +311,32 @@ class TurnSummaryBlock:
     waited: float = 0.0  # the part of `seconds` a question Hermes asked waited on the person
 
 
+# How an agent's briefing (`AgentDoneBlock`) says it ended: its mark, and the word after its name. Only a completed
+# agent's mark is green, as in the agent list (`subagents.DONE_MARK`): a failure's is red, the rest muted.
+AGENT_FINISHED = "finished"
+AGENT_FAILED = "failed"
+AGENT_INTERRUPTED = "interrupted"
+AGENT_CANCELLED = "cancelled"
+AGENT_DONE_MARKS = {AGENT_FINISHED: "●", AGENT_FAILED: "●", AGENT_INTERRUPTED: "▪", AGENT_CANCELLED: "○"}
+AGENT_SAID_ROWS = 2  # the most rows a briefing gives what the agent said
+AGENT_SAID_LINES = 3  # its reply's first lines read for them: enough to fill them, and to know there was more
+AGENT_SAID_INDENT = "  "  # under the name, past the mark and its space
+AGENT_FACT_SEPARATOR = " · "
+AGENT_SAID_CUT = "…"
+
+
+@dataclass
+class AgentDoneBlock:
+    """A subagent that finished, briefed in the transcript as its `subagent.complete` arrives: `● <name> finished`
+    and its time and output tokens (`facts`), then the first lines of its reply, or its error (`said`)."""
+
+    name: str
+    outcome: str = AGENT_FINISHED  # AGENT_FINISHED, AGENT_FAILED, AGENT_INTERRUPTED or AGENT_CANCELLED
+    facts: tuple[str, ...] = ()  # `2m 14s`, `↓1.2k`: the row drops them from the last where it has no room
+    said: tuple[str, ...] = ()  # its reply's or its error's lines, cleaned
+    done: bool = True
+
+
 @dataclass
 class ThinkingBlock:
     text: str = ""
@@ -371,7 +406,7 @@ class ToolGroup:
 
 Block = (
     UserBlock | AssistantBlock | ThinkingBlock | ToolGroup | NoticeBlock | CommandBlock | TurnSummaryBlock | SteerBlock
-    | DagBlock
+    | DagBlock | AgentDoneBlock
 )
 
 
@@ -1095,6 +1130,43 @@ def _tail_rows(block: Block, width: int, theme: Theme) -> list[Line]:
     return rows
 
 
+def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Line]:
+    """`● <name> finished  2m 14s · ↓1.2k`, then what it said in up to `AGENT_SAID_ROWS` muted rows under the name.
+
+    The mark is green only for a completed agent (red for a failure, muted
+    `▪` interrupted and `○` cancelled), and the word after the bold name says
+    which, so colour is never the only signal. A row too narrow drops the
+    facts from the last, then cuts the name; the word stays. What it said is
+    drawn as the reply would be (`render_lines`: no `**`, `#` or backticks
+    left), all in one muted tone, and the last row shown ends in `…` where
+    more was said.
+    """
+    mark_style = {AGENT_FINISHED: theme.ok, AGENT_FAILED: theme.error}.get(block.outcome, theme.muted)
+    word_style = {AGENT_FINISHED: theme.text, AGENT_FAILED: theme.error}.get(block.outcome, theme.muted)
+    name_style = replace(theme.text if block.outcome in (AGENT_FINISHED, AGENT_FAILED) else theme.muted, bold=True)
+    mark = f"{AGENT_DONE_MARKS.get(block.outcome, AGENT_DONE_MARKS[AGENT_CANCELLED])} "
+    word = f" {block.outcome}"
+    fixed = cell_width(mark) + cell_width(word)
+    facts = ""
+    for count in range(len(block.facts), -1, -1):
+        facts = AGENT_FACT_SEPARATOR.join(block.facts[:count])
+        if fixed + cell_width(block.name) + (cell_width(COLUMN_GAP + facts) if facts else 0) <= width:
+            break
+    tail: Line = (Span(COLUMN_GAP + facts, theme.faint),) if facts else ()
+    name = truncate(block.name, max(width - fixed - line_width(tail), 1))
+    rows = [truncate_line((Span(mark, mark_style), Span(name, name_style), Span(word, word_style), *tail), width)]
+    room = width - len(AGENT_SAID_INDENT)
+    if room < 1 or not block.said:
+        return rows
+    said = render_lines(block.said[:AGENT_SAID_LINES], MarkdownState(), room, theme)[0]
+    said = [row for row in said if row]
+    more = len(said) > AGENT_SAID_ROWS or len(block.said) > AGENT_SAID_LINES
+    said = [tuple(Span(span.text, theme.muted) for span in row) for row in said[:AGENT_SAID_ROWS]]
+    if more and said:
+        said[-1] = (*truncate_line(said[-1], room - 1, ellipsis=""), Span(AGENT_SAID_CUT, theme.muted))
+    return rows + [(Span(AGENT_SAID_INDENT), *row) for row in said]
+
+
 def _seconds(value: float) -> str:
     return f"{value:.1f}s"
 
@@ -1380,6 +1452,8 @@ def block_rows(
         return _thinking_rows(block, width, theme, expanded, max_rows)
     if isinstance(block, DagBlock):
         return dag_rows(block, width, theme)
+    if isinstance(block, AgentDoneBlock):
+        return _agent_done_rows(block, width, theme)
     return _tool_rows(block, width, theme, expanded, now, glint)
 
 

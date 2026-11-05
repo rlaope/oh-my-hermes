@@ -764,6 +764,18 @@ run and approval decision stays Hermes'; the screen is OMH's.
   <text>`), and it and what `x` reports
   wait under the running call and are written at the next block boundary,
   so neither cuts that call off nor splits a reply.
+- When a subagent finishes, the transcript says so in a short briefing, as
+  Claude Code does for a teammate: `● <name> finished  1m 35s · ↓1.8k`, then
+  the first lines of its reply, or its error, in up to two dim rows under the
+  name, ending in `…` where it said more. A dag node's child is named by its
+  node's label, any other agent by the short title the agent list shows. The
+  mark is green only for an agent that completed; a failed one reads `●
+  <name> failed` in red with its error under it, an interrupted one `▪ <name>
+  interrupted` and a cancelled one `○ <name> cancelled`, both muted. One
+  briefing per agent, in the order they finished, and nothing when one
+  starts. A briefing that arrives while a reply streams or a call runs waits
+  under it and is written at the next block boundary, so it never splits a
+  paragraph or a table. The messenger's replies are unchanged.
 - The OMH TUI asks the terminal for click reports only while the agent list
   is open, so during a turn the wheel scrolls and a drag selects as in any
   shell, and the agent view is reached with Down; nothing in it, and

@@ -46,14 +46,20 @@ from typing import Any
 from . import gateway_contract as contract
 from .keys import BUTTON_LEFT, CHAR, DOWN, ENTER, ESCAPE, LEFT, RIGHT, UP, Key, Mouse, Paste, list_nav_step
 from .layout import Budget, agent_view_cap, is_tiny, max_height
-from .dag_tree import TreeState, run_key, tree_lines
+from ..plugin_bundle.omh.hud_text import compact_count, elapsed_text
+from .dag_tree import TreeState, node_label, run_key, tree_lines
 from .panels import (
     RUNNING_NODE_STATES, agent_view_count, agent_view_keep, dag_run_summary, graph_is_dag, panel_lines,
 )
 from .style import Line, Span, Style
-from .subagents import FINISHED_STATUSES, MAIN_ID, OPEN_MARK, RUNNING, Hit
+from .subagents import (
+    COMPLETED, ENDED, FINISHED_STATUSES, INTERRUPTED, MAIN_ID, OPEN_MARK, RUNNING, TOKENS_MARK, Agent, Hit, short_title,
+)
 from .width import cell_width
-from .transcript import NOTICE_WARN, STEER_QUEUED, STEER_REFUSED, NoticeBlock, SteerBlock, as_text
+from .transcript import (
+    AGENT_CANCELLED, AGENT_FAILED, AGENT_FINISHED, AGENT_INTERRUPTED, NOTICE_WARN, STEER_QUEUED, STEER_REFUSED,
+    AgentDoneBlock, NoticeBlock, SteerBlock, as_text,
+)
 
 # The list Down opens (the agent view's rows, `layout.agent_view_cap` of them; a longer roster scrolls), and one
 # agent's log in the pager.
@@ -82,6 +88,8 @@ STEER_SAY = (
     "↪ steer · esc cancels",
 )
 AGENT_FINISHED_NOTICE = "{name} has finished; there is nothing to {action}."
+# How a finished agent's briefing names its end, by its status; every failure status is a failure.
+AGENT_OUTCOMES = {COMPLETED: AGENT_FINISHED, INTERRUPTED: AGENT_INTERRUPTED, ENDED: AGENT_CANCELLED}
 # An agent steer that settled after its session was left, as the main steer's notices say it, naming the agent and
 # the session it was for.
 AGENT_STEER_LEFT_NOTICE = (
@@ -756,6 +764,21 @@ class AgentViewMixin:
         # By run, not by node: a kept lane whose node left the drawing (a superseded repair) belongs to the run too.
         runs = frozenset(node_id.rpartition(":")[0] for node_id in ids if node_id.startswith("d:"))
         self._forget_agents(self.roster.drop_kept(runs))
+
+    def _brief_finished(self, agent: Agent) -> None:
+        """Brief an agent its `subagent.complete` just finished in the transcript (`transcript.AgentDoneBlock`): named
+        as the tree names its node while the graph binds it to one, else by its short title as the list names it,
+        with its time, its output tokens and what it said. Held under what is live and written at the next block
+        boundary (`Transcript.add_aside`), so it never splits a streaming reply or cuts off a running call."""
+        payload = self.hud.payload if self.hud is not None else None
+        name = ""
+        if isinstance(payload, Mapping) and not payload.get("error") and graph_is_dag(payload):
+            name = node_label(payload["delegation_graph"], self.roster, agent)
+        tokens = f"{TOKENS_MARK}{compact_count(agent.output_tokens)}" if agent.output_tokens else ""
+        facts = tuple(fact for fact in (elapsed_text(agent.elapsed(self.clock())), tokens) if fact)
+        outcome = AGENT_OUTCOMES.get(agent.status, AGENT_FAILED)
+        self.transcript.add_aside(AgentDoneBlock(name or short_title(agent.goal) or agent.name, outcome, facts,
+                                                 agent.reply))
 
     def _forget_agents(self, dropped: frozenset[str]) -> None:
         """Forget a pending `x`, a picked steer and the tail misses of the agents the roster just `dropped`."""

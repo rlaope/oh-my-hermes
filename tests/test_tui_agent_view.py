@@ -33,7 +33,7 @@ from omh.tui.panels import SPINNER_FRAMES
 from omh.tui.style import Span
 from omh.tui.subagents import Roster
 from omh.tui.theme import DEFAULT_THEME
-from omh.tui.transcript import NoticeBlock
+from omh.tui.transcript import AGENT_FAILED, AGENT_FINISHED, AgentDoneBlock, NoticeBlock
 from omh.tui.width import line_width
 
 STARTS = FRAMES[:2]  # both recorded agents started, neither finished
@@ -165,10 +165,13 @@ class RosterFeedTests(unittest.TestCase):
         app._on_event(Event(FRAMES[0][0], None, FRAMES[0][1]))
         self.assertEqual(app.roster.agents, {})
 
-    def test_a_subagent_event_adds_nothing_to_the_transcript(self) -> None:
+    def test_a_subagent_event_adds_to_the_transcript_only_the_briefing_of_an_agent_it_finished(self) -> None:
         app, _client = make_app()
-        relay(app)
+        relay(app, [frame for frame in FRAMES if frame[0] != "subagent.complete"])
         self.assertEqual(app.transcript.blocks, [])
+        relay(app)  # the recording's completes: one per agent finished, the second agent's repeated one ignored
+        self.assertEqual([(type(block), block.outcome) for block in app.transcript.blocks],
+                         [(AgentDoneBlock, AGENT_FINISHED), (AgentDoneBlock, AGENT_FAILED)])
 
     def test_a_payload_that_is_not_a_subagents_never_raises_into_the_loop(self) -> None:
         app, _client = make_app(busy=True)
@@ -785,7 +788,10 @@ class RoomTests(unittest.TestCase):
         for number in range(running + done):
             agent_event(app, "start", f"sa-{number}", goal=f"task {number}")
             if number >= running:
-                agent_event(app, "complete", f"sa-{number}", goal=f"task {number}", status="completed")
+                # Folded into the roster alone: the app would also brief each in the transcript (`AgentDoneBlock`),
+                # whose rows would move the region these cases place on the screen.
+                app.roster.apply("subagent.complete", payload(f"sa-{number}", goal=f"task {number}",
+                                                              status="completed"), 0.0)
         return app
 
     def test_on_the_bottom_rows_the_view_keeps_its_rows_when_the_turn_ends_so_the_composer_stays(self) -> None:
