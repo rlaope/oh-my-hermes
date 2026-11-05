@@ -23,8 +23,10 @@ painted, as `tests/test_tui_agent_mouse.py` reads it: columns and rows from 1.
 from __future__ import annotations
 
 import base64
+import signal
 import time
 import unittest
+from unittest.mock import patch
 
 from _tui_gateway_replay import Scenario, spans
 from _vt_screen import VTScreen
@@ -564,6 +566,8 @@ class TurnTests(unittest.TestCase):
 
 class ButtonTests(unittest.TestCase):
     def test_a_press_whose_release_never_comes_stops_holding_esc_once_reports_go_off(self) -> None:
+        # Ctrl+Z stops the job only where the platform has SIGTSTP (`App._suspend`); the subcase sets it either way, so
+        # it runs the same on Windows CI, where `signal` has none.
         for leave in ("resize", "suspend"):
             with self.subTest(leave=leave):
                 app = main_app()
@@ -573,8 +577,23 @@ class ButtonTests(unittest.TestCase):
                 if leave == "resize":
                     app._on_resize()
                 else:
-                    app._suspend()
+                    with patch.object(signal, "SIGTSTP", getattr(signal, "SIGTSTP", 20), create=True):
+                        app._suspend()
+                self.assertFalse(app.terminal.mouse_reporting)  # type: ignore[attr-defined]
                 self.assertFalse(app.button_held)
+
+    def test_where_ctrl_z_stops_nothing_reports_stay_on_and_the_release_still_ends_the_press(self) -> None:
+        # No SIGTSTP (no job control): `_suspend` does nothing, so reports never go off and the release arrives as
+        # usual; the press is held until then, as it should be.
+        app = main_app()
+        row = row_of(app, "first line")
+        press(app, 5, row)
+        with patch.object(signal, "SIGTSTP", None, create=True):
+            app._suspend()
+        self.assertTrue(app.terminal.mouse_reporting)  # type: ignore[attr-defined]
+        self.assertTrue(app.button_held)
+        release(app, 5, row)
+        self.assertFalse(app.button_held)
 
 
 class ComposerFrameTests(unittest.TestCase):
