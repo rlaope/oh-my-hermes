@@ -41,6 +41,20 @@ All notable changes will be documented here.
   `--channel preview` instead of updating to a release and recording it as a
   `main` build.
 
+- **A drag in the OMH TUI copies the transcript without the rail.** The main
+  screen now takes the mouse: a drag over the transcript or the live rows
+  selects the text (shown reversed) and copies it without the thin `┃` rail
+  or a reply's margin, which stay drawn as before; the row above the composer
+  says `copied N chars`, and a double click copies a word, a triple click a
+  row. The wheel up opens the transcript view (Ctrl+O's), one notch up from
+  where the screen was. It works on every terminal that reports the mouse,
+  inside tmux with `mouse` on or off; a row the TUI cannot map for certain
+  (the shell's output above the session) is never guessed at, a drag whose
+  live rows change under it is dropped and copies nothing, Ctrl+C right after
+  a drag only drops the selection, and the
+  terminal's own selection is still there with its bypass modifier (Shift,
+  Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
+  terminal's own wheel and selection on the main screen, as before.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check
@@ -88,6 +102,18 @@ All notable changes will be documented here.
   Procedure steps name what survives each failure, Recovery Notes cover each
   skill's own blockers, and catalog checks keep both in place. The idea comes
   from PortSwigger Burp AT research skills.
+- **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
+  the machine sleeps past the session's turn lease, Hermes stops the running
+  turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
+  on." It now says it sends that `continue` in 3 s, with Esc to cancel, and then
+  sends it as a typed `continue` goes. It never does so for the person's own Esc,
+  `/stop` or interrupting prompt, for a turn that ended with an error, or for a
+  turn this TUI did not send (another client's on a shared gateway, whose stop
+  looks the same from here). Anything the person sends in the wait (a prompt,
+  `/stop`, `/help`, `/new`), a turn that starts, or another session opened
+  cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
+  or an open question holds it, and a notice says to send `continue`. At most 2
+  go between two prompts of the person's own; past that the old notice asks.
 
 ## 4.0.6 - 2026-11-04
 

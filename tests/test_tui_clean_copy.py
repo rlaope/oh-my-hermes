@@ -1,8 +1,10 @@
 """What a selection copies: the rail on the main screen, and the pager's own drag to copy without it (the owner's
 request of 2026-10-28, "the blue line on the left gets copied with the text").
 
-On the main screen the transcript lives in the terminal's own scrollback and
-the terminal's own selection copies it, rail and all: the rail a block hangs on
+On the main screen the transcript lives in the terminal's own scrollback, and
+the terminal's own selection (its bypass modifier, or `OMH_TUI_MOUSE=0`) copies
+it, rail and all; the OMH TUI's own drag there copies without it
+(`tests/test_tui_main_mouse.py`). The rail a block hangs on
 is the thin `┃` in its colour (the owner's choice of 2026-10-30, after the
 painted full cell of #2371 read too heavy), and without colour your prompt's is
 the light `│`. The pager (alternate screen) takes the mouse with a held
