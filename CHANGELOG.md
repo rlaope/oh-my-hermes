@@ -18,6 +18,24 @@ All notable changes will be documented here.
   a run. It is not shown when Hermes' `model_map` backend offers no option
   for `review` but does for `unspecified-high`. Verify nodes are not linted,
   and neither are nodes whose label only reads like a review.
+- **dag-ulw refuses two nodes that write one file under different spellings.**
+  `omh_dag` define, repair and extend refused a shared write scope with no
+  direct edge only when both nodes wrote the same entry character for
+  character, so `src/` beside `src/x.py`, `./src/x.py` beside `src/x.py` and
+  `src/*.py` beside `src/x.py` ran in parallel and could overwrite each
+  other. Entries are now compared as paths: `\` reads as `/`, letter case,
+  `./`, repeated or trailing `/` and `x/..` change nothing, and an entry
+  covers every path under it by whole segments (`src/a` and `src/ab` stay
+  apart). A `*` or `?` glob beside a file name with a suffix must match it,
+  with `**/` matching no directory too (`*.md` meets `docs/a.md`, not
+  `src/x.py`; `src/**/*.py` meets `src/x.py`). Beside a directory, a name
+  with no suffix or another glob, it covers the directory before it. A `[`
+  stays a literal, so `app/[slug]/page.tsx` names one file. The refusal still
+  reads `write_scope_overlap`, now names every overlapping pair at once (up
+  to 20, then a count) and which node wrote which entry, and a repair, like
+  an extend, is checked only for pairs with one of its own new nodes, so two
+  earlier nodes it cannot change never refuse it. The coding fanout
+  contract's boundary check still compares as written.
 - **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
   of the hollow `○`.** Four finished agents in a row looked the same as four
   that had not started. A completed agent now leads with `✓` in the done

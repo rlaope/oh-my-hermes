@@ -84,6 +84,7 @@ MAX_NAME_CHARS: Final = 48
 MAX_GOAL_CHARS: Final = 240
 MAX_SCOPE_ENTRIES: Final = 16
 MAX_SCOPE_CHARS: Final = 200
+OVERLAPS_NAMED: Final = 20  # pairs one write_scope_overlap refusal names; the rest are counted
 MAX_REASON_CHARS: Final = 200
 MAX_REPAIR_CYCLES: Final = 2
 REPLAN_CYCLE: Final = MAX_REPAIR_CYCLES
@@ -419,11 +420,17 @@ def _require_graph(
 ) -> None:
     """The hard rejects over a whole graph: references, cycles, and write scopes shared without an edge.
 
+    Scopes are compared as paths (`dag_core.shared_scope_pairs` ``as_paths``):
+    ``./src/x.py`` is ``src/x.py``, ``src/`` holds it, and ``src/*.py`` matches
+    it. One refusal names every overlapping pair in the check, and which node
+    wrote which entry, so a directory entry is not refused one pair per round.
+
     ``editable`` limits the scope check to pairs of those nodes: a repair is
     checked against the nodes that can still run, not against finished ones.
     ``involving`` limits it further to pairs with one of those nodes in them:
-    an extend round is checked against the run's earlier nodes, not the run
-    against itself again. ``before`` adds orderings the scope check counts as
+    a repair or an extend round is checked against the run's earlier nodes,
+    not the run against itself again (two earlier nodes are not the new
+    nodes' to change). ``before`` adds orderings the scope check counts as
     edges, {node: nodes ordered before it}: a repair group runs before every
     node that waits on the node it repairs.
     """
@@ -443,15 +450,21 @@ def _require_graph(
         raise DagRefusal("dependency_cycle", f"These nodes depend on each other in a circle: {', '.join(stuck)}.")
     checked = set(editable) if editable is not None else known
     new = set(involving)
-    scopes = [(str(node["id"]), node["write_scope"]) for node in nodes]
+    scopes = {str(node["id"]): node["write_scope"] for node in nodes}
     ordered = {node: [*listed, *(before or {}).get(node, ())] for node, listed in parents.items()}
-    for first, second, shared, joined in dag_core.shared_scope_pairs(scopes, ordered):
-        if not joined and first in checked and second in checked and (not new or first in new or second in new):
-            raise DagRefusal(
-                "write_scope_overlap",
-                f"Nodes {first} and {second} both write {', '.join(shared)} with no edge between them; "
-                "make one depend on the other or split the scope.",
-            )
+    overlaps = [
+        f"{first} writes {', '.join(entry for entry in shared if entry in scopes[first])} and "
+        f"{second} writes {', '.join(entry for entry in shared if entry in scopes[second])}"
+        for first, second, shared, joined in dag_core.shared_scope_pairs(list(scopes.items()), ordered, as_paths=True)
+        if not joined and first in checked and second in checked and (not new or first in new or second in new)
+    ]
+    if overlaps:
+        raise DagRefusal(
+            "write_scope_overlap",
+            f"These nodes write overlapping paths with no edge between them: {'; '.join(overlaps[:OVERLAPS_NAMED])}"
+            f"{f' and {len(overlaps) - OVERLAPS_NAMED} more pairs' if len(overlaps) > OVERLAPS_NAMED else ''}. "
+            "Make one of each pair depend on the other, or split the scope.",
+        )
 
 
 def markerless_nodes(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
@@ -1430,7 +1443,7 @@ def repair(
     # dependent writing what the group writes is ordered, not an overlap.
     every = {str(node["id"]): node["depends_on"] for node in record["nodes"]}
     below = {key: sorted(group) for key in every if root in ancestors(key, every)}
-    _require_graph(list(record["nodes"]) + added, editable=group | runnable, before=below)
+    _require_graph(list(record["nodes"]) + added, editable=group | runnable, involving=group, before=below)
     _require_oneshot_room(added, oneshot_remaining, "repair")
     record["nodes"].extend(added)
     groups.append([str(node["id"]) for node in added])
