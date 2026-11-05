@@ -26,12 +26,18 @@ or withdrawn by the gateway. Three rules shape this module:
 A question answered by picking (`PromptSlot.picking`: an approval, or a
 clarify question with choices) lists its choices, each from a row of its own
 and wrapped when long, the highlighted one marked `❯`, and the app hides the
-composer while it is open. A clarify
-question's last row opens a text field for an answer of the person's own
-(Hermes' wording, "Other (type your answer)"); while that field is open the
-composer is the field. Every slot row hangs off a `▌` bar, in the warn colour
-for an approval and grey for anything else, so a question Hermes asked
-never reads as panel or transcript text.
+composer while it is open. A clarify question with choices is drawn the way
+Claude Code draws AskUserQuestion (`_framed_lines`): between two rules across
+the width, its asked sentence bold under the context Hermes wrote before it
+(dim, capped), a `label — description` choice as its label with the
+description dim under it, a last row that opens a text field for an answer of
+the person's own ("Type something."; while that field is open the composer is
+the field), and its keys on its own row under the bottom rule rather than on
+the info line. On a question written in Korean that row reads "직접 입력",
+Hermes' "(Recommended)" tag reads "(권장)" and the keys are Korean; what a
+pick sends back is Hermes' own string either way. Every other slot row hangs
+off a `▌` bar, in the warn colour for an approval and grey for anything else,
+so a question Hermes asked never reads as panel or transcript text.
 
 An approval shows its command one command per row (`command_risk`), the
 ones that destroy something in full after a `▲`. Every command is listed when
@@ -57,6 +63,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 import json
 import os
+import re
 import sys
 from typing import Any
 
@@ -104,8 +111,43 @@ RULE_CELLS = 60  # the faint rule between the command and the choices, at most
 _DENY_KEYS = frozenset("dn")
 # The keys that pick a clarify choice. `str.isdigit` also admits "²" or "٣", which `int` rejects.
 CHOICE_DIGITS = "123456789"
-# The last row of a clarify question's choices: it opens a text field (Hermes' Ink TUI, `prompt.clarify.other`).
-CLARIFY_OTHER = "Other (type your answer)"
+# The last row of a clarify question's choices: it opens a text field (Claude Code's AskUserQuestion wording).
+CLARIFY_OTHER = "Type something."
+# The same row, and the tag Hermes puts on the recommended choice (`RECOMMENDED_TAG`), on a question written in
+# Korean (`_korean_question`). Display only: a picked choice is still answered with Hermes' own string.
+CLARIFY_OTHER_KO = "직접 입력"
+RECOMMENDED_TAG_KO = "(권장)"
+# A choice written `label — description` shows the label on its numbered row and the description dim under it
+# (`_choice_parts`). One separator, spaces included, so a dash inside a word or a range never splits a choice.
+CHOICE_DESCRIPTION = " — "
+# The rule above and below a clarify question with choices (`_framed_lines`), across the whole width.
+FRAME_RULE = "─"
+# How many rows the context before a clarify question's asked sentence keeps, dim, before Ctrl+O shows the rest.
+LEAD_ROWS = 3
+MULTI_NOTE_KO = " (여러 개 선택 가능)"
+# The framed question's own key row, under its bottom rule, for what the keys do now: longest form that fits first,
+# Korean on a question written in Korean. The info line says nothing then (`framed`).
+CLARIFY_FOOTERS = {
+    "choice": (
+        ("Enter to select · ↑↓ to navigate · 1-9 picks · type to answer · Esc to cancel",
+         "Enter to select · ↑↓ to navigate · Esc to cancel", "Esc to cancel"),
+        ("Enter 선택 · ↑↓ 이동 · 1-9 바로 선택 · 입력하면 직접 답변 · Esc 취소", "Enter 선택 · ↑↓ 이동 · Esc 취소", "Esc 취소"),
+    ),
+    "closed": (
+        ("Enter to select · ↑↓ to navigate · 1-9 picks · Esc to cancel",
+         "Enter to select · ↑↓ to navigate · Esc to cancel", "Esc to cancel"),
+        ("Enter 선택 · ↑↓ 이동 · 1-9 바로 선택 · Esc 취소", "Enter 선택 · ↑↓ 이동 · Esc 취소", "Esc 취소"),
+    ),
+    "multi": (
+        ("Space to tick · Enter to send · ↑↓ to navigate · type to answer · Esc to cancel",
+         "Space to tick · Enter to send · Esc to cancel", "Esc to cancel"),
+        ("Space 체크 · Enter 보내기 · ↑↓ 이동 · 입력하면 직접 답변 · Esc 취소", "Space 체크 · Enter 보내기 · Esc 취소", "Esc 취소"),
+    ),
+    "field": (
+        ("Enter to send · ↑↓ back to the choices · Esc to cancel", "Enter to send · Esc to cancel", "Esc to cancel"),
+        ("Enter 보내기 · ↑↓ 선택지로 · Esc 취소", "Enter 보내기 · Esc 취소", "Esc 취소"),
+    ),
+}
 # A question the TUI asks itself (the app's model confirmation) sets this to True: its choices are the only answers,
 # so it has no text field's row. Hermes' own questions never carry it.
 CLOSED_CHOICES = "omh_closed_choices"
@@ -241,8 +283,15 @@ class PromptSlot:
         return self.method == "clarify" and bool(self._current_choices()) and not self.typing
 
     @property
+    def framed(self) -> bool:
+        """Whether the slot draws a clarify question with choices between two rules, with its keys on its own row
+        under them (`_framed_lines`), so the info line says none."""
+        return self.method == "clarify" and bool(self._current_choices())
+
+    @property
     def keys(self) -> tuple[str, ...]:
-        """The keys this question takes now, longest form first, said on the info line."""
+        """The keys this question takes now, longest form first, said on the info line (a framed question's are on
+        its own footer instead, `CLARIFY_FOOTERS`)."""
         if self.method == "approval":
             return APPROVAL_KEYS
         if self.method == "clarify":
@@ -517,20 +566,27 @@ class PromptSlot:
 
     # -- rendering --------------------------------------------------------------------------
 
-    def lines(self, width: int, theme: Theme, max_rows: int, waiting: int = 0, whole: bool = False) -> list[Line]:
-        """The slot's rows, at most `max_rows`; the question's keys are the info line's (`keys_while`).
+    def lines(
+        self, width: int, theme: Theme, max_rows: int, waiting: int = 0, whole: bool = False, waited: str = "",
+    ) -> list[Line]:
+        """The slot's rows, at most `max_rows`; the question's keys are the info line's (`keys_while`), or a framed
+        question's own (`_framed_lines`).
 
         A list keeps the highlighted row whatever the budget (`_fit`). A
         question with no list keeps its first row and its last ones. Whatever
         is cut, a marker says Ctrl+O shows the question whole. `waiting`
         questions queued behind this one are counted after its first words.
         `whole` draws an approval's command as Hermes sent it instead of by
-        command (`whole_lines`).
+        command, and a clarify question's context uncut (`whole_lines`).
+        `waited` is how long the person has been asked, said on a framed
+        question's key row.
         """
         if max_rows <= 0:
             return []
         inner = max(width - len(SLOT_BAR), 1)
         queued: Line = (Span(WAITING.format(count=waiting, s="s" if waiting != 1 else ""), theme.muted),) if waiting else ()
+        if self.framed:
+            return self._framed_lines(width, theme, max_rows, queued, whole, waited)
         if self.method == "approval":
             rows = self._approval_lines(inner, theme, max_rows, queued, whole)
         elif self.method == "clarify":
@@ -539,25 +595,29 @@ class PromptSlot:
             # The header and the hint matter most; the body is what gets cut.
             rows = _keep_ends(self._value_lines(inner, theme, queued), max_rows, inner, theme)
         bar = Span(SLOT_BAR, theme.warn if self.method == "approval" else theme.muted)
-        # A highlighted choice's band (a fill span) runs on to the right edge past the cut.
-        return [(*truncate_line((bar, *truncate_line(row, inner)), width), *(row[-1:] if row and is_fill(row[-1]) else ()))
-                for row in rows]
+        return [_barred(row, bar, width) for row in rows]
 
     def whole_lines(self, width: int, theme: Theme, waiting: int = 0) -> list[Line]:
         """Every row of the question, nothing cut, an approval's command whole as Hermes sent it: what Ctrl+O pages
         while it is open (the pager has its own keys)."""
         return self.lines(width, theme, sys.maxsize, waiting=waiting, whole=True)
 
-    def _choice_rows(self, labels: list[tuple[str, str]], width: int, theme: Theme, mark_style: Style) -> list[list[Line]]:
-        """Each `(lead, label)` as its rows: the label wrapped under its lead (a number), whole, so a tag at its end
-        (Hermes' `(Recommended)`) shows; the highlighted one marked `❯` and highlighted."""
+    def _choice_rows(
+        self, labels: list[tuple[str, str, str]], width: int, theme: Theme, mark_style: Style,
+    ) -> list[list[Line]]:
+        """Each `(lead, label, description)` as its rows: the label wrapped under its lead (a number), whole, so a tag
+        at its end (`(Recommended)`) shows, and the description dim under the label; the highlighted one marked `❯`
+        and highlighted."""
         rows: list[list[Line]] = []
-        for index, (lead, label) in enumerate(labels):
+        for index, (lead, label, description) in enumerate(labels):
             current = index == self.selected
             style = theme.menu_current if current else theme.text
             first: Line = (Span(CHOICE_MARK if current else " " * len(CHOICE_MARK), mark_style), Span(lead, style))
             rest: Line = (Span(" " * (len(CHOICE_MARK) + cell_width(lead))),)
-            rows.append(wrap_prefixed((Span(label, style),), first, rest, width))
+            wrapped = wrap_prefixed((Span(label, style),), first, rest, width)
+            if description:
+                wrapped += wrap_prefixed((Span(description, theme.muted),), rest, rest, width)
+            rows.append(wrapped)
         return rows
 
     def _span(self, choices: list[list[Line]], room: int) -> tuple[int, int]:
@@ -815,32 +875,92 @@ class PromptSlot:
         return rows
 
     def _clarify_lines(self, width: int, theme: Theme, max_rows: int, queued: Line) -> list[Line]:
-        """The question (its counter when there are several), then its choices and the text field's row.
-
-        A question with no choices says how to answer under it instead.
-        """
+        """A clarify question with no choices: the question, and how to answer it under it (one with choices is
+        `_framed_lines`)."""
         question = self._current_question()
         if question is None:
             return []
         total = len(self._questions())
         counter = f" ({self.question_index + 1}/{total})" if total > 1 else ""
-        note: Line = (Span(MULTI_NOTE, theme.muted),) if self._multi() else ()
         head: list[Line] = list(
-            wrap_line(
-                (Span("? ", theme.user), Span(str(question.get("question", "")) + counter, theme.text), *note, *queued),
-                width,
-            )
+            wrap_line((Span("? ", theme.user), Span(str(question.get("question", "")) + counter, theme.text), *queued),
+                      width)
         )
+        return _keep_ends([*head, (Span("  type an answer and press enter · esc cancels", theme.hint),)], max_rows,
+                          width, theme)
+
+    def _framed_lines(
+        self, width: int, theme: Theme, max_rows: int, queued: Line, whole: bool, waited: str,
+    ) -> list[Line]:
+        """A clarify question with choices, as Claude Code draws AskUserQuestion: a rule across the width, the
+        question, its choices, a rule, and a row saying the keys.
+
+        The question's asked sentence is bold, and the context Hermes wrote
+        before it dim above it, at most `LEAD_ROWS` rows unless `whole`
+        (`question_parts`); a choice's description is dim under its label
+        (`_choice_parts`). On a question written in Korean the recommended tag,
+        the text field's row and the keys are Korean. When rows run short the
+        blank row goes first, then the two rules; the key row stays while two
+        rows of the question are left, the context gives way before the asked
+        sentence, and `_fit` cuts the rest as it cuts any question.
+        """
+        question = self._current_question() or {}
+        text = str(question.get("question", ""))
+        korean = _korean_question(text)
+        inner = max(width - len(SLOT_BAR), 1)
+        total = len(self._questions())
+        counter = f" ({self.question_index + 1}/{total})" if total > 1 else ""
+        note: Line = (Span(MULTI_NOTE_KO if korean else MULTI_NOTE, theme.muted),) if self._multi() else ()
+        lead, asked = question_parts(text)
+        lead_rows = [row for part in lead.splitlines() if part.strip()
+                     for row in wrap_line((Span(part.strip(), theme.muted),), inner)]
+        if not whole and len(lead_rows) > LEAD_ROWS:
+            lead_rows = [*lead_rows[: LEAD_ROWS - 1], _ends_with_more(lead_rows[LEAD_ROWS - 1], inner, theme)]
+        asked_parts = [part.strip() for part in asked.splitlines() if part.strip()] or [""]
+        asked_rows: list[Line] = []
+        for index, part in enumerate(asked_parts):
+            tail: Line = (Span(counter, theme.user), *note, *queued) if index == len(asked_parts) - 1 else ()
+            asked_rows += wrap_line((Span(part, theme.user), *tail), inner)
         choices = self._current_choices()
-        if not choices:
-            return _keep_ends([*head, (Span("  type an answer and press enter · esc cancels", theme.hint),)], max_rows,
-                              width, theme)
-        rows = [*choices, CLARIFY_OTHER] if self._other_row() else choices
-        labels = [(f"{number}. ", choice) for number, choice in enumerate(rows, start=1)]
+        entries = [_choice_parts(choice, korean) for choice in choices]
+        if self._other_row():
+            entries.append((CLARIFY_OTHER_KO if korean else CLARIFY_OTHER, ""))
+        leads = [f"{number}. " for number in range(1, len(entries) + 1)]
         if self._multi():
             boxes = [TICKED if choice in self.ticked else UNTICKED for choice in choices] + [" " * len(UNTICKED)]
-            labels = [(box + lead, label) for box, (lead, label) in zip(boxes, labels)]
-        return self._fit(head, [], self._choice_rows(labels, width, theme, theme.user), max_rows, width, theme)
+            leads = [box + lead for box, lead in zip(boxes, leads)]
+        choice_rows = self._choice_rows(
+            [(lead, label, description) for lead, (label, description) in zip(leads, entries)], inner, theme, theme.user
+        )
+        listed = sum(len(choice) for choice in choice_rows)
+        natural = len(lead_rows) + len(asked_rows) + listed
+        # The key row first: the info line says none of them while the question is framed. The rules and the blank
+        # row between the question and its choices only when nothing is cut for them.
+        room = max_rows
+        footer = room - 1 >= min(natural, 2)
+        room -= footer
+        ruled = not self.typing and room - 2 >= natural  # with the field open the composer's rules stand under it
+        room -= 2 * ruled
+        blank = room - 1 >= natural  # a row of the head below, so `room` keeps it
+        # Rows run short: the context gives way before the asked sentence does, and Ctrl+O still shows it.
+        keep = max(room - len(asked_rows) - listed, 0)
+        if lead_rows and keep < len(lead_rows):
+            lead_rows = [*lead_rows[: keep - 1], _ends_with_more(lead_rows[keep - 1], inner, theme)] if keep else []
+            if not keep:
+                asked_rows[-1] = _ends_with_more(asked_rows[-1], inner, theme)
+        head = [*lead_rows, *asked_rows, *([()] if blank else [])]
+        bar = Span(SLOT_BAR, theme.muted)
+        rule: Line = (Span(FRAME_RULE * width, theme.faint),)
+        body = [_barred(row, bar, width) for row in self._fit(head, [], choice_rows, room, inner, theme)]
+        rows = [rule, *body, rule] if ruled else body
+        if footer:
+            state = "field" if self.typing else "closed" if not self._other_row() else "multi" if self._multi() else "choice"
+            forms = CLARIFY_FOOTERS[state][1 if korean else 0]
+            said = [f"{form} · {waited}" for form in forms] + list(forms) if waited else list(forms)
+            indent = " " * len(SLOT_BAR)
+            fits = [form for form in said if cell_width(indent + form) <= width]
+            rows.append(truncate_line((Span(indent + (fits[0] if fits else said[-1]), theme.hint),), width))
+        return rows
 
     def _value_lines(self, width: int, theme: Theme, queued: Line) -> list[Line]:
         label = {
@@ -876,6 +996,60 @@ def _without_recommended(text: object) -> str:
     if stripped.casefold().endswith(RECOMMENDED_TAG.casefold()):
         return stripped[: -len(RECOMMENDED_TAG)].strip()
     return stripped
+
+
+def _barred(row: Line, bar: Span, width: int) -> Line:
+    """A slot row behind its bar, cut to `width`; a highlighted choice's band (a fill span) runs on to the right edge
+    past the cut."""
+    return (*truncate_line((bar, *truncate_line(row, max(width - len(SLOT_BAR), 1))), width),
+            *(row[-1:] if row and is_fill(row[-1]) else ()))
+
+
+def _choice_parts(choice: str, korean: bool) -> tuple[str, str]:
+    """A clarify choice as `(label, description)`: split at its first `CHOICE_DESCRIPTION` when text stands on both
+    sides, else the whole choice and no description; Hermes' `(Recommended)` at its end goes on the label, in Korean
+    on a question written in Korean. Display only."""
+    bare = _without_recommended(choice)
+    label, separator, description = bare.partition(CHOICE_DESCRIPTION)
+    if not (separator and label.strip() and description.strip()):
+        label, description = bare, ""
+    if bare != choice.strip():
+        label = f"{label.strip()} {RECOMMENDED_TAG_KO if korean else RECOMMENDED_TAG}"
+    return label.strip(), description.strip()
+
+
+# Where a sentence ends: after `.`, `!` or `?` (or their full-width forms) and the space after it, or a line break.
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?。！？])\s+|\n+")
+
+
+def question_parts(text: str) -> tuple[str, str]:
+    """A clarify question as `(context, asked)`: the asked part from its last sentence ending in `?` (with what
+    follows it), else its last paragraph, else all of it; the context is everything before. Nothing is dropped:
+    the two parts, joined, are the question."""
+    text = text.strip()
+    starts = [0, *(match.end() for match in _SENTENCE_BREAK.finditer(text))]
+    sentences = [(start, text[start:end].strip()) for start, end in zip(starts, [*starts[1:], len(text)])]
+    asking = [start for start, sentence in sentences if sentence.endswith(("?", "？"))]
+    if asking:
+        cut = asking[-1]
+    else:
+        paragraphs = [match.end() for match in re.finditer(r"\n\s*\n", text)]
+        cut = paragraphs[-1] if paragraphs else 0
+    return text[:cut].strip(), text[cut:].strip()
+
+
+_HANGUL = re.compile(r"[\u1100-\u11ff\u3131-\u318e\uac00-\ud7a3]")
+_LATIN = re.compile(r"[A-Za-z]")
+
+
+def _korean_question(text: str) -> bool:
+    """Whether a clarify question is written in Korean: at least as many of its words hold Hangul as hold Latin
+    letters and no Hangul, and one does. Words, not letters, because a Hangul syllable is one character where an
+    English word is several, and a Korean question naming `distribution (macos-latest)` is still Korean."""
+    words = text.split()
+    hangul = sum(1 for word in words if _HANGUL.search(word))
+    latin = sum(1 for word in words if _LATIN.search(word) and not _HANGUL.search(word))
+    return hangul > 0 and hangul >= latin
 
 
 def _home_short(text: str, home: str) -> str:

@@ -664,6 +664,7 @@ BUSY_MODES = frozenset({"queue", "steer", "interrupt"})
 STATE_IDLE = "idle"
 STATE_RUNNING = "running"
 STATE_WAITING = "waiting on you"
+WAIT_SHOWN_SECONDS = 60.0  # a framed clarify question's key row says how long it waited from this on
 # What each state is in herdr's agent list, when the TUI runs in a herdr pane (`herdr.py`).
 HERDR_STATES = {STATE_IDLE: "idle", STATE_RUNNING: "working", STATE_WAITING: "blocked"}
 WAITING_GLYPH = "? "  # in place of the spinner while a question waits on the person
@@ -7529,7 +7530,8 @@ class App(ModesMixin, AgentViewMixin):
         steered = self.roster.agents.get(self.agent_steer or "")
         picker_keys = self._picker_keys()
         if self.slot is not None:
-            say = self.slot.keys_while(self._busy())
+            # A framed clarify question says its keys on its own row, under its bottom rule (`PromptSlot.framed`).
+            say = "" if self.slot.framed else self.slot.keys_while(self._busy())
         elif picker_keys:
             say = picker_keys
         elif self.list_selected is not None:
@@ -7688,11 +7690,14 @@ class App(ModesMixin, AgentViewMixin):
         if self.tail_spacer:
             lines.append(())
         if self._busy() and self.waiting_since is not None:
-            # The turn waits on the person: no spinner, and one clock, the wait's.
-            waited = elapsed_text(now - self.waiting_since)
-            row = (Span(WAITING_GLYPH, self.theme.user), Span(STATE_WAITING, self.theme.text),
-                   Span(f" ({waited})", self.theme.muted))
-            lines.append(truncate_line(row, cols))
+            # The turn waits on the person: no spinner, and one clock, the wait's. A framed clarify question
+            # carries that clock on its own key row (`PromptSlot.framed`), where the person is looking, as
+            # Hermes' 60-minute clarify timeout makes it worth seeing; this row would only repeat it.
+            if self.slot is None or not self.slot.framed:
+                waited = elapsed_text(now - self.waiting_since)
+                row = (Span(WAITING_GLYPH, self.theme.user), Span(STATE_WAITING, self.theme.text),
+                       Span(f" ({waited})", self.theme.muted))
+                lines.append(truncate_line(row, cols))
         elif self._busy() and self.interrupting:
             elapsed = elapsed_text(now - (self.busy_since or now))
             written = f" · ↓{compact_count(self.turn_shown)} tokens" if self.turn_shown else ""
@@ -7784,7 +7789,11 @@ class App(ModesMixin, AgentViewMixin):
             return []
         # The info line says a question's or a picker's keys at every height; their rows do not.
         if self.slot is not None:
-            return self.slot.lines(cols, self.theme, cap, waiting=len(self.waiting_requests))
+            # Hermes gives up on a clarify after an hour, so the key row says how long it has waited once that
+            # is a minute or more (`WAIT_SHOWN_SECONDS`); a fresh question says nothing about time.
+            seconds = self.clock() - self.waiting_since if self.waiting_since is not None else 0.0
+            waited = elapsed_text(seconds) if seconds >= WAIT_SHOWN_SECONDS else ""
+            return self.slot.lines(cols, self.theme, cap, waiting=len(self.waiting_requests), waited=waited)
         front = self._front_picker()  # the one `_on_input` gives the keys to
         if front is not None and front is self.launch_picker:
             shown = [] if self.card_state == CARD_LIVE else self._launch_preview(cols)

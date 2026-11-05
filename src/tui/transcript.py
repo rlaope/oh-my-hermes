@@ -118,6 +118,7 @@ from .markdown import (
     wrap_prefixed,
 )
 from .style import NO_COLOR, Line, Span, Style, fill
+from .prompts import question_parts
 from .slash import slash_spans, slash_token_ranges
 from .theme import TOOL_FAMILIES, Theme, kind_style, on_band
 from .width import cell_width, cluster_width, clusters, line_width, truncate, truncate_left, truncate_line
@@ -659,7 +660,21 @@ def _args_summary(payload: dict[str, Any]) -> str:
     return _GOAL_MARKERS.sub("", summary).strip() if as_text(payload.get("name")) == "delegate_task" else summary
 
 
+def _clarify_summary(payload: dict[str, Any]) -> str:
+    """A clarify call's row: its first question's asked sentence (`question_parts`), at most `CLARIFY_SUMMARY_CELLS`,
+    since the picker under it shows the whole question; "" when the call carries none."""
+    args = payload.get("args")
+    questions = args.get("questions") if isinstance(args, dict) else None
+    first = questions[0] if isinstance(questions, list) and questions and isinstance(questions[0], dict) else {}
+    text = as_text(first.get("question")) or as_text(payload.get("context"))
+    return truncate(_first_line(question_parts(text)[1]), CLARIFY_SUMMARY_CELLS)
+
+
 def _call_summary(payload: dict[str, Any]) -> str:
+    if as_text(payload.get("name")) == CLARIFY_TOOL:
+        asked = _clarify_summary(payload)
+        if asked:
+            return asked
     context = _first_line(as_text(payload.get("context")))
     if context and as_text(payload.get("name")) in BRIDGE_TOOLS:
         return context.replace(LABEL_SEPARATOR, ": ", 1)  # the transcript's own field separator: `· 1 tool` is a count
@@ -698,6 +713,7 @@ _ERROR_KEYS = ("error", "stderr", "user_summary", "output")
 _DENIED_KEYS = ("user_summary", "error", "output")
 DENIED_LINE = "denied"  # a denied call whose result says nothing more
 CLARIFY_TOOL = "clarify"  # the Hermes tool a clarify question comes from
+CLARIFY_SUMMARY_CELLS = 60  # a clarify call's row says this much of what it asks (`_clarify_summary`)
 # Hermes' clarify `outcome` for a question that went unanswered (beside `submitted`), worded for the row under its ✗.
 UNANSWERED_OUTCOMES = {"cancelled": "cancelled", "timed_out": "timed out", "undelivered": "not delivered"}
 TOOL_OUTPUT_ROWS = 3  # shown under a tool row; the details view shows up to TOOL_OUTPUT_KEEP
