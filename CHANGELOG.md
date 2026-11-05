@@ -146,6 +146,16 @@ All notable changes will be documented here.
   an extend, is checked only for pairs with one of its own new nodes, so two
   earlier nodes it cannot change never refuse it. The coding fanout
   contract's boundary check still compares as written.
+- **The area under the composer is exactly as tall as what it draws.** On the
+  screen's bottom rows, when the agent view gives rows up (a dag-ulw layer
+  settles or folds, or the run ends and its tree goes), the composer moves
+  down by them and the output above is painted again that many rows lower,
+  in the same synchronized update. No row stays blank under the tree or
+  above the composer. This replaces the tree's high-water hold during a turn
+  and the blank rows a finished run left under the info line. The lines
+  painted again on the screen's first rows are also still in the terminal's
+  scrollback, one per row given up, so they show twice there once they
+  scroll off again.
 - **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
   of the hollow `○`.** Four finished agents in a row looked the same as four
   that had not started. A completed agent now leads with `✓` in the done

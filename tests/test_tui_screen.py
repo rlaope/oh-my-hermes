@@ -1011,3 +1011,38 @@ class EscapeGuardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LowerTests(unittest.TestCase):
+    """A region on the screen's last row that gives rows up moves its top down (`LiveRegion._lower`): the rows above it
+    are painted again that many rows lower from the lines it flushed there, in the frame's one write."""
+
+    def rows(self, count: int, word: str) -> list[Line]:
+        return [(Span(f"{word} {index}"),) for index in range(count)]
+
+    def test_the_rows_above_move_down_and_the_region_keeps_the_last_row(self) -> None:
+        harness = Harness(rows=10, cols=20, at_top=True)
+        harness.region.render(self.rows(4, "row"), None, 20, flush=self.rows(12, "out"), screen_rows=10)
+        self.assertEqual(harness.region.last_row(10), 9)
+        self.assertTrue(harness.region.can_lower(10, 2))
+        sent = len(harness.writes)
+        harness.region.render(self.rows(2, "row"), None, 20, screen_rows=10, lower=2)
+        self.assertEqual(len(harness.writes) - sent, 1, "one write")
+        self.assertIn("\x1b[?2026h", harness.writes[-1], "a synchronized update")
+        self.assertEqual(harness.screen.lines(), [f"out {index}" for index in range(4, 12)] + ["row 0", "row 1"])
+        self.assertEqual((harness.region.top_row(10), harness.region.last_row(10)), (8, 9))
+
+    def test_a_region_cannot_paint_again_rows_it_did_not_write(self) -> None:
+        # Started under the shell's own output, it flushed nothing above it: those rows are not its to move.
+        harness = Harness(rows=10, cols=20, history=6)
+        region = LiveRegion(harness._write, start_row=6)
+        harness.region = region
+        region.render(self.rows(4, "row"), None, 20, screen_rows=10)
+        self.assertEqual(region.last_row(10), 9)
+        self.assertFalse(region.can_lower(10, 2))
+        region.render(self.rows(2, "row"), None, 20, screen_rows=10, lower=2)
+        self.assertEqual(harness.screen.lines()[:6], [f"history {index}" for index in range(6)], "nothing moved")
+        region.render(self.rows(4, "row"), None, 20, flush=self.rows(8, "out"), screen_rows=10)
+        self.assertTrue(region.can_lower(10, 2), "once it flushed every row above it, it can")
+        self.assertFalse(region.can_lower(10, 4), "not by all its rows")
+        self.assertFalse(region.can_lower(10, 0))
