@@ -50,18 +50,19 @@ All notable changes will be documented here.
   its run's definition order, from seven hues kept clear of the running, done
   and failed colours, so the first seven nodes of a run never share one and
   neighbours never do; an agent keeps its colour on every row, every redraw,
-  in `/history` and when the run is read again. Each hue reads at 4.5:1 on every launch look
-  and scene ground, light and dark. The `●` mark still shows the outcome, and
-  under `NO_COLOR` the handle is plain bold. A child whose node the HUD has not
-  bound yet takes the id its goal's `[dag:<run>/<node>]` marker names, with
-  its short title on the row under it and no role until the graph holds the
-  node; a graph from an OMH that exported no role shows none, never one guessed
-  from the label. Any other agent keeps its bold short title, without a role
-  or `@`, since Hermes' subagent frames carry no name to make a handle of. The agent list and the dag tree under the composer keep their
-  state colours. On a screen too short for the running call, the fold row and
-  the spacer between them, the fold row now drops its spacer, then gives way
-  entirely, so the call stays on screen. Sizing the held briefings no longer
-  renders a long streaming reply whole on every delta.
+  in `/history` and when the run is read again. Each hue reads at 4.5:1 on
+  every launch look and scene ground, light and dark. The `●` mark still shows
+  the outcome, and under `NO_COLOR` the handle is plain bold. A child whose
+  node the HUD has not bound yet takes the id its goal's `[dag:<run>/<node>]`
+  marker names, with its short title on the row under it and no role until the
+  graph holds the node; a graph from an OMH that exported no role shows none,
+  never one guessed from the label. Any other agent keeps its bold short
+  title, without a role or `@`, since Hermes' subagent frames carry no name to
+  make a handle of. The agent list and the dag tree under the composer keep
+  their state colours. On a screen too short for the running call, the fold
+  row and the spacer between them, the fold row now drops its spacer, then
+  gives way entirely, so the call stays on screen. Sizing the held briefings
+  no longer renders a long streaming reply whole on every delta.
 - **The round-end checks also run after edits made through the shell.**
   Hermes calls OMH's round-end hook only after a `patch` or `write_file`, so
   a turn that edited files only with `sed`, a heredoc script or `cat >` got

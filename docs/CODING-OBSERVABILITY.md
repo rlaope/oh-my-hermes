@@ -363,7 +363,14 @@ What it shows, and what it leaves as `?`:
     accepted leave the drawing. Each node carries where it came from
     (`dag_origin`: `define`, `repair:<root>`, `extend:<round>`), and a repair
     node its repair cycle (`cycle`: 2 for the second repair of the same
-    node), which the TUI's tree draws as `↻ repair 2`. On a
+    node), which the TUI's tree draws as `↻ repair 2`. Each node also
+    carries its role (`role`: `build`, `baseline`, `verify` or `review`, as
+    `dag_run.node_role` reads it) and its place in the run's definition
+    order (`node_index`, which superseded and added nodes keep). The TUI's
+    briefing of a finished dag child reads both (`tui.dag_tree.bound_node`):
+    it names the child `● build @notify finished`, the handle in the hue
+    `node_index` picks. A graph without them shows no role, and the handle
+    takes a hue from its id. On a
     Docker or SSH terminal the handoff files live in that terminal, under
     its user's home. A node
     accepted while its handoff could not be read in the Docker or SSH

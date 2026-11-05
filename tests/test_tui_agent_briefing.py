@@ -273,7 +273,7 @@ class AppBriefingTests(unittest.TestCase):
 
     def test_a_dag_nodes_child_is_named_by_its_node(self) -> None:
         app, _client = make_app(busy=False, clock=lambda: 0.0)
-        with_hud(app, dag_export_run(), received_at=0.0)
+        with_hud(app, dag_export_run())
         agent_event(app, "start", FIRST, goal="implement the export button in the toolbar [dag:r1/button]")
         agent_event(app, "complete", FIRST, goal="implement the export button in the toolbar [dag:r1/button]",
                     status="completed", summary="Button added.")
@@ -290,7 +290,7 @@ class AppBriefingTests(unittest.TestCase):
                 graph = dag_export_run()
                 next(node for node in graph["nodes"] if node["id"] == "d:r1:button")["title"] = label
                 app, _client = make_app(busy=False, clock=lambda: 0.0)
-                with_hud(app, graph, received_at=0.0)
+                with_hud(app, graph)
                 agent_event(app, "start", FIRST, goal="do it [dag:r1/button]")
                 agent_event(app, "complete", FIRST, goal="do it [dag:r1/button]", status="failed", summary="boom")
                 [block] = blocks_of(app, AgentDoneBlock)
@@ -298,7 +298,7 @@ class AppBriefingTests(unittest.TestCase):
 
     def test_a_goal_no_node_binds_is_named_as_the_agent_list_names_it(self) -> None:
         app, _client = make_app(busy=False, clock=lambda: 0.0)
-        with_hud(app, dag_export_run(), received_at=0.0)
+        with_hud(app, dag_export_run())
         agent_event(app, "start", FIRST, goal="Check the docs. DELIVERABLE: a list")
         agent_event(app, "complete", FIRST, goal="Check the docs. DELIVERABLE: a list", status="completed")
         [block] = blocks_of(app, AgentDoneBlock)
@@ -364,7 +364,7 @@ class HeldBriefingFoldTests(unittest.TestCase):
             lanes = [lane(f"d:r1:p{number}", f"lane {number:02d}: check part {number}", "quick", "glm-5.3", "low",
                           "running", order=number + 1) for number in range(finished)]
             edges = [("root", item["id"], "dispatch") for item in lanes] + [("d:r1:p0", "d:r1:p1", "depends_on")]
-            with_hud(app, graph([root(), *lanes], edges), received_at=0.0)
+            with_hud(app, graph([root(), *lanes], edges))
         app._on_event(Event("message.start", SID, {}))
         app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "delegate_task", "context": f"{finished} tasks"}))
         for number in range(finished):
@@ -530,7 +530,7 @@ class HandleNamingTests(unittest.TestCase):
             with self.subTest(hud=hud is not None):
                 app, _client = make_app(busy=False, clock=lambda: 0.0)
                 if hud is not None:
-                    with_hud(app, hud, received_at=0.0)
+                    with_hud(app, hud)
                 goal = "Write the release notes [dag:r1/notes]"
                 agent_event(app, "start", FIRST, goal=goal)
                 agent_event(app, "complete", FIRST, goal=goal, status="completed", summary="Done.")
@@ -555,7 +555,7 @@ def dag_app(role: object = None, *, bind: bool = True):
     if role is not None:
         node["role"] = role
     app, _client = make_app(busy=False, cols=120, clock=lambda: 0.0)
-    with_hud(app, run if bind else None, received_at=0.0)
+    with_hud(app, run if bind else None)
     goal = "implement the export button in the toolbar [dag:r1/button]"
     agent_event(app, "start", FIRST, goal=goal)
     agent_event(app, "complete", FIRST, goal=goal, status="failed" if role == "verify" else "completed",
@@ -635,7 +635,7 @@ class RunHueTests(unittest.TestCase):
             item.update(role="build", node_index=index)
         edges = [("root", item["id"], "dispatch") for item in lanes] + [(f"d:{run}:auth", f"d:{run}:billing",
                                                                           "depends_on")]
-        with_hud(app, graph([root(), *lanes], edges), received_at=0.0)
+        with_hud(app, graph([root(), *lanes], edges))
         for name in self.NAMES:
             goal = f"Port {name} [dag:{run}/{name}]"
             agent_event(app, "start", f"sa-{name}", goal=goal)
@@ -647,7 +647,7 @@ class RunHueTests(unittest.TestCase):
 
     def test_the_first_seven_nodes_of_a_run_differ_and_neighbours_always_do(self) -> None:
         app = self.run_app()
-        self.assertEqual([block.hue for block in blocks_of(app, AgentDoneBlock)], list(range(8)))
+        self.assertEqual([block.node_index for block in blocks_of(app, AgentDoneBlock)], list(range(8)))
         styles = self.handle_styles(app)
         self.assertEqual(len({style.fg for style in styles[:7]}), 7, "auth and admin may share; nothing earlier does")
         self.assertEqual(styles[7], styles[0], "the eighth starts the hues again")
@@ -665,7 +665,7 @@ class RunHueTests(unittest.TestCase):
 
     def test_without_a_place_the_handle_falls_back_to_its_hash(self) -> None:
         _app, block = dag_app("build")  # the shared fixture's graph records no node_index
-        self.assertIsNone(block.hue)
+        self.assertIsNone(block.node_index)
         head = block_rows(block, 120, DEFAULT_THEME)[0]
         self.assertEqual(head[2].style, agent_style("button", DEFAULT_THEME))
 
@@ -690,6 +690,24 @@ class ShortScreenHeldTests(unittest.TestCase):
         app._on_event(Event("tool.complete", SID, {"tool_id": "t1", "name": "delegate_task", "result": "{}"}))
         app._on_event(Event("message.complete", SID, {"text": "", "status": "complete"}))
         self.assertEqual(len(blocks_of(app, AgentDoneBlock)), 2)
+
+    def test_under_a_streaming_reply_that_fills_the_tail_the_fold_row_stays(self) -> None:
+        # #2591 review: a growing held table took every row of the tail and the fold row was dropped; a reply's top
+        # rows give way instead, as the region keeps the bottom rows.
+        app, _client = make_app(busy=True, rows=12, cols=150, clock=lambda: 0.0)
+        app._on_event(Event("message.start", SID, {}))
+        table = "| N | Value |\n| --- | --- |\n" + "".join(f"| {n} | v{n} |\n" for n in range(3))
+        app._on_event(Event("message.delta", SID, {"text": "Intro line.\n\n" + table}))
+        for number in range(2):
+            goal = f"lane {number:02d}: check part {number}"
+            agent_event(app, "start", f"sa-{number}", goal=goal)
+            agent_event(app, "complete", f"sa-{number}", goal=goal, status="completed", summary="Checked.")
+        drawn(app)
+        screen = [row.rstrip() for row in drawn(app)]
+        fold = screen.index("● 2 finished")
+        self.assertTrue(screen[fold - 1].endswith("┘"), screen)
+        self.assertTrue(screen[fold + 1].startswith("✻ Working"), screen)
+        self.assertEqual(len(held_of(app, AgentDoneBlock)), 2)
 
 
 class HeldUnderReplyCostTests(unittest.TestCase):

@@ -946,10 +946,11 @@ def _dag_nodes(
 
     A node a repair or an extend round added also gets an edge from where it
     came from (`dag_origin`) when nothing else of its own group leads to it,
-    so the drawing shows it below that node. Each node carries its role (`role`, `dag_run.node_role`: build,
-    baseline, verify or review), which the TUI names a finished child's briefing by, and its place in the run's
-    definition order (`node_index`: superseded and added nodes keep theirs), which picks its handle's hue. A parked
-    node is a waiting one
+    so the drawing shows it below that node. Each node carries its role
+    (`role`, `dag_run.node_role`: build, baseline, verify or review), which
+    the TUI names a finished child's briefing by, and its place in the run's
+    definition order (`node_index`: superseded and added nodes keep theirs),
+    which picks its handle's hue. A parked node is a waiting one
     marked `parked`, with what its attempt recorded it waits on (`parked_at`,
     `wake_at`, `wait_handle`, `wait_reason`); its elapsed time is the time
     since it parked.

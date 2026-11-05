@@ -77,14 +77,15 @@ owner's ask of 2026-11-05, after Claude Code's `● Teammate @x finished`):
 `● <name> finished  1m 35s · ↓1.8k`, the mark green only for a completed agent
 (`● … failed` in red, `▪ … interrupted` and `○ … cancelled` muted); a dag
 node's child is named by its role and its id as a handle, `● build @notify
-finished` (the role plain, `@<id>` in a hue its node's place in its run picks,
-`theme.agent_style`, the same on every row), with the node's label on one muted row under
-it; then the first lines of its reply, or its error, in at most two
-muted rows under the name, ending in `…` where it said more. The app writes it as an aside
-(`add_aside`), so it waits under a streaming reply or a running call and is
-written at the next block boundary, in the order the agents finished. Past
-`AGENT_HELD_SHOWN` held at once, the live region folds the older ones into one
-row (`_held_rows`); `/history` (`shown_blocks`) holds every one whole meanwhile.
+finished` (the role plain, `@<id>` in a hue its node's place in its run
+picks, `theme.agent_style`, the same on every row), with the node's label on
+one muted row under it; then the first lines of its reply, or its error, in
+at most two muted rows under the name, ending in `…` where it said more. The
+app writes it as an aside (`add_aside`), so it waits under a streaming reply
+or a running call and is written at the next block boundary, in the order the
+agents finished. Past `AGENT_HELD_SHOWN` held at once, the live region folds
+the older ones into one row (`_held_rows`); `/history` (`shown_blocks`) holds
+every one whole meanwhile.
 
 Two events do not mean what their names suggest, measured against Hermes
 6c61c3e27d (the recorded fixtures and the gateway source):
@@ -356,7 +357,7 @@ class AgentDoneBlock:
     title: str = ""  # a dag node's label, on one dim row under a `name` that is the node's id; "" for none
     handle: bool = False  # `name` is a dag node's id, drawn `@<name>` in its own hue (`theme.agent_style`)
     role: str = ""  # a dag node's role (`build`, `verify`, …), plain, before the handle; "" for none
-    hue: int | None = None  # the node's place in its run's definition order, which picks the handle's hue
+    node_index: int | None = None  # the node's place in its run's definition order, which picks the handle's hue
 
 
 @dataclass
@@ -1185,11 +1186,11 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
     The mark is green only for a completed agent (red for a failure, muted
     `▪` interrupted and `○` cancelled), and the word after the bold name says
     which, so colour is never the only signal. A `handle` is `@<name>` in the
-    hue its node's place in its run picks (`hue`; its name's hash without
-    one, `agent_style`), whatever the outcome: the colour
-    names the agent, not how it ended. A `role` goes before it, plain, as
-    Claude Code's `Teammate`; a row too narrow cuts the handle before the role. A row too narrow drops the
-    facts from the last, then cuts the name; the word stays. What it said is
+    hue its node's place in its run picks (`node_index`; its name's hash
+    without one, `agent_style`), whatever the outcome: the colour names the
+    agent, not how it ended. A `role` goes before it, plain, as Claude Code's
+    `Teammate`. A row too narrow drops the facts from the last, then cuts
+    the name (a handle before the role); the word stays. What it said is
     drawn as the reply would be (`render_lines`: no `**`, `#` or backticks
     left), all in one muted tone, and the last row shown ends in `…` where
     more was said.
@@ -1198,7 +1199,7 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
     word_style = {AGENT_FINISHED: theme.text, AGENT_FAILED: theme.error}.get(block.outcome, theme.muted)
     plain = theme.text if block.outcome in (AGENT_FINISHED, AGENT_FAILED) else theme.muted
     if block.handle:
-        name_style = agent_style(block.name, theme, block.hue)
+        name_style = agent_style(block.name, theme, block.node_index)
     else:
         name_style = replace(plain, bold=True)
     shown = f"@{block.name}" if block.handle else block.name
@@ -2383,12 +2384,17 @@ class Transcript:
         `room`, that quarter. The running call keeps its rows before the newest briefing is drawn whole, and before
         the fold row: where `room` holds the live block and the fold row but not the spacer above it, the fold row
         goes without it, and where it holds the live block alone, no briefing is drawn (all are still written at the
-        boundary). Only what is drawn is rendered."""
+        boundary). A streaming reply is the exception: its top rows give way first (the region keeps the bottom
+        rows), so with `room` for one row of it beside the fold row, the fold row stays. Only what is drawn is
+        rendered."""
         briefings = [block for block in self._held if isinstance(block, AgentDoneBlock)]
         fits = max_rows // AGENT_HELD_SHARE if max_rows is not None else None
         spaced = True  # the fold row keeps the spacer above it
         if briefings and room is not None:
             spare = room - max(live, 1)
+            reply = bool(self.blocks) and isinstance(self.blocks[-1], AssistantBlock) and not self.blocks[-1].done
+            if spare < 1 and reply and room >= 2:
+                spare = 1  # the fold row alone, without its spacer
             if spare < 1:
                 briefings = []
             spaced = spare >= 2
