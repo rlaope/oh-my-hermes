@@ -5,7 +5,7 @@ import hashlib
 from importlib.resources import files
 import json
 
-from .catalog_types import ExpertQuestion, ProcedureCheck, ProcedureStep, SkillDefinition, SkillExample
+from .catalog_types import ExpertQuestion, ProcedureCheck, ProcedureBail, ProcedureStep, SkillDefinition, SkillExample
 
 TOOLKIT_RESOURCES = (
     "README.md", "LICENSE.upstream", "scripts/analyze.py",
@@ -47,9 +47,21 @@ DEFINITION = SkillDefinition(
         ProcedureStep("gis_validate", "analysis", (_INPUTS[0], _INPUTS[1]), (_OUTPUTS[2],), ("gis_input_check",),
                       "Inspect source rights, coordinate ordering and extent; require explicit EPSG identifiers and an appropriate projected metre CRS before preparing computation."),
         ProcedureStep("gis_intersect", "production", _INPUTS, _OUTPUTS, ("gis_input_check", "gis_backend_check"),
-                      "Run the standalone helper with a finite host timeout in an isolated optional environment; record real stdout, stderr and exit without fallback values."),
+                      "Run the standalone helper with a finite host timeout in an isolated optional environment; record real stdout, stderr and exit without fallback values.",
+            on_fail=ProcedureBail(
+                still_stands=('replay and provenance manifest',),
+                downgrade_to='not_observed',
+                handback='Return the replay and provenance manifest, captured stdout, stderr and exit or timeout, and the dependency or input blocker for a retry in a new output directory without claiming zero overlap.',
+            ),
+        ),
         ProcedureStep("gis_reconcile", "validation", _INPUTS, _OUTPUTS, ("gis_output_check", "gis_backend_check"),
-                      "Read back every promised artifact, check hashes and independent area/count expectations, and report observed results separately from public-world interpretation."),
+                      "Read back every promised artifact, check hashes and independent area/count expectations, and report observed results separately from public-world interpretation.",
+            on_fail=ProcedureBail(
+                still_stands=('replay and provenance manifest',),
+                downgrade_to='tentative',
+                handback="Return result GeoJSON and measured summary JSON with failed hash, count or pair-sum versus union-area checks and fixture limits; retain only the manifest's validated input provenance, not a verified overlap result.",
+            ),
+        ),
     ),
     artifact_expectations=(
         "Actual `result.geojson` in longitude/latitude OGC:CRS84; each positive-area pair carries source indices, original namespaced properties, area_m2 and perimeter_m.",

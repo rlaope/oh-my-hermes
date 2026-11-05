@@ -343,9 +343,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # rollback in STOP WHEN); only refactor-plan moves, and the pin before it was 354f7cf2...5e6b.
         # Research citation receipts: ulw-research, web-research and research-brief gain one receipts-verify
         # clause; only those three bodies move, and the pin before it was ab8d58ad...6258e7.
+        # Bail points replace default Recovery Notes on the attributed skills; procedure bails and the shared rail move references only.
         # dag-ulw's category-ladder line sends a `role=review` node to `review`, keeps `role=baseline`
-        # low and has `role=verify` climb the ladder; only dag-ulw moves, and the pin before it was 94013490...f849.
-        self.assertEqual(_digest(legacy_hashes), '721754a97fd4411ade539faa9a6cc55d2201f85183d87f42bce78c4b6d909e81')
+        # low and has `role=verify` climb the ladder; only dag-ulw moves. Re-derived on the tree merged
+        # with main after the bail points; main's pin before it was fb4303cb...1fcf.
+        self.assertEqual(_digest(legacy_hashes), '2b0982e6ec972a7bc5c91190a5fed140bd8790a8c9408b0e1bdddb1ce7c38db3')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -356,7 +358,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 128600 -> 128099: codebase-onboarding's own Completion Checklist and
         # Recovery Notes replace the planning-category defaults it repeated
         # (-501); swapping only that body back to main's restores 128600.
-        self.assertEqual(legacy['repeated']['bytes'], 128099)
+        # Skill-specific bail notes remove duplicate Recovery Notes; the measured count falls, with all ceilings unchanged.
+        self.assertEqual(legacy['repeated']['bytes'], 120488)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

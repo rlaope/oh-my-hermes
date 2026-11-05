@@ -49,8 +49,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If the reviewed target is missing, inspect the requested artifact or ask one target question.
-- If independent verification is unavailable, report the gap and avoid an approval-style claim.
+- If verify-new lacks an observed credential check, retain the redacted risk matrix and credential_rotation_sequence/v1, mark replacement unresolved, and hand back the verify-new evidence requirement before the operator revokes the old credential.
+- If no single local plugin directory is explicitly named, no plugin audit finding stands; mark plugin_risk_audit/v1 not_observed and hand back the directory question without importing, registering, or activating any plugin.
+- If a proposed deny glob also blocks commands the workflow needs, retain safe_action_policy/v1, mark proposed_approval_deny_list/v1 unresolved, and hand back the conflicting globs and needed commands for user revision without changing config.
 
 
 

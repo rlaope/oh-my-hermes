@@ -39,6 +39,7 @@ Run the standalone helper with a finite host timeout in an isolated optional env
 - Input refs: `input and overlay polygon layers`, `explicit source and metric target CRS`, `new output directory and execution budget`
 - Output refs: `result GeoJSON`, `measured summary JSON`, `replay and provenance manifest`
 - Check IDs: `gis_input_check`, `gis_backend_check`
+- If this step fails: not_observed; still stands: `replay and provenance manifest`; hand back: Return the replay and provenance manifest, captured stdout, stderr and exit or timeout, and the dependency or input blocker for a retry in a new output directory without claiming zero overlap.
 
 ### `gis_reconcile` (validation)
 
@@ -47,3 +48,4 @@ Read back every promised artifact, check hashes and independent area/count expec
 - Input refs: `input and overlay polygon layers`, `explicit source and metric target CRS`, `new output directory and execution budget`
 - Output refs: `result GeoJSON`, `measured summary JSON`, `replay and provenance manifest`
 - Check IDs: `gis_output_check`, `gis_backend_check`
+- If this step fails: tentative; still stands: `replay and provenance manifest`; hand back: Return result GeoJSON and measured summary JSON with failed hash, count or pair-sum versus union-area checks and fixture limits; retain only the manifest's validated input provenance, not a verified overlap result.

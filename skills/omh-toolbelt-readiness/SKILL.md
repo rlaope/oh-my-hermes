@@ -49,8 +49,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If tool_search finds a deferred native tool but access is untested, retain its present classification, mark API access not_observed, and hand back the tool_call step for a user-approved check instead of listing the tool as missing.
+- If a required MCP server or CLI is absent, retain the present, optional, and unsafe inventory entries, mark workflow readiness unresolved, and hand back the missing dependency and installation owner without installing it.
 
 ## Workflow Lane
 

@@ -74,8 +74,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Low-confidence or conflicting signals return a picker or clarification instead of forced routing.
   - Catalog answers are rendered without shell approval when wrapper metadata is sufficient.
 - Recovery notes:
-  - If routing signals conflict, show the compact picker or ask one clarifying question.
-  - If wrapper metadata is unavailable, keep the recommendation advisory and avoid runtime claims.
+  - If a skill is not installed, keep the intent; hand back the install gap as unresolved.
+  - If executor readiness is unknown, keep routing; hand back the check as not_observed.
 - Required inputs:
   - user request
   - installed skill descriptions
@@ -135,8 +135,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Low-confidence or conflicting signals return a picker or clarification instead of forced routing.
   - Catalog answers are rendered without shell approval when wrapper metadata is sufficient.
 - Recovery notes:
-  - If routing signals conflict, show the compact picker or ask one clarifying question.
-  - If wrapper metadata is unavailable, keep the recommendation advisory and avoid runtime claims.
+  - If bounded recommend queries cannot run through CLI, plugin, or wrapper, retain only the imperative task, mark catalog selection not_observed, and hand back the workflow picker instead of a memorized recommendation.
+  - If recommendation output contains only `meta-router`, retain the consulted catalog evidence, mark workflow selection unresolved, and hand back the task remainder for a bounded re-query rather than selecting this skill.
+  - If stage re-queries still leave a multi-stage task low-confidence, retain the consulted catalog evidence, mark the proposed chain tentative, and hand back a clarification question about the unresolved stage.
 - Required inputs:
   - leading /omh or ./omh command with an imperative remainder
   - live OMH catalog via bounded `omh recommend --json` queries
@@ -371,7 +372,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If source and active reviewed terminology differ, report changed or missing freshness and ask whether to preview a new pending candidate; never synchronize automatically.
   - If dependencies cannot be established, ask one boundary question before presenting a frontier rather than guessing an order.
   - If frontier round or decision identity cannot be recovered, close with a named recovery blocker instead of restarting or emitting another round.
-  - If the user moves from terminology to implementation, summarize confirmed understanding and hand off to `ralplan`, `ulw-plan`, or the selected coding owner only after a separate go-ahead.
+  - If the user moves from terminology to implementation, summarize confirmed understanding and hand off to `ralplan` or the selected coding owner only after a separate go-ahead.
 - Required inputs:
   - the terminology question or alignment goal
   - repository evidence and optional root PROJECT_TERMS.md source status
@@ -732,8 +733,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Dispatch never merges: collect each unit's fanout_unit_result/v1 evidence, verify the integrated combination of units (not just each one alone -- disjoint file scopes can still conflict at integration), and report merged/unmerged per unit in the closing brief. Merging the unit branches remains an explicit operator or reviewing-agent action; a dispatch receipt is never merge evidence.
   - The closing brief includes the observed `omh_run_summary` summary_text verbatim, or an explicit run-summary not_available line, before any specific next-action question -- never a model-estimated number.
 - Recovery notes:
-  - If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
-  - If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
+  - If this run lacks an explicit coding-owner choice, no handoff stands yet; mark prompt composition unresolved and hand back the choose_executor question without selecting a CLI.
+  - If the scratch-edit permission probe fails, retain the composed prompt and discovered skill names, mark execution not_observed, and hand back the denied permission and required grant change before retrying.
+  - If dispatch returns no session or thread id, retain the dispatch receipt, mark steering unresolved, and hand back the explicit unsteerable note and any observed unit result without claiming a resumable session.
 - Required inputs:
   - explicit coding-owner choice for this run
   - task or unit description
@@ -1135,8 +1137,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Follow-up planning or handoff uses the research summary without calling it execution evidence.
   - Each evidence row that cites a ledger source carries the id as `[n]` and its quote, and the citation check is reported from an observed ledger verify run that cited at least one source, or as `not_observed`.
 - Recovery notes:
-  - If sources cannot be accessed, state the retrieval gap and use only observed local context.
-  - If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
+  - If ledger verification cites zero distinct sources, retain the source ledger and evidence table, mark the citation check not_observed, and hand back the draft with the missing [n] source IDs for correction.
+  - If an evidence row's quote cannot be attached from the page text, retain the retrieved source and other supported rows, mark that claim unresolved, and hand back the unmatched wording and source for correction.
+  - If a pricing comparison mixes periods, currencies, or denominators, retain its dated source rows, mark the comparison tentative, and hand back the missing common basis before drawing a decision implication.
 - Required inputs:
   - business question
   - source boundary
@@ -1206,8 +1209,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
   - Follow-up planning or handoff uses the research summary without calling it execution evidence.
 - Recovery notes:
-  - If sources cannot be accessed, state the retrieval gap and use only observed local context.
-  - If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
+  - If one watch source cannot be read, retain covered sources' findings and the failed source's previous cutoff, mark its coverage unresolved, and hand back that source and uncovered window rather than reporting a quiet period.
+  - If the synthesis tool cannot process collected findings, retain raw findings in source_inbox/v1, mark synthesis not_observed, and hand back research_department_plan/v1 with the synthesis-tool readiness gap.
+  - If schedule creation has no cronjob_manage result or cron listing, retain the cadence and Scout, Analyst, and Briefer plan, mark job creation not_observed, and hand back the prepared job description for separately approved scheduling.
 - Required inputs:
   - topic or watch area
   - source boundaries
@@ -1346,8 +1350,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Observed signals are separated from strategic inference.
   - Accepted decisions and implementation follow-ups are not conflated.
 - Recovery notes:
-  - If evidence is mostly assumption, label it and recommend a research or feedback-triage pass.
-  - If the decision owner is missing, keep the output as options rather than accepted strategy.
+  - If demand and capacity cannot be compared in one unit or hiring ramp lag is unknown, retain the stated constraints and options, mark the recommendation tentative, and hand back the missing capacity and timing inputs.
+  - If a drafted decision record lacks write approval, retain the options, tradeoffs, and proposed decision note, mark persistence not_observed, and hand back the draft for approval without writing docs/adr/.
 - Required inputs:
   - goal
   - known evidence
@@ -1408,8 +1412,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Meeting prep, observed minutes, accepted decisions, and action ownership are separate states.
   - Missing context that would change the meeting structure is surfaced.
 - Recovery notes:
-  - If participants, purpose, or decision owner are missing, ask for the one field that changes the agenda.
-  - If minutes or decisions were not observed, keep the output as prep rather than record.
+  - If decision topics lack known context, retain the supplied meeting goal and audience, mark the agenda tentative, and hand back discussion prompts and the decisions-needed list with its open questions.
+  - If action owners, due dates, or acceptance conditions are absent from a meeting record, retain the prepared agenda and prompts, mark action ownership not_observed, and hand back the action-item template with those columns marked unknown.
+  - If follow-up coding lacks observed decisions or an accepted plan, retain the meeting brief, mark the coding handoff unresolved, and hand back the decisions needed rather than an implementation claim.
 - Required inputs:
   - meeting goal
   - audience
@@ -1469,8 +1474,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Bug, feature, research, strategy, and coding handoff outcomes stay separate.
   - The next workflow is recommended before any implementation claim.
 - Recovery notes:
-  - If feedback lacks source or severity, ask for the missing signal before coding handoff.
-  - If the item is actually a plan or research request, route to that workflow instead of triage.
+  - If no feedback items are supplied, no cluster stands; mark triage not_observed and hand back the request for feedback items or a summary, source boundary, and product area.
+  - If bug and feature signals cannot be separated from the supplied reports, retain source-bounded clusters, mark their classification and ranking tentative, and hand back the missing evidence with research or strategy follow-up options.
+  - If a triaged cluster has no explicit coding intent or accepted-plan evidence, retain the clusters and ranking, mark the coding handoff unresolved, and hand back the next workflow recommendation with product_evidence_loop/v1 still prepared-only.
 - Required inputs:
   - feedback items or summary
   - source boundary
@@ -1530,8 +1536,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If period, currency, basis, or comparator version conflicts, retain the supplied source provenance, mark comparability unresolved, and hand back finance_scope_source_record/v1 with the conflicting attributes.
+  - If totals or account mappings do not tie out, retain the confirmed scope and source record, mark reconciliation unresolved, and hand back finance_reconciliation_analysis_schedule/v1 with unreconciled gaps.
+  - If recalculation fails at brief validation, retain supported calculations and finance_risk_register/v1, mark finance_decision_brief/v1 unresolved with HOLD, and hand back the failed calculation and escalation owner.
 - Required inputs:
   - period
   - supplied finance source
@@ -1586,6 +1593,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `period`, `supplied finance source`
     - Output refs: `finance_reconciliation_analysis_schedule/v1`
     - Check IDs: `finance_source_reconciliation_check`
+    - If this step fails: unresolved; still stands: `finance_scope_source_record/v1`; hand back: Return the draft finance_reconciliation_analysis_schedule/v1 with untied totals, mappings, basis or unit conflicts, cutoff defects and duplicate or missing records listed; do not label the extract reconciled.
     - Instruction: Tie totals and account mappings, normalize only approved basis and units, test cutoff and duplicate or missing records, and preserve unreconciled gaps.
   - `finance_analyze_variances` (`analysis`)
     - Input refs: `supplied finance source`, `calculation assumptions`, `decision question`
@@ -1601,6 +1609,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `period`, `supplied finance source`, `decision question`, `calculation assumptions`
     - Output refs: `finance_decision_brief/v1`
     - Check IDs: `finance_scope_comparability_check`, `finance_source_reconciliation_check`, `finance_policy_assumption_check`, `finance_conditional_interpretation_check`, `finance_validation_escalation_check`
+    - If this step fails: unresolved; still stands: `finance_scope_source_record/v1`, `finance_risk_register/v1`; hand back: Return finance_decision_brief/v1 as HOLD with failed recalculations, reconciliation gaps, policy or cutoff conflicts, control exceptions and high-impact assumptions assigned to a qualified finance or accounting owner.
     - Instruction: Report recalculation and reconciliation status, evidence-linked risks, assumptions, decision options and owners, and a PASS or HOLD disposition with mandatory escalation gaps.
 
 ### people-ops
@@ -1643,8 +1652,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If interview evidence cannot support a candidate debrief, retain the role outcomes, must-have versus trainable criteria, and scorecard, mark the recommendation unresolved, and hand back the missing evidence to the decision owner.
+  - If policy constraints need a jurisdiction-specific ruling, retain the role brief and interview scorecard, mark the policy conclusion unresolved, and hand back the flagged questions to `legal-compliance-review`.
 - Required inputs:
   - role or people-process outcome
   - available evidence
@@ -1707,8 +1716,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Open questions, residual risk, and missing verification are named.
   - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
 - Recovery notes:
-  - If the reviewed target is missing, inspect the requested artifact or ask one target question.
-  - If independent verification is unavailable, report the gap and avoid an approval-style claim.
+  - If an authority's pinpoint or effective status cannot be verified, retain the established document scope, mark authority-dependent issues unresolved, and hand back legal_scope_authority_record/v1 with the missing citations for counsel.
+  - If a contested clause has an open counsel hold or no cited playbook position, retain its issue row, mark that redline row unresolved, and hand back the counsel question rather than proposed language.
+  - If mandatory counsel triggers remain open at final review, retain the issue matrix and hold register, mark legal_review_disposition/v1 unresolved with HOLD, and hand back the exact triggers and counsel owner without a final determination.
 - Required inputs:
   - jurisdiction
   - document or process version
@@ -1769,6 +1779,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `supplied authority`, `document or process version`
     - Output refs: `legal_scope_authority_record/v1`
     - Check IDs: `legal_authority_citation_check`, `legal_final_determination_guard`
+    - If this step fails: unresolved; still stands: `legal_scope_authority_record/v1`; hand back: Return legal_scope_authority_record/v1 with scope facts intact and each missing, stale or unverified authority, pinpoint and effective status listed for research or counsel.
     - Instruction: Create a citation ledger using only supplied or observed sources, exact pinpoints and effective status; route absent authority to research or counsel instead of filling it in.
   - `legal_map_issues_exceptions` (`analysis`)
     - Input refs: `jurisdiction`, `document or process version`, `supplied authority`, `review objective`
@@ -1779,16 +1790,19 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `jurisdiction`, `supplied authority`, `review objective`
     - Output refs: `legal_risk_counsel_hold_register/v1`
     - Check IDs: `legal_counsel_hold_check`
+    - If this step fails: tentative; still stands: `legal_scope_authority_record/v1`, `legal_issue_traceability_matrix/v1`; hand back: Return the draft legal_risk_counsel_hold_register/v1 with uncovered trigger IDs, missing risk assessments and counsel owners for correction; no affected issue is cleared.
     - Instruction: Rank impact, applicability, urgency, confidence and reversibility, then impose mandatory counsel holds and owners for every triggered high-risk or authority-sensitive issue.
   - `legal_prepare_negotiation_positions` (`production`)
     - Input refs: `document or process version`, `supplied authority`, `review objective`
     - Output refs: `legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment`
     - Check IDs: `legal_negotiation_preparation_check`, `legal_counsel_hold_check`
+    - If this step fails: unresolved; still stands: `legal_scope_authority_record/v1`, `legal_issue_traceability_matrix/v1`, `legal_risk_counsel_hold_register/v1`; hand back: Return legal_negotiation_preparation/v1 with held or uncited clause rows blocked as counsel questions and missing fallback, walk-away or linked concession positions identified; issue no proposal for a held clause.
     - Instruction: When the objective is a redline, build one row per contested clause -- playbook position, gap, proposed language, fallback, walk-away, counsel-hold state -- then rank the concession order by what is lost and name the linked rows; prepare nothing for a clause whose hold is open.
   - `legal_validate_disposition` (`validation`)
     - Input refs: `jurisdiction`, `document or process version`, `supplied authority`, `review objective`
     - Output refs: `legal_review_disposition/v1`
     - Check IDs: `legal_scope_facts_instruments_check`, `legal_authority_citation_check`, `legal_issue_matrix_check`, `legal_counsel_hold_check`, `legal_final_determination_guard`
+    - If this step fails: unresolved; still stands: `legal_scope_authority_record/v1`, `legal_issue_traceability_matrix/v1`, `legal_risk_counsel_hold_register/v1`; hand back: Return legal_review_disposition/v1 as HOLD with exact failed authority or issue checks, open triggers and counsel owners; retain earlier drafts without issuing a final legal or compliance determination.
     - Instruction: Return PASS, REVISE, or HOLD with exact open triggers and counsel route; prohibit final legal or compliance determinations until all mandatory holds are resolved by qualified counsel.
 
 ### support-operations
@@ -1832,8 +1846,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Bug, feature, research, strategy, and coding handoff outcomes stay separate.
   - The next workflow is recommended before any implementation claim.
 - Recovery notes:
-  - If feedback lacks source or severity, ask for the missing signal before coding handoff.
-  - If the item is actually a plan or research request, route to that workflow instead of triage.
+  - If customer impact or reproduction evidence is missing, retain the stated case facts, mark severity tentative, and hand back the reply draft and missing repro, account, or entitlement evidence list.
+  - If no escalation owner or path is available, retain the issue/severity/impact/escalation matrix, mark ownership unresolved, and hand back the internal next-step and owner handoff brief with the owner question.
 - Required inputs:
   - support case
   - known facts
@@ -1897,8 +1911,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Draft recommendations, accepted decisions, and executor handoffs are separate states.
   - Rejected options or unresolved tradeoffs are recorded before handoff.
 - Recovery notes:
-  - If acceptance criteria or verification are missing, route back to clarification before handoff.
-  - If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
+  - If an outcome lacks acceptable assessment evidence, retain curriculum_learner_outcome_brief/v1, mark curriculum_alignment_map/v1 tentative, and hand back the orphan outcomes or assessment mismatches for revision.
+  - If an access or technology barrier has no equivalent demonstration path, retain the aligned outcomes and assessments, mark curriculum_sequence_design/v1 unresolved, and hand back the barrier and required adaptation.
+  - If learner review or pilot evidence is absent, return the alignment and sequence as unvalidated drafts, mark validation unresolved, and hand back curriculum_validation_disposition/v1 with required reviews and revalidation checks.
 - Required inputs:
   - learners
   - learning goal
@@ -1950,21 +1965,25 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `learners`, `learning goal`, `prerequisites`, `constraints`
     - Output refs: `curriculum_alignment_map/v1`
     - Check IDs: `curriculum_outcome_evidence_alignment_check`
+    - If this step fails: tentative; still stands: `curriculum_learner_outcome_brief/v1`; hand back: Return the draft curriculum_alignment_map/v1 with orphan outcomes, unmatched assessments, performance-condition mismatches and missing rubric or formative evidence identified for revision.
     - Instruction: Before sequencing instruction, define acceptable assessment evidence, rubric criteria and formative decision points for every outcome and expose all coverage defects.
   - `curriculum_design_sequence_scaffolds` (`production`)
     - Input refs: `learners`, `learning goal`, `prerequisites`, `constraints`
     - Output refs: `curriculum_sequence_design/v1`
     - Check IDs: `curriculum_scaffolding_inclusion_check`
+    - If this step fails: tentative; still stands: `curriculum_learner_outcome_brief/v1`, `curriculum_alignment_map/v1`; hand back: Return the draft curriculum_sequence_design/v1 with missing practice, feedback or scaffold fading and unaddressed learner barriers tied to the access or equivalent-demonstration choices needing revision.
     - Instruction: Design activities from the evidence backward, including diagnosis, modeling where useful, guided practice, feedback, independent transfer, scaffold fading, accessible formats and equivalent demonstration paths.
   - `curriculum_validate_alignment` (`validation`)
     - Input refs: `learners`, `learning goal`, `prerequisites`, `constraints`
     - Output refs: `curriculum_validation_disposition/v1`
     - Check IDs: `curriculum_intake_readiness_check`, `curriculum_outcome_evidence_alignment_check`, `curriculum_scaffolding_inclusion_check`, `curriculum_validation_revision_check`
+    - If this step fails: unresolved; still stands: `curriculum_learner_outcome_brief/v1`; hand back: Return curriculum_validation_disposition/v1 with criterion-level gaps, learner impact, required revisions, owner decisions and missing evidence; expert or learner review plans remain prepared until observed.
     - Instruction: Record criterion-level PASS, REVISE, or BLOCKED findings, exact misalignments and learner impact, required revisions, owner decisions, evidence gaps, and bounded expert or learner review plans.
   - `curriculum_revise_revalidate` (`validation`)
     - Input refs: `learners`, `learning goal`, `prerequisites`, `constraints`
     - Output refs: `curriculum_alignment_map/v1`, `curriculum_sequence_design/v1`, `curriculum_validation_disposition/v1`
     - Check IDs: `curriculum_outcome_evidence_alignment_check`, `curriculum_scaffolding_inclusion_check`, `curriculum_validation_revision_check`
+    - If this step fails: unresolved; still stands: `curriculum_learner_outcome_brief/v1`, `curriculum_validation_disposition/v1`; hand back: Return the prior curriculum_validation_disposition/v1 with pending revisions, owner decisions and failed revalidation checks for the alignment map and sequence; keep required unobserved reviews BLOCKED.
     - Instruction: Apply approved revisions to the affected artifacts, rerun the named checks, and retain BLOCKED whenever required evidence or review remains unobserved.
 
 ### localization-review
@@ -2007,8 +2026,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Open questions, residual risk, and missing verification are named.
   - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
 - Recovery notes:
-  - If the reviewed target is missing, inspect the requested artifact or ask one target question.
-  - If independent verification is unavailable, report the gap and avoid an approval-style claim.
+  - If the source version cannot be established, retain supplied strings and the locale/audience brief, mark terminology and cultural-fit choices tentative, and hand back the source-version question before treating the glossary as approved.
+  - If rendered UI evidence is missing, retain glossary choices and the string issue matrix, mark rendered validation not_observed, and hand back locale QA criteria and review owners for an accepted `visual-qa` handoff.
 - Required inputs:
   - locale
   - audience
@@ -2070,8 +2089,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Observed signals are separated from strategic inference.
   - Accepted decisions and implementation follow-ups are not conflated.
 - Recovery notes:
-  - If evidence is mostly assumption, label it and recommend a research or feedback-triage pass.
-  - If the decision owner is missing, keep the output as options rather than accepted strategy.
+  - If consent or suppression status is unknown, retain sales_opportunity_evidence_record/v1 and sales_qualification_state/v1, mark sequence eligibility unresolved with HOLD, and hand back the missing eligibility questions without drafting outreach.
+  - If no observed buyer response supports a commitment, retain the eligible sales_draft_sequence/v1, mark confirmation not_observed, and hand back sales_handoff_disposition/v1 with proposed actions, owners, timing, and exit criteria.
 - Required inputs:
   - account or segment
   - available evidence
@@ -2128,16 +2147,19 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `account or segment`, `available evidence`, `sales objective`
     - Output refs: `sales_draft_sequence/v1`
     - Check IDs: `sales_sequence_eligibility_check`
+    - If this step fails: unresolved; still stands: `sales_opportunity_evidence_record/v1`, `sales_qualification_state/v1`; hand back: Return sales_draft_sequence/v1 as HOLD with missing consent, privacy, suppression, channel or policy evidence and the owner/approver question required before drafting.
     - Instruction: Verify supplied consent basis, privacy and suppression restrictions, permitted channels, organizational policy, sender and approver, locale, timing and cadence before any message construction.
   - `sales_prepare_draft_sequence` (`production`)
     - Input refs: `account or segment`, `available evidence`, `buyer hypothesis`, `sales objective`
     - Output refs: `sales_draft_sequence/v1`
     - Check IDs: `sales_account_evidence_check`, `sales_sequence_eligibility_check`
+    - If this step fails: tentative; still stands: `sales_opportunity_evidence_record/v1`, `sales_qualification_state/v1`; hand back: Return sales_draft_sequence/v1 with unsupported personalization or proof and missing cadence, owner, approver or stop conditions marked for correction, keeping every row an unsent draft.
     - Instruction: Prepare eligible draft rows for audience, channel, cadence, supported personalization and proof, purpose, value, CTA, objection hypothesis and validation question, owner, approver and stop conditions; do not send.
   - `sales_validate_handoff` (`validation`)
     - Input refs: `account or segment`, `available evidence`, `buyer hypothesis`, `sales objective`
     - Output refs: `sales_handoff_disposition/v1`
     - Check IDs: `sales_account_evidence_check`, `sales_qualification_state_check`, `sales_sequence_eligibility_check`, `sales_handoff_check`
+    - If this step fails: unresolved; still stands: `sales_draft_sequence/v1`, `sales_opportunity_evidence_record/v1`, `sales_qualification_state/v1`; hand back: Return sales_handoff_disposition/v1 as HOLD with proposed actions, CRM field/value proposals, missing buyer confirmation and unresolved owner, timing, dependency or exit-criterion gaps.
     - Instruction: Return proposed versus confirmed actions, ownership, timing, exit criteria, dependencies, evidence refs, CRM object/field/value proposals, gaps and ADVANCE, HOLD or DISQUALIFY disposition, preserving confirmation only from observed response.
 
 ### product-brief
@@ -2182,8 +2204,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Draft recommendations, accepted decisions, and executor handoffs are separate states.
   - Rejected options or unresolved tradeoffs are recorded before handoff.
 - Recovery notes:
-  - If acceptance criteria or verification are missing, route back to clarification before handoff.
-  - If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
+  - If the problem gate has not returned validated, retain supplied product evidence as unvalidated, mark PRD readiness unresolved, and hand back the problem and user context to `product-discovery-validation`.
+  - If the decision owner has not resolved prioritization tradeoffs, retain the drafted PRD and roadmap options, mark roadmap commitment unresolved, and hand back the tradeoffs and open questions for that owner.
+  - If Jira or Linear updates lack an explicit target and approval, retain the prepared PRD, mark roadmap-system mutation not_observed, and hand back the target and approval questions for `connector-operator`.
 - Required inputs:
   - product evidence
   - problem and user
@@ -2243,8 +2266,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If status evidence covers only part of the requested time window, retain the dated observations in the status summary, mark uncovered status not_observed, and hand back the missing periods and affected priorities.
+  - If a blocker needs a code fix but no follow-up is accepted, retain the observed blocker and risk, mark remediation unresolved, and hand back the follow-up action for acceptance before delegation.
 - Required inputs:
   - status evidence
   - scope
@@ -2308,8 +2331,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If source notes are missing, retain the cadence, audience, and time-window scaffold, mark minutes and decisions not_observed, and hand back operation_artifact/v1 with the explicit missing-notes boundary.
+  - If notes leave an action item's owner or due date unstated, retain its source-linked outcome and dependencies, mark follow-up readiness unresolved, and hand back the action item history with unknown fields for confirmation.
+  - If a retro proposal has no decision or owner acknowledgement, retain the source notes, mark acceptance unresolved, and hand back the proposal outside the decision log for explicit confirmation before an implementation handoff.
 - Required inputs:
   - cadence or meeting type
   - audience or participants
@@ -2370,8 +2394,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Draft report, generated package, approval, and delivery are separate states.
   - The next action says whether to gather evidence, generate, revise, approve, or deliver.
 - Recovery notes:
-  - If input evidence is incomplete, mark the section as pending rather than fabricating a report claim.
-  - If delivery or attachment is unavailable, keep the report package prepared_not_observed.
+  - If no presentation tool can produce a binary deck, retain the PPT-ready Markdown or JSON outline, mark binary export not_observed, and hand back the outline, assumptions, and missing-input list for separate deck generation.
+  - If the tool returns "rendered": false (it still exits 0) or its image count differs from slide_count, keep the deck's outline read-back, leave render QA not observed, and hand back the missing-tool or image-count gap for that file.
+  - If the requested achievements export fails, retain the rest of the report package, mark the badge section not_observed, and hand back the missing output from omh achievements export --format md instead of inventing badges.
 - Required inputs:
   - audience
   - reporting period or scope
@@ -2432,8 +2457,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Binary export, rendering, formula recalculation, attachment, and delivery stay observed-only.
   - The next action identifies whether the package is planned, generated, QA-ready, or blocked.
 - Recovery notes:
-  - If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.
-  - If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.
+  - If source metrics needed by an outline section are missing, retain the verified source facts and outline, mark that section unresolved, and hand back material_artifact/v1 with its missing inputs and output owner.
+  - If xlsx_recalc.py reports recalculated false, retain the observed sheet_schema, mark formula_recalculation not_observed, and hand back its missing tools and the --out <copy> recalculation and cached-value read-back steps.
+  - If DOCX package validation passes without a rendered converted PDF, retain observed section_structure and required_clause_check, mark appearance and page_count not_observed, and hand back the converted-PDF preview checks.
 - Required inputs:
   - audience or recipient
   - source inputs
@@ -2503,8 +2529,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Binary export, rendering, formula recalculation, attachment, and delivery stay observed-only.
   - The next action identifies whether the package is planned, generated, QA-ready, or blocked.
 - Recovery notes:
-  - If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.
-  - If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.
+  - If image_generation_capability/v1 is unknown or prompt_only, retain visual_prompt_card/v1, mark generation not_observed, and hand back image_generation_setup/v1 with the question of which image tool to use.
+  - If an edit lacks the supplied image reference or preserve/remove constraints, retain only the supplied edit intent, mark transformation unresolved, and hand back the missing inputs for the image transformation brief.
+  - If visual_generation_receipt/v1 reports a failed or partial attempt, retain visual_prompt_card/v1 and the receipt's failure stage, mark generation not_observed, and hand back the failed attempt without claiming an image.
 - Required inputs:
   - source/image
   - create/edit
@@ -3602,8 +3629,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If an in-scope plugin, MCP, or runtime surface cannot be inspected, retain the observed surface_inventory/v1 entries, mark that surface not_observed, and hand back the evidence gap rather than call it a missing capability.
+  - If config risks cannot be checked without exposing secret values, retain redacted key names and paths, mark those checks unresolved, and hand back config_security_findings/v1 with risk categories for later remediation.
 - Required inputs:
   - workspace or repo root
   - audit scope: repo, skills, prompts, plugins, MCP/tools, hooks, config, docs, runtime artifacts
@@ -3668,8 +3695,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Open questions, residual risk, and missing verification are named.
   - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
 - Recovery notes:
-  - If the reviewed target is missing, inspect the requested artifact or ask one target question.
-  - If independent verification is unavailable, report the gap and avoid an approval-style claim.
+  - If build or CI evidence is missing for the target release, retain the evidenced readiness_matrix/v1 rows, mark readiness unresolved, and hand back release_gate_verdict/v1 on HOLD with the missing evidence list.
+  - If rollback owner, health thresholds, or recovery path is missing, retain the evidenced readiness_matrix/v1 rows, mark rollback readiness unresolved, and hand back rollback_and_monitoring_plan/v1 with the exact gaps.
 - Required inputs:
   - product, service, release, or artifact scope
   - target environment and release channel
@@ -3741,8 +3768,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Proposed fixes are separated from observed QA evidence.
   - Missing or failed verification routes back to plan, fix, or a narrower test.
 - Recovery notes:
-  - If the expected behavior is unclear, route back to plan before running adversarial checks.
-  - If verification fails, return to fix or research with the failed signal instead of advancing.
+  - If a required check fails with an unknown origin, keep the other fresh results, mark the claim unresolved on HOLD, and hand back the same check rerun at the merge base as the missing evidence.
+  - If a fix test has only a fresh green result, retain that result within its scope, mark the claim unresolved on HOLD with regression_witness_missing, and hand back the required pre-fix red witness and its source.
+  - If a declared generated path has no known regeneration command, retain verification_matrix/v1, mark generated-output verification unresolved, and hand back generated_artifact_provenance/v1 with the command gap.
 - Required inputs:
   - claim or change under verification
   - expected behavior and risk surface
@@ -3817,8 +3845,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If observed_at lacks receipt-authenticated provenance, retain the task set, rubric, and input digests, mark the comparison not_observed, and hand back paired_run_decision/v1 with the provenance gap rather than a pass or fail.
+  - If candidate inputs or success criteria differ outside the variable under test, retain the observed runs, mark executor selection tentative, and hand back the mismatched digests or criteria and a matched rerun budget.
+  - If a judge has no measured agreement against human labels, retain the prewritten rubric and observed executable checks, mark judgment unresolved and unqualified, and hand back the missing agreement measurements instead of a correctness claim.
 - Required inputs:
   - candidate executors or agents
   - task set and fixtures
@@ -3882,8 +3911,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - duplication_conflict_report/v1 names the existing rule or check each candidate repeats or contradicts, or says none was found and where it looked.
   - Nothing reached a destination without an approval recorded in review_queue/v1.
 - Recovery notes:
-  - If source evidence conflicts, route to memory or knowledge review before writing durable guidance.
-  - If the fact may be stale, record the staleness warning and next refresh action.
+  - If a principle rests on one observation, retain its source reference in principle_candidate_set/v1, mark the rule tentative and needs-evidence in review_queue/v1, and hand back the candidate for repeated observations.
+  - If approval is missing, retain principle_candidate_set/v1 and duplication_conflict_report/v1, mark implementation not_observed, and hand back review_queue/v1 without producing approved_patch_handoff/v1.
+  - If skill_manage stages an approved change, retain the approved candidate and staged result, mark the skill update not_observed, and hand back the pending ID for the person's `/skills approve <id>`.
 - Required inputs:
   - source corpus: skills, prompts, traces, reviews, failures, or docs
   - destination boundary: AGENTS, skills, prompt, docs, memory, check, or no-write review
@@ -4161,8 +4191,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Local telemetry, provider truth, billing truth, and completion evidence are separate states.
   - Warnings name the next measurement or operator review action.
 - Recovery notes:
-  - If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
-  - If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+  - If the previous must-keep pack has no item classes, retain its recorded contents, mark the class delta unresolved, and hand back must_keep_item_class_delta/v1 as comparison unavailable, never as zero items.
+  - If a checkpoint is due but no Hermes /compress reply is observed, retain the must-keep context pack and checkpoint plan, mark compaction not_observed, and hand back /compress <focus> with the reply needed to verify continuity.
+  - If the session has no published context_budget_plan/v1, retain the proposed budget plan, mark inherited capacity unresolved, and hand back the capacity_unknown_hold and session reference for publication or rebinding.
 - Required inputs:
   - task or workflow scope
   - expected duration, artifacts, and handoff surfaces
@@ -4233,8 +4264,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Open questions, residual risk, and missing verification are named.
   - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
 - Recovery notes:
-  - If the reviewed target is missing, inspect the requested artifact or ask one target question.
-  - If independent verification is unavailable, report the gap and avoid an approval-style claim.
+  - If verify-new lacks an observed credential check, retain the redacted risk matrix and credential_rotation_sequence/v1, mark replacement unresolved, and hand back the verify-new evidence requirement before the operator revokes the old credential.
+  - If no single local plugin directory is explicitly named, no plugin audit finding stands; mark plugin_risk_audit/v1 not_observed and hand back the directory question without importing, registering, or activating any plugin.
+  - If a proposed deny glob also blocks commands the workflow needs, retain safe_action_policy/v1, mark proposed_approval_deny_list/v1 unresolved, and hand back the conflicting globs and needed commands for user revision without changing config.
 - Required inputs:
   - target workflow, code change, prompt, tool, dependency, or release surface
   - available evidence: diff, config, package metadata, command plan, or runtime permissions
@@ -4320,8 +4352,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If a stop condition is missing, retain the recurring request and cadence, mark the choice among cron, heartbeat, loop, and native goal unresolved, and hand back recurring_surface_comparison/v1 with the stop-condition question.
+  - If overlap, missed-run, retry, backfill, or failure-pause decisions remain open, retain prepared_native_blueprint/v1, mark activation unresolved, and hand back the missing policy choices and native-runtime limits before activation.
+  - If no run reference exists for the saved intent revision, retain hermes_recurring_intent/v1, mark execution and delivery not_observed, and hand back `hermes cron runs` and `hermes cron incidents` as the next status checks.
 - Required inputs:
   - recurring request
   - schedule or cadence hint
@@ -4387,8 +4420,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If metrics do not cover the named service and time window, retain the cited incident notes, mark SLO and error-budget conclusions unresolved, and hand back the evidence and missing-evidence list with the uncovered window.
+  - If remediation closure has no supporting reference, retain the source-backed reliability review, mark closure not_observed, and hand back the remediation follow-ups and missing closure evidence without claiming the fix completed.
 - Required inputs:
   - service or incident scope
   - time window
@@ -4449,8 +4482,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If the success metric or release scope is missing, retain the supplied idea and user value, mark delivery planning unresolved, and hand back the stage rail with the missing decision before an executor handoff.
+  - If plan acceptance or executor choice is absent, retain the prepared decision gates and stage rail, mark the coding handoff unresolved, and hand back the acceptance or runtime-choice question.
+  - If deploy evidence is missing after verification, retain the observed verification results, mark deploy and monitoring not_observed, and hand back the stage rail with the deploy evidence gate still open.
 - Required inputs:
   - product idea
   - target user or customer signal
@@ -4596,8 +4630,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If operating signals do not support an architecture tradeoff, retain the cited signals, mark that tradeoff tentative, and hand back the decision note with assumptions and delivery risks.
+  - If the decision owner has not accepted implementation follow-ups, retain the priority frame and risk ranking, mark follow-up authority unresolved, and hand back the decision note and handoff candidates for acceptance.
 - Required inputs:
   - operating signals
   - roadmap or release scope
@@ -4658,8 +4692,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If a monitor has only its first baseline tick or a silent tick, retain the checklist and watchlist, mark release health not_observed, and hand back the recorded cron runs and open incidents needed to assess health.
+  - If the rollback owner is missing, retain the release scope and health signals, mark the deploy decision gate unresolved, and hand back the rollback criteria with the owner question before advancing.
+  - If a canary lacks host_deployment_observation/v1 or a pre-deploy production baseline, retain the checklist, mark the comparison unresolved and BLOCK, and hand back the missing observation or baseline without authorizing rollback.
 - Required inputs:
   - release scope
   - environment
@@ -4732,8 +4767,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Proposed fixes are separated from observed QA evidence.
   - Missing or failed verification routes back to plan, fix, or a narrower test.
 - Recovery notes:
-  - If the expected behavior is unclear, route back to plan before running adversarial checks.
-  - If verification fails, return to fix or research with the failed signal instead of advancing.
+  - If a scenario needs a real install or external service the harness cannot reach, retain other observed pass/fail evidence, mark that scenario not_observed, and hand back its manual test guide with setup, do, expect, and broken signals.
+  - If a hostile browser scenario would submit, buy, send, or delete on a live target without approval, retain read-only scenario results, mark that action not_observed, and hand back the target and exact action for user approval.
+  - If a failing browser scenario has no screenshot or console readback, keep its observed failure, mark diagnosis tentative, and hand back the scenario, target, and missing capture for a bounded rerun.
 - Required inputs:
   - changed behavior
   - acceptance criteria
@@ -4805,8 +4841,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When the plan describes code changes, each code task is a vertical slice whose done check exercises its behavior end to end, or a prefactor ordered before the slices, or a wide change handed to `refactor-plan`, or the one task that writes a file every slice only appends to; the closing gate and fix tasks aside.
   - When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
 - Recovery notes:
-  - If acceptance criteria or verification are missing, route back to clarification before handoff.
-  - If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
+  - If no acceptance answer comes, keep the draft unaccepted, hand back the question, prepare no handoff.
+  - If a verification step has no outside judge, mark it unresolved and hand back the missing judge.
 - Required inputs:
   - requirements
   - constraints
@@ -5127,8 +5163,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
   - Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
 - Recovery notes:
-  - If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
-  - If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
+  - If baseline regression checks cannot run, retain the categorized smell inventory, mark the behavior lock unresolved, and hand back the cleanup plan and missing before-checks without starting risky edits.
+  - If verification fails between single-smell passes, retain the last verified pass's evidence, mark the new pass unresolved, and hand back its small diff and failed check for a fix or revert before the next pass.
+  - If the cleanup has no runtime record, retain its observed diff and before/after checks, mark the cleaner run not_observed, and hand back the four-part closing report for recording before an AC-SLOP checkpoint.
 - Required inputs:
   - target smell, or a scoped file list when the user has not named one
   - current behavior
@@ -5617,8 +5654,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Open questions, residual risk, and missing verification are named.
   - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
 - Recovery notes:
-  - If the reviewed target is missing, inspect the requested artifact or ask one target question.
-  - If independent verification is unavailable, report the gap and avoid an approval-style claim.
+  - If no advisor is configured, retain the question and context summary, mark external advice not_observed, and hand back the agent's own answer without choosing a default advisor.
+  - If the named advisor returns no response, retain the prepared advisor prompt, mark external advice not_observed, and hand back the question and context summary for a later consultation.
+  - If advisor claims lack file, artifact, command, or source evidence, retain the captured advice as advice only, mark those conclusions tentative, and hand back accepted/rejected points and unresolved questions in the decision note.
 - Required inputs:
   - question
   - context summary
@@ -6421,8 +6459,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If reproduction evidence is still missing after three questions, retain the report classification and observed facts, mark the direction unresolved, and hand back the missing steps, versions, or logs without filing.
+  - If duplicate search cannot finish, retain the scoped report summary, mark duplicate status unresolved, and hand back the explicit repository and pending search; do not confirm or dispatch creation.
+  - If connector read-back lacks request binding or issue fields, retain the confirmed direction and duplicate status, mark creation not_observed, and hand back the idempotency key and missing read-back fields without redispatching.
 - Required inputs:
   - public report or summary
   - source boundary
@@ -7984,16 +8023,19 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `experiment budget`, `scratch boundary`, `measurement method`
     - Output refs: `prepared prototype handoff with exact commands and expected observations`
     - Check IDs: `prototype_budget_isolation_check`, `prototype_smallest_artifact_check`
+    - If this step fails: unresolved; still stands: `decision_prototype/v1`; hand back: Return decision_prototype/v1 with draft commands, expected observations and the exact budget, runtime or write-boundary blocker; no command is authorized outside the declared scratch boundary.
     - Instruction: Write the exact commands, expected observations, workspace identity, and stop conditions as an executor-neutral handoff; production files are read-only inputs and no result is filled in before it is observed.
   - `prototype_record_observations` (`validation`)
     - Input refs: `experiment budget`, `measurement method`
     - Output refs: `observation ledger separating observed outputs from interpretation and confidence`
     - Check IDs: `prototype_execution_evidence_check`
+    - If this step fails: not_observed; still stands: `decision_prototype/v1`, `prepared prototype handoff with exact commands and expected observations`; hand back: Return the prepared prototype handoff with executor-unavailable or timeout status and any captured failure evidence; leave experiment results unobserved rather than filling the observation ledger with guesses.
     - Instruction: Ingest only observed outputs and bounded evidence references, then derive interpretation, confidence, and unresolved questions in separate fields; an unavailable executor, timeout, or inconclusive run is recorded as that state, never as a result.
   - `prototype_close_receipt` (`validation`)
     - Input refs: `decision question`, `experiment budget`, `scratch boundary`, `measurement method`
     - Output refs: `decision receipt for planning with supported option, rejected option, residual risk, and evidence limits`, `decision_prototype/v1`
     - Check IDs: `prototype_scope_check`, `prototype_budget_isolation_check`, `prototype_smallest_artifact_check`, `prototype_execution_evidence_check`, `prototype_cleanup_receipt_check`
+    - If this step fails: unresolved; still stands: `decision_prototype/v1`, `prepared prototype handoff with exact commands and expected observations`, `observation ledger separating observed outputs from interpretation and confidence`; hand back: Return the observation ledger and a decision receipt naming unresolved options, residual risk, evidence limits, keep/discard and cleanup status; block promotion until a separate accepted plan and handoff exist.
     - Instruction: Decide keep or discard, observe cleanup before reporting `discarded`, and close with a compact decision receipt that `ralplan` can consume without transcript replay and without any implementation handoff.
 
 ### lifecycle-growth
@@ -8129,21 +8171,25 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `target segment`, `channels or product surfaces`, `consent and policy constraints`
     - Output refs: `lifecycle_safety_policy/v1`
     - Check IDs: `lifecycle_safety_eligibility_check`
+    - If this step fails: unresolved; still stands: `lifecycle_growth_brief/v1`, `audience_trigger_policy/v1`; hand back: Return the unresolved lifecycle_safety_policy/v1 with missing consent, suppression, channel eligibility, frequency budgets, or throttle scope named; keep launch on HOLD.
     - Instruction: Order suppression precedence above legal and tenant constraints, user preferences, channel eligibility, quiet hours, and locale, then set global and per-campaign frequency budgets; record the throttle grouping key, resolved value, scope, and fallback so distinct recipients or tenants never share one window; treat production workflow content as read-only and route edits to a draft with an explicit promotion decision; fail closed when any eligibility input is missing.
   - `lifecycle_design_experiment` (`production`)
     - Input refs: `lifecycle objective and stage`, `event schema and baseline`, `channels or product surfaces`, `experiment budget`, `decision owner`
     - Output refs: `growth_experiment_plan/v1`
     - Check IDs: `lifecycle_target_behavior_check`, `lifecycle_experiment_validity_check`
+    - If this step fails: tentative; still stands: `lifecycle_growth_brief/v1`, `audience_trigger_policy/v1`, `lifecycle_safety_policy/v1`; hand back: Return the tentative growth_experiment_plan/v1 with missing assignment, actual-exposure definition, metric, guardrail, runtime, or rollback checks flagged; keep approval unapproved.
     - Instruction: Specify treatment and control, sticky assignment and exposure units, the actual-exposure definition, one primary metric, guardrails, holdout rationale, minimum runtime, data-health checks, pause and rollback conditions, and an approval state that a named human must set before any launch handoff.
   - `lifecycle_prepare_measurement_readout` (`validation`)
     - Input refs: `event schema and baseline`, `experiment budget`, `decision owner`
     - Output refs: `growth_measurement_readout/v1`
     - Check IDs: `lifecycle_readout_evidence_check`
+    - If this step fails: unresolved; still stands: `lifecycle_growth_brief/v1`, `audience_trigger_policy/v1`, `lifecycle_safety_policy/v1`, `growth_experiment_plan/v1`; hand back: Return the unresolved growth_measurement_readout/v1 with missing exposure evidence, denominator, freshness, overlap, channel, or analysis-run checks named; keep counts unknown, not zero.
     - Instruction: Lay out eligible, assigned, attempted, delivered, displayed, acted, and outcome stages with denominator and freshness checks. Supply the separate exposure-evidence companion to evaluate or prepare; unknown audience, assignment, contact pressure, overlap, or channel accounting holds expansion. First-launch preparation needs observed audience/reachability/contact checks, not invented treatment counts. Keep causal-claim status separate, list each conditional step as matched or skipped with a redacted reason, and record the analysis run's state and observation time alongside any delay. Record `ship`, `rollback`, `review`, or `insufficient_data` without forcing a decision on thin data.
   - `lifecycle_validate_handoff` (`validation`)
     - Input refs: `lifecycle objective and stage`, `target segment`, `event schema and baseline`, `channels or product surfaces`, `consent and policy constraints`, `experiment budget`, `decision owner`
     - Output refs: `growth_handoff_disposition/v1`
     - Check IDs: `lifecycle_target_behavior_check`, `lifecycle_audience_eligibility_check`, `lifecycle_safety_eligibility_check`, `lifecycle_experiment_validity_check`, `lifecycle_readout_evidence_check`, `lifecycle_handoff_boundary_check`
+    - If this step fails: unresolved; still stands: `lifecycle_growth_brief/v1`, `audience_trigger_policy/v1`, `lifecycle_safety_policy/v1`, `growth_experiment_plan/v1`, `growth_measurement_readout/v1`; hand back: Return the unresolved growth_handoff_disposition/v1 with blocked actions, missing owners or approvals, and the exact analysis run needing status reconciliation; leave requests prepared_not_observed.
     - Instruction: Propose connector, content, analytics, product, or implementation actions with owner, approver, evidence refs, timing, and stop conditions; prepare any cancellation or status-reconciliation request against the exact named run and leave it `prepared_not_observed` until a provider result is observed; return HOLD readiness while any check holds, approval is missing, or the latest analysis run is still in flight, route validated product changes to `product-brief`, and never report a send, display, action, outcome, cancellation, or causal effect that was not observed.
 
 ### market-research
@@ -8265,6 +8311,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `buyer segment and geography`, `period currency units and source cutoff`, `available evidence and source boundary`
     - Output refs: `TAM SAM SOM model and sensitivity`
     - Check IDs: `market_size_check`
+    - If this step fails: unresolved; still stands: `market scope and source ledger`; hand back: Return the market scope and source ledger with an unresolved TAM SAM SOM model and sensitivity, preserving unknown operands, unit gaps, calculation receipts, and unreconciled ranges.
     - Instruction: When in scope, use references/market-sizing.md to construct sourced TAM/SAM/SOM boundaries, calculate top-down and bottom-up scenarios with tools, reconcile disagreement, and report sensitivity; otherwise mark this lane not requested.
   - `analyze_customer_evidence` (`analysis`)
     - Input refs: `buyer segment and geography`, `available evidence and source boundary`
@@ -8280,6 +8327,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `decision and audience`, `buyer segment and geography`, `period currency units and source cutoff`, `available evidence and source boundary`, `research budget and stop condition`
     - Output refs: `decision-ready market findings`
     - Check IDs: `market_source_check`, `market_findings_check`
+    - If this step fails: tentative; still stands: `market scope and source ledger`, `TAM SAM SOM model and sensitivity`, `customer evidence and JTBD matrix`, `comparable competitor and pricing profiles`; hand back: Return tentative decision-ready market findings with the source ledger, calculation receipts, assumptions, contrary evidence, and unresolved retrieval gaps; name each next verification owner.
     - Instruction: Use references/findings-template.md to deliver findings, calculations, assumptions, contrary evidence and unresolved retrieval gaps; record optional lanes as not requested, stop at the agreed budget, and hand decision implications to the decision owner.
 
 ### product-discovery-validation
@@ -8408,26 +8456,31 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `target segment`, `known evidence and current alternatives`, `learning budget and deadline`
     - Output refs: `customer_discovery_plan/v1`
     - Check IDs: `discovery_customer_reentry_check`
+    - If this step fails: tentative; still stands: `discovery_decision_frame/v1`, `discovery_evidence_ledger/v1`; hand back: Return the tentative customer_discovery_plan/v1 with missing participant criteria, past-behavior prompts, consent, bias controls, or evidence re-entry fields flagged for correction.
     - Instruction: Prepare participant criteria, a past-behavior interview guide, consent and privacy constraints, bias controls, the human task that recruits and interviews, and the contract for how bounded summaries re-enter the ledger; OMH contacts nobody.
   - `discovery_gate_problem` (`validation`)
     - Input refs: `problem hypothesis`, `known evidence and current alternatives`, `success, failure, and stop criteria`
     - Output refs: `discovery_decision_frame/v1`
     - Check IDs: `discovery_evidence_class_check`, `discovery_problem_gate_check`
+    - If this step fails: unresolved; still stands: `discovery_decision_frame/v1`, `discovery_evidence_ledger/v1`, `customer_discovery_plan/v1`; hand back: Return the discovery_decision_frame/v1 as unresolved with missing target-segment human or behavioral evidence and the customer_discovery_plan/v1; keep solution work blocked.
     - Instruction: Compare ledger entries against the precommitted criteria and record the problem gate as validated, refuted, or inconclusive, admitting only entries observed in the framed target segment; when it is not validated, or when the audience is unknown, synthetic-only, or non-recruitable, stop solution and MVP work and name the customer or audience evidence still missing.
   - `discovery_rank_assumptions` (`production`)
     - Input refs: `problem hypothesis`, `target segment`, `known evidence and current alternatives`, `decision owner`, `learning budget and deadline`, `success, failure, and stop criteria`
     - Output refs: `assumption_test_portfolio/v1`
     - Check IDs: `discovery_assumption_precommit_check`
+    - If this step fails: tentative; still stands: `discovery_decision_frame/v1`, `discovery_evidence_ledger/v1`, `customer_discovery_plan/v1`; hand back: Return the tentative assumption_test_portfolio/v1 with unranked assumptions or missing success, failure, inconclusive, segment, budget, owner, and evidence re-entry conditions flagged.
     - Instruction: List the assumptions by category, score decision impact and evidence gap, and select for each top-ranked assumption the cheapest disconfirming test that could change the decision, with its precommitted conditions and bounded budget; a prototype is one optional instrument routed to `decision-prototype`, never validation by itself.
   - `discovery_draft_gtm_hypothesis` (`production`)
     - Input refs: `problem hypothesis`, `target segment`, `known evidence and current alternatives`
     - Output refs: `initial_gtm_hypothesis/v1`
     - Check IDs: `discovery_gtm_hypothesis_check`
+    - If this step fails: tentative; still stands: `discovery_decision_frame/v1`, `discovery_evidence_ledger/v1`, `customer_discovery_plan/v1`, `assumption_test_portfolio/v1`; hand back: Return the tentative initial_gtm_hypothesis/v1 with unsupported pricing, willingness-to-pay, or market-size fields left unknown and each missing evidence basis named.
     - Instruction: Draft the beachhead segment, buyer versus user, current alternative, value proposition, pricing or willingness-to-pay hypothesis, one initial channel, first cohort, and learning metrics, each tied to its evidence basis or marked unknown.
   - `discovery_validate_decision_receipt` (`validation`)
     - Input refs: `problem hypothesis`, `target segment`, `known evidence and current alternatives`, `decision owner`, `learning budget and deadline`, `success, failure, and stop criteria`
     - Output refs: `discovery_decision_receipt/v1`
     - Check IDs: `discovery_decision_frame_check`, `discovery_evidence_class_check`, `discovery_customer_reentry_check`, `discovery_problem_gate_check`, `discovery_assumption_precommit_check`, `discovery_decision_receipt_check`, `discovery_gtm_hypothesis_check`
+    - If this step fails: unresolved; still stands: `discovery_decision_frame/v1`, `discovery_evidence_ledger/v1`, `customer_discovery_plan/v1`, `assumption_test_portfolio/v1`, `initial_gtm_hypothesis/v1`; hand back: Return an unresolved discovery_decision_receipt/v1 naming unmet precommitted criteria, contradictions, rejected paths, and missing audience evidence; block persevere and product handoff.
     - Instruction: Record the decision against the precommitted criteria and observed evidence, with confidence limits, rejected paths, residual risks, and the next route; a `persevere` receipt hands `product-brief` the validated problem, segment, MVP learning boundary, residual risks, and GTM hypotheses without transcript replay.
 
 ### sales-pipeline-review
@@ -8537,6 +8590,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `pipeline snapshot`, `as-of time and review horizon`, `currency, amount, stage, and forecast definitions`, `decision owner`
     - Output refs: `sales_pipeline_scope/v1`
     - Check IDs: `sales_pipeline_scope_check`
+    - If this step fails: unresolved; still stands: nothing yet; hand back: Return sales_pipeline_scope/v1 as unresolved with the exact missing or stale timestamp, undefined semantics, currency basis, duplicate, or ownership gap; perform no calculation or ranking.
     - Instruction: Record the opaque source reference, as-of time, horizon and cohort, included motions and owners, currency and conversion basis, amount semantics, stage and forecast-category definitions, freshness, duplicates, missing owners, and data-quality gaps; return `HOLD` with the exact blocking gap before calculating or ranking anything.
   - `sales_pipeline_assess_health` (`analysis`)
     - Input refs: `pipeline snapshot`, `as-of time and review horizon`, `currency, amount, stage, and forecast definitions`
@@ -8552,11 +8606,13 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `pipeline snapshot`, `as-of time and review horizon`, `prior forecast and actuals`
     - Output refs: `sales_outcome_learning_annex/v1`, `sales_renewal_risk_annex/v1`
     - Check IDs: `sales_outcome_learning_check`, `sales_renewal_risk_check`
+    - If this step fails: tentative; still stands: `sales_pipeline_scope/v1`, `sales_pipeline_health/v1`, `sales_forecast_assessment/v1`; hand back: Return tentative sales_outcome_learning_annex/v1 and sales_renewal_risk_annex/v1 drafts with their cohort, source, contradiction, and owner gaps; mark unsupported annexes unsupported.
     - Instruction: When supplied evidence supports it, prepare the won/lost/unqualified learning annex by bounded cohort with contradictions and research follow-ups, and the renewal-risk annex with horizon, health, utilization, support, budget, and staffing signals, open risks, expansion hypotheses, and owner; otherwise emit each annex as `unsupported` with the missing evidence named.
   - `sales_pipeline_validate_handoff` (`validation`)
     - Input refs: `pipeline snapshot`, `as-of time and review horizon`, `currency, amount, stage, and forecast definitions`, `prior forecast and actuals`, `decision owner`
     - Output refs: `sales_pipeline_handoff/v1`
     - Check IDs: `sales_pipeline_scope_check`, `sales_pipeline_health_check`, `sales_forecast_state_check`, `sales_pipeline_handoff_check`
+    - If this step fails: unresolved; still stands: `sales_pipeline_scope/v1`, `sales_pipeline_health/v1`, `sales_forecast_assessment/v1`, `sales_outcome_learning_annex/v1`, `sales_renewal_risk_annex/v1`; hand back: Return the unresolved sales_pipeline_handoff/v1 with missing follow-up owners, due dates, exit criteria, evidence, or CRM approvals named; keep CRM changes proposed and mutation not_observed.
     - Instruction: Select account follow-ups with owner, due date, exit criterion, and evidence reference, list proposed CRM object/field/value corrections with evidence, owner, and approval state, name the sibling route for discovery, feedback, calculation, or finance work, and return the review disposition with mutation, storage, sync, alert, and communication left to the connector boundary.
 
 ### show-reel
@@ -8691,6 +8747,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `objective audience and channel`, `source brand and asset permissions`
     - Output refs: `show_reel_source_asset_register/v1`
     - Check IDs: `reel_source_check`
+    - If this step fails: unresolved; still stands: `show_reel_brief/v1`; hand back: Return show_reel_source_asset_register/v1 with unresolved source revisions, rights, consent and literal-fact citations, plus the decision-changing question needed to clear HOLD.
     - Instruction: For an idea video with nothing of a product on screen, record `no_product_claims` and move on. Otherwise verify claim provenance, revision, brand identity, screenshots, font and asset rights; distinguish supplied, observed, vendor-asserted, inferred and concept. Resolve conflicts or HOLD; never fabricate metrics, customers or real demos.
   - `reel_select_concept` (`analysis`)
     - Input refs: `objective audience and channel`, `duration format and budget`, `source brand and asset permissions`
@@ -8701,36 +8758,43 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `objective audience and channel`, `duration format and budget`, `source brand and asset permissions`
     - Output refs: `show_reel_storyboard/v1`
     - Check IDs: `reel_story_check`
+    - If this step fails: tentative; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_source_asset_register/v1`; hand back: Return show_reel_storyboard/v1 with the failing segments, source/asset bindings, composition and native-script legibility defects marked for revision.
     - Instruction: Author each timed segment with message, source/asset IDs, medium, palette, typography, texture, layout, camera/object movement and transition, listing a distinct composition per beat so that adjacent segments differ in at least two of medium, palette, typeface, motion and texture; bind native-script text runs and visibly distinguish concept from captured product evidence.
   - `reel_measure_timing` (`production`)
     - Input refs: `objective audience and channel`, `duration format and budget`, `available production tools`
     - Output refs: `show_reel_timing_map/v1`
     - Check IDs: `reel_timing_check`
+    - If this step fails: unresolved; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`; hand back: Return show_reel_timing_map/v1 with available measured cues, missing reading or pronunciation evidence and unresolved voice rights, leaving scene times unlocked.
     - Instruction: Select muted, music-only or narration mode only as needed; measure reading, approved pronunciation and word/beat cues before locking scene times, keep literal onscreen text separate, and HOLD unsupported voice locales or consent.
   - `reel_author_motion` (`production`)
     - Input refs: `objective audience and channel`, `duration format and budget`, `source brand and asset permissions`, `available production tools`
     - Output refs: `show_reel_renderer_handoff/v1`
     - Check IDs: `reel_adapter_check`
+    - If this step fails: not_observed; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`, `show_reel_timing_map/v1`; hand back: Return show_reel_renderer_handoff/v1 with the bounded recipe, missing capability or font evidence, timeout/cancel limits and partial-resume boundaries, without claiming a render.
     - Instruction: Read the installed `toolkit/README.md`, `references/motion-techniques.md`, `references/craft-engine.md` and `references/craft-techniques.md` with ordinary file tools; write scenes fresh from the segment art direction with the engine or another observed host-tool recipe. Bind toolkit provenance and source-bound run receipts, safe inputs/cwd, versions, deterministic seek, commands, timeout/cancel and font readiness; serial capture has no resume/chunk claim. Author motion without hidden installs or core subprocesses.
   - `reel_review_revise` (`validation`)
     - Input refs: `objective audience and channel`, `duration format and budget`, `available production tools`
     - Output refs: `show_reel_preview_review/v1`
     - Check IDs: `reel_preview_check`
+    - If this step fails: tentative; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_renderer_handoff/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`, `show_reel_timing_map/v1`; hand back: Return show_reel_preview_review/v1 with observed previews, missing motion checks, keep/fix/rebuild findings and remaining weakest-scene work at the revision budget.
     - Instruction: Render style frames, then draft playback and transition strips at delivery-size; record keep/fix/rebuild by scene, identify strongest and weakest scenes, reject repeated headline/card/rail grammar, spend the declared revision budget rebuilding the weakest, compare same-time before/after plus both cut boundaries, re-render, and stop at the budget with unresolved defects visible.
   - `reel_export` (`production`)
     - Input refs: `duration format and budget`, `available production tools`
     - Output refs: `show_reel_export_manifest/v1`
     - Check IDs: `reel_export_check`
+    - If this step fails: not_observed; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_preview_review/v1`, `show_reel_renderer_handoff/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`, `show_reel_timing_map/v1`; hand back: Return show_reel_export_manifest/v1 separating failed or partial files from final files and listing missing codec, color, size, hash and audio measurements needed before export can pass.
     - Instruction: Export actual master/share variants as requested; measure codec, color, dimensions, fps, duration, filesize and hashes, audio loudness/true peak and sync when audio exists. Keep failed and partial outputs distinct from final files.
   - `reel_validate` (`validation`)
     - Input refs: `objective audience and channel`, `duration format and budget`, `source brand and asset permissions`, `available production tools`
     - Output refs: `show_reel_qa_report/v1`
     - Check IDs: `reel_qa_check`, `reel_export_check`
+    - If this step fails: tentative; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_export_manifest/v1`, `show_reel_preview_review/v1`, `show_reel_renderer_handoff/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`, `show_reel_timing_map/v1`; hand back: Return show_reel_qa_report/v1 with evidence-linked REVISE/HOLD findings, missing required checks and separate technical, artistic, playback and listening verdicts for the next correction.
     - Instruction: Inspect actual delivery-size playback, content/brand, localized native line breaks, glyph fallback, Arabic shaping/bidi isolation, cuts, motion and audio; return evidence-linked PASS/REVISE/HOLD, keep technical, artistic, full-speed playback and listening verdicts independent; never whole-video PASS from a screenshot, score, metric or preset.
   - `reel_deliver` (`validation`)
     - Input refs: `objective audience and channel`, `duration format and budget`, `source brand and asset permissions`, `available production tools`
     - Output refs: `show_reel_delivery_manifest/v1`
     - Check IDs: `reel_delivery_check`, `reel_qa_check`
+    - If this step fails: not_observed; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_export_manifest/v1`, `show_reel_preview_review/v1`, `show_reel_qa_report/v1`, `show_reel_renderer_handoff/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`, `show_reel_timing_map/v1`; hand back: Return show_reel_delivery_manifest/v1 with generated files, available source-package files, QA receipts and missing attachment or recipient evidence, keeping transfer and publication unconfirmed.
     - Instruction: Deliver requested files and source package with selected sources, pinned versions, licenses, locale variants, regeneration recipe and QA receipts; distinguish generated/attached/received/published with exact-target readback and honest missing evidence. HOLD a video request if only a storyboard exists.
 
 ### repro-audit
@@ -8897,11 +8961,13 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `input and overlay polygon layers`, `explicit source and metric target CRS`, `new output directory and execution budget`
     - Output refs: `result GeoJSON`, `measured summary JSON`, `replay and provenance manifest`
     - Check IDs: `gis_input_check`, `gis_backend_check`
+    - If this step fails: not_observed; still stands: `replay and provenance manifest`; hand back: Return the replay and provenance manifest, captured stdout, stderr and exit or timeout, and the dependency or input blocker for a retry in a new output directory without claiming zero overlap.
     - Instruction: Run the standalone helper with a finite host timeout in an isolated optional environment; record real stdout, stderr and exit without fallback values.
   - `gis_reconcile` (`validation`)
     - Input refs: `input and overlay polygon layers`, `explicit source and metric target CRS`, `new output directory and execution budget`
     - Output refs: `result GeoJSON`, `measured summary JSON`, `replay and provenance manifest`
     - Check IDs: `gis_output_check`, `gis_backend_check`
+    - If this step fails: tentative; still stands: `replay and provenance manifest`; hand back: Return result GeoJSON and measured summary JSON with failed hash, count or pair-sum versus union-area checks and fixture limits; retain only the manifest's validated input provenance, not a verified overlap result.
     - Instruction: Read back every promised artifact, check hashes and independent area/count expectations, and report observed results separately from public-world interpretation.
 
 ### sprite-forge
@@ -8999,11 +9065,13 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `grid sheet from the host image tool on flat #FF00FF`, `declared rows x cols, cell size and feet baseline`, `new output directory and execution budget`
     - Output refs: `aligned equal-size frames and sheet`, `sprite_forge_qc/v1 receipt`, `character art-direction record`
     - Check IDs: `sprite_input_check`, `sprite_backend_check`
+    - If this step fails: not_observed; still stands: `character art-direction record`; hand back: Return the character art-direction record and observed helper command, refusal or timeout, with the required grid correction or optional Pillow setup before retrying in a new output directory.
     - Instruction: Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment and nearest-neighbor resize.
   - `sprite_verify` (`validation`)
     - Input refs: `grid sheet from the host image tool on flat #FF00FF`, `declared rows x cols, cell size and feet baseline`, `new output directory and execution budget`
     - Output refs: `aligned equal-size frames and sheet`, `sprite_forge_qc/v1 receipt`, `character art-direction record`
     - Check IDs: `sprite_qc_check`, `sprite_backend_check`
+    - If this step fails: tentative; still stands: `character art-direction record`; hand back: Return the sprite_forge_qc/v1 receipt with observed metrics or read-back gaps and, for REGENERATE, the tighter pose and scale instructions for a new source sheet, never patched frames.
     - Instruction: Read back every frame, the aligned sheet and qc.json; recompute hashes and report observed metrics separately from art-quality judgement.
 
 ### biomedical-evidence
@@ -9102,6 +9170,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `public gene/variant and disease query`, `bounded BioMCP capture workspace`, `intended entity identifiers and source scope`
     - Output refs: `biomedical_reconciliation_manifest/v1`
     - Check IDs: `bio_scope`, `bio_capture`
+    - If this step fails: not_observed; still stands: `biomedical_evidence_matrix/v1`; hand back: Return the scoped biomedical_evidence_matrix/v1 and any biomedical_reconciliation_manifest/v1 receipts, preserving actual streams and failures; leave missing ClinVar or CTGov captures not_observed.
     - Instruction: Use the bounded host terminal to capture ClinVar and CTGov responses plus receipts; retrieval remains unobserved without actual streams.
   - `bio_reconcile_captures` (`analysis`)
     - Input refs: `public gene/variant and disease query`, `bounded BioMCP capture workspace`, `intended entity identifiers and source scope`
@@ -9112,6 +9181,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `public gene/variant and disease query`, `bounded BioMCP capture workspace`, `intended entity identifiers and source scope`
     - Output refs: `biomedical_evidence_matrix/v1`, `biomedical_reconciliation_manifest/v1`
     - Check IDs: `bio_reconcile`, `bio_verify`
+    - If this step fails: tentative; still stands: `biomedical_reconciliation_manifest/v1`; hand back: Return biomedical_reconciliation_manifest/v1 as capture receipts and the tentative biomedical_evidence_matrix/v1 with hash, output, identity, and date failures; retain nonzero partial status.
     - Instruction: Read back outputs and hashes; report availability separately from completeness, observed conflicts and every unresolved date or identifier.
 
 ### molecular-docking
@@ -9200,11 +9270,13 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `prepared receptor and ligand PDBQT paths`, `binding box and preparation provenance`, `approved local resource budget`
     - Output refs: `molecular_docking_run/v1 and real pose/score files`
     - Check IDs: `docking_input_check`, `docking_budget_check`
+    - If this step fails: not_observed; still stands: `molecular_docking_preflight/v1`; hand back: Return molecular_docking_preflight/v1 with captured stdout, stderr, exit or deadline evidence and any partial pose/score files for backend review before a retry in a new output directory.
     - Instruction: Explicitly run toolkit/scripts/dock.py in the chosen isolated Vina environment with a new output directory, captured logs and a real finite host timeout. Never auto-install or silently substitute a provider.
   - `docking_verify` (`validation`)
     - Input refs: `prepared receptor and ligand PDBQT paths`, `binding box and preparation provenance`, `approved local resource budget`
     - Output refs: `molecular_docking_run/v1 and real pose/score files`
     - Check IDs: `docking_execution_check`
+    - If this step fails: tentative; still stands: `molecular_docking_preflight/v1`; hand back: Return poses.pdbqt, scores.json and manifest.json with failed pose, energy, atom-record, hash or replay checks and engine version/platform limits; keep the docking run unverified.
     - Instruction: Read poses.pdbqt, scores.json and manifest.json; reconcile saved pose energies and atom records with actual inputs and all hashes. Replay with a new output directory when needed; qualify reproducibility by version/platform.
 
 ### ai-job-search
@@ -9305,16 +9377,19 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `requested career action`, `supported candidate facts and preferences`, `approved private workspace and source scope`
     - Output refs: `jobs.json and shortlist.md`
     - Check IDs: `career_scope`, `career_sources`
+    - If this step fails: not_observed; still stands: `profile.md and preferences.md`; hand back: Return jobs.json and shortlist.md with receipts, unverified leads, and blocked sources (not empty results).
     - Instruction: Use bounded native retrieval, capture source receipts, invoke validate/merge/summary and write an evidence-linked qualitative shortlist.
   - `career_draft` (`production`)
     - Input refs: `requested career action`, `supported candidate facts and preferences`, `approved private workspace and source scope`
     - Output refs: `versioned application drafts and review.md`, `interview-prep.md and optional skill-gaps.md`
     - Check IDs: `career_claims`, `career_sources`
+    - If this step fails: tentative; still stands: `jobs.json and shortlist.md`, `profile.md and preferences.md`; hand back: Return versioned drafts and review.md with evidence gaps, review mode and the question blocking interview-prep.md.
     - Instruction: Write versioned evidence-mapped application documents, review actual drafts, then prepare interviews from that exact version.
   - `career_track` (`validation`)
     - Input refs: `requested career action`, `supported candidate facts and preferences`, `approved private workspace and source scope`
     - Output refs: `evidence-bound tracker and next actions`
     - Check IDs: `career_state`
+    - If this step fails: unresolved; still stands: `interview-prep.md and optional skill-gaps.md`, `jobs.json and shortlist.md`, `profile.md and preferences.md`, `versioned application drafts and review.md`; hand back: Keep history; return helper exits, missing events, tracker read-back gaps, draft version and next actions.
     - Instruction: Record only explicitly evidenced events with the companion, read back the tracker and report safe next actions.
 
 ### jev-ask
@@ -9827,8 +9902,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If project versus user scope or lasting versus temporary retention is ambiguous, retain the bounded summary as a candidate, mark capture unresolved, and hand back one scope-or-durability question without claiming a write.
+  - If omh_memory returns error, retain memory_new_candidate/v1 as prepared only, mark the write not_observed, and hand back the bounded summary, record_type, tags, scope, and retention_class for the omh memory capture fallback.
+  - If capture returns pending_review, retain the staged memory_new_candidate/v1, mark approval not_observed, and hand back the stated review reason without treating an unsafe or relative-time phrase as an approved record.
 - Required inputs:
   - user request
   - target context
@@ -9889,8 +9965,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If entry-by-entry confirmation stops before the assembled diff is approved, retain the reviewed claim decisions, mark the diff unresolved, and hand back reviewed indexes, remaining candidates, and the next entry to resume.
+  - If the native memory tool is unavailable after diff approval, retain the approved before/after diff, mark the native write not_observed, and hand back that diff without editing MEMORY.md or USER.md directly.
+  - If a native write returns staged: true with a pending_id, retain the approved diff and pending_id, mark saving not_observed, and hand back /memory approve <id> for the person without repeating the write.
 - Required inputs:
   - user request
   - target context
@@ -9950,8 +10027,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.
   - The next wrapper action is explicit and platform-safe.
 - Recovery notes:
-  - If platform metadata is missing, keep the card platform-neutral and ask for the target surface.
-  - If send or registration evidence is unavailable, show the adapter-owned action instead of claiming delivery.
+  - If silent update conflicts with a status notice, keep the thread; hand back the silent-or-notify choice.
+  - If an action would touch a thread other than the named one, mark it unresolved; hand back the target.
 - Required inputs:
   - user request
   - target context
@@ -10009,8 +10086,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
   - Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
 - Recovery notes:
-  - If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
-  - If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
+  - If the scratch-edit probe is denied, keep the denial, mark permission unresolved; hand back the grant needed.
+  - If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the JSON flag.
 - Required inputs:
   - user request
   - target context
@@ -10072,8 +10149,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Prepared generation, generated file, render QA, approval, attachment, and delivery are separate states.
   - The next action says whether to generate, revise, QA, approve, attach, or deliver.
 - Recovery notes:
-  - If generation tooling is missing, prepare a prompt or package handoff and mark file output not_observed.
-  - If QA or attachment evidence is missing, keep generated/delivered states separate and show the next check.
+  - If rendered images do not match slide_count or remain uninspected, retain the observed slide_count, mark render_screenshot unresolved, and hand back the exact file and outstanding image checks.
+  - If the person's approval names no final file, retain each generated version's read-back, mark approval unresolved, and hand back the stable id and version choices without selecting by modification time.
+  - If a publication URL resolves to a different content hash, retain the approved file and any archive evidence already read back, mark publication unresolved, and hand back the URL and expected sha256 for destination read-back.
 - Required inputs:
   - user request
   - target context
@@ -10129,8 +10207,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The next action is readable, reversible when possible, and confirmation-gated when risky.
   - Delivery, notification, or platform behavior is not claimed without wrapper evidence.
 - Recovery notes:
-  - If transcript confidence or intent is weak, ask one short clarification before action.
-  - If platform delivery is unavailable, keep the response in chat and mark delivery not_observed.
+  - If a dictated request names no target context, nothing is actionable yet; mark the next action unresolved and hand back one target question before preparing voice-operator/v1.
+  - If a clarified voice request still lacks confirmation for a risky action, retain the voice-operator/v1 guidance, mark execution not_observed, and hand back the proposed next action for explicit approval.
 - Required inputs:
   - user request
   - target context
@@ -10981,8 +11059,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If tool_search finds a deferred native tool but access is untested, retain its present classification, mark API access not_observed, and hand back the tool_call step for a user-approved check instead of listing the tool as missing.
+  - If a required MCP server or CLI is absent, retain the present, optional, and unsafe inventory entries, mark workflow readiness unresolved, and hand back the missing dependency and installation owner without installing it.
 - Required inputs:
   - user request
   - target context
@@ -11108,8 +11186,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Local telemetry, provider truth, billing truth, and completion evidence are separate states.
   - Warnings name the next measurement or operator review action.
 - Recovery notes:
-  - If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
-  - If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+  - If the metric window is missing, keep supplied payloads, mark quality unresolved; hand back the next measure.
+  - If a budget threshold is missing, keep the observed cost, mark advice tentative; hand back the gaps.
 - Required inputs:
   - user request
   - target context
@@ -11175,8 +11253,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Local telemetry, provider truth, billing truth, and completion evidence are separate states.
   - Warnings name the next measurement or operator review action.
 - Recovery notes:
-  - If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
-  - If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+  - If neither active-profile nor legacy hermes-achievements files are available, no badge result stands; mark the summary not_observed and hand back the missing local-file evidence needed for hermes_achievements_observation/v1.
+  - If the snapshot is older than the plugin's rescan window, retain its badge list as of generated_at, mark current progress tentative, and hand back the timestamp and stale-snapshot warning.
+  - If supplied session_activity_receipt/v1 lacks a metric, retain the available badge and activity metadata, mark that metric not_observed, and hand back the gap without replacing it with zero.
 - Required inputs:
   - user request
   - target context
@@ -11237,8 +11316,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Blocking issues, warnings, and optional surfaces are separated.
   - The next repair action is explicit and does not claim a reload or runtime observation.
 - Recovery notes:
-  - If a managed path or config key is missing, route to setup/update repair instead of editing hidden state.
-  - If a reload or plugin load was not observed, keep the diagnostic result as local health evidence only.
+  - If only a prepared handoff exists, mark coding progress not_observed; hand back the missing stage.
+  - If P0 capture fails its audit, keep the tier checks, mark readiness unresolved; hand back quick wins.
 - Required inputs:
   - user request
   - target context
@@ -11689,8 +11768,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Only reviewed rejected candidates are returned; expired candidates stay excluded.
   - Recall output is not presented as approved memory, source freshness, or execution evidence.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If the query, scope, tags, stale policy, or match limit is unspecified, no rejected-decision match stands yet; mark recall unresolved and hand back one question fixing the missing filter.
+  - If a candidate's reviewed-rejected status or expiry cannot be checked, retain only matches that passed those checks, mark remaining recall unresolved, and hand back rejected_decision_recall/v1 with the claim boundary and missing checks.
 - Required inputs:
   - user request
   - target context
@@ -11746,8 +11825,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Host usage is Hermes' recorded accounting for the named session, observed only when it recorded tokens; provider billing and cron stay not_observed.
   - The report does not intercept, route, or execute provider or host work.
 - Recovery notes:
-  - If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
-  - If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+  - If the named Hermes session has no row or recorded tokens, retain supplied timings and context data in run_efficiency_report/v1, mark host_usage not_observed, and hand back the session ID for a recorded-usage check.
+  - If session_activity_receipt/v1 omits tool durations or context-budget metrics, retain its available observations, mark the missing metrics not_observed rather than zero, and hand back the exact missing measurements.
 - Required inputs:
   - user request
   - target context
@@ -11806,8 +11885,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - No secret value, credential validation, provider call, model route, wallet, or payment action is claimed.
   - Any host observation reference remains supplied metadata, not a live connector check.
 - Recovery notes:
-  - If required context is missing, ask one blocking question or route back to the narrower workflow.
-  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+  - If provider ID or profile ID is missing, retain the supplied capability requirements, mark provider_profile_posture/v1 unresolved, and hand back a request for the missing ID without reading any secret.
+  - If secret-presence metadata is absent, retain the named provider, profile, and requested capabilities, mark secret presence not_observed, and hand back metadata-only secret requirements plus allowed and prohibited actions.
+  - If only a host observation reference is supplied, retain it as metadata, mark provider connectivity not_observed, and hand back provider_profile_posture/v1 without claiming credential validation or making a provider call.
 - Required inputs:
   - user request
   - target context

@@ -48,8 +48,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If a managed path or config key is missing, route to setup/update repair instead of editing hidden state.
-- If a reload or plugin load was not observed, keep the diagnostic result as local health evidence only.
+- If only a prepared handoff exists, mark coding progress not_observed; hand back the missing stage.
+- If P0 capture fails its audit, keep the tier checks, mark readiness unresolved; hand back quick wins.
 
 ## Workflow Lane
 

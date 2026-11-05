@@ -59,6 +59,13 @@ All notable changes will be documented here.
   counts completed, else a muted `▪`.
   Interrupted, failed, waiting and running agents keep their marks.
 
+- **A skill that fails partway now says what it already proved.** It lowers the
+  affected result to tentative, unresolved, or not_observed, and hands back what
+  the person needs to continue instead of presenting partial work as finished.
+  Procedure steps name what survives each failure, Recovery Notes cover each
+  skill's own blockers, and catalog checks keep both in place. The idea comes
+  from PortSwigger Burp AT research skills.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and
