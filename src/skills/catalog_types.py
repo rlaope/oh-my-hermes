@@ -950,6 +950,17 @@ class ProcedureCheck:
     instruction: str
 
 
+PROCEDURE_BAIL_LEVELS = ("tentative", "unresolved", "not_observed")
+
+
+@dataclass(frozen=True)
+class ProcedureBail:
+    still_stands: tuple[str, ...]
+    downgrade_to: str
+    handback: str
+    fallback_skill: str = ""
+
+
 @dataclass(frozen=True)
 class ProcedureStep:
     step_id: str
@@ -958,6 +969,7 @@ class ProcedureStep:
     output_refs: tuple[str, ...]
     check_ids: tuple[str, ...]
     instruction: str
+    on_fail: ProcedureBail | None = None
 
 
 @dataclass(frozen=True)

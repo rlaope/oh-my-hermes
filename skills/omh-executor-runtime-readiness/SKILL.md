@@ -50,8 +50,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
-- If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
+- If the scratch-edit probe is denied, keep the denial, mark permission unresolved; hand back the grant needed.
+- If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the JSON flag.
 
 ## Workflow Lane
 

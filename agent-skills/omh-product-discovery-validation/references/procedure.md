@@ -68,6 +68,7 @@ Prepare participant criteria, a past-behavior interview guide, consent and priva
 - Input refs: `target segment`, `known evidence and current alternatives`, `learning budget and deadline`
 - Output refs: `customer_discovery_plan/v1`
 - Check IDs: `discovery_customer_reentry_check`
+- If this step fails: tentative; still stands: `discovery_decision_frame/v1`, `discovery_evidence_ledger/v1`; hand back: Return the tentative customer_discovery_plan/v1 with missing participant criteria, past-behavior prompts, consent, bias controls, or evidence re-entry fields flagged for correction.
 
 ### `discovery_gate_problem` (validation)
 
@@ -76,6 +77,7 @@ Compare ledger entries against the precommitted criteria and record the problem 
 - Input refs: `problem hypothesis`, `known evidence and current alternatives`, `success, failure, and stop criteria`
 - Output refs: `discovery_decision_frame/v1`
 - Check IDs: `discovery_evidence_class_check`, `discovery_problem_gate_check`
+- If this step fails: unresolved; still stands: `discovery_decision_frame/v1`, `discovery_evidence_ledger/v1`, `customer_discovery_plan/v1`; hand back: Return the discovery_decision_frame/v1 as unresolved with missing target-segment human or behavioral evidence and the customer_discovery_plan/v1; keep solution work blocked.
 
 ### `discovery_rank_assumptions` (production)
 
@@ -84,6 +86,7 @@ List the assumptions by category, score decision impact and evidence gap, and se
 - Input refs: `problem hypothesis`, `target segment`, `known evidence and current alternatives`, `decision owner`, `learning budget and deadline`, `success, failure, and stop criteria`
 - Output refs: `assumption_test_portfolio/v1`
 - Check IDs: `discovery_assumption_precommit_check`
+- If this step fails: tentative; still stands: `discovery_decision_frame/v1`, `discovery_evidence_ledger/v1`, `customer_discovery_plan/v1`; hand back: Return the tentative assumption_test_portfolio/v1 with unranked assumptions or missing success, failure, inconclusive, segment, budget, owner, and evidence re-entry conditions flagged.
 
 ### `discovery_draft_gtm_hypothesis` (production)
 
@@ -92,6 +95,7 @@ Draft the beachhead segment, buyer versus user, current alternative, value propo
 - Input refs: `problem hypothesis`, `target segment`, `known evidence and current alternatives`
 - Output refs: `initial_gtm_hypothesis/v1`
 - Check IDs: `discovery_gtm_hypothesis_check`
+- If this step fails: tentative; still stands: `discovery_decision_frame/v1`, `discovery_evidence_ledger/v1`, `customer_discovery_plan/v1`, `assumption_test_portfolio/v1`; hand back: Return the tentative initial_gtm_hypothesis/v1 with unsupported pricing, willingness-to-pay, or market-size fields left unknown and each missing evidence basis named.
 
 ### `discovery_validate_decision_receipt` (validation)
 
@@ -100,3 +104,4 @@ Record the decision against the precommitted criteria and observed evidence, wit
 - Input refs: `problem hypothesis`, `target segment`, `known evidence and current alternatives`, `decision owner`, `learning budget and deadline`, `success, failure, and stop criteria`
 - Output refs: `discovery_decision_receipt/v1`
 - Check IDs: `discovery_decision_frame_check`, `discovery_evidence_class_check`, `discovery_customer_reentry_check`, `discovery_problem_gate_check`, `discovery_assumption_precommit_check`, `discovery_decision_receipt_check`, `discovery_gtm_hypothesis_check`
+- If this step fails: unresolved; still stands: `discovery_decision_frame/v1`, `discovery_evidence_ledger/v1`, `customer_discovery_plan/v1`, `assumption_test_portfolio/v1`, `initial_gtm_hypothesis/v1`; hand back: Return an unresolved discovery_decision_receipt/v1 naming unmet precommitted criteria, contradictions, rejected paths, and missing audience evidence; block persevere and product handoff.

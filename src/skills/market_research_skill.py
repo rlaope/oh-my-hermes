@@ -5,7 +5,7 @@ No figures, customer quotations, retrievals, or validations are supplied here.
 """
 from __future__ import annotations
 
-from .catalog_types import ExpertQuestion, ProcedureCheck, ProcedureStep, SkillDefinition, SkillExample
+from .catalog_types import ExpertQuestion, ProcedureCheck, ProcedureBail, ProcedureStep, SkillDefinition, SkillExample
 
 _INPUTS = (
     "decision and audience",
@@ -79,13 +79,25 @@ DEFINITION = SkillDefinition(
         ProcedureStep("register_market_evidence", "analysis", (_INPUTS[2], _INPUTS[3], _INPUTS[4]), (_OUTPUTS[0],), ("market_source_check",),
                       "Register sources at retrieval with IDs, dates, cutoff coverage, access failures and claim classes; seek contrary evidence within the budget, preserving gaps rather than filling them from recall."),
         ProcedureStep("size_addressable_market", "production", (_INPUTS[1], _INPUTS[2], _INPUTS[3]), (_OUTPUTS[1],), ("market_size_check",),
-                      "When in scope, use references/market-sizing.md to construct sourced TAM/SAM/SOM boundaries, calculate top-down and bottom-up scenarios with tools, reconcile disagreement, and report sensitivity; otherwise mark this lane not requested."),
+                      "When in scope, use references/market-sizing.md to construct sourced TAM/SAM/SOM boundaries, calculate top-down and bottom-up scenarios with tools, reconcile disagreement, and report sensitivity; otherwise mark this lane not requested.",
+            on_fail=ProcedureBail(
+                still_stands=('market scope and source ledger',),
+                downgrade_to='unresolved',
+                handback='Return the market scope and source ledger with an unresolved TAM SAM SOM model and sensitivity, preserving unknown operands, unit gaps, calculation receipts, and unreconciled ranges.',
+            ),
+        ),
         ProcedureStep("analyze_customer_evidence", "analysis", (_INPUTS[1], _INPUTS[3]), (_OUTPUTS[2],), ("market_customer_check",),
                       "When in scope, use references/customer-evidence.md to code attributed jobs, pains, triggers, alternatives and behavior; retain sample frame, selection bias and contrary cases. An interview plan is not an interview."),
         ProcedureStep("compare_competitors_and_pricing", "analysis", (_INPUTS[1], _INPUTS[2], _INPUTS[3]), (_OUTPUTS[3],), ("market_comparability_check",),
                       "When in scope, use references/competitive-pricing.md to build dated comparable profiles and normalize price/packaging with tool calculations; separate observation, assertion and inference and keep unavailable metrics unavailable."),
         ProcedureStep("deliver_market_findings", "validation", _INPUTS, (_OUTPUTS[4],), ("market_source_check", "market_findings_check"),
-                      "Use references/findings-template.md to deliver findings, calculations, assumptions, contrary evidence and unresolved retrieval gaps; record optional lanes as not requested, stop at the agreed budget, and hand decision implications to the decision owner."),
+                      "Use references/findings-template.md to deliver findings, calculations, assumptions, contrary evidence and unresolved retrieval gaps; record optional lanes as not requested, stop at the agreed budget, and hand decision implications to the decision owner.",
+            on_fail=ProcedureBail(
+                still_stands=('market scope and source ledger', 'TAM SAM SOM model and sensitivity', 'customer evidence and JTBD matrix', 'comparable competitor and pricing profiles'),
+                downgrade_to='tentative',
+                handback='Return tentative decision-ready market findings with the source ledger, calculation receipts, assumptions, contrary evidence, and unresolved retrieval gaps; name each next verification owner.',
+            ),
+        ),
     ),
     safety_rules=(
         "Never invent figures or quotes, customer participants, market shares, traffic/revenue estimates, source IDs, or tool results. Label unsupported inputs unknown rather than borrowing a generic industry ratio.",

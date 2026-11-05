@@ -51,8 +51,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If reproduction evidence is still missing after three questions, retain the report classification and observed facts, mark the direction unresolved, and hand back the missing steps, versions, or logs without filing.
+- If duplicate search cannot finish, retain the scoped report summary, mark duplicate status unresolved, and hand back the explicit repository and pending search; do not confirm or dispatch creation.
+- If connector read-back lacks request binding or issue fields, retain the confirmed direction and duplicate status, mark creation not_observed, and hand back the idempotency key and missing read-back fields without redispatching.
 
 ## Workflow Lane
 
