@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -177,7 +178,7 @@ class ConfirmTests(unittest.TestCase):
         ((spawn, wake, _run),) = started
         self.assertEqual(spawn.argv, RESTART_ARGV)
         self.assertEqual(spawn.cwd, ENVIRON["HERMES_PYTHON_SRC_ROOT"])
-        self.assertEqual(spawn.env["PYTHONPATH"], "/opt/hermes:/opt/hermes/site")
+        self.assertEqual(spawn.env["PYTHONPATH"], os.pathsep.join(("/opt/hermes", "/opt/hermes/site")))
         self.assertEqual(wake, app._wake_loop)
         self.assertIn(GATEWAY_RESTART_STARTED.format(command="hermes gateway restart"), notices(app))
         self.assertIn("restarting Hermes' gateway… 0s", "\n".join(drawn(app)))
@@ -560,10 +561,10 @@ class ImpactTests(unittest.TestCase):
         self.top = Path(top)
 
     def test_a_served_profile_reads_the_shared_gateways_record(self) -> None:
-        records = {"/r/profiles/kami": Gateway("", False), "/r": HOST}
-        with patch.object(bot_board, "read_gateway", lambda home: records[str(home)]):
+        records = {Path("/r/profiles/kami"): Gateway("", False), Path("/r"): HOST}
+        with patch.object(bot_board, "read_gateway", lambda home: records[Path(home)]):
             impact = gateway_restart.read_impact({"HERMES_HOME": "/r/profiles/kami"}, "kami")
-        self.assertEqual((str(impact.home), impact.profile), ("/r", "kami"))
+        self.assertEqual((impact.home, impact.profile), (Path("/r"), "kami"))
         self.assertEqual(impact.platforms, ("kami:discord", "telegram"))
         self.assertEqual(gateway_restart.impact_lines(impact, busy=False)[0],
                          "profiles: default, kami · bots: kami:discord, telegram · 2 running")
@@ -572,7 +573,7 @@ class ImpactTests(unittest.TestCase):
         own = Gateway("running", True, 99)
         with patch.object(bot_board, "read_gateway", lambda home: own):
             impact = gateway_restart.read_impact({"HERMES_HOME": "/r/profiles/solo"}, "solo")
-        self.assertEqual((str(impact.home), impact.gateway, impact.profile), ("/r/profiles/solo", own, ""))
+        self.assertEqual((impact.home, impact.gateway, impact.profile), (Path("/r/profiles/solo"), own, ""))
         self.assertEqual(gateway_restart.impact_lines(impact, busy=False), ["no bots connected · nothing running"])
 
     def test_no_live_record_is_said_unknown(self) -> None:
@@ -582,8 +583,8 @@ class ImpactTests(unittest.TestCase):
         lines = gateway_restart.impact_lines(impact, busy=True)
         self.assertIn("who else uses it is unknown here", lines[0])
         self.assertEqual(lines[1], "This session's running turn would be interrupted too.")
-        records = {"/r/profiles/kami": Gateway("", False), "/r": Gateway("running", True, 1, served=("default",))}
-        with patch.object(bot_board, "read_gateway", lambda home: records[str(home)]):
+        records = {Path("/r/profiles/kami"): Gateway("", False), Path("/r"): Gateway("running", True, 1, served=("default",))}
+        with patch.object(bot_board, "read_gateway", lambda home: records[Path(home)]):
             self.assertIsNone(gateway_restart.read_impact({"HERMES_HOME": "/r/profiles/kami"}, "kami").gateway)
 
     def test_a_service_run_gateway_lets_running_work_finish_and_any_other_interrupts_it(self) -> None:
@@ -606,9 +607,9 @@ class ImpactTests(unittest.TestCase):
         home = self.top / "home"
         home.mkdir()
         self.assertEqual(gateway_restart.after_turn_seconds(home), gateway_restart.DEFAULT_AFTER_TURN_SECONDS)
-        (home / "config.yaml").write_text("agent:\n  restart_after_turn_timeout: 120\n", encoding="utf-8")
+        (home / "config.yaml").write_bytes(b"agent:\n  restart_after_turn_timeout: 120\n")  # LF on every OS
         self.assertEqual(gateway_restart.after_turn_seconds(home), 120.0)
-        (home / "config.yaml").write_text("agent:\n  restart_after_turn_timeout: soon\n", encoding="utf-8")
+        (home / "config.yaml").write_bytes(b"agent:\n  restart_after_turn_timeout: soon\n")  # LF on every OS
         self.assertEqual(gateway_restart.after_turn_seconds(home), gateway_restart.DEFAULT_AFTER_TURN_SECONDS)
 
     def test_the_board_reads_a_service_run_gateway_from_its_argv(self) -> None:
