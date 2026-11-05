@@ -734,6 +734,8 @@ class PreLlmCallScenarioTests(unittest.TestCase):
                     "running_work_board",
                     "done_unverified_plan",
                     "held_native_write",
+                    "plan_acceptance",
+                    "clarify_timed_out",
                     "all_surfaces",
                     "all_surfaces_without_section",
                 ]
@@ -754,6 +756,32 @@ class PreLlmCallScenarioTests(unittest.TestCase):
             without_line = per_turn_context.pre_llm_call_context_scenario_chars()["held_native_write"]
         line = native_todo.HELD_NATIVE_WRITE_NOTE.format(kind="accepted plan")
         self.assertEqual(with_line - without_line, len(line) + len("\n\n"))
+
+    def test_the_plan_acceptance_scenario_measures_the_follow_on_line(self) -> None:
+        from omh.plugin_bundle.omh import plan_follow_on
+        from omh.plugin_bundle.omh.hooks import llm_hooks
+
+        with_line = per_turn_context.pre_llm_call_context_scenario_chars()["plan_acceptance"]
+        with mock.patch.object(llm_hooks, "acceptance_line", lambda *args: ""):
+            without_line = per_turn_context.pre_llm_call_context_scenario_chars()["plan_acceptance"]
+        self.assertEqual(with_line - without_line, len(plan_follow_on.ACCEPTANCE_LINE) + len("\n\n"))
+
+    def test_the_console_scenarios_measure_the_console_choices_lines(self) -> None:
+        from omh.plugin_bundle.omh import console_choices
+        from omh.plugin_bundle.omh.hooks import llm_hooks
+
+        with_line = per_turn_context.pre_llm_call_context_scenario_chars()
+        with mock.patch.object(llm_hooks, "console_choices_line", lambda *args, **kwargs: ""):
+            without_line = per_turn_context.pre_llm_call_context_scenario_chars()
+        joined = len("\n\n")
+        for name in ("all_surfaces", "all_surfaces_without_section"):
+            with self.subTest(scenario=name):
+                self.assertEqual(with_line[name] - without_line[name], len(console_choices.CONSOLE_CHOICES_LINE) + joined)
+        # The re-ask is the timed-out turn's only part: the scenario is that line inside the fence.
+        self.assertEqual(without_line["clarify_timed_out"], 0)
+        self.assertEqual(
+            with_line["clarify_timed_out"], len(llm_hooks.fence_omh_context([console_choices.TIMED_OUT_LINE]))
+        )
 
     def test_parts_add_so_all_surfaces_is_the_maximum(self) -> None:
         scenarios = per_turn_context.pre_llm_call_context_scenario_chars()

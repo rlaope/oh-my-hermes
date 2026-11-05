@@ -49,8 +49,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If the reviewed target is missing, inspect the requested artifact or ask one target question.
-- If independent verification is unavailable, report the gap and avoid an approval-style claim.
+- If no advisor is configured, retain the question and context summary, mark external advice not_observed, and hand back the agent's own answer without choosing a default advisor.
+- If the named advisor returns no response, retain the prepared advisor prompt, mark external advice not_observed, and hand back the question and context summary for a later consultation.
+- If advisor claims lack file, artifact, command, or source evidence, retain the captured advice as advice only, mark those conclusions tentative, and hand back accepted/rejected points and unresolved questions in the decision note.
 
 ## Workflow Lane
 

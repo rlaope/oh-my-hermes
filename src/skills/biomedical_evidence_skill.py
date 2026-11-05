@@ -5,7 +5,7 @@ import hashlib
 from importlib.resources import files
 import json
 
-from .catalog_types import ExpertQuestion, HermesSkillLine, ProcedureCheck, ProcedureStep, SkillDefinition, SkillExample
+from .catalog_types import ExpertQuestion, HermesSkillLine, ProcedureCheck, ProcedureBail, ProcedureStep, SkillDefinition, SkillExample
 
 _QUERY = "public gene/variant and disease query"
 _CAPTURE = "bounded BioMCP capture workspace"
@@ -42,9 +42,21 @@ DEFINITION = SkillDefinition(
     ),
     procedure_steps=(
         ProcedureStep("bio_frame", "analysis", (_QUERY, _IDENTIFIERS), (_MATRIX,), ("bio_scope",), "Fix the exact public query, allele/build/transcript and disease matching basis; do not repair ambiguous identifiers."),
-        ProcedureStep("bio_capture_sources", "production", (_QUERY, _CAPTURE, _IDENTIFIERS), (_MANIFEST,), ("bio_scope", "bio_capture"), "Use the bounded host terminal to capture ClinVar and CTGov responses plus receipts; retrieval remains unobserved without actual streams."),
+        ProcedureStep("bio_capture_sources", "production", (_QUERY, _CAPTURE, _IDENTIFIERS), (_MANIFEST,), ("bio_scope", "bio_capture"), "Use the bounded host terminal to capture ClinVar and CTGov responses plus receipts; retrieval remains unobserved without actual streams.",
+            on_fail=ProcedureBail(
+                still_stands=('biomedical_evidence_matrix/v1',),
+                downgrade_to='not_observed',
+                handback='Return the scoped biomedical_evidence_matrix/v1 and any biomedical_reconciliation_manifest/v1 receipts, preserving actual streams and failures; leave missing ClinVar or CTGov captures not_observed.',
+            ),
+        ),
         ProcedureStep("bio_reconcile_captures", "analysis", (_QUERY, _CAPTURE, _IDENTIFIERS), (_MATRIX,), ("bio_capture", "bio_reconcile"), "Invoke the offline helper against the original capture envelope; preserve structured assertions, source failures and mismatched contexts."),
-        ProcedureStep("bio_verify_outputs", "validation", (_QUERY, _CAPTURE, _IDENTIFIERS), (_MATRIX, _MANIFEST), ("bio_reconcile", "bio_verify"), "Read back outputs and hashes; report availability separately from completeness, observed conflicts and every unresolved date or identifier."),
+        ProcedureStep("bio_verify_outputs", "validation", (_QUERY, _CAPTURE, _IDENTIFIERS), (_MATRIX, _MANIFEST), ("bio_reconcile", "bio_verify"), "Read back outputs and hashes; report availability separately from completeness, observed conflicts and every unresolved date or identifier.",
+            on_fail=ProcedureBail(
+                still_stands=('biomedical_reconciliation_manifest/v1',),
+                downgrade_to='tentative',
+                handback='Return biomedical_reconciliation_manifest/v1 as capture receipts and the tentative biomedical_evidence_matrix/v1 with hash, output, identity, and date failures; retain nonzero partial status.',
+            ),
+        ),
     ),
     artifact_expectations=(
         "Authored file contracts, not registered OMH RPC artifacts: evidence-matrix.json and manifest.json plus external raw capture/receipt references.",

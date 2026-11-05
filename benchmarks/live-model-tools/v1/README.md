@@ -574,6 +574,703 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-11-04 round end after shell-only edits: base vs on (`transform_tool_result`), gate failed, merged by owner decision
+
+Pre-registered before its first live run.
+
+**Diagnosis** (research folder `OPT/opt-m/`). Hermes calls `pre_verify` only when
+`_turn_file_mutation_paths` is non-empty (`agent/turn_stop_gates.py`, `_pre_verify_nudge`), and
+only a landed `patch` / `write_file` adds a path to it (`agent/turn_explainers.py`,
+`_record_file_mutation_result`; `FILE_MUTATING_TOOL_NAMES` in `agent/tool_result_classification.py`).
+A turn that edits only through `terminal` therefore gets no round-end note: in the 2026-11-03
+caller-check run, 24 of 48 Sonnet on-arm runs and 18 of 48 base-arm runs edited only through
+`terminal`, and none of them logged a round-end line. In OPT-L's Sonnet base arm, one shell-only
+`L-RENAME-ALIAS` run failed: a `sed` rename left `__all__ = ["compute_quota"]` in `api.py`, which
+the export check names on the `patch` path.
+
+**The change** (`consistency_trigger.py`, `hooks/verify_hooks.py`, `hooks/result_transforms.py`).
+After each `terminal` / `execute_code` call of a turn that made no `patch` / `write_file` call, the
+workspace's Python files are re-indexed and compared with the last index (the turn-start index at
+first). When the call changed a Python file, the export, test and caller notes `pre_verify` builds at
+attempt 0 are built for every Python file the turn changed, and a non-empty note rides that call's
+result under the JSON key `omh_round_end`, once per turn. Every other call, and every turn with a
+`patch` / `write_file` call, is left exactly as on main. The consistency checklist does not ride
+along (it needs the coding posture, which this seam is not given), nor does the opt-in impact note
+(its baseline is taken only before `patch` / `write_file`). No continue is added: the note arrives
+before the model's next call, which every tool result is followed by anyway.
+
+**Mechanisms considered** (Hermes read-only, ranked by how closely they reproduce `pre_verify`):
+adding the shell-changed paths to the agent's `_turn_file_mutation_paths` would reproduce it exactly
+but writes Hermes's private state (and also arms Hermes's own verify-on-stop); posting into
+`agent.lsp.deferred` would continue the turn at its first stop but labels the note as a language
+server's verdict; an `llm_execution` middleware re-issuing the final call would rewrite the
+conversation out of the transcript; `pre_llm_call` runs at the next turn's start; `transform_llm_output`
+cannot continue a turn. `transform_tool_result` on the call that changed the file is the plugin seam
+that delivers the same note text before the model's next decision.
+
+**Offline replay, before this registration** (`OPT/opt-m/replay_shell.py`): the 445 OPT-K / OPT-L
+sessions with a `terminal` call before their first `patch` / `write_file`, each re-run from its
+seed's fixture with the recorded commands; all 71 shell-only sessions end on their recorded
+`final_tree_digest`. Notes on 2 sessions, both export notes naming a line that was stale at that
+moment: the failing OPT-L Sonnet `L-RENAME-ALIAS-613981` (`api.py:3`, on its last command) and a
+passing OPT-K Sonnet `L-RENAME-SHADOW-857137` (`cli.py:1`, mid-edit; the model fixed that line two
+calls later). No note on any other session, controls included.
+
+The setup, fixed before the first live run:
+
+- **Arms.** Each arm links its OMH plugin bundle from a source snapshot (`git archive`):
+  - `base`: origin/main `225f62ff2`;
+  - `on`: this branch at the commit that adds this section. Its bundle differs from base in
+    `consistency_trigger.py`, `hooks/verify_hooks.py` and `hooks/result_transforms.py` only.
+- **Profiles.** `optm-<lane>-<arm>`, the 2026-11-03 caller-check configuration, product default:
+  Hermes's default `tools.tool_search`; plugin settings `omh_home` and `lsp_tools: true`;
+  `impact_check` not set, so off; `pyright` pinned by an absolute `lsp.servers.pyright.command`;
+  `agent.max_turns: 120` and `agent.run_budget_seconds: 600`; the observer-only meter plugin. Edit
+  surface `lsp`, the `baseline` prompt, `--git-init-workspace`, `--test-env`, effort `medium`.
+- **Panel.** Subscription routes only: `claude-sonnet-5-5` (s55) and `claude-haiku-4-5-20251001`
+  (h45) through `claude-proxy` (CPA). `gpt-6-luna` and `gpt-6.1-sol` through `openai-codex` are
+  added to condition S only if every s55 / h45 run has finished; they are reported, and gated only
+  if run.
+- **Conditions.**
+  - **D, product default** (no edit directive), the condition users get.
+  - **S, shell edits** (`--edit-directive shell`, the same sentence in both arms: change files
+    only through terminal commands, no `patch` / `write_file`). It makes every lane edit the way
+    Sonnet often does unprompted, so the positives are measured on models that leave a caller or
+    an export broken.
+- **Templates.** Each positive is paired with the control written for its check:
+  - export: `L-RENAME-ALIAS` / `L-RENAME-EXPORTS`;
+  - caller: `I-SIGNATURE` / `I-DEFAULTED`;
+  - test: `I-KWARG` / `C-TEST-UPDATE`;
+  - breaks nothing: `I-CONTROL`.
+  Condition D also runs the no-regression templates `L-RENAME-SHADOW`, `E-RENAME`, `C-DUPLICATE`
+  and `C-DECOY`.
+- **Seeds.** None appears under `.omc/research`, `docs` or the bench before this section:
+  431027, 583919 and 815473 for every template; 347911 also for the three positives and their
+  three controls. D: 11 templates x 3 + 6 = 39 instances per lane per arm; S: 7 x 3 + 6 = 27.
+  s55 + h45: 132 instances per arm, 264 runs.
+- **Order, retries, crashes.** As in the 2026-11-03 run: per instance the two arms run back to back
+  on identical fresh workspaces in alternating order; lanes run in parallel under the load gate
+  (1-min load at most 20) and the disk gate (wait below 8 GB free, stop below 5 GB), and under the
+  shared live-run lock; `rate_limited`, `provider_error`, `model_unavailable` and a client the gateway
+  refused within seconds are retried on the same route, every other outcome is final. Records as
+  run are the strict reading; each instance whose last record is a `process_crash` in either arm is
+  run once more in both arms (`runs-rerun/`) for the re-run reading. Both readings are reported.
+
+Definitions:
+- A **shell-only run** is a session with at least one `terminal` / `execute_code` call and no
+  `patch` / `write_file` call, from the session DB.
+- A **shell check** is a `shell_round_end session=<id> files=N ...` line in the on arm's profile
+  log; a **shell note** is such a line with `export=1`, `test=1` or `caller=1`.
+- A **continue** is a session with an assistant row whose `finish_reason` is `verify_hook_continue`.
+- **Tokens** are the run record's `observation.tokens`; a cell is one lane, one condition and one
+  template.
+
+The gate, `on` against `base`:
+
+1. **No template loses a pass**, pooled over lanes and conditions: for each template, on passes at
+   least base passes.
+2. **Controls stay silent:** 0 shell notes on `L-RENAME-EXPORTS`, `I-DEFAULTED`, `C-TEST-UPDATE`
+   and `I-CONTROL` in the on arm.
+3. **No new continues on controls:** continues on those four templates, on at most base.
+4. **No token blow-up:** no on-arm run above 3x the median tokens of the base arm in its cell.
+5. **The shell round end acts, and costs no pass:**
+   - (a) every on-arm shell-only run whose replay (`replay_shell.py`, the run's own commands on its
+     seed's fixture, checked against `final_tree_digest`) changes a Python file logs a shell check,
+     and the live shell notes equal the replayed ones;
+   - (b) shell-only positives pooled (`L-RENAME-ALIAS`, `I-SIGNATURE`, `I-KWARG` runs that are
+     shell-only), on passes at least base passes, counted per arm over that arm's shell-only runs
+     and reported beside the run counts.
+
+Reported, not gated: per lane, condition and template, passes, shell-only runs, shell checks and
+notes, continues, median tokens and median wall; the rows each note named; tokens and money by
+route.
+
+Recomputed from the raw run records, the session-DB snapshots and the profile logs by
+`OPT/opt-m/gate.py`, not from the driver log.
+
+**Fallback.** If any clause fails, the failure is recorded here and the branch does not merge;
+nothing from it ships. If a fresh review finds a note naming a line that is not broken, that shape
+is made silent and this run's sessions are replayed offline with the fix; a fix that would change
+any on-arm note in this run is reported, and the branch merges only on a new measurement. If a
+clause fails on runs where the note arrived mid-edit (a later command of the same turn fixed the
+named line on its own), the next candidate is a note that waits for a command that changed no
+Python file, under its own pre-registration.
+
+#### Measurement 1 result (2026-11-05): every clause passed; review found two wrong-note shapes, so it does not carry the merge
+
+Counted runs 2026-11-05 00:12-01:42 KST, s55 and h45, conditions D and S: 264 runs, 0 crashes or
+incomplete runs, so the strict and re-run readings are the same. Recomputed by `OPT/opt-m/gate.py`
+(`gate-strict-claude.json`):
+
+| Clause | Result |
+| --- | --- |
+| 1. No template loses a pass, pooled | PASS: no template lower; I-SIGNATURE 13 -> 15, L-RENAME-EXPORTS 15 -> 16, every other template equal |
+| 2. Shell notes on controls | PASS: 0 |
+| 3. Continues on controls, on <= base | PASS: 8 -> 8 |
+| 4. No on run above 3x its cell's base median tokens | PASS: none |
+| 5a. Coverage and fidelity against the replay | PASS: 56 on-arm shell-only runs, each on its recorded tree digest, live notes equal replayed notes |
+| 5b. Shell-only positives | PASS: 22/26 -> 24/27 |
+
+Totals: 125/132 -> 128/132 passes, 11.32M -> 11.18M tokens. 14 shell notes in 13 runs, all
+on positives; 12 of the 13 runs are Haiku in condition S. Sonnet in condition D edited
+shell-only in 22 of 39 base runs and 19 of 39 on runs.
+
+Two corrections to the recompute, made before the clause was read and kept in
+`replay_shell.py`:
+- an on-arm session's recorded tool result already carries the live note, and the annotator
+  declines a result with that key, so the replay removes the key first;
+- a command that names a file by its absolute workspace path is rewritten to the replay root
+  before the snapshot step too, as the live run resolved it.
+
+Before these corrections, clause 5a showed 4 mismatches, and after them 0.
+
+**Why it does not merge.** The review of the noted sessions found two notes that named a line
+which was not broken when the model read it:
+- **Haiku `I-KWARG-583919`, stale within a message.** Hermes hands each command's result to
+  `transform_tool_result` as it lands, but the model reads a message's results together. The
+  caller note was computed after the first of four `sed` calls, and named the two callers that the
+  next two calls of the same message had already updated. The run then rewrote the returned key
+  and the test, and failed. The same cell went 4/4 -> 2/4.
+- **Haiku `I-KWARG-347911`, a mid-turn baseline.** Haiku wrote its answer file with `write_file`,
+  so `pre_verify` ran and continued the turn. `pre_verify` consumes the turn's state at attempt 0,
+  and the state rebuilt after the continue took mid-turn text as the turn's start. Its test note
+  then asked to restore the model's own first-round edit.
+
+By the fallback written above, both shapes are made silent and the branch merges only on a new
+measurement. The partial GPT runs in condition S (16 records, stopped between instances when the
+defect was found, not gated) were luna 3/5 -> 5/5 and sol 3/3 -> 3/3.
+
+#### Measurement 2, pre-registered before its first run (2026-11-05)
+
+**The change since measurement 1** (v2):
+- **The message's last command.** A new `post_api_request` observer keeps the ids of the model
+  message's tool calls (`consistency_trigger.note_tool_batch`; ids and tool names only). The shell
+  round end looks only at the message's last call that is not a read. An id the latest message
+  does not hold is looked at, as every call was in v1.
+- **No second round end in a turn.** A turn whose state `pre_verify` already consumed
+  (`discard_snapshots`, `round_end_trigger`) gets no shell round end afterwards.
+
+**Offline replay of v2** (`replay_shell.py --batches`):
+- The 445 OPT-K / OPT-L sessions get the same 2 notes as v1.
+- On measurement 1's on-arm sessions, 3 notes change, all Haiku in condition S:
+  - `I-KWARG-583919`: the stale caller note is gone; a test note at the message's end names
+    the rewritten expectation (`tests/test_http_client.py:5`), the defect the run failed on;
+  - `L-RENAME-ALIAS-347911` and `L-RENAME-ALIAS-815473`: a mid-message export note is gone,
+    because the same message fixed `api.py:3`.
+
+  The post-continue case is not replayed (the replay stops at a session's first `patch` /
+  `write_file`); it is pinned by `tests/test_shell_round_end.py`.
+
+**Setup.** As in measurement 1, except:
+- **Arms:** `base` origin/main `225f62ff2` (unchanged); `on` this branch at the commit that adds
+  this section.
+- **Seeds:** none appears under `.omc/research`, `docs` or the bench before this section. 290999,
+  668893 and 733331 for every template; 197711 also for the three positives and their three
+  controls.
+- **Panel:** s55 and h45 in D and S as before. `gpt-6-luna` and `gpt-6.1-sol` through
+  `openai-codex` in condition S, run in parallel with the Claude lanes under the same load gate,
+  and gated.
+- **Size:** 132 instances per arm on s55 + h45, plus 27 per GPT lane per arm: 186 per arm, 372
+  runs.
+- **Records:** measurement 1's records and profile snapshots move to `OPT/opt-m/m1/`;
+  measurement 2 writes `runs/` and `hermes-db/` afresh. The profiles are reused; the on-arm bundle
+  link moves to the new commit's snapshot.
+
+**The gate:** clauses 1-5 above, unchanged, over all lanes run, recomputed by
+`OPT/opt-m/gate.py`.
+
+**Fallback:** as above. If a clause fails, the branch does not merge. If a review again finds a
+note naming a line that is not broken when the model reads it, that shape is made silent and the
+branch does not merge on this measurement.
+
+#### Measurement 2 result (2026-11-05): gate failed on clause 1, by two Haiku I-KWARG runs; the branch does not merge
+
+Counted runs 2026-11-05 02:19-03:08 KST: s55 and h45 in D and S, luna and sol in S. 372 runs, 0
+crashes or incomplete runs, so the strict and re-run readings are the same. Recomputed by
+`OPT/opt-m/gate.py` (`gate-strict.json`) and recounted from the raw records by separate code;
+the two agree.
+
+| Clause | Result |
+| --- | --- |
+| 1. No template loses a pass, pooled | **FAIL**: I-KWARG 24 -> 22. Every other template equal or higher: I-SIGNATURE 17 -> 24, L-RENAME-ALIAS 22 -> 24 |
+| 2. Shell notes on controls | PASS: 0 |
+| 3. Continues on controls, on <= base | PASS: 12 -> 12 |
+| 4. No on run above 3x its cell's base median tokens | PASS: none |
+| 5a. Coverage and fidelity against the replay | PASS: 84 on-arm shell-only runs, each on its recorded tree digest, live notes equal replayed notes |
+| 5b. Shell-only positives | PASS: 30/39 -> 38/39 |
+
+Totals: 177/186 -> 184/186 passes, 15.43M -> 14.92M tokens. 14 shell notes in 14 runs, all on
+positives:
+- Haiku in condition S: 9;
+- gpt-6-luna in condition S: 5.
+
+Where the shell route acted, the cells moved:
+- h45 S I-SIGNATURE: 0/4 -> 4/4;
+- luna S I-SIGNATURE: 1/4 -> 4/4;
+- luna S L-RENAME-ALIAS: 2/4 -> 4/4.
+
+**The two I-KWARG losses.**
+- **h45 D `I-KWARG-290999`: the shell route did not act.** No `shell_round_end` line was logged;
+  Haiku edited with `patch`, so the turn ended through `pre_verify`, the same code as base.
+- **h45 S `I-KWARG-733331`: the note was true, and a later test rewrite was not named.**
+  1. The caller note named `health.py:5` and `sync.py:5`, broken after a single-command message,
+     and the model fixed both.
+  2. It then rewrote the existing test's expected key (`"timeout"` -> `"timeout_s"`), the known
+     Haiku I-KWARG shape, and failed.
+  3. The test check would have named that line, but the turn's one shell note was already spent
+     on the caller note.
+
+One correction to the recompute, made before clause 5a was read and kept in `replay_shell.py`:
+the live terminal had a `python` on its path and the replay did not, so luna's `python -c` edits
+(exit 127) were not applied. The replay now puts its test environment's `bin` first. Before
+this correction, 20 luna sessions missed their digest and 3 notes did not match; after it, none.
+
+**Next candidate** (not built, not measured): let each of the three checks speak once per turn,
+instead of one shell note per turn. In `I-KWARG-733331` the test check would then have named the
+rewritten expectation, which is the line that failed the run. Under the fallback, it needs its own
+pre-registration.
+
+#### Measurement 3, pre-registered before its first run (2026-11-05)
+
+**The change since measurement 2 (v3).** Each of the three checks (export, test, caller) is said at
+most once per turn on its own. In v2 the turn had one shell note: the first note of any kind spent
+it. Measurement 2's S `I-KWARG-733331` lost its run that way: a true caller note spent the turn, and
+the test expectation the model rewrote afterwards was never named. A check that spoke stays silent
+for the rest of the turn; the others stay free. Re-indexing stops once all three have spoken. Every
+v2 guard is kept:
+- only a message's last call that is not a read is looked at;
+- nothing after `pre_verify` consumed the turn's state;
+- evidence is the files on disk, never command text;
+- a turn with a `patch` / `write_file` call is `pre_verify`'s.
+
+**Offline replay of v3** (`replay_shell.py --batches`; every shell-only replay ends on its recorded
+`final_tree_digest` except one, noted below):
+
+| Sessions | Noted | Notes by check | Notes on controls | Sessions with a second note |
+| --- | --- | --- | --- | --- |
+| OPT-K / OPT-L, 445 (71 shell-only) | 2 | export 2 (same as v1 and v2) | 0 | 0 |
+| Measurement 1, both arms, 174 (115 shell-only) | 22 | caller 17, export 4, test 2 | 0 | 1: h45 S on `I-KWARG-347911`, caller then test |
+| Measurement 2, both arms, 282 (170 shell-only) | 28 | caller 21, export 6, test 3 | 0 | 2: h45 S on `I-KWARG-733331` and h45 S base `I-KWARG-197711`, caller then test |
+
+- **`I-KWARG-733331` (measurement 2, the run that failed clause 1)** gets the caller note it got
+  live (call 7), and now also the test note at call 10: `tests/test_http_client.py:5: was assert
+  fetch("u") == {"url": "u", "timeout": 5.0, ...}`, the line the run failed on.
+- **No continues.** The shell round end adds none by construction: it rides a tool result and
+  never returns a `pre_verify` directive. Whether continues on controls stay at most base is left
+  to the live clause.
+- **One digest mismatch, outside the gated set.** Measurement 2's s55 base `I-SIGNATURE-197711`
+  chained several `sed -i` calls with `|`, so they ran concurrently and the final tree depends on
+  timing. It is a base-arm run; clause 5a reads on-arm runs only.
+
+**Setup.** As in measurement 2, except:
+- **Arms:** `base` origin/main `225f62ff2` (unchanged); `on` this branch at the commit that adds
+  this section.
+- **Seeds:** none appears in any text file under `.omc/research`, `docs` or the bench before this
+  section. 274877, 391553 and 452989 for every template; 806351 also for the three positives and
+  their three controls.
+- **Panel:** s55 and h45 in D and S; luna and sol in S; all gated. 372 runs.
+- **Live-run lock:** the shared `OPT/.live.lock`, taken only after optl-finish's Registration 2 run
+  releases it; the load and disk gates as before.
+- **Records:** measurement 2's records and profile snapshots move to `OPT/opt-m/m2/`.
+
+**The gate:** clauses 1-5 of this section, unchanged, recomputed by `OPT/opt-m/gate.py` and
+recounted from the raw records by separate code.
+
+**Fallback, fixed now.**
+- **A clause fails:** the branch does not merge, and the result is recorded here.
+- **A review finds a wrong note:** if a note names a line that is not broken when the model reads
+  it, that shape is made silent and the branch does not merge on this measurement.
+- **A loss in a session the shell route did not act on** (no `shell_round_end` line): it still
+  counts. The clause has no exception for it.
+- **If v3 fails:** nothing from this branch ships. The next candidate is chosen from the diagnosis
+  of the failing runs, under its own pre-registration.
+
+#### Measurement 3 result (2026-11-05): gate failed on clauses 2 and 4; the branch does not merge
+
+Counted runs 2026-11-05 08:23-09:08 KST, after OPT-L's Registration 2 released the shared lock:
+s55 and h45 in D and S, luna and sol in S. 372 runs, 0 crashes or incomplete runs, so the strict
+and re-run readings are the same. Recomputed by `OPT/opt-m/gate.py` (`gate-strict.json`) and
+recounted from the raw records by separate code; the two agree.
+
+| Clause | Result |
+| --- | --- |
+| 1. No template loses a pass, pooled | PASS: no template lower; I-KWARG 21 -> 24, I-SIGNATURE 18 -> 24 |
+| 2. Shell notes on controls | **FAIL**: 2, both export notes on h45 S `L-RENAME-EXPORTS` (391553, 452989), both runs passed |
+| 3. Continues on controls, on <= base | PASS: 12 -> 12 |
+| 4. No on run above 3x its cell's base median tokens | **FAIL**: luna S `I-SIGNATURE-452989`, 157,648 against a median of 39,745 |
+| 5a. Coverage and fidelity against the replay | PASS: 82 on-arm shell-only runs, each on its recorded tree digest, live notes equal replayed notes |
+| 5b. Shell-only positives | PASS: 33/41 -> 39/39 |
+
+Totals: 177/186 -> 186/186 passes, 15.38M -> 15.27M tokens. 16 shell notes.
+
+Where the shell route acted, the cells moved:
+- h45 S I-KWARG: 2/4 -> 4/4;
+- h45 S I-SIGNATURE: 2/4 -> 4/4;
+- luna S I-SIGNATURE: 0/4 -> 4/4.
+
+No run got a second note in the same turn, so v3's change (each check once per turn) did not occur
+live.
+
+**The two failed clauses.**
+- **Clause 2, an export note on the export check's control, true when read.** In
+  `L-RENAME-EXPORTS-391553`, Haiku's second `sed` renamed the package import but not the `__all__`
+  entry. The note named `store/__init__.py:10` (`__all__` lists `fetch_rows`) after that message,
+  and the model's next message fixed it. The control is defined by its correct final state (no
+  dangling export), and the clause counts any note on it, including one on a mid-edit state that
+  was broken when the model read it.
+- **Clause 4, a token outlier in a run the shell route did not act on.** In
+  `I-SIGNATURE-452989`, luna edited with `patch` despite the shell rule. Main's own `pre_verify`
+  caller check (the same code in both arms) continued the turn, and the model then fixed
+  `cli.py` and `invoices.py` and passed. Every base luna S I-SIGNATURE run failed (0/4) and
+  stopped early, which sets the low median.
+
+**Next candidate** (not built, not measured), if the owner wants another round:
+- Each clause failed on a behaviour the clause did not anticipate rather than on a wrong note. The
+  pre-registered clauses would have to change (for example, clause 2 counting only notes that
+  name a line still broken at the turn's end, and clause 4 counting only runs the shell route
+  acted on).
+- That is a change of the gate, not of the product. It needs the owner's decision and a new
+  pre-registration.
+
+#### Owner decision (2026-11-05): merged against measurement 3's failed clauses 2 and 4
+
+The owner decided to merge v3 against the failed clauses. Passes went 177 -> 186 of 186, and both
+failures have known causes recorded above: the two control notes were true when read and fixed
+in the model's next message, and the token outlier is a `patch` turn the shell route did not act
+on. This overrides the pre-registered gate, and is recorded here as such.
+
+### 2026-11-03 round-end continue cost: settled signature references and evidence notes, base vs on
+
+Pre-registered before its first live run. Runs before the commit that adds this section are none;
+smokes after it are uncounted and say so in their folder name.
+
+In the H2H2 and H2H3 head-to-heads (research folder `H2H3/REPORT.md`, `OPT/opt-l/DIAGNOSIS.md`),
+OMH continued 68 of 198 sessions at the round end. 38 of those changed nothing and the run passed
+anyway, at 1.02M tokens, about 2 extra model calls each. Every one came from `consistency_trigger`
+firing alone:
+
+- `C-DECOY`, 18: `copy` of the look-alike `_to_cents`;
+- `I-KWARG`, 12: `signature fetch`, where the file named `fetch` only as `client.fetch()`, or an
+  unedited test called `fetch("u")`;
+- `I-SIGNATURE`, 8: `signature compute_fee`, named only by `from .pricing import compute_fee as fee`
+  in `__init__.py`, whose one user `cli.py` was already edited.
+
+The true positives this item must keep: `C-DUPLICATE` (12 of 12 continues fixed the copy; omp passes
+0 of 6) and `L-RENAME-ALIAS` (6 of 6, export note).
+
+The change, in `consistency_trigger.py` and `verify_hooks.py` (commit `47c73adb5`):
+
+1. **Settled references.** A `signature` hit on a module-level function is dropped in a file only when
+   every `\bname\b` match there is proven to need no change, by `ast`:
+   - `p.name`, where `p` is bound only as a parameter in that file; or
+   - `from <the edited module> import name [as alias]`, where the alias is bound once and called only
+     in calls that bind the same way under the old and new parameter lists; and an alias other than
+     the name appears in no other unedited Python or config file.
+
+   A comment, a string, a value use, a module attribute or an import from elsewhere keeps the hit.
+   Only a module-level function defined once, undecorated, with the same return annotation, is
+   eligible.
+2. **Evidence in the note.** When the check fires alone, the note shows the lines the trigger matched:
+   for a copy, the other definition with its module docstring and the comment above it. It does not
+   ask for a search. A fire with nothing to show keeps the generic checklist.
+
+`C-DECOY`'s fire count cannot drop structurally: its `_to_cents` is byte-identical to
+`C-DUPLICATE`'s real copy, and only the docstring prose differs. The alternative "fire only when the
+edited line appears verbatim in the other file" was measured and rejected, because both fixtures
+spell `Decimal` differently from the edited file, so it cuts `C-DUPLICATE` too. So `C-DECOY` is gated
+on the cost of a fire, not on the number of fires.
+
+**Offline replay, before this registration** (`OPT/opt-l/replay.py`). Every recorded H2H2 and H2H3
+omn session is re-driven through each tree's real hooks: the fixture is rebuilt from its seed, the
+`patch` / `write_file` calls up to the first stop are replayed (`snapshot_before_edit` before each),
+and then `pre_verify(attempt=0)` runs.
+
+| Tree | Sessions | Continue decision equal to live | Continues |
+| --- | --- | --- | --- |
+| base `3ad772371` | 198 | 198 / 198 | 68 |
+| on `47c73adb5` | 198 | n/a | 48 |
+
+Per template, base to on:
+- `I-KWARG` 15 to 3: the 3 left are Haiku, test note;
+- `I-SIGNATURE` 17 to 9: the 9 left are Luna and Haiku, with `cli.py` still broken at the stop;
+- `C-DECOY` 18 to 18; `C-DUPLICATE` 12 to 12; `L-RENAME-ALIAS` 6 to 6;
+- every other template 0 to 0.
+
+No true positive is lost, and no new fire appears.
+
+The setup, fixed before the first live run:
+
+- **Arms.** Each links its OMH bundle from a `git archive` snapshot (`OPT/opt-l/omh-head/<sha>`):
+  `base` = origin/main `3ad772371`; `on` = this branch at `47c73adb5`. The bundles differ only in
+  the two files above.
+- **Profiles.** `optl-<lane>-<arm>` (`OPT/opt-l/make_profiles.sh`), H2H3's OMH-arm configuration
+  in both arms:
+  - Hermes's default `tools.tool_search`;
+  - plugin settings `omh_home` and `lsp_tools: true`; `impact_check` not set (off, as shipped);
+  - `pyright` pinned by an absolute command;
+  - `agent.max_turns: 120`, `agent.run_budget_seconds: 600`;
+  - the observer-only meter plugin.
+
+  Edit surface `lsp`, the `baseline` prompt with no edit directive, `--git-init-workspace`,
+  `--test-env`, effort `medium`.
+- **Panel.** Subscription routes only; expected money $0:
+
+  | Lane | Model | Route |
+  | --- | --- | --- |
+  | h45 | `claude-haiku-4-5-20251001` | `claude-proxy` (CPA) |
+  | s55 | `claude-sonnet-5-5` | `claude-proxy` (CPA) |
+  | luna | `gpt-6-luna` | `openai-codex` |
+  | sol | `gpt-6.1-sol` | `openai-codex` |
+
+- **Templates.** The 11 head-to-head templates: `I-SIGNATURE`, `I-RETURN-SHAPE`, `I-KWARG`,
+  `I-CONTROL`, `C-DUPLICATE`, `C-SCOPE-TRAP`, `C-DECOY`, `E-RENAME`, `E-BUGFIX`, `L-RENAME-ALIAS`,
+  `L-RENAME-SHADOW`.
+  - Positives (fewer or cheaper fires): `I-KWARG`, `I-SIGNATURE`, `C-DECOY`.
+  - Controls that must keep their fire and their pass: `C-DUPLICATE`, `L-RENAME-ALIAS`, and the
+    `I-SIGNATURE` runs that stop with a caller still broken.
+  - Controls with no fire on either arm in the replay: the other six.
+- **Seeds.** 613981, 778469 and 860143. None appears under `.omc/research` or in the bench. That is 33
+  instances per lane per arm, 132 per arm, 264 runs.
+- **Order and load.** Per instance the two arms run back to back on identical fresh workspaces, in
+  alternating order; the four lanes run in parallel. The driver is `OPT/opt-l/run_optl.py` (sha256
+  `18e0994c...`), derived from H2H3's, and it holds the same gates before every instance:
+  - wait while the 1-minute load is above 20;
+  - wait while free disk is below 8 GB; stop if it falls below 5 GB.
+
+  Live batches run under the shared live-run lock.
+- **Retries and crashes.** As H2H3:
+  - Retried on the same route: `rate_limited`, `provider_error`, `model_unavailable`, and a client
+    the gateway refused within 15 s.
+  - `authentication_failed` aborts every lane.
+  - A timeout is final and scored as a fail.
+  - A `process_crash` is scored as a fail in the **strict reading**. Once the lanes finish, each
+    instance whose last record in either arm is a crash is run once more in both arms, and those
+    re-runs make the **re-run reading**. Every clause is reported under both readings.
+
+Definitions:
+- A **continue** is a session with at least one assistant row whose `finish_reason` is
+  `verify_hook_continue` (session DB).
+- **Tokens** are the record's `observation.tokens`.
+- **Calls** are `sessions.api_call_count`.
+- A **pass** is the controller validator's `grade.pass`.
+
+The gate, `on` against `base`. Must hold:
+
+1. Total passes (n = 132): on at least base.
+2. Per template, pooled over the four models (n = 12): on at least base - 1.
+3. `C-DUPLICATE`, `L-RENAME-ALIAS` and `I-SIGNATURE` passes (n = 12 each): on at least base.
+4. `mutation_outside_scope` runs: on at most base.
+
+Must improve:
+
+5. Pooled median tokens (n = 132): on at most 0.95x base.
+6. Sol median tokens (n = 33): on at most 0.95x base.
+7. `I-KWARG` + `I-SIGNATURE` continues (n = 24): on strictly below base.
+8. `C-DECOY` (n = 12):
+   - continues: on at most base;
+   - median tokens: on at most 0.90x base;
+   - median calls: on at most base - 1.
+
+Reported, not gated:
+- the per-lane, per-template table of passes, continues, median calls and median tokens;
+- the trigger's verdict reasons per arm, including `settled`;
+- the median calls of the extra round after a continue;
+- median wall time and final answer kept;
+- the load path (`omh_pkg`);
+- tokens and money by route.
+
+Everything is recomputed from the raw run records, the session-DB snapshots and the profile logs by
+`OPT/opt-l/gate.py`, not from the driver log.
+
+**Fallback, fixed now.** If any clause fails, the failure is recorded here and the branch does not
+ask to merge. What is dropped depends on where the regression sits:
+- **A quality clause (1 to 4) fails on runs where the on arm sent an evidence note.** The note is
+  the behavioural part, so `verify_hooks` returns to the generic checklist, and the settled
+  references stay.
+- **It fails on a run whose on-arm verdict was `settled`.** That is a cut that dropped a needed fire,
+  so `_settled` is dropped.
+- **Only the cost clauses (5 to 8) fail.** The change does not merge on this run.
+
+A re-measure after any drop is a new pre-registration with new seeds.
+
+#### Amendment 1 (2026-11-03, before any live run of either arm)
+
+- **The `on` arm moves from `47c73adb5` to `8442cb3c4`.** That commit moves the argument-binding
+  rule into the shared leaf module `call_shape.py`, as the lead assigned, for the parallel caller
+  check. It adds four pinned negatives: a removed default, a `**kwargs` pass-through, a star import,
+  and an alias re-exported from a plain module and used elsewhere. The offline replay of `8442cb3c4`
+  gives the same continue decision and the same note text as `47c73adb5` on all 198 sessions
+  (`replay-on-8442cb3c4.json`).
+- **Why the briefed clause "`C-DECOY` continues strictly fewer" was replaced by clause 8**
+  (approved by the lead). The fixtures in `lib/corpus.py` give both look-alikes the same body:
+  `return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)`
+  in `C-DUPLICATE`'s second module and in `C-DECOY`'s. The edited file's line is
+  `return Decimal(amount).quantize(CENT, rounding=ROUND_HALF_EVEN)`. A verbatim-old-text rule
+  therefore cuts both copies, and any code-only rule treats them alike. Only the module docstring
+  separates them ("kept in step with" vs "intentionally different from"), and a prose signal is the
+  suppressor #2494 dropped.
+- **The evidence note shows context only.** That means the definition, the module docstring and
+  the comment above it. Its wording is the same for every copy, and it never says a copy may be
+  skipped. Clause 3 (`C-DUPLICATE` on at least base) stays a hard clause.
+
+#### Result (2026-11-05): the gate failed in both readings
+
+264 counted runs and 8 crash re-runs (4 instances, both arms; one, `sol` base
+`I-RETURN-SHAPE-778469`, crashed again and stays a fail). Recomputed by `OPT/opt-l/gate.py` and
+again by an independent script (`recompute.py`); the two agree on every clause.
+
+| Clause | Strict (on vs base) | | Re-run (on vs base) | |
+| --- | --- | --- | --- | --- |
+| 1. Total passes, on >= base | 123 vs 126 | **fail** | 126 vs 126 | pass |
+| 2. Per template, on >= base - 1 | worst `I-SIGNATURE` 7 vs 9 | **fail** | worst `I-SIGNATURE` 7 vs 9 | **fail** |
+| 3. `C-DUPLICATE` passes | 12 vs 11 | pass | 12 vs 11 | pass |
+| 3. `L-RENAME-ALIAS` passes | 12 vs 11 | pass | 12 vs 11 | pass |
+| 3. `I-SIGNATURE` passes | 7 vs 9 | **fail** | 7 vs 9 | **fail** |
+| 4. `mutation_outside_scope`, on <= base | 2 vs 1 | **fail** | 0 vs 1 | pass |
+| 5. Pooled median tokens, on <= 0.95x | 78,716 vs 83,704 (0.940x) | pass | 79,847 vs 83,704 (0.954x) | **fail** |
+| 6. Sol median tokens, on <= 0.95x | 82,255 vs 90,984 (0.904x) | pass | 83,432 vs 90,984 (0.917x) | pass |
+| 7. `I-KWARG` + `I-SIGNATURE` continues, on < base | 8 vs 19 | pass | 8 vs 19 | pass |
+| 8a. `C-DECOY` continues, on <= base | 11 vs 11 | pass | 12 vs 11 | **fail** |
+| 8b. `C-DECOY` median tokens, on <= 0.90x | 84,078 vs 100,656 (0.835x) | pass | 85,710 vs 100,656 (0.852x) | pass |
+| 8c. `C-DECOY` median calls, on <= base - 1 | 10 vs 11 | pass | 10 vs 11 | pass |
+
+Tokens by route, re-run reading (base / on): `claude-proxy` h45 4,660,327 / 3,906,467 and s55
+1,722,343 / 1,628,489; `openai-codex` luna 2,952,549 / 2,804,460 and sol 3,024,138 / 2,790,203. Total
+12,359,357 / 11,129,619 (0.901x). Continues 40 / 31. Money $0 (subscription routes only). Median
+wall 43.1 s / 40.2 s.
+
+**Where it failed.** Both `I-SIGNATURE` losses are Haiku runs (h45 base 3 of 3, on 1 of 3). In each,
+the trigger fired alone on `signature compute_fee in src/benchapp/__init__.py`, and the on arm sent
+the evidence note. That note shows only `from .pricing import compute_fee as fee`. The model judged
+that an import needs no change and stopped, leaving `cli.py`'s `fee(...)` call broken. On base, the
+generic checklist sent it to search; it fixed `cli.py` and passed. None of the 12 on-arm `settled`
+verdicts failed.
+
+**Fallback, as pre-registered.** A quality clause failed on runs where the on arm sent an evidence
+note. So the evidence note is dropped and the settled references stay. Re-measuring that is a new
+pre-registration with new seeds. The branch does not ask to merge on this run.
+
+#### Registration 2 (2026-11-05): the fallback, base vs on
+
+Pre-registered before its first live run. This is a new registration, not an amendment of the one
+above, and no data of this arm exists yet. Smokes are uncounted and say so in their folder name.
+
+**Arms.** Each links its OMH bundle from a `git archive` snapshot (`OPT/opt-l/omh-head/<sha>`):
+- `base` = `225f62ff2`, the origin/main parent of this branch's merge. It includes the caller check
+  (#2546).
+- `on` = `12fb9c0c6`, this branch with the fallback applied: the evidence note is gone (`verify_hooks`
+  is byte-identical to `base`), the settled references stay, and the argument binder is the shared
+  `call_shape.py`.
+
+**Offline replay, before this registration** (`OPT/opt-l/replay.py`, the 198 H2H2 and H2H3 omn
+sessions):
+
+| Tree | Continue decision equal to live | Continues |
+| --- | --- | --- |
+| base `225f62ff2` | 198 / 198 | 68 |
+| on `12fb9c0c6` | n/a | 48 |
+
+- The 20 continues cut are `I-KWARG` 12 and `I-SIGNATURE` 8. Every one is a harmless false positive
+  that passed live.
+- No new fire appears. The other 178 sessions are identical to `base`, note text included.
+- On the first registration's own on-arm `I-SIGNATURE` sessions with a broken caller (h45 x3, luna
+  x3), the caller note fires on this tree and names `src/benchapp/cli.py:5`. That includes both
+  sessions the gate lost. No evidence note is sent.
+
+**Why clauses 5 and 8 change.** The fallback removes the only lever this item had on `C-DECOY`: the
+evidence note. `C-DECOY` replays identically on both trees. A projection, computed before this
+registration, replays this tree over the first registration's base-arm sessions. Wherever this tree
+would not continue, it removes the extra round's share of tokens and its calls:
+- `I-KWARG` 8 and `I-SIGNATURE` 4 continues are cut;
+- pooled median tokens 83,704 to 82,362 (0.984x);
+- sol median 90,984 to 82,721 (0.909x);
+- `C-DECOY` median tokens 100,656 to 100,656 (1.000x), median calls 11 to 11;
+- total tokens 0.961x.
+
+The script is `OPT/opt-l/project_fallback.py` (sha256 `a95e60a3...`), and its output is
+`project_fallback.txt` (sha256 `a5a87ca3...`). Under the first registration's clauses, 5 and 8 would
+fail by construction. They become no-regression clauses. Clauses 6 and 7 stay as the improvement
+clauses.
+
+**Setup.** As the first registration, except:
+- profiles `optl2-<lane>-<arm>` (`OPT/opt-l/make_profiles2.sh`);
+- driver `OPT/opt-l/run_optl2.py` (sha256 `4847b98e...`), which is `run_optl.py` with only the
+  profile prefix and the seeds changed;
+- seeds 284927, 648391 and 731957. None appears under `.omc/research`, in `~/.omh` or on main.
+
+The arms, configuration, panel and routes are unchanged:
+- `claude-proxy` (CPA) for h45 `claude-haiku-4-5-20251001` and s55 `claude-sonnet-5-5`;
+- `openai-codex` for luna `gpt-6-luna` and sol `gpt-6.1-sol`.
+
+Also unchanged: subscription routes only, the 11 templates, 264 runs, the alternating arm order, the
+load and disk gates, the shared live-run lock, retries and crash re-runs, both readings, and the
+definitions. The bench harness is this branch's at registration.
+
+The gate, `on` against `base`. Must hold:
+
+1. Total passes (n = 132): on at least base.
+2. Per template, pooled over the four models (n = 12): on at least base - 1.
+3. `C-DUPLICATE`, `L-RENAME-ALIAS` and `I-SIGNATURE` passes (n = 12 each): on at least base.
+4. `mutation_outside_scope` runs: on at most base.
+
+No regression:
+
+5. Pooled median tokens (n = 132): on at most 1.00x base.
+8. `C-DECOY` (n = 12): continues on at most base, and median tokens on at most 1.05x base.
+
+Must improve:
+
+6. Sol median tokens (n = 33): on at most 0.95x base.
+7. `I-KWARG` + `I-SIGNATURE` continues (n = 24): on strictly below base.
+
+Recomputed from the raw records by `OPT/opt-l/gate2.py`, and again independently by
+`OPT/opt-l/recompute2.py`.
+
+**Fallback.** The same chain as the first registration:
+- a quality clause (1 to 4) fails on a run whose on-arm verdict was `settled`: `_settled` is dropped;
+- only cost clauses (5 to 8) fail: the change does not merge on this run.
+
+A re-measure after any drop is a new registration with new seeds.
+
+#### Registration 2 result (2026-11-05): the gate failed on clause 6 only
+
+264 counted runs (05:38 to 07:06 KST) and 6 crash re-runs. The re-runs cover three `sol`
+`I-RETURN-SHAPE` instances in both arms; 5 of the 6 crashed again at the 600 s budget. `gate2.py` and
+the independent `recompute2.py` agree on every clause in both readings.
+
+| Clause | Strict (on vs base) | | Re-run (on vs base) | |
+| --- | --- | --- | --- | --- |
+| 1. Total passes, on >= base | 130 vs 127 | pass | 129 vs 128 | pass |
+| 2. Per template, on >= base - 1 | worst `C-DECOY` 12 vs 12 | pass | worst `I-RETURN-SHAPE` 9 vs 10 | pass |
+| 3. `C-DUPLICATE` passes | 12 vs 12 | pass | 12 vs 12 | pass |
+| 3. `L-RENAME-ALIAS` passes | 12 vs 12 | pass | 12 vs 12 | pass |
+| 3. `I-SIGNATURE` passes | 12 vs 12 | pass | 12 vs 12 | pass |
+| 4. `mutation_outside_scope`, on <= base | 2 vs 4 | pass | 3 vs 3 | pass |
+| 5. Pooled median tokens, on <= 1.00x | 78,832 vs 83,336 (0.946x) | pass | 78,291 vs 83,942 (0.933x) | pass |
+| 6. Sol median tokens, on <= 0.95x | 84,853 vs 85,006 (0.998x) | **fail** | 83,801 vs 85,456 (0.981x) | **fail** |
+| 7. `I-KWARG` + `I-SIGNATURE` continues, on < base | 7 vs 19 | pass | 7 vs 19 | pass |
+| 8. `C-DECOY` continues, on <= base | 11 vs 11 | pass | 11 vs 11 | pass |
+| 8. `C-DECOY` median tokens, on <= 1.05x | 100,190 vs 103,002 (0.973x) | pass | 100,190 vs 103,002 (0.973x) | pass |
+
+Tokens by route, re-run reading (base / on):
+- `claude-proxy`: h45 4,466,020 / 4,242,207; s55 1,763,025 / 1,570,521.
+- `openai-codex`: luna 3,297,476 / 3,109,503; sol 2,968,523 / 2,734,694.
+- Total 12,495,044 / 11,656,925 (0.933x). Continues 42 / 28. Money $0. Median wall 34.0 s / 34.0 s.
+
+Quality held in both readings:
+- `I-SIGNATURE` passed 12 of 12 in both arms: with the caller check in both, this registration loses
+  no broken caller;
+- all 12 on-arm `settled` verdicts passed;
+- the only on-arm failures are the three crashed `sol` `I-RETURN-SHAPE` runs; base crashed on two of the
+  same instances.
+
+**Why clause 6 failed.** Sol's continues fell from 14 to 7, and its total tokens to 0.921x. But sol's
+median sits on templates this change does not touch: `E-BUGFIX` at about 85k and `C-SCOPE-TRAP` at
+about 77k. The pre-registration projection of 0.909x came from the first registration's base sessions,
+whose sol median sat among the `I-KWARG` and `I-SIGNATURE` runs.
+
+**Decision, as registered.** Only a cost clause failed, so the change does not merge on this run.
+
 ### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
 
 Pre-registered before its first live run.

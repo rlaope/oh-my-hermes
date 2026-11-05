@@ -3,7 +3,11 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from .catalog_types import SkillDefinition
+from .catalog_types import PROCEDURE_BAIL_LEVELS, SkillDefinition
+
+
+# Migration ratchet: remove a skill as soon as all its required steps have bails.
+PROCEDURE_BAIL_PENDING: frozenset[str] = frozenset()
 
 
 PROCEDURE_STEP_KINDS = frozenset({"analysis", "production", "validation"})
@@ -203,7 +207,49 @@ def procedure_violation_ids(definition: SkillDefinition) -> list[str]:
     if len(question_input_set) != len(question_inputs):
         violations.append("procedure_duplicate_or_invalid_required_input_question")
 
+    violations.extend(_procedure_bail_violations(definition))
     return list(dict.fromkeys(violations))
+
+
+def _procedure_bail_violations(definition: SkillDefinition) -> list[str]:
+    violations: list[str] = []
+    earlier_outputs: set[str] = set()
+    # An invalid all-analysis procedure has no required bails to migrate.
+    required_bails_complete = any(
+        getattr(step, "kind", None) in ("production", "validation")
+        for step in definition.procedure_steps
+    )
+    for step in definition.procedure_steps:
+        bail = getattr(step, "on_fail", None)
+        if getattr(step, "kind", None) in ("production", "validation") and bail is None:
+            required_bails_complete = False
+            if definition.name not in PROCEDURE_BAIL_PENDING:
+                violations.append("procedure_bail_required")
+        if bail is not None:
+            if getattr(bail, "downgrade_to", None) not in PROCEDURE_BAIL_LEVELS:
+                violations.append("procedure_bail_unknown_level")
+            stands = _string_members(getattr(bail, "still_stands", None))
+            if stands is None or not stands[1] or any(ref not in earlier_outputs for ref in stands[0]):
+                violations.append("procedure_bail_unknown_stands_ref")
+            handback = getattr(bail, "handback", None)
+            if not isinstance(handback, str) or not handback.strip() or _has_placeholder_prefix(handback):
+                violations.append("procedure_bail_handback_required")
+            fallback = getattr(bail, "fallback_skill", "")
+            if fallback:
+                # Catalog assembly imports this validator; resolve only after assembly.
+                try:
+                    from .catalog import installable_skill_names
+                except ImportError:
+                    pass  # Only the optional catalog-name check is unavailable.
+                else:
+                    if fallback == definition.name or fallback not in installable_skill_names():
+                        violations.append("procedure_bail_unknown_fallback")
+        outputs = _string_members(getattr(step, "output_refs", None))
+        if outputs is not None:
+            earlier_outputs.update(outputs[0])
+    if definition.name in PROCEDURE_BAIL_PENDING and required_bails_complete:
+        violations.append("procedure_bail_pending_stale")
+    return violations
 
 
 def validate_procedure_contract(

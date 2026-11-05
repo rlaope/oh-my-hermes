@@ -99,6 +99,7 @@ from .catalog_types import (
     HermesReferenceLine,
     PortableLine,
     ProcedureCheck,
+    ProcedureBail,
     ProcedureStep,
     SkillDefinition,
     SkillExample,
@@ -232,6 +233,11 @@ _GROUNDED_CITATIONS_VERIFY_RULE = (
     "not - and `verify --evidence` also fails a draft whose cited source carries no verbatim quote. An exit `0` "
     "whose `info: stats:` line reads `0 distinct source(s) cited` checked nothing and is reported as `not_observed`"
 )
+_GROUNDED_CITATIONS_RECEIPTS_RULE = (
+    "After that verify, run `omh research receipts verify --citations <ledger> --draft <draft>` and report its fetched "
+    "coverage from the run, or as `not_observed`; a receipt proves only that the page was opened in this session tree, "
+    "never that it supports the claim"
+)
 
 # A blocked source, as `research` and `web-research` recover it. Hermes bundles
 # `blocked-page-recovery` and no other host does, so the portable bodies say
@@ -338,6 +344,10 @@ _DEFINITIONS = [
             "help me pick the right skill",
             "unsure where this request belongs",
         ),
+        recovery_notes=(
+            "If a skill is not installed, keep the intent; hand back the install gap as unresolved.",
+            "If executor readiness is unknown, keep routing; hand back the check as not_observed.",
+        ),
     ),
     SkillDefinition(
         "meta-router",
@@ -394,6 +404,11 @@ _DEFINITIONS = [
             "route this task through the catalog",
             "chain several workflows for one job",
             "omh command with an instruction",
+        ),
+        recovery_notes=(
+            "If bounded recommend queries cannot run through CLI, plugin, or wrapper, retain only the imperative task, mark catalog selection not_observed, and hand back the workflow picker instead of a memorized recommendation.",
+            "If recommendation output contains only `meta-router`, retain the consulted catalog evidence, mark workflow selection unresolved, and hand back the task remainder for a bounded re-query rather than selecting this skill.",
+            "If stage re-queries still leave a multi-stage task low-confidence, retain the consulted catalog evidence, mark the proposed chain tentative, and hand back a clarification question about the unresolved stage.",
         ),
     ),
     SkillDefinition(
@@ -919,7 +934,7 @@ _DEFINITIONS = [
             "If source and active reviewed terminology differ, report changed or missing freshness and ask whether to preview a new pending candidate; never synchronize automatically.",
             "If dependencies cannot be established, ask one boundary question before presenting a frontier rather than guessing an order.",
             "If frontier round or decision identity cannot be recovered, close with a named recovery blocker instead of restarting or emitting another round.",
-            "If the user moves from terminology to implementation, summarize confirmed understanding and hand off to `ralplan`, `ulw-plan`, or the selected coding owner only after a separate go-ahead.",
+            "If the user moves from terminology to implementation, summarize confirmed understanding and hand off to `ralplan` or the selected coding owner only after a separate go-ahead.",
         ),
         situations=(
             "what does this term mean in our repo",
@@ -1651,6 +1666,11 @@ _DEFINITIONS = [
             "prepare instructions for the external coding CLI",
             "give this job to the agent I chose",
         ),
+        recovery_notes=(
+            "If this run lacks an explicit coding-owner choice, no handoff stands yet; mark prompt composition unresolved and hand back the choose_executor question without selecting a CLI.",
+            "If the scratch-edit permission probe fails, retain the composed prompt and discovered skill names, mark execution not_observed, and hand back the denied permission and required grant change before retrying.",
+            "If dispatch returns no session or thread id, retain the dispatch receipt, mark steering unresolved, and hand back the explicit unsteerable note and any observed unit result without claiming a resumable session.",
+        ),
     ),
     SkillDefinition(
         "research",
@@ -1766,7 +1786,7 @@ _DEFINITIONS = [
             "Revise the search plan when new evidence exposes a gap or contradiction instead of stopping at the first pass.",
             "Record contested claims with two independent original groups/domains, primary support and an observed counter-search, or keep them unresolved; use `references/evidence-records.md` for records. Agent/operator validation: `python -m omh.workflows.research_dossier <json-file>`.",
             "Separate direct evidence, citation links, retrieval dates, inference, confidence, and residual uncertainty.",
-            f"{_GROUNDED_CITATIONS_REGISTER_RULE}. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} Use parent-only serialized writes: lanes return observed source entries and quote refs; the parent registers URLs, attaches quotes, and remaps lane ids before drafting. Lanes never write the shared ledger. When a human briefing is written, report the citation check from a run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}. It is a citation check, not fact verification, and it never stands in for the contested-claim gate. Without the skill, keep each source's URL and retrieval date in the research notes and report the citation check as `not_observed`.",
+            f"{_GROUNDED_CITATIONS_REGISTER_RULE}. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} Use parent-only serialized writes: lanes return observed source entries and quote refs; the parent registers URLs, attaches quotes, and remaps lane ids before drafting. Lanes never write the shared ledger. When a human briefing is written, report the citation check from a run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}. It is a citation check, not fact verification, and it never stands in for the contested-claim gate. {_GROUNDED_CITATIONS_RECEIPTS_RULE}. Without the skill, keep each source's URL and retrieval date in the research notes and report the citation check as `not_observed`.",
             "Name retrieval gaps when Hermes or the wrapper cannot access the web.",
             "For AI or usability research, separate target-user/task assumptions, measured or reported usability dimensions, and generalizability limits from the evidence.",
             "Decompose the question into orthogonal research axes and disambiguate named entities before any deep reading.",
@@ -1929,7 +1949,7 @@ _DEFINITIONS = [
             "Cross-check a contested claim against a second independent domain, or state that it stays unverified.",
             "Keep historical-capture evidence and live-page evidence as two typed surfaces for a point-in-time or then-versus-now question; capture time, publication time, and retrieval time are independent clocks and none substitutes for another.",
             f"{_GROUNDED_CITATIONS_REGISTER_RULE}, before any prose is written; cite a source only by the id the ledger gave it, written `[n]`. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} Mark background that rests on model knowledge `[unverified]` instead of citing it: the marker is for background the answer does not rest on and never carries the answer, and a contested claim with a single source keeps its citation and is stated as uncorroborated. The ledger id sits beside the source class and the retrieval date and replaces neither. Without the skill, list each source when it is retrieved and cite it at the claim it supports.",
-            f"When that ledger is in use, report the citation check from a run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}, and so is an answer given only in chat: `verify` reads a draft file and exits `2` without one, so write the answer to a file first when the check matters. The run compares cited ids and the Sources block with the ledger; it does not test whether a claim is true, so a passing citation check is never reported as fact verification. Without the ledger the citation check is `not_observed`.",
+            f"When that ledger is in use, report the citation check from a run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}, and so is an answer given only in chat: `verify` reads a draft file and exits `2` without one, so write the answer to a file first when the check matters. The run compares cited ids and the Sources block with the ledger; it does not test whether a claim is true, so a passing citation check is never reported as fact verification. {_GROUNDED_CITATIONS_RECEIPTS_RULE}. Without the ledger the citation check is `not_observed`.",
             "Stop at the answer: one retrieval round settles a lookup, and an expanding lead list means the request belongs to `research`.",
             "Report what retrieval did not yield rather than closing the gap from recall.",
         ),
@@ -2269,7 +2289,7 @@ _DEFINITIONS = [
             "Record each material claim as a compact evidence row: claim, source, source class (upstream official, practitioner heuristic, or unattributed), source date, confidence, and unresolved conflict.",
             "Keep claims that lack corroboration in an explicit unresolved list instead of asserting or silently dropping them.",
             "Separate observed sources, source quality, source diversity, inferred trends, and unresolved uncertainty.",
-            f"{_GROUNDED_CITATIONS_REGISTER_RULE}, and carry two more fields on every evidence row: the ledger id written as `[n]` - a bare number in a cell is not a citation to `verify`, so that row would go unchecked - and the verbatim quote attached with `sources.py quote <id> --text <quote> --from <page text file>`, which rejects wording that file does not contain. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} A row whose quote could not be attached says so, and a claim that rests on model knowledge is marked `[unverified]` and listed as unresolved, never entered as evidence. Run `sources.py verify <draft> --evidence`, since every evidence row is meant to carry its quote, and report the citation check from that run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}; it is a citation check, not fact verification. Without the skill, keep the source and its quoted wording in the row and report the citation check as `not_observed`.",
+            f"{_GROUNDED_CITATIONS_REGISTER_RULE}, and carry two more fields on every evidence row: the ledger id written as `[n]` - a bare number in a cell is not a citation to `verify`, so that row would go unchecked - and the verbatim quote attached with `sources.py quote <id> --text <quote> --from <page text file>`, which rejects wording that file does not contain. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} A row whose quote could not be attached says so, and a claim that rests on model knowledge is marked `[unverified]` and listed as unresolved, never entered as evidence. Run `sources.py verify <draft> --evidence`, since every evidence row is meant to carry its quote, and report the citation check from that run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}; it is a citation check, not fact verification. {_GROUNDED_CITATIONS_RECEIPTS_RULE}. Without the skill, keep the source and its quoted wording in the row and report the citation check as `not_observed`.",
             "Use the brief to feed strategy or meeting work without calling it execution evidence.",
             "For a market question, fix the decision audience, buyer/segment/geography, source cutoff, period/currency/base year, units and denominator before synthesis; leave missing values unknown. Use `market-research` for scoped TAM/SAM/SOM, customer/JTBD evidence, and comparable competitor/pricing methods instead of improvising a market model inside the brief.",
             "Write each finding with source IDs and dates, observed, vendor-asserted, or inferred status, assumptions, decision implication, contrary evidence, confidence limit, and next verification owner. Keep failed-source coverage visible, not a claim that no evidence exists; lead with what changes the decision and attach only relevant method worksheets.",
@@ -2289,6 +2309,11 @@ _DEFINITIONS = [
             "vendor comparison with evidence",
             "competitive landscape brief",
             "evidence for this business call",
+        ),
+        recovery_notes=(
+            "If ledger verification cites zero distinct sources, retain the source ledger and evidence table, mark the citation check not_observed, and hand back the draft with the missing [n] source IDs for correction.",
+            "If an evidence row's quote cannot be attached from the page text, retain the retrieved source and other supported rows, mark that claim unresolved, and hand back the unmatched wording and source for correction.",
+            "If a pricing comparison mixes periods, currencies, or denominators, retain its dated source rows, mark the comparison tentative, and hand back the missing common basis before drawing a decision implication.",
         ),
     ),
     SkillDefinition(
@@ -2409,6 +2434,11 @@ _DEFINITIONS = [
             "track market changes over time",
             "incoming sources with regular briefings",
             "notebooklm-backed research synthesis",
+        ),
+        recovery_notes=(
+            "If one watch source cannot be read, retain covered sources' findings and the failed source's previous cutoff, mark its coverage unresolved, and hand back that source and uncovered window rather than reporting a quiet period.",
+            "If the synthesis tool cannot process collected findings, retain raw findings in source_inbox/v1, mark synthesis not_observed, and hand back research_department_plan/v1 with the synthesis-tool readiness gap.",
+            "If schedule creation has no cronjob_manage result or cron listing, retain the cadence and Scout, Analyst, and Briefer plan, mark job creation not_observed, and hand back the prepared job description for separately approved scheduling.",
         ),
     ),
     SkillDefinition(
@@ -2606,6 +2636,10 @@ _DEFINITIONS = [
             "big bets for next quarter",
             "make a call on this tradeoff",
         ),
+        recovery_notes=(
+            "If demand and capacity cannot be compared in one unit or hiring ramp lag is unknown, retain the stated constraints and options, mark the recommendation tentative, and hand back the missing capacity and timing inputs.",
+            "If a drafted decision record lacks write approval, retain the options, tradeoffs, and proposed decision note, mark persistence not_observed, and hand back the draft for approval without writing docs/adr/.",
+        ),
     ),
     SkillDefinition(
         "meeting-brief",
@@ -2667,6 +2701,11 @@ _DEFINITIONS = [
             "agenda for the leadership meeting",
             "questions to raise in the review meeting",
             "decisions we need from this meeting",
+        ),
+        recovery_notes=(
+            "If decision topics lack known context, retain the supplied meeting goal and audience, mark the agenda tentative, and hand back discussion prompts and the decisions-needed list with its open questions.",
+            "If action owners, due dates, or acceptance conditions are absent from a meeting record, retain the prepared agenda and prompts, mark action ownership not_observed, and hand back the action-item template with those columns marked unknown.",
+            "If follow-up coding lacks observed decisions or an accepted plan, retain the meeting brief, mark the coding handoff unresolved, and hand back the decisions needed rather than an implementation claim.",
         ),
     ),
     SkillDefinition(
@@ -2737,6 +2776,11 @@ _DEFINITIONS = [
             "sort app store reviews by theme",
             "customers report failed payments",
             "prioritize feedback themes",
+        ),
+        recovery_notes=(
+            "If no feedback items are supplied, no cluster stands; mark triage not_observed and hand back the request for feedback items or a summary, source boundary, and product area.",
+            "If bug and feature signals cannot be separated from the supplied reports, retain source-bounded clusters, mark their classification and ranking tentative, and hand back the missing evidence with research or strategy follow-up options.",
+            "If a triaged cluster has no explicit coding intent or accepted-plan evidence, retain the clusters and ranking, mark the coding handoff unresolved, and hand back the next workflow recommendation with product_evidence_loop/v1 still prepared-only.",
         ),
     ),
     SkillDefinition(
@@ -2818,6 +2862,11 @@ _DEFINITIONS = [
                 "finance_reconcile_sources", "validation", ("period", "supplied finance source"),
                 ("finance_reconciliation_analysis_schedule/v1",), ("finance_source_reconciliation_check",),
                 "Tie totals and account mappings, normalize only approved basis and units, test cutoff and duplicate or missing records, and preserve unreconciled gaps.",
+                on_fail=ProcedureBail(
+                    still_stands=('finance_scope_source_record/v1',),
+                    downgrade_to='unresolved',
+                    handback='Return the draft finance_reconciliation_analysis_schedule/v1 with untied totals, mappings, basis or unit conflicts, cutoff defects and duplicate or missing records listed; do not label the extract reconciled.',
+                ),
             ),
             ProcedureStep(
                 "finance_analyze_variances", "analysis", ("supplied finance source", "calculation assumptions", "decision question"),
@@ -2834,6 +2883,11 @@ _DEFINITIONS = [
                 ("finance_decision_brief/v1",),
                 ("finance_scope_comparability_check", "finance_source_reconciliation_check", "finance_policy_assumption_check", "finance_conditional_interpretation_check", "finance_validation_escalation_check"),
                 "Report recalculation and reconciliation status, evidence-linked risks, assumptions, decision options and owners, and a PASS or HOLD disposition with mandatory escalation gaps.",
+                on_fail=ProcedureBail(
+                    still_stands=('finance_scope_source_record/v1', 'finance_risk_register/v1'),
+                    downgrade_to='unresolved',
+                    handback='Return finance_decision_brief/v1 as HOLD with failed recalculations, reconciliation gaps, policy or cutoff conflicts, control exceptions and high-impact assumptions assigned to a qualified finance or accounting owner.',
+                ),
             ),
         ),
         artifact_expectations=("prepared finance analysis brief when a wrapper captures it",),
@@ -2872,6 +2926,11 @@ _DEFINITIONS = [
             "risks in the month end close",
             "actuals against forecast for the CFO",
             "burn rate review",
+        ),
+        recovery_notes=(
+            "If period, currency, basis, or comparator version conflicts, retain the supplied source provenance, mark comparability unresolved, and hand back finance_scope_source_record/v1 with the conflicting attributes.",
+            "If totals or account mappings do not tie out, retain the confirmed scope and source record, mark reconciliation unresolved, and hand back finance_reconciliation_analysis_schedule/v1 with unreconciled gaps.",
+            "If recalculation fails at brief validation, retain supported calculations and finance_risk_register/v1, mark finance_decision_brief/v1 unresolved with HOLD, and hand back the failed calculation and escalation owner.",
         ),
     ),
     SkillDefinition(
@@ -2935,6 +2994,10 @@ _DEFINITIONS = [
             "onboarding plan for a new hire",
             "job description and hiring plan",
             "run a fair hiring debrief",
+        ),
+        recovery_notes=(
+            "If interview evidence cannot support a candidate debrief, retain the role outcomes, must-have versus trainable criteria, and scorecard, mark the recommendation unresolved, and hand back the missing evidence to the decision owner.",
+            "If policy constraints need a jurisdiction-specific ruling, retain the role brief and interview scorecard, mark the policy conclusion unresolved, and hand back the flagged questions to `legal-compliance-review`.",
         ),
     ),
     SkillDefinition(
@@ -3033,6 +3096,11 @@ _DEFINITIONS = [
                 "legal_trace_authority", "validation", ("supplied authority", "document or process version"),
                 ("legal_scope_authority_record/v1",), ("legal_authority_citation_check", "legal_final_determination_guard"),
                 "Create a citation ledger using only supplied or observed sources, exact pinpoints and effective status; route absent authority to research or counsel instead of filling it in.",
+                on_fail=ProcedureBail(
+                    still_stands=('legal_scope_authority_record/v1',),
+                    downgrade_to='unresolved',
+                    handback='Return legal_scope_authority_record/v1 with scope facts intact and each missing, stale or unverified authority, pinpoint and effective status listed for research or counsel.',
+                ),
             ),
             ProcedureStep(
                 "legal_map_issues_exceptions", "analysis", ("jurisdiction", "document or process version", "supplied authority", "review objective"),
@@ -3043,18 +3111,33 @@ _DEFINITIONS = [
                 "legal_apply_counsel_holds", "production", ("jurisdiction", "supplied authority", "review objective"),
                 ("legal_risk_counsel_hold_register/v1",), ("legal_counsel_hold_check",),
                 "Rank impact, applicability, urgency, confidence and reversibility, then impose mandatory counsel holds and owners for every triggered high-risk or authority-sensitive issue.",
+                on_fail=ProcedureBail(
+                    still_stands=('legal_scope_authority_record/v1', 'legal_issue_traceability_matrix/v1'),
+                    downgrade_to='tentative',
+                    handback='Return the draft legal_risk_counsel_hold_register/v1 with uncovered trigger IDs, missing risk assessments and counsel owners for correction; no affected issue is cleared.',
+                ),
             ),
             ProcedureStep(
                 "legal_prepare_negotiation_positions", "production", ("document or process version", "supplied authority", "review objective"),
                 ("legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment",),
                 ("legal_negotiation_preparation_check", "legal_counsel_hold_check"),
                 "When the objective is a redline, build one row per contested clause -- playbook position, gap, proposed language, fallback, walk-away, counsel-hold state -- then rank the concession order by what is lost and name the linked rows; prepare nothing for a clause whose hold is open.",
+                on_fail=ProcedureBail(
+                    still_stands=('legal_scope_authority_record/v1', 'legal_issue_traceability_matrix/v1', 'legal_risk_counsel_hold_register/v1'),
+                    downgrade_to='unresolved',
+                    handback='Return legal_negotiation_preparation/v1 with held or uncited clause rows blocked as counsel questions and missing fallback, walk-away or linked concession positions identified; issue no proposal for a held clause.',
+                ),
             ),
             ProcedureStep(
                 "legal_validate_disposition", "validation", ("jurisdiction", "document or process version", "supplied authority", "review objective"),
                 ("legal_review_disposition/v1",),
                 ("legal_scope_facts_instruments_check", "legal_authority_citation_check", "legal_issue_matrix_check", "legal_counsel_hold_check", "legal_final_determination_guard"),
                 "Return PASS, REVISE, or HOLD with exact open triggers and counsel route; prohibit final legal or compliance determinations until all mandatory holds are resolved by qualified counsel.",
+                on_fail=ProcedureBail(
+                    still_stands=('legal_scope_authority_record/v1', 'legal_issue_traceability_matrix/v1', 'legal_risk_counsel_hold_register/v1'),
+                    downgrade_to='unresolved',
+                    handback='Return legal_review_disposition/v1 as HOLD with exact failed authority or issue checks, open triggers and counsel owners; retain earlier drafts without issuing a final legal or compliance determination.',
+                ),
             ),
         ),
         artifact_expectations=(
@@ -3098,6 +3181,11 @@ _DEFINITIONS = [
             "liability and indemnity clause",
             "questions to ask our lawyer",
             "terms of service compliance check",
+        ),
+        recovery_notes=(
+            "If an authority's pinpoint or effective status cannot be verified, retain the established document scope, mark authority-dependent issues unresolved, and hand back legal_scope_authority_record/v1 with the missing citations for counsel.",
+            "If a contested clause has an open counsel hold or no cited playbook position, retain its issue row, mark that redline row unresolved, and hand back the counsel question rather than proposed language.",
+            "If mandatory counsel triggers remain open at final review, retain the issue matrix and hold register, mark legal_review_disposition/v1 unresolved with HOLD, and hand back the exact triggers and counsel owner without a final determination.",
         ),
     ),
     SkillDefinition(
@@ -3162,6 +3250,10 @@ _DEFINITIONS = [
             "customer cannot log in",
             "how urgent is this ticket",
             "reply to a refund request",
+        ),
+        recovery_notes=(
+            "If customer impact or reproduction evidence is missing, retain the stated case facts, mark severity tentative, and hand back the reply draft and missing repro, account, or entitlement evidence list.",
+            "If no escalation owner or path is available, retain the issue/severity/impact/escalation matrix, mark ownership unresolved, and hand back the internal next-step and owner handoff brief with the owner question.",
         ),
     ),
     SkillDefinition(
@@ -3238,23 +3330,43 @@ _DEFINITIONS = [
                 "curriculum_define_evidence_criteria", "production", ("learners", "learning goal", "prerequisites", "constraints"),
                 ("curriculum_alignment_map/v1",), ("curriculum_outcome_evidence_alignment_check",),
                 "Before sequencing instruction, define acceptable assessment evidence, rubric criteria and formative decision points for every outcome and expose all coverage defects.",
+                on_fail=ProcedureBail(
+                    still_stands=('curriculum_learner_outcome_brief/v1',),
+                    downgrade_to='tentative',
+                    handback='Return the draft curriculum_alignment_map/v1 with orphan outcomes, unmatched assessments, performance-condition mismatches and missing rubric or formative evidence identified for revision.',
+                ),
             ),
             ProcedureStep(
                 "curriculum_design_sequence_scaffolds", "production", ("learners", "learning goal", "prerequisites", "constraints"),
                 ("curriculum_sequence_design/v1",), ("curriculum_scaffolding_inclusion_check",),
                 "Design activities from the evidence backward, including diagnosis, modeling where useful, guided practice, feedback, independent transfer, scaffold fading, accessible formats and equivalent demonstration paths.",
+                on_fail=ProcedureBail(
+                    still_stands=('curriculum_learner_outcome_brief/v1', 'curriculum_alignment_map/v1'),
+                    downgrade_to='tentative',
+                    handback='Return the draft curriculum_sequence_design/v1 with missing practice, feedback or scaffold fading and unaddressed learner barriers tied to the access or equivalent-demonstration choices needing revision.',
+                ),
             ),
             ProcedureStep(
                 "curriculum_validate_alignment", "validation", ("learners", "learning goal", "prerequisites", "constraints"),
                 ("curriculum_validation_disposition/v1",),
                 ("curriculum_intake_readiness_check", "curriculum_outcome_evidence_alignment_check", "curriculum_scaffolding_inclusion_check", "curriculum_validation_revision_check"),
                 "Record criterion-level PASS, REVISE, or BLOCKED findings, exact misalignments and learner impact, required revisions, owner decisions, evidence gaps, and bounded expert or learner review plans.",
+                on_fail=ProcedureBail(
+                    still_stands=('curriculum_learner_outcome_brief/v1',),
+                    downgrade_to='unresolved',
+                    handback='Return curriculum_validation_disposition/v1 with criterion-level gaps, learner impact, required revisions, owner decisions and missing evidence; expert or learner review plans remain prepared until observed.',
+                ),
             ),
             ProcedureStep(
                 "curriculum_revise_revalidate", "validation", ("learners", "learning goal", "prerequisites", "constraints"),
                 ("curriculum_alignment_map/v1", "curriculum_sequence_design/v1", "curriculum_validation_disposition/v1"),
                 ("curriculum_outcome_evidence_alignment_check", "curriculum_scaffolding_inclusion_check", "curriculum_validation_revision_check"),
                 "Apply approved revisions to the affected artifacts, rerun the named checks, and retain BLOCKED whenever required evidence or review remains unobserved.",
+                on_fail=ProcedureBail(
+                    still_stands=('curriculum_learner_outcome_brief/v1', 'curriculum_validation_disposition/v1'),
+                    downgrade_to='unresolved',
+                    handback='Return the prior curriculum_validation_disposition/v1 with pending revisions, owner decisions and failed revalidation checks for the alignment map and sequence; keep required unobserved reviews BLOCKED.',
+                ),
             ),
         ),
         artifact_expectations=("prepared curriculum design brief when a wrapper captures it",),
@@ -3290,6 +3402,11 @@ _DEFINITIONS = [
             "syllabus with weekly quizzes",
             "lesson plan for a workshop",
             "learning path with assessments",
+        ),
+        recovery_notes=(
+            "If an outcome lacks acceptable assessment evidence, retain curriculum_learner_outcome_brief/v1, mark curriculum_alignment_map/v1 tentative, and hand back the orphan outcomes or assessment mismatches for revision.",
+            "If an access or technology barrier has no equivalent demonstration path, retain the aligned outcomes and assessments, mark curriculum_sequence_design/v1 unresolved, and hand back the barrier and required adaptation.",
+            "If learner review or pilot evidence is absent, return the alignment and sequence as unvalidated drafts, mark validation unresolved, and hand back curriculum_validation_disposition/v1 with required reviews and revalidation checks.",
         ),
     ),
     SkillDefinition(
@@ -3352,6 +3469,10 @@ _DEFINITIONS = [
             "translation glossary consistency",
             "does this copy fit the korean market",
             "locale QA checklist",
+        ),
+        recovery_notes=(
+            "If the source version cannot be established, retain supplied strings and the locale/audience brief, mark terminology and cultural-fit choices tentative, and hand back the source-version question before treating the glossary as approved.",
+            "If rendered UI evidence is missing, retain glossary choices and the string issue matrix, mark rendered validation not_observed, and hand back locale QA criteria and review owners for an accepted `visual-qa` handoff.",
         ),
     ),
     SkillDefinition(
@@ -3433,17 +3554,32 @@ _DEFINITIONS = [
                 "sales_check_sequence_eligibility", "validation", ("account or segment", "available evidence", "sales objective"),
                 ("sales_draft_sequence/v1",), ("sales_sequence_eligibility_check",),
                 "Verify supplied consent basis, privacy and suppression restrictions, permitted channels, organizational policy, sender and approver, locale, timing and cadence before any message construction.",
+                on_fail=ProcedureBail(
+                    still_stands=('sales_opportunity_evidence_record/v1', 'sales_qualification_state/v1'),
+                    downgrade_to='unresolved',
+                    handback='Return sales_draft_sequence/v1 as HOLD with missing consent, privacy, suppression, channel or policy evidence and the owner/approver question required before drafting.',
+                ),
             ),
             ProcedureStep(
                 "sales_prepare_draft_sequence", "production", ("account or segment", "available evidence", "buyer hypothesis", "sales objective"),
                 ("sales_draft_sequence/v1",), ("sales_account_evidence_check", "sales_sequence_eligibility_check"),
                 "Prepare eligible draft rows for audience, channel, cadence, supported personalization and proof, purpose, value, CTA, objection hypothesis and validation question, owner, approver and stop conditions; do not send.",
+                on_fail=ProcedureBail(
+                    still_stands=('sales_opportunity_evidence_record/v1', 'sales_qualification_state/v1'),
+                    downgrade_to='tentative',
+                    handback='Return sales_draft_sequence/v1 with unsupported personalization or proof and missing cadence, owner, approver or stop conditions marked for correction, keeping every row an unsent draft.',
+                ),
             ),
             ProcedureStep(
                 "sales_validate_handoff", "validation", ("account or segment", "available evidence", "buyer hypothesis", "sales objective"),
                 ("sales_handoff_disposition/v1",),
                 ("sales_account_evidence_check", "sales_qualification_state_check", "sales_sequence_eligibility_check", "sales_handoff_check"),
                 "Return proposed versus confirmed actions, ownership, timing, exit criteria, dependencies, evidence refs, CRM object/field/value proposals, gaps and ADVANCE, HOLD or DISQUALIFY disposition, preserving confirmation only from observed response.",
+                on_fail=ProcedureBail(
+                    still_stands=('sales_draft_sequence/v1', 'sales_opportunity_evidence_record/v1', 'sales_qualification_state/v1'),
+                    downgrade_to='unresolved',
+                    handback='Return sales_handoff_disposition/v1 as HOLD with proposed actions, CRM field/value proposals, missing buyer confirmation and unresolved owner, timing, dependency or exit-criterion gaps.',
+                ),
             ),
         ),
         artifact_expectations=("prepared sales development brief when a wrapper captures it",),
@@ -3481,6 +3617,10 @@ _DEFINITIONS = [
             "questions to ask the buyer",
             "outbound approach for this company",
             "MEDDIC or BANT qualification",
+        ),
+        recovery_notes=(
+            "If consent or suppression status is unknown, retain sales_opportunity_evidence_record/v1 and sales_qualification_state/v1, mark sequence eligibility unresolved with HOLD, and hand back the missing eligibility questions without drafting outreach.",
+            "If no observed buyer response supports a commitment, retain the eligible sales_draft_sequence/v1, mark confirmation not_observed, and hand back sales_handoff_disposition/v1 with proposed actions, owners, timing, and exit criteria.",
         ),
     ),
     SkillDefinition(
@@ -3547,6 +3687,11 @@ _DEFINITIONS = [
             "roadmap options and tradeoffs",
             "RICE scoring for features",
         ),
+        recovery_notes=(
+            "If the problem gate has not returned validated, retain supplied product evidence as unvalidated, mark PRD readiness unresolved, and hand back the problem and user context to `product-discovery-validation`.",
+            "If the decision owner has not resolved prioritization tradeoffs, retain the drafted PRD and roadmap options, mark roadmap commitment unresolved, and hand back the tradeoffs and open questions for that owner.",
+            "If Jira or Linear updates lack an explicit target and approval, retain the prepared PRD, mark roadmap-system mutation not_observed, and hand back the target and approval questions for `connector-operator`.",
+        ),
     ),
     SkillDefinition(
         "ops-review",
@@ -3593,6 +3738,10 @@ _DEFINITIONS = [
             "status of the support queue and releases",
             "weekly blockers and owners",
             "operations update for leadership",
+        ),
+        recovery_notes=(
+            "If status evidence covers only part of the requested time window, retain the dated observations in the status summary, mark uncovered status not_observed, and hand back the missing periods and affected priorities.",
+            "If a blocker needs a code fix but no follow-up is accepted, retain the observed blocker and risk, mark remediation unresolved, and hand back the follow-up action for acceptance before delegation.",
         ),
     ),
     SkillDefinition(
@@ -3656,6 +3805,11 @@ _DEFINITIONS = [
             "track action items across meetings",
             "standup history for the team",
             "running log of team decisions",
+        ),
+        recovery_notes=(
+            "If source notes are missing, retain the cadence, audience, and time-window scaffold, mark minutes and decisions not_observed, and hand back operation_artifact/v1 with the explicit missing-notes boundary.",
+            "If notes leave an action item's owner or due date unstated, retain its source-linked outcome and dependencies, mark follow-up readiness unresolved, and hand back the action item history with unknown fields for confirmation.",
+            "If a retro proposal has no decision or owner acknowledgement, retain the source notes, mark acceptance unresolved, and hand back the proposal outside the decision log for explicit confirmation before an implementation handoff.",
         ),
     ),
     SkillDefinition(
@@ -3741,6 +3895,11 @@ _DEFINITIONS = [
         portable_override_shadows={
             "expected_outputs": "e1e56353a2af34c52a86e2d6c92b4e4476904a7f6ea2ff7521d2004c2ba45063",
         },
+        recovery_notes=(
+            "If no presentation tool can produce a binary deck, retain the PPT-ready Markdown or JSON outline, mark binary export not_observed, and hand back the outline, assumptions, and missing-input list for separate deck generation.",
+            "If the tool returns \"rendered\": false (it still exits 0) or its image count differs from slide_count, keep the deck's outline read-back, leave render QA not observed, and hand back the missing-tool or image-count gap for that file.",
+            "If the requested achievements export fails, retain the rest of the report package, mark the badge section not_observed, and hand back the missing output from omh achievements export --format md instead of inventing badges.",
+        ),
     ),
     SkillDefinition(
         "materials-package",
@@ -3834,6 +3993,11 @@ _DEFINITIONS = [
             "pull the tables out of a pdf",
             "create a docx from this outline",
             "hwp document for a korean agency",
+        ),
+        recovery_notes=(
+            "If source metrics needed by an outline section are missing, retain the verified source facts and outline, mark that section unresolved, and hand back material_artifact/v1 with its missing inputs and output owner.",
+            "If xlsx_recalc.py reports recalculated false, retain the observed sheet_schema, mark formula_recalculation not_observed, and hand back its missing tools and the --out <copy> recalculation and cached-value read-back steps.",
+            "If DOCX package validation passes without a rendered converted PDF, retain observed section_structure and required_clause_check, mark appearance and page_count not_observed, and hand back the converted-PDF preview checks.",
         ),
     ),
     SkillDefinition(
@@ -3998,6 +4162,11 @@ _DEFINITIONS = [
             "thumbnail for this report",
             "image prompt for this announcement",
             "cut out the backdrop of this photo",
+        ),
+        recovery_notes=(
+            "If image_generation_capability/v1 is unknown or prompt_only, retain visual_prompt_card/v1, mark generation not_observed, and hand back image_generation_setup/v1 with the question of which image tool to use.",
+            "If an edit lacks the supplied image reference or preserve/remove constraints, retain only the supplied edit intent, mark transformation unresolved, and hand back the missing inputs for the image transformation brief.",
+            "If visual_generation_receipt/v1 reports a failed or partial attempt, retain visual_prompt_card/v1 and the receipt's failure stage, mark generation not_observed, and hand back the failed attempt without claiming an image.",
         ),
     ),
     SkillDefinition(
@@ -5660,6 +5829,10 @@ _DEFINITIONS = [
             "find gaps in our workspace",
             "what is configured in this repo",
         ),
+        recovery_notes=(
+            "If an in-scope plugin, MCP, or runtime surface cannot be inspected, retain the observed surface_inventory/v1 entries, mark that surface not_observed, and hand back the evidence gap rather than call it a missing capability.",
+            "If config risks cannot be checked without exposing secret values, retain redacted key names and paths, mark those checks unresolved, and hand back config_security_findings/v1 with risk categories for later remediation.",
+        ),
     ),
     SkillDefinition(
         "production-audit",
@@ -5745,6 +5918,10 @@ _DEFINITIONS = [
             "pre-release risk review",
             "is rollback ready",
             "go or no-go decision",
+        ),
+        recovery_notes=(
+            "If build or CI evidence is missing for the target release, retain the evidenced readiness_matrix/v1 rows, mark readiness unresolved, and hand back release_gate_verdict/v1 on HOLD with the missing evidence list.",
+            "If rollback owner, health thresholds, or recovery path is missing, retain the evidenced readiness_matrix/v1 rows, mark rollback readiness unresolved, and hand back rollback_and_monitoring_plan/v1 with the exact gaps.",
         ),
     ),
     SkillDefinition(
@@ -5850,6 +6027,11 @@ _DEFINITIONS = [
             "derived files no longer match their source",
             "definition of done checklist",
         ),
+        recovery_notes=(
+            "If a required check fails with an unknown origin, keep the other fresh results, mark the claim unresolved on HOLD, and hand back the same check rerun at the merge base as the missing evidence.",
+            "If a fix test has only a fresh green result, retain that result within its scope, mark the claim unresolved on HOLD with regression_witness_missing, and hand back the required pre-fix red witness and its source.",
+            "If a declared generated path has no known regeneration command, retain verification_matrix/v1, mark generated-output verification unresolved, and hand back generated_artifact_provenance/v1 with the command gap.",
+        ),
     ),
     SkillDefinition(
         "agent-evaluation",
@@ -5935,6 +6117,11 @@ _DEFINITIONS = [
             "which agent should be our default",
             "fair comparison between agents",
             "agent bake-off on real tasks",
+        ),
+        recovery_notes=(
+            "If observed_at lacks receipt-authenticated provenance, retain the task set, rubric, and input digests, mark the comparison not_observed, and hand back paired_run_decision/v1 with the provenance gap rather than a pass or fail.",
+            "If candidate inputs or success criteria differ outside the variable under test, retain the observed runs, mark executor selection tentative, and hand back the mismatched digests or criteria and a matched rerun budget.",
+            "If a judge has no measured agreement against human labels, retain the prewritten rubric and observed executable checks, mark judgment unresolved and unqualified, and hand back the missing agreement measurements instead of a correctness claim.",
         ),
     ),
     SkillDefinition(
@@ -6029,6 +6216,11 @@ _DEFINITIONS = [
             "learn rules from past failures",
             "guidelines from what keeps going wrong",
             "best practices from agent traces",
+        ),
+        recovery_notes=(
+            "If a principle rests on one observation, retain its source reference in principle_candidate_set/v1, mark the rule tentative and needs-evidence in review_queue/v1, and hand back the candidate for repeated observations.",
+            "If approval is missing, retain principle_candidate_set/v1 and duplication_conflict_report/v1, mark implementation not_observed, and hand back review_queue/v1 without producing approved_patch_handoff/v1.",
+            "If skill_manage stages an approved change, retain the approved candidate and staged result, mark the skill update not_observed, and hand back the pending ID for the person's `/skills approve <id>`.",
         ),
     ),
     SkillDefinition(
@@ -6461,6 +6653,11 @@ _DEFINITIONS = [
             "context is about to overflow",
             "reuse cached prompts well",
         ),
+        recovery_notes=(
+            "If the previous must-keep pack has no item classes, retain its recorded contents, mark the class delta unresolved, and hand back must_keep_item_class_delta/v1 as comparison unavailable, never as zero items.",
+            "If a checkpoint is due but no Hermes /compress reply is observed, retain the must-keep context pack and checkpoint plan, mark compaction not_observed, and hand back /compress <focus> with the reply needed to verify continuity.",
+            "If the session has no published context_budget_plan/v1, retain the proposed budget plan, mark inherited capacity unresolved, and hand back the capacity_unknown_hold and session reference for publication or rebinding.",
+        ),
     ),
     SkillDefinition(
         "security-safety-review",
@@ -6570,6 +6767,11 @@ _DEFINITIONS = [
             "a key leaked and needs rotating",
             "dangerous rm commands in scripts",
             "tool permissions are too broad",
+        ),
+        recovery_notes=(
+            "If verify-new lacks an observed credential check, retain the redacted risk matrix and credential_rotation_sequence/v1, mark replacement unresolved, and hand back the verify-new evidence requirement before the operator revokes the old credential.",
+            "If no single local plugin directory is explicitly named, no plugin audit finding stands; mark plugin_risk_audit/v1 not_observed and hand back the directory question without importing, registering, or activating any plugin.",
+            "If a proposed deny glob also blocks commands the workflow needs, retain safe_action_policy/v1, mark proposed_approval_deny_list/v1 unresolved, and hand back the conflicting globs and needed commands for user revision without changing config.",
         ),
     ),
     SkillDefinition(
@@ -6687,6 +6889,11 @@ _DEFINITIONS = [
             "post a timed update to discord",
             "put this recurring task on a schedule",
         ),
+        recovery_notes=(
+            "If a stop condition is missing, retain the recurring request and cadence, mark the choice among cron, heartbeat, loop, and native goal unresolved, and hand back recurring_surface_comparison/v1 with the stop-condition question.",
+            "If overlap, missed-run, retry, backfill, or failure-pause decisions remain open, retain prepared_native_blueprint/v1, mark activation unresolved, and hand back the missing policy choices and native-runtime limits before activation.",
+            "If no run reference exists for the saved intent revision, retain hermes_recurring_intent/v1, mark execution and delivery not_observed, and hand back `hermes cron runs` and `hermes cron incidents` as the next status checks.",
+        ),
     ),
     SkillDefinition(
         "reliability-review",
@@ -6752,6 +6959,10 @@ _DEFINITIONS = [
             "stop this incident from recurring",
             "incident follow-up actions",
         ),
+        recovery_notes=(
+            "If metrics do not cover the named service and time window, retain the cited incident notes, mark SLO and error-budget conclusions unresolved, and hand back the evidence and missing-evidence list with the uncovered window.",
+            "If remediation closure has no supporting reference, retain the source-backed reliability review, mark closure not_observed, and hand back the remediation follow-ups and missing closure evidence without claiming the fix completed.",
+        ),
     ),
     SkillDefinition(
         "idea-to-deploy",
@@ -6808,6 +7019,11 @@ _DEFINITIONS = [
             "take this from idea to production",
             "empty repo to first release",
             "MVP through to deployment",
+        ),
+        recovery_notes=(
+            "If the success metric or release scope is missing, retain the supplied idea and user value, mark delivery planning unresolved, and hand back the stage rail with the missing decision before an executor handoff.",
+            "If plan acceptance or executor choice is absent, retain the prepared decision gates and stage rail, mark the coding handoff unresolved, and hand back the acceptance or runtime-choice question.",
+            "If deploy evidence is missing after verification, retain the observed verification results, mark deploy and monitoring not_observed, and hand back the stage rail with the deploy evidence gate still open.",
         ),
     ),
     SkillDefinition(
@@ -6987,6 +7203,10 @@ _DEFINITIONS = [
             "tech roadmap and shipping risks",
             "risky launch across several teams",
         ),
+        recovery_notes=(
+            "If operating signals do not support an architecture tradeoff, retain the cited signals, mark that tradeoff tentative, and hand back the decision note with assumptions and delivery risks.",
+            "If the decision owner has not accepted implementation follow-ups, retain the priority frame and risk ranking, mark follow-up authority unresolved, and hand back the decision note and handoff candidates for acceptance.",
+        ),
     ),
     SkillDefinition(
         "deploy-and-monitor",
@@ -7046,6 +7266,11 @@ _DEFINITIONS = [
             "when should we roll back",
             "is the new version holding up in production",
             "ship to production and keep an eye on it",
+        ),
+        recovery_notes=(
+            "If a monitor has only its first baseline tick or a silent tick, retain the checklist and watchlist, mark release health not_observed, and hand back the recorded cron runs and open incidents needed to assess health.",
+            "If the rollback owner is missing, retain the release scope and health signals, mark the deploy decision gate unresolved, and hand back the rollback criteria with the owner question before advancing.",
+            "If a canary lacks host_deployment_observation/v1 or a pre-deploy production baseline, retain the checklist, mark the comparison unresolved and BLOCK, and hand back the missing observation or baseline without authorizing rollback.",
         ),
     ),
     SkillDefinition(
@@ -7122,6 +7347,11 @@ _DEFINITIONS = [
         portable_override_shadows={
             "quality_bar": "a8376dad9d82ab8f240c6368c424abc4b793cf0953174364252a84014a7f0321",
         },
+        recovery_notes=(
+            "If a scenario needs a real install or external service the harness cannot reach, retain other observed pass/fail evidence, mark that scenario not_observed, and hand back its manual test guide with setup, do, expect, and broken signals.",
+            "If a hostile browser scenario would submit, buy, send, or delete on a live target without approval, retain read-only scenario results, mark that action not_observed, and hand back the target and exact action for user approval.",
+            "If a failing browser scenario has no screenshot or console readback, keep its observed failure, mark diagnosis tentative, and hand back the scenario, target, and missing capture for a bounded rerun.",
+        ),
     ),
     SkillDefinition(
         "plan",
@@ -7200,6 +7430,10 @@ _DEFINITIONS = [
             "plan before we start coding",
             "steps to add this safely",
             "reproduce the bug then plan the fix",
+        ),
+        recovery_notes=(
+            "If no acceptance answer comes, keep the draft unaccepted, hand back the question, prepare no handoff.",
+            "If a verification step has no outside judge, mark it unresolved and hand back the missing judge.",
         ),
     ),
     SkillDefinition(
@@ -7660,6 +7894,11 @@ _DEFINITIONS = [
             "clean up what the ai wrote",
             "simplify without changing behavior",
             "delete unused helpers",
+        ),
+        recovery_notes=(
+            "If baseline regression checks cannot run, retain the categorized smell inventory, mark the behavior lock unresolved, and hand back the cleanup plan and missing before-checks without starting risky edits.",
+            "If verification fails between single-smell passes, retain the last verified pass's evidence, mark the new pass unresolved, and hand back its small diff and failed check for a fix or revert before the next pass.",
+            "If the cleanup has no runtime record, retain its observed diff and before/after checks, mark the cleaner run not_observed, and hand back the four-part closing report for recording before an AC-SLOP checkpoint.",
         ),
     ),
     SkillDefinition(
@@ -8444,6 +8683,11 @@ _DEFINITIONS = [
             "outside review of my plan",
             "consult a different ai",
             "cross-check this with claude",
+        ),
+        recovery_notes=(
+            "If no advisor is configured, retain the question and context summary, mark external advice not_observed, and hand back the agent's own answer without choosing a default advisor.",
+            "If the named advisor returns no response, retain the prepared advisor prompt, mark external advice not_observed, and hand back the question and context summary for a later consultation.",
+            "If advisor claims lack file, artifact, command, or source evidence, retain the captured advice as advice only, mark those conclusions tentative, and hand back accepted/rejected points and unresolved questions in the decision note.",
         ),
     ),
     SkillDefinition(
@@ -9545,6 +9789,11 @@ _DEFINITIONS.append(
             "someone reported a bug in discord",
             "check for duplicate issues first",
             "write up an issue for the maintainers",
+        ),
+        recovery_notes=(
+            "If reproduction evidence is still missing after three questions, retain the report classification and observed facts, mark the direction unresolved, and hand back the missing steps, versions, or logs without filing.",
+            "If duplicate search cannot finish, retain the scoped report summary, mark duplicate status unresolved, and hand back the explicit repository and pending search; do not confirm or dispatch creation.",
+            "If connector read-back lacks request binding or issue fields, retain the confirmed direction and duplicate status, mark creation not_observed, and hand back the idempotency key and missing read-back fields without redispatching.",
         ),
     )
 )

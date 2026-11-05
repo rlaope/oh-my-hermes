@@ -81,7 +81,9 @@ DEFINITION = SkillDefinition(
         "Split first: many small nodes beat one big one, but never split one shared write scope or one judgement.",
         "Climb the difficulty ladder `quick` -> `unspecified-low` -> `unspecified-high` with a one-line reason per "
         "climb; use `ultrabrain` at most once, and a graph whose every node is `deep` or `deep-work` is a routing "
-        "failure.",
+        "failure. A `role=review` node takes category `review` where your routes serve it; a `role=baseline` node "
+        "stays `quick` or `unspecified-low`; a `role=verify` node judges the run goal and baseline exemptions, so "
+        "climb the ladder for it as for any judgement.",
         "Write every node prompt self-contained, in order: TASK, DELIVERABLE, SCOPE (what it may read and write), "
         "VERIFY (the literal command and expected result), STOP WHEN.",
         "`depends_on` only orders nodes; data moves through the handoff files `omh_dag` names, never through "
@@ -200,6 +202,11 @@ def run_loop_reference() -> str:
    this run, including non-dag `delegate_task` calls. If the host's one-shot detector itself
    cannot be read, define is refused as `oneshot_detection_unavailable` rather than run uncapped;
    `ready`, `settle`, `repair` and `extend` refuse it the same way, and the record is untouched.
+   The nodes share one worktree: dependents and the verify node read earlier nodes' edits from it. With
+   Hermes' `delegation.worktree_isolation` on and a local terminal, each child would start from the last
+   commit without them, so define is refused as `worktree_isolation_on`, and a run defined before it was
+   turned on hands out no call while it is on (`status` says why). OMH never writes the setting: relay the
+   say, which names `hermes config set delegation.worktree_isolation false` for the person to run.
    Each node's `role` says what it is for: `build` (the default), `baseline`, `verify` or `review`; any
    other role is refused. Only a `verify` node verifies the goal, and every other node with a `write_scope`
    is a producer it has to follow. A node with no role that writes files and whose label opens with a check

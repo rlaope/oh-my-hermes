@@ -371,6 +371,9 @@ class AppTestCase(unittest.TestCase):
             FALLBACK_SENTINEL_ENV: str(root / "fallback"),
             "OMH_TUI_WALLPAPER": "0",  # the living wallpaper paints the blank cells; its own tests turn it on
             "OMH_TUI_UPDATE_CHECK": "0",  # the update notice asks npm; its own tests turn it on, with the fetch injected
+            # The main screen leaves the mouse to the terminal, the behaviour these replays pin byte for byte;
+            # `tests/test_tui_main_mouse.py` turns it on.
+            "OMH_TUI_MOUSE": "0",
             **(env or {}),
         }
         environ.pop("OMH_NO_TUI", None)
@@ -1008,7 +1011,9 @@ class SessionTests(AppTestCase):
         self.assertTrue(all(len(line) <= 60 for line in everything))
 
     def test_a_session_without_subagents_never_turns_on_mouse_reporting_so_drag_selection_stays_native(self) -> None:
-        # With agents to click it does, for as long as they are clickable: `test_tui_agent_mouse`.
+        # With OMH_TUI_MOUSE=0, this harness's default. With agents to click it does, for as long as they are
+        # clickable (`test_tui_agent_mouse`); without the switch the main screen takes the mouse
+        # (`test_tui_main_mouse`).
         run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=startup_answers()))
         run.terminal.script(Step(b"\x04", when=run.terminal.idle, label="the first frame"))
         self.run_main(run)

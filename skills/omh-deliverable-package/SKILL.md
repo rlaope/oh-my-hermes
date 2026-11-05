@@ -48,8 +48,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If generation tooling is missing, prepare a prompt or package handoff and mark file output not_observed.
-- If QA or attachment evidence is missing, keep generated/delivered states separate and show the next check.
+- If rendered images do not match slide_count or remain uninspected, retain the observed slide_count, mark render_screenshot unresolved, and hand back the exact file and outstanding image checks.
+- If the person's approval names no final file, retain each generated version's read-back, mark approval unresolved, and hand back the stable id and version choices without selecting by modification time.
+- If a publication URL resolves to a different content hash, retain the approved file and any archive evidence already read back, mark publication unresolved, and hand back the URL and expected sha256 for destination read-back.
 
 ## Workflow Lane
 

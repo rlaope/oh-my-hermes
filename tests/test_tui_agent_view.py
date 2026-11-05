@@ -33,7 +33,7 @@ from omh.tui.panels import SPINNER_FRAMES
 from omh.tui.style import Span
 from omh.tui.subagents import Roster
 from omh.tui.theme import DEFAULT_THEME
-from omh.tui.transcript import NoticeBlock
+from omh.tui.transcript import AGENT_FAILED, AGENT_FINISHED, AgentDoneBlock, NoticeBlock
 from omh.tui.width import line_width
 
 STARTS = FRAMES[:2]  # both recorded agents started, neither finished
@@ -165,10 +165,13 @@ class RosterFeedTests(unittest.TestCase):
         app._on_event(Event(FRAMES[0][0], None, FRAMES[0][1]))
         self.assertEqual(app.roster.agents, {})
 
-    def test_a_subagent_event_adds_nothing_to_the_transcript(self) -> None:
+    def test_a_subagent_event_adds_to_the_transcript_only_the_briefing_of_an_agent_it_finished(self) -> None:
         app, _client = make_app()
-        relay(app)
+        relay(app, [frame for frame in FRAMES if frame[0] != "subagent.complete"])
         self.assertEqual(app.transcript.blocks, [])
+        relay(app)  # the recording's completes: one per agent finished, the second agent's repeated one ignored
+        self.assertEqual([(type(block), block.outcome) for block in app.transcript.blocks],
+                         [(AgentDoneBlock, AGENT_FINISHED), (AgentDoneBlock, AGENT_FAILED)])
 
     def test_a_payload_that_is_not_a_subagents_never_raises_into_the_loop(self) -> None:
         app, _client = make_app(busy=True)
@@ -279,7 +282,7 @@ class ViewTests(unittest.TestCase):
         app, _client = agent_app(busy=False, frames=FRAMES, cols=80)
         self.assertEqual(info_left(app), CHIP)
         rows = view_text(app)
-        self.assertEqual([row[:4] for row in rows], ["  ● ", "  ○ ", "  ✗ "])
+        self.assertEqual([row[:4] for row in rows], ["  ● ", "  ✓ ", "  ✗ "])
 
     def test_a_narrow_row_drops_the_right_side_and_keeps_the_count_whole(self) -> None:
         patched = mock.patch("omh.tui.app.__version__", "9.9.9")  # the badge's version, fixed: the gap is a width
@@ -510,7 +513,7 @@ class OneAgentSurfaceTests(unittest.TestCase):
         self.assertEqual(info_left(app), CHIP)
         self.assertEqual(view_text(app), VIEW)
         relay(app, FRAMES)
-        self.assertEqual([row[:4] for row in view_text(app)], ["  ● ", "  ○ ", "  ✗ "])
+        self.assertEqual([row[:4] for row in view_text(app)], ["  ● ", "  ✓ ", "  ✗ "])
         for state in ("idle", "running", "agents running"):
             self.assertNotIn(state, mode_row(app))
 
@@ -559,7 +562,7 @@ def box_top(screen: list[str]) -> int | None:
 
 
 class DagViewTests(unittest.TestCase):
-    """A DAG run's folding tree under the info line (`dag_tree`): a third of the screen from the start, one line once
+    """A DAG run's folding tree under the info line (`dag_tree`): `TREE_ROWS` rows from the start, one line once
     the run is over, and the keys Down gives it in its own rows. tests/test_tui_dag_tree.py pins the tree itself."""
 
     def tree_app(self, rows: int, graph: dict, **options: object) -> App:
@@ -567,35 +570,39 @@ class DagViewTests(unittest.TestCase):
         with_graph(app, graph)
         return app
 
-    def test_the_staged_export_tree_is_whole_at_40_rows_and_folded_at_24_keeping_its_running_lane(self) -> None:
+    def test_the_staged_export_tree_is_whole_at_40_rows_and_keeps_its_running_lane_at_24(self) -> None:
         from _delegation_graphs import export_run
 
         # The folding tree (the owner's pick of 2026-10-22) in place of the box-drawing tree: no `◆ main` row, a
-        # label row per stage, a blank row between two stages.
-        whole = view_text(self.tree_app(40, export_run(staged=True)))
-        self.assertEqual(len(whole), 11, whole)  # header, three stages, five lanes, two blanks: under 40 // 3
+        # label row per stage, a blank row between two; a done one-node stage on one row (the owner, 2026-11-04).
+        whole = [row.rstrip() for row in view_text(self.tree_app(40, export_run(staged=True)))]
+        self.assertEqual(len(whole), 10, whole)  # header, the done stage, two stages, their four lanes, two blanks
         self.assertFalse([row for row in whole if "more" in row])
-        self.assertEqual([row.strip()[:12] for row in whole[:2]], ["DAG · export", "▾ stage 1 · "])
+        self.assertEqual([row.strip()[:12] for row in whole[:2]], ["DAG · export", "✓ stage 1 · "])
+        self.assertEqual(whole[2], "")
         folded = [row.rstrip() for row in view_text(self.tree_app(24, export_run(staged=True)))]
         self.assertLessEqual(len(folded), 24 // 3)
-        self.assertIn("  ▸ stage 1 · 1 node · 1 done", folded, "the done stage shuts first")
         self.assertIn("    ▸ 2 more · 2 waiting", folded, "the busy stage's quiet lanes fold into one row")
         self.assertTrue([row for row in folded if "⠋ Export button" in row and "running" in row], folded)
 
-    def test_the_cap_is_a_third_of_the_screen_whatever_runs(self) -> None:
+    def test_the_cap_is_tree_rows_whatever_runs(self) -> None:
         from _delegation_graphs import parallel
+        from omh.tui.agent_view import TREE_ROWS
 
         # Nothing running: the non-DAG cap would be min(7, rows // 4), 6 at 24 rows and 7 at 40; the tree, twenty
-        # waiting lanes that fold no further, still gets a third of the screen, its last row the count of the rest.
+        # waiting lanes that fold no further, gets a third of the screen up to `TREE_ROWS` (no more on a taller
+        # screen), its last row the count of the rest.
         idle = parallel(20)
         for node in idle["nodes"][1:]:
             node.update(state="waiting", status="waiting")
         idle["edges"].append({"from": "l0", "to": "l1", "kind": "depends_on"})
-        for rows in (24, 40):
+        for rows in (24, 40, 72):
             with self.subTest(rows=rows):
+                cap = min(TREE_ROWS, rows // 3)
                 shown = view_text(self.tree_app(rows, idle))
-                self.assertEqual(len(shown), rows // 3)
-                self.assertEqual(shown[-1].rstrip(), f"  … {20 - (rows // 3 - 2)} more nodes · ↓ to browse")
+                self.assertEqual(len(shown), cap)
+                self.assertEqual(shown[-1].rstrip(), f"  +{20 - (cap - 2)} more · /dag")
+        self.assertEqual(TREE_ROWS, 16)
         # The same run's six-row tree without stages (one unnamed group draws no label row) fits whole at 24 rows.
         from _delegation_graphs import export_run
 
@@ -637,89 +644,96 @@ class DagViewTests(unittest.TestCase):
         self.assertTrue(running[0].startswith("  DAG · export feature · 5 nodes"), running)
         self.assertEqual(view_text(self.ended(self.tree_app(40, export_run(done, staged=True)))), [])
 
-    def test_a_tree_that_shrinks_mid_run_keeps_its_rows_on_the_bottom_rows_until_the_turn_ends(self) -> None:
-        # The mid-run blank band (2026-10-23 audit): a tree that drew fewer rows while the turn ran gave them up, and
-        # on the bottom rows they stayed blank between the transcript and the working row. The tree keeps them,
-        # blank under it, until the turn ends.
-        from _delegation_graphs import parallel
-
-        def run(lanes: int) -> dict:
-            graph = parallel(lanes)
-            graph["edges"] = [{"from": "root", "to": "l0", "kind": "dispatch"}] + [
-                {"from": "l0", "to": f"l{number}", "kind": "depends_on"} for number in range(1, lanes)]
-            return graph
-
-        app = self.tree_app(40, run(8))
-        pinned(app)
-        tall = view_rows(app)
-        with_graph(app, run(3))  # the graph reader now keeps fewer of the run's lanes
-        held = view_text(app)
-        self.assertEqual(len(held), tall)
-        tree = len(held)
-        while tree and not held[tree - 1].strip():
-            tree -= 1
-        self.assertLess(tree, tall, "the tree itself shrank; its rows stay under it, blank")
-        self.assertTrue(held[tree - 1].strip().startswith("⠋ Lane 2 migrate"), held)
-        app.turn_pending = False
-        self.assertLess(view_rows(app), tall, "the hold ends with the turn")
-
     @staticmethod
-    def chained(lanes: int) -> dict:
-        """`lanes` running lanes, the first a layer of its own and the rest after it: a dag run's tree."""
-        from _delegation_graphs import parallel
+    def staged(states: dict[str, str], extra: int = 0) -> dict:
+        """A dag run of three one-lane layers (`a1`, `b1`, `c1`) in `states` (the rest waiting), and `extra` lanes an
+        extend round added after `c1`: a done one-lane layer of a small run is one row, so each settle shrinks it."""
+        from _delegation_graphs import graph, lane, root
 
-        graph = parallel(lanes)
-        graph["edges"] = [{"from": "root", "to": "l0", "kind": "dispatch"}] + [
-            {"from": "l0", "to": f"l{number}", "kind": "depends_on"} for number in range(1, lanes)]
-        return graph
+        keys = ["a1", "b1", "c1"] + [f"x{number}" for number in range(1, extra + 1)]
+        layer = {key: ("layer 4" if key[0] == "x" else f"layer {'abc'.index(key[0]) + 1}") for key in keys}
+        nodes = [root()] + [
+            {**lane(f"d:r:{key}", f"Step {key}", "quick", "glm-5.3", "low", states.get(key, "waiting"),
+                    elapsed=30 if states.get(key) in ("running", "done") else None, order=at, group=layer[key],
+                    status="accepted" if states.get(key) == "done" else ""), "dag_node": key}
+            for at, key in enumerate(keys, start=1)]
+        edges = [("root", "d:r:a1", "dispatch"), ("d:r:a1", "d:r:b1", "depends_on"), ("d:r:b1", "d:r:c1", "depends_on")]
+        edges += [("d:r:c1", f"d:r:x{number}", "depends_on") for number in range(1, extra + 1)]
+        built = graph(nodes, edges, name="r", source="dag")
+        built["dag_open"] = any(state != "done" for state in [states.get(key, "waiting") for key in keys])
+        return built
 
-    @staticmethod
-    def held(app: App) -> int:
-        """The blank rows under the tree's last drawn row."""
-        rows = view_text(app)
-        under = 0
-        while under < len(rows) and not rows[len(rows) - 1 - under].strip():
-            under += 1
-        return under
+    def test_the_bottom_is_as_tall_as_the_tree_in_every_frame_of_a_run(self) -> None:
+        # The owner, 2026-11-04 ("밑에 빈공간은 하단레이어마다 동적으로 늘줄되어야하느거아닌가"): under the composer the
+        # region is the info line and the tree's rows, no more, as the tree grows and shrinks. On the bottom rows a
+        # tree that gives rows up moves the region's top down, the transcript above painted again lower
+        # (`screen.LiveRegion._lower`), so no row stays blank under the tree or between the transcript and the
+        # composer. It replaces the tree's high-water hold (2026-10-23) and the blank rows a finished run left under
+        # the info line (2026-10-26).
+        done = "done"
+        steps = [
+            ("define", {"a1": "running"}, 0),
+            ("layer 1 settles", {"a1": done, "b1": "running"}, 0),
+            ("layer 2 settles", {"a1": done, "b1": done, "c1": "running"}, 0),
+            ("extend +2", {"a1": done, "b1": done, "c1": "running", "x1": "running", "x2": "running"}, 2),
+            ("layer 3 settles", {"a1": done, "b1": done, "c1": done, "x1": "running", "x2": "running"}, 2),
+        ]
+        for busy in (True, False):
+            with self.subTest(busy=busy):
+                app = self.tree_app(42, self.staged(steps[0][1]))
+                app.turn_pending = busy
+                pinned(app)
+                heights = []
+                for name, states, extra in steps:
+                    with_graph(app, self.staged(states, extra))
+                    sent = len(app.terminal.writes)
+                    screen = drawn(app)
+                    frame = [write for write in app.terminal.writes[sent:] if "\x1b[?2026h" in write]
+                    if name != "define":  # the first step draws what was already there: nothing to write
+                        self.assertEqual(len(frame), 1, f"{name}: one synchronized update, so nothing flickers")
+                    info = screen_info_index(app, screen)
+                    tree = view_text(app)
+                    self.assertEqual(app.region.last_row(42), 41, name)
+                    self.assertEqual(info + 1 + len(tree), 42, f"{name}: the bottom is the info line and the tree")
+                    self.assertTrue(screen[41].strip(), f"{name}: no blank row under the tree")
+                    self.assertTrue(tree[0].strip().startswith("DAG ·"), name)
+                    top = box_top(screen)
+                    gap = next(at for at in range(top) if screen[top - 1 - at].strip())  # blank rows over the rule
+                    self.assertLessEqual(gap, 1, f"{name}: no blank band over the composer: {screen[top - 5: top]}")
+                    heights.append((len(tree), top))
+                sizes, tops = [size for size, _top in heights], [top for _size, top in heights]
+                self.assertEqual(sizes, [9, 8, 6, 10, 8], heights)
+                for at in (1, 2, 4):  # each settle: the tree shrank and the composer moved down by as many rows
+                    self.assertEqual(tops[at] - tops[at - 1], sizes[at - 1] - sizes[at], heights)
+                self.assertEqual(tops[3] - tops[2], sizes[2] - sizes[3], "the extend grew it: the composer rose")
+                # The run ends and the turn with it: the tree clears and the info line is the last row.
+                with_graph(app, self.staged({key: done for key in ("a1", "b1", "c1", "x1", "x2")}, 2))
+                app.turn_pending = False
+                screen = drawn(app)
+                self.assertEqual(view_text(app), [])
+                self.assertEqual(screen_info_index(app, screen), 41, "the bottom is the info line alone")
 
-    def test_the_hold_ends_with_a_turn_that_draws_no_tree_and_on_a_new_session(self) -> None:
-        # The review of 2fb605957: the hold was dropped only where a tree, or its summary line, was drawn between
-        # turns. A turn that ended with the graph gone (a settled graph that went quiet) left it, and the next turn's
-        # first tree drew the old height's rows blank under it (20 held, 15 of them blank).
-        app = self.tree_app(40, self.chained(8))
-        pinned(app)
-        view_rows(app)  # a frame drawn on the bottom rows: the tree's height is held from here
-        with_graph(app, self.chained(3))
-        self.assertGreater(self.held(app), 0)
-        with_graph(app, None)
-        app.turn_pending = False
-        self.assertEqual(view_text(app), [], "between the turns no tree is drawn")
-        app.turn_pending = True  # the next turn, and a smaller run, with the region still on the bottom rows
-        with_graph(app, self.chained(2))
-        self.assertEqual(app.region.last_row(40), 39)
-        self.assertEqual(self.held(app), 0)
-        # A new session drops a hold too, before anything is drawn.
-        app.tree_hold = 20
-        app.turn_pending = False
-        client = app.client
-        type_text(app, "/new")
-        app._on_input(Key(ENTER))
-        answer(app, client, {"session_id": "live-2", "stored_session_id": "stored-2", "info": {}})
-        self.assertEqual(app.tree_hold, 0)
-
-    def test_the_held_rows_never_pass_the_views_cap(self) -> None:
-        # A taller composer or a slot lowers the view's cap mid-turn: the hold gives way, so the composer and the
-        # info line stay on the screen.
-        app = self.tree_app(24, self.chained(8))
-        pinned(app)
-        view_rows(app)
-        with_graph(app, self.chained(2))
-        self.assertGreater(self.held(app), 0)
-        self.assertLessEqual(len(app._agent_view(120, 24, 3)), 3)
-        app.composer.replace(0, len(app.composer.text), "\n".join(f"draft line {number}" for number in range(6)))
-        screen = drawn(app)
-        self.assertTrue(any(row.startswith("❯ draft line 0") for row in screen), screen)
-        self.assertLessEqual(len(view_text(app)), app.frame_budget.agents)
+    def test_each_row_given_up_puts_one_line_twice_in_the_scrollback(self) -> None:
+        # The cost the owner accepted (2026-11-05): the lines painted again on the screen's first rows as the region's
+        # top moves down are already in the terminal's scrollback, so once they scroll off again they are there twice.
+        # One line per row the tree gives up, no more.
+        done = "done"
+        for busy in (False, True):
+            with self.subTest(busy=busy):
+                app = self.tree_app(42, self.staged({"a1": "running"}))
+                app.turn_pending = busy
+                pinned(app)
+                given = 0
+                for states in ({"a1": done, "b1": "running"}, {"a1": done, "b1": done, "c1": "running"}):
+                    before = app.frame_budget.agents
+                    with_graph(app, self.staged(states))
+                    drawn(app)
+                    given += before - app.frame_budget.agents
+                self.assertEqual(given, 3, "the two settles gave up one row, then two")
+                app.transcript.add_notice("\n".join(f"after {number}" for number in range(60)))
+                drawn(app)  # everything the screen held is in the scrollback now
+                kept = [row.strip() for row in app.terminal.screen.scrollback if row.strip().startswith("line ")]
+                self.assertEqual(len(kept) - len(set(kept)), given, "one line twice per row given up")
 
     def test_down_in_a_dag_run_gives_the_tree_the_keys_in_its_own_rows_and_nothing_moves(self) -> None:
         from _delegation_graphs import parallel
@@ -777,15 +791,20 @@ class RoomTests(unittest.TestCase):
             {"text": "Ship", "state": "pending"}]
 
     def small_app(self, running: int, done: int, *, plan: bool = True, graph: dict | None = None,
-                  cols: int = 80, rows: int = 12) -> App:
+                  cols: int = 80, rows: int = 12, briefed: bool = True) -> App:
         """`rows` rows (12) and a turn running: `running` agents running and `done` done, the plan in the slot (four
-        rows) unless `plan` is False, and `graph` as the conversation's delegation graph."""
+        rows) unless `plan` is False, and `graph` as the conversation's delegation graph. Each done agent is briefed
+        in the transcript as the app does, unless `briefed` is False."""
         app, _client = make_app(busy=True, rows=rows, cols=cols, clock=lambda: 0.0)
         with_graph(app, graph, self.PLAN if plan else None)
         for number in range(running + done):
             agent_event(app, "start", f"sa-{number}", goal=f"task {number}")
             if number >= running:
-                agent_event(app, "complete", f"sa-{number}", goal=f"task {number}", status="completed")
+                if briefed:
+                    agent_event(app, "complete", f"sa-{number}", goal=f"task {number}", status="completed")
+                else:  # the roster alone: the app would also brief it in the transcript (`AgentDoneBlock`)
+                    app.roster.apply("subagent.complete", payload(f"sa-{number}", goal=f"task {number}",
+                                                                  status="completed"), 0.0)
         return app
 
     def test_on_the_bottom_rows_the_view_keeps_its_rows_when_the_turn_ends_so_the_composer_stays(self) -> None:
@@ -806,6 +825,20 @@ class RoomTests(unittest.TestCase):
         again = drawn(app)
         self.assertEqual((box_top(again), app.frame_budget.agents), (top, 2))
         self.assertTrue(again[top - 5].startswith("✻ Working"), again)
+
+    def test_briefings_written_on_the_bottom_rows_move_neither_the_composer_nor_the_view(self) -> None:
+        # A finished agent's briefing (`AgentDoneBlock`) is transcript output like any other: on the bottom rows it
+        # scrolls above the region, and the composer's box and the view's rows stay where they were.
+        app = self.small_app(running=3, done=2)
+        top = box_top(pinned(app))
+        rows = app.frame_budget.agents
+        self.assertGreater(rows, 0)
+        agent_event(app, "complete", "sa-0", goal="task 0", status="completed", summary="Done.\nAll green.")
+        screen = drawn(app)
+        self.assertEqual((box_top(screen), app.frame_budget.agents), (top, rows))
+        self.assertTrue(any(line.startswith("● task 0 finished") for line in app.terminal.screen.history()), screen)
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual((box_top(drawn(app)), app.frame_budget.agents), (top, rows))
 
     def test_a_dag_trees_rows_stay_through_the_turns_end_and_the_next_prompt(self) -> None:
         from _delegation_graphs import export_run
@@ -902,8 +935,9 @@ class RoomTests(unittest.TestCase):
 
     def test_a_turn_drawn_above_the_bottom_rows_holds_nothing_when_its_answer_brings_them_down(self) -> None:
         # Above the bottom rows the composer follows the content, so a turn drawn there keeps no rows: the answer
-        # that brings the region down to the bottom rows must not shrink the view one frame later.
-        app = self.small_app(running=3, done=4)
+        # that brings the region down to the bottom rows must not shrink the view one frame later. Its agents finish
+        # unbriefed: four briefings would fill the 12 rows the case needs the region to stand above the bottom of.
+        app = self.small_app(running=3, done=4, briefed=False)
         app._on_input(Key(CHAR, "l", ctrl=True))
         drawn(app)
         self.assertNotEqual(app.region.last_row(12), 11)
@@ -973,7 +1007,9 @@ class RoomTests(unittest.TestCase):
         app._on_input(Key(ENTER))
         answer(app, app.client, {"session_id": "live-2", "stored_session_id": "stored-2", "info": {}})
         # `/new` redraws nothing, so the region is still on the bottom rows. The new session's tree (a third of 12
-        # rows is four) gets the three rows the plan leaves it, not what the last session's turn left the view.
-        with_graph(app, export_run(), self.PLAN)
+        # rows is four) gets the three rows the plan leaves it, not what the last session's turn left the view. Its
+        # lane is handed out, not running: a running one would put the waiting row (`App._pending_wait`) over the
+        # composer, a row of its own.
+        with_graph(app, export_run({"ui": "dispatched"}), self.PLAN)
         self.assertEqual(view_rows(app), 3)
         self.assertEqual(app.region.last_row(12), 11)

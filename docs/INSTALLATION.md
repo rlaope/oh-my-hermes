@@ -656,7 +656,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   working row adds `MoA: refs 2/3`, then `MoA: aggregating…`.
 - While a turn has delegated work, the agent view under the info line lists
   its subagents as Claude Code's agent list does: `● main`, then one row per
-  agent, its mark (a spinner while it runs, `○` done, `✗` failed, `▪`
+  agent, its mark (a spinner while it runs, `✓` done, `○` cancelled, `✗` failed, `▪`
   interrupted, `◌` waiting for a worker), a short title (its goal up to the
   first field label such as `DELIVERABLE:` or the end of its first sentence,
   which an abbreviation such as `e.g.` does not end; a dag lane keeps its own
@@ -679,7 +679,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   runs or the run is over. The view stays
   while agents outlive the turn, each one's mark saying whether it still
   runs. With more agents than the view has rows, the running ones keep
-  theirs and the rest are counted on its last row (`○ 3 done`, or `+4 more ·
+  theirs and the rest are counted on its last row (`✓ 3 done`, or `+4 more ·
   1 waiting · 3 done`); in two rows or fewer `● main` gives its row up
   first. While the conversation's delegation graph is a DAG run (a lane
   waits on another, or a lane delegates), the view is the run's folding tree
@@ -764,17 +764,112 @@ run and approval decision stays Hermes'; the screen is OMH's.
   <text>`), and it and what `x` reports
   wait under the running call and are written at the next block boundary,
   so neither cuts that call off nor splits a reply.
-- The OMH TUI asks the terminal for click reports only while the agent list
+- When a subagent finishes, the transcript says so in a short briefing, as
+  Claude Code does for a teammate: `● <name> finished  1m 35s · ↓1.8k`, then
+  the first lines of its reply, or its error, in up to two dim rows under the
+  name, ending in `…` where it said more. A dag node's child is named by the
+  node's role and its id as a handle (`● build @notify finished`, `● verify
+  @check failed`), as Claude Code names a teammate, the handle bold in a hue
+  of its own, picked by the node's place in its run, so the first seven
+  nodes of a run differ, and the same on every
+  row (plain bold under `NO_COLOR`), with the node's label on one dim row under
+  it, cut with `…` (none when the label is the id). Until the HUD holds the
+  node, the id is the one the child's `[dag:<run>/<node>]` marker names, with
+  no role. Any
+  other agent is named by the short title the agent list shows, with no role,
+  no `@` and no such row, since Hermes' subagent frames carry no name. The
+  mark is green only for an agent that completed; a failed one reads `●
+  <name> failed` in red with its error under it, an interrupted one `▪ <name>
+  interrupted` and a cancelled one `○ <name> cancelled`, both muted. One
+  briefing per agent, in the order they finished, and nothing when one
+  starts. A briefing that arrives while a reply streams or a call runs waits
+  under it and is written at the next block boundary, so it never splits a
+  paragraph or a table; `/history` and Ctrl+O show it meanwhile. While more
+  than three wait under a running call (`delegate_task`), or more than the
+  rows left above the composer hold beside the call, the newest ones that fit
+  are drawn whole and the rest fold into one row above them (`● 9 more
+  finished · 1 failed`; `● 2 finished` when none fits whole, without the
+  blank row above it, or no row at all, where the screen is too short), so
+  the call stays on screen; every one is written
+  whole, in order, at the boundary. Briefings are the TUI's own rows, not
+  part of the session Hermes stores: a resumed or rewound session is drawn
+  again without them. The messenger's replies are unchanged.
+- The OMH TUI takes the mouse on the main screen once it can tell which row
+  a report lands on (once the session's output has reached the bottom of the
+  screen, or after Ctrl+L). A drag over the transcript or the rows under it
+  selects the text (shown reversed) and copies it when you let go, without
+  the rail a block hangs on or a reply's margin, and the row above the
+  composer says `✓ copied 694 chars to clipboard` for 2 s (the copy goes out
+  as the pager's does, below); a double click copies a word and a triple
+  click a row, and a key, the wheel, the next click or, once it is copied,
+  the next output drops the selection. The composer's rules, its `❯` and its placeholder are never
+  copied, only what you typed. The info line and the agent view under it
+  are never selected, and while a turn runs neither are the working row,
+  its tip and the rows under them: a drag carried onto them runs to the end
+  of the last row above them, so dragging to the bottom of the screen
+  copies the transcript. During a turn that puts your draft out of a drag's
+  reach too, and an approval or a value prompt, which sit under the row
+  counting how long Hermes has waited; the wheel up opens the question's own
+  view (Ctrl+O's), where a drag copies it. A question with choices, framed
+  between two rules, has no such row and can be dragged over during a turn
+  as well; its rules, its bar, the `❯` on the highlighted choice and its
+  key row are never copied, only the question and the choices. A drag over the transcript's rows stays on them
+  while output scrolls the screen; one over the live rows that change (a
+  reply still streaming, the panels, the composer) is dropped, highlight
+  and all, and copies nothing as soon as the rows under it change, and the
+  row above the composer says `selection dropped: text moved`, so it never
+  copies text other than what it showed. Its highlight never goes into the
+  scrollback. Ctrl+C within 2 s of a drag that copied only drops the
+  selection, since Windows Terminal and VS Code copy with it; the next
+  Ctrl+C acts as always. The wheel up opens the
+  transcript view Ctrl+O opens, one notch up from its end, where the screen
+  was; it scrolls there, and q goes back. The wheel down does nothing on the
+  main screen. A row the OMH TUI did not print in this screen (the shell's
+  output above the session, the rows from before a Ctrl+Z) selects nothing:
+  dragging from there opens the transcript view instead (the open question,
+  while one is asked), and with nothing to show it opens nothing. While the
+  window is being resized the mouse is the terminal's, and a selection is
+  dropped; on a terminal that ignores the erase of its scrollback (`CSI 3 J`)
+  rows reflowed into the scrollback with a selection on them can keep it
+  reversed there. The agent list still takes a click on its rows, and the
+  wheel over the list does nothing, as below. If you scroll the terminal's
+  own scrollback (its scrollbar, Shift+PageUp) and then drag, the row a
+  report names is the terminal's to say: some terminals jump back to the
+  bottom first or report nothing over scrollback rows, and one that reports
+  the row it shows could select another row than the one under the pointer;
+  the OMH TUI cannot tell, so drag after coming back to the bottom. On Linux
+  a middle click is the X primary selection's paste, and a drag there no
+  longer sets that selection: the click reaches the OMH TUI, which does
+  nothing with it. Hold the bypass modifier (Shift) with the middle click to
+  paste the primary selection as before, or select with it to set one. Your terminal's own
+  selection is still there with its bypass modifier: Shift while dragging in
+  xterm, kitty, WezTerm, Ghostty, Alacritty, foot, GNOME Terminal, Konsole,
+  Windows Terminal and Otty (its default; Settings → Controls → Mouse →
+  Bypass Mouse Reporting chooses another), Option in iTerm2, Fn in
+  Terminal.app (or turn off View → Allow Mouse Reporting, ⌘R); VS Code's
+  terminal on macOS has none unless
+  `terminal.integrated.macOptionClickForcesSelection` is on. That selection
+  copies the rail, as it always has. Inside tmux the reports reach the OMH
+  TUI with `set -g mouse` on or off, and with it on tmux hands the OMH TUI
+  the wheel and the drag instead of starting copy mode. `OMH_TUI_MOUSE=0`
+  leaves the main screen's mouse to the terminal as before: the wheel
+  scrolls its scrollback and a drag selects natively, rail included, and
+  click reports are on only while the agent list or the `/theme` picker is
+  open, as the next item says.
+- With `OMH_TUI_MOUSE=0` the OMH TUI asks the terminal for click reports only while the agent list
   is open, so during a turn the wheel scrolls and a drag selects as in any
   shell, and the agent view is reached with Down; nothing in it, and
   nothing on the info line, is clickable while the list is closed. While the list is open a plain drag no longer selects text in
-  most terminals and the wheel does not scroll. To select anyway, hold Fn
-  while dragging in Terminal.app (or turn off View → Allow Mouse Reporting),
-  Option in iTerm2, Shift in most other terminals. Selection and the wheel
+  most terminals and the wheel does not scroll. To select anyway, hold the
+  bypass modifier above. Selection and the wheel
   come back as soon as the list closes, while a question is open, and while
-  the window is being resized. While click reports are on, and for 0.5 s after they go off, an Esc pressed on
+  the window is being resized. While click reports are on there, and for 0.5 s after they go off, an Esc pressed on
   its own acts after 0.3 s, the time a click report split by a slow
-  connection has to arrive whole. Another key typed within that time ends
+  connection has to arrive whole. Where the main screen takes the mouse
+  (without `OMH_TUI_MOUSE=0`) the Esc waits only where a report can still
+  come split: over SSH or WSL, while a mouse button is held, and for 0.5 s
+  after the last report (a wheel turn, a click); otherwise it acts at the
+  first silence, as with reports off. Another key typed within that time ends
   the wait, and both keys act, except `[`, which is read as the rest of a
   sequence, as is `O` arriving together with the letter that ends F1 to F4,
   an arrow, Home or End. A key the terminal sends in the same burst as the
@@ -808,10 +903,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   SSH. Elsewhere it
   goes out as OSC 52 with nothing to confirm it, and the footer says `⚠ copy
   sent (terminal may not support OSC 52)` (under tmux, that tmux passes it on
-  only with `set-clipboard on`). On the main screen the terminal's own
-  selection is the only one: the transcript is in its scrollback, and taking
-  the mouse there would take the wheel and that scrollback away, so what it
-  copies there keeps each row's rail (`┃ ` in front of each row, and a
+  only with `set-clipboard on`). The terminal's own selection (its bypass
+  modifier, or everywhere with `OMH_TUI_MOUSE=0`) copies what the screen
+  shows, so it keeps each row's rail (`┃ ` in front of each row, and a
   reply's margin after it), and the terminal shows no copy notice of its
   own.
 - The composer takes a paste whole when the terminal brackets it, as most
@@ -872,11 +966,17 @@ run and approval decision stays Hermes'; the screen is OMH's.
   and the info line says `d or esc denies`.
   When the approval came from a subagent, that stops the session's whole
   running turn, not only the subagent. The tell row is the one deny that
-  does not stop the turn; it redirects it. A clarify question numbers its choices: a digit, or Up and Down then
-  Enter, picks one. One that takes several says `(choose one or more)` and
+  does not stop the turn; it redirects it. A clarify question with choices
+  stands between two rules, as Claude Code's own question dialog does: the
+  context Hermes wrote dim (its first rows), the question itself bold, a
+  choice written `label — description` as its label with the description
+  under it, and its keys on a row of their own under the bottom rule, with
+  how long it has waited once that is a minute (Hermes gives up after an
+  hour). It numbers its choices: a digit, or Up and Down
+  then Enter, picks one. One that takes several says `(choose one or more)` and
   puts a box before each choice: Space or its digit ticks the choice (`[x]`)
   or unticks it, Enter sends the ticked ones (the highlighted one alone when
-  none is ticked), and an answer of your own joins the ticked ones. Its last row, `Other (type your answer)`, opens the
+  none is ticked), and an answer of your own joins the ticked ones. Its last row, `Type something.`, opens the
   composer as the field for an answer of your own, and so does typing any
   character that picks nothing, which becomes the answer's first character;
   Up or Down goes back to the list and keeps what you typed for that
@@ -1488,7 +1588,19 @@ profile archive, not the transcript, so the first `/export` says so and the
 next one runs it), and `/reload-skills` (Hermes re-scans its
 skills for this session and the TUI reads its command list again, so a skill
 installed since the start, by `omh update` or `/skills install`, runs as
-`/<name>` without a restart). Claude Code's `/cost`, `/permissions` and
+`/<name>` without a restart), and `/gateway restart` (restarts Hermes'
+gateway and reattaches to the same session: it first names the gateway's
+profiles, its connected messenger bots and its running work, and runs nothing
+until you pick Restart. It then runs Hermes' own `hermes gateway restart`; a
+gateway a service (systemd, launchd, or a custom supervisor) runs lets running
+work finish first, up to Hermes' `restart_after_turn_timeout`, and new turns
+wait meanwhile. Restarting the whole gateway loads new OMH plugin code after
+`omh update`. In a named profile the shared gateway serves, you pick that
+profile alone (its running turns stop now, only it reconnects, and new OMH
+code is not loaded) or the whole gateway. While it restarts, commands that
+call the gateway, `/image` and `/paste` included, wait in the composer. Your draft
+stays and nothing is sent again; a failure says why and the command to run
+in a terminal; bare `/gateway` stays Hermes' platform status). Claude Code's `/cost`, `/permissions` and
 `/compact` run Hermes' `/usage`, `/approvals` and `/compress` (`here [N]`, a
 focus topic, or `--preview`; Hermes refuses a compression while a turn runs,
 and the TUI says to run it again once the turn ends). Hermes' shared gateway,
@@ -3569,6 +3681,7 @@ checkouts apart:
 ```text
 omh 2.0.1 (source 6da2a3ca, clean)
 omh 2.0.1 (editable 6da2a3ca, dirty)
+omh 4.0.6 (main@6da2a3ca)
 omh 2.0.1 (build identity unavailable: installed package, no stamped identity)
 ```
 
@@ -3586,14 +3699,24 @@ Read the fields with these boundaries in mind:
   environment inside somebody else's checkout therefore reports `unavailable`
   instead of borrowing that project's revision.
 - Only identity is serialized. No branch name, remote URL, diff, changed-file
-  list, or environment data appears in either output.
+  list, or environment data appears in either output. The one ref shown is the
+  published one an archive install was asked for (`main` or a release tag),
+  never a local branch.
 - Dirty state is `unknown`, never guessed, when the revision came from reading
   `.git` directly because no `git` binary was available.
-- Published OMH artifacts carry no stamped identity today, so a wheel, npm, or
-  Homebrew install reports `unavailable` with `no_stamped_identity`. That is
-  the explicit compatibility result: a packager that ships a
-  `build_identity_stamp/v1` `_build_identity.json` inside the package is read,
-  and an artifact without one is never given an invented revision.
+- A package built from one of this repository's GitHub archives (the
+  installer's `preview` channel fetches `main.zip`, and tag and commit
+  archives work the same) knows its commit: `src/omh/_archive_commit.txt` is
+  marked `export-subst` in `.gitattributes`, so `git archive`, which GitHub
+  uses to build archives, writes the archived commit into it. The ref comes
+  from the URL pip recorded in the package's PEP 610 `direct_url.json`:
+  `main` for the branch archive, the tag for a tag archive, none for a commit
+  archive. That gives `omh 4.0.6 (main@6da2a3ca)`.
+- Release wheels, npm, and Homebrew packages are built from a checkout, where
+  that file keeps its `$Format:%H$` placeholder, so they report `unavailable`
+  with `no_stamped_identity`. A packager that ships a
+  `build_identity_stamp/v1` `_build_identity.json` inside the package is read
+  first, and an artifact without either is never given an invented revision.
 - The block is diagnostic provenance only. It is not evidence that the named
   revision was tested, reviewed, passed CI, was published, or behaved
   correctly at runtime, and it never changes the doctor status or exit code.
@@ -4995,10 +5118,15 @@ installation; that creates a second independently managed `omh` command.
 
 Advanced operators using installer-managed commands can still pin or test a
 different command package with
-`omh update --channel stable --version <version>`. Package-manager installs
-reject `--version`, `--package-url`, and `--source-ref` rather than silently
-installing a different release; use that manager directly for an intentional
-CLI rollback. `omh update --channel local --from-skills-dir ./skills` refreshes
+`omh update --channel stable --version <version>`. A plain `omh update` on an
+installer-managed command tracks branch `main` (the `preview` channel), and
+`--channel main` is accepted as another name for `--channel preview`.
+Package-manager installs reject `--version`, `--package-url`, and
+`--source-ref` rather than silently installing a different release; use that
+manager directly for an intentional CLI rollback. They also refuse
+`--channel preview` (or `main`): the package carries one release wheel, so the
+manager can only install a release, and to track `main` you reinstall with the
+installer and `OMH_CHANNEL=preview`. `omh update --channel local --from-skills-dir ./skills` refreshes
 workflow content only and does not replace the command package, plugin bundle,
 or Hermes registration. These flags are for release validation, fixtures, or
 intentional rollback testing. Local modifications block updates unless
@@ -5060,6 +5188,27 @@ place. It runs as a transaction:
    move the pointer back and re-enter the previous generation; shared-resource
    restoration must succeed before recovery is considered complete.
 
+A successful update ends by naming what it moved between, read from the two
+generations' own files. A generation built from one of this repository's
+GitHub archives knows its commit (see [Build identity](#build-identity)), so an
+update between two `main` commits says so even when the release version did
+not move, and an update with nothing new on `main` says it is already there:
+
+```text
+OMH update complete: command and workflow pack activated together.
+  oh-my-hermes 4.0.6 main@1a2b3c4d → main@5e6f7a8b
+  oh-my-hermes 4.0.6: already at main@5e6f7a8b
+```
+
+The first update onto such a generation names only the old version, and a
+release wheel, built from a checkout, names versions only
+(`oh-my-hermes 4.0.5 → 4.0.6`). `omh update --json` carries the same facts as
+`identity_change` (`update_identity_change/v1`): `status` (`changed`,
+`unchanged`, `previous_unrecorded`, `version_changed`, `unrecorded`),
+`previous` and `current` (`version`, `ref`, `commit_sha`, empty when not
+recorded), and `version_changed`. No commit count is shown: counting needs a
+GitHub API call, which `omh update` does not make.
+
 The pointer makes the command/workflow-pack selection atomic, not all shared
 resource changes. Both things that consume the
 install are spelled beneath it and never in resolved form: the `omh` launcher
@@ -5092,6 +5241,7 @@ What you see when something goes wrong:
 | Staging or download fails | Candidate deleted before anything is activated | The install you already had, untouched |
 | Candidate fails its smoke checks | Candidate deleted before activation | The install you already had, untouched |
 | Activated version fails the post-activation run | Attempt pointer rollback and restoring reentry | Previous command/pack selected if rollback succeeds; shared resources restored only if reentry succeeds |
+| Only a bot profile fails its refresh | The activated version stays; the update exits `3` and names each profile | The new install, plus the profiles to repair |
 | Restoring reentry also fails | Retain recovery marker and candidate anchor; report failed restoration | Recovery still required, not a healthy restored install |
 | Machine dies mid-activation | Next `omh update` reconciles the marker and retries the required activation/restoration step | Command/pack remain paired; restoration can still fail |
 | Two updates at once | The second refuses to start | No partial work |
@@ -5105,8 +5255,24 @@ with the failure reason. Do not delete the retained candidate or clear the
 marker by hand. Preserve the reported paths and failure evidence, resolve the
 reported restoration error, then retry `omh update`: pending restore intent
 allows only restoration until it succeeds, not a fresh candidate activation.
-A healthy restoring reentry clears the marker and permits candidate cleanup;
-the original attempted update still reports failure rather than success.
+A healthy restoring reentry clears the marker and permits candidate cleanup,
+and that same run then goes on to stage the update it was asked for; the
+original attempted update still reports failure rather than success. While the
+marker is open, `omh doctor` reports it as `staged_update_recovery`, and the
+update's own report leads with "could not restore the previous generation:
+recovery is required".
+
+A bot profile that fails its refresh no longer rolls the update back. The
+previous generation fails on the same profile, so a rollback cannot repair it,
+and its restore would fail the same way on every later run. On 2026-11-04 four
+bench profiles whose `plugins/omh` links pointed at deleted worktrees did
+exactly that. The update now keeps the activated version, prints each
+profile's failure, and exits `3`; any failure in the update's own home still
+exits `1` and rolls back. A `plugins/omh` that is a link to a path that no
+longer exists holds no plugin anyone owns, so update replaces it with the
+released bundle without `--force` and prints a `Repaired …` line naming
+where the link pointed. A link to an existing tree OMH did not write still
+needs `--force`.
 Pointer rollback alone does not prove shared-resource restoration or reverse
 all user/plugin state. Run `omh doctor` after recovery and inspect any remaining
 profile failures before treating the install as healthy.

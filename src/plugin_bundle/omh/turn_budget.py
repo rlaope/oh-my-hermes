@@ -125,7 +125,24 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # (-81 on the routed request's largest role, `handoff-guide`), and a
 # fallback label that only respells the action's underscores is dropped
 # (-73). Re-derived from the producer.
-PRE_LLM_CALL_CONTEXT_CHAR_LIMIT = 5632
+# 5632 unchanged: the `plan_acceptance` scenario joins the set so the plan
+# follow-on line (`plan_follow_on`, 479 with its join) is measured on the turn
+# that accepts a plan Hermes' `/plan` just wrote, beside the route hint and
+# the active plan line (2759). It rides at most once per plan made, and on
+# `/plan`'s own turn (410 fenced alone), so it is under `all_surfaces`, which still sets the maximum,
+# and the fallback maximum is unchanged with it. Re-derived from the producer.
+# 5632 -> 6041 (2026-11-05): the console choices line (`console_choices`, 407
+# plus its join) asks a console session (cli, tui, desktop) to put a choice
+# its reply stops on through Hermes' `clarify` picker rather than a prose
+# list, with its context in the reply text, a one-sentence question and
+# `label — clause` choices the TUI draws as a label and a dim description. It
+# rides the session's first turn, so `all_surfaces` now runs as a
+# console session's first turn (`platform="tui"`) and carries it (+409); a
+# messaging platform's turn renders exactly what it rendered before. Its
+# re-ask variant (255) rides only the person's turn after a clarify timed
+# out, measured alone by the new `clarify_timed_out` scenario (374 fenced),
+# under `all_surfaces`. Re-derived from the producer.
+PRE_LLM_CALL_CONTEXT_CHAR_LIMIT = 6041
 # The same scenario set on the fallback: a session the awareness section did
 # not render for (a restart resume, a legacy id-rotating compaction, a refused
 # section, an older host) still gets the primer in the fenced context, so its
@@ -157,7 +174,9 @@ PRE_LLM_CALL_CONTEXT_CHAR_LIMIT = 5632
 # above does not move. Re-derived from the producer.
 # 7338 -> 7184 (2026-10-28): the same route-hint dedup (-154). Re-derived
 # from the producer.
-PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT = 7184
+# 7184 -> 7593 (2026-11-05): the same console choices line on the same
+# console first turn (+409). Re-derived from the producer.
+PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT = 7593
 
 SLOT_LIMITS: dict[str, int] = {
     "primer": AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,

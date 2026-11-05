@@ -42,6 +42,17 @@ deterministically and from the disk alone, whether such a thing exists:
        methods), and the function or class is named in another file;
      - ``line_copy``: a non-trivial line the edit replaced or removed also appears elsewhere.
 
+   - A ``signature`` hit on a module-level function is dropped when every mention of its name in
+     that file is proven to need no change (``_settled``): another object's member (``param.name``),
+     or an import of it from the edited module used only in calls that bind the same way before and
+     after the edit. Anything unproven keeps the hit.
+3. ``shell_changed_files`` (``transform_tool_result`` of a ``terminal`` / ``execute_code`` call): Hermes
+   calls ``pre_verify`` only after a ``patch`` / ``write_file`` landed, so for a turn that made neither it
+   re-indexes the workspace after each command and, when the command changed a Python file, returns every
+   Python file the turn changed. ``verify_hooks.shell_round_end_note`` gives those files the structural
+   round-end notes, each check once per turn. Of a model message's calls only the last one that is not a read is
+   looked at (``note_tool_batch``), and a turn whose state ``pre_verify`` already consumed gets none.
+
 No signal means the check is skipped. Every other outcome fires it as it fired before this module:
 
 - a changed source file that is not Python;
@@ -72,7 +83,8 @@ import time
 from collections import OrderedDict
 from typing import Any, Final, NamedTuple
 
-from . import lsp_nav
+from . import call_shape, lsp_nav
+from .impact_check import _imports_from, module_names
 from .lsp_nav import LspNavError, inside
 from .tools.lsp_nav_tool import _workspace_root, workspace_relative
 
@@ -137,6 +149,8 @@ _COMMON_NAMES: Final = frozenset({"main", "log", "LOG", "logger", "LOGGER", "app
 _CONSTRUCTOR_METHODS: Final = frozenset({"__init__", "__new__", "__call__"})
 # Platforms `pre_verify` never gives the check (`verify_hooks._NO_CHECKLIST_PLATFORMS`, kept equal by a test).
 NO_CHECK_PLATFORMS: Final = frozenset({"subagent"})
+# The shell round end's checks (`verify_hooks.shell_round_end_note`), each said at most once per turn.
+SHELL_NOTE_KINDS: Final = frozenset({"export", "test", "caller"})
 # Statement bodies read as if their definitions sat at the enclosing level.
 _BLOCK_FIELDS: Final = ("body", "orelse", "finalbody")
 
@@ -149,6 +163,13 @@ _posture: "OrderedDict[str, bool]" = OrderedDict()
 # session -> {"turn", "root", "indexed": bool, "index": {realpath: (mtime_ns, size[, digest])} | None,
 #             "before": {realpath: str}, "opaque": set[str], "bytes": int}
 _sessions: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+# session -> the turn whose round end already ran (`discard_snapshots`): state Hermes' `pre_verify` dropped
+# mid-turn is rebuilt for the same turn without a shell round end, whose baseline would be mid-turn text.
+_ended: "OrderedDict[str, str]" = OrderedDict()
+# session -> (every id of the latest model message's tool calls, the ids of its last call that is not a
+# read): the shell round end waits for that call, so a note never names a line a later call of the same
+# message changed (`note_tool_batch`, from `post_api_request`).
+_batches: "OrderedDict[str, tuple[frozenset[str], frozenset[str]]]" = OrderedDict()
 
 
 class Verdict(NamedTuple):
@@ -174,6 +195,9 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
             return
         state = _turn_state(session_id, kwargs)
         tool_name = kwargs.get("tool_name")
+        if tool_name in _EDIT_TOOLS:
+            with _lock:
+                state["edit_tool"] = True  # Hermes ends this turn through `pre_verify`: no shell round end
         if tool_name not in _READ_TOOLS:
             _take_index(session_id, state)
         _prune_named(state)
@@ -250,6 +274,8 @@ def round_end_trigger(session_id: str, code_paths: tuple[str, ...]) -> Verdict:
     files (``code_paths``). Consumes the session's state."""
     with _lock:
         state = _sessions.pop(session_id, None) if session_id else None
+        if state is not None:
+            _end_turn(session_id, state["turn"])
     started = time.monotonic()
     try:
         verdict = _decide(state, code_paths, started + SCAN_SECONDS)
@@ -279,11 +305,93 @@ def turn_snapshots(session_id: object) -> dict[str, str]:
         return {**state["named"], **state["before"]} if state is not None else {}
 
 
+def note_tool_batch(session_id: object, tool_calls: object) -> None:
+    """``post_api_request``: keep the ids of the model message's tool calls, and of its last call that is
+    not a read, for ``shell_changed_files``. Hermes runs a message's commands one after another and gives
+    each result to ``transform_tool_result`` as it lands, but the model reads them all at once."""
+    if not isinstance(session_id, str) or not session_id:
+        return
+    every: set[str] = set()
+    last: frozenset[str] = frozenset()
+    for call in tool_calls if isinstance(tool_calls, list) else ():
+        if not isinstance(call, dict):
+            continue
+        ids = frozenset(value for key in ("id", "call_id") if isinstance(value := call.get(key), str) and value)
+        function = call.get("function")
+        name = function.get("name") if isinstance(function, dict) else call.get("name")
+        every |= ids
+        if ids and name not in _READ_TOOLS:
+            last = ids
+    with _lock:
+        _batches[session_id] = (frozenset(every), last)
+        _batches.move_to_end(session_id)
+        while len(_batches) > _MAX_SESSIONS:
+            _batches.popitem(last=False)
+
+
+def shell_changed_files(session_id: object, turn_id: object, tool_call_id: object = "") -> tuple[str, ...]:
+    """After a ``terminal`` / ``execute_code`` call (``transform_tool_result``): every Python file this turn
+    changed, when the call just changed one. Empty otherwise, and always empty for a turn that made a
+    ``patch`` / ``write_file`` call (Hermes ends that turn through ``pre_verify``), a turn without an index,
+    one whose shell round end is spent, or a re-index over budget.
+
+    Hermes calls ``pre_verify`` only when a ``patch`` / ``write_file`` landed this turn, so a turn that
+    edits only through the shell gets no round-end check. The evidence here is the files themselves: the
+    workspace is re-indexed and compared with the index this function saw last (the turn-start one at
+    first), so a call that changed no Python file costs one walk and says nothing. A call that a later call
+    of the same model message may undo is not looked at: the last such call is (``note_tool_batch``). A call
+    id the latest message does not hold is looked at, as every call was before batches were kept."""
+    try:
+        if not isinstance(session_id, str) or not session_id:
+            return ()
+        with _lock:
+            every, last_writer = _batches.get(session_id, (frozenset(), frozenset()))
+            if tool_call_id in every and tool_call_id not in last_writer:
+                return ()
+            state = _sessions.get(session_id)
+            if state is None or state["turn"] != str(turn_id or "") or state["index"] is None \
+                    or state["edit_tool"] or state["shell_closed"] or state["shell_spent"] >= SHELL_NOTE_KINDS:
+                return ()
+            start, last, root = state["index"], state["shell_index"] or state["index"], state["root"]
+        current = _index(root, time.monotonic() + INDEX_SECONDS)
+        with _lock:
+            state["shell_index"] = current
+        if not any(_differs(last.get(path), current.get(path), path) for path in set(last) | set(current)):
+            return ()
+        return tuple(sorted(path for path in set(start) | set(current)
+                            if _differs(start.get(path), current.get(path), path)))
+    except Exception as exc:  # noqa: BLE001 - an undecidable call says nothing, as on a turn without this check
+        _LOG.warning("consistency_trigger shell_changed failed=%s: %s", type(exc).__name__, exc)
+        return ()
+
+
+def spend_shell_round_end(session_id: object, kinds: object) -> None:
+    """These checks of the shell round end (``SHELL_NOTE_KINDS``) have spoken for this turn: each is said
+    once, like ``pre_verify``'s attempt 0. One that spoke does not silence the others: a caller note early in
+    the turn leaves the test check free to name an expectation the turn rewrites later."""
+    if isinstance(session_id, str) and session_id and isinstance(kinds, (set, frozenset, tuple, list)):
+        with _lock:
+            state = _sessions.get(session_id)
+            if state is not None:
+                state["shell_spent"] |= {kind for kind in kinds if kind in SHELL_NOTE_KINDS}
+
+
+def shell_spent_kinds(session_id: object) -> frozenset[str]:
+    """The checks of the shell round end that already spoke this turn."""
+    if not isinstance(session_id, str) or not session_id:
+        return frozenset()
+    with _lock:
+        state = _sessions.get(session_id)
+        return frozenset(state["shell_spent"]) if state is not None else frozenset()
+
+
 def discard_snapshots(session_id: object) -> None:
     """Drop the session's state without reading it (the turn's first stop did not need a verdict)."""
     if isinstance(session_id, str) and session_id:
         with _lock:
-            _sessions.pop(session_id, None)
+            state = _sessions.pop(session_id, None)
+            if state is not None:
+                _end_turn(session_id, state["turn"])
 
 
 def note_turn_posture(session_id: object, platform: object) -> None:
@@ -306,6 +414,18 @@ def reset() -> None:
         _sessions.clear()
         _over_budget.clear()
         _posture.clear()
+        _ended.clear()
+        _batches.clear()
+
+
+def _end_turn(session_id: str, turn: str) -> None:
+    """Under ``_lock``: the turn's round end ran (``pre_verify`` consumed its state)."""
+    if not turn:
+        return
+    _ended[session_id] = turn
+    _ended.move_to_end(session_id)
+    while len(_ended) > _MAX_SESSIONS:
+        _ended.popitem(last=False)
 
 
 def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -322,7 +442,9 @@ def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         if state is not None and state["turn"] == turn:  # a parallel first call got here first
             return state
         state = {"turn": turn, "root": root, "indexed": False, "index": None, "unindexed": ("", ""), "before": {},
-                 "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": []}
+                 "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": [],
+                 "edit_tool": False, "shell_index": None, "shell_spent": set(),
+                 "shell_closed": bool(turn) and _ended.get(session_id) == turn}
         _sessions.pop(session_id, None)
         _sessions[session_id] = state
         while len(_sessions) > _MAX_SESSIONS:
@@ -395,7 +517,7 @@ def _decide(state: dict[str, Any] | None, code_paths: tuple[str, ...], deadline:
         after = _read(path, missing="")
         if after is None:
             return Verdict(True, "too_large", _relative(path, root))
-        status = _collect(before, after, needles)
+        status = _collect(before, after, needles, path)
         if status != "ok":
             return Verdict(True, status, _relative(path, root))
     if needles.empty():
@@ -409,12 +531,28 @@ class _Needles:
         self.renamed: set[str] = set()   # renamed: named elsewhere, Python or config
         self.signature: set[str] = set()  # signature: named elsewhere
         self.lines: set[str] = set()     # line_copy: appears as a line elsewhere
+        # signature needles that are module-level functions (`_callable`): name -> (edited file, the
+        # definition before, after); None when the name cannot be settled reference by reference.
+        self.callables: dict[str, tuple[str, ast.AST, ast.AST] | None] = {}
 
     def empty(self) -> bool:
         return not (self.defined or self.renamed or self.signature or self.lines)
 
+    def note_callable(self, name: str, path: str, qualified: str, old: list[tuple[int, int, ast.AST]],
+                      new: list[tuple[int, int, ast.AST]]) -> None:
+        """Keep a module-level function whose signature changed, for `_settled`; any other shape, or a
+        second definition of the name in this turn's files, makes the name unsettleable."""
+        if name in self.callables:
+            self.callables[name] = None
+            return
+        nodes = [node for _s, _e, node in old] + [node for _s, _e, node in new]
+        ok = ("." not in qualified and len(old) == 1 and len(new) == 1 and all(map(_is_function, nodes))
+              and type(nodes[0]) is type(nodes[1]) and not any(node.decorator_list for node in nodes)
+              and ast.dump(nodes[0].returns or ast.Constant(None)) == ast.dump(nodes[1].returns or ast.Constant(None)))
+        self.callables[name] = (path, nodes[0], nodes[1]) if ok else None
 
-def _collect(before: str, after: str, needles: _Needles) -> str:
+
+def _collect(before: str, after: str, needles: _Needles, path: str = "") -> str:
     """Add what this file's edit could have a copy or a reference of elsewhere.
 
     Returns ``"ok"``, ``"parse_error"`` (either side does not parse) or ``"unattributed"`` (a
@@ -460,6 +598,7 @@ def _collect(before: str, after: str, needles: _Needles) -> str:
         new_sigs = sorted(_signature(node) for _s, _e, node in new_defs[qualified] if _is_function(node))
         if old_sigs != new_sigs and not _dunder(name):
             needles.signature.add(name)
+            needles.note_callable(name, path, qualified, entries, new_defs[qualified])
     # A constructor's signature, a field or an abstract method changes what callers of the class
     # depend on; callers name the class, not `__init__`, so the class is what is searched for.
     for qualified, entries in old_defs.items():
@@ -468,6 +607,7 @@ def _collect(before: str, after: str, needles: _Needles) -> str:
         new_classes = [node for _s, _e, node in new_entries or () if isinstance(node, ast.ClassDef)]
         if classes and new_classes and sorted(map(_class_shape, classes)) != sorted(map(_class_shape, new_classes)):
             needles.signature.add(qualified.rsplit(".", 1)[-1])
+            needles.callables[qualified.rsplit(".", 1)[-1]] = None
     return "ok"
 
 
@@ -477,6 +617,7 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
     named = {name: re.compile(rf"\b{re.escape(name)}\b") for name in sorted(needles.renamed | needles.signature)}
     renamed = {name: named[name] for name in sorted(needles.renamed)}
     suffixes = PYTHON_SUFFIXES + (CONFIG_SUFFIXES if renamed else ())
+    settled: set[str] = set()
     try:
         for path in _walk(root, suffixes, deadline):
             if path in edited:
@@ -498,6 +639,10 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
                     return Verdict(True, "copy", f"{name} in {where}")
             for name, pattern in named.items():
                 if name in text and pattern.search(text):
+                    if name not in needles.renamed and _settled(name, needles.callables.get(name), path, text, root,
+                                                                edited, deadline):
+                        settled.add(name)
+                        continue
                     reason = "renamed" if name in needles.renamed else "signature"
                     return Verdict(True, reason, f"{name} in {where}")
             if needles.lines:
@@ -508,7 +653,170 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
         return Verdict(True, "scan_budget", str(exc))
     except _OutsideLink as exc:
         return Verdict(True, "outside_link", str(exc))
-    return Verdict(False, "no_copy_or_reference")
+    return Verdict(False, "no_copy_or_reference", f"settled {','.join(sorted(settled))}" if settled else "")
+
+
+def _settled(name: str, changed: tuple[str, ast.AST, ast.AST] | None, path: str, text: str, root: str,
+             edited: set[str], deadline: float) -> bool:
+    """Whether every mention of ``name`` in the unedited file ``path`` is proven not to need the
+    signature change of the module-level function ``changed`` (its file, its definition before and
+    after). Each ``\\bname\\b`` match in the text must be one of:
+
+    - ``p.name``, an attribute of a name the file binds only as a function parameter: another
+      object's member, not the edited module's function;
+    - ``from <the edited module> import name [as alias]``, where the name the import binds is bound
+      nowhere else in the file and is used only as ``alias(...)`` calls that bind the same way
+      before and after the change (`_same_binding`) or as an ``__all__`` entry, and an alias that is
+      not ``name`` appears in no other unedited Python or config file;
+    - such a call ``name(...)``.
+
+    A match in a comment, a string or any other use is unproven, and so is the whole file: the
+    trigger then fires as before. Residual: a module object passed in as a parameter
+    (``def f(mod): mod.name(...)``) is read as another object.
+    """
+    if changed is None:
+        return False
+    target, old, new = changed
+    tree = _parse(text)
+    if tree is None:
+        return False
+    nodes = list(ast.walk(tree))
+    bindings = _bindings(nodes)
+    parameters = _parameter_only_names(nodes, bindings)
+    names = module_names(target, root)
+    proven = 0
+    aliases: dict[str, int] = {}
+    for node in nodes:
+        if isinstance(node, ast.Attribute) and node.attr == name and _root_name(node.value) in parameters:
+            proven += 1
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if alias.name == name and _imports_from(node, path, target, names) == "module":
+                    proven += 1
+                    bound = alias.asname or name
+                    aliases[bound] = aliases.get(bound, 0) + 1
+    for bound, count in aliases.items():
+        if count != 1 or bindings.get(bound, 0) != 1:
+            return False
+        calls = [node for node in nodes if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                 and node.func.id == bound]
+        if not all(_same_binding(call, old.args, new.args) for call in calls):
+            return False
+        if bound == name:
+            proven += len(calls)
+            continue
+        if len(re.findall(rf"\b{re.escape(bound)}\b", text)) != 1 + len(calls) + _all_entries(nodes).count(bound):
+            return False
+        if _named_elsewhere(bound, root, edited | {path}, deadline):
+            return False
+    return proven == len(re.findall(rf"\b{re.escape(name)}\b", text))
+
+
+def _bindings(nodes: list[ast.AST]) -> dict[str, int]:
+    """How many times each name is bound in a file: by imports, ``def`` / ``class``, assignment,
+    ``for`` / ``with`` / comprehension targets, ``except ... as``, ``global`` / ``nonlocal`` and
+    ``match`` captures. Parameters are not counted."""
+    counts: dict[str, int] = {}
+
+    def add(item: str | None) -> None:
+        if item:
+            counts[item] = counts.get(item, 0) + 1
+
+    for node in nodes:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                add(alias.asname or alias.name.split(".", 1)[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                add(alias.asname or alias.name)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            add(node.name)
+        elif isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
+            add(node.id)
+        elif isinstance(node, ast.ExceptHandler):
+            add(node.name)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            for item in node.names:
+                add(item)
+        elif type(node).__name__ in ("MatchAs", "MatchStar"):
+            add(getattr(node, "name", None))
+        elif type(node).__name__ == "MatchMapping":
+            add(getattr(node, "rest", None))
+    return counts
+
+
+def _parameter_only_names(nodes: list[ast.AST], bindings: dict[str, int]) -> set[str]:
+    """Names the file binds only as function parameters."""
+    return {node.arg for node in nodes if isinstance(node, ast.arg)} - set(bindings)
+
+
+def _root_name(node: ast.AST) -> str | None:
+    """The name an attribute chain starts from (``a`` for ``a.b.c``); None for any other base."""
+    while isinstance(node, ast.Attribute):
+        node = node.value
+    return node.id if isinstance(node, ast.Name) else None
+
+
+def _all_entries(nodes: list[ast.AST]) -> list[str]:
+    """The string entries of every ``__all__`` assignment in a file."""
+    entries: list[str] = []
+    for node in nodes:
+        targets = (node.targets if isinstance(node, ast.Assign)
+                   else [node.target] if isinstance(node, (ast.AugAssign, ast.AnnAssign)) else [])
+        if any(isinstance(target, ast.Name) and target.id == "__all__" for target in targets):
+            value = getattr(node, "value", None)
+            entries += [item.value for item in ast.walk(value) if isinstance(item, ast.Constant)
+                        and isinstance(item.value, str)] if value is not None else []
+    return entries
+
+
+def _named_elsewhere(name: str, root: str, skip: set[str], deadline: float) -> bool:
+    """Whether ``name`` appears as a word in any Python or config file under ``root`` outside ``skip``
+    (or in a Python file too large or unreadable to rule out). Raises `_Budget` / `_OutsideLink` like
+    the scan it runs inside."""
+    pattern = re.compile(rf"\b{re.escape(name)}\b")
+    for path in _walk(root, PYTHON_SUFFIXES + CONFIG_SUFFIXES, deadline):
+        if path in skip:
+            continue
+        text = _read(path)
+        if text is None:
+            if path.endswith(PYTHON_SUFFIXES):
+                return True
+            continue
+        if name in text and pattern.search(text):
+            return True
+    return False
+
+
+def _same_binding(call: ast.Call, old: ast.arguments, new: ast.arguments) -> bool:
+    """Whether ``call`` binds under both parameter lists (`call_shape.bind`) and the same way: each
+    argument reaches a parameter of the same name and annotation, and the parameters it leaves to
+    their defaults have the same defaults. A ``*args`` / ``**kwargs`` at the call, or an argument that
+    only a ``*args`` / ``**kwargs`` parameter takes, is unproven."""
+    if call_shape.bind(call_shape.shape(old), call) != "" or call_shape.bind(call_shape.shape(new), call) != "":
+        return False
+    before = _binding(call, old)
+    return before is not None and before == _binding(call, new)
+
+
+def _binding(call: ast.Call, params: ast.arguments) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+    """For a call that binds: the parameters it binds, in call order with their annotations, and the
+    sorted defaults of the ones it leaves unbound. None when an argument reaches ``*args`` /
+    ``**kwargs``."""
+    positional = params.posonlyargs + params.args
+    if len(call.args) > len(positional):
+        return None
+    by_name = {arg.arg: arg for arg in params.args + params.kwonlyargs}
+    bound = list(positional[:len(call.args)])
+    for keyword in call.keywords:
+        if keyword.arg not in by_name:
+            return None
+        bound.append(by_name[keyword.arg])
+    defaults = dict(zip([arg.arg for arg in positional][len(positional) - len(params.defaults):], params.defaults))
+    defaults.update((arg.arg, value) for arg, value in zip(params.kwonlyargs, params.kw_defaults) if value is not None)
+    unbound = [arg for arg in positional + params.kwonlyargs if arg not in bound]
+    shown = tuple(f"{arg.arg}:{ast.dump(arg.annotation) if arg.annotation else ''}" for arg in bound)
+    return shown, tuple(sorted(f"{arg in params.kwonlyargs}:{ast.dump(defaults[arg.arg])}" for arg in unbound))
 
 
 def _walk(root: str, suffixes: tuple[str, ...], deadline: float):
@@ -788,5 +1096,6 @@ def _parse(text: str) -> ast.AST | None:
         return None
 
 
-__all__ = ["Verdict", "discard_snapshots", "note_turn_posture", "reset", "round_end_trigger", "snapshot_before_edit",
-           "turn_root", "turn_snapshots"]
+__all__ = ["Verdict", "discard_snapshots", "note_tool_batch", "note_turn_posture", "reset", "round_end_trigger",
+           "shell_changed_files", "shell_spent_kinds", "snapshot_before_edit", "spend_shell_round_end", "turn_root",
+           "turn_snapshots"]

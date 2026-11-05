@@ -20,6 +20,7 @@ from ..awareness import (
     route_hint_without_engine_workflows,
     search_helper_hint,
 )
+from ..console_choices import console_choices_line
 from ..context_brief import build_context_brief
 from ..degradation import (
     COMPONENT_LOCALIZED_ROUTING_TEXT,
@@ -42,6 +43,7 @@ from ..installed_skills import hermes_loadable_skill_names
 from ..kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
 from ..native_todo import held_native_write_note
 from ..omh_roles import extract_role_marker, role_context_payload
+from ..plan_follow_on import DAG_ULW, acceptance_line, plan_turn_line
 from ..omh_identities import extract_identity_marker, identity_context_payload
 from ..dispatch_outcomes import unacknowledged_outcomes
 from ..runtime_reader import read_omh_activity, read_omh_hud, read_omh_status, read_omh_todo
@@ -948,6 +950,29 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         if workflow_context:
             payload["omh_active_workflow"] = workflow_context
             context_parts.append(render_active_workflow_context(workflow_context))
+        # `dag-ulw` as one option beside carrying a plan out, on `/plan`'s own
+        # turn and, conditionally, on the turn right after a plan was made
+        # (`plan_follow_on`). A child is never offered dag-ulw, nor a home
+        # that cannot load it.
+        if not delegated and (installed_skills is None or DAG_ULW in installed_skills):
+            follow_on = plan_turn_line(user_message) or acceptance_line(
+                request_message, kwargs.get("conversation_history"), workflow_context, session_id
+            )
+            if follow_on:
+                context_parts.append(follow_on)
+        # In a console session, a choice the reply stops on goes through
+        # Hermes' `clarify` picker rather than a prose list: on the session's
+        # first turn, and on the person's next turn after a clarify timed out
+        # (`console_choices`). A messaging platform and a child get nothing.
+        if not delegated:
+            console_choices = console_choices_line(
+                kwargs.get("platform"),
+                kwargs.get("conversation_history"),
+                is_first_turn=is_first_turn,
+                person_turn=bool(request_message),
+            )
+            if console_choices:
+                context_parts.append(console_choices)
         budget_context = context_budget_continuation(
             omh_home, session_id, str(kwargs.get("model", "") or "")
         )

@@ -68,6 +68,7 @@ Order suppression precedence above legal and tenant constraints, user preference
 - Input refs: `target segment`, `channels or product surfaces`, `consent and policy constraints`
 - Output refs: `lifecycle_safety_policy/v1`
 - Check IDs: `lifecycle_safety_eligibility_check`
+- If this step fails: unresolved; still stands: `lifecycle_growth_brief/v1`, `audience_trigger_policy/v1`; hand back: Return the unresolved lifecycle_safety_policy/v1 with missing consent, suppression, channel eligibility, frequency budgets, or throttle scope named; keep launch on HOLD.
 
 ### `lifecycle_design_experiment` (production)
 
@@ -76,6 +77,7 @@ Specify treatment and control, sticky assignment and exposure units, the actual-
 - Input refs: `lifecycle objective and stage`, `event schema and baseline`, `channels or product surfaces`, `experiment budget`, `decision owner`
 - Output refs: `growth_experiment_plan/v1`
 - Check IDs: `lifecycle_target_behavior_check`, `lifecycle_experiment_validity_check`
+- If this step fails: tentative; still stands: `lifecycle_growth_brief/v1`, `audience_trigger_policy/v1`, `lifecycle_safety_policy/v1`; hand back: Return the tentative growth_experiment_plan/v1 with missing assignment, actual-exposure definition, metric, guardrail, runtime, or rollback checks flagged; keep approval unapproved.
 
 ### `lifecycle_prepare_measurement_readout` (validation)
 
@@ -84,6 +86,7 @@ Lay out eligible, assigned, attempted, delivered, displayed, acted, and outcome 
 - Input refs: `event schema and baseline`, `experiment budget`, `decision owner`
 - Output refs: `growth_measurement_readout/v1`
 - Check IDs: `lifecycle_readout_evidence_check`
+- If this step fails: unresolved; still stands: `lifecycle_growth_brief/v1`, `audience_trigger_policy/v1`, `lifecycle_safety_policy/v1`, `growth_experiment_plan/v1`; hand back: Return the unresolved growth_measurement_readout/v1 with missing exposure evidence, denominator, freshness, overlap, channel, or analysis-run checks named; keep counts unknown, not zero.
 
 ### `lifecycle_validate_handoff` (validation)
 
@@ -92,3 +95,4 @@ Propose connector, content, analytics, product, or implementation actions with o
 - Input refs: `lifecycle objective and stage`, `target segment`, `event schema and baseline`, `channels or product surfaces`, `consent and policy constraints`, `experiment budget`, `decision owner`
 - Output refs: `growth_handoff_disposition/v1`
 - Check IDs: `lifecycle_target_behavior_check`, `lifecycle_audience_eligibility_check`, `lifecycle_safety_eligibility_check`, `lifecycle_experiment_validity_check`, `lifecycle_readout_evidence_check`, `lifecycle_handoff_boundary_check`
+- If this step fails: unresolved; still stands: `lifecycle_growth_brief/v1`, `audience_trigger_policy/v1`, `lifecycle_safety_policy/v1`, `growth_experiment_plan/v1`, `growth_measurement_readout/v1`; hand back: Return the unresolved growth_handoff_disposition/v1 with blocked actions, missing owners or approvals, and the exact analysis run needing status reconciliation; leave requests prepared_not_observed.

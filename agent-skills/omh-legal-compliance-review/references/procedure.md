@@ -51,6 +51,7 @@ Create a citation ledger using only supplied or observed sources, exact pinpoint
 - Input refs: `supplied authority`, `document or process version`
 - Output refs: `legal_scope_authority_record/v1`
 - Check IDs: `legal_authority_citation_check`, `legal_final_determination_guard`
+- If this step fails: unresolved; still stands: `legal_scope_authority_record/v1`; hand back: Return legal_scope_authority_record/v1 with scope facts intact and each missing, stale or unverified authority, pinpoint and effective status listed for research or counsel.
 
 ### `legal_map_issues_exceptions` (analysis)
 
@@ -67,6 +68,7 @@ Rank impact, applicability, urgency, confidence and reversibility, then impose m
 - Input refs: `jurisdiction`, `supplied authority`, `review objective`
 - Output refs: `legal_risk_counsel_hold_register/v1`
 - Check IDs: `legal_counsel_hold_check`
+- If this step fails: tentative; still stands: `legal_scope_authority_record/v1`, `legal_issue_traceability_matrix/v1`; hand back: Return the draft legal_risk_counsel_hold_register/v1 with uncovered trigger IDs, missing risk assessments and counsel owners for correction; no affected issue is cleared.
 
 ### `legal_prepare_negotiation_positions` (production)
 
@@ -75,6 +77,7 @@ When the objective is a redline, build one row per contested clause -- playbook 
 - Input refs: `document or process version`, `supplied authority`, `review objective`
 - Output refs: `legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment`
 - Check IDs: `legal_negotiation_preparation_check`, `legal_counsel_hold_check`
+- If this step fails: unresolved; still stands: `legal_scope_authority_record/v1`, `legal_issue_traceability_matrix/v1`, `legal_risk_counsel_hold_register/v1`; hand back: Return legal_negotiation_preparation/v1 with held or uncited clause rows blocked as counsel questions and missing fallback, walk-away or linked concession positions identified; issue no proposal for a held clause.
 
 ### `legal_validate_disposition` (validation)
 
@@ -83,3 +86,4 @@ Return PASS, REVISE, or HOLD with exact open triggers and counsel route; prohibi
 - Input refs: `jurisdiction`, `document or process version`, `supplied authority`, `review objective`
 - Output refs: `legal_review_disposition/v1`
 - Check IDs: `legal_scope_facts_instruments_check`, `legal_authority_citation_check`, `legal_issue_matrix_check`, `legal_counsel_hold_check`, `legal_final_determination_guard`
+- If this step fails: unresolved; still stands: `legal_scope_authority_record/v1`, `legal_issue_traceability_matrix/v1`, `legal_risk_counsel_hold_register/v1`; hand back: Return legal_review_disposition/v1 as HOLD with exact failed authority or issue checks, open triggers and counsel owners; retain earlier drafts without issuing a final legal or compliance determination.

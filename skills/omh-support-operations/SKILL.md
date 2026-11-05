@@ -51,8 +51,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If feedback lacks source or severity, ask for the missing signal before coding handoff.
-- If the item is actually a plan or research request, route to that workflow instead of triage.
+- If customer impact or reproduction evidence is missing, retain the stated case facts, mark severity tentative, and hand back the reply draft and missing repro, account, or entitlement evidence list.
+- If no escalation owner or path is available, retain the issue/severity/impact/escalation matrix, mark ownership unresolved, and hand back the internal next-step and owner handoff brief with the owner question.
 
 ## Workflow Lane
 

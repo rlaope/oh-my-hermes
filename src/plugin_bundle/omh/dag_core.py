@@ -22,6 +22,8 @@ a node with no parent; it orders, it never gates.
 
 from __future__ import annotations
 
+import fnmatch
+import posixpath
 from collections.abc import Collection, Iterable, Mapping, Sequence
 
 UNKNOWN_DEPENDENCY = "unknown_dependency"
@@ -140,20 +142,68 @@ def bottlenecks(
     return sorted(counts, key=lambda item: (-item[1], item[0]))[:limit]
 
 
+def _scope_path(entry: str) -> tuple[tuple[str, ...], str, str]:
+    """A write-scope entry for `shared_scope_pairs` ``as_paths``: (the segments it writes under, its glob, its file).
+
+    ``\\`` reads as ``/``, case is folded and the rest goes through
+    `posixpath.normpath`, so ``./``, a repeated or trailing ``/`` and ``x/..``
+    change nothing; a leading ``/`` stays a first ``/`` segment. A ``*`` or
+    ``?`` glob writes under the directory before the segment holding it, and
+    keeps its whole pattern, with ``**/`` read as ``*`` (`fnmatch`'s ``*``
+    already crosses ``/``, and ``src/**/*.py`` must meet ``src/x.py``) and
+    ``[`` escaped (``app/[slug]/page.tsx`` names a file far more often than a
+    write scope holds a character class). The file
+    is the normalised path when the entry is neither a glob nor written as a
+    directory (a trailing ``/``) and its last segment has a suffix; else "".
+    """
+    text = entry.replace("\\", "/").casefold()
+    absolute = text.startswith("/")
+    normal = posixpath.normpath(text.lstrip("/") or ".")
+    segments = [] if normal == "." else normal.split("/")
+    globbed = [index for index, segment in enumerate(segments) if "*" in segment or "?" in segment]
+    under = (("/",) if absolute else ()) + tuple(segments[:globbed[0]] if globbed else segments)
+    whole = ("/" if absolute else "") + "/".join(segments)
+    pattern = whole.replace("**/", "*").replace("[", "[[]") if globbed else ""
+    concrete = not globbed and not text.endswith("/") and bool(segments) and posixpath.splitext(segments[-1])[1]
+    return under, pattern, whole if concrete else ""
+
+
+def _meets(first: tuple[tuple[str, ...], str, str], second: tuple[tuple[str, ...], str, str]) -> bool:
+    """Whether two `_scope_path` entries may write one path: one writes under the other, and a glob beside a file
+    matches it (`fnmatch`: ``*`` crosses ``/``). A glob beside a glob or a directory meets by its directory alone."""
+    (first_under, first_glob, first_file), (second_under, second_glob, second_file) = first, second
+    if first_under != second_under[:len(first_under)] and second_under != first_under[:len(second_under)]:
+        return False
+    if first_glob and second_file:
+        return fnmatch.fnmatchcase(second_file, first_glob)
+    if second_glob and first_file:
+        return fnmatch.fnmatchcase(first_file, second_glob)
+    return True
+
+
 def shared_scope_pairs(
-    scopes: Sequence[tuple[str, Iterable[str]]], parents: Mapping[str, Iterable[str]]
+    scopes: Sequence[tuple[str, Iterable[str]]], parents: Mapping[str, Iterable[str]], *, as_paths: bool = False
 ) -> list[tuple[str, str, list[str], bool]]:
     """Every pair of nodes whose scopes name a same entry: (first, second, the shared entries, joined by an edge).
 
-    Entries are compared as written. Joined means one of the two lists the
-    other as a parent directly; an order through a third node does not count.
+    Entries are compared as written, unless ``as_paths``: then two entries
+    meet as `_meets` says (``src`` and ``src/x.py`` meet, ``src/a`` and
+    ``src/ab`` do not, ``*.md`` meets ``docs/a.md`` and not ``src/x.py``), and
+    the shared entries are every entry of either node that meets one of the
+    other's, as written. Joined means one of the two lists the other as a
+    parent directly; an order through a third node does not count.
     """
     edges = {(node, parent) for node, listed in parents.items() for parent in listed}
-    indexed = [(node, set(scope)) for node, scope in scopes]
+    indexed = [(node, {entry: _scope_path(entry) if as_paths else ((entry,), "", "") for entry in scope})
+               for node, scope in scopes]
     pairs: list[tuple[str, str, list[str], bool]] = []
     for position, (first, first_scope) in enumerate(indexed):
         for second, second_scope in indexed[position + 1:]:
-            shared = sorted(first_scope & second_scope)
+            shared: set[str] = set()
+            for first_entry, first_path in first_scope.items():
+                for second_entry, second_path in second_scope.items():
+                    if _meets(first_path, second_path):
+                        shared.update((first_entry, second_entry))
             if shared:
-                pairs.append((first, second, shared, (first, second) in edges or (second, first) in edges))
+                pairs.append((first, second, sorted(shared), (first, second) in edges or (second, first) in edges))
     return pairs

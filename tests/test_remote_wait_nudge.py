@@ -1079,15 +1079,17 @@ class InstalledPluginTests(unittest.TestCase):
 
 
 class PassDisjointnessTests(unittest.TestCase):
-    """`terminal` reaches this pass and no other annotating pass.
+    """`terminal` reaches this pass and no annotating pass that runs before it.
 
-    `hooks/result_transforms.py` states which tool sets overlap now that
-    there are five annotating passes, and the answer is that `read_file` is
-    the only shared one, between engagement nudges and truncated-read
-    recovery. That sentence is only worth writing if something checks it, so
-    the sets are derived from the modules here rather than restated. A pass
-    that later widens into `terminal` fails this instead of quietly sharing a
-    result with a directive that assumes it saw the host's own object.
+    `hooks/result_transforms.py` states which tool sets overlap, and among the
+    passes before this one the answer is that `read_file` is the only shared
+    one, between engagement nudges and truncated-read recovery. That sentence
+    is only worth writing if something checks it, so the sets are derived from
+    the modules here rather than restated. A pass before this one that later
+    widens into `terminal` fails this instead of quietly sharing a result with
+    a directive that assumes it saw the host's own object. The shell round end
+    also watches `terminal` but runs after this pass and reads no host field;
+    `tests/test_shell_round_end.py` pins that composition.
     """
 
     def setUp(self) -> None:

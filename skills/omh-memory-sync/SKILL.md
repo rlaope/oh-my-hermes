@@ -49,8 +49,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If entry-by-entry confirmation stops before the assembled diff is approved, retain the reviewed claim decisions, mark the diff unresolved, and hand back reviewed indexes, remaining candidates, and the next entry to resume.
+- If the native memory tool is unavailable after diff approval, retain the approved before/after diff, mark the native write not_observed, and hand back that diff without editing MEMORY.md or USER.md directly.
+- If a native write returns staged: true with a pending_id, retain the approved diff and pending_id, mark saving not_observed, and hand back /memory approve <id> for the person without repeating the write.
 
 ## Workflow Lane
 

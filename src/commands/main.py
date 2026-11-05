@@ -170,6 +170,7 @@ from .paper import (
 )
 from .playbook import _add_playbook_commands, cmd_playbook_inspect, cmd_playbook_list, cmd_playbook_recommend
 from .release import _add_release_commands, cmd_release_checklist, cmd_release_hermes_smoke
+from .research import _add_research_commands
 from .runtime import (
     _add_runtime_commands,
     cmd_runtime_ci,
@@ -319,6 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_ops_commands(sub)
     _add_materials_commands(sub)
     _add_paper_commands(sub)
+    _add_research_commands(sub)
     _add_visual_commands(sub)
     _add_adapter_quality_commands(sub)
     _add_benchmark_commands(sub)

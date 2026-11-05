@@ -49,8 +49,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If feedback lacks source or severity, ask for the missing signal before coding handoff.
-- If the item is actually a plan or research request, route to that workflow instead of triage.
+- If no feedback items are supplied, no cluster stands; mark triage not_observed and hand back the request for feedback items or a summary, source boundary, and product area.
+- If bug and feature signals cannot be separated from the supplied reports, retain source-bounded clusters, mark their classification and ranking tentative, and hand back the missing evidence with research or strategy follow-up options.
+- If a triaged cluster has no explicit coding intent or accepted-plan evidence, retain the clusters and ranking, mark the coding handoff unresolved, and hand back the next workflow recommendation with product_evidence_loop/v1 still prepared-only.
 
 
 
