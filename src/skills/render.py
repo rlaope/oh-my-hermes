@@ -204,6 +204,7 @@ EXECUTION_RULES = (
     "Keep progress evidence-backed.",
     "Verify with the smallest relevant test or inspection before claiming completion.",
     "If Hermes cannot provide a required runtime capability, say so and use the fallback above.",
+    "When a step fails partway, report what earlier steps already proved, lower the result to tentative, unresolved, or not_observed, and hand back what the person needs to continue; never present the partial result as the finished one.",
 )
 
 DELEGATION_RECORD_COMMAND = "omh runtime delegate --run <run-id> --requested --not-observed --result not_observed"
@@ -332,7 +333,7 @@ def loadable_skill_mentions(line: str) -> str:
     """Rewrite each backticked installed catalog name in `line` to its display label.
 
     Applied where a body hands work to a sibling: the `## Do Not Use When`
-    lines and the handoff policy.
+    lines, the `## Recovery Notes` lines and the handoff policy.
 
     `skill_view` loads a skill by the label its directory carries (`omh-apps`,
     `ulw-research`), not by the canonical catalog name (`connector-operator`,
@@ -690,7 +691,7 @@ def _quality_rubric_sections(
 
 ## Recovery Notes
 
-{_tuple_list(definition.recovery_notes)}"""
+{_tuple_list(tuple(loadable_skill_mentions(line) for line in definition.recovery_notes))}"""
 
 
 def _artifact_contract_block(definition: SkillDefinition) -> str:
@@ -3092,7 +3093,7 @@ Quality tier: `{definition.quality_tier}`
 
 ## Recovery Notes
 
-{_tuple_list(definition.recovery_notes)}
+{_tuple_list(tuple(loadable_skill_mentions(line) for line in definition.recovery_notes))}
 
 {awareness_workflow_context_markdown(name)}
 

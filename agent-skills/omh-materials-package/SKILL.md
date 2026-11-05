@@ -47,8 +47,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.
-- If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.
+- If source metrics needed by an outline section are missing, retain the verified source facts and outline, mark that section unresolved, and hand back material_artifact/v1 with its missing inputs and output owner.
+- If xlsx_recalc.py reports recalculated false, retain the observed sheet_schema, mark formula_recalculation not_observed, and hand back its missing tools and the --out <copy> recalculation and cached-value read-back steps.
+- If DOCX package validation passes without a rendered converted PDF, retain observed section_structure and required_clause_check, mark appearance and page_count not_observed, and hand back the converted-PDF preview checks.
 
 
 

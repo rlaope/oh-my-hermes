@@ -50,8 +50,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If acceptance criteria or verification are missing, route back to clarification before handoff.
-- If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
+- If no acceptance answer comes, keep the draft unaccepted, hand back the question, prepare no handoff.
+- If a verification step has no outside judge, mark it unresolved and hand back the missing judge.
 
 
 

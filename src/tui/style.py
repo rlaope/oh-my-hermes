@@ -106,6 +106,9 @@ class Style:
     # A cell that frames the text and is no part of it (a block's rail, a reply's margin): never painted differently,
     # and left out of what the pager copies (`Pager.handle_mouse`).
     gutter: bool = False
+    # A gutter painted as one run with a neighbour of the same look (`screen.paint_line`): a framed question's bar and
+    # the context beside it, which were one run before the bar became a gutter.
+    joins: bool = False
 
     def sgr(self) -> str:
         """The SGR sequence that turns this style on; "" for the default style."""

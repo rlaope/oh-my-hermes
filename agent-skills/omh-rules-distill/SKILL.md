@@ -49,8 +49,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If source evidence conflicts, route to memory or knowledge review before writing durable guidance.
-- If the fact may be stale, record the staleness warning and next refresh action.
+- If a principle rests on one observation, retain its source reference in principle_candidate_set/v1, mark the rule tentative and needs-evidence in review_queue/v1, and hand back the candidate for repeated observations.
+- If approval is missing, retain principle_candidate_set/v1 and duplication_conflict_report/v1, mark implementation not_observed, and hand back review_queue/v1 without producing approved_patch_handoff/v1.
+- If skill_manage stages an approved change, retain the approved candidate and staged result, mark the skill update not_observed, and hand back the pending ID for the person's `/skills approve <id>`.
 
 
 

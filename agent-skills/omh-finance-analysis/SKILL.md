@@ -50,8 +50,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If period, currency, basis, or comparator version conflicts, retain the supplied source provenance, mark comparability unresolved, and hand back finance_scope_source_record/v1 with the conflicting attributes.
+- If totals or account mappings do not tie out, retain the confirmed scope and source record, mark reconciliation unresolved, and hand back finance_reconciliation_analysis_schedule/v1 with unreconciled gaps.
+- If recalculation fails at brief validation, retain supported calculations and finance_risk_register/v1, mark finance_decision_brief/v1 unresolved with HOLD, and hand back the failed calculation and escalation owner.
 
 
 

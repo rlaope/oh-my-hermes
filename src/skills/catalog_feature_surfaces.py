@@ -255,6 +255,11 @@ _FEATURE_SURFACE_SKILLS = (
             "description": "665cad64b43113a52b3f7a3bd5840245a1e83a67938ca67400409c6292f27924",
             "safety_rules": "1339e73ae4df4feb34e2bfe93e42f0e6945e8a83176c0602b6778b2842ffc354",
         },
+        recovery_notes=(
+            "If project versus user scope or lasting versus temporary retention is ambiguous, retain the bounded summary as a candidate, mark capture unresolved, and hand back one scope-or-durability question without claiming a write.",
+            "If omh_memory returns error, retain memory_new_candidate/v1 as prepared only, mark the write not_observed, and hand back the bounded summary, record_type, tags, scope, and retention_class for the omh memory capture fallback.",
+            "If capture returns pending_review, retain the staged memory_new_candidate/v1, mark approval not_observed, and hand back the stated review reason without treating an unsafe or relative-time phrase as an approved record.",
+        ),
     ),
     _feature_surface_skill(
         "memory-sync",
@@ -320,6 +325,11 @@ _FEATURE_SURFACE_SKILLS = (
             "fix wrong facts about me",
             "duplicate or conflicting memories",
         ),
+        recovery_notes=(
+            "If entry-by-entry confirmation stops before the assembled diff is approved, retain the reviewed claim decisions, mark the diff unresolved, and hand back reviewed indexes, remaining candidates, and the next entry to resume.",
+            "If the native memory tool is unavailable after diff approval, retain the approved before/after diff, mark the native write not_observed, and hand back that diff without editing MEMORY.md or USER.md directly.",
+            "If a native write returns staged: true with a pending_id, retain the approved diff and pending_id, mark saving not_observed, and hand back /memory approve <id> for the person without repeating the write.",
+        ),
     ),
     _feature_surface_skill(
         "gateway-intent-card",
@@ -358,6 +368,10 @@ _FEATURE_SURFACE_SKILLS = (
             "where should the bot post updates",
             "send the attachment to telegram",
             "quiet status updates in the channel",
+        ),
+        recovery_notes=(
+            "If silent update conflicts with a status notice, keep the thread; hand back the silent-or-notify choice.",
+            "If an action would touch a thread other than the named one, mark it unresolved; hand back the target.",
         ),
     ),
     _feature_surface_skill(
@@ -403,6 +417,10 @@ _FEATURE_SURFACE_SKILLS = (
             "which coding agent has the tools",
             "tools the coding agent lacks",
             "worktree support for helper agents",
+        ),
+        recovery_notes=(
+            "If the scratch-edit probe is denied, keep the denial, mark permission unresolved; hand back the grant needed.",
+            "If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the JSON flag.",
         ),
     ),
     _feature_surface_skill(
@@ -450,6 +468,11 @@ _FEATURE_SURFACE_SKILLS = (
             "Planning a deck, PDF, workbook, or document from source inputs before any file exists (its outline, target formats, and QA ladder); use `materials-package`.",
             "A text-only report, executive brief, or slide outline with no file to produce; use `report-package`.",
         ),
+        recovery_notes=(
+            "If rendered images do not match slide_count or remain uninspected, retain the observed slide_count, mark render_screenshot unresolved, and hand back the exact file and outstanding image checks.",
+            "If the person's approval names no final file, retain each generated version's read-back, mark approval unresolved, and hand back the stable id and version choices without selecting by modification time.",
+            "If a publication URL resolves to a different content hash, retain the approved file and any archive evidence already read back, mark publication unresolved, and hand back the URL and expected sha256 for destination read-back.",
+        ),
     ),
     _feature_surface_skill(
         "voice-operator",
@@ -488,6 +511,10 @@ _FEATURE_SURFACE_SKILLS = (
             "one-line voice note",
             "talking while driving",
             "terse ask from mobile",
+        ),
+        recovery_notes=(
+            "If a dictated request names no target context, nothing is actionable yet; mark the next action unresolved and hand back one target question before preparing voice-operator/v1.",
+            "If a clarified voice request still lacks confirmation for a risky action, retain the voice-operator/v1 guidance, mark execution not_observed, and hand back the proposed next action for explicit approval.",
         ),
     ),
     _feature_surface_skill(
@@ -1636,6 +1663,10 @@ _FEATURE_SURFACE_SKILLS = (
             "tools needed for linear and github triage",
             "credentials this automation requires",
         ),
+        recovery_notes=(
+            "If tool_search finds a deferred native tool but access is untested, retain its present classification, mark API access not_observed, and hand back the tool_call step for a user-approved check instead of listing the tool as missing.",
+            "If a required MCP server or CLI is absent, retain the present, optional, and unsafe inventory entries, mark workflow readiness unresolved, and hand back the missing dependency and installation owner without installing it.",
+        ),
     ),
     _feature_surface_skill(
         "harness-session-inventory",
@@ -1783,6 +1814,10 @@ _FEATURE_SURFACE_SKILLS = (
             "where our loops keep failing",
             "uptime and error rate overview",
         ),
+        recovery_notes=(
+            "If the metric window is missing, keep supplied payloads, mark quality unresolved; hand back the next measure.",
+            "If a budget threshold is missing, keep the observed cost, mark advice tentative; hand back the gaps.",
+        ),
     ),
     _feature_surface_skill(
         "achievements",
@@ -1834,6 +1869,11 @@ _FEATURE_SURFACE_SKILLS = (
             "show my hermes badges",
             "achievement progress for my report",
             "newest badges I earned",
+        ),
+        recovery_notes=(
+            "If neither active-profile nor legacy hermes-achievements files are available, no badge result stands; mark the summary not_observed and hand back the missing local-file evidence needed for hermes_achievements_observation/v1.",
+            "If the snapshot is older than the plugin's rescan window, retain its badge list as of generated_at, mark current progress tentative, and hand back the timestamp and stale-snapshot warning.",
+            "If supplied session_activity_receipt/v1 lacks a metric, retain the available badge and activity metadata, mark that metric not_observed, and hand back the gap without replacing it with zero.",
         ),
     ),
     _feature_surface_skill(
@@ -1887,6 +1927,10 @@ _FEATURE_SURFACE_SKILLS = (
             "manager summary of agent progress",
             "is the ai work any good",
             "blockers in agent tasks",
+        ),
+        recovery_notes=(
+            "If only a prepared handoff exists, mark coding progress not_observed; hand back the missing stage.",
+            "If P0 capture fails its audit, keep the tier checks, mark readiness unresolved; hand back quick wins.",
         ),
     ),
     _feature_surface_skill(

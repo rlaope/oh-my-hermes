@@ -5,7 +5,7 @@ import hashlib
 from importlib.resources import files
 import json
 
-from .catalog_types import ExpertQuestion, ProcedureCheck, ProcedureStep, SkillDefinition, SkillExample
+from .catalog_types import ExpertQuestion, ProcedureCheck, ProcedureBail, ProcedureStep, SkillDefinition, SkillExample
 
 TOOLKIT_RESOURCES = (
     "README.md", "LICENSE.upstream", "scripts/forge.py",
@@ -51,9 +51,21 @@ DEFINITION = SkillDefinition(
         ProcedureStep("sprite_direct", "analysis", (_INPUTS[0], _INPUTS[1]), (_OUTPUTS[2],), ("sprite_input_check",),
                       "Write the character art-direction record: identity elements, rejected drafts with reasons, cell size, baseline and attack-frame timing linked to game data."),
         ProcedureStep("sprite_process", "production", _INPUTS, _OUTPUTS, ("sprite_input_check", "sprite_backend_check"),
-                      "Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment and nearest-neighbor resize."),
+                      "Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment and nearest-neighbor resize.",
+            on_fail=ProcedureBail(
+                still_stands=('character art-direction record',),
+                downgrade_to='not_observed',
+                handback='Return the character art-direction record and observed helper command, refusal or timeout, with the required grid correction or optional Pillow setup before retrying in a new output directory.',
+            ),
+        ),
         ProcedureStep("sprite_verify", "validation", _INPUTS, _OUTPUTS, ("sprite_qc_check", "sprite_backend_check"),
-                      "Read back every frame, the aligned sheet and qc.json; recompute hashes and report observed metrics separately from art-quality judgement."),
+                      "Read back every frame, the aligned sheet and qc.json; recompute hashes and report observed metrics separately from art-quality judgement.",
+            on_fail=ProcedureBail(
+                still_stands=('character art-direction record',),
+                downgrade_to='tentative',
+                handback='Return the sprite_forge_qc/v1 receipt with observed metrics or read-back gaps and, for REGENERATE, the tighter pose and scale instructions for a new source sheet, never patched frames.',
+            ),
+        ),
     ),
     artifact_expectations=(
         "Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y`, plus the re-composited aligned `sheet.png`.",

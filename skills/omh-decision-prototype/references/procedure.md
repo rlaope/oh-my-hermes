@@ -56,6 +56,7 @@ Write the exact commands, expected observations, workspace identity, and stop co
 - Input refs: `experiment budget`, `scratch boundary`, `measurement method`
 - Output refs: `prepared prototype handoff with exact commands and expected observations`
 - Check IDs: `prototype_budget_isolation_check`, `prototype_smallest_artifact_check`
+- If this step fails: unresolved; still stands: `decision_prototype/v1`; hand back: Return decision_prototype/v1 with draft commands, expected observations and the exact budget, runtime or write-boundary blocker; no command is authorized outside the declared scratch boundary.
 
 ### `prototype_record_observations` (validation)
 
@@ -64,6 +65,7 @@ Ingest only observed outputs and bounded evidence references, then derive interp
 - Input refs: `experiment budget`, `measurement method`
 - Output refs: `observation ledger separating observed outputs from interpretation and confidence`
 - Check IDs: `prototype_execution_evidence_check`
+- If this step fails: not_observed; still stands: `decision_prototype/v1`, `prepared prototype handoff with exact commands and expected observations`; hand back: Return the prepared prototype handoff with executor-unavailable or timeout status and any captured failure evidence; leave experiment results unobserved rather than filling the observation ledger with guesses.
 
 ### `prototype_close_receipt` (validation)
 
@@ -72,3 +74,4 @@ Decide keep or discard, observe cleanup before reporting `discarded`, and close 
 - Input refs: `decision question`, `experiment budget`, `scratch boundary`, `measurement method`
 - Output refs: `decision receipt for planning with supported option, rejected option, residual risk, and evidence limits`, `decision_prototype/v1`
 - Check IDs: `prototype_scope_check`, `prototype_budget_isolation_check`, `prototype_smallest_artifact_check`, `prototype_execution_evidence_check`, `prototype_cleanup_receipt_check`
+- If this step fails: unresolved; still stands: `decision_prototype/v1`, `prepared prototype handoff with exact commands and expected observations`, `observation ledger separating observed outputs from interpretation and confidence`; hand back: Return the observation ledger and a decision receipt naming unresolved options, residual risk, evidence limits, keep/discard and cleanup status; block promotion until a separate accepted plan and handoff exist.

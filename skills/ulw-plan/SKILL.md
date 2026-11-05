@@ -64,8 +64,8 @@ Bad example:
 ## Recovery Notes
 
 - If requirements are still fuzzy, route back to deep-interview before planning.
-- If current-source evidence is missing, route a `research` step before accepting the plan.
-- If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
+- If current-source evidence is missing, route a `ulw-research` step before accepting the plan.
+- If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ulw-work` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
 
 ## Workflow Lane
 

@@ -42,6 +42,7 @@ Use bounded native retrieval, capture source receipts, invoke validate/merge/sum
 - Input refs: `requested career action`, `supported candidate facts and preferences`, `approved private workspace and source scope`
 - Output refs: `jobs.json and shortlist.md`
 - Check IDs: `career_scope`, `career_sources`
+- If this step fails: not_observed; still stands: `profile.md and preferences.md`; hand back: Return jobs.json and shortlist.md with receipts, unverified leads, and blocked sources (not empty results).
 
 ### `career_draft` (production)
 
@@ -50,6 +51,7 @@ Write versioned evidence-mapped application documents, review actual drafts, the
 - Input refs: `requested career action`, `supported candidate facts and preferences`, `approved private workspace and source scope`
 - Output refs: `versioned application drafts and review.md`, `interview-prep.md and optional skill-gaps.md`
 - Check IDs: `career_claims`, `career_sources`
+- If this step fails: tentative; still stands: `jobs.json and shortlist.md`, `profile.md and preferences.md`; hand back: Return versioned drafts and review.md with evidence gaps, review mode and the question blocking interview-prep.md.
 
 ### `career_track` (validation)
 
@@ -58,3 +60,4 @@ Record only explicitly evidenced events with the companion, read back the tracke
 - Input refs: `requested career action`, `supported candidate facts and preferences`, `approved private workspace and source scope`
 - Output refs: `evidence-bound tracker and next actions`
 - Check IDs: `career_state`
+- If this step fails: unresolved; still stands: `interview-prep.md and optional skill-gaps.md`, `jobs.json and shortlist.md`, `profile.md and preferences.md`, `versioned application drafts and review.md`; hand back: Keep history; return helper exits, missing events, tracker read-back gaps, draft version and next actions.
