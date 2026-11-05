@@ -48,8 +48,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If platform metadata is missing, keep the card platform-neutral and ask for the target surface.
-- If send or registration evidence is unavailable, show the adapter-owned action instead of claiming delivery.
+- If silent update conflicts with a status notice, keep the thread; hand back the silent-or-notify choice.
+- If an action would touch a thread other than the named one, mark it unresolved; hand back the target.
 
 ## Workflow Lane
 

@@ -47,8 +47,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If routing signals conflict, show the compact picker or ask one clarifying question.
-- If wrapper metadata is unavailable, keep the recommendation advisory and avoid runtime claims.
+- If bounded recommend queries cannot run through CLI, plugin, or wrapper, retain only the imperative task, mark catalog selection not_observed, and hand back the workflow picker instead of a memorized recommendation.
+- If recommendation output contains only `omh-meta-router`, retain the consulted catalog evidence, mark workflow selection unresolved, and hand back the task remainder for a bounded re-query rather than selecting this skill.
+- If stage re-queries still leave a multi-stage task low-confidence, retain the consulted catalog evidence, mark the proposed chain tentative, and hand back a clarification question about the unresolved stage.
 
 ## Workflow Lane
 

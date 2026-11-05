@@ -49,8 +49,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
-- If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
+- If baseline regression checks cannot run, retain the categorized smell inventory, mark the behavior lock unresolved, and hand back the cleanup plan and missing before-checks without starting risky edits.
+- If verification fails between single-smell passes, retain the last verified pass's evidence, mark the new pass unresolved, and hand back its small diff and failed check for a fix or revert before the next pass.
+- If the cleanup has no runtime record, retain its observed diff and before/after checks, mark the cleaner run not_observed, and hand back the four-part closing report for recording before an AC-SLOP checkpoint.
 
 
 

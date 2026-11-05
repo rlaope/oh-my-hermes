@@ -1,0 +1,57 @@
+{
+  "all_fetched": false,
+  "citations": [
+    {
+      "id": 1,
+      "sessions": [
+        "20261105_000000_fixture"
+      ],
+      "status": "fetched",
+      "url_display": "https://example.invalid/a"
+    },
+    {
+      "id": 3,
+      "sessions": [],
+      "status": "missing",
+      "url_display": "https://example.invalid/c"
+    }
+  ],
+  "claim_boundary": "A fetch receipt proves the cited URL was opened by a web tool in this session tree (the session, its earlier compaction segments, and the subagent sessions their delegation ledgers name). A URL matches as the citation ledger holds it or in the ASCII form Hermes' URL tools request; a redirect target is never matched to the URL that redirected to it, so a citation of the pre-redirect URL reads as missing. It is not evidence that the page supports the claim the draft makes from it.",
+  "counts": {
+    "child_unresolved": 0,
+    "fetched": 1,
+    "missing": 1,
+    "not_in_ledger": 0,
+    "search_only": 0
+  },
+  "coverage": {
+    "basis": "observed_cases",
+    "denominator": 2,
+    "denominator_of": "cited_sources",
+    "excluded": [
+      "fenced_code_markers",
+      "markdown_link_labels",
+      "sources_block_lines"
+    ],
+    "numerator": 1,
+    "numerator_of": [
+      "fetched"
+    ],
+    "percent": 50.0,
+    "schema_version": "omh_reported_rate/v1"
+  },
+  "delegation_ledger": "absent",
+  "delegation_ledgers": {
+    "20261105_000000_fixture": "absent"
+  },
+  "receipt_refusals": {},
+  "schema_version": "citation_receipt_check/v1",
+  "segments": [
+    "20261105_000000_fixture"
+  ],
+  "segments_resolved": true,
+  "session_id": "20261105_000000_fixture",
+  "sessions_checked": [
+    "20261105_000000_fixture"
+  ]
+}

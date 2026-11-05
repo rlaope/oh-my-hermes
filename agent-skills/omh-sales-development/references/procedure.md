@@ -53,6 +53,7 @@ Verify supplied consent basis, privacy and suppression restrictions, permitted c
 - Input refs: `account or segment`, `available evidence`, `sales objective`
 - Output refs: `sales_draft_sequence/v1`
 - Check IDs: `sales_sequence_eligibility_check`
+- If this step fails: unresolved; still stands: `sales_opportunity_evidence_record/v1`, `sales_qualification_state/v1`; hand back: Return sales_draft_sequence/v1 as HOLD with missing consent, privacy, suppression, channel or policy evidence and the owner/approver question required before drafting.
 
 ### `sales_prepare_draft_sequence` (production)
 
@@ -61,6 +62,7 @@ Prepare eligible draft rows for audience, channel, cadence, supported personaliz
 - Input refs: `account or segment`, `available evidence`, `buyer hypothesis`, `sales objective`
 - Output refs: `sales_draft_sequence/v1`
 - Check IDs: `sales_account_evidence_check`, `sales_sequence_eligibility_check`
+- If this step fails: tentative; still stands: `sales_opportunity_evidence_record/v1`, `sales_qualification_state/v1`; hand back: Return sales_draft_sequence/v1 with unsupported personalization or proof and missing cadence, owner, approver or stop conditions marked for correction, keeping every row an unsent draft.
 
 ### `sales_validate_handoff` (validation)
 
@@ -69,3 +71,4 @@ Return proposed versus confirmed actions, ownership, timing, exit criteria, depe
 - Input refs: `account or segment`, `available evidence`, `buyer hypothesis`, `sales objective`
 - Output refs: `sales_handoff_disposition/v1`
 - Check IDs: `sales_account_evidence_check`, `sales_qualification_state_check`, `sales_sequence_eligibility_check`, `sales_handoff_check`
+- If this step fails: unresolved; still stands: `sales_draft_sequence/v1`, `sales_opportunity_evidence_record/v1`, `sales_qualification_state/v1`; hand back: Return sales_handoff_disposition/v1 as HOLD with proposed actions, CRM field/value proposals, missing buyer confirmation and unresolved owner, timing, dependency or exit-criterion gaps.

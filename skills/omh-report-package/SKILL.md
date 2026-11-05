@@ -49,8 +49,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If input evidence is incomplete, mark the section as pending rather than fabricating a report claim.
-- If delivery or attachment is unavailable, keep the report package prepared_not_observed.
+- If no presentation tool can produce a binary deck, retain the PPT-ready Markdown or JSON outline, mark binary export not_observed, and hand back the outline, assumptions, and missing-input list for separate deck generation.
+- If the tool returns "rendered": false (it still exits 0) or its image count differs from slide_count, keep the deck's outline read-back, leave render QA not observed, and hand back the missing-tool or image-count gap for that file.
+- If the requested achievements export fails, retain the rest of the report package, mark the badge section not_observed, and hand back the missing output from omh achievements export --format md instead of inventing badges.
 
 ## Workflow Lane
 

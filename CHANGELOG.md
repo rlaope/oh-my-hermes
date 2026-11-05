@@ -4,6 +4,65 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A dag-ulw verify node names which producer's scope holds each failure,
+  and a repair node is told the failed attempt's edits may still be on
+  disk.** A producer accepted earlier cannot be repaired, so a failing check
+  is repaired through the verify node, and nothing said which producer the
+  failing path belonged to. The verify node's task now carries a compact map
+  of its upstream producers' declared `write_scope` (their repairs and its
+  own included, cut at 600 characters on whole paths and producers) and asks
+  it to name in its handoff, for each failing check, the producer whose
+  scope holds the failing path, or `unattributed`: attribution by declared
+  scope, not proven cause. A repair node that writes files, in its first
+  cycle and in the re-plan cycle, now reads that the failed attempt's edits
+  may still be on disk and, in a git checkout, to inspect `git status
+  --short` and `git diff HEAD` on the failed nodes' scopes (its own scope
+  when the failed node was a verify node) before editing. There is still no
+  rollback: the worktree is shared. Every other node's task reads byte for
+  byte as before.
+- **dag-ulw refuses two nodes that write one file under different spellings.**
+  `omh_dag` define, repair and extend refused a shared write scope with no
+  direct edge only when both nodes wrote the same entry character for
+  character, so `src/` beside `src/x.py`, `./src/x.py` beside `src/x.py` and
+  `src/*.py` beside `src/x.py` ran in parallel and could overwrite each
+  other. Entries are now compared as paths: `\` reads as `/`, letter case,
+  `./`, repeated or trailing `/` and `x/..` change nothing, and an entry
+  covers every path under it by whole segments (`src/a` and `src/ab` stay
+  apart). A `*` or `?` glob beside a file name with a suffix must match it,
+  with `**/` matching no directory too (`*.md` meets `docs/a.md`, not
+  `src/x.py`; `src/**/*.py` meets `src/x.py`). Beside a directory, a name
+  with no suffix or another glob, it covers the directory before it. A `[`
+  stays a literal, so `app/[slug]/page.tsx` names one file. The refusal still
+  reads `write_scope_overlap`, now names every overlapping pair at once (up
+  to 20, then a count) and which node wrote which entry, and a repair, like
+  an extend, is checked only for pairs with one of its own new nodes, so two
+  earlier nodes it cannot change never refuse it. The coding fanout
+  contract's boundary check still compares as written.
+- **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
+  of the hollow `○`.** Four finished agents in a row looked the same as four
+  that had not started. A completed agent now leads with `✓` in the done
+  green; the collapsed `N done` row is green only when every agent it
+  counts completed, else a muted `▪`.
+  Interrupted, failed, waiting and running agents keep their marks.
+
+- **A skill that fails partway now says what it already proved.** It lowers the
+  affected result to tentative, unresolved, or not_observed, and hands back what
+  the person needs to continue instead of presenting partial work as finished.
+  Procedure steps name what survives each failure, Recovery Notes cover each
+  skill's own blockers, and catalog checks keep both in place. The idea comes
+  from PortSwigger Burp AT research skills.
+- **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
+  the machine sleeps past the session's turn lease, Hermes stops the running
+  turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
+  on." It now says it sends that `continue` in 3 s, with Esc to cancel, and then
+  sends it as a typed `continue` goes. It never does so for the person's own Esc,
+  `/stop` or interrupting prompt, for a turn that ended with an error, or for a
+  turn this TUI did not send (another client's on a shared gateway, whose stop
+  looks the same from here). Anything the person sends in the wait (a prompt,
+  `/stop`, `/help`, `/new`), a turn that starts, or another session opened
+  cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
+  or an open question holds it, and a notice says to send `continue`. At most 2
+  go between two prompts of the person's own; past that the old notice asks.
 - **A resumed session with work left goes on by itself in the OMH TUI.**
   `omh --resume <id>`, `/resume` and the session picker opened the session
   and waited for the person to write, so an interrupted turn or an open
@@ -20,24 +79,6 @@ All notable changes will be documented here.
   a session with a turn running (its own or another client's), a turn
   Hermes resubmits itself after a crash, a run that needs repair, a draft,
   a queued line or an open question.
-- **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
-  the machine sleeps past the session's turn lease, Hermes stops the running
-  turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
-  on." It now says it sends that `continue` in 3 s, with Esc to cancel, and then
-  sends it as a typed `continue` goes. It never does so for the person's own Esc,
-  `/stop` or interrupting prompt, for a turn that ended with an error, or for a
-  turn this TUI did not send (another client's on a shared gateway, whose stop
-  looks the same from here). Anything the person sends in the wait (a prompt,
-  `/stop`, `/help`, `/new`), a turn that starts, or another session opened
-  cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
-  or an open question holds it, and a notice says to send `continue`. At most 2
-  go between two prompts of the person's own; past that the old notice asks.
-- **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
-  of the hollow `○`.** Four finished agents in a row looked the same as four
-  that had not started. A completed agent now leads with `✓` in the done
-  green; the collapsed `N done` row is green only when every agent it
-  counts completed, else a muted `▪`.
-  Interrupted, failed, waiting and running agents keep their marks.
 
 ## 4.0.6 - 2026-11-04
 

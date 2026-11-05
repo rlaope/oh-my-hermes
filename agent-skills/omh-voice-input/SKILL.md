@@ -47,8 +47,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If transcript confidence or intent is weak, ask one short clarification before action.
-- If platform delivery is unavailable, keep the response in chat and mark delivery not_observed.
+- If a dictated request names no target context, nothing is actionable yet; mark the next action unresolved and hand back one target question before preparing voice-operator/v1.
+- If a clarified voice request still lacks confirmation for a risky action, retain the voice-operator/v1 guidance, mark execution not_observed, and hand back the proposed next action for explicit approval.
 
 
 

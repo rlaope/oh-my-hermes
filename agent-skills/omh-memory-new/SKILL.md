@@ -48,8 +48,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If project versus user scope or lasting versus temporary retention is ambiguous, retain the bounded summary as a candidate, mark capture unresolved, and hand back one scope-or-durability question without claiming a write.
+- If omh_memory returns error, retain memory_new_candidate/v1 as prepared only, mark the write not_observed, and hand back the bounded summary, record_type, tags, scope, and retention_class for the omh memory capture fallback.
+- If capture returns pending_review, retain the staged memory_new_candidate/v1, mark approval not_observed, and hand back the stated review reason without treating an unsafe or relative-time phrase as an approved record.
 
 
 

@@ -48,6 +48,7 @@ Tie totals and account mappings, normalize only approved basis and units, test c
 - Input refs: `period`, `supplied finance source`
 - Output refs: `finance_reconciliation_analysis_schedule/v1`
 - Check IDs: `finance_source_reconciliation_check`
+- If this step fails: unresolved; still stands: `finance_scope_source_record/v1`; hand back: Return the draft finance_reconciliation_analysis_schedule/v1 with untied totals, mappings, basis or unit conflicts, cutoff defects and duplicate or missing records listed; do not label the extract reconciled.
 
 ### `finance_analyze_variances` (analysis)
 
@@ -72,3 +73,4 @@ Report recalculation and reconciliation status, evidence-linked risks, assumptio
 - Input refs: `period`, `supplied finance source`, `decision question`, `calculation assumptions`
 - Output refs: `finance_decision_brief/v1`
 - Check IDs: `finance_scope_comparability_check`, `finance_source_reconciliation_check`, `finance_policy_assumption_check`, `finance_conditional_interpretation_check`, `finance_validation_escalation_check`
+- If this step fails: unresolved; still stands: `finance_scope_source_record/v1`, `finance_risk_register/v1`; hand back: Return finance_decision_brief/v1 as HOLD with failed recalculations, reconciliation gaps, policy or cutoff conflicts, control exceptions and high-impact assumptions assigned to a qualified finance or accounting owner.

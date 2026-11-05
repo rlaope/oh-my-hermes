@@ -52,7 +52,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If the proposal under review cannot be stated in one paragraph, route back to `deep-interview` before opening round one.
+- If the proposal under review cannot be stated in one paragraph, route back to `ulw-interview` before opening round one.
 - If independence was broken — a perspective saw another's findings, or the same seat produced two angles — say so, re-run that perspective on a restated problem, and mark the round's independence as caveated rather than silently continuing.
 - If a round produces no objections at all, treat that as a roster defect rather than consensus: state which angle is missing and add or replace a seat before distilling.
 - If distillation would need a fifth bucket, the extra content is a plan trying to escape; move it to the planner handoff instead of widening the bucket set.

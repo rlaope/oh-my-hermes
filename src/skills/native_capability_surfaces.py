@@ -39,6 +39,10 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
                 "options we decided against",
                 "why an approach was dismissed",
             ),
+            recovery_notes=(
+                "If the query, scope, tags, stale policy, or match limit is unspecified, no rejected-decision match stands yet; mark recall unresolved and hand back one question fixing the missing filter.",
+                "If a candidate's reviewed-rejected status or expiry cannot be checked, retain only matches that passed those checks, mark remaining recall unresolved, and hand back rejected_decision_recall/v1 with the claim boundary and missing checks.",
+            ),
         ),
         feature_surface_skill(
             "run-efficiency",
@@ -100,6 +104,10 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
                 "time spent per tool in this run",
                 "wasted steps in this session",
             ),
+            recovery_notes=(
+                "If the named Hermes session has no row or recorded tokens, retain supplied timings and context data in run_efficiency_report/v1, mark host_usage not_observed, and hand back the session ID for a recorded-usage check.",
+                "If session_activity_receipt/v1 omits tool durations or context-budget metrics, retain its available observations, mark the missing metrics not_observed rather than zero, and hand back the exact missing measurements.",
+            ),
         ),
         feature_surface_skill(
             "provider-profile-posture",
@@ -131,6 +139,11 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
                 "which secrets does this connector need",
                 "check credentials exist safely",
                 "capabilities of a provider profile",
+            ),
+            recovery_notes=(
+                "If provider ID or profile ID is missing, retain the supplied capability requirements, mark provider_profile_posture/v1 unresolved, and hand back a request for the missing ID without reading any secret.",
+                "If secret-presence metadata is absent, retain the named provider, profile, and requested capabilities, mark secret presence not_observed, and hand back metadata-only secret requirements plus allowed and prohibited actions.",
+                "If only a host observation reference is supplied, retain it as metadata, mark provider connectivity not_observed, and hand back provider_profile_posture/v1 without claiming credential validation or making a provider call.",
             ),
         ),
     )
