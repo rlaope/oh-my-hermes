@@ -200,12 +200,14 @@ from .model_picker import PICK as MODEL_PICK
 from .model_picker import ModelPicker, model_rows, typed_switch_value
 from . import dag_block
 from .dag_tree import TreeState
+from .turn_ends import TURN_DONE, TURN_INTERRUPTED, TURN_OPEN, TURN_STOPPED, read_turn_end, record_turn_end
 from .panels import (
     CATCH_MARK,
     HudPoller,
     HudSnapshot,
     catch_lines,
     dag_page_lines,
+    graph_is_dag,
     hud_chips,
     panel_lines,
     plan_room_collapsed,
@@ -522,6 +524,10 @@ COMPRESS_STARTED_NOTICE = "Compressing: Hermes summarizes the older turns with a
 # The working row's verb while a `/compress` is out and no turn runs (`App._compressing_since`). It offers no Esc:
 # with no turn running Esc arms the rewind and sends no interrupt, so it does not stop a compression.
 COMPRESSING_VERB = "Compressing"
+# Between turns, while something the session waits on still runs (a background process Hermes will wake it for, a
+# delegated child or dag-ulw node that wakes the parent as it ends), the working row says so, as it says a turn runs
+# (the owner, 2026-11-05: "걍 Musing마냥 … 계속 나오게"): `✻ Waiting… (33m 47s · 1 agent · terminal)`.
+ALERT_WAIT_VERB = "Waiting"
 # How long a `/compress` is waited for: Hermes' own budget for it (`hermes_cli/gateway_client.py` COMPRESS_RPC_TIMEOUT,
 # the compression ceiling plus slack), in place of `CALL_ANSWER_SECONDS`.
 COMPRESS_ANSWER_SECONDS = 660.0
@@ -709,6 +715,17 @@ AUTO_CONTINUE_ASKED = "a question or picker is open"
 AUTO_CONTINUE_SENT = "you sent a line"
 AUTO_CONTINUE_LEFT = "the session changed"
 AUTO_CONTINUE_UNSENT = "it did not go out"
+# A session resumed (`omh --resume <id>`, `/resume`, the session picker) with work left goes on the same way: the row
+# says why, and after AUTO_CONTINUE_SECONDS, in which Esc cancels, the same `continue` goes (`_offer_resume_continue`).
+RESUME_CONTINUE_NOTICE = "Resuming: {why}; sending `continue` in {seconds} s · Esc cancels"
+RESUME_WHY_INTERRUPTED = "Hermes interrupted its last turn"
+RESUME_WHY_RUN = {  # `dag_open_run_nudge.RESUMABLE_REASONS`; {count} nodes of run {run}
+    "returned": "dag-ulw run {run} has {count} {nodes} back to settle",
+    "lost": "dag-ulw run {run} has {count} {nodes} a restart ended",
+    "parked_due": "dag-ulw run {run} has {count} parked {nodes} due",
+    "out_no_child": "dag-ulw run {run} has {count} {nodes} out with no child",
+    "ready_idle": "dag-ulw run {run} has {count} ready {nodes}",
+}
 RESPAWNED_WHY = "The Hermes gateway was restarted"
 # Gateway crash recovery, bounded as Hermes' own TUI bounds it (ui-tui `app/gatewayRecovery.ts`): at most
 # RESPAWN_LIMIT respawns in a sliding RESPAWN_WINDOW_SECONDS, each resuming the session that was open. Past that,
@@ -1673,6 +1690,22 @@ def attach_message(environ: Mapping[str, str]) -> str:
     )
 
 
+def waiting_dag_run(omh_home: str | None, hermes_home: str | None, session: str) -> tuple[str, str, list[str]] | None:
+    """The session's open dag-ulw run a turn would move with no node running (`dag_open_run_nudge.waiting_run`)."""
+    from ..plugin_bundle.omh.dag_open_run_nudge import waiting_run
+
+    if not omh_home or not hermes_home:
+        return None
+    return waiting_run(session_id=session, omh_home=omh_home, hermes_home=hermes_home)
+
+
+def resume_run_why(reason: str, run: str, nodes: Sequence[str]) -> str:
+    """What the resuming row says of a waiting run; "" for a reason a resume does not go on with."""
+    template = RESUME_WHY_RUN.get(reason)
+    count = len(nodes)
+    return template.format(run=run, count=count, nodes="node" if count == 1 else "nodes") if template else ""
+
+
 def write_active_session(path: str, stored_id: str, extra: Mapping[str, Any] | None = None) -> None:
     """Write `{"session_id": <stored id>}` (mode 0600) for the launcher's exit epilogue. Best effort.
 
@@ -1866,6 +1899,7 @@ class App(ModesMixin, AgentViewMixin):
         self.dag_ends: set[tuple[str, int]] = set()  # the dag-ulw run ends already printed (`dag_block.moment`)
         self.dag_end_due: dict[str, str] = {}  # run -> its end's title, printed when the turn ends (`_dag_moment`)
         self.read_dag_graph = dag_block.read_graph
+        self.read_waiting_run = waiting_dag_run
         self.composer = Composer()
         # Hermes' own input history: read once here, and every line the person sends appended (`history.py`).
         self.history_file = history_path(environ)
@@ -2114,6 +2148,8 @@ class App(ModesMixin, AgentViewMixin):
         self.tree_selected: str | None = None  # the dag tree's highlighted row while the tree has the keys
         self.tree_folds: dict[str, bool] = {}  # the dag tree's rows the person folded (False) or opened (True)
         self.tree_run = ""  # the run those folds belong to (`dag_tree.run_key`); a new run, or session, starts none
+        self.tree_second = -1  # the whole wall second the tree's clocks were last drawn at (`_tree_second_due`)
+        self.alert_second = -1  # the same for the wait's row (`_pending_wait`)
         self.tree_state: TreeState | None = None  # what the tree's keys need, as the agent view last drew it
         # The dag run that is over, which the view no longer draws, and when its graph had last moved (`_run_gone`)
         self.retired_run: tuple[str, float] | None = None
@@ -2207,6 +2243,8 @@ class App(ModesMixin, AgentViewMixin):
             self._draw_history(result.get("messages"))
         self._say_gateway_health()  # under a resumed session's history, where the launch's screen ends
         self._redeliver(result.get("open_requests"))
+        if resume:
+            self._offer_resume_continue(result)
         if pick:
             self._sessions("")
 
@@ -2690,10 +2728,12 @@ class App(ModesMixin, AgentViewMixin):
         if self.redraw_at is not None:
             due.append(self.redraw_at)
         elif self._busy() or self._compressing_since() is not None or self._panel_live() or self._aura_live() \
-                or self.held_submits:
+                or self._tree_spins() or self.held_submits:
             due.append(self.last_render + self._tick_seconds())
         if self.redraw_at is None and (background := self._background_due_at()) is not None:
             due.append(background)  # the background row's clock: once a second, on the second
+        if self.redraw_at is None and (tree := self._tree_second_due_at()) is not None:
+            due.append(tree)  # the times on the dag tree's rows, the same way
         if self.redraw_at is None and self._wallpaper_moves():
             due.append(self.ambient_at + WALLPAPER_TICK_SECONDS)
         if self.path_due is not None and self.sid:
@@ -3360,6 +3400,7 @@ class App(ModesMixin, AgentViewMixin):
                 self._settle_steers_at_turn_end()
                 # A stop the person asked for in no way (Esc, `/stop`, a prompt in busy mode `interrupt`) is Hermes' own.
                 self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)  # `_turn_ended` spends it
+                self._note_turn(self._turn_end(payload))
                 self.transcript.hermes_resuming = self._arm_auto_continue(payload)
             self.transcript.apply(event)
             self._track_sent_now(event.type)
@@ -3375,6 +3416,7 @@ class App(ModesMixin, AgentViewMixin):
                 # A turn started (this TUI's prompt, another client's): a `continue` that waited is not sent into it.
                 self.auto_continue, self.auto_continue_out = None, False
                 self.turn_ours = self.turn_pending
+                self._note_turn(TURN_OPEN)  # its end, once seen, says how it ended (`turn_ends`)
                 if not self.turn_pending:  # a turn this TUI did not start (a resumed one, a server queue)
                     self.busy_since = self.clock()
                     self.turn_waited = 0.0
@@ -4747,6 +4789,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         if self.sid:
             self.interrupting = True
+            self._note_turn(TURN_STOPPED)
             self._request("session.interrupt", {"session_id": self.sid}, lambda result: None, self._on_interrupt_refused)
 
     def _on_interrupt_refused(self, error: dict[str, Any]) -> bool:
@@ -4979,7 +5022,9 @@ class App(ModesMixin, AgentViewMixin):
             self.queued.append(QueuedLine(text, shown, typed, chips=chips, notice=notice, images=images))
             return
         if self._busy():  # the busy mode sends it into the running turn: no turn starts
-            self.stop_asked = self.stop_asked or self.busy_mode == BUSY_INTERRUPT
+            if self.busy_mode == BUSY_INTERRUPT:
+                self.stop_asked = True
+                self._note_turn(TURN_STOPPED)
             self._submit_prompt(text, shown, notice=notice, images=images)
         else:
             self._start_turn(typed or text, lambda: self._submit_prompt(text, shown, notice=notice, images=images),
@@ -5398,6 +5443,61 @@ class App(ModesMixin, AgentViewMixin):
             return
         self._give_back(text, images)
 
+    def _turn_end(self, payload: Any) -> str:
+        """How the turn a `message.complete` ends ended, as `turn_ends` keeps it (before `_arm_auto_continue` spends
+        `turn_ours`): the person's stop, Hermes' own interrupt of a turn this TUI sent, or anything else."""
+        status = as_text(payload.get("status")) if isinstance(payload, Mapping) else ""
+        if status != "interrupted":
+            return TURN_DONE
+        if not self.transcript.hermes_interrupted:
+            return TURN_STOPPED
+        if self.turn_ours and not as_text(payload.get("error")).strip():
+            return TURN_INTERRUPTED
+        return TURN_DONE
+
+    def _note_turn(self, end: str) -> None:
+        """Keep how the live session's last turn ended under the OMH home (`turn_ends`), for a later resume."""
+        home = self._omh_home()
+        if home is not None and self.stored_id:
+            record_turn_end(home, self.stored_id, end, self.wall_clock())
+
+    def _resume_evidence(self, result: Mapping[str, Any]) -> str:
+        """Why the session a resume just opened has work to go on with, as the resuming row says it; "" for none.
+
+        Never one Hermes goes on with itself (`auto_continue`: a turn a process death cut, which Hermes submits
+        again); a session with a turn running is busy, which `_offer_resume_continue` checks. Then, by how this home's
+        TUIs saw its last turn end (`turn_ends`): the person's stop never; Hermes' own interrupt of a turn a TUI sent
+        does. Otherwise an open dag-ulw run that a turn would move with no node running does, whatever the last turn
+        did: a run's parent turn ends while the run waits on its children, and a restart can end those children.
+        """
+        if result.get("auto_continue") is not None or not self.stored_id:
+            return ""
+        home = self._omh_home()
+        end = read_turn_end(home, self.stored_id) if home is not None else None
+        if end == TURN_STOPPED:
+            return ""
+        if end == TURN_INTERRUPTED:
+            return RESUME_WHY_INTERRUPTED
+        found = self.read_waiting_run(self.environ.get("OMH_HOME") or None, self.environ.get("HERMES_HOME") or None,
+                                      self.stored_id)
+        return resume_run_why(*found) if found is not None else ""
+
+    def _offer_resume_continue(self, result: Mapping[str, Any]) -> None:
+        """A session just resumed with work left (`_resume_evidence`) goes on by itself, as a turn Hermes interrupted
+        does (`_auto_continue_when_due`): the row says why, and Esc in the wait cancels it. Held, with no row, by what
+        holds that one (a draft, a queued line, an open question, the AUTO_CONTINUE_LIMIT) and by a turn running
+        (the resume's `running`: its own turn still going, or another client's)."""
+        if self._busy() or self._switching() or not self.sid or self.auto_continues >= AUTO_CONTINUE_LIMIT \
+                or self._auto_continue_held():
+            return
+        why = self._resume_evidence(result)
+        if not why:
+            return
+        self.auto_continue = (self.stored_id, self.clock() + AUTO_CONTINUE_SECONDS)
+        self.transcript.add_notice(
+            RESUME_CONTINUE_NOTICE.format(why=why, seconds=f"{AUTO_CONTINUE_SECONDS:g}"), NOTICE_WARN)
+        self.dirty = True
+
     def _drain_queue(self) -> None:
         """Send the next queued line: a prompt starts the next turn; a `!` line runs, and the one after waits for it.
 
@@ -5810,6 +5910,7 @@ class App(ModesMixin, AgentViewMixin):
             echo = self.transcript.command
             if invocation.name.lower() == "stop" and self._busy():
                 self.stop_asked = True  # the turn it interrupts ends `interrupted`: the person's stop
+                self._note_turn(TURN_STOPPED)
             sid = self.sid
             self._request(
                 "slash.exec",
@@ -6385,6 +6486,7 @@ class App(ModesMixin, AgentViewMixin):
         self._redeliver(result.get("open_requests"))
         self._refresh_catalog()  # its workspace may hold project-local skills the last one did not
         self._carry_switch_held()
+        self._offer_resume_continue(result)
 
     def _on_resume_refused(
         self, target: str, error: dict[str, Any], notice: str = "", by_title: bool = False, seq: int | None = None,
@@ -7461,6 +7563,26 @@ class App(ModesMixin, AgentViewMixin):
         payload = self.hud.payload if self.hud is not None else None
         return isinstance(payload, Mapping) and bool(payload.get("active"))
 
+    def _tree_spins(self) -> bool:
+        """Whether the dag tree the last frame drew moves (a running or parked node's spinner, a waiting row's dots,
+        `dag_tree.TreeState.moves`), or the wait's row turns (`_pending_wait`): with motion on and the window
+        focused, also between turns. Unfocused their motion holds (`_ambient_clock`), so nothing ticks for it at the
+        spinner's pace."""
+        return self.motion and self.decoder.unfocused_at is None and (
+            self.tree_state is not None and self.tree_state.moves or self._pending_wait() is not None)
+
+    def _tree_second_due_at(self) -> float | None:
+        """When, on the loop's clock, a time on the tree's rows or the wait's row next shows another second
+        (`TreeState.clocks`, `_pending_wait`: content that counts on focused or not); None without one."""
+        if not (self.tree_state is not None and self.tree_state.clocks) and self._pending_wait() is None:
+            return None
+        return self.clock() + 1.0 - self.wall_clock() % 1.0
+
+    def _tree_second_due(self) -> bool:
+        second = int(self.wall_clock())
+        return (self.tree_state is not None and self.tree_state.clocks and second != self.tree_second
+                or self._pending_wait() is not None and second != self.alert_second)
+
     def _aura_live(self) -> bool:
         """Whether the composer's `dag-ulw` aura moves now (`aura`): a token in the draft it draws, at the truecolor
         depth, with motion on, on a background its band shows on (`theme.aura_moves`), and while no list or tree
@@ -7645,8 +7767,8 @@ class App(ModesMixin, AgentViewMixin):
             return  # the screen is mid-reflow; the settled redraw paints it
         now = self.clock()
         due = (self._busy() or self._compressing_since() is not None or self._panel_live() or self._aura_live()
-               or bool(self.held_submits)) and now - self.last_render >= self._tick_seconds()
-        if not (self.dirty or due or self._background_due()):
+               or self._tree_spins() or bool(self.held_submits)) and now - self.last_render >= self._tick_seconds()
+        if not (self.dirty or due or self._background_due() or self._tree_second_due()):
             if self._wallpaper_moves() and now - self.ambient_at >= WALLPAPER_TICK_SECONDS:
                 self.ambient_at = now  # only the wallpaper's cells that moved: no frame is built
                 self.region.paint_ambient(self._ambient() or (), self.size[1])
@@ -8020,6 +8142,11 @@ class App(ModesMixin, AgentViewMixin):
         """The frame every spinner and sweep shows now; the first, always, with reduced motion."""
         return int(self.clock() / TICK_SECONDS) if self.motion else 0
 
+    def _held_frame(self) -> int:
+        """The spinner's frame at `_ambient_clock`: as `_spinner_frame` while the window has focus, held at the
+        moment it lost it while not (the dag tree's motion, `agent_view._tree_view`)."""
+        return int(self._ambient_clock() / TICK_SECONDS) if self.motion else 0
+
     def _tick_seconds(self) -> float:
         """How often the loop paints while something moves: each spinner step, once a second with reduced motion."""
         return TICK_SECONDS if self.motion else REDUCED_TICK_SECONDS
@@ -8062,8 +8189,10 @@ class App(ModesMixin, AgentViewMixin):
         if not lines and self.transcript.taken_any:
             lines = [()]  # the spacer a block opens with, here between the transcript and the region under it
         compressing = self._compressing_since()
+        alert = self._pending_wait() if compressing is None else None
         # A blank row above the working row, as between two blocks; the frame drops it first when rows are short.
-        self.tail_spacer = (self._busy() or compressing is not None) and bool(lines) and bool(lines[-1])
+        self.tail_spacer = (self._busy() or compressing is not None or alert is not None) and bool(lines) and bool(
+            lines[-1])
         if self.tail_spacer:
             lines.append(())
         if self._busy() and self.waiting_since is not None:
@@ -8125,14 +8254,63 @@ class App(ModesMixin, AgentViewMixin):
                    *working_spans(f"{COMPRESSING_VERB}…", frame, self.theme),
                    Span(f" ({elapsed_text(now - compressing)})", self.theme.muted))
             lines.append(truncate_line(row, cols))
+        elif alert is not None:
+            # What the session waits on: the working row's spinner and words, the longest wait's clock, then how many
+            # agents and terminals. The spinner holds while the window is unfocused (#2542); the clock counts on.
+            longest, agents, terminals = alert
+            facts = [elapsed_text(longest)]
+            facts += [f"{agents} agent{'' if agents == 1 else 's'}"] if agents else []
+            facts += ["terminal" if terminals == 1 else f"{terminals} terminals"] if terminals else []
+            frame = self._held_frame()
+            row = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
+                   *working_spans(f"{ALERT_WAIT_VERB}…", frame, self.theme),
+                   Span(f" ({' · '.join(facts)})", self.theme.muted))
+            lines.append(truncate_line(row, cols))
+            self.alert_second = int(self.wall_clock())
         return lines
+
+    def _pending_wait(self) -> tuple[float, int, int] | None:
+        """What the session waits on between turns, as (the longest wait's seconds, agents, terminals); None during a
+        turn and when nothing it waits on runs. Read from structure only, never from what the model said:
+        - the session's background processes still running that Hermes will wake it for (`notify_on_complete`, or
+          `watch_patterns` on a match), as their checkpoint records, none once one ended unreported (the info line
+          offers its result);
+        - the delegated children still running, which wake the parent as they end: the running or stuck lanes of the
+          delegation graph the HUD reads (a dag-ulw node, a `delegate_task` child), each with the graph's time
+          counted on since the HUD read it."""
+        if self._busy():
+            return None
+        wall = self.wall_clock()
+        times: list[float] = []
+        terminals = 0
+        if self.bg_done is None and self._background_live():
+            waking = [process for process in self.bg_running if process.notify or process.watched]
+            terminals = len(waking)
+            times += [wall - process.started_at for process in waking]
+        payload = self.hud.payload if self.hud is not None else None
+        graph = payload.get("delegation_graph") if isinstance(payload, Mapping) and not payload.get("error") else None
+        # A run its end print retired is over, whatever this read of the HUD still says (`_run_gone`).
+        live = isinstance(graph, Mapping) and graph.get("status") == "active" and not (
+            graph_is_dag(payload) and self._run_gone(graph))
+        lanes = [node for node in graph.get("nodes") or [] if isinstance(node, Mapping) and node.get("kind") != "root"
+                 and node.get("state") in ("running", "stuck")] if live else []
+        read_at = self.hud.received_at if self.hud is not None else 0.0
+        since = wall - read_at if 0 < read_at <= wall else 0.0
+        for lane in lanes:
+            elapsed = lane.get("elapsed_seconds")
+            if isinstance(elapsed, int | float) and not isinstance(elapsed, bool):
+                times.append(float(elapsed) + since)
+        agents = len(lanes)
+        if not terminals and not agents:
+            return None
+        return max(times, default=0.0), agents, terminals
 
     def _working_rows(self) -> int:
         """The tail's last rows that say a turn runs, as `_tail` draws them: the working (or waiting, or
         interrupting) row, and the tip under the working row from TIP_MIN_ROWS rows. The agent view leaves the tail
         these (`layout.allocate`'s `tail_floor`), so a short terminal never loses the row saying a turn runs."""
-        if not self._busy():
-            return int(self._compressing_since() is not None)  # the compression's row, with no tip
+        if not self._busy():  # the compression's row, or the wait's, with no tip
+            return int(self._compressing_since() is not None or self._pending_wait() is not None)
         if self._framed_wait():
             return 0  # `_tail` draws no row: the framed question's key row carries the wait's clock
         return 1 + int(self.size[1] >= TIP_MIN_ROWS and self.waiting_since is None and not self.interrupting)

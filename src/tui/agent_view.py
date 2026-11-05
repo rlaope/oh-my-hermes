@@ -48,6 +48,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from . import gateway_contract as contract
+from .background import tool_call
 from .keys import BUTTON_LEFT, CHAR, DOWN, ENTER, ESCAPE, LEFT, RIGHT, UP, Key, Mouse, Paste, list_nav_step
 from .layout import Budget, agent_view_cap, is_tiny, max_height
 from ..plugin_bundle.omh.hud_text import compact_count, elapsed_text
@@ -80,6 +81,11 @@ TREE_HINTS = (
 # The fewest rows a tree takes the keys in: its highlight between a count above and one below. Under it Down opens the
 # agent list in the view's rows, as it did before the tree.
 MIN_TREE_ROWS = 3
+# The most rows a dag run's tree takes under the composer, and never more than a third of the screen
+# (`layout.agent_view_cap`). The owner, 2026-11-04: 17 rows was too big and 8 too little and too cramped; 16 holds a
+# small run whole with its blank rows (the 6-node run in 14 at 150x42), and on a taller screen the tree stops growing
+# there, `/dag` drawing the whole graph.
+TREE_ROWS = 16
 # What the info line says once `x` asked, longest first.
 INTERRUPT_CONFIRM = "x again interrupts {name} · any other key cancels"
 INTERRUPT_CONFIRMS = (INTERRUPT_CONFIRM, "x again interrupts {name}", "x again interrupts")
@@ -149,9 +155,10 @@ class AgentViewMixin:
         same rows, noting each row's agent id in `listed`.
 
         While the conversation's delegation graph is a DAG run its folding
-        tree (`_tree_view`) is the view, in up to a third of the screen from
-        the start and no more rows than the tree has (the owner wants the
-        graph in sight while it runs); Down gives the tree the keys. A run
+        tree (`_tree_view`) is the view, in up to `TREE_ROWS` rows (a third
+        of a short screen) from the start and no more rows than the tree has
+        (the owner wants the graph in sight while it runs, and the area under
+        the composer small); Down gives the tree the keys. A run
         that is over leaves the view as its turn ends (`_run_gone`): its end
         print in the transcript holds its final graph. Otherwise the roster's
         rows while it holds agents, else the HUD's agents block and the tree,
@@ -172,7 +179,7 @@ class AgentViewMixin:
                 # The view stands for the dag run while its graph is one; once it is over that is nothing at all.
                 self.tree_selected = self.list_selected = None
                 return []
-            cap = self._view_cap(rows, cols, rows // 3, room)
+            cap = self._view_cap(rows, cols, min(TREE_ROWS, rows // 3), room)
             lines = self._tree_view(payload, cols, cap)
             lines += [()] * self._tree_held_rows(len(lines), cap, rows)
             if self.list_selected is None:
@@ -247,11 +254,17 @@ class AgentViewMixin:
         self.tree_size = (cols, cap)
         folds = self._tree_folds(graph)
 
+        processes = {process.proc_id: (tool_call(process), process.started_at) for process in self.bg_running}
+        # The spinner and the waiting dots are the tree's motion: held while the window is unfocused, as the
+        # ambience is (`_ambient_clock`, #2542). The times on its rows are content and count on at `wall`.
+        frame, beat, wall = self._held_frame(), int(self._ambient_clock()) if self.motion else None, self.wall_clock()
+
         def draw() -> tuple[list[Line], TreeState]:
             return tree_lines(graph, self.roster, cols, cap, self.theme, frame, folds, self.tree_selected,
-                              self.color_depth, now, self._aura_phase())
+                              self.color_depth, now, self._aura_phase(), processes, wall, self.hud.received_at, beat)
 
         lines, self.tree_state = draw()
+        self.tree_second = int(wall)
         if self.tree_selected is not None and self.tree_selected not in self.tree_state.order:
             # A fold hid the highlighted row, or its node left the graph: the nearest row above it still shown.
             self.tree_selected = _nearest_shown(self.tree_state, self.tree_selected)

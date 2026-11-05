@@ -251,7 +251,7 @@ class AppBriefingTests(unittest.TestCase):
 
     def test_a_dag_nodes_child_is_named_by_its_node(self) -> None:
         app, _client = make_app(busy=False, clock=lambda: 0.0)
-        with_hud(app, dag_export_run())
+        with_hud(app, dag_export_run(), received_at=0.0)
         agent_event(app, "start", FIRST, goal="implement the export button in the toolbar [dag:r1/button]")
         agent_event(app, "complete", FIRST, goal="implement the export button in the toolbar [dag:r1/button]",
                     status="completed", summary="Button added.")
@@ -267,7 +267,7 @@ class AppBriefingTests(unittest.TestCase):
                 graph = dag_export_run()
                 next(node for node in graph["nodes"] if node["id"] == "d:r1:button")["title"] = label
                 app, _client = make_app(busy=False, clock=lambda: 0.0)
-                with_hud(app, graph)
+                with_hud(app, graph, received_at=0.0)
                 agent_event(app, "start", FIRST, goal="do it [dag:r1/button]")
                 agent_event(app, "complete", FIRST, goal="do it [dag:r1/button]", status="failed", summary="boom")
                 [block] = blocks_of(app, AgentDoneBlock)
@@ -275,7 +275,7 @@ class AppBriefingTests(unittest.TestCase):
 
     def test_a_goal_no_node_binds_is_named_as_the_agent_list_names_it(self) -> None:
         app, _client = make_app(busy=False, clock=lambda: 0.0)
-        with_hud(app, dag_export_run())
+        with_hud(app, dag_export_run(), received_at=0.0)
         agent_event(app, "start", FIRST, goal="Check the docs. DELIVERABLE: a list")
         agent_event(app, "complete", FIRST, goal="Check the docs. DELIVERABLE: a list", status="completed")
         [block] = blocks_of(app, AgentDoneBlock)
@@ -345,7 +345,7 @@ class HeldBriefingFoldTests(unittest.TestCase):
             lanes = [lane(f"d:r1:p{number}", f"lane {number:02d}: check part {number}", "quick", "glm-5.3", "low",
                           "running", order=number + 1) for number in range(finished)]
             edges = [("root", item["id"], "dispatch") for item in lanes] + [("d:r1:p0", "d:r1:p1", "depends_on")]
-            with_hud(app, graph([root(), *lanes], edges))
+            with_hud(app, graph([root(), *lanes], edges), received_at=0.0)
         app._on_event(Event("message.start", SID, {}))
         app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "delegate_task", "context": f"{finished} tasks"}))
         for number in range(finished):
