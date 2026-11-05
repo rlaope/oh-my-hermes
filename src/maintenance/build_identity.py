@@ -21,7 +21,9 @@ Three rules shape the implementation:
   observed ``install_kind`` and a ``reason``, never a guessed revision.
 - **Only identity is serialized.** The full commit SHA and a clean/dirty
   result, and nothing else: no branch name, no remote URL, no diff, no changed
-  file list, no environment data.
+  file list, no environment data. The one exception is ``ref`` on a package
+  installed from this repository's own GitHub archive: the published ref the
+  archive URL names (``main`` or a release tag), never a local branch.
 
 The payload is diagnostic provenance. It is not release evidence, and it never
 claims the identified revision was tested, reviewed, passed CI, or published --
@@ -53,11 +55,20 @@ BUILD_IDENTITY_STAMP_SCHEMA = "build_identity_stamp/v1"
 # `importlib.metadata` names are compared (lowercase, `_` folded to `-`).
 DISTRIBUTION_NAME = "oh-my-hermes"
 # Packaging may ship this file inside the installed package to give a built
-# artifact an immutable identity. Nothing in this repository writes one today,
-# so shipped wheels report `unavailable` / `no_stamped_identity`; see
+# artifact an immutable identity. Nothing in this repository writes one, so
+# the release wheels report `unavailable` / `no_stamped_identity`; see
 # docs/INSTALLATION.md. The reader exists so a packager that does stamp an
 # artifact is read rather than ignored.
 STAMP_FILE_NAME = "_build_identity.json"
+# `src/omh/_archive_commit.txt` holds `$Format:%H$`, marked export-subst in
+# `.gitattributes`, so `git archive` and every GitHub archive (the preview
+# `main.zip`, tag and commit archives) write the archived commit into it. A
+# package built from a checkout keeps the placeholder, which reads as absent.
+ARCHIVE_COMMIT_FILE_NAME = "_archive_commit.txt"
+# The archive URLs whose ref the identity may name. Kept here rather than
+# imported from `maintenance.release`, which `omh --version` should not load.
+_REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
+_RELEASE_TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
 
 INSTALL_KINDS = (
     "source_checkout",
@@ -150,11 +161,20 @@ def probe_build_identity(
     identity_source = str(source["identity_source"])
     reason = str(source["reason"])
 
+    ref = None
     if commit_sha is None and repo_root is None:
         stamp = read_stamped_identity(root)
+        archive = read_archive_commit(root, version=package_version) if stamp["status"] == "absent" else None
         if stamp["status"] == "verified":
             commit_sha = stamp["commit_sha"]
             dirty = stamp["dirty"]
+            identity_source = "stamped_artifact"
+            reason = ""
+        elif archive is not None and archive["commit_sha"] is not None:
+            # An archive is one commit's tree, so the package built from it is clean.
+            commit_sha = archive["commit_sha"]
+            dirty = False
+            ref = archive["ref"]
             identity_source = "stamped_artifact"
             reason = ""
         elif stamp["status"] == "malformed":
@@ -176,6 +196,7 @@ def probe_build_identity(
         "identity_status": identity_status,
         "identity_source": identity_source if identity_status == "verified" else "none",
         "commit_sha": commit_sha,
+        "ref": ref,
         "dirty": dirty,
         "dirty_status": _dirty_status(dirty) if identity_status == "verified" else "unknown",
         "reason": reason,
@@ -190,8 +211,11 @@ def build_identity_summary(identity: dict[str, object]) -> str:
     version = str(identity.get("version", ""))
     install_kind = str(identity.get("install_kind", "unknown"))
     if identity.get("identity_status") == "verified":
-        origin = _ORIGIN_LABELS.get(install_kind, "build")
         short_sha = str(identity.get("commit_sha", ""))[:_SHORT_SHA_CHARS]
+        ref = identity.get("ref")
+        if ref:
+            return f"omh {version} ({ref}@{short_sha})"
+        origin = _ORIGIN_LABELS.get(install_kind, "build")
         dirty_word = _DIRTY_WORDS[_dirty_status(identity.get("dirty"))]
         return f"omh {version} ({origin} {short_sha}, {dirty_word})"
     kind_label = _INSTALL_KIND_LABELS.get(install_kind, _INSTALL_KIND_LABELS["unknown"])
@@ -262,6 +286,37 @@ def read_stamped_identity(package_root: Path) -> dict[str, object]:
         "commit_sha": commit_sha,
         "dirty": dirty if isinstance(dirty, bool) else None,
     }
+
+
+def read_archive_commit(package_root: Path, *, version: str) -> dict[str, str | None]:
+    """The commit a GitHub archive wrote into the package, and the ref it was asked for.
+
+    ``commit_sha`` is None for a package built from a checkout, where the file
+    still holds the ``$Format:%H$`` placeholder. ``ref`` comes from the PEP 610
+    record pip wrote beside the package: ``main`` for the preview branch
+    archive, the tag for a release tag archive, and None for anything else (a
+    commit archive names no ref, and a fork or local path is not this repo's).
+    """
+    text = _read_small_text(Path(package_root) / ARCHIVE_COMMIT_FILE_NAME)
+    commit_sha = (text or "").strip().lower()
+    if not _FULL_SHA_RE.match(commit_sha):
+        return {"commit_sha": None, "ref": None}
+    return {"commit_sha": commit_sha, "ref": _archive_ref(Path(package_root), version)}
+
+
+def _archive_ref(package_root: Path, version: str) -> str | None:
+    record = _read_small_text(package_root.parent / f"oh_my_hermes-{version}.dist-info" / "direct_url.json")
+    try:
+        data = json.loads(record) if record else None
+    except ValueError:
+        return None
+    url = str(data.get("url", "") or "") if isinstance(data, dict) else ""
+    if url == f"{_REPOSITORY_ARCHIVE_ROOT}/heads/main.zip":
+        return "main"
+    tag = url.removeprefix(f"{_REPOSITORY_ARCHIVE_ROOT}/tags/").removesuffix(".zip")
+    if url == f"{_REPOSITORY_ARCHIVE_ROOT}/tags/{tag}.zip" and _RELEASE_TAG_RE.match(tag):
+        return tag
+    return None
 
 
 def declares_this_project(root: Path) -> bool:

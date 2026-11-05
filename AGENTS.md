@@ -181,7 +181,11 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   (`src/tui/herdr.py`, in INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`): a local
   socket, no network call. The gateway child does not get the pane's
   `HERDR_PANE_ID`; herdr's CLI and skill still work there, without a
-  current-pane default.
+  current-pane default. On `/gateway restart`, typed by the person and
+  confirmed in the slot, it runs Hermes' own `hermes gateway restart --yes
+  --detach` on Hermes' interpreter (`src/tui/gateway_restart.py`, in
+  INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`) and reattaches to the same
+  session; it signals no process itself.
   Read [`docs/OMH-TUI-BOUNDARY.md`](docs/OMH-TUI-BOUNDARY.md) before touching
   `src/tui/`.
 - No Hermes core patching.

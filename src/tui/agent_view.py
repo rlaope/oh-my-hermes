@@ -51,14 +51,20 @@ from . import gateway_contract as contract
 from .background import tool_call
 from .keys import BUTTON_LEFT, CHAR, DOWN, ENTER, ESCAPE, LEFT, RIGHT, UP, Key, Mouse, Paste, list_nav_step
 from .layout import Budget, agent_view_cap, is_tiny, max_height
-from .dag_tree import TreeState, run_key, tree_lines
+from ..plugin_bundle.omh.hud_text import compact_count, elapsed_text
+from .dag_tree import TreeState, bound_node, run_key, tree_lines
 from .panels import (
     RUNNING_NODE_STATES, agent_view_count, agent_view_keep, dag_run_summary, graph_is_dag, panel_lines,
 )
 from .style import Line, Span, Style
-from .subagents import FINISHED_STATUSES, MAIN_ID, OPEN_MARK, RUNNING, Hit
+from .subagents import (
+    COMPLETED, ENDED, FINISHED_STATUSES, INTERRUPTED, MAIN_ID, OPEN_MARK, RUNNING, TOKENS_MARK, Agent, Hit, short_title,
+)
 from .width import cell_width
-from .transcript import NOTICE_WARN, STEER_QUEUED, STEER_REFUSED, NoticeBlock, SteerBlock, as_text
+from .transcript import (
+    AGENT_CANCELLED, AGENT_FAILED, AGENT_FINISHED, AGENT_INTERRUPTED, NOTICE_WARN, STEER_QUEUED, STEER_REFUSED,
+    AgentDoneBlock, NoticeBlock, SteerBlock, as_text,
+)
 
 # The list Down opens (the agent view's rows, `layout.agent_view_cap` of them; a longer roster scrolls), and one
 # agent's log in the pager.
@@ -92,6 +98,8 @@ STEER_SAY = (
     "↪ steer · esc cancels",
 )
 AGENT_FINISHED_NOTICE = "{name} has finished; there is nothing to {action}."
+# How a finished agent's briefing names its end, by its status; every failure status is a failure.
+AGENT_OUTCOMES = {COMPLETED: AGENT_FINISHED, INTERRUPTED: AGENT_INTERRUPTED, ENDED: AGENT_CANCELLED}
 # An agent steer that settled after its session was left, as the main steer's notices say it, naming the agent and
 # the session it was for.
 AGENT_STEER_LEFT_NOTICE = (
@@ -158,8 +166,6 @@ class AgentViewMixin:
         """
         self.listed = ()
         self.tree_state = None
-        if not self._busy():
-            self.tree_hold = 0  # whatever the view draws between turns, the next turn's tree starts from its own rows
         payload = self.hud.payload if self.hud is not None else None
         valid = isinstance(payload, Mapping) and not payload.get("error")  # else the slot says the reader failed
         frame, now = self._spinner_frame(), self.clock()
@@ -173,7 +179,6 @@ class AgentViewMixin:
                 return []
             cap = self._view_cap(rows, cols, min(TREE_ROWS, rows // 3), room)
             lines = self._tree_view(payload, cols, cap)
-            lines += [()] * self._tree_held_rows(len(lines), cap, rows)
             if self.list_selected is None:
                 return lines
             listed, self.listed = self.roster.list_lines(cols, self.theme, self.list_selected, frame, len(lines), now)
@@ -190,27 +195,12 @@ class AgentViewMixin:
             return []
         return self._hud_view(payload, cols, self._view_cap(rows, cols, agent_view_keep(payload, cols), room))
 
-    def _tree_held_rows(self, drawn: int, cap: int, rows: int) -> int:
-        """Blank rows under a tree that shrank while the turn runs on the screen's bottom rows: the tree keeps the
-        most rows it took this turn (in `cap`), so a layer that shuts mid-run leaves its rows under the tree, not as
-        a blank band between the transcript and the working row (rows the content gives up stay, `layout`). The
-        hold ends with the turn (`_agent_view`, whatever the view then draws), at the next prompt and on a session
-        change (`_clear_roster`), and above the bottom rows, where the composer follows the content; it never passes
-        `cap`, which a taller composer or a slot can lower mid-turn."""
-        if not self._busy() or self.region.last_row(rows) != rows - 1:
-            self.tree_hold = 0
-            return 0
-        self.tree_hold = max(self.tree_hold, drawn)
-        return max(min(self.tree_hold, cap) - drawn, 0)
-
     def _run_gone(self, graph: Mapping[str, Any]) -> bool:
         """Whether the view no longer draws `graph`'s dag run (the owner, 2026-10-26: a finished run stayed under the
         composer until the next prompt). It is over (`panels.dag_run_summary`) and no turn runs, or it was retired
         (`_retire_finished_run`) and has not moved since: a payload older than the end print that retired it still
         shows a lane running, and a later turn reads the same run over. A run whose every lane settled mid-turn
-        keeps its tree (each layer shut) until the turn ends: on the screen's bottom rows a view that shrank there
-        left its rows blank between the transcript and the working row, as rows the content gives up stay
-        (`layout`), and at the turn's end the run's end print and the turn's summary line fill them. A run an
+        keeps its tree (each layer shut) until the turn ends, and its end print with it. A run an
         extend or a repair moved on after its end (a newer `changed_at`, still open) is drawn again."""
         if not self._busy() and dag_run_summary(graph):
             return True
@@ -223,11 +213,8 @@ class AgentViewMixin:
         """Stop drawing `graph`'s dag run, which is over: as the turn ends with it over (`_agent_view`), or as its
         end print reads it over afresh (`App._dag_ends_due`) while the panel's payload may be older. Its children
         leave the roster with it, so the roster's rows do not take its place once its graph lingers out of the HUD.
-        The rows its tree took in the last frame are noted in `tree_freed` (`App._render` keeps them, blank, under the
-        info line until output fills them)."""
+        The rows its tree took go with it: on the bottom rows the region's top moves down by them (`App._render`)."""
         key, changed = run_key(graph), _changed_at(graph)
-        if self.retired_run is None or self.retired_run[0] != key or changed > self.retired_run[1]:
-            self.tree_freed = self.frame_budget.agents if self.frame_budget is not None else 0
         self.retired_run = (key, changed)
         self._forget_agents(self.roster.drop_runs(frozenset(key.split())))
 
@@ -754,11 +741,10 @@ class AgentViewMixin:
 
     def _clear_roster(self) -> None:
         """Drop the agents and every piece of tail bookkeeping and pending action that names them, and the view's
-        holds (`_held_view_rows`, `_tree_held_rows`). The open dag run's lanes stay (`_open_dag_nodes`): their children outlive the turn
+        hold (`_held_view_rows`). The open dag run's lanes stay (`_open_dag_nodes`): their children outlive the turn
         that sent them, and the tree's rows under each node read them."""
         self.roster.clear(self._open_dag_nodes())
         self.view_hold = None
-        self.tree_hold = 0
         self._drop_agent_actions()
 
     def _prune_kept_lanes(self) -> None:
@@ -777,6 +763,26 @@ class AgentViewMixin:
         # By run, not by node: a kept lane whose node left the drawing (a superseded repair) belongs to the run too.
         runs = frozenset(node_id.rpartition(":")[0] for node_id in ids if node_id.startswith("d:"))
         self._forget_agents(self.roster.drop_kept(runs))
+
+    def _brief_finished(self, agent: Agent) -> None:
+        """Brief an agent its `subagent.complete` just finished in the transcript (`transcript.AgentDoneBlock`), with
+        its time, its output tokens and what it said. A dag node's child is named by the node's id, as Claude Code
+        names a teammate by its handle, with the node's label on a row of its own under it (none when the label is
+        empty or the id itself); any other agent by its short title, as the list names it, with no such row. Held
+        under what is live and written at the next block boundary (`Transcript.add_aside`), so it never splits a
+        streaming reply or cuts off a running call."""
+        payload = self.hud.payload if self.hud is not None else None
+        handle = title = ""
+        if isinstance(payload, Mapping) and not payload.get("error") and graph_is_dag(payload):
+            handle, title = bound_node(payload["delegation_graph"], self.roster, agent)
+        if title.casefold() == handle.casefold():
+            title = ""
+        tokens = f"{TOKENS_MARK}{compact_count(agent.output_tokens)}" if agent.output_tokens else ""
+        elapsed = agent.elapsed(self.clock())
+        facts = tuple(fact for fact in (elapsed_text(elapsed) if elapsed >= 1 else "", tokens) if fact)  # no `0s`
+        outcome = AGENT_OUTCOMES.get(agent.status, AGENT_FAILED)
+        self.transcript.add_aside(AgentDoneBlock(handle or short_title(agent.goal) or agent.name, outcome, facts,
+                                                 agent.reply, title=title))
 
     def _forget_agents(self, dropped: frozenset[str]) -> None:
         """Forget a pending `x`, a picked steer and the tail misses of the agents the roster just `dropped`."""

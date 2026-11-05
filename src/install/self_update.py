@@ -15,6 +15,7 @@ from typing import Any, Literal, NotRequired, Protocol, TypedDict
 
 try:
     from ..core.errors import OmhError
+    from ..maintenance.build_identity import read_archive_commit
     from ..maintenance.hermes_gateway import recorded_gateway_starts, refresh_skill_dir_caches
     from ..system.local_store import FileLockTimeout, file_lock
     from ..system.paths import managed_command_venv_dir, resolve_paths
@@ -23,6 +24,7 @@ try:
     from .self_update_state_validation import require_generation_path, same_existing_path
 except ImportError:  # pragma: no cover - direct-source installer smoke.
     from core.errors import OmhError
+    from maintenance.build_identity import read_archive_commit
     from maintenance.hermes_gateway import recorded_gateway_starts, refresh_skill_dir_caches
     from system.local_store import FileLockTimeout, file_lock
     from system.paths import managed_command_venv_dir, resolve_paths
@@ -31,7 +33,15 @@ except ImportError:  # pragma: no cover - direct-source installer smoke.
     from install.self_update_state_validation import require_generation_path, same_existing_path
 
 RESULT_SCHEMA_VERSION = "command_package_self_update/v1"
+IDENTITY_CHANGE_SCHEMA_VERSION = "update_identity_change/v1"
 REENTRY_TIMEOUT_SECONDS = 600.0
+# `omh update` exits with this when its own home refreshed and only a bot
+# profile failed. The activated generation runs; rolling it back cannot repair
+# a profile (the previous generation fails on the same profile), so a staged
+# update keeps the generation and reports the profiles instead. On 2026-11-04
+# four bench profiles whose `plugins/omh` links pointed at deleted worktrees
+# rolled an update back, and the restore failed the same way on every later run.
+PROFILE_REPAIR_EXIT_CODE = 3
 class Runner(Protocol):
     """The complete subprocess contract used by a staged self-update."""
 
@@ -57,6 +67,7 @@ class PhaseResult(PhaseStatus, total=False):
     reason: str
     pointer: str
     launcher: str
+    profiles_need_repair: bool
 
 
 class RollbackFields(TypedDict, total=False):
@@ -90,6 +101,21 @@ class SelfUpdateResult(TypedDict):
     recovery: RecoveryResult
     cleanup: CleanupResult
     hermes_skill_refresh: NotRequired[list[dict[str, str]]]
+    identity_change: NotRequired["IdentityChange"]
+
+
+class GenerationIdentity(TypedDict):
+    version: str
+    ref: str
+    commit_sha: str
+
+
+class IdentityChange(TypedDict):
+    schema_version: str
+    status: str
+    previous: GenerationIdentity
+    current: GenerationIdentity
+    version_changed: bool
 
 
 def _result(candidate: Path) -> SelfUpdateResult:
@@ -167,11 +193,62 @@ def _smoke(candidate: Path, expected_version: str, *, runner: Runner, platform: 
 
 
 def _reentry_argv() -> list[str]:
-    argv = [item for item in sys.argv[1:] if item != "--recover-known-good"]
+    argv: list[str] = []
+    for item in sys.argv[1:]:
+        if item == "--recover-known-good":
+            continue
+        # `--channel main` is an alias a restored, older generation may not know.
+        if item == "--channel=main" or (item == "main" and argv[-1:] == ["--channel"]):
+            item = "--channel=preview" if item.startswith("--") else "preview"
+        argv.append(item)
     return argv if "--command-package-updated" in argv else [*argv, "--command-package-updated"]
 
 
-def _reenter(root: Path, generation: Path, args: Any, runner: Runner, platform: SelfUpdatePlatform, *, restoring: bool = False) -> tuple[bool, str]:
+def generation_identity(generation: Path) -> GenerationIdentity:
+    """The omh version, archive ref and archive commit a generation holds.
+
+    Read from files, not by running the generation: the dist-info directory
+    names the version, and the archive commit file plus pip's PEP 610 record
+    name the commit and ref (`maintenance.build_identity.read_archive_commit`).
+    Empty strings where a generation does not record one, such as a package
+    built from a checkout or the pre-generation legacy venv.
+    """
+    venv = generation / "venv"
+    for site in (*sorted(venv.glob("lib/python*/site-packages")), venv / "Lib" / "site-packages"):
+        package = site / "omh"
+        if not package.is_dir():
+            continue
+        dist_info = sorted(site.glob("oh_my_hermes-*.dist-info"))
+        version = dist_info[-1].name.removeprefix("oh_my_hermes-").removesuffix(".dist-info") if dist_info else ""
+        archive = read_archive_commit(package, version=version)
+        return {"version": version, "ref": archive["ref"] or "", "commit_sha": archive["commit_sha"] or ""}
+    return {"version": "", "ref": "", "commit_sha": ""}
+
+
+def identity_change(previous: GenerationIdentity, current: GenerationIdentity) -> IdentityChange:
+    """Classify what an activated update moved between.
+
+    `changed` / `unchanged` need both commits. `previous_unrecorded` is the
+    first update onto a generation that records its commit. Without a current
+    commit only the version can be compared: `version_changed` or `unrecorded`.
+    """
+    if current["commit_sha"] and previous["commit_sha"]:
+        status = "unchanged" if current["commit_sha"] == previous["commit_sha"] else "changed"
+    elif current["commit_sha"]:
+        status = "previous_unrecorded"
+    else:
+        status = "version_changed" if current["version"] != previous["version"] else "unrecorded"
+    return {
+        "schema_version": IDENTITY_CHANGE_SCHEMA_VERSION,
+        "status": status,
+        "previous": previous,
+        "current": current,
+        "version_changed": current["version"] != previous["version"],
+    }
+
+
+def _reenter(root: Path, generation: Path, args: Any, runner: Runner, platform: SelfUpdatePlatform, *, restoring: bool = False) -> tuple[bool, str, bool]:
+    """Run the update through the pointer: (passed, reason, bot profiles need repair)."""
     trusted = require_generation_path(root, generation, None, "re-entry generation")
     pointed = pointer_target(root, platform=platform)
     if pointed is None:
@@ -193,11 +270,16 @@ def _reenter(root: Path, generation: Path, args: Any, runner: Runner, platform: 
     try:
         checked = runner(command, text=True, stdout=None, stderr=subprocess.PIPE, env=env, timeout=REENTRY_TIMEOUT_SECONDS)
     except (OSError, subprocess.TimeoutExpired):
-        return False, "post-activation re-entry timed out"
+        return False, "post-activation re-entry timed out", False
     if checked.stderr:
         sys.stderr.write(str(checked.stderr))
         sys.stderr.flush()
-    return (checked.returncode == 0, _detail(checked, "post-activation re-entry failed"))
+    if checked.returncode == PROFILE_REPAIR_EXIT_CODE:
+        return True, "bot profiles were not refreshed; see the warnings above", True
+    # The re-entry's stdout went to the terminal, so an exit without stderr
+    # still has to say which run failed and where its reasons are.
+    fallback = f"the re-entered `omh update` exited {checked.returncode}; its warnings are printed above"
+    return checked.returncode == 0, _detail(checked, fallback), False
 
 
 def _running_generation(root: Path) -> Path | None:
@@ -258,7 +340,13 @@ def run_installer_self_update(args: Any, plan: Mapping[str, object], *, runner: 
             if had_marker and interrupted is None:
                 result["recovery"] = {"status": "ok", "action": "discarded_unswitched_candidate"}
             if interrupted is not None:
-                return _recover_interrupted(root, state, interrupted, args, runner, selected, result, hermes_home=paths.hermes_home)
+                recovered = _recover_interrupted(root, state, interrupted, args, runner, selected, result, hermes_home=paths.hermes_home)
+                if recovered["recovery"].get("action") != "completed_pending_restore" or not package_url:
+                    return recovered
+                # The restore an earlier run left pending is done, so this run
+                # goes on to the update it was asked for instead of stopping.
+                result = _result(candidate)
+                result["recovery"] = recovered["recovery"]
             if bool(getattr(args, "recover_known_good", False)):
                 return _recover_known_good(root, state, args, runner, selected, result, hermes_home=paths.hermes_home)
             if not package_url:
@@ -298,12 +386,17 @@ def _activate(root: Path, state: dict[str, Any], candidate: Path, args: Any, run
     save_state(root, state)
     launcher = "present" if state["migration"].get("launcher_on_pointer") else "absent_manual_instruction"
     result["activation"] = {"status": "ok", "pointer": str(root / "current"), "launcher": launcher}
-    passed, reason = _reenter(root, candidate, args, runner, platform)
-    result.update(phase="post_activation", post_activation={"status": "ok" if passed else "failed", "reason": reason})
+    passed, reason, profiles = _reenter(root, candidate, args, runner, platform)
+    post_activation: PhaseResult = {"status": "ok" if passed else "failed", "reason": reason}
+    if profiles:
+        post_activation["profiles_need_repair"] = True
+    result.update(phase="post_activation", post_activation=post_activation)
     if not passed:
         _rollback_activation(root, state, candidate, previous, args, runner, platform, result, hermes_home=hermes_home)
         return result
     commit_activation(root, state, candidate)
+    # Read before garbage collection, which may delete the previous generation.
+    result["identity_change"] = identity_change(generation_identity(previous), generation_identity(candidate))
     collect_garbage(root, state, result, running_generation=_running_generation(root), gateway_starts=recorded_gateway_starts(hermes_home) if hermes_home is not None else ())
     save_state(root, state)
     result.update(ok=True, phase="cleanup")
@@ -320,7 +413,7 @@ def _rollback_activation(root: Path, state: dict[str, Any], candidate: Path, pre
     except OmhError as exc:
         restored, reason = False, str(exc)
     else:
-        restored, reason = _reenter(root, previous, args, runner, platform, restoring=True)
+        restored, reason, _profiles = _reenter(root, previous, args, runner, platform, restoring=True)
         # The candidate's re-entry may have refreshed Hermes onto the candidate,
         # which is about to be deleted; the restored generation may predate the refresh.
         _refresh_hermes_skills(root, hermes_home, result)
@@ -338,14 +431,18 @@ def _rollback_activation(root: Path, state: dict[str, Any], candidate: Path, pre
 def _recover_interrupted(root: Path, state: dict[str, Any], interrupted: tuple[Path, Path], args: Any, runner: Runner, platform: SelfUpdatePlatform, result: SelfUpdateResult, *, hermes_home: Path | None = None) -> SelfUpdateResult:
     candidate, previous = interrupted
     restoring = state["activation_in_progress"].get("restore_required") is True
-    passed, _reason = (False, "restore pending") if restoring else _reenter(root, candidate, args, runner, platform)
+    passed, reason, profiles = (False, "restore pending", False) if restoring else _reenter(root, candidate, args, runner, platform)
     if passed:
         commit_activation(root, state, candidate)
         save_state(root, state)
         result.update(ok=True, phase="recovery", recovery={"status": "ok", "action": "completed_interrupted_activation"})
+        if profiles:
+            result["post_activation"] = {"status": "ok", "reason": reason, "profiles_need_repair": True}
         return result
     result.update(phase="recovery", recovery={"status": "failed", "action": "rolled_back_interrupted_activation"})
     _rollback_activation(root, state, candidate, previous, args, runner, platform, result, hermes_home=hermes_home)
+    if restoring and result["rollback"].get("restored"):
+        result["recovery"] = {"status": "ok", "action": "completed_pending_restore", "selected": previous.name}
     return result
 
 
@@ -355,7 +452,7 @@ def _recover_known_good(root: Path, state: dict[str, Any], args: Any, runner: Ru
     mark_activation(state, target, previous)
     save_state(root, state)
     _switch(root, target, platform)
-    passed, reason = _reenter(root, target, args, runner, platform)
+    passed, reason, _profiles = _reenter(root, target, args, runner, platform)
     if not passed:
         _switch(root, previous, platform)
         _refresh_hermes_skills(root, hermes_home, result)
