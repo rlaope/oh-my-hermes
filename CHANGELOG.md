@@ -4,6 +4,26 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI waits out a Hermes gateway restart run elsewhere instead of
+  exiting.** `hermes gateway restart` from another terminal, `omh update`,
+  launchd or another screen's `/gateway restart` closed this screen's
+  connection, and the crash respawn then spent its three tries within a
+  second: a draining gateway answers "not ready" (the attach child's exit
+  69) until its running work is done, so the TUI exited with a resume
+  hint. Now a drop where the gateway's record (`gateway_state.json`) says
+  it drains, was asked to restart or is starting, or where the attach
+  child exits 69, keeps the screen open with one status row (`Hermes'
+  gateway is restarting… 0:42 · ctrl+c leaves`) and reattaches the same
+  session, keeping the draft and holding prompts as before. While the
+  record says the old process drains, nothing is spawned and the wait
+  lasts as long as the drain; otherwise tries pause 1, 2, 4, then 5 s for
+  up to 150 s. Once back it says `Hermes' gateway is back` and, when the
+  restart loaded a newer OMH, which version runs now. A try that fails
+  any other way still spends one of the crash respawn's three, so a
+  refused attach ends fast; a gateway that never comes back ends after
+  the budget with the same resume hint. `/gateway restart`'s own reattach
+  shares the pauses, the drain wait and the status row.
+
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
   choice sent the question at once: with nothing ticked it answered with
