@@ -9,13 +9,16 @@ All notable changes will be documented here.
   own, made from the parent's last commit, so a dependent node and the verify
   node started without the earlier nodes' edits, and verify could pass a tree
   without the work. `omh_dag action=define` is now refused as
-  `worktree_isolation_on` with a line the model relays: turn the setting off
-  for this profile, or do the work without dag-ulw. A run defined before the
-  setting was turned on still settles its nodes but hands out no
-  `delegate_task` call while it is on. OMH only reads the profile's
-  `config.yaml` and never writes it; a config it cannot read counts as off,
-  as before. The check does not tell apart a session where Hermes skips
-  isolation anyway (outside git, a terminal that is not local).
+  `worktree_isolation_on` with a line the model relays, naming
+  `hermes config set delegation.worktree_isolation false`, or do the work
+  without dag-ulw. A run defined before the setting was turned on still
+  settles its nodes but hands out no `delegate_task` call while it is on, and
+  `status` says why. OMH asks Hermes' own getters first, so its managed
+  config and environment count; outside Hermes it reads the profile's
+  `config.yaml` the way Hermes reads the key (a quoted `'false'` is on). It
+  never writes the setting. On a Docker or SSH terminal, where Hermes skips
+  isolation, nothing changes; a config that cannot be read counts as off, as
+  before.
 
 ## 4.0.6 - 2026-11-04
 
