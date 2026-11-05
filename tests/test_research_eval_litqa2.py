@@ -172,11 +172,18 @@ class PrepareTests(_Workspace):
             ('{"id": "x", "ideal": "a", "distractors": ["b"]}', "row 1: missing question"),
             ('{"id": "x", "question": "q?", "distractors": ["b"]}', "row 1: missing ideal"),
             ('[1, 2]', "row 1: not a JSON object"),
+            # literal_eval raises TypeError (unhashable key) here, not ValueError.
+            ('{"id": "x", "question": "q?", "ideal": "a", "distractors": "{[1]: 2}"}', "row 1: distractors"),
         )
         for text, message in cases:
             with self.subTest(message=message), self.assertRaises(LitQA2InputError) as caught:
                 parse_rows(text)
             self.assertIn(message, str(caught.exception))
+
+    def test_a_line_separator_inside_a_string_stays_one_row(self) -> None:
+        # str.splitlines() would break this valid row at U+2028 and refuse both halves.
+        line = json.dumps({"id": "x", "question": "q\u2028?", "ideal": "a", "distractors": ["b"]}, ensure_ascii=False)
+        self.assertEqual([row["question"] for row in parse_rows(line + "\n")], ["q\u2028?"])
 
 
 class ExtractionTests(unittest.TestCase):
@@ -194,6 +201,8 @@ class ExtractionTests(unittest.TestCase):
             ("**ANSWER:** (b).", 4, "B"),
             ("**ANSWER:** (e).", 4, None),
             ("  answer : d", 4, "D"),
+            ("ANSWER: \u0131", 9, None),  # dotless i upper-cases to I
+            ("ANSWER: \u017f", 26, None),  # long s upper-cases to S
             ("ANSWER: E", 5, "E"),
             ("ANSWER: E", 4, None),
         )
@@ -393,6 +402,26 @@ class CliTests(_Workspace):
         big = answers / "baseline" / "q01.md"
         big.write_bytes(b"x" * (64 * 1024 + 1))
         self.assertEqual(run_cli(grade)[0], 2)
+
+    def test_k_malformed_key_letters_exit_2(self) -> None:
+        # A substring test admitted "" and "AB" and raised TypeError on null; each must be a refused key.
+        out = self.root / "out"
+        self.assertEqual(run_cli(self.prepare_argv(out))[0], 0)
+        answers = self.root / "answers"
+        for task in self.key_of(out)["tasks"]:
+            for arm in ("baseline", "research"):
+                self.answer(answers, arm, task["task_id"], "ANSWER: A\n")
+        for field in ("correct", "unsure"):
+            for bad in (None, "", "AB", "a", 1):
+                with self.subTest(field=field, bad=bad):
+                    key = self.key_of(out)
+                    key["tasks"][0][field] = bad
+                    path = self.root / "bad_key.json"
+                    path.write_text(json.dumps(key), encoding="utf-8")
+                    argv = ["research", "eval", "litqa2", "grade", "--key", str(path), "--answers", str(answers)]
+                    status, _stdout, stderr = run_cli(argv)
+                    self.assertEqual(status, 2, stderr)
+                    self.assertTrue(stderr.startswith("omh: "), stderr)
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest entry point

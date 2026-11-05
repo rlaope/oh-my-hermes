@@ -52,7 +52,9 @@ UNSURE_OPTION: Final = "Insufficient information to answer this question"
 ANSWER_INSTRUCTION: Final = "Finish with one final line exactly of the form `ANSWER: <letter>`."
 CLAIM_BOUNDARY: Final = (
     "Scores one biology literature-QA benchmark (LitQA2). Both arms are Hermes subagents in one profile, "
-    "told apart only by their instruction; these are not paired-run signed receipts."
+    "told apart only by their instruction; these are not paired-run signed receipts. Options are shown as the "
+    "dataset gives them, so a row whose distractors repeat a sentence shows that sentence twice; only the ideal "
+    "answer's letter scores as correct."
 )
 
 OUTCOME_CORRECT: Final = "correct"
@@ -119,7 +121,7 @@ def _parse_distractors(value: object, line_number: int) -> list[str]:
     if isinstance(value, str):
         try:
             value = ast.literal_eval(value)
-        except (ValueError, SyntaxError, MemoryError, RecursionError) as exc:
+        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError) as exc:
             raise LitQA2InputError(f"row {line_number}: distractors is not a list literal") from exc
     if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
         raise LitQA2InputError(f"row {line_number}: distractors must be a list of non-empty strings")
@@ -130,7 +132,8 @@ def parse_rows(text: str) -> list[dict[str, Any]]:
     """``{id, question, ideal, distractors}`` per JSONL row; ``row N`` in an error is the 1-based line."""
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for line_number, line in enumerate(text.splitlines(), start=1):
+    # Split on LF only: str.splitlines() also breaks on U+2028 and friends, which JSON strings may hold.
+    for line_number, line in enumerate(text.split("\n"), start=1):
         if not line.strip():
             continue
         try:
@@ -256,7 +259,8 @@ def extract_answer(text: str, option_count: int) -> str | None:
     if value is None:
         return None
     value = value.strip(_ANSWER_STRIP)
-    if len(value) != 1 or value.upper() not in LETTERS:
+    # ASCII only: 'ı'.upper() is 'I' and 'ſ'.upper() is 'S', which would read a non-letter as an option.
+    if len(value) != 1 or not value.isascii() or value.upper() not in LETTERS:
         return None
     letter = value.upper()
     return letter if LETTERS.index(letter) < option_count else None
@@ -270,6 +274,11 @@ def outcome_for(letter: str | None, task: Mapping[str, Any]) -> str:
     if letter == task["unsure"]:
         return OUTCOME_UNSURE
     return OUTCOME_INCORRECT
+
+
+def _is_option_letter(value: object, option_count: int) -> bool:
+    """One letter among the first ``option_count``; a substring test would admit ``""`` and ``"AB"``."""
+    return isinstance(value, str) and value in set(LETTERS[:option_count])
 
 
 def read_key(path: Path) -> dict[str, Any]:
@@ -289,7 +298,8 @@ def read_key(path: Path) -> dict[str, Any]:
             and isinstance(task.get("task_id"), str) and _TASK_ID_RE.match(task["task_id"])
             and task["task_id"] not in seen
             and isinstance(count, int) and not isinstance(count, bool) and 2 <= count <= len(LETTERS)
-            and task.get("correct") in LETTERS[:count] and task.get("unsure") in LETTERS[:count]
+            and _is_option_letter(task.get("correct"), count)
+            and _is_option_letter(task.get("unsure"), count)
             and task.get("correct") != task.get("unsure")
         )
         if not valid:
