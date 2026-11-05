@@ -618,6 +618,55 @@ class RoleTests(unittest.TestCase):
         self.assertEqual(role_span.style, DEFAULT_THEME.muted, "an interrupted node's role is muted, as its word")
 
 
+class RunHueTests(unittest.TestCase):
+    """Within one dag run a handle's hue is its node's place in the run's definition order (`node_index`), so two
+    nodes of a run share a hue only once all seven are used, and neighbours never do."""
+
+    NAMES = ("auth", "billing", "search", "upload", "export", "notify", "audit", "admin")
+
+    def run_app(self, run: str = "r1"):
+        app, _client = make_app(busy=False, cols=150, clock=lambda: 0.0)
+        lanes = [lane(f"d:{run}:{name}", f"Port {name}", "quick", "glm-5.3", "low", "running", order=index + 1)
+                 for index, name in enumerate(self.NAMES)]
+        for index, item in enumerate(lanes):
+            item.update(role="build", node_index=index)
+        edges = [("root", item["id"], "dispatch") for item in lanes] + [(f"d:{run}:auth", f"d:{run}:billing",
+                                                                          "depends_on")]
+        with_hud(app, graph([root(), *lanes], edges), received_at=0.0)
+        for name in self.NAMES:
+            goal = f"Port {name} [dag:{run}/{name}]"
+            agent_event(app, "start", f"sa-{name}", goal=goal)
+            agent_event(app, "complete", f"sa-{name}", goal=goal, status="completed", summary="Ported.")
+        return app
+
+    def handle_styles(self, app) -> list:
+        return [block_rows(block, 150, DEFAULT_THEME)[0][2].style for block in blocks_of(app, AgentDoneBlock)]
+
+    def test_the_first_seven_nodes_of_a_run_differ_and_neighbours_always_do(self) -> None:
+        app = self.run_app()
+        self.assertEqual([block.hue for block in blocks_of(app, AgentDoneBlock)], list(range(8)))
+        styles = self.handle_styles(app)
+        self.assertEqual(len({style.fg for style in styles[:7]}), 7, "auth and admin may share; nothing earlier does")
+        self.assertEqual(styles[7], styles[0], "the eighth starts the hues again")
+        self.assertTrue(all(first != second for first, second in zip(styles, styles[1:])))
+
+    def test_the_hue_holds_across_renders_history_and_a_reload_of_the_run(self) -> None:
+        app = self.run_app()
+        first = self.handle_styles(app)
+        self.assertEqual(self.handle_styles(app), first)
+        history = [row for row in app.transcript.history_lines(150, DEFAULT_THEME)
+                   if line_text(row).startswith("● build @")]
+        self.assertEqual([row[2].style for row in history], first)
+        self.assertEqual(self.handle_styles(self.run_app()), first, "the same run read again keeps every hue")
+        self.assertEqual(self.handle_styles(self.run_app("r2")), first, "another run may reuse the hues")
+
+    def test_without_a_place_the_handle_falls_back_to_its_hash(self) -> None:
+        _app, block = dag_app("build")  # the shared fixture's graph records no node_index
+        self.assertIsNone(block.hue)
+        head = block_rows(block, 120, DEFAULT_THEME)[0]
+        self.assertEqual(head[2].style, agent_style("button", DEFAULT_THEME))
+
+
 class ShortScreenHeldTests(unittest.TestCase):
     """#2586 review: on a screen whose tail cannot hold the call, a spacer and the fold row, the call still wins."""
 

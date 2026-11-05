@@ -200,12 +200,13 @@ def _bound(by_id: Mapping[str, Mapping[str, Any]], roster: Roster) -> dict[str, 
     return bound
 
 
-def bound_node(graph: Mapping[str, Any], roster: Roster, agent: Agent) -> tuple[str, str, str]:
+def bound_node(graph: Mapping[str, Any], roster: Roster, agent: Agent) -> tuple[str, str, str, int | None]:
     """The node `agent` is the child of, as the tree binds them (`_bound`), else the node of `graph` its goal's marker
     names (`Agent.dag_node`): its id within its run (the last part of the graph's `d:<run>:<node>`,
     `delegation_graph.dag_node_id`), its label on one line, and its role as the graph records it (`build`,
-    `baseline`, `verify` or `review`; "" for a graph that records none). ("", "", "") when no node of `graph` is
-    its."""
+    `baseline`, `verify` or `review`; "" for a graph that records none), and its place in its run's definition order
+    (`node_index`, which picks its handle's hue; None for a graph that records none). ("", "", "", None) when no node
+    of `graph` is its."""
     from ..plugin_bundle.omh.dag_run import ROLES
     from ..plugin_bundle.omh.delegation_view import _tree_structure
 
@@ -214,11 +215,11 @@ def bound_node(graph: Mapping[str, Any], roster: Roster, agent: Agent) -> tuple[
     if node_id is None and agent.dag_node in by_id:
         node_id = agent.dag_node
     if node_id is None:
-        return "", "", ""
+        return "", "", "", None
     node = by_id[node_id]
-    role = node.get("role")
+    role, index = node.get("role"), node.get("node_index")
     return (node_id.rpartition(":")[2], " ".join(clean_text(str(node.get("title") or "")).split()),
-            role if role in ROLES else "")
+            role if role in ROLES else "", index if isinstance(index, int) and not isinstance(index, bool) else None)
 
 
 def _others(by_id: Mapping[str, Mapping[str, Any]], roster: Roster, bound: set[str]) -> list[Agent]:

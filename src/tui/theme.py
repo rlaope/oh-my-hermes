@@ -156,11 +156,12 @@ KIND_HUES = {
     "web": ("#C5DE70", "#687C00"), "dag": ("#F778BA", "#BF4588"),
 }
 # A subagent's handle (`@<node id>`) in its briefing (`transcript.AgentDoneBlock`), after Claude Code's coloured
-# `@teammate`: one of these hues (on a dark background, on a light one), picked by a stable hash of the handle
-# (`agent_style`), so an agent keeps its colour on every row, every redraw and in `/history`. At OKLCH 60, 95, 175,
-# 210, 285, 315 and 345 degrees, each keeps 23 degrees or more from every skin's state hues (failed red 11 to 25,
-# done green 128 to 147, running blue 253) and 30 or more from the next; built at one lightness and chroma per side,
-# so none stands out, and lifted to 4.5:1 as the kinds are.
+# `@teammate`: one of these hues (on a dark background, on a light one), picked by the node's place in its run's
+# definition order (`agent_style`), so the first seven nodes of a run differ and an agent keeps its colour on every
+# row, every redraw, in `/history` and after a resume; a handle with no such place by a stable hash. At OKLCH 60,
+# 95, 175, 210, 285, 315 and 345 degrees, each keeps 23 degrees or more from every skin's state hues (failed red 11
+# to 25, done green 128 to 147, running blue 253) and 30 or more from the next; built at one lightness and chroma per
+# side, so none stands out, and lifted to 4.5:1 as the kinds are.
 AGENT_HUES = (
     ("#F6AB6B", "#9A5505"), ("#D6BD5C", "#7F6700"), ("#59D7B9", "#007E65"), ("#47D2E8", "#007A8F"),
     ("#B6B3FF", "#635DAB"), ("#DBA6F3", "#835198"), ("#F59ECF", "#984979"),
@@ -371,11 +372,15 @@ def aura_moves(theme: Theme) -> bool:
     return bool(theme.aura) and theme.aura[0].fg is not None
 
 
-def agent_style(handle: str, theme: Theme) -> Style:
-    """A subagent's handle: bold, in the hue a stable hash of `handle` picks from `Theme.agents`, the same in every
-    process and on every redraw (`hash` is salted per process); bold in the terminal's foreground with no hues."""
+def agent_style(handle: str, theme: Theme, index: int | None = None) -> Style:
+    """A subagent's handle: bold, in a hue of `Theme.agents`. A dag node's `index`, its place in its run's definition
+    order, picks it, cycling only once every hue is used, so the nodes of one run differ (and neighbours always);
+    without one, a stable hash of `handle`, the same in every process (`hash` is salted per process). Bold in the
+    terminal's foreground with no hues."""
     if not theme.agents:
         return theme.user
+    if index is not None:
+        return theme.agents[index % len(theme.agents)]
     digest = hashlib.blake2s(handle.encode("utf-8", "surrogatepass"), digest_size=8).digest()
     return theme.agents[int.from_bytes(digest, "big") % len(theme.agents)]
 

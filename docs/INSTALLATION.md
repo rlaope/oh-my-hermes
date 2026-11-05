@@ -770,7 +770,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   name, ending in `…` where it said more. A dag node's child is named by the
   node's role and its id as a handle (`● build @notify finished`, `● verify
   @check failed`), as Claude Code names a teammate, the handle bold in a hue
-  of its own that stays the same for that id on every
+  of its own, picked by the node's place in its run, so the first seven
+  nodes of a run differ, and the same on every
   row (plain bold under `NO_COLOR`), with the node's label on one dim row under
   it, cut with `…` (none when the label is the id). Until the HUD holds the
   node, the id is the one the child's `[dag:<run>/<node>]` marker names, with

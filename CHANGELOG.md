@@ -18,10 +18,11 @@ All notable changes will be documented here.
   handle.** As Claude Code writes `● Teammate @x finished`, a dag node's child
   now reads `● build @notify finished` (`verify`, `review`, `baseline`: the
   role the node was defined with, which the delegation graph now carries), the
-  handle bold in a hue of its own. The hue comes
-  from a stable hash of the node id over seven hues kept clear of the
-  running, done and failed colours, so one agent keeps its colour on every row,
-  every redraw and in `/history`. Each hue reads at 4.5:1 on every launch look
+  handle bold in a hue of its own. The hue is picked by the node's place in
+  its run's definition order, from seven hues kept clear of the running, done
+  and failed colours, so the first seven nodes of a run never share one and
+  neighbours never do; an agent keeps its colour on every row, every redraw,
+  in `/history` and when the run is read again. Each hue reads at 4.5:1 on every launch look
   and scene ground, light and dark. The `●` mark still shows the outcome, and
   under `NO_COLOR` the handle is plain bold. A child whose node the HUD has not
   bound yet takes the id its goal's `[dag:<run>/<node>]` marker names, with

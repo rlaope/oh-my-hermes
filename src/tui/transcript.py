@@ -77,8 +77,8 @@ owner's ask of 2026-11-05, after Claude Code's `● Teammate @x finished`):
 `● <name> finished  1m 35s · ↓1.8k`, the mark green only for a completed agent
 (`● … failed` in red, `▪ … interrupted` and `○ … cancelled` muted); a dag
 node's child is named by its role and its id as a handle, `● build @notify
-finished` (the role plain, `@<id>` in a hue of its own, `theme.agent_style`, the
-same for that id on every row), with the node's label on one muted row under
+finished` (the role plain, `@<id>` in a hue its node's place in its run picks,
+`theme.agent_style`, the same on every row), with the node's label on one muted row under
 it; then the first lines of its reply, or its error, in at most two
 muted rows under the name, ending in `…` where it said more. The app writes it as an aside
 (`add_aside`), so it waits under a streaming reply or a running call and is
@@ -354,6 +354,7 @@ class AgentDoneBlock:
     title: str = ""  # a dag node's label, on one dim row under a `name` that is the node's id; "" for none
     handle: bool = False  # `name` is a dag node's id, drawn `@<name>` in its own hue (`theme.agent_style`)
     role: str = ""  # a dag node's role (`build`, `verify`, …), plain, before the handle; "" for none
+    hue: int | None = None  # the node's place in its run's definition order, which picks the handle's hue
 
 
 @dataclass
@@ -1156,7 +1157,8 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
     The mark is green only for a completed agent (red for a failure, muted
     `▪` interrupted and `○` cancelled), and the word after the bold name says
     which, so colour is never the only signal. A `handle` is `@<name>` in the
-    hue its name hashes to (`agent_style`), whatever the outcome: the colour
+    hue its node's place in its run picks (`hue`; its name's hash without
+    one, `agent_style`), whatever the outcome: the colour
     names the agent, not how it ended. A `role` goes before it, plain, as
     Claude Code's `Teammate`; a row too narrow cuts the handle before the role. A row too narrow drops the
     facts from the last, then cuts the name; the word stays. What it said is
@@ -1168,7 +1170,7 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
     word_style = {AGENT_FINISHED: theme.text, AGENT_FAILED: theme.error}.get(block.outcome, theme.muted)
     plain = theme.text if block.outcome in (AGENT_FINISHED, AGENT_FAILED) else theme.muted
     if block.handle:
-        name_style = agent_style(block.name, theme)
+        name_style = agent_style(block.name, theme, block.hue)
     else:
         name_style = replace(plain, bold=True)
     shown = f"@{block.name}" if block.handle else block.name
