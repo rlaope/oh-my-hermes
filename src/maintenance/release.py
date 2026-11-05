@@ -934,7 +934,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72455
 # previous ledger" from its rerun clause (-2). No other row moved.
 # Merged with main after #2506: 533365 (main) + 136 - 2 = 533499, measured from the producer
 # on the merged tree; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533499
+# Planning skills offer dag-ulw after acceptance: the `ralplan` row's node-prompt
+# line names `dag-ulw` nodes beside `ultrawork` board rows (+12). No other row
+# moved. 533499 + 12 = 533511, measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533511
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
