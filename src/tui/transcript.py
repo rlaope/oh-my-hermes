@@ -661,7 +661,26 @@ def _args_summary(payload: dict[str, Any]) -> str:
     return _GOAL_MARKERS.sub("", summary).strip() if as_text(payload.get("name")) == "delegate_task" else summary
 
 
+def _clarify_summary(payload: dict[str, Any]) -> str:
+    """A clarify call's row: how many choices it offers (`3 choices`), or how many questions when it asks several,
+    since the picker under it shows the question itself; "" when its arguments say neither, and the row then
+    reads as any tool's (`_call_summary`)."""
+    args = payload.get("args")
+    questions = args.get("questions") if isinstance(args, dict) else None
+    if not isinstance(questions, list) or not questions or not all(isinstance(q, dict) for q in questions):
+        return ""
+    if len(questions) > 1:
+        return f"{len(questions)} questions"
+    choices = questions[0].get("choices")
+    count = sum(1 for choice in choices if isinstance(choice, str)) if isinstance(choices, list) else 0
+    return f"{count} choice{'' if count == 1 else 's'}" if count else ""
+
+
 def _call_summary(payload: dict[str, Any]) -> str:
+    if as_text(payload.get("name")) == CLARIFY_TOOL:
+        asked = _clarify_summary(payload)
+        if asked:
+            return asked
     context = _first_line(as_text(payload.get("context")))
     if context and as_text(payload.get("name")) in BRIDGE_TOOLS:
         return context.replace(LABEL_SEPARATOR, ": ", 1)  # the transcript's own field separator: `· 1 tool` is a count

@@ -1,0 +1,16 @@
+{
+  "results": [
+    {
+      "content": "BODY-SAMPLE-SENTINEL ok page.",
+      "error": null,
+      "title": "TITLE-SENTINEL ok",
+      "url": "https://example.org/ok"
+    },
+    {
+      "content": "",
+      "error": "HTTP 404",
+      "title": "",
+      "url": "https://example.org/broken"
+    }
+  ]
+}
