@@ -3359,7 +3359,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             dry_run=False,
             from_skills_dir=None,
             source=None,
-            channel="preview",
+            channel=None,  # a bare `omh update`; --channel preview is refused here
             version="",
             package_url="",
         )
@@ -3498,7 +3498,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             dry_run=False,
             from_skills_dir=None,
             source=None,
-            channel="preview",
+            channel=None,  # a bare `omh update`; --channel preview is refused here
             version="",
             package_url="",
         )
@@ -3551,7 +3551,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             dry_run=False,
             from_skills_dir=None,
             source=None,
-            channel="preview",
+            channel=None,  # a bare `omh update`; --channel preview is refused here
             version="",
             package_url="",
         )
@@ -3770,7 +3770,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             dry_run=False,
             from_skills_dir=None,
             source=None,
-            channel="preview",
+            channel=None,  # a bare `omh update`; --channel preview is refused here
             version="",
             package_url="",
         )
