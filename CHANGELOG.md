@@ -14,6 +14,30 @@ All notable changes will be documented here.
   no-break or ideographic space, or a terminal escape was missed after a
   tall table, so the next table's header went out as a body row of the one
   before.
+- **The OMH TUI waits out a Hermes gateway restart run elsewhere instead of
+  exiting.** `hermes gateway restart` from another terminal, `omh update`,
+  launchd or another screen's `/gateway restart` closed this screen's
+  connection, and the crash respawn then spent its three tries within a
+  second: a draining gateway answers "not ready" (the attach child's exit
+  69) until its running work is done, so the TUI exited with a resume
+  hint. Now a drop where the gateway's record (`gateway_state.json`) says
+  a restart was asked or a new process is starting, or where the attach
+  child exits 69, keeps the screen open with one status row (`Hermes'
+  gateway is restarting… 0:42 · ctrl+c leaves`) and reattaches the same
+  session, keeping the draft and holding prompts as before. While the old
+  process drains for the restart, a try goes every 5 s (Hermes' after-turn
+  wait lets a client answer a parked question) and the wait lasts as long
+  as the drain, at most Hermes' `restart_after_turn_timeout` plus 150 s;
+  otherwise tries pause 1, 2, 4, then 5 s for up to 150 s. Once back it
+  says `Hermes' gateway is back` and, when the restart loaded a newer OMH,
+  which version runs now. A gateway stopped elsewhere (`hermes gateway
+  stop`: no restart asked) or a new one that failed to start ends the
+  screen at once with the resume hint, so no try starts a stopped service
+  again. A try that fails any other way, or a resume the gateway refuses,
+  still spends one of the crash respawn's three; a gateway that never
+  comes back ends after the budget with the same resume hint.
+  `/gateway restart`'s own reattach shares the pauses, the drain wait and
+  the status row.
 
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
@@ -241,6 +265,10 @@ All notable changes will be documented here.
   clock. A turn's working row takes over when a turn starts, and the row
   goes when nothing is left to wait on. It is read from structure, never
   from what the model said, and the info line is unchanged.
+- **The OMH TUI's dag tree lists the nodes that run, not every finished one.**
+  A layer with work moving shows at most three of its quiet nodes as rows;
+  more fold into its `▸ N more` row from the start, however tall the
+  terminal is. Opening that row still lists them.
 - **dag-ulw refuses two nodes that write one file under different spellings.**
   `omh_dag` define, repair and extend refused a shared write scope with no
   direct edge only when both nodes wrote the same entry character for
