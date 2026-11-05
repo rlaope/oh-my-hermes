@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 import unittest
+from unittest import mock
 
 from _delegation_graphs import graph, lane, root
 from _tui_lines import badge_text
@@ -57,6 +58,14 @@ ACTIVITY = {
 SUMMARY = {"inventory": ("completed", "26 open PRs listed into inventory.json"),
            "group-3": ("failed", "blocked: rebase conflict in tools/registry.py\nsee the handoff")}
 TREE_HINT = "↑↓ select · ←/→ or space fold · ⏎ log · x interrupt · s steer · esc back"
+
+
+def setUpModule() -> None:
+    # These tests read the folds and the cut at a third of the screen, as the cap was before `TREE_ROWS`; the cap of
+    # `TREE_ROWS` rows itself is `test_tui_dag_wait_view`'s.
+    patch = mock.patch("omh.tui.agent_view.TREE_ROWS", 10**6)
+    patch.start()
+    unittest.addModuleCleanup(patch.stop)
 
 
 def node_id(key: str) -> str:
@@ -121,20 +130,27 @@ def left(row: str) -> str:
     """A row up to its right-hand figures (two spaces or more after its text starts: the figure columns start two
     cells after the title column), its indent kept; the highlighted row's pointer stands in its indent."""
     row = row.replace(CHOICE_MARK, " " * len(CHOICE_MARK), 1) if row.startswith(CHOICE_MARK) else row
+    row = undotted(row)
     body = row.lstrip(" ")
     return row[: len(row) - len(body)] + re.split(r" {2,}", body.rstrip())[0] if body else ""
 
 
 def right(row: str) -> str:
-    parts = re.split(r" {2,}", row.strip(), maxsplit=1)
+    """A row's right-hand figures, the waiting dots after them (`dag_tree.WAIT_DOTS`) left off."""
+    parts = re.split(r" {2,}", undotted(row).strip(), maxsplit=1)
     return parts[-1] if len(parts) > 1 else ""
+
+
+def undotted(row: str) -> str:
+    return re.sub(r" ·{1,3}$", "", row.rstrip())
 
 
 def accounted(shown: list[str]) -> int:
     """The nodes a drawn tree stands for: each node row, each shut layer's and `more` row's nodes, and every count."""
     headers = [row for row in shown if re.match(r"^ {4}( {4})*(▸ |▾ |  )[^\s›]", row) and " more · " not in row]
     folded = sum(int(found) for row in shown
-                 for found in re.findall(r"^  ▸ layer \d+ · (\d+) nodes?|^ +▸ (\d+) more ·|^  … (\d+) more nodes?", row)
+                 for found in re.findall(r"^  ▸ layer \d+ · (\d+) nodes?|^  ▸ ✓ [^·]+ · (\d+) done$"
+                                         r"|^ +▸ (\d+) more ·|^  \+(\d+) more", row)
                  for found in found if found)
     return len(headers) + folded
 
@@ -150,10 +166,9 @@ def down_to(app, key: str) -> None:
 
 DEFAULT = [  # the tree's rows up to their right-hand figures, at 120x72 (a cap of 24 rows: all of it fits)
     "  DAG · sweep · 7 nodes · 9 edges · 3 running · 1 failed · 2 waiting · 1 done",
-    "  ▾ layer 1 · 1 node · 1 done",
-    "    ▸ ✓ Inventory rlaope PRs",
+    "  ✓ layer 1 · Inventory rlaope PRs",  # a done one-node layer of a small run: its node on the layer's row
     "",
-    "  ▾ layer 2 · 4 nodes · 2 running · 1 failed · 1 waiting",
+    "  ▾ layer 2 · 4 nodes",  # open, every node with its row: the counts are theirs
     "    ▾ ⠋ PR group 1: #138300 #107931",
     "        › terminal(uv run pytest tests/test_chat_name.py -q)",
     "        › Adding the test the review asks for",
@@ -168,7 +183,7 @@ DEFAULT = [  # the tree's rows up to their right-hand figures, at 120x72 (a cap 
     "            › Keeping both tool entries",
     "      · PR group 4: #128680 #110669",
     "",
-    "  ▾ layer 3 · 1 node · 1 waiting",
+    "  ▾ layer 3",
     "      · Verify handoffs",
 ]
 
@@ -184,14 +199,15 @@ class DefaultFoldTests(unittest.TestCase):
         app, _client = tree_app()
         rows = {left(row): " · ".join(part.strip() for part in right(row).split("·")) for row in view_text(app)}
         self.assertEqual(rows["    ▾ ⠋ PR group 1: #138300 #107931"], "deep · gpt-6.1-sol:high · running 2m 12s · ↓1.3k")
-        self.assertEqual(rows["    ▸ ✓ Inventory rlaope PRs"], "quick · kimi-k3-ultrafast:low · accepted 48s · ↓900")
+        self.assertEqual(rows["    ▾ ✗ PR group 3: #127631 #58015"],
+                         "quick · kimi-k3-ultrafast:low · failed 1m 1s · ↓700")
         self.assertEqual(rows["      · Verify handoffs"], "deep · gpt-6.1-sol:high · waits on 4 lanes")
 
     def test_the_figures_stand_in_columns_two_cells_after_the_title_column(self) -> None:
         # The owner's GIF review (2026-10-23): figures pushed to the right edge, each row's own width, read as a
         # ragged column. They start at one column two cells after the widest title, each padded to its widest value.
         app, _client = tree_app()
-        headers = [row for row in view_text(app) if right(row)]
+        headers = [undotted(row) for row in view_text(app) if right(row)]
         separators = [[at for at, char in enumerate(row) if char == "·" and at > len(left(row))] for row in headers]
         self.assertEqual(len({row.index(right(row)) for row in headers}), 1, headers)  # one start column
         self.assertEqual(len({tuple(found[:3]) for found in separators if len(found) >= 3}), 1, headers)  # aligned
@@ -211,7 +227,7 @@ class DefaultFoldTests(unittest.TestCase):
         app, _client = make_app(busy=True, rows=72, cols=160, clock=lambda: 0.0)
         with_graph(app, built)
         shown = [left(row) for row in view_text(app)]
-        self.assertIn("      ✓ Inventory rlaope PRs · List every open PR by the…", shown)
+        self.assertIn("  ✓ layer 1 · Inventory rlaope PRs · List every open PR by the…", shown)
         self.assertIn("      ⠋ PR group 1: #138300 #107931", shown, f"{SHORT_LABEL} cells or more: the label alone")
         self.assertIn("      · Verify handoffs", shown, "a summary the label already says is not repeated")
         whole = "Inventory rlaope PRs · List every open PR by the author into inventory.json"
@@ -228,7 +244,7 @@ class DefaultFoldTests(unittest.TestCase):
         with_graph(app, {**sweep(), "hidden_nodes": 600, "hidden_by_group": {"layer 2": 600}})
         shown = [left(row) for row in view_text(app)]
         self.assertIn("  ▾ layer 2 · 4 of 604 nodes · 2 running · 1 failed · 1 waiting", shown)
-        self.assertIn("  ▾ layer 1 · 1 node · 1 done", shown)
+        self.assertIn("  ▸ ✓ layer 1 · 1 done", shown)
 
     def test_a_layer_the_cap_emptied_keeps_its_row_in_its_place(self) -> None:
         # scene_final under the 48-node cap drew 3 layers of a 4-layer run: the cut layer had no row at all.
@@ -241,8 +257,9 @@ class DefaultFoldTests(unittest.TestCase):
         app, _client = make_app(busy=True, rows=72, cols=120, clock=lambda: 0.0)
         with_graph(app, built)
         layers = [row for row in (left(row) for row in view_text(app)) if "layer" in row]
+        # Layer 3, after the live layer 2, is the one open by default: it has no node drawn to open.
         self.assertEqual([re.sub(r" · .*", "", row) for row in layers],
-                         ["  ▾ layer 1", "  ▾ layer 2", "  ▸ layer 3", "  ▾ layer 4"])
+                         ["  ▸ ✓ layer 1", "  ▾ layer 2", "  ▸ layer 3", "  ▸ layer 4"])
         self.assertIn("  ▸ layer 3 · 0 of 161 nodes", layers)
 
     def test_a_long_token_is_cut_itself_rather_than_leaving_most_of_the_title_empty(self) -> None:
@@ -339,7 +356,7 @@ class FoldKeyTests(unittest.TestCase):
         app._on_input(Key(DOWN))
         for _ in range(40):
             app._on_input(Key(UP))
-        self.assertEqual(app.tree_selected, "layer:layer 1")
+        self.assertEqual(app.tree_selected, node_id("inventory"), "the done layer's one node, on its row")
         for _ in range(40):
             app._on_input(Key(DOWN))
         self.assertEqual(app.tree_selected, node_id("verify"))
@@ -376,7 +393,7 @@ class CapTests(unittest.TestCase):
         app, _client = tree_app(rows=72, nodes=self.big())
         shown = [left(row) for row in view_text(app)]
         self.assertLessEqual(len(shown), 72 // 3)
-        self.assertIn("  ▸ layer 1 · 1 node · 1 done", shown)
+        self.assertIn("  ▸ ✓ layer 1 · 1 done", shown)
         self.assertIn("    ▸ 11 more · 9 waiting · 2 done", shown)
         self.assertIn("    ▾ ⠋ PR group 1: #138300 #107931", shown, "the running nodes stay, open")
         self.assertIn("  ▸ layer 4 · 1 node · 1 waiting", shown)
@@ -388,7 +405,7 @@ class CapTests(unittest.TestCase):
         app, _client = tree_app(rows=30, nodes=self.big())  # a cap of 10
         shown = [left(row) for row in view_text(app)]
         self.assertEqual(len(shown), 10)
-        self.assertRegex(shown[-1], r"^  … \d+ more nodes · ↓ to browse$")
+        self.assertRegex(shown[-1], r"^  \+\d+ more · /dag$")
         self.assertIn("    ▸ ⠋ PR group 1: #138300 #107931", shown, "running nodes shut before anything is cut")
         self.assertEqual(accounted(shown), len(self.big()), "every node is drawn, folded or counted")
 
@@ -396,7 +413,7 @@ class CapTests(unittest.TestCase):
         for rows in (30, 21, 12):  # caps of 10, 7 and 4
             app, _client = tree_app(rows=rows, nodes=self.big())
             shown = [left(row) for row in view_text(app)]
-            self.assertNotIn("  ▸ layer 1 · 1 node · 1 done", shown, f"a done layer holds no row at {rows} rows")
+            self.assertNotIn("  ▸ ✓ layer 1 · 1 done", shown, f"a done layer holds no row at {rows} rows")
             self.assertIn("    ▸ ⠋ PR group 1: #138300 #107931", shown, f"a running node keeps its row at {rows} rows")
             self.assertEqual(shown[1], "  ▾ layer 2 · 14 nodes · 2 running · 1 failed · 9 waiting · 2 done",
                              "no blank row under the header where the done layer was")
@@ -406,7 +423,7 @@ class CapTests(unittest.TestCase):
         for rows in range(9, 60):
             app, _client = tree_app(rows=rows, nodes=self.big())
             shown = [left(row) for row in view_text(app)]
-            if shown[-1].startswith("  … "):
+            if shown[-1].startswith("  +"):
                 self.assertNotEqual(shown[-2], "", f"a blank row over the cut at {rows} rows")
                 self.assertEqual(accounted(shown), len(self.big()), f"every node is drawn, folded or counted at {rows}")
 
@@ -419,8 +436,8 @@ class CapTests(unittest.TestCase):
             after = [left(row) for row in view_text(app)]
             self.assertEqual(app.tree_selected, node_id("group-1"))
             self.assertEqual(after[:-1], before[:-1], f"the rows moved on Down at {cols}x{rows}")
-            self.assertNotIn("  ▸ layer 1 · 1 node · 1 done", after)
-            self.assertRegex(after[-1], r"^  … \d+ more nodes · ↑↓ to browse$", "the count holds the done layer above")
+            self.assertNotIn("  ▸ ✓ layer 1 · 1 done", after)
+            self.assertRegex(after[-1], r"^  \+\d+ more · ↑↓ to browse$", "the count holds the done layer above")
 
     def test_with_the_keys_the_rows_scroll_to_the_highlight_between_counts(self) -> None:
         app, _client = tree_app(rows=30, nodes=self.big())  # a cap of 10
@@ -433,12 +450,12 @@ class CapTests(unittest.TestCase):
             self.assertIn(app.tree_selected, app.tree_state.rows, "the highlighted row is always drawn")
             self.assertEqual(accounted(shown), len(self.big()), f"every node is drawn or counted: {shown}")
             for at in (0, -1):
-                if shown[at].startswith("  … "):
+                if shown[at].startswith("  +") or shown[at].startswith("  more"):
                     # `↑↓ to browse`: the count holds a done layer that yielded its row above and rows below.
-                    self.assertRegex(shown[at], r"^  … ([1-9]\d* more nodes?|more)( above| below| · ↑↓ to browse)$",
+                    self.assertRegex(shown[at], r"^  (\+[1-9]\d* more|more)( above| below| · ↑↓ to browse)$",
                                      "no count of 0")
                     self.assertNotEqual(shown[1 if at == 0 else -2], "", "no blank row next to a count")
-            seen += shown[0].startswith("  … ") and shown[-1].startswith("  … ")
+            seen += shown[0].startswith("  +") and shown[-1].startswith("  +")
         self.assertTrue(seen, "the window was between two counts at least once")
         self.assertEqual(shown[-1], "  ▸ layer 8 · 1 node · 1 waiting", "at the end the last row is the tree's last")
         self.assertEqual(app.tree_selected, "layer:layer 8")
@@ -472,6 +489,7 @@ class TreeColourTests(unittest.TestCase):
         self.assertEqual(span("PR group 3:", "✗").style.fg, app.theme.error.fg)
         self.assertEqual(span("Inventory rlaope PRs", "✓").style.fg, app.theme.ok.fg)
         self.assertNotEqual(span("Inventory rlaope PRs", "✓").style.fg, app.theme.running.fg)
+        self.assertEqual(span("Inventory rlaope PRs", "Inventory").style.fg, app.theme.muted.fg, "a done title is quiet")
         self.assertEqual(span("terminal(uv run pytest", "terminal").style.fg, kind_style("terminal", app.theme).fg)
         self.assertEqual(span("read_file(tools/registry.py)", "read_file").style.fg,
                          kind_style("read_file", app.theme).fg)
@@ -488,10 +506,11 @@ class RepairTests(unittest.TestCase):
         self.assertNotIn("  ▾ layer 3 · 2 nodes", " ".join(shown), "the repair is not counted in the layer it sits in")
 
     def test_a_failed_node_over_a_running_repair_stays_open_when_rows_run_short(self) -> None:
-        app, _client = tree_app(rows=45)  # a cap of 15: open nodes shut from the bottom up, but not this one
+        app, _client = tree_app(rows=39)  # a cap of 13: open nodes shut from the bottom up, but not this one
         shown = [left(row) for row in view_text(app)]
-        self.assertEqual(len(shown), 15)
+        self.assertLessEqual(len(shown), 13)
         self.assertIn("    ▾ ✗ PR group 3: #127631 #58015", shown)
+        self.assertIn("  ▾ layer 3", shown, "the layer that comes next stays open; the cut counts its node")
         self.assertIn("        ▸ ⠋ ↻ repair 1 · Resolve the registry conflict", shown)
         self.assertIn("    ▸ ⠋ PR group 2: #128662 #99354", shown)
 
@@ -583,7 +602,7 @@ class TreeActionTests(unittest.TestCase):
         app, client = tree_app()
         app._on_input(Key(DOWN))
         app._on_input(Key(UP))  # layer 2's row
-        app._on_input(Key(UP))  # the inventory, accepted
+        app._on_input(Key(UP))  # the inventory, accepted, on its done layer's row
         self.assertEqual(app.tree_selected, node_id("inventory"))
         app._on_input(Key(CHAR, "x"))
         app._on_input(Key(CHAR, "x"))
@@ -593,13 +612,12 @@ class TreeActionTests(unittest.TestCase):
     def test_on_a_layer_or_a_node_no_child_ran_for_enter_x_and_s_do_nothing(self) -> None:
         app, client = tree_app()
         app._on_input(Key(DOWN))
-        for _ in range(3):  # layer 2's row, the inventory, layer 1's row
-            app._on_input(Key(UP))
-        self.assertEqual(app.tree_selected, "layer:layer 1")
+        app._on_input(Key(UP))  # layer 2's row
+        self.assertEqual(app.tree_selected, "layer:layer 2")
         for key in (Key(ENTER), Key(CHAR, "x"), Key(CHAR, "s")):
             app._on_input(key)
         self.assertEqual((app.pager, client.calls, app.agent_steer, app.tree_selected),
-                         (None, [], None, "layer:layer 1"))
+                         (None, [], None, "layer:layer 2"))
         self.assertEqual([left(row) for row in view_text(app)], DEFAULT, "and fold nothing")
         down_to(app, node_id("group-4"))
         for key in (Key(ENTER), Key(CHAR, "x"), Key(CHAR, "s")):
@@ -819,7 +837,7 @@ def shut_layer_2(app) -> None:
     app._on_input(Key(ESCAPE))
 
 
-LAYER_2_OPEN = "  ▾ layer 2 · 4 nodes · 2 running · 1 failed · 1 waiting"
+LAYER_2_OPEN = "  ▾ layer 2 · 4 nodes"
 
 
 class FoldScopeTests(unittest.TestCase):
@@ -929,7 +947,7 @@ class TreeMouseTests(unittest.TestCase):
         app, _client = tree_app()
         settled(app)
         app._on_input(Key(DOWN))
-        click(app, 10, row_of(app, "layer 3 · 1 node"))
+        click(app, 10, row_of(app, "▾ layer 3"))
         self.assertEqual(app.tree_selected, "layer:layer 3")
         self.assertIsNone(app.pager)
 
@@ -1005,27 +1023,27 @@ class CountLabelTests(unittest.TestCase):
 
     def test_the_first_rows_count_what_is_below(self) -> None:
         shown = self.window(node_id("fix-0"))
-        self.assertEqual(shown[-1], "  … 13 more nodes below", "the done layer is below the rows shown")
+        self.assertEqual(shown[-1], "  +13 more below", "the done layer is below the rows shown")
 
     def test_the_middle_counts_a_done_layer_past_the_window_below(self) -> None:
-        shown = self.window(node_id("fix-9"))
-        self.assertEqual((shown[0], shown[-1]), ("  … 4 more nodes above", "  … 8 more nodes below"))
+        shown = self.window(node_id("fix-8"))
+        self.assertEqual((shown[0], shown[-1]), ("  +4 more above", "  +8 more below"))
 
     def test_the_middle_says_browse_for_a_done_layer_between_its_rows(self) -> None:
         shown = self.window("layer:layer 3")
-        self.assertEqual((shown[0], shown[-1]), ("  … 11 more nodes · ↑↓ to browse", "  … 3 more nodes below"))
+        self.assertEqual((shown[0], shown[-1]), ("  +11 more · ↑↓ to browse", "  +3 more below"))
 
     def test_the_last_rows_say_browse_for_a_done_layer_between_them(self) -> None:
         shown = self.window(node_id("ship-5"))
-        self.assertEqual(shown[0], "  … 13 more nodes · ↑↓ to browse")
+        self.assertEqual(shown[0], "  +13 more · ↑↓ to browse")
 
     def test_with_nothing_given_way_the_last_rows_count_what_is_above(self) -> None:
         shown = self.window(node_id("ship-5"), done=False)
-        self.assertEqual(shown[0], "  … 13 more nodes above")
+        self.assertEqual(shown[0], "  +13 more above")
 
     def test_a_highlighted_done_layer_keeps_its_row(self) -> None:
-        shown = self.window("layer:layer 2")
-        self.assertIn("  ▸ layer 2 · 2 nodes · 2 done", shown)
+        shown = self.window("settled:layer 2")
+        self.assertIn("  ▸ ✓ layer 2 · 2 done", shown)
 
 
 class KeptRunTests(unittest.TestCase):
@@ -1157,7 +1175,8 @@ class RunEndTests(unittest.TestCase):
         over = big_run((4, 6, 6, 4), {f"n{number}": "done" for number in range(1, 21)})
         app, _client = tree_app(rows=42, cols=150, children=False)
         pinned(app)
-        with_graph(app, over)
+        # The tree as the run ran (every lane running: open, its full height), as the panel's payload still holds it.
+        with_graph(app, big_run((4, 6, 6, 4), {f"n{number}": "running" for number in range(1, 21)}))
         app.stored_id = "stored-1"
         app.read_dag_graph = lambda _omh, _hermes, session: over
         top = box_top(drawn(app))
