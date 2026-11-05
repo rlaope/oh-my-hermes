@@ -554,6 +554,10 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
         findings.append("all_nodes_deep")
     if sum(1 for node in nodes if node["category"] == "ultrabrain") > 1:
         findings.append("ultrabrain_more_than_once")
+    # Only a declared review: a guessed one (a role-less or stored node) is not asked to move. Verify nodes are left
+    # alone: they judge the run goal, which can need a high category.
+    findings += [f"review_not_review_category:{node['id']}" for node in nodes
+                 if node.get("role") == "review" and node["category"] != "review"]
     return findings
 
 
