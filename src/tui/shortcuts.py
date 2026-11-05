@@ -65,8 +65,9 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Esc Esc", "With text, clears it and keeps it in this session's history; on an empty composer between turns, "
                 "lists your prompts to rewind to (/rewind does too)"),
     ("Esc (vim mode)", "With display.vim_mode on in Hermes' config, the composer starts in INSERT and Esc goes to "
-                       "NORMAL and does nothing else; in NORMAL, h l 0 ^ $ w b e j k gg G move, i a I A o O insert, "
-                       "x X dd D C cc S s r, d c y with a motion, p P, u and Ctrl+R edit, a count repeats, and Esc "
+                       "NORMAL and does nothing else; in NORMAL, h l 0 ^ $ w b e j k gg G move, f F t T and a character "
+                       "find on the line and ; , repeat the find, i a I A o O insert, x X dd D C cc S s r, d c y "
+                       "with a motion or iw aw, p P, u and Ctrl+R edit, a count repeats, and Esc "
                        "does what it does without vim mode, except that during a turn it takes two to interrupt. "
                        "In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the "
                        "plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps "

@@ -1335,7 +1335,7 @@ Esc closes it):
 | Ctrl+_ / Ctrl+Y | Undo or redo an edit in the composer (Ctrl+_ is what Ctrl+- and Ctrl+/ send on most terminals); a run of typed characters is one edit |
 | Esc | Closes the `/` or `@` menu; on an empty composer, interrupts a running turn (the activity row shows how long it has run, then `interrupting…`, and what you queued comes back to the composer unsent); cancels a rewind you picked; cancels an agent steer you picked and keeps what you typed; after an approval's tell row, sends nothing more and brings your draft back |
 | Esc Esc | With text, clears it and keeps it in this session's history; on an empty composer between turns, lists your prompts to rewind to (`/rewind` does too) |
-| Esc (vim mode) | With `display.vim_mode` on in Hermes' config, the composer starts in INSERT and Esc goes to NORMAL and does nothing else; in NORMAL, `h l 0 ^ $ w b e j k gg G` move, `i a I A o O` insert, `x X dd D C cc S s r`, `d c y` with a motion, `p P`, `u` and Ctrl+R edit, a count repeats, and Esc does what it does without vim mode, except that during a turn it takes two to interrupt. In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into session history. Esc or an unmapped key cancels the leader; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and do what they always do. A picker taking input also cancels pending leader and Vim commands; a session picker waiting while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or Ctrl+C takes the picker. The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed |
+| Esc (vim mode) | With `display.vim_mode` on in Hermes' config, the composer starts in INSERT and Esc goes to NORMAL and does nothing else; in NORMAL, `h l 0 ^ $ w b e j k gg G` move, `f F t T` and a character find on the line and `; ,` repeat the find, `i a I A o O` insert, `x X dd D C cc S s r`, `d c y` with a motion or `iw aw`, `p P`, `u` and Ctrl+R edit, a count repeats, and Esc does what it does without vim mode, except that during a turn it takes two to interrupt. In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into session history. Esc or an unmapped key cancels the leader; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and do what they always do. A picker taking input also cancels pending leader and Vim commands; a session picker waiting while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or Ctrl+C takes the picker. The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed |
 | Ctrl+V | Attaches the clipboard image as an `[Image #N]` token at the caret |
 | Ctrl+O | Opens the whole transcript with every detail (thinking, tool output, whole diffs) at its end, or, while Hermes asks something, the whole question (it answers nothing); q leaves it |
 | Ctrl+L | Redraws the screen |
@@ -1429,17 +1429,27 @@ rest of this page says.
     down or up, as ↓ and ↑, walking the input history at the first and the
     last row), `gg` and `G` (the first and the last line, or line N with a
     count, on its first character that is not blank);
+  - finds on the line: `f` `F` `t` `T` and a character move to its next
+    (`f`) or previous (`F`) copy on the line, or stop just before it (`t`
+    `T`); `;` repeats the last find and `,` repeats it the other way, and a
+    repeated `t` or `T` skips the copy right beside the caret. A find that
+    misses does nothing and leaves `;` as it was;
   - into INSERT: `i` `a` `I` `A` `o` `O`;
   - edits: `x` `X`, `dd`, `D`, `C`, `cc` and `S`, `s`, `r<char>`; the
     operators `d` (delete), `c` (change: delete, then INSERT) and `y` (yank)
-    with a motion `h` `l` `0` `^` `$` `w` `b` `e` (`dw`, `cw`, `d$`, `c$`,
-    `yw`, `db`, `de` and so on), and doubled for whole lines (`dd`, `cc`,
-    `yy`); `dw` and `cw` stop at the end of the line, and `cw` on a word
+    with a motion `h` `l` `0` `^` `$` `w` `b` `e` `f` `F` `t` `T` `;` `,`
+    (`dw`, `cw`, `d$`, `c$`, `yw`, `db`, `de`, `dt)`, `cf,` and so on), with
+    the text objects `iw` (the word under the caret, or the blanks) and `aw`
+    (the word and the blanks after it, or before it at the end of the line;
+    on blanks, the blanks and the word after them), on the line (`diw`,
+    `caw`, `y2aw`), and doubled for whole lines (`dd`,
+    `cc`, `yy`); a `c` whose find misses stays in NORMAL; `dw` and `cw` stop at the end of the line, and `cw` on a word
     changes up to its end, as Vim's does; `p` and `P` put what the last
     deletion, change or yank took after or before the caret (whole lines
     below or above the line); `u` undoes and Ctrl+R redoes;
   - a count before a command or a motion repeats it: `3w`, `2dd`, `d2w`,
-    `2dw`, `3x`, `2p`, `3G`; `i a I A o O` and `0 ^ $` take none.
+    `2dw`, `3x`, `2p`, `3G`, `2f,`, `d2aw`; `i a I A o O` and `0 ^ $` take
+    none.
 - Enter in NORMAL always sends the composer, as Enter does in INSERT, even
   with a `\` under or before the caret; `\` then Enter adds a line in INSERT
   only, and Alt+Enter, Shift+Enter and Ctrl+J add one in both modes.
@@ -1474,9 +1484,9 @@ rest of this page says.
   approvals, pickers, the agent list and pagers keep their own keys.
 - What differs from Hermes' Vi mode (prompt_toolkit's, in `hermes --cli`):
   there is no REPLACE mode (`R`), visual mode, named register, text object
-  (`iw`), search or find (`/`, `f`, `t`), `.` repeat, `~`, `J`, `>>` or
-  mark; `w` `b` `e` move by words between blanks (Vim's `W` `B` `E`, not
-  stopping at punctuation); `j` and `k` move a row on the screen, as ↑ and
+  but `iw` and `aw`, search (`/`), `.` repeat, `~`, `J`, `>>` or mark; `w`
+  `b` `e` move by words between blanks (Vim's `W` `B` `E`, not stopping at
+  punctuation), and `iw` `aw` take words the same way, on one line; `j` and `k` move a row on the screen, as ↑ and
   ↓ do; a count does not repeat an insert; and Hermes keeps the cursor a
   steady block in both modes, where OMH changes its shape with the mode (see
   the first item above).
