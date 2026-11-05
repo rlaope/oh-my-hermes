@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **In a console session a choice goes through Hermes' `clarify` picker, and
+  the OMH TUI draws that picker the way Claude Code draws its question
+  dialog.** On the first turn of an attended `cli`, `tui` or `desktop`
+  session, the model is asked to use `clarify` where its reply would stop for
+  the person to pick between named options or approve an action it will not
+  take without their answer, instead of listing the options in prose and
+  asking for a word back. A closing offer of optional further work stays
+  prose. After a clarify timed out, the person's next message brings the same
+  ask once more. Messaging platforms, single-query runs, kanban task
+  processes and delegated children get nothing and render the same bytes as
+  before. In the OMH TUI a question with choices now stands between two
+  rules: the context dim, the question itself bold, a `label — description`
+  choice as its label with the description under it, `Type something.` for
+  an answer of your own, and the keys on a row of their own with how long the
+  question has waited. The tool row says how many choices it offers instead
+  of repeating the question. A pick still answers with Hermes' own choice
+  string.
 - **`dag-ulw` is offered where a plan's follow-on is chosen.** On Hermes'
   own `/plan` turn, whose reply offers to carry the plan out, the model is
   asked to also name `dag-ulw` as one option when the plan's tasks form a

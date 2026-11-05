@@ -213,7 +213,7 @@ from .panels import (
 from .dag_pager import DagPager
 from .background import BackgroundProcess, askable, finished_forms, report_prompt, running_forms, tool_call
 from .clipboard import COPY_OSC52, COPY_PBCOPY, SSH_VARIABLES, copy_route, pbcopy, tmux_client_over_ssh
-from .prompts import CLOSED_CHOICES, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
+from .prompts import CLOSED_CHOICES, FRAMED_FOOTER_MIN_ROWS, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
 from .faults import FaultLog
 from .screen import (
     CARRIAGE_RETURN,
@@ -7530,8 +7530,10 @@ class App(ModesMixin, AgentViewMixin):
         steered = self.roster.agents.get(self.agent_steer or "")
         picker_keys = self._picker_keys()
         if self.slot is not None:
-            # A framed clarify question says its keys on its own row, under its bottom rule (`PromptSlot.framed`).
-            say = "" if self.slot.framed else self.slot.keys_while(self._busy())
+            # A framed clarify question says its keys on its own row, under its bottom rule (`PromptSlot.framed`),
+            # when the slot has the rows for it; on a shorter one the info line says them, as for any question.
+            framed_keys = self.slot.framed and self._slot_cap(cols, self.size[1]) >= FRAMED_FOOTER_MIN_ROWS
+            say = "" if framed_keys else self.slot.keys_while(self._busy())
         elif picker_keys:
             say = picker_keys
         elif self.list_selected is not None:
@@ -7778,13 +7780,19 @@ class App(ModesMixin, AgentViewMixin):
             (Span(OUTPUT_INDENT), Span(OUTPUT_MARK, self.theme.dim), Span(f"Tip: {tip}", self.theme.hint)), cols
         )
 
-    def _slot_lines(self, cols: int, rows: int) -> list[Line]:
-        """The slot's rows; with the composer hidden it has the composer frame's rows too (`layout.choice_cap`)."""
+    def _slot_cap(self, cols: int, rows: int) -> int:
+        """The rows the slot may take; with the composer hidden it has the composer frame's rows too
+        (`layout.choice_cap`)."""
         cap = choice_cap(rows, cols) if self._composer_hidden() else slot_cap(rows, cols)
-        self.menu_under = []
-        self.panel_shown = False  # the plan panel is in the slot (`_menu_or_panel_lines`): it gets its blank rows
         if self.slot is not None:
             cap = max(cap, 1)  # on a tiny terminal a question answered with text keeps a row for its label (`allocate`)
+        return cap
+
+    def _slot_lines(self, cols: int, rows: int) -> list[Line]:
+        """The slot's rows, at most `_slot_cap`."""
+        cap = self._slot_cap(cols, rows)
+        self.menu_under = []
+        self.panel_shown = False  # the plan panel is in the slot (`_menu_or_panel_lines`): it gets its blank rows
         if cap <= 0:
             return []
         # The info line says a question's or a picker's keys at every height; their rows do not.

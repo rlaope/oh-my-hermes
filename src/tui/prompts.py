@@ -120,6 +120,9 @@ CHOICE_DESCRIPTION = " — "
 FRAME_RULE = "─"
 # How many rows the context before a clarify question's asked sentence keeps, dim, before Ctrl+O shows the rest.
 LEAD_ROWS = 3
+# A framed question keeps its key row from this many slot rows on; below that the info line says its keys
+# (`PromptSlot.keys_while`), since a question with choices always has two rows of its own to keep.
+FRAMED_FOOTER_MIN_ROWS = 3
 # The framed question's own key row, under its bottom rule, for what the keys do now, in Claude Code's terse
 # wording: longest form that fits first. Digits and typing still pick and answer; the row names the three keys
 # every question takes. The info line says nothing then (`framed`).
@@ -917,10 +920,12 @@ class PromptSlot:
         natural = len(lead_rows) + len(asked_rows) + listed
         # The key row first: the info line says none of them while the question is framed. The rules and the blank
         # row between the question and its choices only when nothing is cut for them.
+        # Ctrl+O's view (`whole`) is a pager with keys of its own: no key row there, and no rules.
         room = max_rows
-        footer = room - 1 >= min(natural, 2)
+        footer = not whole and max_rows >= FRAMED_FOOTER_MIN_ROWS
         room -= footer
-        ruled = not self.typing and room - 2 >= natural  # with the field open the composer's rules stand under it
+        # With the field open the composer's rules stand under it.
+        ruled = not whole and not self.typing and room - 2 >= natural
         room -= 2 * ruled
         blank = room - 1 >= natural  # a row of the head below, so `room` keeps it
         # Rows run short: the context gives way before the asked sentence does, and Ctrl+O still shows it.

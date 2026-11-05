@@ -69,9 +69,9 @@ class LineTests(unittest.TestCase):
                     console_choices_line(platform, [], is_first_turn=True, person_turn=True), CONSOLE_CHOICES_LINE
                 )
         self.assertIn("clarify is in your tool list or tool_search finds it", CONSOLE_CHOICES_LINE)
-        # Only where the reply already stops: an offer is left as it is.
-        self.assertIn("would already stop", CONSOLE_CHOICES_LINE)
-        self.assertIn("An offer you will not wait on stays prose.", CONSOLE_CHOICES_LINE)
+        # Only where the reply stops for a pick or an approval it needs: a courtesy offer is left as it is.
+        self.assertIn("approve an action you will not take without their answer", CONSOLE_CHOICES_LINE)
+        self.assertIn("A closing offer of optional further work stays prose.", CONSOLE_CHOICES_LINE)
 
     def test_a_messaging_platform_gets_nothing(self) -> None:
         for platform in MESSAGING:
@@ -79,6 +79,36 @@ class LineTests(unittest.TestCase):
                 self.assertEqual(console_choices_line(platform, [], is_first_turn=True, person_turn=True), "")
                 self.assertEqual(console_choices_line(platform, TIMED_OUT_HISTORY, is_first_turn=False,
                                                       person_turn=True), "")
+
+    def test_an_unattended_console_run_gets_nothing(self) -> None:
+        # There clarify comes back undelivered with "use your own judgment": an approval would be self-decided.
+        for env in ({"HERMES_SINGLE_QUERY_SESSION": "1"}, {"HERMES_KANBAN_TASK": "t_1"}):
+            with self.subTest(env=env), mock.patch.dict("os.environ", env):
+                self.assertEqual(console_choices_line("cli", [], is_first_turn=True, person_turn=True), "")
+                self.assertEqual(console_choices_line("tui", TIMED_OUT_HISTORY, is_first_turn=False,
+                                                      person_turn=True), "")
+        with mock.patch.dict("os.environ", {"HERMES_SINGLE_QUERY_SESSION": "0"}):
+            self.assertEqual(console_choices_line("cli", [], is_first_turn=True, person_turn=True),
+                             CONSOLE_CHOICES_LINE)
+
+    def test_the_line_goes_out_again_once_compaction_dropped_it(self) -> None:
+        fence = "\n\n<omh-context>\n" + CONSOLE_CHOICES_LINE + "\n</omh-context>"
+        kept = [{"role": "user", "content": "hi", "api_content": "hi" + fence},
+                {"role": "assistant", "content": "hello"}, {"role": "user", "content": "next"}]
+        self.assertEqual(console_choices_line("tui", kept, is_first_turn=False, person_turn=True), "")
+        dropped = [{"role": "user", "content": "[CONTEXT COMPACTION] summary", "api_content": "x\n\n<omh-context>\n"
+                    "[OMH Route Hint] something else\n</omh-context>"}, {"role": "user", "content": "next"}]
+        self.assertEqual(console_choices_line("tui", dropped, is_first_turn=False, person_turn=True),
+                         CONSOLE_CHOICES_LINE)
+        # A person quoting the line does not count as the host carrying it.
+        quoted = [{"role": "user", "content": CONSOLE_CHOICES_LINE, "api_content": CONSOLE_CHOICES_LINE + "\n\nx"},
+                  {"role": "user", "content": "next"}]
+        self.assertEqual(console_choices_line("tui", quoted, is_first_turn=False, person_turn=True),
+                         CONSOLE_CHOICES_LINE)
+        # A host that replays nothing never repeats it.
+        bare = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"},
+                {"role": "user", "content": "next"}]
+        self.assertEqual(console_choices_line("tui", bare, is_first_turn=False, person_turn=True), "")
 
     def test_a_later_turn_gets_nothing(self) -> None:
         history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"},
@@ -102,6 +132,15 @@ class LineTests(unittest.TestCase):
         # The person's message after that notice still sees the timeout.
         history = [*history, {"role": "assistant", "content": "ok"}, {"role": "user", "content": "뭐해"}]
         self.assertEqual(console_choices_line("tui", history, is_first_turn=False, person_turn=True), TIMED_OUT_LINE)
+
+    def test_a_session_command_frame_is_not_the_person_coming_back(self) -> None:
+        # Hermes writes `/loop` wake-ups and `/goal` continuations with no display_kind; the person's message
+        # after them still sees the timeout from before them.
+        for frame in ("[/loop wakeup #3]\nRecurring task: check CI", "[Continuing toward your standing goal]\nGoal: ship"):
+            with self.subTest(frame=frame):
+                history = [*TIMED_OUT_HISTORY[:-1], {"role": "user", "content": frame},
+                           {"role": "assistant", "content": "still waiting"}, {"role": "user", "content": "뭐해"}]
+                self.assertTrue(clarify_timed_out_since_person_spoke(history))
 
     def test_once_per_timeout(self) -> None:
         # The person already answered after the timeout: their next message is past it.
@@ -161,6 +200,12 @@ class PreLlmCallTests(unittest.TestCase):
         context = self.context("뭐해", platform="tui", first=False, history=TIMED_OUT_HISTORY)
         self.assertIn(TIMED_OUT_LINE, context)
         self.assertNotIn(CONSOLE_CHOICES_LINE, context)
+
+    def test_an_unattended_cli_run_gets_nothing_through_the_hook(self) -> None:
+        for env in ({"HERMES_SINGLE_QUERY_SESSION": "1"}, {"HERMES_KANBAN_TASK": "t_1"}):
+            with self.subTest(env=env), mock.patch.dict("os.environ", env):
+                self.assertNotIn(HEAD, self.context("rename the export button", platform="cli", first=True))
+                self.assertNotIn(HEAD, self.context("뭐해", platform="tui", first=False, history=TIMED_OUT_HISTORY))
 
     def test_a_delegated_child_gets_nothing(self) -> None:
         with mock.patch.object(llm_hooks, "session_is_delegated", return_value=True):

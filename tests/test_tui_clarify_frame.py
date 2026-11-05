@@ -113,6 +113,13 @@ class FrameTests(unittest.TestCase):
             self.assertLessEqual(cell_width(row), 60, row)
         self.assertIn("▌ ❯ 1. 지금 머지 (Recommended)", drawn)
 
+    def test_ctrl_o_view_has_no_key_row_and_no_rules(self) -> None:
+        # The pager has keys of its own (Esc goes back), so the picker's key row would be wrong there.
+        whole = lines_text(slot(KOREAN).whole_lines(150, DEFAULT_THEME))
+        self.assertTrue(all(row.startswith(prompts.SLOT_BAR) for row in whole), whole)
+        self.assertFalse([row for row in whole if "Esc" in row or prompts.FRAME_RULE * 10 in row], whole)
+        self.assertEqual(whole[-1], "▌   4. Type something.")
+
     def test_long_context_is_capped_and_ctrl_o_shows_all_of_it(self) -> None:
         long = {"questions": [{**KOREAN["questions"][0],
                                "question": "배경 설명입니다. " * 60 + "어떻게 할까요?"}]}
@@ -236,24 +243,43 @@ class AppTests(unittest.TestCase):
         self.assertTrue([row for row in app._tail(150) if STATE_WAITING in line_text(row)])
         self.assertIn("esc denies", line_text(app._info_line(150)))
 
-    def test_the_tool_row_says_the_asked_sentence(self) -> None:
+    def test_the_tool_row_counts_the_choices_instead_of_repeating_the_question(self) -> None:
         app, _now = self.open(KOREAN)
         rows = [line_text(row) for row in app._tail(150)]
         call = next(row for row in rows if "clarify" in row)
-        self.assertIn("clarify(어떻게 할까요?)", call)
-        self.assertNotIn("PR #2565", call)
+        self.assertIn("clarify(3 choices)", call)
+        self.assertNotIn("할까요", call)
+
+    def test_a_short_slot_gives_the_keys_back_to_the_info_line(self) -> None:
+        from omh.tui.gateway import ServerRequest
+        from test_tui_modes import make_app
+
+        for rows, on_info in ((30, False), (6, False), (5, True)):
+            with self.subTest(rows=rows):
+                app, _client = make_app(busy=True, rows=rows, cols=100)
+                app._on_server_request(ServerRequest("srq-1", "clarify", ENGLISH))
+                cap = app._slot_cap(100, rows)
+                self.assertEqual(cap < prompts.FRAMED_FOOTER_MIN_ROWS, on_info, cap)
+                info = line_text(app._info_line(100))
+                self.assertEqual("esc cancels" in info, on_info, info)
+                slot_rows = [line_text(row) for row in app._slot_lines(100, rows)]
+                self.assertEqual(any("Esc to cancel" in row for row in slot_rows), not on_info, slot_rows)
 
 
 class ToolRowTests(unittest.TestCase):
-    def test_the_clarify_row_says_the_asked_sentence_not_the_whole_question(self) -> None:
-        payload = {"name": "clarify", "args": {"questions": KOREAN["questions"]},
-                   "context": KOREAN["questions"][0]["question"][:80]}
-        self.assertEqual(_call_summary(payload), "어떻게 할까요?")
-        long = {"name": "clarify", "args": {"questions": [{"question": "Why " * 40 + "?"}]}}
-        self.assertEqual(cell_width(_call_summary(long)), 60)
-        self.assertTrue(_call_summary(long).endswith("…"))
-        # A call that carries no question falls back to Hermes' context, then to nothing new.
-        self.assertEqual(_call_summary({"name": "clarify", "context": "Ship it? Now."}), "Ship it? Now.")
+    def test_the_clarify_row_counts_choices_or_questions(self) -> None:
+        def summary(args: object) -> str:
+            return _call_summary({"name": "clarify", "args": args, "context": "Ship it? Now."})
+
+        self.assertEqual(summary({"questions": KOREAN["questions"]}), "3 choices")
+        self.assertEqual(summary({"questions": [{"question": "q", "choices": ["only"]}]}), "1 choice")
+        self.assertEqual(summary({"questions": [{"question": "a", "choices": ["x", "y"]}, {"question": "b"}]}),
+                         "2 questions")
+        # Absent or malformed arguments, or a question with no choices: the row reads as any tool's.
+        for args in (None, {}, {"questions": []}, {"questions": "q"}, {"questions": [1]},
+                     {"questions": [{"question": "Why?"}]}, {"questions": [{"question": "q", "choices": [1, 2]}]}):
+            with self.subTest(args=args):
+                self.assertEqual(summary(args), "Ship it? Now.")
         self.assertEqual(_call_summary({"name": "terminal", "context": "ls -la"}), "ls -la")
 
 

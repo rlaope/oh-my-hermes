@@ -14,7 +14,9 @@ So this module adds one line, on two turns only:
 
 - `CONSOLE_CHOICES_LINE`, on a console session's first turn. Hermes replays
   each turn's injection from `api_content`, so the line stays in the
-  session's context after that without being sent again. It states the
+  session's context after that without being sent again; when the replayed
+  rows no longer carry it (a compaction or a resume dropped the first turn's
+  injection) it goes out once more (`_line_dropped`). It states the
   presence rule (`native_tool_presence_clause`), because `pre_llm_call` is
   handed no tool list; the model reads its own.
 - `TIMED_OUT_LINE`, on the first turn a person opens after a clarify of the
@@ -22,14 +24,18 @@ So this module adds one line, on two turns only:
   clarify result since the person last wrote has `outcome` `timed_out`
   (Hermes 2026-10 and later) or `timed_out: true` (earlier). A clarify that
   was answered later, or a turn Hermes opened for itself (a background
-  process finishing), sends nothing.
+  process finishing, a `/loop` wake-up or `/goal` continuation), sends
+  nothing.
 
-Both lines only redirect a question the model would ask anyway: an offer it
-will not wait on stays prose, so a misfire costs a picker where a list would
-have stood, never a new question. Neither says anything about the reply's
-voice. A messaging platform (Discord, Slack, ...) gets neither, and renders
-exactly what it rendered before; its `clarify` is a numbered message, not a
-picker.
+Both lines only redirect a question the model would ask anyway: a closing
+offer of optional further work stays prose, so a misfire costs a picker where
+a list would have stood, never a new question. Neither says anything about
+the reply's voice. A messaging platform (Discord, Slack, ...) gets neither,
+and renders exactly what it rendered before; its `clarify` is a numbered
+message, not a picker. Nor does an unattended run on a console platform (a
+single-query `hermes -z` or `chat -q`, a kanban task process;
+`jev_consent.attended_turn`): there clarify comes back undelivered with
+"use your own judgment", and an approval would be decided by the model.
 
 Stdlib only; this ships in the plugin bundle, which may not import `omh`.
 """
@@ -40,6 +46,8 @@ from collections.abc import Mapping
 import json
 from typing import Final
 
+from .hermes_session_commands import host_command_turn
+from .jev_consent import attended_turn
 from .memory_session_lens import OPERATOR_CONSOLE_PLATFORMS
 from .native_tools import native_tool_presence_clause
 from .turn_authorship import host_synthesized_turn
@@ -50,10 +58,10 @@ CLARIFY_TOOL: Final = "clarify"
 # under it (`tui/prompts.py`, `CHOICE_DESCRIPTION`); the context goes in the
 # reply text before the call, so the picker's question stays one sentence.
 CONSOLE_CHOICES_LINE: Final = (
-    "[OMH Console Choices] Where a reply would already stop for the person to pick between named options or "
-    f"approve a next step, and {native_tool_presence_clause(CLARIFY_TOOL)}, ask through clarify, not a prose "
-    "list: context in your reply text before the call, the question one short sentence, 2-4 choices written "
-    "`label — one short clause`, recommended first. An offer you will not wait on stays prose."
+    "[OMH Console Choices] Where a reply would stop for the person to pick between named options or approve an "
+    f"action you will not take without their answer, and {native_tool_presence_clause(CLARIFY_TOOL)}, use "
+    "clarify, not a prose list: context in your reply first, a one-sentence question, 2-4 choices as "
+    "`label — short clause`, recommended first. A closing offer of optional further work stays prose."
 )
 TIMED_OUT_LINE: Final = (
     "[OMH Console Choices] Your last clarify timed out before the person answered. If their message leaves "
@@ -63,9 +71,12 @@ TIMED_OUT_LINE: Final = (
 
 
 def _person_row(row: Mapping[str, object]) -> bool:
-    """A user row a person wrote: no host `display_kind` on it (`turn_authorship`)."""
+    """A user row a person wrote: no host `display_kind` on it (`turn_authorship`), and not one of Hermes'
+    session-command frames, which carry none (`/loop` wake-ups, `/goal` continuations, `/plan`)."""
     kind = row.get("display_kind")
-    return row.get("role") == "user" and not (isinstance(kind, str) and host_synthesized_turn(kind))
+    if row.get("role") != "user" or (isinstance(kind, str) and host_synthesized_turn(kind)):
+        return False
+    return not host_command_turn(row.get("content"))
 
 
 def _since_person_spoke(history: object) -> list[Mapping[str, object]]:
@@ -116,14 +127,42 @@ def clarify_timed_out_since_person_spoke(history: object) -> bool:
     return bool(last)
 
 
-def console_choices_line(platform: object, history: object, *, is_first_turn: bool, person_turn: bool) -> str:
-    """The line for this turn of a console session, else "".
+def _line_dropped(history: object) -> bool:
+    """Whether the host replays injections (a row carries `api_content`) and none carries the line any more.
 
+    True after a compaction or a resume dropped the first turn's injection, so
+    the line goes out once more; a host that replays nothing never repeats it.
+    Only the host-injected suffix of each row is read, as for the primer, so a
+    person quoting the line cannot suppress it.
+    """
+    if not isinstance(history, (list, tuple)):
+        return False
+    replayed = False
+    for row in history:
+        api_content = row.get("api_content") if isinstance(row, Mapping) else None
+        if not isinstance(api_content, str):
+            continue
+        replayed = True
+        clean = row.get("content")
+        injected = api_content[len(clean):] if isinstance(clean, str) and api_content.startswith(clean) else api_content
+        if CONSOLE_CHOICES_LINE in injected:
+            return False
+    return replayed
+
+
+def console_choices_line(platform: object, history: object, *, is_first_turn: bool, person_turn: bool) -> str:
+    """The line for this turn of a console session a person attends, else "".
+
+    An unattended run on a console platform (a single-query `hermes -z` or
+    `chat -q`, a kanban task process) gets nothing: its clarify comes back
+    undelivered with "use your own judgment", so an approval the model would
+    have stopped for would be decided by the model instead (`attended_turn`).
     `person_turn` is whether a person's own words opened the turn (the hook's
     `request_message`); only such a turn re-asks after a timeout.
     """
-    if str(platform or "").strip().casefold() not in OPERATOR_CONSOLE_PLATFORMS:
+    platform_id = str(platform or "").strip().casefold()
+    if platform_id not in OPERATOR_CONSOLE_PLATFORMS or not attended_turn(platform_id):
         return ""
     if person_turn and clarify_timed_out_since_person_spoke(history):
         return TIMED_OUT_LINE
-    return CONSOLE_CHOICES_LINE if is_first_turn else ""
+    return CONSOLE_CHOICES_LINE if is_first_turn or _line_dropped(history) else ""
