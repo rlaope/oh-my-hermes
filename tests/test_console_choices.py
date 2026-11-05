@@ -105,6 +105,11 @@ class LineTests(unittest.TestCase):
                   {"role": "user", "content": "next"}]
         self.assertEqual(console_choices_line("tui", quoted, is_first_turn=False, person_turn=True),
                          CONSOLE_CHOICES_LINE)
+        # An assistant row's api_content (a promoted final row) is no sign the host replays injections.
+        assistant_only = [{"role": "user", "content": "hi"},
+                          {"role": "assistant", "content": "hello", "api_content": "hello"},
+                          {"role": "user", "content": "next"}]
+        self.assertEqual(console_choices_line("tui", assistant_only, is_first_turn=False, person_turn=True), "")
         # A host that replays nothing never repeats it.
         bare = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"},
                 {"role": "user", "content": "next"}]

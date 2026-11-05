@@ -142,6 +142,17 @@ class FrameTests(unittest.TestCase):
         self.assertEqual(len(text(KOREAN, rows=2)), 2)
         self.assertEqual(text(KOREAN, rows=1), ["▌ ❯ 1. 지금 머지 (Recommended) … ctrl+o shows all"])
 
+    def test_the_key_row_needs_three_rows(self) -> None:
+        self.assertEqual(prompts.FRAMED_FOOTER_MIN_ROWS, 3)
+        for rows in (1, 2):
+            with self.subTest(rows=rows):
+                drawn = text(ENGLISH, rows=rows)
+                self.assertFalse([row for row in drawn if "Esc to cancel" in row], drawn)
+                self.assertTrue(all(row.startswith(prompts.SLOT_BAR) for row in drawn), drawn)
+        drawn = text(ENGLISH, rows=3)
+        self.assertEqual(drawn[-1], "  Enter to select · ↑↓ to navigate · Esc to cancel")
+        self.assertEqual(len(drawn), 3)
+
     def test_the_key_row_follows_the_state(self) -> None:
         clarify = slot(KOREAN)
         clarify.handle_key(Key(CHAR, "x"))  # opens the text field

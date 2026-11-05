@@ -128,18 +128,21 @@ def clarify_timed_out_since_person_spoke(history: object) -> bool:
 
 
 def _line_dropped(history: object) -> bool:
-    """Whether the host replays injections (a row carries `api_content`) and none carries the line any more.
+    """Whether the host replays injections (a user row carries `api_content`) and none carries the line any more.
 
     True after a compaction or a resume dropped the first turn's injection, so
     the line goes out once more; a host that replays nothing never repeats it.
-    Only the host-injected suffix of each row is read, as for the primer, so a
-    person quoting the line cannot suppress it.
+    Only user rows count: the hook's context rides the user message, and
+    Hermes also stamps `api_content` on promoted assistant rows, which says
+    nothing about injections being replayed. Only the host-injected suffix of
+    each row is read, as for the primer, so a person quoting the line cannot
+    suppress it.
     """
     if not isinstance(history, (list, tuple)):
         return False
     replayed = False
     for row in history:
-        api_content = row.get("api_content") if isinstance(row, Mapping) else None
+        api_content = row.get("api_content") if isinstance(row, Mapping) and row.get("role") == "user" else None
         if not isinstance(api_content, str):
             continue
         replayed = True
