@@ -6219,6 +6219,9 @@ _SYSTEMATIC_REVIEW_SOFTWARE_WORDS = frozenset(
         "code", "codebase", "repo", "repository", "pr", "prs", "diff", "branch", "commit", "commits", "module", "modules",
         "microservice", "microservices", "api", "apis", "endpoint", "endpoints", "function", "functions", "migration",
         "migrations", "schema", "auth", "handling", "bug", "bugs", "app", "apps", "service", "services", "stack",
+        "logging", "logs", "tests", "testing", "deployment", "deployments", "infrastructure", "database", "databases",
+        "frontend", "backend", "dependencies", "configuration", "monitoring", "observability", "exceptions", "errors",
+        "error",
     }
 )
 _SYSTEMATIC_REVIEW_LITERATURE_WORDS = frozenset(
