@@ -419,6 +419,10 @@ def _require_graph(
 ) -> None:
     """The hard rejects over a whole graph: references, cycles, and write scopes shared without an edge.
 
+    Scopes are compared as paths (`dag_core.shared_scope_pairs` ``as_paths``):
+    ``./src/x.py`` is ``src/x.py``, ``src/`` holds it, and ``src/*.py`` holds
+    everything under ``src``.
+
     ``editable`` limits the scope check to pairs of those nodes: a repair is
     checked against the nodes that can still run, not against finished ones.
     ``involving`` limits it further to pairs with one of those nodes in them:
@@ -445,7 +449,7 @@ def _require_graph(
     new = set(involving)
     scopes = [(str(node["id"]), node["write_scope"]) for node in nodes]
     ordered = {node: [*listed, *(before or {}).get(node, ())] for node, listed in parents.items()}
-    for first, second, shared, joined in dag_core.shared_scope_pairs(scopes, ordered):
+    for first, second, shared, joined in dag_core.shared_scope_pairs(scopes, ordered, as_paths=True):
         if not joined and first in checked and second in checked and (not new or first in new or second in new):
             raise DagRefusal(
                 "write_scope_overlap",

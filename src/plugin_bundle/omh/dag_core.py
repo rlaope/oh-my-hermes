@@ -140,20 +140,48 @@ def bottlenecks(
     return sorted(counts, key=lambda item: (-item[1], item[0]))[:limit]
 
 
+def _scope_path(entry: str) -> tuple[str, ...]:
+    """A write-scope entry as the path segments it may write under, for `shared_scope_pairs` ``as_paths``.
+
+    Case-folded; empty and ``.`` segments dropped, so a leading ``./``, a
+    repeated ``/`` and a trailing ``/`` change nothing; a leading ``/`` stays
+    as a first ``/`` segment. A glob (``*`` or ``?``) is cut to the directory
+    before the segment holding it: ``src/*.py`` writes under ``src``, and
+    ``*.py`` under the whole tree. ``[`` is a literal, since ``app/[slug]/page.tsx``
+    names a file far more often than a write scope holds a character class.
+    """
+    segments = ["/"] if entry.startswith("/") else []
+    for segment in entry.casefold().split("/"):
+        if "*" in segment or "?" in segment:
+            break
+        if segment not in ("", "."):
+            segments.append(segment)
+    return tuple(segments)
+
+
 def shared_scope_pairs(
-    scopes: Sequence[tuple[str, Iterable[str]]], parents: Mapping[str, Iterable[str]]
+    scopes: Sequence[tuple[str, Iterable[str]]], parents: Mapping[str, Iterable[str]], *, as_paths: bool = False
 ) -> list[tuple[str, str, list[str], bool]]:
     """Every pair of nodes whose scopes name a same entry: (first, second, the shared entries, joined by an edge).
 
-    Entries are compared as written. Joined means one of the two lists the
-    other as a parent directly; an order through a third node does not count.
+    Entries are compared as written, unless ``as_paths``: then two entries
+    meet when one's `_scope_path` is the other's or a whole-segment prefix of it
+    (``src`` and ``src/x.py`` meet, ``src/a`` and ``src/ab`` do not), and the
+    shared entries are every entry of either node that meets one of the
+    other's, as written. Joined means one of the two lists the other as a
+    parent directly; an order through a third node does not count.
     """
     edges = {(node, parent) for node, listed in parents.items() for parent in listed}
-    indexed = [(node, set(scope)) for node, scope in scopes]
+    indexed = [(node, {entry: _scope_path(entry) if as_paths else (entry,) for entry in scope})
+               for node, scope in scopes]
     pairs: list[tuple[str, str, list[str], bool]] = []
     for position, (first, first_scope) in enumerate(indexed):
         for second, second_scope in indexed[position + 1:]:
-            shared = sorted(first_scope & second_scope)
+            shared: set[str] = set()
+            for first_entry, first_path in first_scope.items():
+                for second_entry, second_path in second_scope.items():
+                    if first_path == second_path[:len(first_path)] or second_path == first_path[:len(second_path)]:
+                        shared.update((first_entry, second_entry))
             if shared:
-                pairs.append((first, second, shared, (first, second) in edges or (second, first) in edges))
+                pairs.append((first, second, sorted(shared), (first, second) in edges or (second, first) in edges))
     return pairs

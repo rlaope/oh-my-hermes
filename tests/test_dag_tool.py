@@ -301,6 +301,29 @@ class DefineTests(unittest.TestCase):
                           nodes=[node("a", scope=("x.py",)), node("b", scope=("x.py",), depends_on=("a",))])
         self.assertEqual(result["status"], "ok", result)
 
+    def test_scopes_written_differently_still_overlap(self) -> None:
+        """Mutation: compare entries as written; a directory, `./` or a glob then lets two nodes write one file."""
+        for first, second in (("src/", "src/x.py"), ("src/x.py", "./src/x.py"), ("src/*.py", "src/x.py")):
+            with self.subTest(first=first, second=second), homes():
+                refused = call(action="define", run="feat", nodes=[node("a", scope=(first,)), node("b", scope=(second,))])
+                # Through a third node is still no edge: only a direct one orders the two writers.
+                chained = call(action="define", run="chain", nodes=[
+                    node("a", scope=(first,)), node("m", depends_on=("a",)), node("b", depends_on=("m",), scope=(second,))])
+                joined = call(action="define", run="joined", nodes=[
+                    node("a", scope=(first,)), node("b", depends_on=("a",), scope=(second,))])
+            self.assertEqual((refused["status"], refused["reason"]), ("refused", "write_scope_overlap"), refused)
+            self.assertEqual(refused["say"],
+                             f"Nodes a and b both write {', '.join(sorted((first, second)))} with no edge between "
+                             "them; make one depend on the other or split the scope.")
+            self.assertEqual(chained["reason"], "write_scope_overlap", chained)
+            self.assertEqual(joined["status"], "ok", joined)
+
+    def test_neighbouring_names_do_not_overlap(self) -> None:
+        for first, second in (("src/a", "src/ab"), ("docs/x.md", "docs/xy.md")):
+            with self.subTest(first=first, second=second), homes():
+                result = call(action="define", run="feat", nodes=[node("a", scope=(first,)), node("b", scope=(second,))])
+            self.assertEqual(result["status"], "ok", result)
+
     def test_lint_is_advice_and_never_rejects(self) -> None:
         # A partial marker set is lint; a prompt with no marker at all is refused (see DefineTests.preflight).
         nodes = [node("a", category="deep", prompt="TASK: do the thing."), node("b", category="deep-work", scope=("b.py",)),
@@ -841,6 +864,18 @@ class RepairTests(unittest.TestCase):
         superseded = {row["id"]: row["state"] for row in second["nodes"]}
         self.assertEqual(superseded["v2"], "superseded")
 
+    def test_a_repair_writing_a_runnable_nodes_file_under_another_spelling_is_refused(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[
+                node("api", scope=("a.py",)), node("ui", scope=("src/ui.py",)),
+                node("verify", role="verify", depends_on=("api", "ui"), label="Verify")])
+            call(action="settle", run="feat", node="api", outcome="failed")
+            refused = call(action="repair", run="feat", node="api", nodes=[node("fix", scope=("a.py", "src/"))])
+            repaired = call(action="repair", run="feat", node="api", nodes=[node("fix", scope=("a.py", "lib/"))])
+        self.assertEqual((refused["status"], refused["reason"]), ("refused", "write_scope_overlap"), refused)
+        self.assertEqual(repaired["status"], "ok", repaired)
+
     def test_a_repair_node_may_not_wait_on_an_open_node(self) -> None:
         with homes() as home:
             slots_table(home)
@@ -1231,6 +1266,16 @@ class ExtendTests(unittest.TestCase):
         for reason, result in results.items():
             self.assertEqual(result.get("reason"), reason, result)
         self.assertEqual((unchanged["state"], len(unchanged["nodes"])), ("done", 2))
+
+    def test_an_earlier_nodes_file_under_another_spelling_is_refused(self) -> None:
+        with homes() as home:
+            self._done(home)
+            refused = {entry: call(action="extend", run="feat", nodes=[node("x", scope=(entry,))])
+                       for entry in ("./a.py", "*.py")}
+            extended = call(action="extend", run="feat", nodes=[node("x", scope=("ab.py",))])
+        for entry, result in refused.items():
+            self.assertEqual((entry, result.get("reason")), (entry, "write_scope_overlap"), result)
+        self.assertEqual(extended["status"], "ok", extended)
 
     def test_the_new_nodes_are_linted(self) -> None:
         with homes() as home:

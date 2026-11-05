@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **dag-ulw refuses two nodes that write one file under different spellings.**
+  `omh_dag` define, repair and extend refused a shared write scope with no
+  direct edge only when both nodes wrote the same entry character for
+  character, so `src/` beside `src/x.py`, `./src/x.py` beside `src/x.py` and
+  `src/*.py` beside `src/x.py` ran in parallel and could overwrite each
+  other. Entries are now compared as paths: a leading `./`, repeated or
+  trailing `/` and letter case change nothing, an entry covers every path
+  under it by whole segments (`src/a` and `src/ab` stay apart), and a `*` or
+  `?` glob covers the directory before it. The refusal still reads
+  `write_scope_overlap` and names the entries as each node wrote them. A
+  `[` stays a literal, so `app/[slug]/page.tsx` names one file. The coding
+  fanout contract's boundary check still compares as written.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and
