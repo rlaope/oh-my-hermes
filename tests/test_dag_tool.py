@@ -303,7 +303,8 @@ class DefineTests(unittest.TestCase):
 
     def test_scopes_written_differently_still_overlap(self) -> None:
         """Mutation: compare entries as written; a directory, `./` or a glob then lets two nodes write one file."""
-        for first, second in (("src/", "src/x.py"), ("src/x.py", "./src/x.py"), ("src/*.py", "src/x.py")):
+        for first, second in (("src/", "src/x.py"), ("src/x.py", "./src/x.py"), ("src/*.py", "src/x.py"),
+                              ("src/**/*.py", "src/x.py")):
             with self.subTest(first=first, second=second), homes():
                 refused = call(action="define", run="feat", nodes=[node("a", scope=(first,)), node("b", scope=(second,))])
                 # Through a third node is still no edge: only a direct one orders the two writers.
@@ -1319,6 +1320,14 @@ class ExtendTests(unittest.TestCase):
                                          "a writes src/a.py and x writes src/; b writes src/b.py and x writes src/; "
                                          "c writes src/c.py and x writes src/. "
                                          "Make one of each pair depend on the other, or split the scope.")
+
+    def test_the_refusal_names_a_bounded_number_of_pairs(self) -> None:
+        nodes = [node(f"n{index}", scope=(f"src/n{index}.py",)) for index in range(dag_run.OVERLAPS_NAMED + 3)]
+        with homes():
+            refused = call(action="define", run="feat", nodes=[*nodes, node("x", scope=("src/",))])
+        self.assertEqual(refused.get("reason"), "write_scope_overlap", refused)
+        self.assertEqual(refused["say"].count(" and x writes src/"), dag_run.OVERLAPS_NAMED)
+        self.assertIn("src/ and 3 more pairs. Make one of each pair", refused["say"])
 
     def test_the_new_nodes_are_linted(self) -> None:
         with homes() as home:

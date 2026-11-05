@@ -84,6 +84,7 @@ MAX_NAME_CHARS: Final = 48
 MAX_GOAL_CHARS: Final = 240
 MAX_SCOPE_ENTRIES: Final = 16
 MAX_SCOPE_CHARS: Final = 200
+OVERLAPS_NAMED: Final = 20  # pairs one write_scope_overlap refusal names; the rest are counted
 MAX_REASON_CHARS: Final = 200
 MAX_REPAIR_CYCLES: Final = 2
 REPLAN_CYCLE: Final = MAX_REPAIR_CYCLES
@@ -460,7 +461,8 @@ def _require_graph(
     if overlaps:
         raise DagRefusal(
             "write_scope_overlap",
-            f"These nodes write overlapping paths with no edge between them: {'; '.join(overlaps)}. "
+            f"These nodes write overlapping paths with no edge between them: {'; '.join(overlaps[:OVERLAPS_NAMED])}"
+            f"{f' and {len(overlaps) - OVERLAPS_NAMED} more pairs' if len(overlaps) > OVERLAPS_NAMED else ''}. "
             "Make one of each pair depend on the other, or split the scope.",
         )
 

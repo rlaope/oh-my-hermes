@@ -101,6 +101,10 @@ class SharedScopeTests(unittest.TestCase):
             ("/src/x.py", "/src/x.py"), ("app/[slug]/*.tsx", "app/[slug]/page.tsx"),
             # A glob beside a directory or another glob meets by its directory: a name with no suffix may be one.
             ("src/*.py", "src/lib"), ("src/*.py", "src/"), ("src/*.py", "src/*.md"), ("*.md", "src/"),
+            ("*.md", "docs/v1.2/"),
+            # `**/` matches zero directories too.
+            ("src/**/*.py", "src/x.py"), ("**/*.md", "README.md"), ("tests/**/test_*.py", "tests/test_x.py"),
+            ("docs/**/*.md", "docs/a.md"), ("**/*.py", "x.py"), ("src/**/*.py", "src/a/b/x.py"),
         )
         apart = (
             ("src/a", "src/ab"), ("docs/x.md", "docs/xy.md"), ("src/*.py", "lib/x.py"), ("src/a/", "src/ab/c.py"),
@@ -147,6 +151,9 @@ class CallerTests(unittest.TestCase):
             [{"units": ["a", "b"], "shared_files": ["x.py"],
               "resolution": "ordered by depends_on edge; merge strictly in merge_order"}],
         )
+        # The fanout contract compares file scopes as written: a directory beside a file under it is no overlap.
+        self.assertEqual(detect_boundary_overlaps([{"unit_id": "a", "file_scope": ["src/"]},
+                                                   {"unit_id": "b", "file_scope": ["src/x.py"]}]), [])
         with self.assertRaisesRegex(FanoutContractError, r"^depends_on contains a cycle among units: a, b$"):
             merge_order([{"unit_id": "a", "depends_on": ["b"]}, {"unit_id": "b", "depends_on": ["a"]}])
         with self.assertRaisesRegex(FanoutContractError, r"^units a and b share files \['x.py'\] without a depends_on"):

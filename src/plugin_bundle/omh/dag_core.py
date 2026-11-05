@@ -149,8 +149,10 @@ def _scope_path(entry: str) -> tuple[tuple[str, ...], str, str]:
     `posixpath.normpath`, so ``./``, a repeated or trailing ``/`` and ``x/..``
     change nothing; a leading ``/`` stays a first ``/`` segment. A ``*`` or
     ``?`` glob writes under the directory before the segment holding it, and
-    keeps its whole pattern (``[`` escaped: ``app/[slug]/page.tsx`` names a
-    file far more often than a write scope holds a character class). The file
+    keeps its whole pattern, with ``**/`` read as ``*`` (`fnmatch`'s ``*``
+    already crosses ``/``, and ``src/**/*.py`` must meet ``src/x.py``) and
+    ``[`` escaped (``app/[slug]/page.tsx`` names a file far more often than a
+    write scope holds a character class). The file
     is the normalised path when the entry is neither a glob nor written as a
     directory (a trailing ``/``) and its last segment has a suffix; else "".
     """
@@ -161,7 +163,7 @@ def _scope_path(entry: str) -> tuple[tuple[str, ...], str, str]:
     globbed = [index for index, segment in enumerate(segments) if "*" in segment or "?" in segment]
     under = (("/",) if absolute else ()) + tuple(segments[:globbed[0]] if globbed else segments)
     whole = ("/" if absolute else "") + "/".join(segments)
-    pattern = whole.replace("[", "[[]") if globbed else ""
+    pattern = whole.replace("**/", "*").replace("[", "[[]") if globbed else ""
     concrete = not globbed and not text.endswith("/") and bool(segments) and posixpath.splitext(segments[-1])[1]
     return under, pattern, whole if concrete else ""
 
