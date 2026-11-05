@@ -596,8 +596,9 @@ class PromptSlot:
         for index, (lead, label, description) in enumerate(labels):
             current = index == self.selected
             style = theme.menu_current if current else theme.text
-            first: Line = (Span(CHOICE_MARK if current else " " * len(CHOICE_MARK), mark_style), Span(lead, style))
-            rest: Line = (Span(" " * (len(CHOICE_MARK) + cell_width(lead))),)
+            first: Line = (Span(CHOICE_MARK if current else " " * len(CHOICE_MARK), _framing(mark_style)),
+                           Span(lead, style))
+            rest: Line = (Span(" " * (len(CHOICE_MARK) + cell_width(lead)), _framing(Style())),)
             wrapped = wrap_prefixed((Span(label, style),), first, rest, width)
             if description:
                 wrapped += wrap_prefixed((Span(description, theme.muted),), rest, rest, width)
@@ -642,7 +643,9 @@ class PromptSlot:
         forms = list(MORE_APPROVAL_CHOICES) if self.method == "approval" else [form.format(**said) for form in MORE_CHOICES]
         if ticked:
             forms[-1] = f"  … {ticked} ticked · ctrl+o"
-        marker: Line = (Span(next((form for form in forms if cell_width(form) <= width), forms[-1]), theme.muted),)
+        # The marker says what the picker left out: no text of the question, so a gutter (`_framing`) a drag never copies.
+        marker: Line = (Span(next((form for form in forms if cell_width(form) <= width), forms[-1]),
+                             _framing(theme.muted)),)
         return ([*rows, marker] if last < len(choices) - 1 else [marker, *rows]), False
 
     def _is_ticked(self, index: int) -> bool:
@@ -935,8 +938,10 @@ class PromptSlot:
             if not keep:
                 asked_rows[-1] = _ends_with_more(asked_rows[-1], inner, theme)
         head = [*lead_rows, *asked_rows, *([()] if blank else [])]
-        bar = Span(SLOT_BAR, theme.muted)
-        rule: Line = (Span(FRAME_RULE * width, theme.faint),)
+        # The bar, the rules, a choice's mark and the key row frame the question and are no text of it: gutters
+        # (`style.gutter`), which a drag on the main screen never highlights or copies.
+        bar = Span(SLOT_BAR, _framing(theme.muted))
+        rule: Line = (Span(FRAME_RULE * width, _framing(theme.faint)),)
         body = [_barred(row, bar, width) for row in self._fit(head, [], choice_rows, room, inner, theme)]
         rows = [rule, *body, rule] if ruled else body
         if footer:
@@ -944,7 +949,7 @@ class PromptSlot:
             said = [f"{form} · {waited}" for form in forms] + list(forms) if waited else list(forms)
             indent = " " * len(SLOT_BAR)
             fits = [form for form in said if cell_width(indent + form) <= width]
-            rows.append(truncate_line((Span(indent + (fits[0] if fits else said[-1]), theme.hint),), width))
+            rows.append(truncate_line((Span(indent + (fits[0] if fits else said[-1]), _framing(theme.hint)),), width))
         return rows
 
     def _value_lines(self, width: int, theme: Theme, queued: Line) -> list[Line]:
@@ -981,6 +986,12 @@ def _without_recommended(text: object) -> str:
     if stripped.casefold().endswith(RECOMMENDED_TAG.casefold()):
         return stripped[: -len(RECOMMENDED_TAG)].strip()
     return stripped
+
+
+def _framing(style: Style) -> Style:
+    """`style` as a gutter: a cell that frames the question, never highlighted or copied by a drag, painted as one run
+    with a neighbour of its look (`style.joins`), as it was before it was a gutter."""
+    return replace(style, gutter=True, joins=True)
 
 
 def _barred(row: Line, bar: Span, width: int) -> Line:

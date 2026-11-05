@@ -176,7 +176,7 @@ class TableStreamingTests(unittest.TestCase):
     def test_quitting_mid_reply_flushes_the_held_table_rows(self) -> None:
         app, _client = make_app(busy=True)
         flushed: list[str] = []
-        app.region.flush_above = lambda lines, cols: flushed.extend(lines_text(lines))  # type: ignore[method-assign]
+        app.region.flush_above = lambda lines, cols, rows=None: flushed.extend(lines_text(lines))  # type: ignore[method-assign]
         app.transcript.apply(ev("message.start"))
         app.transcript.apply(ev("message.delta", text="| X | Y |\n| --- | --- |\n| 1 | a |\n| 2 | b |"))
         app._shutdown()
