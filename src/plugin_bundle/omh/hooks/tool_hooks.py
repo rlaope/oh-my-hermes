@@ -13,6 +13,7 @@ from ..approval_bypass import record_approval_bypass
 from ..catch_log import REPEAT_LOOP, record_catch
 from ..consistency_trigger import snapshot_before_edit
 from ..dag_define_gate import delegate_before_define_directive
+from ..dag_scope_guard import dag_scope_directive
 from ..delegation_route_restore import dispatch_route_directive
 from ..evidence_store_guard import evidence_write_directive
 from ..host_observation import host_session_id, observe_plugin_hook_call
@@ -272,6 +273,18 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
     )
     if evidence_directive is not None:
         return _route_gated(evidence_directive, **route_gate)
+    # A dag-ulw node's child writing outside its node's write scope is refused
+    # (`dag_scope_guard`): the scope was checked at define and never again.
+    scope_directive = dag_scope_directive(
+        tool_name=kwargs.get("tool_name"),
+        tool_input=tool_input,
+        session_id=session_id,
+        task_id=kwargs.get("task_id"),
+        omh_home=omh_home,
+        hermes_home=hermes_home,
+    )
+    if scope_directive is not None:
+        return _route_gated(scope_directive, **route_gate)
     # The repeat guard runs after the user's own rules and before anything
     # that observes a dispatch, for the same reason: it intervenes on a
     # call, so nothing downstream may record that call as having happened.
