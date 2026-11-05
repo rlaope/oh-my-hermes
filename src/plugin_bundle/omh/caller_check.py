@@ -40,6 +40,10 @@ import os
 import time
 from typing import Final, NamedTuple
 
+from .call_shape import Shape as _Shape
+from .call_shape import bind as _bind
+from .call_shape import expected_to_fail as _expected_to_fail
+from .call_shape import shape as _shape
 from .consistency_trigger import turn_snapshots
 from .impact_check import _imports_from as imports_from
 from .impact_check import find_importers, host_hook_timeout, module_names
@@ -55,24 +59,7 @@ MAX_SIGNATURE_CHARS: Final = 160
 # check sizes its own; past it the rows found so far are returned.
 DEADLINE_SHARE: Final = 2.0 / 30.0
 
-# Calls that expect an exception: `pytest.raises`, unittest's `assertRaises` / `assertRaisesRegex`, and
-# a handler catching what a bad call raises.
-_RAISES_CALLS: Final = frozenset({"raises", "assertRaises", "assertRaisesRegex"})
-_CATCHES_TYPE_ERROR: Final = frozenset({"TypeError", "Exception", "BaseException"})
-
 _LOG = logging.getLogger("omh.caller_check")
-
-
-class _Shape(NamedTuple):
-    """What a call must satisfy: the parameters by kind, and which of them have a default."""
-
-    positional_only: tuple[str, ...]
-    positional: tuple[str, ...]  # positional-or-keyword
-    defaulted: frozenset[str]    # positional parameters with a default
-    var_positional: bool
-    keyword_only: tuple[str, ...]
-    required_keywords: frozenset[str]
-    var_keyword: bool
 
 
 class _Changed(NamedTuple):
@@ -181,44 +168,6 @@ def _sole_functions(tree: ast.Module) -> dict[str, ast.FunctionDef | ast.AsyncFu
                 and counts.get(node.name) == 1:
             found[node.name] = node
     return found
-
-
-def _shape(arguments: ast.arguments) -> _Shape:
-    positional = [arg.arg for arg in (*arguments.posonlyargs, *arguments.args)]
-    defaulted = frozenset(positional[len(positional) - len(arguments.defaults):]) if arguments.defaults else frozenset()
-    required = frozenset(arg.arg for arg, default in zip(arguments.kwonlyargs, arguments.kw_defaults)
-                         if default is None)
-    return _Shape(tuple(arg.arg for arg in arguments.posonlyargs), tuple(arg.arg for arg in arguments.args),
-                  defaulted, arguments.vararg is not None, tuple(arg.arg for arg in arguments.kwonlyargs), required,
-                  arguments.kwarg is not None)
-
-
-def _bind(shape: _Shape, call: ast.Call) -> str | None:
-    """Why ``call`` cannot bind to ``shape`` (``""`` when it binds); None when that cannot be known."""
-    if any(isinstance(arg, ast.Starred) for arg in call.args) or any(item.arg is None for item in call.keywords):
-        return None
-    slots = (*shape.positional_only, *shape.positional)
-    given = len(call.args)
-    if given > len(slots) and not shape.var_positional:
-        return f"{given} positional arguments, but it takes {len(slots)}"
-    bound = set(slots[:given])
-    for item in call.keywords:
-        name = item.arg
-        if name in shape.positional_only:
-            if shape.var_keyword:
-                continue
-            return f"positional-only `{name}` passed by keyword"
-        if name in shape.positional or name in shape.keyword_only:
-            if name in bound:
-                return f"`{name}` given twice"
-            bound.add(name)
-        elif not shape.var_keyword:
-            return f"unexpected keyword `{name}`"
-    missing = [name for name in slots if name not in bound and name not in shape.defaulted]
-    missing += [name for name in shape.keyword_only if name in shape.required_keywords and name not in bound]
-    if missing:
-        return "missing " + ", ".join(f"`{name}`" for name in missing)
-    return ""
 
 
 def _package_exports(callers: list[str], target: str, root: str, functions: set[str]) -> dict[str, dict[str, str]]:
@@ -370,41 +319,6 @@ def _binding_counts(tree: ast.Module) -> dict[str, int]:
         elif isinstance(node, ast.MatchMapping):
             add(node.rest)
     return counts
-
-
-def _expected_to_fail(tree: ast.Module) -> set[int]:
-    """``id()`` of every call written to raise: inside a ``try`` that catches ``TypeError`` or wider, a
-    ``with`` over a ``raises`` call, or an argument of a ``raises`` call."""
-    guarded: set[int] = set()
-
-    def mark(nodes: list[ast.AST]) -> None:
-        for node in nodes:
-            guarded.update(id(inner) for inner in ast.walk(node) if isinstance(inner, ast.Call))
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and _leaf(node.func) in _RAISES_CALLS:
-            mark([*node.args, *(item.value for item in node.keywords)])
-        elif isinstance(node, (ast.With, ast.AsyncWith)):
-            if any(isinstance(item.context_expr, ast.Call) and _leaf(item.context_expr.func) in _RAISES_CALLS
-                   for item in node.items):
-                mark(list(node.body))
-        elif isinstance(node, ast.Try) or type(node).__name__ == "TryStar":
-            if any(_catches_type_error(handler.type) for handler in node.handlers):
-                mark(list(node.body))
-    return guarded
-
-
-def _catches_type_error(caught: ast.expr | None) -> bool:
-    if caught is None:
-        return True
-    parts = caught.elts if isinstance(caught, ast.Tuple) else [caught]
-    return any(_leaf(part) in _CATCHES_TYPE_ERROR for part in parts)
-
-
-def _leaf(node: ast.expr) -> str:
-    if isinstance(node, ast.Attribute):
-        return node.attr
-    return node.id if isinstance(node, ast.Name) else ""
 
 
 def _assigned_attributes(tree: ast.Module) -> set[tuple[str, str]]:

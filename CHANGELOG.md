@@ -62,6 +62,10 @@ All notable changes will be documented here.
   terminal's own selection is still there with its bypass modifier (Shift,
   Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
   terminal's own wheel and selection on the main screen, as before.
+- **The round-end check continues a turn less often.** A changed function's
+  name in another file no longer continues the turn when every mention there
+  is proven to need no change: another object's method of the same name, or
+  an import whose calls bind the same way before and after the edit.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check
