@@ -102,8 +102,10 @@ QUEUED = "queued"
 RUNNING = "running"
 COMPLETED = "completed"
 INTERRUPTED = "interrupted"
+ENDED = "ended"  # cancelled: over, but not a success, so no green check
+CANCELLED_STATUSES = frozenset({"cancelled", "canceled"})
 FAILED_STATUSES = frozenset({"failed", "error", "timeout"})  # Hermes' SUBAGENT_FAILURE_STATUSES
-FINISHED_STATUSES = FAILED_STATUSES | {COMPLETED, INTERRUPTED}
+FINISHED_STATUSES = FAILED_STATUSES | {COMPLETED, INTERRUPTED, ENDED}
 
 MAIN_ID = ""  # the main agent's row: `apply` ignores an empty `subagent_id`, so no agent has it
 
@@ -129,14 +131,15 @@ MAIN_NAME = "main"
 UNNAMED = "agent"
 UNNAMED_TOOL = "tool"
 MAIN_MARK = "●"
-DONE_MARK = "○"
+DONE_MARK = "✓"
+OTHER_END_MARK = "○"  # an `ENDED` agent keeps the hollow mark every finished one had before the check
 FAILED_MARK = "✗"
 QUEUED_MARK = "◌"
 INTERRUPTED_MARK = "▪"
 OPEN_MARK = "↓ agents"  # what Down opens, after the count on the info line
 WAITING = "waiting"  # a queued agent's figure: how long it has waited for a worker
 # The order the agent view keeps rows in when it has no room for all: running first, done last.
-KEEP_RANK = {RUNNING: 0, QUEUED: 1, **{status: 2 for status in FAILED_STATUSES}, INTERRUPTED: 3, COMPLETED: 4}
+KEEP_RANK = {RUNNING: 0, QUEUED: 1, **{status: 2 for status in FAILED_STATUSES}, INTERRUPTED: 3, COMPLETED: 4, ENDED: 4}
 SELECTED_MARK = CHOICE_MARK  # the pointer every menu marks its row with; `▸` here is a folded row
 UNSELECTED_MARK = "  "
 COLUMN_GAP = "  "
@@ -315,7 +318,9 @@ def _mark(agent: Agent, theme: Theme, spinner_frame: int) -> Span:
         return Span(FAILED_MARK, theme.error)
     if agent.status == INTERRUPTED:
         return Span(INTERRUPTED_MARK, theme.muted)
-    return Span(DONE_MARK, theme.muted)
+    if agent.status == COMPLETED:
+        return Span(DONE_MARK, theme.ok)
+    return Span(OTHER_END_MARK, theme.muted)
 
 
 # Where a structured goal's title ends: at its first field label or at the end of its first sentence. The labels are
@@ -353,15 +358,18 @@ def _tokens_text(count: int | None) -> str:
 
 
 def _collapsed_row(cut: list[Agent], theme: Theme) -> Line:
-    """The agent view's last row, for the agents it has no room for: `○ 3 done`, else `+4 more · 1 waiting · 3 done`
+    """The agent view's last row, for the agents it has no room for: `✓ 3 done` (muted `▪` when one was
+    interrupted, never a green check for it), else `+4 more · 1 waiting · 3 done`
     (running, waiting, failed and done ones counted, in that order)."""
-    if all(agent.status in (COMPLETED, INTERRUPTED) for agent in cut):
-        return (Span(UNSELECTED_MARK), Span(DONE_MARK, theme.muted), Span(f" {len(cut)} done", theme.muted))
+    if all(agent.status in (COMPLETED, INTERRUPTED, ENDED) for agent in cut):
+        mark = (Span(DONE_MARK, theme.ok) if all(agent.status == COMPLETED for agent in cut)
+                else Span(INTERRUPTED_MARK, theme.muted))
+        return (Span(UNSELECTED_MARK), mark, Span(f" {len(cut)} done", theme.muted))
     counts = [
         (sum(1 for agent in cut if agent.status == RUNNING), "running"),
         (sum(1 for agent in cut if agent.status == QUEUED), WAITING),
         (sum(1 for agent in cut if agent.status in FAILED_STATUSES), "failed"),
-        (sum(1 for agent in cut if agent.status in (COMPLETED, INTERRUPTED)), "done"),
+        (sum(1 for agent in cut if agent.status in (COMPLETED, INTERRUPTED, ENDED)), "done"),
     ]
     said = "".join(f"{FACT_SEPARATOR}{count} {word}" for count, word in counts if count)
     return (Span(UNSELECTED_MARK), Span(f"+{len(cut)} more{said}", theme.muted))
@@ -577,7 +585,7 @@ class Roster:
             return
         _identify(agent, payload)
         status = _text(payload.get("status")).lower()
-        agent.status = status if status in FINISHED_STATUSES else COMPLETED
+        agent.status = status if status in FINISHED_STATUSES else ENDED if status in CANCELLED_STATUSES else COMPLETED
         agent.finished_at = now
         duration = payload.get("duration_seconds")
         if _bounded(duration, MAX_SECONDS):
@@ -615,7 +623,7 @@ class Roster:
         so Down highlights a row without moving one. More agents than
         `max_rows` holds collapse into one last row: running agents are kept
         first, then those waiting for a worker, then failed, interrupted and
-        done ones, and the last row counts the rest, `○ 3 done` when every one
+        done ones, and the last row counts the rest, `✓ 3 done` when every one
         of them finished, else `+4 more · 1 waiting · 3 done`. The rows kept
         stay in roster order. In two rows or fewer `● main` gives its row up
         first, so a running agent is still named. With no agent there is no
@@ -715,7 +723,8 @@ class Roster:
             elapsed_text(agent.elapsed(now)), _tools_text(agent.tool_count),
             _tokens_text(agent.output_tokens).replace(" ", NO_BREAK_SPACE), agent.model,
         ]
-        state = _mark(agent, theme, 0).style  # the agent's own state: running blue, failed red, else grey
+        mark_style = _mark(agent, theme, 0).style
+        state = theme.muted if mark_style == theme.ok else mark_style  # running blue, failed red, else grey
         status = Span(agent.status, state)
         rest = Span("".join(f"{FACT_SEPARATOR}{fact}" for fact in facts if fact), theme.muted)
         header: list[Line] = [
