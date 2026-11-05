@@ -2914,7 +2914,7 @@ class LeaderWorkflowTests(unittest.TestCase):
         for modifier in ("ctrl", "alt", "shift", "reported_shift"):
             for name, char in ((ENTER, ""), (CHAR, "c")):
                 if (modifier, char) == ("ctrl", "c"):
-                    continue  # Ctrl+C keeps its own meaning (test_display_keys_and_ctrl_c_work_over_an_armed_leader)
+                    continue  # Ctrl+C keeps its own meaning (test_ctrl_c_over_an_armed_leader_matches_the_unarmed_press)
                 with self.subTest(modifier=modifier, name=name):
                     app, client = self.armed("keep", busy=True)
                     app._on_input(Key(name, char, **{modifier: True}))

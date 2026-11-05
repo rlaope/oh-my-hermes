@@ -4115,6 +4115,8 @@ class App(ModesMixin, AgentViewMixin):
             self.composer._drop_pending()  # the picker owns input, including display keys that return below
         if self._display_key(event):
             return
+        if self.composer.leader and isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c":
+            self.composer._drop_pending()  # Ctrl+C does what it does unarmed, a question's text field included
         if self.slot is not None and self._slot_arming(event):
             return  # in the first moment of a question every key is ignored: nothing typed, cleared or sent
         if self.slot is not None and _slot_owns(self.slot, event, self.composer.text):
@@ -4286,9 +4288,6 @@ class App(ModesMixin, AgentViewMixin):
             return True
         if isinstance(event, Key) and event.name == ESCAPE:
             return self._escape(event)
-        if isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c":
-            self.composer._drop_pending()
-            return False  # Ctrl+C interrupts, clears or leaves as it does without the leader
         if not isinstance(event, Key) or event.name != CHAR or event.ctrl or event.alt or event.shift or event.reported_shift:
             self._on_composer(self._edit(self.composer, event), event)
             return True
