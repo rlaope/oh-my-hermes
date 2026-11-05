@@ -867,6 +867,45 @@ Recomputed from the raw records by `OPT/opt-l/gate2.py`, and again independently
 
 A re-measure after any drop is a new registration with new seeds.
 
+#### Registration 2 result (2026-11-05): the gate failed on clause 6 only
+
+264 counted runs (05:38 to 07:06 KST) and 6 crash re-runs. The re-runs cover three `sol`
+`I-RETURN-SHAPE` instances in both arms; 5 of the 6 crashed again at the 600 s budget. `gate2.py` and
+the independent `recompute2.py` agree on every clause in both readings.
+
+| Clause | Strict (on vs base) | | Re-run (on vs base) | |
+| --- | --- | --- | --- | --- |
+| 1. Total passes, on >= base | 130 vs 127 | pass | 129 vs 128 | pass |
+| 2. Per template, on >= base - 1 | worst `C-DECOY` 12 vs 12 | pass | worst `I-RETURN-SHAPE` 9 vs 10 | pass |
+| 3. `C-DUPLICATE` passes | 12 vs 12 | pass | 12 vs 12 | pass |
+| 3. `L-RENAME-ALIAS` passes | 12 vs 12 | pass | 12 vs 12 | pass |
+| 3. `I-SIGNATURE` passes | 12 vs 12 | pass | 12 vs 12 | pass |
+| 4. `mutation_outside_scope`, on <= base | 2 vs 4 | pass | 3 vs 3 | pass |
+| 5. Pooled median tokens, on <= 1.00x | 78,832 vs 83,336 (0.946x) | pass | 78,291 vs 83,942 (0.933x) | pass |
+| 6. Sol median tokens, on <= 0.95x | 84,853 vs 85,006 (0.998x) | **fail** | 83,801 vs 85,456 (0.981x) | **fail** |
+| 7. `I-KWARG` + `I-SIGNATURE` continues, on < base | 7 vs 19 | pass | 7 vs 19 | pass |
+| 8. `C-DECOY` continues, on <= base | 11 vs 11 | pass | 11 vs 11 | pass |
+| 8. `C-DECOY` median tokens, on <= 1.05x | 100,190 vs 103,002 (0.973x) | pass | 100,190 vs 103,002 (0.973x) | pass |
+
+Tokens by route, re-run reading (base / on):
+- `claude-proxy`: h45 4,466,020 / 4,242,207; s55 1,763,025 / 1,570,521.
+- `openai-codex`: luna 3,297,476 / 3,109,503; sol 2,968,523 / 2,734,694.
+- Total 12,495,044 / 11,656,925 (0.933x). Continues 42 / 28. Money $0. Median wall 34.0 s / 34.0 s.
+
+Quality held in both readings:
+- `I-SIGNATURE` passed 12 of 12 in both arms: with the caller check in both, this registration loses
+  no broken caller;
+- all 12 on-arm `settled` verdicts passed;
+- the only on-arm failures are the three crashed `sol` `I-RETURN-SHAPE` runs; base crashed on two of the
+  same instances.
+
+**Why clause 6 failed.** Sol's continues fell from 14 to 7, and its total tokens to 0.921x. But sol's
+median sits on templates this change does not touch: `E-BUGFIX` at about 85k and `C-SCOPE-TRAP` at
+about 77k. The pre-registration projection of 0.909x came from the first registration's base sessions,
+whose sol median sat among the `I-KWARG` and `I-SIGNATURE` runs.
+
+**Decision, as registered.** Only a cost clause failed, so the change does not merge on this run.
+
 ### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
 
 Pre-registered before its first live run.
