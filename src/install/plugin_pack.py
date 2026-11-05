@@ -209,10 +209,15 @@ def _dangling_link_target(target: Path) -> str | None:
     if not is_directory_link(target) or target.exists():
         return None
     try:
-        return os.readlink(target)
+        pointed = os.readlink(target)
     except OSError:
         # A junction Windows will not read back still dangles; name the link.
         return str(target)
+    # Windows reads a link back in extended-length form (`\\?\C:\...`); the
+    # person reads the path they would type.
+    if pointed.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + pointed[len("\\\\?\\UNC\\"):]
+    return pointed.removeprefix("\\\\?\\")
 
 
 def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool = False) -> dict[str, Any]:

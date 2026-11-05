@@ -2571,6 +2571,22 @@ class SymlinkedPluginDirectoryTests(unittest.TestCase):
             self.assertTrue((bundle / PLUGIN_MANAGED_MANIFEST).is_file())
             self.assertNotIn("use --force to replace it", stdout + stderr)
 
+    def test_a_dangling_link_is_named_without_the_windows_extended_prefix(self) -> None:
+        # Windows CI read the link back as `\\?\C:\...`; the repair line names
+        # the path a person would type.
+        from omh.install import plugin_pack
+
+        with TemporaryDirectory() as tmp:
+            link = Path(tmp) / "omh"
+            link.symlink_to(Path(tmp) / "gone", target_is_directory=True)
+            for raw, shown in (
+                ("\\\\?\\C:\\gone\\omh", "C:\\gone\\omh"),
+                ("\\\\?\\UNC\\srv\\share\\omh", "\\\\srv\\share\\omh"),
+                ("/home/me/gone/omh", "/home/me/gone/omh"),
+            ):
+                with self.subTest(raw=raw), mock.patch.object(plugin_pack.os, "readlink", return_value=raw):
+                    self.assertEqual(plugin_pack._dangling_link_target(link), shown)
+
     def test_a_link_to_a_live_unmanaged_tree_is_still_kept_without_force(self) -> None:
         # Only a dangling link is repaired; a link to files OMH did not write
         # may hold someone's plugin and still needs --force.
