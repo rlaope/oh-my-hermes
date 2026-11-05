@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A dag-ulw verify node names which producer's scope holds each failure,
+  and a repair node is told the failed attempt's edits may still be on
+  disk.** A producer accepted earlier cannot be repaired, so a failing check
+  is repaired through the verify node, and nothing said which producer the
+  failing path belonged to. The verify node's task now carries a compact map
+  of its upstream producers' declared `write_scope` (its own repairs
+  included, cut at 600 characters) and asks it to name in its handoff, for
+  each failing check, the producer whose scope holds the failing path, or
+  `unattributed`: attribution by declared scope, not proven cause. A repair
+  node, in its first cycle and in the re-plan cycle, now reads that the
+  failed attempt's edits may still be on disk and, in a git checkout, to
+  inspect `git diff --` the failed nodes' scopes (or the files its handoff
+  reported) before editing. There is still no rollback: the worktree is
+  shared. Every other node's task reads byte for byte as before.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and

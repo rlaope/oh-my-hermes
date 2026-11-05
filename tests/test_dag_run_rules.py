@@ -1487,5 +1487,123 @@ class GoalVerdictTests(unittest.TestCase):
         self.assertEqual(done_graph["dag_verdict"], "verified")
 
 
+
+ATTRIBUTION = "In the handoff, name for each failing check the producer whose declared write_scope holds its failing path"
+LEFTOVERS = "The failed attempt's edits may still be on disk: if this is a git checkout, inspect `git diff"
+
+
+def line_with(context: str, start: str) -> str:
+    return next(line for line in context.splitlines() if line.startswith(start))
+
+
+class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
+    """Worker guidance only: these pin the generated instruction, not live compliance."""
+
+    def test_verify_task_maps_each_upstream_producer_to_its_declared_scope(self) -> None:
+        with homes() as home:
+            record = dag_run.new_record(PARENT, "feat", "Feature", "", [
+                node("api", scope=("src/api.py",)), node("ui", scope=("src/ui/", "src/ui.py")),
+                node("docs-probe", role="baseline"), node("elsewhere", scope=("other.py",)),
+                node("verify", role="verify", depends_on=("api", "ui", "docs-probe")),
+            ], time.time())
+            context = dag_run.task_for(record, record["nodes"][-1], home.omh,
+                                       dag_run.derive(record, [], time.time()))["context"]
+        line = line_with(context, ATTRIBUTION)
+        self.assertIn("or `unattributed`: by declared scope, not proven cause.", line)
+        self.assertTrue(line.endswith("Scopes: api: src/api.py; ui: src/ui.py, src/ui/"), line)
+        self.assertNotIn("elsewhere", line)
+        self.assertLess(context.index(ATTRIBUTION), context.index("Stay inside your SCOPE"))
+
+    def test_the_scope_map_is_bounded(self) -> None:
+        with homes() as home:
+            producers = [node(f"p{index}", scope=tuple(f"src/{index}/{'x' * 150}-{entry}.py" for entry in range(16)))
+                         for index in range(8)]
+            record = dag_run.new_record(PARENT, "feat", "Feature", "", [
+                *producers, node("verify", role="verify", depends_on=tuple(f"p{index}" for index in range(8))),
+            ], time.time())
+            context = dag_run.task_for(record, record["nodes"][-1], home.omh,
+                                       dag_run.derive(record, [], time.time()))["context"]
+        scopes = line_with(context, ATTRIBUTION).split("Scopes: ", 1)[1]
+        self.assertEqual(len(scopes), dag_run.SCOPE_MAP_CHARS)
+        self.assertTrue(scopes.startswith("p0: src/0/") and scopes.endswith("…"), scopes)
+
+    def test_a_verify_node_with_no_producer_upstream_gets_no_map(self) -> None:
+        with homes() as home:
+            record = dag_run.new_record(PARENT, "feat", "Feature", "", [
+                node("probe", role="baseline"), node("verify", role="verify", depends_on=("probe",)),
+            ], time.time())
+            context = dag_run.task_for(record, record["nodes"][-1], home.omh,
+                                       dag_run.derive(record, [], time.time()))["context"]
+        self.assertNotIn(ATTRIBUTION, context)
+        self.assertNotIn("Scopes:", context)
+
+    def test_a_rerun_verify_maps_its_own_repair_and_the_repair_is_told_about_leftovers(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node("api", scope=("a.py",)),
+                                                     node("verify", role="verify", depends_on=("api",))])
+            handoff(home, "feat", "api")
+            call(action="settle", run="feat", node="api", outcome="accepted")
+            call(action="settle", run="feat", node="verify", outcome="failed", reason="2 tests red")
+            repaired = call(action="repair", run="feat", node="verify", nodes=[node("fix", scope=("b c.py",))])
+            fix_context = calls_by_node(repaired)["fix"]["context"]
+            handoff(home, "feat", "fix")
+            rerun = calls_by_node(call(action="settle", run="feat", node="fix", outcome="accepted"))["verify"]
+        # The failed verify node declared no scope: the repair is pointed at its own.
+        self.assertIn(LEFTOVERS + " -- 'b c.py'` (or the files its handoff reported) before editing; "
+                      "keep what is right, undo what is wrong in your SCOPE.", fix_context)
+        self.assertTrue(line_with(rerun["context"], ATTRIBUTION).endswith("Scopes: api: a.py; fix: b c.py"))
+        self.assertNotIn(LEFTOVERS, rerun["context"])
+
+    def test_cycle_one_and_the_replan_cycle_both_carry_the_leftovers_line(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            original = call(action="define", run="feat", nodes=[node("api", scope=("src/api.py",))])
+            call(action="settle", run="feat", node="api", outcome="failed", reason="tests red")
+            first = call(action="repair", run="feat", node="api", nodes=[node("fix", scope=("src/fix.py",))])
+            call(action="settle", run="feat", node="fix", outcome="failed", reason="still red")
+            last = call(action="repair", run="feat", node="fix", nodes=[node("again", scope=("src/api.py",))])
+        self.assertNotIn(LEFTOVERS, calls_by_node(original)["api"]["context"])
+        first_context = calls_by_node(first)["fix"]["context"]
+        self.assertIn(LEFTOVERS + " -- src/api.py`", first_context)
+        last_context = calls_by_node(last)["again"]["context"]
+        self.assertIn(LEFTOVERS + " -- src/api.py src/fix.py`", last_context)
+        # After the re-plan block, which keeps its own bound up to the handoff line.
+        self.assertLess(last_context.index("Handoff:"), last_context.index(LEFTOVERS))
+        self.assertLess(last_context.index(LEFTOVERS), last_context.index("Stay inside your SCOPE"))
+
+    def test_the_leftover_paths_are_bounded(self) -> None:
+        with homes() as home:
+            record = dag_run.new_record(PARENT, "feat", "Feature", "", [
+                node("api", scope=tuple(f"src/{'y' * 120}-{entry}.py" for entry in range(16)))], time.time())
+            record["nodes"].append({**record["nodes"][0], "id": "fix", "repairs": "api", "cycle": 1,
+                                    "origin": "repair:api", "attempts": []})
+            record["repairs"] = {"api": [["fix"]]}
+            context = dag_run.task_for(record, record["nodes"][-1], home.omh,
+                                       dag_run.derive(record, [], time.time()))["context"]
+        line = line_with(context, "The failed attempt's edits")
+        command = line.split("`", 2)[1]
+        self.assertLessEqual(len(command.removeprefix("git diff -- ")), dag_run.LEFTOVER_PATHS_CHARS)
+        self.assertIn("` (+14 more paths) (or the files its handoff reported)", line)
+
+    def test_a_node_that_neither_verifies_nor_repairs_reads_exactly_as_before(self) -> None:
+        with homes() as home:
+            record = dag_run.new_record(PARENT, "feat", "Feature", "", [
+                node("api", scope=("src/api.py",)), node("ui", depends_on=("api",), scope=("src/ui.py",)),
+                node("verify", role="verify", depends_on=("ui",)),
+            ], time.time())
+            derived = dag_run.derive(record, [], time.time())
+            context = dag_run.task_for(record, record["nodes"][1], home.omh, derived)["context"]
+            handoff_path = dag_run.node_handoff(record, home.omh, "ui")
+            read_path = dag_run.node_handoff(record, home.omh, "api")
+        self.assertEqual(context, "\n".join([
+            PROMPT, "",
+            f"Handoff: before you stop, write your report to {handoff_path}: what you did, the files you changed, "
+            "what VERIFY showed, and anything still open. The parent reads that file and your final message.",
+            f"Read first: {read_path}. A missing file means that part did not finish: stop and say so.",
+            "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
+            "say plainly that you are blocked and why; do not report blocked work as done.",
+        ]))
+
 if __name__ == "__main__":
     unittest.main()

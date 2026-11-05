@@ -85,6 +85,9 @@ MAX_GOAL_CHARS: Final = 240
 MAX_SCOPE_ENTRIES: Final = 16
 MAX_SCOPE_CHARS: Final = 200
 MAX_REASON_CHARS: Final = 200
+# The verify node's producer scope map and a repair node's `git diff` paths are cut at these lengths (per node turn).
+SCOPE_MAP_CHARS: Final = 600
+LEFTOVER_PATHS_CHARS: Final = 300
 MAX_REPAIR_CYCLES: Final = 2
 REPLAN_CYCLE: Final = MAX_REPAIR_CYCLES
 MAX_EXTEND_ROUNDS: Final = 2
@@ -1115,6 +1118,37 @@ def reads_for(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
     return reads
 
 
+def _producer_scopes(record: Mapping[str, Any], node: Mapping[str, Any], preceding: set[str]) -> str:
+    """``id: path, path; ...`` for the producers a verify node follows (and their repairs, and its own), cut at
+    `SCOPE_MAP_CHARS`. Attribution by declared scope only: no write is observed."""
+    holders = preceding | {str(node["id"])}
+    rows = [f"{item['id']}: {', '.join(item['write_scope'])}" for item in record["nodes"]
+            if is_producer(item) and (str(item["id"]) in preceding or item.get("repairs") in holders)]
+    text = "; ".join(rows)
+    return text if len(text) <= SCOPE_MAP_CHARS else text[:SCOPE_MAP_CHARS - 1] + "…"
+
+
+def _leftovers_line(record: Mapping[str, Any], node: Mapping[str, Any]) -> str:
+    """A repair starts from what the failed attempt left on disk (no rollback: the worktree is shared)."""
+    root = _root(node)
+    earlier = {root}
+    for group in (record.get("repairs") or {}).get(root, [])[:max(0, int(node.get("cycle") or 1) - 1)]:
+        earlier.update(group)
+    paths = sorted({path for item in record["nodes"] if str(item["id"]) in earlier for path in item["write_scope"]})
+    paths = paths or list(node["write_scope"])  # a failed verify node declares no scope: name the repair's own
+    shown: list[str] = []
+    for path in paths:
+        quoted = shlex.quote(path)
+        if len(" ".join([*shown, quoted])) > LEFTOVER_PATHS_CHARS:
+            break
+        shown.append(quoted)
+    left = len(paths) - len(shown)
+    command = "git diff" + (f" -- {' '.join(shown)}" if shown else "")
+    more = f" (+{left} more paths)" if left else ""
+    return (f"The failed attempt's edits may still be on disk: if this is a git checkout, inspect `{command}`{more} "
+            "(or the files its handoff reported) before editing; keep what is right, undo what is wrong in your SCOPE.")
+
+
 def task_for(
     record: Mapping[str, Any], node: Mapping[str, Any], omh_home: Path, derived: Mapping[str, Mapping[str, Any]]
 ) -> dict[str, str]:
@@ -1185,6 +1219,12 @@ def task_for(
                              "goal done.")
         lines.append("Check the complete run goal, not only this node's local VERIFY. "
                      "Name each unmet or unobserved goal criterion; producer claims are not verification evidence.")
+        scopes = _producer_scopes(record, node, preceding)
+        if scopes:
+            lines.append("In the handoff, name for each failing check the producer whose declared write_scope holds "
+                         f"its failing path, or `unattributed`: by declared scope, not proven cause. Scopes: {scopes}")
+    if node.get("repairs"):
+        lines.append(_leftovers_line(record, node))
     lines.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
                  "say plainly that you are blocked and why; do not report blocked work as done.")
     # The marker ends the goal: Hermes previews each goal by its first 40 characters, and a person reads the label
