@@ -106,7 +106,7 @@ from .panels import DAG_INDENT, SPINNER_FRAMES, dag_style
 from .session_picker import pointer
 from .style import TRUECOLOR, Line, Span
 from .subagents import (
-    COMPLETED, FAILED_STATUSES, INTERRUPTED, LOG_PROGRESS, LOG_THINKING, LOG_TOOL, QUEUED, RUNNING, Agent, LogRow,
+    COMPLETED, ENDED, FAILED_STATUSES, INTERRUPTED, LOG_PROGRESS, LOG_THINKING, LOG_TOOL, QUEUED, RUNNING, Agent, LogRow,
     Roster, short_title,
 )
 from .theme import Theme, kind_style
@@ -122,7 +122,7 @@ LAYER_KEY = "layer:"
 OTHERS_KEY = "others:"  # the group of the roster's agents no node is bound to; `agent:` + its id for each of them
 OTHERS = "other agents"
 # An agent's status as a node's state, for a row of the `other agents` group.
-AGENT_STATES = {RUNNING: "running", QUEUED: "waiting", INTERRUPTED: "interrupted", COMPLETED: "done",
+AGENT_STATES = {RUNNING: "running", QUEUED: "waiting", INTERRUPTED: "interrupted", COMPLETED: "done", ENDED: "done",
                 **{status: "failed" for status in FAILED_STATUSES}}
 MORE_KEY = "more:"  # + a layer's label: the row that layer's quiet nodes fold into
 SETTLED_KEY = "settled:"  # + the first label of a run of settled layers: the one row they fold into
