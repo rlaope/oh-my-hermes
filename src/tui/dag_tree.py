@@ -102,6 +102,7 @@ from typing import Any
 
 from .aura import aura_text
 from .dag_block import SMALL_GRAPH_LANES
+from .markdown import clean_text
 from .panels import DAG_INDENT, SPINNER_FRAMES, dag_style
 from .session_picker import pointer
 from .style import TRUECOLOR, Line, Span
@@ -197,6 +198,19 @@ def _bound(by_id: Mapping[str, Mapping[str, Any]], roster: Roster) -> dict[str, 
         if agent is not None and node.get("kind") != "root":
             bound[node_id] = agent
     return bound
+
+
+def bound_node(graph: Mapping[str, Any], roster: Roster, agent: Agent) -> tuple[str, str]:
+    """The node `agent` is the child of, as the tree binds them (`_bound`): its id within its run (the last part of
+    the graph's `d:<run>:<node>`, `delegation_graph.dag_node_id`) and its label on one line; ("", "") when no node of
+    `graph` is its."""
+    from ..plugin_bundle.omh.delegation_view import _tree_structure
+
+    _root, _groups, _nested, by_id = _tree_structure(graph)
+    node_id = next((key for key, bound in _bound(by_id, roster).items() if bound is agent), None)
+    if node_id is None:
+        return "", ""
+    return node_id.rpartition(":")[2], " ".join(clean_text(str(by_id[node_id].get("title") or "")).split())
 
 
 def _others(by_id: Mapping[str, Mapping[str, Any]], roster: Roster, bound: set[str]) -> list[Agent]:

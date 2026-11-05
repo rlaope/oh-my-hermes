@@ -57,6 +57,10 @@ docs/ROLES.md text eol=lf
 src/plugin_bundle/omh/tools/capability_families.json text eol=lf
 examples/**/*.json text eol=lf
 
+# GitHub archives (the preview `main.zip`, tag and commit archives) substitute
+# the archived commit here, so a generation built from one knows its commit.
+src/omh/_archive_commit.txt export-subst
+
 # The LitQA2 synthetic fixture is pinned by sha256 in tests/test_research_eval_litqa2.py, and
 # `prepare` refuses a digest mismatch, so Windows autocrlf must not rewrite it.
 tests/fixtures/research_eval_litqa2/** text eol=lf

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 import json
 import os
+import sys
 from pathlib import Path
 
 from .advisory import AdvisoryReport, run_config_advisories
@@ -552,6 +553,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.extend(_toolcall_rule_checks(paths))
     checks.extend(_plugin_hook_error_checks(paths))
     checks.append(_retired_skill_install_check(paths))
+    checks.append(_staged_update_recovery_check())
     checks.append(_flat_skill_layout_check(paths))
     checks.append(_agent_skills_pack_check())
     checks.append(_plugin_ulw_lifecycle_check(paths))
@@ -1404,6 +1406,63 @@ def _retained_generations_backed_by(copy: Path) -> list[str]:
         except OSError:
             continue
     return backed
+
+
+def _staged_update_recovery_check() -> Check:
+    """An open staged-update marker is a finding, because it blocks every update.
+
+    While `activation_in_progress` is set, the next `omh update` first finishes
+    or undoes that activation; with `restore_required` it only retries the
+    restore and stages nothing new. On 2026-11-04 that marker stayed open
+    across every run while the output read like an ordinary stop, so updates
+    looked like they ran and nothing arrived.
+    """
+    state_path = managed_command_self_update_state_path()
+    if state_path is None or not state_path.is_file() or not _runs_from(state_path.parent):
+        # A checkout or another install has its own update path; the marker
+        # blocks only the installer-managed command, so only it reports one.
+        return Check("staged_update_recovery", True, "no staged-update state for this command", observed=False)
+    try:
+        state = read_json_object(state_path)
+    except (OSError, ValueError) as exc:
+        return Check(
+            "staged_update_recovery",
+            False,
+            f"cannot read {state_path}: {exc}",
+            severity="warning",
+            next_action="run `omh update --recover-known-good`",
+        )
+    marker = state.get("activation_in_progress")
+    if not isinstance(marker, dict):
+        return Check("staged_update_recovery", True, "no staged update is pending")
+    previous = Path(str(marker.get("previous") or "")).name
+    candidate = Path(str(marker.get("candidate") or "")).name
+    if marker.get("restore_required") is True:
+        return Check(
+            "staged_update_recovery",
+            False,
+            f"an earlier `omh update` could not restore generation {previous} after generation {candidate} failed; "
+            "every `omh update` retries that restore first and installs nothing new until it succeeds",
+            severity="warning",
+            remediation="the restore runs the same update over every Hermes home; the failure it prints (for example a bot profile whose plugins/omh points at a deleted path) is what blocks it",
+            next_action="resolve the failure the last `omh update` printed, then run `omh update`; it finishes the restore before staging",
+        )
+    return Check(
+        "staged_update_recovery",
+        False,
+        f"an `omh update` was interrupted while activating generation {candidate}",
+        severity="warning",
+        next_action="run `omh update`; it completes or rolls back that activation first",
+    )
+
+
+def _runs_from(root: Path) -> bool:
+    """Whether the running interpreter's environment lives under `root`."""
+    try:
+        Path(sys.prefix).resolve().relative_to(root.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
 
 
 def _retired_skill_install_check(paths: OmhPaths) -> Check:

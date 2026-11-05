@@ -15,7 +15,9 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import tomllib
 import unittest
+import zipfile
 
 from _cli_harness import run_cli
 from _local_package import load_local_package
@@ -23,6 +25,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from omh.maintenance.build_identity import (  # noqa: E402
+    ARCHIVE_COMMIT_FILE_NAME,
     BUILD_IDENTITY_CLAIM_BOUNDARY,
     BUILD_IDENTITY_SCHEMA,
     BUILD_IDENTITY_STAMP_SCHEMA,
@@ -42,6 +45,7 @@ NEEDS_GIT = unittest.skipUnless(GIT, "a local git binary is required to build th
 
 _SHA_A = "a" * 40
 _SHA_B = "b" * 40
+_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 
 
 def _git(repo: Path, *arguments: str) -> str:
@@ -314,6 +318,66 @@ class InstalledArtifactIdentityTests(unittest.TestCase):
                 self.assertIsNone(identity["commit_sha"])
                 self.assertEqual(identity["reason"], "malformed_stamped_identity")
 
+    def _archive_build(self, root: Path, *, commit: str, url: str) -> Path:
+        """What pip leaves after installing one of this repository's GitHub archives."""
+        package_root = self._site_packages(root)
+        (package_root / ARCHIVE_COMMIT_FILE_NAME).write_text(f"{commit}\n", encoding="utf-8")
+        dist_info = package_root.parent / f"oh_my_hermes-{__version__}.dist-info"
+        dist_info.mkdir()
+        (dist_info / "direct_url.json").write_text(json.dumps({"url": url, "archive_info": {}}), encoding="utf-8")
+        return package_root
+
+    def test_a_main_archive_build_names_main_and_the_archived_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            package_root = self._archive_build(Path(tmp).resolve(), commit=_SHA_A.upper(), url=f"{_ARCHIVE_ROOT}/heads/main.zip")
+
+            identity = _probe(package_root)
+
+            self.assertEqual(identity["identity_status"], "verified")
+            self.assertEqual(identity["identity_source"], "stamped_artifact")
+            self.assertEqual(identity["commit_sha"], _SHA_A)
+            self.assertEqual(identity["ref"], "main")
+            self.assertEqual(identity["dirty_status"], "clean")
+            self.assertEqual(identity["summary"], f"omh {__version__} (main@{_SHA_A[:8]})")
+
+    def test_an_archive_ref_comes_only_from_this_repository_s_archive_urls(self) -> None:
+        for url, ref, summary in (
+            (f"{_ARCHIVE_ROOT}/tags/v4.0.6.zip", "v4.0.6", f"omh {__version__} (v4.0.6@{_SHA_A[:8]})"),
+            # A commit archive names no ref, and a fork is not this repository.
+            (f"https://github.com/rlaope/oh-my-hermes/archive/{_SHA_A}.zip", None, f"omh {__version__} (build {_SHA_A[:8]}, clean)"),
+            ("https://github.com/someone/oh-my-hermes/archive/refs/heads/main.zip", None, f"omh {__version__} (build {_SHA_A[:8]}, clean)"),
+            (f"{_ARCHIVE_ROOT}/heads/feature.zip", None, f"omh {__version__} (build {_SHA_A[:8]}, clean)"),
+        ):
+            with self.subTest(url=url), tempfile.TemporaryDirectory() as tmp:
+                identity = _probe(self._archive_build(Path(tmp).resolve(), commit=_SHA_A, url=url))
+
+                self.assertEqual(identity["commit_sha"], _SHA_A)
+                self.assertEqual(identity["ref"], ref)
+                self.assertEqual(identity["summary"], summary)
+
+    def test_a_build_from_a_checkout_keeps_the_placeholder_and_reads_as_unstamped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            package_root = self._archive_build(Path(tmp).resolve(), commit="$Format:%H$", url=f"{_ARCHIVE_ROOT}/heads/main.zip")
+
+            identity = _probe(package_root)
+
+            self.assertEqual(identity["identity_status"], "unavailable")
+            self.assertIsNone(identity["ref"])
+            self.assertEqual(identity["reason"], "no_stamped_identity")
+
+    def test_a_packager_stamp_wins_over_the_archive_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            package_root = self._archive_build(Path(tmp).resolve(), commit=_SHA_A, url=f"{_ARCHIVE_ROOT}/heads/main.zip")
+            (package_root / STAMP_FILE_NAME).write_text(
+                json.dumps({"schema_version": BUILD_IDENTITY_STAMP_SCHEMA, "commit_sha": _SHA_B, "dirty": False}),
+                encoding="utf-8",
+            )
+
+            identity = _probe(package_root)
+
+            self.assertEqual(identity["commit_sha"], _SHA_B)
+            self.assertIsNone(identity["ref"])
+
     def test_a_staged_wheel_beside_its_dist_info_is_an_installed_package(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             site = Path(tmp).resolve() / "site"
@@ -561,6 +625,7 @@ class BuildIdentityShapeTests(unittest.TestCase):
                     "identity_status",
                     "install_kind",
                     "reason",
+                    "ref",
                     "schema_version",
                     "summary",
                     "version",
@@ -592,6 +657,42 @@ class BuildIdentityShapeTests(unittest.TestCase):
         }
 
         self.assertEqual(build_identity_summary(identity), f"omh 9.9.9 (source {_SHA_A[:8]}, dirty)")
+
+
+class ArchiveCommitSourceTests(unittest.TestCase):
+    """The repository side of the archive commit: git writes it, packaging ships it."""
+
+    def test_the_repository_ships_the_placeholder_marked_for_substitution(self) -> None:
+        repo = Path(__file__).resolve().parents[1]
+        self.assertEqual((repo / "src" / "omh" / ARCHIVE_COMMIT_FILE_NAME).read_text(encoding="utf-8"), "$Format:%H$\n")
+        attributes = (repo / ".gitattributes").read_text(encoding="utf-8").splitlines()
+        self.assertIn(f"src/omh/{ARCHIVE_COMMIT_FILE_NAME} export-subst", attributes)
+        pyproject = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))
+        self.assertIn(ARCHIVE_COMMIT_FILE_NAME, pyproject["tool"]["setuptools"]["package-data"]["omh"])
+
+    def test_the_identity_reads_the_same_archive_urls_release_selection_writes(self) -> None:
+        from omh.maintenance import build_identity, release
+
+        self.assertEqual(build_identity._REPOSITORY_ARCHIVE_ROOT, release.REPOSITORY_ARCHIVE_ROOT)
+        self.assertEqual(release.package_url_for("preview").package_url, f"{_ARCHIVE_ROOT}/heads/main.zip")
+
+    @NEEDS_GIT
+    def test_git_archive_writes_the_commit_into_the_marked_file(self) -> None:
+        # GitHub builds its archives with `git archive`, which applies export-subst.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp).resolve()
+            (repo / ARCHIVE_COMMIT_FILE_NAME).write_text("$Format:%H$\n", encoding="utf-8")
+            (repo / ".gitattributes").write_text(f"{ARCHIVE_COMMIT_FILE_NAME} export-subst\n", encoding="utf-8")
+            _git(repo, "init", "-q")
+            _git(repo, "add", "-A")
+            _git(repo, "commit", "-q", "-m", "initial")
+            archive = repo / "archive.zip"
+            _git(repo, "archive", "--format=zip", "-o", str(archive), "HEAD")
+
+            with zipfile.ZipFile(archive) as bundle:
+                written = bundle.read(ARCHIVE_COMMIT_FILE_NAME).decode("utf-8")
+
+            self.assertEqual(written.strip(), _head_sha(repo))
 
 
 class BuildIdentityCliTests(unittest.TestCase):
