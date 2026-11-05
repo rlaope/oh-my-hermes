@@ -6647,8 +6647,6 @@ class App(ModesMixin, AgentViewMixin):
             return first - 1
         limit = budget.total - budget.agents - budget.info  # the info line's row
         working = min(self._working_rows(), budget.tail)
-        if self.waiting_since is not None and self.slot is not None and self.slot.framed:
-            working = 0  # a framed question carries the wait's clock on its key row (a gutter): `_tail` draws no row
         if working:
             limit = min(limit, budget.sticky_gap + budget.sticky + budget.tail + budget.pad - working)
         return first + limit - 1
@@ -7945,7 +7943,7 @@ class App(ModesMixin, AgentViewMixin):
             # The turn waits on the person: no spinner, and one clock, the wait's. A framed clarify question
             # carries that clock on its own key row (`PromptSlot.framed`), where the person is looking, as
             # Hermes' 60-minute clarify timeout makes it worth seeing; this row would only repeat it.
-            if self.slot is None or not self.slot.framed:
+            if not self._framed_wait():
                 waited = elapsed_text(now - self.waiting_since)
                 row = (Span(WAITING_GLYPH, self.theme.user), Span(STATE_WAITING, self.theme.text),
                        Span(f" ({waited})", self.theme.muted))
@@ -8008,7 +8006,14 @@ class App(ModesMixin, AgentViewMixin):
         these (`layout.allocate`'s `tail_floor`), so a short terminal never loses the row saying a turn runs."""
         if not self._busy():
             return int(self._compressing_since() is not None)  # the compression's row, with no tip
+        if self._framed_wait():
+            return 0  # `_tail` draws no row: the framed question's key row carries the wait's clock
         return 1 + int(self.size[1] >= TIP_MIN_ROWS and self.waiting_since is None and not self.interrupting)
+
+    def _framed_wait(self) -> bool:
+        """Whether the turn waits on a framed clarify question (`PromptSlot.framed`), whose key row says how long it
+        has waited, so `_tail` draws no waiting row and `_working_rows` counts none."""
+        return self._busy() and self.waiting_since is not None and self.slot is not None and self.slot.framed
 
     def _tip_line(self, cols: int) -> Line | None:
         """The working row's tip, `  ⎿  Tip: …`, the same all turn and the next one in TIPS the turn after; None on a
