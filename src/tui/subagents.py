@@ -129,7 +129,7 @@ MAIN_NAME = "main"
 UNNAMED = "agent"
 UNNAMED_TOOL = "tool"
 MAIN_MARK = "●"
-DONE_MARK = "○"
+DONE_MARK = "✓"
 FAILED_MARK = "✗"
 QUEUED_MARK = "◌"
 INTERRUPTED_MARK = "▪"
@@ -315,7 +315,7 @@ def _mark(agent: Agent, theme: Theme, spinner_frame: int) -> Span:
         return Span(FAILED_MARK, theme.error)
     if agent.status == INTERRUPTED:
         return Span(INTERRUPTED_MARK, theme.muted)
-    return Span(DONE_MARK, theme.muted)
+    return Span(DONE_MARK, theme.ok)
 
 
 # Where a structured goal's title ends: at its first field label or at the end of its first sentence. The labels are
@@ -353,10 +353,12 @@ def _tokens_text(count: int | None) -> str:
 
 
 def _collapsed_row(cut: list[Agent], theme: Theme) -> Line:
-    """The agent view's last row, for the agents it has no room for: `○ 3 done`, else `+4 more · 1 waiting · 3 done`
+    """The agent view's last row, for the agents it has no room for: `✓ 3 done` (muted `▪` when one was
+    interrupted, never a green check for it), else `+4 more · 1 waiting · 3 done`
     (running, waiting, failed and done ones counted, in that order)."""
     if all(agent.status in (COMPLETED, INTERRUPTED) for agent in cut):
-        return (Span(UNSELECTED_MARK), Span(DONE_MARK, theme.muted), Span(f" {len(cut)} done", theme.muted))
+        mark = Span(DONE_MARK, theme.ok) if all(agent.status == COMPLETED for agent in cut) else Span(INTERRUPTED_MARK, theme.muted)
+        return (Span(UNSELECTED_MARK), mark, Span(f" {len(cut)} done", theme.muted))
     counts = [
         (sum(1 for agent in cut if agent.status == RUNNING), "running"),
         (sum(1 for agent in cut if agent.status == QUEUED), WAITING),
@@ -615,7 +617,7 @@ class Roster:
         so Down highlights a row without moving one. More agents than
         `max_rows` holds collapse into one last row: running agents are kept
         first, then those waiting for a worker, then failed, interrupted and
-        done ones, and the last row counts the rest, `○ 3 done` when every one
+        done ones, and the last row counts the rest, `✓ 3 done` when every one
         of them finished, else `+4 more · 1 waiting · 3 done`. The rows kept
         stay in roster order. In two rows or fewer `● main` gives its row up
         first, so a running agent is still named. With no agent there is no
