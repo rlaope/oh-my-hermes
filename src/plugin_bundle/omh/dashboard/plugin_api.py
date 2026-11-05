@@ -135,6 +135,10 @@ def resolve_hermes_home() -> Path:
     configured = os.environ.get("HERMES_HOME", "").strip()
     if configured:
         return Path(configured)
+    # Mirrors the bundle's ``runtime_paths.platform_default_hermes_home`` (and
+    # Hermes' ``hermes_constants._platform_default_hermes_home``); this file is
+    # imported standalone, so it cannot import that sibling directly. A parity test in
+    # tests/test_desktop_half.py keeps the two copies equal.
     if sys.platform == "win32":
         local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
         base = Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"

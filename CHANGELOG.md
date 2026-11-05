@@ -22,6 +22,17 @@ All notable changes will be documented here.
   measured saw `dag-ulw`: four got no OMH context at all after `/plan`. A
   turn with no plan just made renders the same bytes as before, and routing
   is unchanged.
+
+- **The Hermes Desktop pane reads the Windows Hermes home in its fallback
+  (#2569 by @k1lgor).** When the dashboard backend could not import Hermes'
+  `get_hermes_home()` and no `HERMES_HOME` was set, it read `~/.hermes`,
+  while Hermes itself defaults to `%LOCALAPPDATA%\hermes` on Windows, so the
+  pane's HUD could read an empty home. That fallback now uses Hermes'
+  platform default, with `HERMES_DATA_DIR_SUFFIX` honoured; a parity test
+  keeps it equal to the bundle's own `platform_default_hermes_home`. The
+  host's answer and an explicit `HERMES_HOME` still win, and POSIX stays
+  `~/.hermes`.
+
 ## 4.0.6 - 2026-11-04
 
 - **After a plan is accepted, the planning skills offer `dag-ulw` beside the

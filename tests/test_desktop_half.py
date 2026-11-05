@@ -30,7 +30,7 @@ from _standalone_bundle import bundle_dir
 from omh.install.plugin_pack import install_plugin_bundle
 from omh.maintenance.doctor import DESKTOP_HALF_FILES, doctor_ok, run_doctor
 from omh.paths import resolve_paths
-from omh.plugin_bundle.omh import runtime_reader, subagent_graph
+from omh.plugin_bundle.omh import runtime_paths, runtime_reader, subagent_graph
 from omh.plugin_bundle.omh.dashboard import plugin_api
 from _module_patch import patch_modules
 from _delegation_graphs import nested, owner_mock, parallel
@@ -922,7 +922,7 @@ class DesktopBackendTests(unittest.TestCase):
         with patch_modules({"hermes_constants": None}):
             with mock.patch.dict(os.environ, {"HERMES_HOME": str(self.hermes_home)}):
                 self.assertEqual(plugin_api.resolve_hermes_home(), self.hermes_home)
-            with mock.patch.dict(os.environ, {"HERMES_HOME": ""}):
+            with mock.patch.dict(os.environ, {"HERMES_HOME": "", "HERMES_DATA_DIR_SUFFIX": ""}):
                 expected = (
                     Path(os.environ["LOCALAPPDATA"]) / "hermes"
                     if os.name == "nt"
@@ -941,6 +941,29 @@ class DesktopBackendTests(unittest.TestCase):
                     self.assertEqual(
                         plugin_api.resolve_hermes_home(),
                         local_appdata / "hermes-test",
+                    )
+
+    def test_resolve_hermes_home_fallback_matches_the_bundle_platform_default(self) -> None:
+        # plugin_api.py is imported standalone, so its platform default is a
+        # copy of runtime_paths.platform_default_hermes_home. Pin the copy to
+        # the original on every branch so the two cannot drift apart.
+        local_appdata = self.root / "local-appdata"
+        cases = (
+            ("win32", {"LOCALAPPDATA": str(local_appdata), "HERMES_DATA_DIR_SUFFIX": ""}),
+            ("win32", {"LOCALAPPDATA": str(local_appdata), "HERMES_DATA_DIR_SUFFIX": "-dev"}),
+            ("win32", {"LOCALAPPDATA": "", "HERMES_DATA_DIR_SUFFIX": ""}),
+            ("linux", {"HERMES_DATA_DIR_SUFFIX": ""}),
+            ("darwin", {"HERMES_DATA_DIR_SUFFIX": "-dev"}),
+        )
+        with patch_modules({"hermes_constants": None}):
+            for platform, env in cases:
+                with self.subTest(platform=platform, env=env), \
+                        mock.patch.dict(os.environ, {"HERMES_HOME": "", **env}), \
+                        mock.patch.object(plugin_api.sys, "platform", platform), \
+                        mock.patch.object(runtime_paths.sys, "platform", platform):
+                    self.assertEqual(
+                        plugin_api.resolve_hermes_home(),
+                        runtime_paths.platform_default_hermes_home(),
                     )
 
     def test_router_exists_exactly_when_fastapi_does(self) -> None:
