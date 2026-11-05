@@ -352,6 +352,12 @@ class MergeTests(_ScreeningDir):
         copy = self.write("copy.md", (FIXTURES / "answers_a.md").read_text(encoding="utf-8"))
         _status, payload, _stderr = self.merge(FIXTURES / "answers_a.md", copy)
         self.assertIn("same_answers_file", payload["warnings"])
+        # A copy that only crossed platforms (CRLF from git autocrlf, an editor's BOM) is still the same answers.
+        text = (FIXTURES / "answers_a.md").read_text(encoding="utf-8").replace("\r\n", "\n")
+        crossed = self.root / "crossed.md"
+        crossed.write_bytes(b"\xef\xbb\xbf" + text.replace("\n", "\r\n").encode("utf-8"))
+        _status, payload, _stderr = self.merge(FIXTURES / "answers_a.md", crossed)
+        self.assertIn("same_answers_file", payload["warnings"])
         _status, payload, _stderr = self.fixture_merge()
         self.assertNotIn("same_answers_file", payload["warnings"])
 

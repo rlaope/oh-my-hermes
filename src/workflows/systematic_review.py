@@ -424,7 +424,11 @@ def _answer_lines(path: Path, what: str) -> list[tuple[str, str, str]]:
 
 
 def _same_answers(answers_a: Path, answers_b: Path) -> bool:
-    """True when A and B name the same path, or files with identical bytes."""
+    """True when A and B name the same path, or files the parser reads as the same text.
+
+    A leading BOM and CRLF line ends are dropped first, as the line parser does, so a copy
+    that only crossed platforms (git autocrlf, an editor's BOM) still counts as the same file.
+    """
     if answers_a.resolve() == answers_b.resolve():
         return True
 
@@ -432,9 +436,10 @@ def _same_answers(answers_a: Path, answers_b: Path) -> bool:
         out: list[bytes] = []
         for answer_file in _answer_files(path, "answers"):
             try:
-                out.append(answer_file.read_bytes())
+                data = answer_file.read_bytes()
             except OSError as exc:
                 raise ScreeningInputError(f"cannot read answers {answer_file}: {exc.strerror or exc}") from exc
+            out.append(data.removeprefix(b"\xef\xbb\xbf").replace(b"\r\n", b"\n"))
         return out
 
     return contents(answers_a) == contents(answers_b)
