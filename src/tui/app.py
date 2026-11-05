@@ -194,7 +194,7 @@ from .modes import (
     info_line,
     model_forms,
 )
-from .pager import ALT_SCREEN_OFF, ALT_SCREEN_ON, HistoryPager, Pager, Selection, forget_cells, reversed_cells
+from .pager import ALT_SCREEN_OFF, ALT_SCREEN_ON, ROW_END, HistoryPager, Pager, Selection, forget_cells, reversed_cells
 from .model_picker import KEYS as MODEL_PICKER_KEYS
 from .model_picker import PICK as MODEL_PICK
 from .model_picker import ModelPicker, model_rows, typed_switch_value
@@ -224,6 +224,7 @@ from .screen import (
     CURSOR_SHAPE_BEAM,
     CURSOR_SHAPE_BLOCK,
     ERASE_SCROLLBACK,
+    FLUSHED_KEPT,
     HIDE_CURSOR,
     SHOW_CURSOR,
     LiveRegion,
@@ -875,6 +876,8 @@ OSC52_COPY = "\x1b]52;c;{}\x07"
 COPY_NOTE_SECONDS = 2.0
 COPIED_NOTE = "copied {count} chars to clipboard"
 COPY_SENT_NOTE = "copy sent ({why})"
+# On the notice row when a selection on the main screen went because the rows under it changed (`_keep_selection_true`).
+SELECTION_DROPPED_NOTE = "selection dropped: text moved"
 OSC52_UNCONFIRMED = "terminal may not support OSC 52"
 OSC52_IN_TMUX = "tmux passes it on only with set-clipboard on"
 # The completion menu's name column: at least this wide, wider for the longest name it lists (OMH skills are
@@ -1991,6 +1994,7 @@ class App(ModesMixin, AgentViewMixin):
         self.selected_lines: dict[int, Line] = {}
         self.unmapped_press = False
         self.button_held = False  # a press on the main screen or in a pager whose release has not come
+        self.copied_at: float | None = None  # when the last drag on the main screen copied, on `clock`
         self.report_at: float | None = None  # when the last mouse report was decoded, on `clock`
         self.platform = sys.platform  # where `copy_route` looks for `pbcopy`
         self.pbcopy: Callable[[str], bool] = partial(pbcopy, environ=environ)
@@ -2745,6 +2749,8 @@ class App(ModesMixin, AgentViewMixin):
         self.terminal.set_mouse(enabled, drag)
         if was_on and not self.terminal.mouse_reporting:
             self.mouse_off_at = self.clock()
+        if not enabled:
+            self.button_held = False  # no release comes for a press once reports are off (a resize, Ctrl+Z, a picker)
 
     def _report_may_follow(self) -> bool:
         """Whether a lone ESC the decoder holds may be the start of a mouse report, so it waits
@@ -6602,9 +6608,12 @@ class App(ModesMixin, AgentViewMixin):
                     self.pager.handle_mouse(event, rows, now)  # one notch up from the end, as the wheel scrolls it
             return
         row = min(event.y - 1, last)  # a report counts from 1; one under the region is on its last row
+        stable = self._last_stable_doc()
         if event.button == BUTTON_LEFT and event.pressed and not event.motion:
             doc = self.region.doc_row(row, rows)
             self.unmapped_press = doc is None
+            if doc is not None and doc > stable:
+                doc = None  # a live row that changes on its own (the working row, the info line): nothing to select
             self._copied(selection.press(None if doc is None else (doc, event.x - 1), now, self._printed_line))
         elif event.motion and event.pressed:
             if self.unmapped_press:
@@ -6614,12 +6623,26 @@ class App(ModesMixin, AgentViewMixin):
             doc = next((found for at in range(row, last + 1) if (found := self.region.doc_row(at, rows)) is not None),
                        None)
             if doc is not None:
-                selection.move((doc, event.x - 1))
+                # Over a live row that changes on its own, the drag runs to the end of the last row that does not.
+                selection.move((doc, event.x - 1) if doc <= stable else (stable, ROW_END))
         elif not event.pressed:
             self.unmapped_press = False
             self._copied(selection.release(now, self._printed_line))
         self._note_selected_lines()
         self.dirty = True
+
+    def _last_stable_doc(self) -> int:
+        """The last printed row a drag on the main screen may hold (`LiveRegion.doc_row`): never the info line or the
+        agent view under it, and while a turn runs never the working row, its tip or anything under them, which
+        change every tick and would drop the selection (`_keep_selection_true`) as soon as a drag reached them."""
+        budget, first = self.frame_budget, self.region.flushed_rows
+        if budget is None:
+            return first - 1
+        limit = budget.total - budget.agents - budget.info  # the info line's row
+        working = min(self._working_rows(), budget.tail)
+        if working:
+            limit = min(limit, budget.sticky_gap + budget.sticky + budget.tail + budget.pad - working)
+        return first + limit - 1
 
     def _transcript_view(self) -> bool:
         """What the mouse opens where it selects nothing: Ctrl+O's view, the open question while one is asked, else the
@@ -6660,23 +6683,26 @@ class App(ModesMixin, AgentViewMixin):
         first = self.region.flushed_rows
         for doc in range(held[0], held[1] + 1):
             index = doc - first
-            if index < 0:
-                after = self.region.doc_line(doc)
+            if index < 0:  # a row above the region: as flushed, unless this frame's flush pushes it out of what is kept
+                after = self.region.doc_line(doc) if first + len(stable) - doc <= FLUSHED_KEPT else None
             elif index < len(stable):
                 after = stable[index]
             else:
                 after = lines[index - len(stable)] if index - len(stable) < len(lines) else None
             if after != self.selected_lines.get(doc):
                 self._drop_selection()
+                self.copy_note = Notification(SELECTION_DROPPED_NOTE, "warn", "")
+                self.copy_noted_at = self.clock()
                 return
 
     def _copy_key_dropped(self, event: Key | Paste | Mouse) -> bool:
-        """Ctrl+C right after a drag on the main screen, while its selection shows or its copy notice is up, only lets
-        the selection go: on a terminal that copies with Ctrl+C (Windows Terminal, VS Code), the person pressing it
-        after a drag means to copy, not to interrupt the turn, clear the draft or arm the exit. True when it did."""
+        """The first Ctrl+C within COPY_NOTE_SECONDS of a drag that copied on the main screen only lets the selection go:
+        on a terminal that copies with Ctrl+C (Windows Terminal, VS Code), the person pressing it after a drag means
+        to copy, not to interrupt the turn, clear the draft or arm the exit. True when it did."""
         if not (isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c" and not event.alt):
             return False
-        if self.pager is not None or (self.selection.rows is None and self.copy_note is None):
+        copied, self.copied_at = self.copied_at, None
+        if self.pager is not None or copied is None or self.clock() - copied >= COPY_NOTE_SECONDS:
             return False
         self.selection.clear()
         self.selected_lines = {}
@@ -6692,7 +6718,7 @@ class App(ModesMixin, AgentViewMixin):
         """`text`, picked on the main screen, to the clipboard, the notice row saying what that did; nothing for ""."""
         if text:
             self.copy_note = self._copy_selection(text)
-            self.copy_noted_at = self.clock()
+            self.copy_noted_at = self.copied_at = self.clock()
 
     def _drop_selection(self) -> None:
         """Let the main screen's selection go; the next frame paints its rows as they were."""

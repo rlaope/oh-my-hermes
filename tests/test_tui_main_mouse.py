@@ -47,7 +47,7 @@ from omh.tui.app import (
 from omh.tui.gateway import ServerRequest
 from omh.tui.keys import BUTTON_LEFT, CHAR, DOWN, WHEEL_DOWN, WHEEL_UP, Key, Mouse
 from omh.tui.pager import HistoryPager, reversed_cells
-from omh.tui.screen import LiveRegion, _flushed_row, cursor_at
+from omh.tui.screen import FLUSHED_KEPT, LiveRegion, _flushed_row, cursor_at
 from omh.tui.style import Span, Style
 from omh.tui.transcript import AssistantBlock
 
@@ -215,14 +215,13 @@ class DragTests(unittest.TestCase):
             release(app, at, row)
         self.assertEqual(osc52(app), ["reply", "first line of the reply"])
 
-    def test_a_drag_carried_under_the_region_ends_on_its_last_row(self) -> None:
+    def test_a_drag_carried_under_the_region_stops_above_the_info_line(self) -> None:
         app = main_app()
+        type_text(app, "draft")
         screen = drawn(app)
-        last = max(index for index, line in enumerate(screen) if line) + 1
         drag(app, (1, row_of(app, "second line")), (60, len(screen)))
         (copied,) = osc52(app)
-        self.assertTrue(copied.startswith("second line"), copied)
-        self.assertTrue(copied.endswith(screen[last - 1].strip()), copied)
+        self.assertEqual(copied, "second line\n\ndraft")  # the rules, the mark and the info line are no text
 
     def test_the_selection_stays_on_its_text_while_output_scrolls_the_screen(self) -> None:
         app = main_app(rows=10)
@@ -495,6 +494,71 @@ class MovedRowsTests(unittest.TestCase):
         self.assertEqual(reversed_count(app.terminal.screen), 0)  # type: ignore[attr-defined]
 
 
+class TurnTests(unittest.TestCase):
+    def test_a_drag_that_overshoots_onto_the_working_rows_during_a_turn_copies_the_reply(self) -> None:
+        now = [100.0]
+        app = main_app(rows=12, clock=lambda: now[0])
+        app.turn_pending = True
+        screen = drawn(app)
+        self.assertIn("Working", "\n".join(screen))
+        first = row_of(app, "first line")
+        press(app, column(app, "first line"), first)
+        move(app, 60, len(screen))  # the screen's last row: under the working row, the composer and the info line
+        for _tick in range(4):  # the working row changes every tick
+            now[0] += 1.0
+            drawn(app)
+            self.assertTrue(reversed_columns(app, row_of(app, "first line")))
+        release(app, 60, len(screen))
+        self.assertEqual(osc52(app), [REPLY])
+        self.assertNotIn("dropped", "\n".join(drawn(app)))
+
+    def test_a_press_on_the_working_row_selects_nothing(self) -> None:
+        app = main_app()
+        app.turn_pending = True
+        drawn(app)
+        row = row_of(app, "Working")
+        drag(app, (1, row), (40, row))
+        self.assertEqual((osc52(app), app.selection.rows), ([], None))
+
+    def test_a_drag_dropped_for_rows_that_changed_says_so(self) -> None:
+        app = main_app()
+        type_text(app, "DRAFTTEXT here")
+        drawn(app)
+        row = row_of(app, "DRAFTTEXT")
+        press(app, column(app, "DRAFTTEXT"), row)
+        move(app, column(app, "DRAFTTEXT") + 5, row)
+        app.transcript.add_notice("NOTICE LINE ONE")
+        drawn(app)
+        self.assertIn("selection dropped: text moved", "\n".join(drawn(app)))
+
+    def test_a_drag_over_rows_that_left_what_the_region_keeps_is_dropped_and_says_so(self) -> None:
+        app = main_app()
+        row, text = row_of(app, "first line"), column(app, "first line")
+        press(app, text, row)
+        move(app, text + 9, row)
+        for index in range(FLUSHED_KEPT + 20):  # one frame flushes more rows than the region keeps
+            app.transcript.add_notice(f"n{index}")
+        drawn(app)
+        release(app, text + 9, row)
+        self.assertEqual(osc52(app), [])
+        self.assertIn("selection dropped: text moved", "\n".join(drawn(app)))
+
+
+class ButtonTests(unittest.TestCase):
+    def test_a_press_whose_release_never_comes_stops_holding_esc_once_reports_go_off(self) -> None:
+        for leave in ("resize", "suspend"):
+            with self.subTest(leave=leave):
+                app = main_app()
+                row = row_of(app, "first line")
+                press(app, 5, row)
+                self.assertTrue(app.button_held)
+                if leave == "resize":
+                    app._on_resize()
+                else:
+                    app._suspend()
+                self.assertFalse(app.button_held)
+
+
 class ComposerFrameTests(unittest.TestCase):
     def test_a_drag_over_the_composer_copies_the_draft_without_its_rules_mark_or_placeholder(self) -> None:
         app = main_app()
@@ -538,6 +602,24 @@ class CopyKeyTests(unittest.TestCase):
         self.assertEqual(app.composer.text, "")
         app._on_input(ctrl_c)
         self.assertEqual(len(client.named("session.interrupt")), 1)  # type: ignore[attr-defined]
+
+
+    def test_only_within_the_copy_notices_time_and_never_without_a_copy(self) -> None:
+        now = [100.0]
+        app = main_app(clock=lambda: now[0])
+        ctrl_c = Key(CHAR, "c", ctrl=True)
+        row, at = row_of(app, "first line"), column(app, "first line")
+        type_text(app, "keep")
+        press(app, at, row)
+        move(app, 40, row)
+        app._on_input(ctrl_c)  # a drag still held copied nothing: Ctrl+C is Ctrl+C, and the draft goes
+        self.assertEqual(app.composer.text, "")
+        type_text(app, "keep")
+        drag(app, (at, row), (40, row))
+        self.assertEqual(osc52(app), ["first line of the reply"])
+        now[0] += COPY_NOTE_SECONDS
+        app._on_input(ctrl_c)  # the copy is 2 s old: Ctrl+C again
+        self.assertEqual(app.composer.text, "")
 
 
 class EscLatencyTests(unittest.TestCase):
@@ -711,15 +793,21 @@ class DefaultMousePromptSlotTests(AppTestCase):
 
     approval_run = PromptSlotTests.approval_run
     assert_denied = PromptSlotTests.assert_denied
-    submit = PromptSlotTests.submit
-    test_an_approval_opens_a_slot_and_d_sends_the_explicit_deny = (
-        PromptSlotTests.test_an_approval_opens_a_slot_and_d_sends_the_explicit_deny)
-    test_esc_on_an_approval_sends_the_explicit_deny = PromptSlotTests.test_esc_on_an_approval_sends_the_explicit_deny
-    test_up_then_enter_on_an_armed_approval_still_denies = (
-        PromptSlotTests.test_up_then_enter_on_an_armed_approval_still_denies)
-    test_a_clarify_choice_is_picked_by_its_number = PromptSlotTests.test_a_clarify_choice_is_picked_by_its_number
-    test_a_typed_clarify_answer_never_enters_the_input_history = (
-        PromptSlotTests.test_a_typed_clarify_answer_never_enters_the_input_history)
+
+    def test_an_approval_opens_a_slot_and_d_sends_the_explicit_deny(self) -> None:
+        PromptSlotTests.test_an_approval_opens_a_slot_and_d_sends_the_explicit_deny(self)  # type: ignore[arg-type]
+
+    def test_esc_on_an_approval_sends_the_explicit_deny(self) -> None:
+        PromptSlotTests.test_esc_on_an_approval_sends_the_explicit_deny(self)  # type: ignore[arg-type]
+
+    def test_up_then_enter_on_an_armed_approval_still_denies(self) -> None:
+        PromptSlotTests.test_up_then_enter_on_an_armed_approval_still_denies(self)  # type: ignore[arg-type]
+
+    def test_a_clarify_choice_is_picked_by_its_number(self) -> None:
+        PromptSlotTests.test_a_clarify_choice_is_picked_by_its_number(self)  # type: ignore[arg-type]
+
+    def test_a_typed_clarify_answer_never_enters_the_input_history(self) -> None:
+        PromptSlotTests.test_a_typed_clarify_answer_never_enters_the_input_history(self)  # type: ignore[arg-type]
 
     def prepare(self, scenario: Scenario, *, rows: int = 24, cols: int = 80, env: dict | None = None):  # type: ignore[no-untyped-def,override]
         return super().prepare(scenario, rows=rows, cols=cols, env={"OMH_TUI_MOUSE": "1", **(env or {})})

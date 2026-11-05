@@ -773,14 +773,19 @@ run and approval decision stays Hermes'; the screen is OMH's.
   as the pager's does, below); a double click copies a word and a triple
   click a row, and a key, the wheel, the next click or, once it is copied,
   the next output drops the selection. The composer's rules, its `❯` and its placeholder are never
-  copied, only what you typed. A drag over the transcript's rows stays on
-  them while output scrolls the screen; one over the live rows (a reply
-  still streaming, the panels, the composer) is dropped, highlight and all,
-  and copies nothing as soon as the rows under it change, so it never copies
-  text other than what it showed. Its highlight never goes into the
-  scrollback. Ctrl+C right after a drag (while its highlight or its copy
-  notice shows) only drops the selection, since Windows Terminal and VS
-  Code copy with it; the next Ctrl+C acts as always. The wheel up opens the
+  copied, only what you typed. The info line and the agent view under it
+  are never selected, and while a turn runs neither are the working row,
+  its tip and the rows under them: a drag carried onto them runs to the end
+  of the last row above them, so dragging to the bottom of the screen
+  copies the transcript. A drag over the transcript's rows stays on them
+  while output scrolls the screen; one over the live rows that change (a
+  reply still streaming, the panels, the composer) is dropped, highlight
+  and all, and copies nothing as soon as the rows under it change, and the
+  row above the composer says `selection dropped: text moved`, so it never
+  copies text other than what it showed. Its highlight never goes into the
+  scrollback. Ctrl+C within 2 s of a drag that copied only drops the
+  selection, since Windows Terminal and VS Code copy with it; the next
+  Ctrl+C acts as always. The wheel up opens the
   transcript view Ctrl+O opens, one notch up from its end, where the screen
   was; it scrolls there, and q goes back. The wheel down does nothing on the
   main screen. A row the OMH TUI did not print in this screen (the shell's
