@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **dag-ulw review nodes route to the `review` category, and baselines stay
+  low.** The skill's difficulty-ladder rule now says a `role=review` node
+  takes the `review` category where the user's routes serve it, a `baseline`
+  node stays `quick` or `unspecified-low`, and a `verify` node, which judges
+  the run goal and baseline exemptions, climbs the ladder like any judgement.
+  Before, the planner put code reviews on `unspecified-high` in some runs and
+  on `review` or `unspecified-low` in others. A review node now costs more:
+  the shipped `review` chain runs the same models as `unspecified-high` at
+  `xhigh` instead of `medium`. `omh_dag` define, repair and extend also
+  return the advisory lint `review_not_review_category:<id>` for a declared
+  review node on another category. Like every lint finding, it never refuses
+  a run. It is not shown when Hermes' `model_map` backend offers no option
+  for `review` but does for `unspecified-high`. Verify nodes are not linted,
+  and neither are nodes whose label only reads like a review.
 - **A drag in the OMH TUI copies the transcript without the rail.** The main
   screen now takes the mouse: a drag over the transcript or the live rows
   selects the text (shown reversed) and copies it without the thin `┃` rail
