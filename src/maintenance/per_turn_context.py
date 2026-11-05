@@ -73,6 +73,28 @@ _PLAN_TURN_HISTORY = (
 )
 
 
+# The platform a console session's turn names (`OPERATOR_CONSOLE_PLATFORMS`): the
+# OMH TUI and Hermes' TUI pass "tui". Its first turn carries the console choices
+# line (`console_choices`), which a messaging platform's never does.
+_CONSOLE_PLATFORM = "tui"
+# A person's turn after a clarify of the session timed out while they were away.
+_CLARIFY_TIMED_OUT_HISTORY = (
+    {"role": "user", "content": "merge it once CI passes"},
+    {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{"id": "call_scenario", "type": "function", "function": {"name": "clarify", "arguments": "{}"}}],
+    },
+    {
+        "role": "tool",
+        "tool_call_id": "call_scenario",
+        "content": json.dumps({"responses": [], "outcome": "timed_out", "notice": "[user did not respond within 60m]"}),
+    },
+    {"role": "assistant", "content": "CI is still red on one job; merge now, or rerun it?"},
+    {"role": "user", "content": "back, what now"},
+)
+
+
 class _RecordingPluginContext:
     """The two registration methods `register()` requires, recording what it passes."""
 
@@ -308,10 +330,14 @@ def pre_llm_call_context_scenario_chars() -> dict[str, int]:
     - `plan_acceptance`: a later turn accepting the plan Hermes' `/plan` wrote
       the turn before, while a plan workflow is active, so the route hint,
       the active plan line and the plan follow-on line ride together.
+    - `clarify_timed_out`: a console session's turn the person opens after a
+      clarify of the session timed out, so the console choices line's
+      re-ask variant rides it (`console_choices`).
     - `all_surfaces_without_section`: `all_surfaces` on the fallback, primer
       included; the fallback's maximum.
     - `all_surfaces`: the route hint, candidate line, largest role, active
-      workflow and running board in one first turn (the three plan scenarios
+      workflow and running board in one first turn of a console session, so
+      the console choices line rides it too (the plan and clarify scenarios
       above need a later turn and are not part of it). The parts add, so
       this is the largest of the seeded scenarios; it is not a bound on every
       turn, because the parts listed below are not seeded. The routed request
@@ -373,16 +399,25 @@ def pre_llm_call_context_scenario_chars() -> dict[str, int]:
             conversation_history=[*_PLAN_TURN_HISTORY, {"role": "user", "content": _PLAN_ACCEPTANCE}],
             **later,
         ),
+        "clarify_timed_out": _run_pre_llm_call(
+            no_seed,
+            user_message=_CLARIFY_TIMED_OUT_HISTORY[-1]["content"],
+            conversation_history=list(_CLARIFY_TIMED_OUT_HISTORY),
+            platform=_CONSOLE_PLATFORM,
+            **later,
+        ),
         "all_surfaces": _largest_role(
             _ROUTED_REQUEST,
             (_seed_active_workflow, _seed_running_board),
             is_first_turn=True,
+            platform=_CONSOLE_PLATFORM,
         ),
         "all_surfaces_without_section": _largest_role(
             _ROUTED_REQUEST,
             (_seed_active_workflow, _seed_running_board),
             section=False,
             is_first_turn=True,
+            platform=_CONSOLE_PLATFORM,
         ),
     }
 

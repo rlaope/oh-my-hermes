@@ -319,7 +319,10 @@ class ModeShownTests(unittest.TestCase):
                         show_mode(app, mode)
                         opener(app)
                         screen = drawn(app)
-                        self.assertEqual(rule_rows(screen), [])
+                        if app.slot is not None:  # a framed question's own rules may stand; the composer's do not
+                            self.assertFalse(composer_drawn(app, screen), screen)
+                        else:
+                            self.assertEqual(rule_rows(screen), [])
                         self.assertTrue(without_badge(screen[info_row(screen)]).startswith(INFO_INSET + label), screen)
 
 
@@ -336,9 +339,11 @@ class ClarifyFieldTests(unittest.TestCase):
         screen = drawn(app)
         self.assertFalse(composer_drawn(app, screen))
         info = info_row(screen)
+        rule = "─" * 80
         self.assertEqual(
-            screen[info - 4 : info],
-            ["▌ ? Which color?", "▌ ❯ 1. red", "▌   2. blue", "▌   3. Other (type your answer)"],
+            screen[info - 8 : info],
+            [rule, "▌ Which color?", "▌", "▌ ❯ 1. red", "▌   2. blue", "▌   3. Type something.", rule,
+             "  Enter to select · ↑↓ to navigate · Esc to cancel"],
         )
 
     def test_typing_a_character_opens_the_field_with_it_and_enter_sends_the_answer(self) -> None:
@@ -347,7 +352,7 @@ class ClarifyFieldTests(unittest.TestCase):
         screen = drawn(app)
         self.assertTrue(composer_drawn(app, screen), screen)
         self.assertIn("❯ green", [composer_text(row) for row in screen])
-        self.assertIn("▌ ❯ 3. Other (type your answer)", screen)
+        self.assertIn("▌ ❯ 3. Type something.", screen)
         press(app, Key(ENTER))
         self.assertEqual(answered(client, "srq-2"), [{"result": {"answers": {"q0": "green"}}}])
         self.assertEqual(held(app), draft)
