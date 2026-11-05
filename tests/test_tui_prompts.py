@@ -730,7 +730,7 @@ class MultiSelectTests(unittest.TestCase):
             "  [ ] 2. ham",
             "  [ ] 3. olives",
             "      4. Type something.",
-            "      Submit",
+            "         Submit",
         ])
         self.assertIn("space", slot("clarify", MULTI).keys[0])
 
@@ -778,7 +778,11 @@ class MultiSelectTests(unittest.TestCase):
         self.assertIsNone(clarify.handle_key(SPACE))  # Space never sends
         self.assertEqual(clarify.selected, 4)
         self.assertEqual(lines_text(clarify.lines(80, DEFAULT_THEME, 12))[-1],
+                         "  Enter to skip · ↑↓ to navigate · Esc to cancel")  # nothing ticked or typed: "" is skipped
+        clarify.draft = "pineapple"
+        self.assertEqual(lines_text(clarify.lines(80, DEFAULT_THEME, 12))[-1],
                          "  Enter to send · ↑↓ to navigate · Esc to cancel")
+        clarify.draft = " "
         clarify.handle_key(Key(DOWN))  # the list stops at Submit
         frame = clarify.handle_key(Key(ENTER)).frame
         self.assertEqual(frame, {"result": {"answers": {"q0": ""}}})
@@ -813,12 +817,12 @@ class MultiSelectTests(unittest.TestCase):
         self.assertIsNone(clarify.handle_key(Key(ENTER)))  # Enter unticks: question 1 stays open
         self.assertEqual((clarify.question_index, clarify.ticked), (0, []))
         clarify.handle_key(Key(ENTER))
-        self.assertEqual(body(lines_text(clarify.lines(80, DEFAULT_THEME, 12)))[-1], "      Next")  # more follow
+        self.assertEqual(body(lines_text(clarify.lines(80, DEFAULT_THEME, 12)))[-1], "         Next")  # more follow
         self.assertIsNone(submitted(clarify))  # Next moves on to question 2
         self.assertEqual(clarify.ticked, [])
         drawn = body(lines_text(clarify.lines(80, DEFAULT_THEME, 12)))
         self.assertIn("❯ [ ] 1. red", drawn)
-        self.assertEqual(drawn[-1], "      Submit")
+        self.assertEqual(drawn[-1], "         Submit")
         answer = clarify.handle_key(Key(CHAR, "2"))
         self.assertIsNone(answer)
         self.assertEqual(submitted(clarify).frame,
@@ -837,6 +841,33 @@ class MultiSelectTests(unittest.TestCase):
                          {"result": {"answers": {"q0": "red (Recommended)"}}})
         self.assertFalse([row for row in body(lines_text(slot("clarify", CLARIFY).lines(80, DEFAULT_THEME, 12)))
                           if "Submit" in row])
+
+
+class SubmitRowTests(unittest.TestCase):
+    def test_the_field_text_shows_on_its_row_and_goes_with_submit(self) -> None:
+        clarify = slot("clarify", MULTI)
+        clarify.handle_key(Key(CHAR, "2"))
+        clarify.draft = "pine\napple"  # what the field holds after the arrows left it
+        self.assertIn("      4. pine apple", body(lines_text(clarify.lines(80, DEFAULT_THEME, 12))))
+        self.assertEqual(submitted(clarify).frame, {"result": {"answers": {"q0": '["ham","pine\\napple"]'}}})
+
+    def test_the_submit_label_sits_under_the_choice_labels_and_is_never_copied(self) -> None:
+        many = {"questions": [{**MULTI["questions"][0], "choices": [f"choice {n}" for n in range(1, 11)]}]}
+        rows = slot("clarify", many).lines(80, DEFAULT_THEME, 30)
+        text = body(lines_text(rows))
+        self.assertEqual(text[-1].index("Submit"), text[-2].index("Type something."))  # past "11. " too
+        submit = next(span for row in rows for span in row if "Submit" in span.text)
+        self.assertTrue(submit.style.gutter)
+
+    def test_a_short_slot_still_reaches_the_submit_row(self) -> None:
+        clarify = slot("clarify", ShortSlotTests.FRUIT)
+        clarify.handle_key(SPACE)
+        for _ in range(5):
+            clarify.handle_key(Key(DOWN))
+        text = body(lines_text(clarify.lines(40, DEFAULT_THEME, 9)))
+        self.assertIn("❯        Submit", text)
+        self.assertEqual(clarify.handle_key(Key(ENTER)).frame["result"]["answers"]["q0"],  # type: ignore[union-attr]
+                         json.dumps([ShortSlotTests.FRUIT["questions"][0]["choices"][0]], separators=(",", ":")))
 
 
 class ShortSlotTests(unittest.TestCase):

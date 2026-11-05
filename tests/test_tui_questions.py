@@ -156,7 +156,22 @@ class MultiSelectAppTests(unittest.TestCase):
                 self.assertEqual(client.answers, [])
                 self.assertIsNotNone(app.slot)
                 self.assertTrue([row for row in drawn(app) if "[x]" in row], drawn(app))
-                self.assertIn("▌       Submit", drawn(app))
+                self.assertIn("▌          Submit", drawn(app))
+
+    def test_text_typed_in_the_field_goes_with_the_submit_row(self) -> None:
+        # Review of #2594: tick, type (the field opens), Down (back to the list, on Submit), Enter sent the ticks alone
+        # and the typed words were lost, unseen. They stay, show on the field's row, and go with the ticked choices.
+        toppings = {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True}
+        app, client = make_app(busy=True)
+        app._on_server_request(ServerRequest("srq-6", "clarify", {"questions": [toppings]}))
+        armed(app)
+        press(app, Key(CHAR, "1"), Key(CHAR, "x"), Key(CHAR, "y"), Key(DOWN))
+        screen = drawn(app)
+        self.assertIn("▌       3. xy", screen)
+        self.assertIn("▌ ❯        Submit", screen)
+        self.assertTrue([row for row in screen if "Enter to send" in row], screen)
+        press(app, Key(ENTER))
+        self.assertEqual(client.answers, [("srq-6", {"result": {"answers": {"q0": '["cheese","xy"]'}}})])
 
     def test_a_second_question_is_shown_before_the_first_answer_goes(self) -> None:
         first = {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True}
@@ -167,7 +182,7 @@ class MultiSelectAppTests(unittest.TestCase):
         press(app, Key(CHAR, "1"), Key(ENTER))  # cheese ticked, then unticked by Enter: question 1 stays
         self.assertIn("▌ ❯ [ ] 1. cheese", drawn(app))
         press(app, Key(ENTER), Key(DOWN), Key(DOWN), Key(DOWN))
-        self.assertIn("▌ ❯     Next", drawn(app))
+        self.assertIn("▌ ❯        Next", drawn(app))
         press(app, Key(ENTER))
         self.assertEqual(client.answers, [])
         armed(app)

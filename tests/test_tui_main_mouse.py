@@ -778,6 +778,9 @@ class FramedPickerTests(unittest.TestCase):
         self.assertIsNotNone(app.slot)
         self.assertFalse(app.slot.ticked)  # type: ignore[union-attr]
         self.assertFalse(app.client.answers)  # type: ignore[attr-defined]
+        drag(app, (1, row_of(app, "Which color")), (60, row_of(app, "Submit")))
+        self.assertIn("3. Type something.", osc52(app)[-1])
+        self.assertNotIn("Submit", osc52(app)[-1])  # the picker's own row, a gutter, as its key row is
 
     def test_the_wheel_while_it_is_open_opens_the_question_view_without_its_key_row_or_rules(self) -> None:
         app = self.picker()

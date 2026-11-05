@@ -113,13 +113,14 @@ class FrameTests(unittest.TestCase):
         question.handle_key(Key(ENTER))  # ticks the first choice, sends nothing
         plain = lines_text(question.lines(150, without_colour(DEFAULT_THEME), 30))
         self.assertEqual(plain, lines_text(question.lines(150, DEFAULT_THEME, 30)))
-        self.assertIn("▌       Submit", plain)
+        self.assertIn("▌          Submit", plain)
         self.assertTrue([row for row in plain if row.startswith("▌ ❯ [x] 1. ")], plain)
-        for width, footer in ((60, "  Enter to tick · Esc to cancel"), (24, "  Esc to cancel")):
+        for width, footer in ((60, "  Enter to tick · ↓ Submit to send · Esc to cancel"),
+                              (40, "  Enter to tick · Esc to cancel"), (24, "  Esc to cancel")):
             with self.subTest(width=width):
                 drawn = lines_text(question.lines(width, DEFAULT_THEME, 30))
                 self.assertEqual(drawn[-1], footer)
-                self.assertIn("▌       Submit", drawn)
+                self.assertIn("▌          Submit", drawn)
                 self.assertTrue(all(cell_width(row) <= width for row in drawn), drawn)
         for _ in range(9):
             question.handle_key(Key(DOWN))  # the list stops at Submit, whose key row says Enter sends
@@ -181,7 +182,7 @@ class FrameTests(unittest.TestCase):
         drawn = text(multi)
         self.assertEqual(drawn[-1],
                          "  Enter to tick · Enter on Submit to send · ↑↓ to navigate · Esc to cancel")
-        self.assertIn("▌       Submit", drawn)
+        self.assertIn("▌          Submit", drawn)
         self.assertIn("▌ Merge the alternative anyway? (choose one or more)", drawn)
         closed = {"questions": [{**ENGLISH["questions"][0], prompts.CLOSED_CHOICES: True}]}
         self.assertEqual(text(closed)[-1], "  Enter to select · ↑↓ to navigate · Esc to cancel")

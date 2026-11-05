@@ -131,9 +131,11 @@ FRAMED_FOOTER_MIN_ROWS = 3
 # every question takes. The info line says nothing then (`framed`).
 CLARIFY_FOOTERS = {
     "choice": ("Enter to select · ↑↓ to navigate · Esc to cancel", "Enter to select · Esc to cancel", "Esc to cancel"),
-    "multi": ("Enter to tick · Enter on {send} to send · ↑↓ to navigate · Esc to cancel", "Enter to tick · Esc to cancel",
-              "Esc to cancel"),
+    "multi": ("Enter to tick · Enter on {send} to send · ↑↓ to navigate · Esc to cancel",
+              "Enter to tick · ↓ {send} to send · Esc to cancel", "Enter to tick · Esc to cancel", "Esc to cancel"),
     "send": ("Enter to send · ↑↓ to navigate · Esc to cancel", "Enter to send · Esc to cancel", "Esc to cancel"),
+    # The Submit row with nothing ticked and nothing typed: it sends "", which Hermes reads as skipped.
+    "skip": ("Enter to skip · ↑↓ to navigate · Esc to cancel", "Enter to skip · Esc to cancel", "Esc to cancel"),
     "field": ("Enter to send · ↑↓ back to the choices · Esc to cancel", "Enter to send · Esc to cancel", "Esc to cancel"),
 }
 # A question the TUI asks itself (the app's model confirmation) sets this to True: its choices are the only answers,
@@ -243,6 +245,9 @@ class PromptSlot:
     answers: dict[str, str | None] = field(default_factory=dict)
     typing: bool = False  # a clarify question's text field is open: the composer is the field
     ticked: list[str] = field(default_factory=list)  # a multi-select question's ticked choices, in the order ticked
+    # The text field's words (the app's composer, set before each key and frame): kept while the arrows leave the
+    # field, shown on its row, and sent with the ticked choices from a multi-select question's Submit row.
+    draft: str = ""
     # An approval's command and its `command_risk.segments`, read once instead of on every frame.
     _segments: tuple[str, list[command_risk.Segment]] | None = field(
         default=None, init=False, repr=False, compare=False,
@@ -365,12 +370,13 @@ class PromptSlot:
         """Choice `index` answers the question; the row after the choices opens the text field instead.
 
         On a multi-select question a choice is ticked or unticked and nothing
-        is sent: only the `Submit` row sends, the ticked choices
-        (`_ticked_answer`; none ticked reads as skipped).
+        is sent: the `Submit` row sends the ticked choices and the text the
+        field holds (`_ticked_answer`; with neither it reads as skipped), and
+        Enter in the open field still sends (`submit_text`).
         """
         choices = self._current_choices()
         if index == self._submit_row():
-            return self._record_answer(_ticked_answer(self.ticked))
+            return self._record_answer(_ticked_answer([*self.ticked, self.draft.strip()]))
         if index < len(choices):
             if self._multi():
                 self._tick(index)
@@ -439,11 +445,11 @@ class PromptSlot:
         and stop at either end; Enter picks the highlighted row; a digit picks
         that choice, or opens the field when it numbers the field's row. Any
         other character, or a paste, opens the field and is its first text.
-        On a multi-select question Enter, Space and a digit tick a choice and
-        never send; the list ends with the `Submit` row (no digit), where
-        Enter sends (`_pick`), and Space does nothing on the field's row or
-        that one. With the field open, Up and Down go back to the list, and
-        what was typed stays in the field.
+        On a multi-select question Enter, Space and a digit on a choice tick
+        it and never send; the list ends with the `Submit` row (no digit),
+        where Enter sends (`_pick`), and Space does nothing on the field's row
+        or that one. With the field open, Up and Down go back to the list, and
+        what was typed stays in the field (`draft`).
         """
         choices = self._current_choices()
         if not choices:
@@ -606,15 +612,18 @@ class PromptSlot:
         return self.lines(width, theme, sys.maxsize, waiting=waiting, whole=True)
 
     def _choice_rows(
-        self, labels: list[tuple[str, str, str]], width: int, theme: Theme, mark_style: Style,
+        self, labels: list[tuple[str, str, str]], width: int, theme: Theme, mark_style: Style, control: int | None = None,
     ) -> list[list[Line]]:
         """Each `(lead, label, description)` as its rows: the label wrapped under its lead (a number), whole, so a tag
         at its end (`(Recommended)`) shows, and the description dim under the label; the highlighted one marked `❯`
-        and highlighted."""
+        and highlighted. The row at `control` (a multi-select question's Submit) is the picker's own, no text of the
+        question: a gutter (`_framing`) a drag never copies."""
         rows: list[list[Line]] = []
         for index, (lead, label, description) in enumerate(labels):
             current = index == self.selected
             style = theme.menu_current if current else theme.text
+            if index == control:
+                style = _framing(style)
             first: Line = (Span(CHOICE_MARK if current else " " * len(CHOICE_MARK), _framing(mark_style)),
                            Span(lead, style))
             rest: Line = (Span(" " * (len(CHOICE_MARK) + cell_width(lead)), _framing(Style())),)
@@ -930,14 +939,17 @@ class PromptSlot:
         choices = self._current_choices()
         entries = [_choice_parts(choice) for choice in choices]
         if self._other_row():
-            entries.append((CLARIFY_OTHER, ""))
+            # While the list has focus the field's row shows what was typed in it, which Submit sends.
+            entries.append((_one_line(self.draft) if self.draft.strip() and not self.typing else CLARIFY_OTHER, ""))
         leads = [f"{number}. " for number in range(1, len(entries) + 1)]
         if self._multi():
             boxes = [TICKED if choice in self.ticked else UNTICKED for choice in choices] + [" " * len(UNTICKED)]
-            leads = [box + lead for box, lead in zip(boxes, leads)] + [" " * len(UNTICKED)]
+            leads = [box + lead for box, lead in zip(boxes, leads)]
+            leads.append(" " * cell_width(leads[-1]))  # under the labels: the Submit row has no box and no number
             entries.append((self._submit_label(), ""))
         choice_rows = self._choice_rows(
-            [(lead, label, description) for lead, (label, description) in zip(leads, entries)], inner, theme, theme.user
+            [(lead, label, description) for lead, (label, description) in zip(leads, entries)], inner, theme, theme.user,
+            control=self._submit_row(),
         )
         listed = sum(len(choice) for choice in choice_rows)
         natural = len(lead_rows) + len(asked_rows) + listed
@@ -965,8 +977,8 @@ class PromptSlot:
         body = [_barred(row, bar, width) for row in self._fit(head, [], choice_rows, room, inner, theme)]
         rows = [rule, *body, rule] if ruled else body
         if footer:
-            kind = "field" if self.typing else "choice" if not self._multi() else (
-                "send" if self.selected == self._submit_row() else "multi")
+            kind = "field" if self.typing else "choice" if not self._multi() else "multi" if (
+                self.selected != self._submit_row()) else "send" if self.ticked or self.draft.strip() else "skip"
             forms = tuple(form.format(send=self._submit_label()) for form in CLARIFY_FOOTERS[kind])
             said = [f"{form} · {waited}" for form in forms] + list(forms) if waited else list(forms)
             indent = " " * len(SLOT_BAR)
