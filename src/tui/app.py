@@ -1873,6 +1873,7 @@ class App(ModesMixin, AgentViewMixin):
         self.agent_steer: str | None = None  # the agent `s` picked: the next line sent is its steer
         over_ssh = any(environ.get(name) for name in SSH_VARIABLES)
         remote = over_ssh or any(environ.get(name) for name in WSL_VARIABLES)
+        self.remote = remote  # input crosses a link that can split a mouse report (`_report_may_follow`)
         self.flush_silence = REMOTE_FLUSH_SILENCE_SECONDS if remote else FLUSH_SILENCE_SECONDS
         self.decoder = KeyDecoder(clock, SSH_BURST_SECONDS if over_ssh else BURST_SECONDS)
         # The living wallpaper is wanted (`/wallpaper`); `_wallpaper_shown` says whether it can show. It needs the
@@ -1983,10 +1984,14 @@ class App(ModesMixin, AgentViewMixin):
         self.pager: Pager | None = None
         self.copy_noted_at: float | None = None  # when the pager's footer or `copy_note` started saying what a copy did
         self.copy_note: Notification | None = None  # what a copy on the main screen did, on the notice row meanwhile
-        # The main screen's selection, by the rows the live region printed (`LiveRegion.doc_row`), and whether the
-        # button is down after a press on a row no selection can start on (one the region did not print).
+        # The main screen's selection, by the rows the live region printed (`LiveRegion.doc_row`), each selected row's
+        # line as the screen showed it when the mouse last moved it (`_keep_selection_true`), and whether the button is
+        # down after a press on a row no selection can start on (one the region did not print).
         self.selection = Selection()
+        self.selected_lines: dict[int, Line] = {}
         self.unmapped_press = False
+        self.button_held = False  # a press on the main screen or in a pager whose release has not come
+        self.report_at: float | None = None  # when the last mouse report was decoded, on `clock`
         self.platform = sys.platform  # where `copy_route` looks for `pbcopy`
         self.pbcopy: Callable[[str], bool] = partial(pbcopy, environ=environ)
         self.tmux_over_ssh: Callable[[Mapping[str, str]], bool] = tmux_client_over_ssh  # `copy_route`'s tmux question
@@ -2619,7 +2624,7 @@ class App(ModesMixin, AgentViewMixin):
             events = self.decoder.feed(data)
         elif self.clock() - self.input_at >= self.flush_silence:
             # A report the terminal sent before an off may still be on its way: the decoder waits for it.
-            events = self.decoder.flush(self.terminal.mouse_reporting, self.mouse_off_at)
+            events = self.decoder.flush(self._report_may_follow(), self.mouse_off_at)
         else:
             events = []
         pending, self.held_input = [*self.held_input, *events], []
@@ -2740,6 +2745,27 @@ class App(ModesMixin, AgentViewMixin):
         self.terminal.set_mouse(enabled, drag)
         if was_on and not self.terminal.mouse_reporting:
             self.mouse_off_at = self.clock()
+
+    def _report_may_follow(self) -> bool:
+        """Whether a lone ESC the decoder holds may be the start of a mouse report, so it waits
+        `keys.REPORTING_ESCAPE_SECONDS` for the rest before it is Esc.
+
+        With `OMH_TUI_MOUSE=0`, whenever reporting is on (the agent list, the
+        /theme picker, a pager), as before. Where the main screen takes the
+        mouse, reporting is on nearly all the time, and a wait on every Esc
+        would slow interrupting a turn and leaving vim's INSERT on every
+        terminal that sends Esc as one byte. There it waits only where a report
+        can come split: over SSH or WSL (`remote`), while a button is held (a
+        drag's motion keeps coming), and for `keys.MOUSE_REPORT_SECONDS` after
+        the last report (a wheel turn, a second click). A report on a local
+        terminal is written whole and read in one read, so elsewhere a lone
+        ESC is Esc at the first silence, as with reporting off.
+        """
+        if not self.terminal.mouse_reporting:
+            return False
+        if not self._takes_mouse() or self.remote or self.button_held:
+            return True
+        return self.report_at is not None and self.clock() - self.report_at < MOUSE_REPORT_SECONDS
 
     def _reports_may_arrive(self) -> bool:
         """Whether a mouse report may still arrive: reporting is on, or went off less than `MOUSE_REPORT_SECONDS` ago."""
@@ -3695,12 +3721,17 @@ class App(ModesMixin, AgentViewMixin):
 
     def _on_input(self, event: Key | Paste | Mouse) -> None:
         if isinstance(event, Mouse):
+            self.report_at = self.clock()
+            if not event.motion and event.button not in (WHEEL_UP, WHEEL_DOWN):
+                self.button_held = event.pressed
             if self.launch_picker is not None:
                 self._launch_picker_click(event)
             elif self.pager is not None:
                 self._pager_mouse(event)
             else:
                 self._on_mouse(event)  # never a key: whatever it is, it types nothing
+            return
+        if self._copy_key_dropped(event):
             return
         self._drop_selection()  # it is of the screen as it is, which a key may move
         if self.pager is not None:
@@ -6413,8 +6444,9 @@ class App(ModesMixin, AgentViewMixin):
     def _redraw(self, arg: str) -> None:
         self._full_redraw()
 
-    def _history(self, arg: str) -> None:
-        """The blocks held now in a pager that renders each one, details shown, only when a page reaches it."""
+    def _history(self, arg: str, quiet: bool = False) -> None:
+        """The blocks held now in a pager that renders each one, details shown, only when a page reaches it; with
+        nothing to show, a notice, or with `quiet` nothing at all."""
         transcript = self.transcript
         blocks, dropped = list(transcript.blocks), transcript.dropped  # what the pager holds, as it opens
 
@@ -6426,13 +6458,15 @@ class App(ModesMixin, AgentViewMixin):
         # Stops at the first block with rows, the first one but for a reply that was only a line break, and
         # keeps what it rendered for the first frame.
         if pager.shows_nothing(self.size[0], self.theme):
-            transcript.add_notice("Nothing in this session's transcript yet.")
+            if not quiet:
+                transcript.add_notice("Nothing in this session's transcript yet.")
             return
         self._show_pager(pager)
 
-    def _details_view(self) -> None:
-        """The whole transcript with every detail (thinking, tool output, whole diffs) in the pager, at its end."""
-        self._history("")
+    def _details_view(self, quiet: bool = False) -> None:
+        """The whole transcript with every detail (thinking, tool output, whole diffs) in the pager, at its end; `quiet`
+        as `_history` takes it."""
+        self._history("", quiet)
         if isinstance(self.pager, HistoryPager):
             self.pager.handle_key(Key(END), self.size[1])
 
@@ -6561,13 +6595,10 @@ class App(ModesMixin, AgentViewMixin):
         now = self.clock()
         selection = self.selection
         if event.button in (WHEEL_UP, WHEEL_DOWN):
-            if event.pressed and event.button == WHEEL_UP and not selection.dragging and self.transcript.blocks:
+            over_list = last - (event.y - 1) in self.clickable  # the agent list's rows: the wheel opens nothing there
+            if event.pressed and event.button == WHEEL_UP and not selection.dragging and not over_list:
                 self._drop_selection()
-                if self.slot is None:
-                    self._details_view()
-                else:
-                    self._question_view()
-                if self.pager is not None:
+                if self._transcript_view() and self.pager is not None:
                     self.pager.handle_mouse(event, rows, now)  # one notch up from the end, as the wheel scrolls it
             return
         row = min(event.y - 1, last)  # a report counts from 1; one under the region is on its last row
@@ -6578,7 +6609,7 @@ class App(ModesMixin, AgentViewMixin):
         elif event.motion and event.pressed:
             if self.unmapped_press:
                 self.unmapped_press = False
-                self._details_view()  # nothing certain to select there: the transcript view, where all of it is
+                self._transcript_view()  # nothing certain to select there: the transcript view, where all of it is
                 return
             doc = next((found for at in range(row, last + 1) if (found := self.region.doc_row(at, rows)) is not None),
                        None)
@@ -6587,7 +6618,71 @@ class App(ModesMixin, AgentViewMixin):
         elif not event.pressed:
             self.unmapped_press = False
             self._copied(selection.release(now, self._printed_line))
+        self._note_selected_lines()
         self.dirty = True
+
+    def _transcript_view(self) -> bool:
+        """What the mouse opens where it selects nothing: Ctrl+O's view, the open question while one is asked, else the
+        whole transcript at its end; nothing, and no notice, when the transcript has no rows to show (a trackpad's
+        wheel would say so on every notch). True when a view opened."""
+        if self.slot is not None:
+            self._question_view()
+        else:
+            self._details_view(quiet=True)
+        return self.pager is not None
+
+    def _note_selected_lines(self) -> None:
+        """Keep each selected row's line as the screen shows it now, to tell later whether the row still shows it."""
+        held = self.selection.rows
+        self.selected_lines = {} if held is None else {
+            doc: self.region.doc_line(doc) or () for doc in range(held[0], held[1] + 1)}
+
+    def _keep_selection_true(self, stable: Sequence[Line], lines: Sequence[Line]) -> None:
+        """Before a frame that flushes `stable` and draws `lines`: let the main screen's selection go, copying nothing,
+        where it would no longer hold what the screen showed when it was made.
+
+        A row keeps its number (`LiveRegion.doc_row`) while lines leave the
+        region's top for the rows above it, but the region's own rows are only
+        a frame: a notice flushed above the region, a new tail row or the
+        composer growing puts other lines at the same numbers. So each
+        selected row's line is compared with the one the frame leaves there;
+        any difference ends the selection, highlight and all, and a drag still
+        held copies nothing on release. A selection already copied (released)
+        goes at the first frame that flushes, which would otherwise paint its
+        rows above the region plain and reversed again for every flush.
+        """
+        held = self.selection.rows
+        if held is None:
+            return
+        if not self.selection.dragging and stable:
+            self._drop_selection()
+            return
+        first = self.region.flushed_rows
+        for doc in range(held[0], held[1] + 1):
+            index = doc - first
+            if index < 0:
+                after = self.region.doc_line(doc)
+            elif index < len(stable):
+                after = stable[index]
+            else:
+                after = lines[index - len(stable)] if index - len(stable) < len(lines) else None
+            if after != self.selected_lines.get(doc):
+                self._drop_selection()
+                return
+
+    def _copy_key_dropped(self, event: Key | Paste | Mouse) -> bool:
+        """Ctrl+C right after a drag on the main screen, while its selection shows or its copy notice is up, only lets
+        the selection go: on a terminal that copies with Ctrl+C (Windows Terminal, VS Code), the person pressing it
+        after a drag means to copy, not to interrupt the turn, clear the draft or arm the exit. True when it did."""
+        if not (isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c" and not event.alt):
+            return False
+        if self.pager is not None or (self.selection.rows is None and self.copy_note is None):
+            return False
+        self.selection.clear()
+        self.selected_lines = {}
+        self.copy_note = None
+        self.dirty = True
+        return True
 
     def _printed_line(self, doc: int) -> Line:
         """Printed row `doc`'s line, for the main screen's selection; () for one the live region no longer holds."""
@@ -6603,6 +6698,7 @@ class App(ModesMixin, AgentViewMixin):
         """Let the main screen's selection go; the next frame paints its rows as they were."""
         if self.selection.rows is not None:
             self.selection.clear()
+            self.selected_lines = {}
             self.dirty = True
 
     def _selection_marks(self) -> dict[int, tuple[int, int]]:
@@ -6917,7 +7013,7 @@ class App(ModesMixin, AgentViewMixin):
                     self.input_at = self.clock()
                     pending.extend(self.decoder.feed(data))
                 elif self.clock() - self.input_at >= self.flush_silence:
-                    pending.extend(self.decoder.flush(self.terminal.mouse_reporting, self.mouse_off_at))
+                    pending.extend(self.decoder.flush(self._report_may_follow(), self.mouse_off_at))
                 self._drain_gateway()
             return picker_key(pending.popleft())
 
@@ -6973,6 +7069,7 @@ class App(ModesMixin, AgentViewMixin):
         self._set_mouse(False)
         # The terminal reflowed the rows a selection was painted on; the full redraw erases them.
         self.selection.forget()
+        self.selected_lines = {}
         self.unmapped_press = False
         self.region.forget_marks()
         self._take_size()
@@ -7558,10 +7655,9 @@ class App(ModesMixin, AgentViewMixin):
         # the frame is drawn under them. Flush and frame are one write, so no screen between them shows.
         # The wallpaper paints the blank tails of the rows above the region too, the transcript's included, so it stays
         # in view over a full session (owner's choice of 2026-10-29; `screen` names what that costs a selection).
+        self._keep_selection_true(stable, frame.lines)
         self.region.render(frame.lines, frame.cursor, cols, flush=stable, screen_rows=rows, ambient=self._ambient(),
                            ambient_above=True, marks=self._selection_marks())
-        if self.region.inserted_rows is not None:  # rows inserted inside the region moved the selection's rows down
-            self.selection.shift(*self.region.inserted_rows)
         self.ambient_at = self.clock()
         self.frame_budget = frame.budget
         self.bg_row_shown = self.bg_on_info and frame.budget.info > 0  # the row is on the info line (`_info_line`)
@@ -7937,8 +8033,9 @@ class App(ModesMixin, AgentViewMixin):
         queue = queue_lines([line.shown or line.text for line in self.queued], cols, cap - len(waiting), self.theme,
                             hint, below)
         taken = len(waiting) + len(queue)
-        said = self.copy_note or self.notification  # what a copy just did, over Hermes' notice for COPY_NOTE_SECONDS
-        notice = [said.line(cols, self.theme)] if said and cap > taken else []
+        # What a copy just did, for COPY_NOTE_SECONDS, then Hermes' own notice: neither hides the other.
+        said = [note for note in (self.copy_note, self.notification) if note is not None][: max(cap - taken, 0)]
+        notice = [note.line(cols, self.theme) for note in said]
         shown = goal_line(self.goal, cols, self.theme)
         goal = [shown] if shown is not None and cap > taken + len(notice) else []
         menu = self._drawn("the menu or HUD panel",

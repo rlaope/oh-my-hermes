@@ -94,9 +94,11 @@ back to the shell, whose own background is back by then, and given the screen's
 height it first paints the region's rows still on the screen on no ground.
 
 A selection (`marks`): the app numbers the rows this region printed in
-order, the rows it flushed and then its own (`doc_row`), so a row keeps its
-number while the screen scrolls and while lines leave the region's top for
-the rows above it. `render(..., marks=...)` shows the cells the main
+order, the rows it flushed and then its own (`doc_row`), so a flushed row
+keeps its number while the screen scrolls. The region's own rows are only the
+frame's: a frame can put other lines at their numbers (lines flushed that the
+region never drew, rows inserted), which the caller checks before it asks
+for marks there (`App._keep_selection_true`). `render(..., marks=...)` shows the cells the main
 screen's selection holds on each of those rows as `highlight` draws them
 (reversed): the region's own rows in the frame, the rows above it painted
 again in place with absolute moves. A highlight is never carried into the
@@ -299,7 +301,6 @@ class LiveRegion:
         self._flushed_total = 0  # the lines this region flushed: the number of its own first row (`doc_row`)
         self._marks: dict[int, tuple[int, int]] = {}  # the selection's columns by printed row, as the caller asked
         self._marked_above: dict[int, tuple[int, int]] = {}  # the rows above the region painted with them now
-        self.inserted_rows: tuple[int, int] | None = None  # the last frame's IL: (first printed row moved, count)
         self._ground = ground  # the look's ground every erase paints (see the module docstring); None for none
         self._regrounded = False  # the ground changed since the last frame: the next one paints every row again
         # The rows flushed above the region: each one's first blank column (None for a band, filled to the edge), for the wallpaper's `ambient_above`.
@@ -373,6 +374,11 @@ class LiveRegion:
         """The screen row the region's last row is on, on a screen `rows` tall."""
         top = self._top(rows)
         return None if top is None or not self._rows else top + len(self._rows) - 1
+
+    @property
+    def flushed_rows(self) -> int:
+        """How many lines this region flushed: the number its own first row has (`doc_row`)."""
+        return self._flushed_total
 
     def doc_row(self, screen_row: int, screen_rows: int) -> int | None:
         """The number of the printed row on 0-based screen row `screen_row` (the rows this region flushed count from 0,
@@ -454,9 +460,6 @@ class LiveRegion:
         self._rows = self._rows[:at] + [""] * count + self._rows[at:]
         self._lines = self._lines[:at] + ((),) * count + self._lines[at:]
         self._shown = self._shown[:at] + ((),) * count + self._shown[at:]
-        first = self._flushed_total + at  # the selection's rows from here down moved down with them
-        self.inserted_rows = (first, count)
-        self._marks = {doc + count if doc >= first else doc: span for doc, span in self._marks.items()}
 
     def _compose(
         self, lines: Sequence[Line], cursor: tuple[int, int] | None, width: int, ops: list[str],
@@ -555,7 +558,6 @@ class LiveRegion:
         rows = screen_rows
         self._ambient_above = ambient_above
         self._marks = dict(marks or {}) if self._highlight is not None else {}
-        self.inserted_rows = None
         grows = len(lines) > len(self._rows)
         # A highlight above the region never scrolls into the scrollback: those rows are painted as flushed first.
         ops: list[str] = self._unmark(rows) if (flush or grows) and rows is not None else []

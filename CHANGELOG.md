@@ -12,7 +12,9 @@ All notable changes will be documented here.
   row. The wheel up opens the transcript view (Ctrl+O's), one notch up from
   where the screen was. It works on every terminal that reports the mouse,
   inside tmux with `mouse` on or off; a row the TUI cannot map for certain
-  (the shell's output above the session) is never guessed at, and the
+  (the shell's output above the session) is never guessed at, a drag whose
+  live rows change under it is dropped and copies nothing, Ctrl+C right after
+  a drag only drops the selection, and the
   terminal's own selection is still there with its bypass modifier (Shift,
   Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
   terminal's own wheel and selection on the main screen, as before.

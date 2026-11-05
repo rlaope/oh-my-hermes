@@ -771,16 +771,36 @@ run and approval decision stays Hermes'; the screen is OMH's.
   the rail a block hangs on or a reply's margin, and the row above the
   composer says `✓ copied 694 chars to clipboard` for 2 s (the copy goes out
   as the pager's does, below); a double click copies a word and a triple
-  click a row, and a key, the wheel or the next click drops the selection.
-  The selection stays on its text while new output scrolls the screen, and
-  its highlight never goes into the scrollback. The wheel up opens the
+  click a row, and a key, the wheel, the next click or, once it is copied,
+  the next output drops the selection. The composer's rules, its `❯` and its placeholder are never
+  copied, only what you typed. A drag over the transcript's rows stays on
+  them while output scrolls the screen; one over the live rows (a reply
+  still streaming, the panels, the composer) is dropped, highlight and all,
+  and copies nothing as soon as the rows under it change, so it never copies
+  text other than what it showed. Its highlight never goes into the
+  scrollback. Ctrl+C right after a drag (while its highlight or its copy
+  notice shows) only drops the selection, since Windows Terminal and VS
+  Code copy with it; the next Ctrl+C acts as always. The wheel up opens the
   transcript view Ctrl+O opens, one notch up from its end, where the screen
   was; it scrolls there, and q goes back. The wheel down does nothing on the
   main screen. A row the OMH TUI did not print in this screen (the shell's
   output above the session, the rows from before a Ctrl+Z) selects nothing:
-  dragging from there opens the transcript view instead. While the window is
-  being resized the mouse is the terminal's, and a selection is dropped. The
-  agent list still takes a click on its rows, as below. Your terminal's own
+  dragging from there opens the transcript view instead (the open question,
+  while one is asked), and with nothing to show it opens nothing. While the
+  window is being resized the mouse is the terminal's, and a selection is
+  dropped; on a terminal that ignores the erase of its scrollback (`CSI 3 J`)
+  rows reflowed into the scrollback with a selection on them can keep it
+  reversed there. The agent list still takes a click on its rows, and the
+  wheel over the list does nothing, as below. If you scroll the terminal's
+  own scrollback (its scrollbar, Shift+PageUp) and then drag, the row a
+  report names is the terminal's to say: some terminals jump back to the
+  bottom first or report nothing over scrollback rows, and one that reports
+  the row it shows could select another row than the one under the pointer;
+  the OMH TUI cannot tell, so drag after coming back to the bottom. On Linux
+  a middle click is the X primary selection's paste, and a drag there no
+  longer sets that selection: the click reaches the OMH TUI, which does
+  nothing with it. Hold the bypass modifier (Shift) with the middle click to
+  paste the primary selection as before, or select with it to set one. Your terminal's own
   selection is still there with its bypass modifier: Shift while dragging in
   xterm, kitty, WezTerm, Ghostty, Alacritty, foot, GNOME Terminal, Konsole,
   Windows Terminal and Otty (its default; Settings → Controls → Mouse →
@@ -802,10 +822,13 @@ run and approval decision stays Hermes'; the screen is OMH's.
   most terminals and the wheel does not scroll. To select anyway, hold the
   bypass modifier above. Selection and the wheel
   come back as soon as the list closes, while a question is open, and while
-  the window is being resized. While click reports are on (on the main screen
-  that is all the time without `OMH_TUI_MOUSE=0`), and for 0.5 s after they go off, an Esc pressed on
+  the window is being resized. While click reports are on there, and for 0.5 s after they go off, an Esc pressed on
   its own acts after 0.3 s, the time a click report split by a slow
-  connection has to arrive whole. Another key typed within that time ends
+  connection has to arrive whole. Where the main screen takes the mouse
+  (without `OMH_TUI_MOUSE=0`) the Esc waits only where a report can still
+  come split: over SSH or WSL, while a mouse button is held, and for 0.5 s
+  after the last report (a wheel turn, a click); otherwise it acts at the
+  first silence, as with reports off. Another key typed within that time ends
   the wait, and both keys act, except `[`, which is read as the rest of a
   sequence, as is `O` arriving together with the letter that ends F1 to F4,
   an arrow, Home or End. A key the terminal sends in the same burst as the
@@ -821,8 +844,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   A click is read only where the OMH TUI can tell which row it landed on:
   once the session's output has reached the bottom of the screen, or after
   Ctrl+L. Until then it leaves the mouse to the terminal, and the keys still
-  open the list and the logs. A terminal that speaks the kitty keyboard
-  protocol sends Esc as a sequence of its own, so there it never waits.
+  open the list and the logs.
 - A view on the alternate screen (Ctrl+O, `/history`, `/logs`, `/dag`, an
   agent's log, the bot board, `/keys`) takes the mouse for itself, since that
   screen has no scrollback for the terminal to scroll: the wheel scrolls the

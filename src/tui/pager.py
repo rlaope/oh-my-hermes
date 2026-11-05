@@ -209,8 +209,8 @@ class Selection:
 
     Rows are numbered by the caller and only compared and counted: the pager
     numbers its page's screen rows, the main screen the rows its live region
-    printed (`screen.LiveRegion.doc_row`), so a selection there stays on its
-    text while the screen scrolls. `line_of(row)` gives each row's line, ()
+    printed (`screen.LiveRegion.doc_row`), so a selection of flushed rows
+    there stays on its text while the screen scrolls. `line_of(row)` gives each row's line, ()
     for a row with nothing on it. A press starts a drag; its motion moves the
     selection's other end, and its release hands back the text. A press on
     the cell a plain click (released where it was pressed, with no motion)
@@ -289,19 +289,6 @@ class Selection:
         """Let everything go, the press held and the last click too: the rows they were on are gone."""
         self.clear()
         self._down, self._click = None, None
-
-    def shift(self, at: int, count: int) -> None:
-        """Rows `at` and under moved down by `count`: the selection, the press and the last click go with them."""
-
-        def moved(cell: Cell) -> Cell:
-            return (cell[0] + count, cell[1]) if cell[0] >= at else cell
-
-        if self._span is not None:
-            self._span = (moved(self._span[0]), moved(self._span[1]))
-        if self._down is not None:
-            self._down = (moved(self._down[0]), self._down[1])
-        if self._click is not None:
-            self._click = (moved(self._click[0]), *self._click[1:])
 
     def span_on(self, row: int) -> tuple[int, int] | None:
         """The first and last column the selection holds on row `row`; None off it."""

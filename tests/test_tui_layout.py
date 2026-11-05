@@ -20,6 +20,7 @@ the rows it leaves the composer.
 
 from __future__ import annotations
 
+from dataclasses import replace
 import itertools
 import unittest
 
@@ -561,8 +562,10 @@ class FrameTests(unittest.TestCase):
 
     def test_the_rules_span_the_width_in_the_rule_colour(self) -> None:
         # The composer as Claude Code draws it now (owner, 2026-10-22): a full-width rule above and under it, no corners.
-        self.assertEqual(rule_line(5, DEFAULT_THEME), (Span("─────", DEFAULT_THEME.rule),))
-        self.assertEqual(rule_line(0, DEFAULT_THEME), (Span("", DEFAULT_THEME.rule),))
+        # A gutter: it frames the composer, and a drag on the main screen never copies it.
+        rule = replace(DEFAULT_THEME.rule, gutter=True)
+        self.assertEqual(rule_line(5, DEFAULT_THEME), (Span("─────", rule),))
+        self.assertEqual(rule_line(0, DEFAULT_THEME), (Span("", rule),))
 
     def test_every_composer_row_is_full_width_with_no_sides_at_every_width(self) -> None:
         for cols in (60, 100, 150):
@@ -589,7 +592,8 @@ class FrameTests(unittest.TestCase):
                 mark = frame.lines[frame.budget.composer_top][0]
                 self.assertEqual(mark.text, "❯ ")
                 shell = DEFAULT_THEME.kinds[KIND_FAMILIES.index("shell")]
-                self.assertEqual(mark.style, shell if mode == MODE_SHELL else DEFAULT_THEME.prompt)
+                # A gutter: the mark frames the draft and a drag on the main screen does not copy it.
+                self.assertEqual(mark.style, replace(shell if mode == MODE_SHELL else DEFAULT_THEME.prompt, gutter=True))
 
     def test_the_placeholder_is_drawn_after_the_prompt_and_never_typed(self) -> None:
         composer = Composer()
@@ -598,7 +602,7 @@ class FrameTests(unittest.TestCase):
         )
         row = frame.lines[frame.budget.composer_top]
         self.assertEqual(lines_text([row]), [composer_row("❯ Ask Hermes anything", 40)])
-        self.assertIn(Span("Ask Hermes anything", DEFAULT_THEME.hint), row)
+        self.assertIn(Span("Ask Hermes anything", replace(DEFAULT_THEME.hint, gutter=True)), row)
         self.assertEqual(frame.cursor, (frame.budget.composer_top, 2))
         self.assertEqual(composer.text, "")
         typed = build_frame(

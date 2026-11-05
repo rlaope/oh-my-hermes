@@ -9,9 +9,12 @@ shown reversed and copied without gutter cells, as the pager copies; a double
 click copies a word and a triple click a row. The wheel up opens Ctrl+O's
 view one notch up from its end. A row the region did not print selects
 nothing: moving the held button from it opens the transcript view instead. A
-resize drops the selection without painting at rows the terminal reflowed. The
-highlight is painted back exactly as the rows were flushed, the scene look's
-ground included, and never scrolls into the scrollback.
+selection that would no longer hold what the screen showed (the live rows
+moved under it) is dropped and copies nothing. A resize drops the selection
+without painting at rows the terminal reflowed. The highlight is painted back
+exactly as the rows were flushed, the scene look's ground included, and never
+scrolls into the scrollback. Most cases here run with the main screen taking
+the mouse, the default the other harnesses turn off (`make_app`).
 
 Where a report lands is read from the VT screen the scripted terminal
 painted, as `tests/test_tui_agent_mouse.py` reads it: columns and rows from 1.
@@ -20,20 +23,31 @@ painted, as `tests/test_tui_agent_mouse.py` reads it: columns and rows from 1.
 from __future__ import annotations
 
 import base64
+import time
 import unittest
 
 from _tui_gateway_replay import Scenario, spans
 from _vt_screen import VTScreen
-from test_tui_agent_mouse import SECOND_ROW, click
+from test_tui_agent_mouse import SECOND_ROW, click, step_through
 from test_tui_agent_view import agent_app
-from test_tui_app import NO_TERMIOS, AppTestCase, Step, startup_answers
+from test_tui_aura import frame_for as aura_frame, rows_of as aura_rows
+from test_tui_app import NO_TERMIOS, AppTestCase, PromptSlotTests, Step, startup_answers
 from test_tui_clean_copy import osc52, row_of
-from test_tui_modes import drawn, make_app, type_text
+from test_tui_modes import QueuedLine, drawn, make_app, type_text
 from omh.tui import terminal as terminal_module
-from omh.tui.app import COPIED_NOTE, COPY_NOTE_SECONDS, App
+from omh.tui.app import (
+    COPIED_NOTE,
+    COPY_NOTE_SECONDS,
+    CURSOR_POSITION_REQUEST,
+    READ_TIMEOUT_SECONDS,
+    REPORTING_SLOT_ARM_SECONDS,
+    App,
+    Notification,
+)
+from omh.tui.gateway import ServerRequest
 from omh.tui.keys import BUTTON_LEFT, CHAR, DOWN, WHEEL_DOWN, WHEEL_UP, Key, Mouse
 from omh.tui.pager import HistoryPager, reversed_cells
-from omh.tui.screen import LiveRegion, _flushed_row
+from omh.tui.screen import LiveRegion, _flushed_row, cursor_at
 from omh.tui.style import Span, Style
 from omh.tui.transcript import AssistantBlock
 
@@ -83,6 +97,24 @@ def reversed_columns(app: App, y: int) -> list[int]:
     """The 1-based columns of screen row `y` (from 1) drawn reversed."""
     screen: VTScreen = app.terminal.screen  # type: ignore[attr-defined]
     return [col + 1 for col in range(screen.cols) if REVERSE in screen.attrs_at(y - 1, col)]
+
+
+def reversed_count(screen: VTScreen) -> int:
+    return sum(REVERSE in screen.attrs_at(row, col) for row in range(screen.rows) for col in range(screen.cols))
+
+
+def scroll_watch(screen: VTScreen) -> list[tuple[int, ...]]:
+    """Every cell's attributes as its row leaves the screen's top, from now on."""
+    scrolled: list[tuple[int, ...]] = []
+    feed_line = screen._line_feed
+
+    def line_feed() -> None:
+        if screen.cursor[0] == screen.rows - 1:
+            scrolled.extend(screen.attrs_at(0, col) for col in range(screen.cols))
+        feed_line()
+
+    screen._line_feed = line_feed  # type: ignore[method-assign]
+    return scrolled
 
 
 def picture(app: App) -> tuple[list[str], list[list[tuple[int, ...]]]]:
@@ -379,12 +411,259 @@ class RegionMarkTests(unittest.TestCase):
         self.assertFalse([attrs for attrs in scrolled if REVERSE in attrs])
         self.assertEqual(screen.scrollback[:2], ["┃ alpha", "┃ beta"])
 
-    def test_rows_inserted_inside_the_region_carry_the_selection_down_with_them(self) -> None:
-        region = region_on(VTScreen(12, WIDTH), None)
-        region.render([(Span("a"),), (Span("b"),)], (0, 0), WIDTH, screen_rows=12)
-        region.render([(Span("a"),), (Span("new"),), (Span("b"),)], (0, 0), WIDTH, screen_rows=12, marks={1: (0, 0)})
-        self.assertEqual(region.inserted_rows, (1, 1))
-        self.assertEqual(region._shown[2], reversed_cells((Span("b"),), 0, 0))
+    def test_a_row_flushed_at_another_width_is_not_mapped(self) -> None:
+        region = region_on(VTScreen(8, WIDTH), None)
+        region.render([(Span("c"),)], (0, 0), WIDTH, flush=rows_of("alpha"), screen_rows=8)
+        self.assertEqual(region.doc_row(0, 8), 0)
+        region.render([(Span("c"),)], (0, 0), WIDTH - 5, screen_rows=8)
+        self.assertIsNone(region.doc_row(0, 8))
+        self.assertIsNone(region.doc_line(0))
+
+    def test_a_clear_paints_a_highlight_above_the_region_back_first(self) -> None:
+        screen = VTScreen(8, WIDTH)
+        region = region_on(screen, GROUND)
+        frame = [(Span("composer"),)]
+        region.render(frame, (0, 0), WIDTH, flush=rows_of("alpha", "beta"), screen_rows=8)
+        region.render(frame, (0, 0), WIDTH, screen_rows=8, marks={0: (0, 99)})
+        self.assertIn(REVERSE, screen.attrs_at(0, 2))
+        region.clear(8)  # Ctrl+Z and the exit hand the screen back with this
+        self.assertEqual(reversed_count(screen), 0)
+        self.assertEqual(screen.lines()[:2], ["┃ alpha", "┃ beta"])
+
+    def test_a_flush_above_at_exit_carries_no_highlight_into_the_scrollback(self) -> None:
+        screen = VTScreen(5, WIDTH)
+        region = region_on(screen, None)
+        frame = [(Span("composer"),)]
+        region.render(frame, (0, 0), WIDTH, flush=rows_of("alpha", "beta", "gamma"), screen_rows=5)
+        region.render(frame, (0, 0), WIDTH, screen_rows=5, marks={0: (0, 99), 1: (0, 99)})
+        scrolled = scroll_watch(screen)
+        region.flush_above(rows_of("one", "two", "three"), WIDTH, 5)
+        self.assertTrue(scrolled)
+        self.assertFalse([attrs for attrs in scrolled if REVERSE in attrs])
+
+
+
+class MovedRowsTests(unittest.TestCase):
+    """The review's repro (2026-11-05): a notice flushed while a drag on the draft is held put the notice at the draft's
+    row numbers, and the release copied the notice's tail, the rule and the draft."""
+
+    def drag_on_the_draft_then(self, rows: int, change) -> tuple[App, list[str]]:  # type: ignore[no-untyped-def]
+        app = main_app(rows=rows)
+        for index in range(12 if rows < 14 else 0):  # the pinned variant: the region on the screen's last rows
+            app.transcript.add_notice(f"earlier {index}")
+        drawn(app)
+        type_text(app, "DRAFTTEXT here")
+        drawn(app)
+        row, at = row_of(app, "DRAFTTEXT"), column(app, "DRAFTTEXT")
+        press(app, at, row)
+        move(app, at + 8, row)
+        drawn(app)
+        self.assertTrue(reversed_columns(app, row))
+        change(app)
+        screen = drawn(app)
+        release(app, at + 8, row)
+        return app, screen
+
+    def test_a_notice_flushed_under_a_held_drag_drops_it_and_copies_nothing(self) -> None:
+        for rows in (14, 8):
+            with self.subTest(pinned=rows < 14):
+                app, screen = self.drag_on_the_draft_then(rows, lambda app: app.transcript.add_notice("NOTICE LINE ONE"))
+                self.assertIn("NOTICE LINE ONE", "\n".join(screen))
+                self.assertEqual(osc52(app), [])
+                self.assertIsNone(app.selection.rows)
+                self.assertEqual(reversed_count(app.terminal.screen), 0)  # type: ignore[attr-defined]
+
+    def test_a_row_inserted_inside_the_region_under_a_held_drag_drops_it(self) -> None:
+        app, _screen = self.drag_on_the_draft_then(14, lambda app: app.queued.append(QueuedLine("queued prompt")))
+        self.assertEqual(osc52(app), [])
+
+    def test_a_drag_over_the_transcript_survives_output_and_a_released_one_goes_at_the_next_flush(self) -> None:
+        app = main_app()
+        row, text = row_of(app, "first line"), column(app, "first line")
+        press(app, text, row)
+        move(app, text + 9, row)
+        app.transcript.add_notice("output meanwhile")
+        drawn(app)
+        self.assertTrue(reversed_columns(app, row_of(app, "first line")))
+        release(app, text + 9, row)
+        self.assertEqual(osc52(app), ["first line"])
+        drawn(app)
+        self.assertIsNotNone(app.selection.rows)  # shown after the copy
+        app.transcript.add_notice("more output")
+        drawn(app)
+        self.assertIsNone(app.selection.rows)
+        self.assertEqual(reversed_count(app.terminal.screen), 0)  # type: ignore[attr-defined]
+
+
+class ComposerFrameTests(unittest.TestCase):
+    def test_a_drag_over_the_composer_copies_the_draft_without_its_rules_mark_or_placeholder(self) -> None:
+        app = main_app()
+        type_text(app, "the draft")
+        screen = drawn(app)
+        composer = row_of(app, "the draft")
+        drag(app, (1, composer - 1), (60, composer + 1))  # the rule above it to the rule under it
+        self.assertEqual(osc52(app), ["the draft"])
+        self.assertIn("─" * 10, screen[composer - 2])
+        app._on_input(Key(CHAR, "u", ctrl=True))  # an empty composer shows its placeholder
+        drawn(app)
+        row = row_of(app, "Ask Hermes anything")
+        press(app, 1, row)
+        move(app, 60, row)
+        release(app, 60, row)
+        self.assertEqual(osc52(app), ["the draft"])  # nothing more: the placeholder is no text
+
+
+    def test_the_rules_are_gutters_with_or_without_the_aura(self) -> None:
+        for text, phase in (("migrate every service", 0), ("dag ulw migrate every service", 3)):
+            with self.subTest(text=text):
+                top, _row, bottom = aura_rows(aura_frame(text, cols=60, aura=phase))
+                self.assertTrue(all(span.style.gutter for span in (*top, *bottom)))
+
+
+class CopyKeyTests(unittest.TestCase):
+    def test_ctrl_c_right_after_a_drag_only_drops_the_selection(self) -> None:
+        app = main_app()
+        client = app.client
+        app.turn_pending = True
+        type_text(app, "keep me")
+        drawn(app)
+        row = row_of(app, "first line")
+        drag(app, (column(app, "first line"), row), (60, row))
+        ctrl_c = Key(CHAR, "c", ctrl=True)
+        app._on_input(ctrl_c)  # on Windows Terminal or VS Code this is the copy the person meant
+        self.assertEqual((client.named("session.interrupt"), app.composer.text, app.exit_armed_at),  # type: ignore[attr-defined]
+                         ([], "keep me", None))
+        self.assertIsNone(app.selection.rows)
+        app._on_input(ctrl_c)  # the next one is Ctrl+C again: the draft goes, then the turn is interrupted
+        self.assertEqual(app.composer.text, "")
+        app._on_input(ctrl_c)
+        self.assertEqual(len(client.named("session.interrupt")), 1)  # type: ignore[attr-defined]
+
+
+class EscLatencyTests(unittest.TestCase):
+    def interrupted(self, reads: list[tuple[float, bytes]], environ: dict[str, str] | None = None) -> bool:
+        now = [100.0]
+        app = main_app(environ, clock=lambda: now[0])
+        app.turn_pending = True
+        self.assertTrue(app.terminal.mouse_reporting)  # type: ignore[attr-defined]
+        step_through(app, now, reads)
+        return bool(app.client.named("session.interrupt"))  # type: ignore[attr-defined]
+
+    def test_a_lone_esc_interrupts_at_the_first_silence_though_reports_are_on(self) -> None:
+        self.assertTrue(self.interrupted([(0.0, b"\x1b"), (READ_TIMEOUT_SECONDS, b"")]))
+
+    def test_it_waits_for_a_reports_rest_right_after_a_report_while_a_button_is_held_and_over_ssh(self) -> None:
+        silence = [(READ_TIMEOUT_SECONDS, b"")]
+        cases = {
+            "after a wheel turn": ([(0.0, b"\x1b[<65;5;3M"), (0.1, b"\x1b"), *silence], None),
+            "a button held": ([(0.0, b"\x1b[<0;5;30M"), (0.6, b"\x1b"), *silence], None),
+            "over ssh": ([(0.0, b"\x1b"), *silence * 3], {"SSH_CONNECTION": "1 2 3 4"}),
+        }
+        for name, (reads, environ) in cases.items():
+            with self.subTest(name):
+                self.assertFalse(self.interrupted(reads, environ))
+                self.assertTrue(self.interrupted([*reads, *silence * 6], environ))  # 0.3 s on, Esc after all
+
+
+class SlotAndViewTests(unittest.TestCase):
+    def test_while_a_question_is_open_the_wheel_and_an_unmapped_drag_open_the_question_view(self) -> None:
+        app = main_app()
+        app._on_server_request(ServerRequest("srq-1", "approval", {"command": "rm -rf ./x"}))
+        drawn(app)
+        app._on_input(Mouse(WHEEL_UP, 5, 3))
+        self.assertEqual(app.pager, app.question_view)
+        self.assertIsNotNone(app.pager)
+
+    def test_an_unmapped_drag_with_no_rows_to_show_opens_nothing_and_says_nothing(self) -> None:
+        app, _client = make_app(rows=14, cols=60, environ=MOUSE)
+        app.terminal.write("shell output\r\n")  # type: ignore[attr-defined]
+        app.adopt_cursor_row(2)
+        app.transcript.blocks.append(AssistantBlock("\n", model="m"))  # a block with no rows
+        drawn(app)
+        for _turn in range(3):
+            press(app, 3, 1)
+            move(app, 9, 1)
+            release(app, 9, 1)
+            app._on_input(Mouse(WHEEL_UP, 5, 1))
+        self.assertIsNone(app.pager)
+        self.assertEqual(len(app.transcript.blocks), 1)  # no "Nothing in this session's transcript yet." notice
+
+    def test_the_copy_notice_and_hermes_notice_both_show(self) -> None:
+        app = main_app()
+        app.notification = Notification("hermes says so", "info", "k")
+        row = row_of(app, "first line")
+        drag(app, (column(app, "first line"), row), (60, row))
+        screen = "\n".join(drawn(app))
+        self.assertIn("copied", screen)
+        self.assertIn("hermes says so", screen)
+
+
+class DefaultAgentListTests(unittest.TestCase):
+    def test_a_list_click_selects_nothing_and_the_wheel_over_the_list_opens_nothing(self) -> None:
+        app, _client = agent_app(environ=MOUSE)
+        app.transcript.add_user("explain it")  # a transcript the wheel elsewhere would open
+        app._on_input(CTRL_L)
+        drawn(app)
+        app._on_input(Key(DOWN))
+        drawn(app)
+        row = row_of(app, SECOND_ROW)
+        app._on_input(Mouse(WHEEL_UP, 5, row))
+        self.assertIsNone(app.pager)
+        app._on_input(Mouse(WHEEL_UP, 5, 1))  # above the list it does
+        self.assertIsNotNone(app.pager)
+        app._on_input(Key(CHAR, "q"))
+        drawn(app)
+        click(app, 5, row)
+        move(app, 30, row)
+        release(app, 30, row)
+        self.assertIsNotNone(app.pager)
+        self.assertIsNone(app.selection.rows)
+        app._on_input(Key(CHAR, "q"))
+        drawn(app)
+        self.assertEqual(reversed_count(app.terminal.screen), 0)  # type: ignore[attr-defined]
+
+
+class ResizeTests(unittest.TestCase):
+    def test_after_a_resize_the_exit_paints_nothing_back_at_the_reflowed_rows(self) -> None:
+        app = main_app()
+        row, text = row_of(app, "first line"), column(app, "first line")
+        press(app, text, row)
+        move(app, text + 9, row)
+        drawn(app)
+        app.terminal.screen.resize(14, 50)  # type: ignore[attr-defined]
+        app._on_resize()
+        writes = app.terminal.writes  # type: ignore[attr-defined]
+        start = len(writes)
+        app._shutdown()
+        self.assertNotIn(cursor_at(row - 1, 0), "".join(writes[start:]))  # the highlighted row is not painted back
+
+
+class ExitTests(unittest.TestCase):
+    def test_the_exit_with_a_highlight_above_the_region_leaves_none_on_the_screen(self) -> None:
+        app = main_app()
+        row, text = row_of(app, "first line"), column(app, "first line")
+        press(app, text, row)
+        move(app, text + 9, row)
+        drawn(app)
+        self.assertTrue(reversed_columns(app, row))
+        app._shutdown()
+        self.assertEqual(reversed_count(app.terminal.screen), 0)  # type: ignore[attr-defined]
+
+
+def answering_cursor_requests(terminal) -> None:  # type: ignore[no-untyped-def]
+    """The scripted terminal answers a cursor position request at its next read, as a terminal does."""
+    answers: list[bytes] = []
+    write, read = terminal.write, terminal.read
+
+    def answering_write(text: str) -> None:
+        write(text)
+        if CURSOR_POSITION_REQUEST in text:
+            answers.append(b"\x1b[24;1R")
+
+    def answering_read(timeout: float, wake: int | None = None) -> bytes:
+        return answers.pop(0) if answers else read(timeout, wake)
+
+    terminal.write, terminal.read = answering_write, answering_read
 
 
 @unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
@@ -423,6 +702,44 @@ class RealLoopTests(AppTestCase):
         self.assertEqual([base64.b64decode(text[5:].rstrip("\x07")).decode() for text in copies], ["❯ copy me"])
         self.assertIn("copy me", "\n".join(terminal.captures["view"]))
         self.assertTrue(aimed)
+
+
+@unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
+class DefaultMousePromptSlotTests(AppTestCase):
+    """`PromptSlotTests`' questions in the real loop with the main screen taking the mouse: a question arms after
+    `REPORTING_SLOT_ARM_SECONDS`, since reports are on as it opens."""
+
+    approval_run = PromptSlotTests.approval_run
+    assert_denied = PromptSlotTests.assert_denied
+    submit = PromptSlotTests.submit
+    test_an_approval_opens_a_slot_and_d_sends_the_explicit_deny = (
+        PromptSlotTests.test_an_approval_opens_a_slot_and_d_sends_the_explicit_deny)
+    test_esc_on_an_approval_sends_the_explicit_deny = PromptSlotTests.test_esc_on_an_approval_sends_the_explicit_deny
+    test_up_then_enter_on_an_armed_approval_still_denies = (
+        PromptSlotTests.test_up_then_enter_on_an_armed_approval_still_denies)
+    test_a_clarify_choice_is_picked_by_its_number = PromptSlotTests.test_a_clarify_choice_is_picked_by_its_number
+    test_a_typed_clarify_answer_never_enters_the_input_history = (
+        PromptSlotTests.test_a_typed_clarify_answer_never_enters_the_input_history)
+
+    def prepare(self, scenario: Scenario, *, rows: int = 24, cols: int = 80, env: dict | None = None):  # type: ignore[no-untyped-def,override]
+        return super().prepare(scenario, rows=rows, cols=cols, env={"OMH_TUI_MOUSE": "1", **(env or {})})
+
+    def armed(self, run, label: str):  # type: ignore[no-untyped-def]
+        return lambda: time.monotonic() - run.terminal.fired[label] > REPORTING_SLOT_ARM_SECONDS + 0.05
+
+
+@unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
+class DefaultMouseExitTests(AppTestCase):
+    def test_the_exit_drains_late_reports_up_to_the_cursor_answer_and_is_quick(self) -> None:
+        run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=startup_answers()),
+                           env={"OMH_TUI_MOUSE": "1"})
+        answering_cursor_requests(run.terminal)
+        run.terminal.script(Step(b"\x04", when=lambda: run.terminal.idle() and run.terminal.mouse_reporting,
+                                 label="exit"))
+        self.run_main(run)
+        self.assert_clean_run(run)
+        self.assertIn(CURSOR_POSITION_REQUEST, "".join(run.terminal.writes))  # reports were on: the drain ran
+        self.assertLess(run.terminal.exited_at - run.terminal.fired["exit"], 0.5)
 
 
 if __name__ == "__main__":
