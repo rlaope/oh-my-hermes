@@ -842,5 +842,75 @@ class TrivialMessageGuardTests(unittest.TestCase):
         self.assertIn("expected confidence high, observed medium", mispinned["issues"])
 
 
+class SystematicReviewRouteTests(unittest.TestCase):
+    """Korean pack and plain-English review sentences, judged by the corpus's own evaluators.
+
+    Kept here rather than in `ROUTING_PRECISION_CASES` / `ROUTING_INTERVENTION_CASES`
+    while another change owns `src/quality/`; the verdict functions are the ones
+    `build_routing_precision_demo` counts, so a pass here is the corpus's pass.
+    """
+
+    NEGATIVES = (
+        # Korean: drafting, finding papers and drawing the flow diagram are not screening.
+        ("sysrev-ko-manuscript", "체계적 문헌고찰 논문 초안을 써줘", ""),
+        ("sysrev-ko-find-papers", "체계적 문헌고찰용 논문을 찾아줘", ""),
+        ("sysrev-ko-prisma-diagram", "PRISMA 스크리닝 흐름도 그려줘", ""),
+        # A systematic, scoping or rapid review of a pointed-at software object.
+        ("sysrev-error-handling", "Do a systematic review of our error handling", "systematic-review"),
+        ("sysrev-microservices", "I need a systematic review of all our microservices for security issues", "systematic-review"),
+        ("sysrev-dead-code", "Do a systematic review of the codebase for dead code", "systematic-review"),
+        ("sysrev-scoping-migration", "Do a scoping review of this migration before we start", "systematic-review"),
+        ("sysrev-rapid-auth", "Do a rapid review of the auth module", "systematic-review"),
+    )
+    INTERVENTIONS = (
+        ("sysrev-ko-screening", "체계적 문헌고찰 스크리닝을 도와줘", "dispatch", "systematic-review"),
+        ("sysrev-ko-dual-abstracts", "초록 400개를 포함/제외 기준으로 두 명이 선별하게 해줘", "dispatch", "systematic-review"),
+        ("sysrev-statin-abstracts", "We are doing a systematic review of statin trials; screen these 400 abstracts", "dispatch", "systematic-review"),
+        ("sysrev-telehealth-scoping", "I need a scoping review of telehealth in rural clinics", "dispatch", "systematic-review"),
+        ("sysrev-plain-pr-review", "review this PR", "clarify", "code-review"),
+        ("sysrev-systematic-code-review-pr", "do a systematic code review of this PR", "dispatch", "code-review"),
+    )
+
+    def test_negative_controls_never_dispatch_systematic_review(self) -> None:
+        from omh.quality.routing_precision import (
+            RoutingPrecisionCase,
+            precision_case_interaction,
+            precision_case_verdict,
+        )
+
+        for case_id, message, forbidden in self.NEGATIVES:
+            with self.subTest(case_id=case_id):
+                case = RoutingPrecisionCase(case_id, case_id, message, "answer_clarification", "", forbidden)
+                interaction = precision_case_interaction(case, source="discord")
+                self.assertEqual(
+                    precision_case_verdict(case, interaction, source="discord"),
+                    {"passed": True, "overrouted": False},
+                )
+
+    def test_interventions_reach_their_owner(self) -> None:
+        from omh.quality.routing_precision import (
+            RoutingInterventionCase,
+            intervention_case_interaction,
+            intervention_case_verdict,
+        )
+
+        owners = {
+            "systematic-review": ("prepare_systematic_review", "systematic_review"),
+            "code-review": ("choose_executor", "handoff"),
+        }
+        for case_id, message, action, owner in self.INTERVENTIONS:
+            with self.subTest(case_id=case_id):
+                if action == "dispatch":
+                    next_action, kind = owners[owner]
+                    case = RoutingInterventionCase(case_id, case_id, message, "dispatch", owner, next_action, kind)
+                else:
+                    case = RoutingInterventionCase(
+                        case_id, case_id, message, "clarify", "oh-my-hermes", "answer_clarification",
+                        "clarification", expected_candidate=owner,
+                    )
+                interaction = intervention_case_interaction(case, source="discord")
+                self.assertEqual(intervention_case_verdict(case, interaction, source="discord"), {"passed": True})
+
+
 if __name__ == "__main__":
     unittest.main()

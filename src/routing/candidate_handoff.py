@@ -247,7 +247,7 @@ def _lexical_shortlist(
         # ("large pdf" is not long-document-reading). An ordinary clarify
         # also needs an anchor word and the skill's offers-itself precondition.
         if declined_dispatch:
-            if only_held_back_overlap(message, skill):
+            if only_held_back_overlap(message, skill) or query.offers_itself_withheld(skill):
                 continue
         elif not lexical_anchor_terms(message, skill) or query.offers_itself_withheld(skill):
             continue

@@ -67,7 +67,7 @@ Bad example:
 
 Use when records for a systematic, scoping or rapid review must be screened against the person's inclusion and exclusion criteria by two independent reviewers, with every conflict and missing decision kept visible.
 
-    Strong routing signals: `systematic-review`, `systematic review`, `systematic literature review`, `scoping review`, `rapid review`, `prisma screening`, `title and abstract screening`, `inclusion and exclusion criteria screening`, `dual reviewer screening`, `체계적 문헌고찰`, `PRISMA 스크리닝`, `포함 제외 기준 선별`
+    Strong routing signals: `systematic-review`, `systematic review`, `systematic literature review`, `scoping review`, `rapid review`, `prisma screening`, `title and abstract screening`, `inclusion and exclusion criteria screening`, `dual reviewer screening`, `체계적 문헌고찰 스크리닝`, `초록 선별`, `두 명이 선별`
 
 ## Catalog Metadata
 

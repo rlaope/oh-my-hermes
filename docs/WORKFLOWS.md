@@ -8896,7 +8896,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Explaining one supplied paper section by section belongs to `paper-learning`.
   - Checking a HellaSwag log against the paper's reported conditions belongs to `repro-audit`.
   - Drafting the manuscript itself is paper writing: load Hermes' optional research-paper-writing skill when it is installed.
-- Strong routing signals: `systematic-review`, `systematic review`, `systematic literature review`, `scoping review`, `rapid review`, `prisma screening`, `title and abstract screening`, `inclusion and exclusion criteria screening`, `dual reviewer screening`, `체계적 문헌고찰`, `PRISMA 스크리닝`, `포함 제외 기준 선별`
+- Strong routing signals: `systematic-review`, `systematic review`, `systematic literature review`, `scoping review`, `rapid review`, `prisma screening`, `title and abstract screening`, `inclusion and exclusion criteria screening`, `dual reviewer screening`, `체계적 문헌고찰 스크리닝`, `초록 선별`, `두 명이 선별`
 - Good example:
   - Prompt: Screen these 400 abstracts for my systematic review of statin trials with two reviewers.
   - Expected behavior: Freeze the agreed criteria, prepare blind batches, dispatch reviewers A and B, merge, and report conflicts, pending records and agreement with the independence label.

@@ -1802,8 +1802,8 @@
 },
 {
 "anchors":"agreement count diagram disagree flow includ inter literatur meta prisma rater result study systematic",
-"hangul":"계적 고찰 기준 리닝 문헌 선별 스크 제외 체계 크리 포함 헌고",
-"hangul_anchors":"계적 고찰 기준 리닝 문헌 선별 제외 체계 크리 포함 헌고",
+"hangul":"계적 고찰 리닝 명이 문헌 선별 스크 체계 초록 크리 헌고",
+"hangul_anchors":"계적 고찰 리닝 명이 문헌 선별 체계 초록 크리 헌고",
 "label":"omh-systematic-review",
 "name":"systematic-review",
 "situation":"Literature screening against frozen criteria",
