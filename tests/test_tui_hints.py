@@ -36,16 +36,22 @@ class QuestionKeyTests(unittest.TestCase):
     def test_an_open_question_puts_its_keys_on_the_info_line_and_esc_means_one_thing(self) -> None:
         cases = [
             (APPROVAL, "↑↓ pick · enter confirms · d or esc denies and stops"),
-            (CLARIFY, "↑↓ or 1-9 · enter picks · type to answer · esc cancels"),
+            (CLARIFY, "Enter to select · ↑↓ to navigate · Esc to cancel"),
             (SECRET, "type it · enter sends · esc declines"),
         ]
         for request, keys in cases:
             with self.subTest(method=request.method):
                 app, _client = make_app(busy=True)
                 app._on_server_request(request)
-                self.assertIn(keys, mode_row(app))
+                if request.method == "clarify":
+                    # A framed question says its keys on its own row under its bottom rule, not on the info line.
+                    self.assertIn(keys, [line_text(row).strip() for row in app._slot_lines(100, 24)])
+                    self.assertNotIn("esc", mode_row(app).casefold())
+                else:
+                    self.assertIn(keys, mode_row(app))
                 self.assertNotIn("esc interrupt", mode_row(app))
-                self.assertNotIn("esc to interrupt", line_text(app._tail(100)[-1]))  # the working row too
+                tail = app._tail(100)  # a framed question draws no waiting row: its key row carries the clock
+                self.assertNotIn("esc to interrupt", line_text(tail[-1]) if tail else "")  # the working row too
 
     def test_an_approval_with_no_turn_running_says_deny_not_stop(self) -> None:
         # A subagent that outlived the turn can still ask; nothing would be interrupted then.
@@ -189,8 +195,9 @@ class NarrowSayTests(unittest.TestCase):
         show_mode(app, MODE_ACCEPT_PLAN)
         app._on_server_request(CLARIFY)
         row = line_text(app._info_line(40))
-        self.assertTrue(row.rstrip().endswith("esc cancels"), row)
         self.assertTrue(row.startswith(INFO_INSET + "⏵⏵") and "⏸" in row, row)
+        # The way out is on the question's own key row, which keeps it at forty columns.
+        self.assertTrue(line_text(app._slot_lines(40, 24)[-1]).rstrip().endswith("Esc to cancel"))
 
     def test_the_right_side_gives_way_before_the_count_or_the_steered_agents_name(self) -> None:
         row = self.steer_row(100, effort="high")
