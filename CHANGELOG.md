@@ -22,6 +22,12 @@ All notable changes will be documented here.
   an extend, is checked only for pairs with one of its own new nodes, so two
   earlier nodes it cannot change never refuse it. The coding fanout
   contract's boundary check still compares as written.
+- **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
+  of the hollow `○`.** Four finished agents in a row looked the same as four
+  that had not started. A completed agent now leads with `✓` in the done
+  green; the collapsed `N done` row is green only when every agent it
+  counts completed, else a muted `▪`.
+  Interrupted, failed, waiting and running agents keep their marks.
 
 ## 4.0.6 - 2026-11-04
 
