@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`/gateway restart` says what each choice stops.** In a named profile the
+  shared gateway serves, "Restart this profile" now says that profile's
+  running turns stop now, since Hermes re-serves it without waiting. The
+  "finishes first, up to N min" line names the whole-gateway restart. A
+  gateway without `--external-supervisor` in its argv is no longer said to be
+  interrupted outright: Hermes' own systemd or launchd service drains it too
+  (SIGUSR1), which the record cannot show, so the slot says the work finishes
+  first if a service runs the gateway, and is otherwise interrupted. `/image`
+  and `/paste` now wait in the composer during the restart, as the other
+  commands that call the gateway do.
 - **A finished dag child's briefing names it by its role and a coloured
   handle.** As Claude Code writes `● Teammate @x finished`, a dag node's child
   now reads `● build @notify finished` (`verify`, `review`, `baseline`: the

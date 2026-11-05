@@ -1586,11 +1586,13 @@ installed since the start, by `omh update` or `/skills install`, runs as
 gateway and reattaches to the same session: it first names the gateway's
 profiles, its connected messenger bots and its running work, and runs nothing
 until you pick Restart. It then runs Hermes' own `hermes gateway restart`; a
-gateway a service runs lets running work finish first, up to Hermes'
-`restart_after_turn_timeout`, and new turns wait meanwhile. Restarting the
-whole gateway loads new OMH plugin code after `omh update`. In a named
-profile the shared gateway serves, you pick that profile alone (only it
-reconnects, and new OMH code is not loaded) or the whole gateway. Your draft
+gateway a service (systemd, launchd, or a custom supervisor) runs lets running
+work finish first, up to Hermes' `restart_after_turn_timeout`, and new turns
+wait meanwhile. Restarting the whole gateway loads new OMH plugin code after
+`omh update`. In a named profile the shared gateway serves, you pick that
+profile alone (its running turns stop now, only it reconnects, and new OMH
+code is not loaded) or the whole gateway. While it restarts, commands that
+call the gateway, `/image` and `/paste` included, wait in the composer. Your draft
 stays and nothing is sent again; a failure says why and the command to run
 in a terminal; bare `/gateway` stays Hermes' platform status). Claude Code's `/cost`, `/permissions` and
 `/compact` run Hermes' `/usage`, `/approvals` and `/compress` (`here [N]`, a
