@@ -33,9 +33,9 @@ the width, its asked sentence bold under the context Hermes wrote before it
 description dim under it, a last row that opens a text field for an answer of
 the person's own ("Type something."; while that field is open the composer is
 the field), and its keys on its own row under the bottom rule rather than on
-the info line. On a question written in Korean that row reads "직접 입력",
-Hermes' "(Recommended)" tag reads "(권장)" and the keys are Korean; what a
-pick sends back is Hermes' own string either way. Every other slot row hangs
+the info line. The picker's own words (the keys, "Type something.", Hermes'
+"(Recommended)") are English whatever language the question is in, as in
+Claude Code. What a pick sends back is Hermes' own string. Every other slot row hangs
 off a `▌` bar, in the warn colour for an approval and grey for anything else,
 so a question Hermes asked never reads as panel or transcript text.
 
@@ -113,10 +113,6 @@ _DENY_KEYS = frozenset("dn")
 CHOICE_DIGITS = "123456789"
 # The last row of a clarify question's choices: it opens a text field (Claude Code's AskUserQuestion wording).
 CLARIFY_OTHER = "Type something."
-# The same row, and the tag Hermes puts on the recommended choice (`RECOMMENDED_TAG`), on a question written in
-# Korean (`_korean_question`). Display only: a picked choice is still answered with Hermes' own string.
-CLARIFY_OTHER_KO = "직접 입력"
-RECOMMENDED_TAG_KO = "(권장)"
 # A choice written `label — description` shows the label on its numbered row and the description dim under it
 # (`_choice_parts`). One separator, spaces included, so a dash inside a word or a range never splits a choice.
 CHOICE_DESCRIPTION = " — "
@@ -124,29 +120,14 @@ CHOICE_DESCRIPTION = " — "
 FRAME_RULE = "─"
 # How many rows the context before a clarify question's asked sentence keeps, dim, before Ctrl+O shows the rest.
 LEAD_ROWS = 3
-MULTI_NOTE_KO = " (여러 개 선택 가능)"
-# The framed question's own key row, under its bottom rule, for what the keys do now: longest form that fits first,
-# Korean on a question written in Korean. The info line says nothing then (`framed`).
+# The framed question's own key row, under its bottom rule, for what the keys do now, in Claude Code's terse
+# wording: longest form that fits first. Digits and typing still pick and answer; the row names the three keys
+# every question takes. The info line says nothing then (`framed`).
 CLARIFY_FOOTERS = {
-    "choice": (
-        ("Enter to select · ↑↓ to navigate · 1-9 picks · type to answer · Esc to cancel",
-         "Enter to select · ↑↓ to navigate · Esc to cancel", "Esc to cancel"),
-        ("Enter 선택 · ↑↓ 이동 · 1-9 바로 선택 · 입력하면 직접 답변 · Esc 취소", "Enter 선택 · ↑↓ 이동 · Esc 취소", "Esc 취소"),
-    ),
-    "closed": (
-        ("Enter to select · ↑↓ to navigate · 1-9 picks · Esc to cancel",
-         "Enter to select · ↑↓ to navigate · Esc to cancel", "Esc to cancel"),
-        ("Enter 선택 · ↑↓ 이동 · 1-9 바로 선택 · Esc 취소", "Enter 선택 · ↑↓ 이동 · Esc 취소", "Esc 취소"),
-    ),
-    "multi": (
-        ("Space to tick · Enter to send · ↑↓ to navigate · type to answer · Esc to cancel",
-         "Space to tick · Enter to send · Esc to cancel", "Esc to cancel"),
-        ("Space 체크 · Enter 보내기 · ↑↓ 이동 · 입력하면 직접 답변 · Esc 취소", "Space 체크 · Enter 보내기 · Esc 취소", "Esc 취소"),
-    ),
-    "field": (
-        ("Enter to send · ↑↓ back to the choices · Esc to cancel", "Enter to send · Esc to cancel", "Esc to cancel"),
-        ("Enter 보내기 · ↑↓ 선택지로 · Esc 취소", "Enter 보내기 · Esc 취소", "Esc 취소"),
-    ),
+    "choice": ("Enter to select · ↑↓ to navigate · Esc to cancel", "Enter to select · Esc to cancel", "Esc to cancel"),
+    "multi": ("Space to tick · Enter to send · ↑↓ to navigate · Esc to cancel", "Space to tick · Enter to send · Esc to cancel",
+              "Esc to cancel"),
+    "field": ("Enter to send · ↑↓ back to the choices · Esc to cancel", "Enter to send · Esc to cancel", "Esc to cancel"),
 }
 # A question the TUI asks itself (the app's model confirmation) sets this to True: its choices are the only answers,
 # so it has no text field's row. Hermes' own questions never carry it.
@@ -898,19 +879,19 @@ class PromptSlot:
         The question's asked sentence is bold, and the context Hermes wrote
         before it dim above it, at most `LEAD_ROWS` rows unless `whole`
         (`question_parts`); a choice's description is dim under its label
-        (`_choice_parts`). On a question written in Korean the recommended tag,
-        the text field's row and the keys are Korean. When rows run short the
+        (`_choice_parts`). The picker's own words (the keys, `Type
+        something.`, Hermes' `(Recommended)`) are English whatever language
+        the question is in. When rows run short the
         blank row goes first, then the two rules; the key row stays while two
         rows of the question are left, the context gives way before the asked
         sentence, and `_fit` cuts the rest as it cuts any question.
         """
         question = self._current_question() or {}
         text = str(question.get("question", ""))
-        korean = _korean_question(text)
         inner = max(width - len(SLOT_BAR), 1)
         total = len(self._questions())
         counter = f" ({self.question_index + 1}/{total})" if total > 1 else ""
-        note: Line = (Span(MULTI_NOTE_KO if korean else MULTI_NOTE, theme.muted),) if self._multi() else ()
+        note: Line = (Span(MULTI_NOTE, theme.muted),) if self._multi() else ()
         lead, asked = question_parts(text)
         lead_rows = [row for part in lead.splitlines() if part.strip()
                      for row in wrap_line((Span(part.strip(), theme.muted),), inner)]
@@ -922,9 +903,9 @@ class PromptSlot:
             tail: Line = (Span(counter, theme.user), *note, *queued) if index == len(asked_parts) - 1 else ()
             asked_rows += wrap_line((Span(part, theme.user), *tail), inner)
         choices = self._current_choices()
-        entries = [_choice_parts(choice, korean) for choice in choices]
+        entries = [_choice_parts(choice) for choice in choices]
         if self._other_row():
-            entries.append((CLARIFY_OTHER_KO if korean else CLARIFY_OTHER, ""))
+            entries.append((CLARIFY_OTHER, ""))
         leads = [f"{number}. " for number in range(1, len(entries) + 1)]
         if self._multi():
             boxes = [TICKED if choice in self.ticked else UNTICKED for choice in choices] + [" " * len(UNTICKED)]
@@ -954,8 +935,7 @@ class PromptSlot:
         body = [_barred(row, bar, width) for row in self._fit(head, [], choice_rows, room, inner, theme)]
         rows = [rule, *body, rule] if ruled else body
         if footer:
-            state = "field" if self.typing else "closed" if not self._other_row() else "multi" if self._multi() else "choice"
-            forms = CLARIFY_FOOTERS[state][1 if korean else 0]
+            forms = CLARIFY_FOOTERS["field" if self.typing else "multi" if self._multi() else "choice"]
             said = [f"{form} · {waited}" for form in forms] + list(forms) if waited else list(forms)
             indent = " " * len(SLOT_BAR)
             fits = [form for form in said if cell_width(indent + form) <= width]
@@ -1005,16 +985,16 @@ def _barred(row: Line, bar: Span, width: int) -> Line:
             *(row[-1:] if row and is_fill(row[-1]) else ()))
 
 
-def _choice_parts(choice: str, korean: bool) -> tuple[str, str]:
+def _choice_parts(choice: str) -> tuple[str, str]:
     """A clarify choice as `(label, description)`: split at its first `CHOICE_DESCRIPTION` when text stands on both
-    sides, else the whole choice and no description; Hermes' `(Recommended)` at its end goes on the label, in Korean
-    on a question written in Korean. Display only."""
+    sides, else the whole choice and no description; Hermes' `(Recommended)` at its end goes on the label. Display
+    only."""
     bare = _without_recommended(choice)
     label, separator, description = bare.partition(CHOICE_DESCRIPTION)
     if not (separator and label.strip() and description.strip()):
         label, description = bare, ""
     if bare != choice.strip():
-        label = f"{label.strip()} {RECOMMENDED_TAG_KO if korean else RECOMMENDED_TAG}"
+        label = f"{label.strip()} {RECOMMENDED_TAG}"
     return label.strip(), description.strip()
 
 
@@ -1036,20 +1016,6 @@ def question_parts(text: str) -> tuple[str, str]:
         paragraphs = [match.end() for match in re.finditer(r"\n\s*\n", text)]
         cut = paragraphs[-1] if paragraphs else 0
     return text[:cut].strip(), text[cut:].strip()
-
-
-_HANGUL = re.compile(r"[\u1100-\u11ff\u3131-\u318e\uac00-\ud7a3]")
-_LATIN = re.compile(r"[A-Za-z]")
-
-
-def _korean_question(text: str) -> bool:
-    """Whether a clarify question is written in Korean: at least as many of its words hold Hangul as hold Latin
-    letters and no Hangul, and one does. Words, not letters, because a Hangul syllable is one character where an
-    English word is several, and a Korean question naming `distribution (macos-latest)` is still Korean."""
-    words = text.split()
-    hangul = sum(1 for word in words if _HANGUL.search(word))
-    latin = sum(1 for word in words if _LATIN.search(word) and not _HANGUL.search(word))
-    return hangul > 0 and hangul >= latin
 
 
 def _home_short(text: str, home: str) -> str:

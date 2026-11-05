@@ -2,9 +2,10 @@
 
 Two rules across the width frame it; the asked sentence is bold and the
 context before it dim; a `label — description` choice shows its description
-dim under its label; its keys are on its own row under the bottom rule, in
-Korean on a question written in Korean. What a pick sends back is Hermes' own
-choice string, whatever the row shows.
+dim under its label; its keys are on its own row under the bottom rule. The
+picker's own words are English whatever language the question is in; only the
+model's question and choices keep theirs. What a pick sends back is Hermes'
+own choice string, whatever the row shows.
 """
 
 from __future__ import annotations
@@ -57,20 +58,20 @@ def text(params: dict, width: int = 150, rows: int = 30, **kwargs) -> list[str]:
 
 
 class FrameTests(unittest.TestCase):
-    def test_korean_question_between_two_rules_with_its_own_korean_key_row(self) -> None:
+    def test_a_korean_question_keeps_its_words_and_the_picker_keeps_english(self) -> None:
         drawn = text(KOREAN, waited="14m 42s")
         rule = prompts.FRAME_RULE * 150
         self.assertEqual(drawn[0], rule)
         self.assertEqual(drawn[-2], rule)
-        self.assertEqual(drawn[-1], "  Enter 선택 · ↑↓ 이동 · 1-9 바로 선택 · 입력하면 직접 답변 · Esc 취소 · 14m 42s")
+        self.assertEqual(drawn[-1], "  Enter to select · ↑↓ to navigate · Esc to cancel · 14m 42s")
         self.assertEqual(drawn[-9:-2], [
             "▌ ",
-            "▌ ❯ 1. 지금 머지 (권장)",
+            "▌ ❯ 1. 지금 머지 (Recommended)",
             "▌      macOS 결과 없이 머지하고 PR B 시작",
             "▌   2. 재실행",
             "▌      러너가 잡힐 때까지 재실행하고 통과하면 머지",
             "▌   3. 대기",
-            "▌   4. 직접 입력",
+            "▌   4. Type something.",
         ])
         self.assertEqual(drawn[-10], "▌ 어떻게 할까요?")
 
@@ -86,7 +87,7 @@ class FrameTests(unittest.TestCase):
             "▌      keep the bar as registered",
             "▌   3. Type something.",
         ])
-        self.assertEqual(drawn[-1], "  Enter to select · ↑↓ to navigate · 1-9 picks · type to answer · Esc to cancel")
+        self.assertEqual(drawn[-1], "  Enter to select · ↑↓ to navigate · Esc to cancel")
 
     def test_the_asked_sentence_is_bold_and_the_context_dim(self) -> None:
         rows = slot(ENGLISH).lines(150, DEFAULT_THEME, 30)
@@ -107,10 +108,10 @@ class FrameTests(unittest.TestCase):
     def test_a_narrow_terminal_wraps_and_shortens_the_key_row(self) -> None:
         drawn = text(KOREAN, width=60)
         self.assertEqual(drawn[0], prompts.FRAME_RULE * 60)
-        self.assertEqual(drawn[-1], "  Enter 선택 · ↑↓ 이동 · Esc 취소")
+        self.assertEqual(drawn[-1], "  Enter to select · ↑↓ to navigate · Esc to cancel")
         for row in drawn:
             self.assertLessEqual(cell_width(row), 60, row)
-        self.assertIn("▌ ❯ 1. 지금 머지 (권장)", drawn)
+        self.assertIn("▌ ❯ 1. 지금 머지 (Recommended)", drawn)
 
     def test_long_context_is_capped_and_ctrl_o_shows_all_of_it(self) -> None:
         long = {"questions": [{**KOREAN["questions"][0],
@@ -126,25 +127,25 @@ class FrameTests(unittest.TestCase):
     def test_short_rows_drop_the_frame_and_the_context_before_the_asked_sentence(self) -> None:
         self.assertEqual(text(KOREAN, width=80, rows=5), [
             "▌ 어떻게 할까요? … ctrl+o shows all",
-            "▌ ❯ 1. 지금 머지 (권장)",
+            "▌ ❯ 1. 지금 머지 (Recommended)",
             "▌      macOS 결과 없이 머지하고 PR B 시작 … ctrl+o shows all",
-            "  Enter 선택 · ↑↓ 이동 · 1-9 바로 선택 · 입력하면 직접 답변 · Esc 취소",
+            "  Enter to select · ↑↓ to navigate · Esc to cancel",
         ])
         self.assertEqual(text(KOREAN, width=80, rows=13)[0], prompts.FRAME_RULE * 80)  # the rules once nothing is cut
         self.assertEqual(len(text(KOREAN, rows=2)), 2)
-        self.assertEqual(text(KOREAN, rows=1), ["▌ ❯ 1. 지금 머지 (권장) … ctrl+o shows all"])
+        self.assertEqual(text(KOREAN, rows=1), ["▌ ❯ 1. 지금 머지 (Recommended) … ctrl+o shows all"])
 
     def test_the_key_row_follows_the_state(self) -> None:
         clarify = slot(KOREAN)
         clarify.handle_key(Key(CHAR, "x"))  # opens the text field
-        self.assertEqual(lines_text(clarify.lines(150, DEFAULT_THEME, 30))[-1], "  Enter 보내기 · ↑↓ 선택지로 · Esc 취소")
+        self.assertEqual(lines_text(clarify.lines(150, DEFAULT_THEME, 30))[-1], "  Enter to send · ↑↓ back to the choices · Esc to cancel")
         multi = {"questions": [{**ENGLISH["questions"][0], "multi_select": True}]}
         drawn = text(multi)
         self.assertEqual(drawn[-1],
-                         "  Space to tick · Enter to send · ↑↓ to navigate · type to answer · Esc to cancel")
+                         "  Space to tick · Enter to send · ↑↓ to navigate · Esc to cancel")
         self.assertIn("▌ Merge the alternative anyway? (choose one or more)", drawn)
         closed = {"questions": [{**ENGLISH["questions"][0], prompts.CLOSED_CHOICES: True}]}
-        self.assertEqual(text(closed)[-1], "  Enter to select · ↑↓ to navigate · 1-9 picks · Esc to cancel")
+        self.assertEqual(text(closed)[-1], "  Enter to select · ↑↓ to navigate · Esc to cancel")
         self.assertNotIn("▌   3. Type something.", text(closed))
 
     def test_a_framed_question_leaves_the_info_line_to_its_own_key_row(self) -> None:
@@ -164,19 +165,18 @@ class AnswerTests(unittest.TestCase):
 
     def test_choice_parts(self) -> None:
         cases = {
-            ("a — b (Recommended)", False): ("a (Recommended)", "b"),
-            ("a — b (Recommended)", True): ("a (권장)", "b"),
-            ("a — b — c", False): ("a", "b — c"),
-            ("plain", True): ("plain", ""),
-            ("blue-green deploy", False): ("blue-green deploy", ""),  # a dash in a word never splits
-            ("2024—2026", False): ("2024—2026", ""),  # no spaces around it: not the separator
-            (" — only a description", False): ("— only a description", ""),
-            ("머지 (Recommended)", True): ("머지 (권장)", ""),
-            ("(Recommended) 머지", True): ("(Recommended) 머지", ""),
+            "a — b (Recommended)": ("a (Recommended)", "b"),
+            "머지 — 지금 머지 (recommended) ": ("머지 (Recommended)", "지금 머지"),  # Hermes' tag, in Hermes' words
+            "a — b — c": ("a", "b — c"),
+            "plain": ("plain", ""),
+            "blue-green deploy": ("blue-green deploy", ""),  # a dash in a word never splits
+            "2024—2026": ("2024—2026", ""),  # no spaces around it: not the separator
+            " — only a description": ("— only a description", ""),
+            "(Recommended) 머지": ("(Recommended) 머지", ""),
         }
-        for (choice, korean), parts in cases.items():
-            with self.subTest(choice=choice, korean=korean):
-                self.assertEqual(prompts._choice_parts(choice, korean), parts)
+        for choice, parts in cases.items():
+            with self.subTest(choice=choice):
+                self.assertEqual(prompts._choice_parts(choice), parts)
 
 
 class QuestionPartsTests(unittest.TestCase):
@@ -221,7 +221,7 @@ class AppTests(unittest.TestCase):
         tail = [line_text(row) for row in app._tail(150)]
         self.assertFalse([row for row in tail if STATE_WAITING in row], tail)
         footer = line_text(app._slot_lines(150, 30)[-1])
-        self.assertEqual(footer, "  Enter 선택 · ↑↓ 이동 · 1-9 바로 선택 · 입력하면 직접 답변 · Esc 취소")
+        self.assertEqual(footer, "  Enter to select · ↑↓ to navigate · Esc to cancel")
         now[0] += 14 * 60 + 42
         self.assertEqual(line_text(app._slot_lines(150, 30)[-1]), footer + " · 14m 42s")
         self.assertNotIn("Esc", line_text(app._info_line(150)))
@@ -242,22 +242,6 @@ class AppTests(unittest.TestCase):
         call = next(row for row in rows if "clarify" in row)
         self.assertIn("clarify(어떻게 할까요?)", call)
         self.assertNotIn("PR #2565", call)
-
-
-class KoreanQuestionTests(unittest.TestCase):
-    def test_which_questions_read_as_korean(self) -> None:
-        cases = {
-            "어느 저장소로 생성할까요?": True,
-            "GitHub device 승인이 끝났나요?": True,  # as many Korean words as English ones
-            "MVP 범위에 넣을 기능을 골라 주세요.": True,
-            KOREAN["questions"][0]["question"]: True,
-            "Which color do you prefer?": False,
-            "OMH degraded (`UnattributableSessionError: no session`) 다시 할까요?": False,
-            "": False,
-        }
-        for question, korean in cases.items():
-            with self.subTest(question=question):
-                self.assertEqual(prompts._korean_question(question), korean)
 
 
 class ToolRowTests(unittest.TestCase):

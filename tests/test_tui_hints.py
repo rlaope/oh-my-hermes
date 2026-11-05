@@ -36,7 +36,7 @@ class QuestionKeyTests(unittest.TestCase):
     def test_an_open_question_puts_its_keys_on_the_info_line_and_esc_means_one_thing(self) -> None:
         cases = [
             (APPROVAL, "↑↓ pick · enter confirms · d or esc denies and stops"),
-            (CLARIFY, "Enter to select · ↑↓ to navigate · 1-9 picks · type to answer · Esc to cancel"),
+            (CLARIFY, "Enter to select · ↑↓ to navigate · Esc to cancel"),
             (SECRET, "type it · enter sends · esc declines"),
         ]
         for request, keys in cases:

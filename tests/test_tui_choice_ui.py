@@ -343,7 +343,7 @@ class ClarifyFieldTests(unittest.TestCase):
         self.assertEqual(
             screen[info - 8 : info],
             [rule, "▌ Which color?", "▌", "▌ ❯ 1. red", "▌   2. blue", "▌   3. Type something.", rule,
-             "  Enter to select · ↑↓ to navigate · 1-9 picks · type to answer · Esc to cancel"],
+             "  Enter to select · ↑↓ to navigate · Esc to cancel"],
         )
 
     def test_typing_a_character_opens_the_field_with_it_and_enter_sends_the_answer(self) -> None:

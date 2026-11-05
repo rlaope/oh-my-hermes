@@ -878,12 +878,11 @@ run and approval decision stays Hermes'; the screen is OMH's.
   choice written `label — description` as its label with the description
   under it, and its keys on a row of their own under the bottom rule, with
   how long it has waited once that is a minute (Hermes gives up after an
-  hour); on a question written in Korean the recommended tag reads `(권장)`
-  and the keys are Korean. It numbers its choices: a digit, or Up and Down
+  hour). It numbers its choices: a digit, or Up and Down
   then Enter, picks one. One that takes several says `(choose one or more)` and
   puts a box before each choice: Space or its digit ticks the choice (`[x]`)
   or unticks it, Enter sends the ticked ones (the highlighted one alone when
-  none is ticked), and an answer of your own joins the ticked ones. Its last row, `Type something.` (`직접 입력`), opens the
+  none is ticked), and an answer of your own joins the ticked ones. Its last row, `Type something.`, opens the
   composer as the field for an answer of your own, and so does typing any
   character that picks nothing, which becomes the answer's first character;
   Up or Down goes back to the list and keeps what you typed for that
