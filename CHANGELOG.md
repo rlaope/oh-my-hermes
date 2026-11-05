@@ -6,6 +6,15 @@ All notable changes will be documented here.
 
 ## 4.0.6 - 2026-11-04
 
+- **The Hermes Desktop pane reads the Windows Hermes home in its fallback
+  (#2569 by @k1lgor).** When the dashboard backend could not import Hermes'
+  `get_hermes_home()` and no `HERMES_HOME` was set, it read `~/.hermes`,
+  while Hermes itself defaults to `%LOCALAPPDATA%\hermes` on Windows, so the
+  pane's HUD could read an empty home. That fallback now uses Hermes'
+  platform default, with `HERMES_DATA_DIR_SUFFIX` honoured; a parity test
+  keeps it equal to the bundle's own `platform_default_hermes_home`. The
+  host's answer and an explicit `HERMES_HOME` still win, and POSIX stays
+  `~/.hermes`.
 - **A drag selects text in the OMH TUI again after another program left the
   mouse on.** Hermes' own TUI turns on mouse modes 1000, 1002, 1003 and 1006,
   and a crash or `kill -9` leaves them on in the tab. The OMH TUI never asked

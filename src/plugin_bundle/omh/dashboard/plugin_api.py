@@ -125,7 +125,7 @@ def load_reader(bundle_root: str | Path = BUNDLE_ROOT) -> types.ModuleType:
 
 def resolve_hermes_home() -> Path:
     """The Hermes home this request reads: the host's own answer when it is
-    importable, else the process ``HERMES_HOME``, else ``~/.hermes``."""
+    importable, else the process ``HERMES_HOME``, else Hermes' platform default."""
     try:
         from hermes_constants import get_hermes_home
     except ImportError:
@@ -133,7 +133,17 @@ def resolve_hermes_home() -> Path:
     if get_hermes_home is not None:
         return Path(get_hermes_home())
     configured = os.environ.get("HERMES_HOME", "").strip()
-    return Path(configured) if configured else Path.home() / ".hermes"
+    if configured:
+        return Path(configured)
+    # Mirrors the bundle's ``runtime_paths.platform_default_hermes_home`` (and
+    # Hermes' ``hermes_constants._platform_default_hermes_home``); this file is
+    # imported standalone, so it cannot import that sibling directly. A parity test in
+    # tests/test_desktop_half.py keeps the two copies equal.
+    if sys.platform == "win32":
+        local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
+        base = Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"
+        return base / ("hermes" + os.environ.get("HERMES_DATA_DIR_SUFFIX", ""))
+    return Path.home() / (".hermes" + os.environ.get("HERMES_DATA_DIR_SUFFIX", ""))
 
 
 def _lane_count(graph: dict[str, Any]) -> int:
