@@ -75,9 +75,10 @@ resize changes only what has not been taken yet.
 A subagent that finishes is briefed as a block of its own (`AgentDoneBlock`, the
 owner's ask of 2026-11-05, after Claude Code's `● Teammate @x finished`):
 `● <name> finished  1m 35s · ↓1.8k`, the mark green only for a completed agent
-(`● … failed` in red, `▪ … interrupted` and `○ … cancelled` muted), then the
-first lines of its reply, or its error, in at most two muted rows under the
-name, ending in `…` where it said more. The app writes it as an aside
+(`● … failed` in red, `▪ … interrupted` and `○ … cancelled` muted); a dag
+node's child is named by the node's id with the node's label on one muted row
+under it; then the first lines of its reply, or its error, in at most two
+muted rows under the name, ending in `…` where it said more. The app writes it as an aside
 (`add_aside`), so it waits under a streaming reply or a running call and is
 written at the next block boundary, in the order the agents finished. Past
 `AGENT_HELD_SHOWN` held at once, the live region folds the older ones into one
@@ -326,23 +327,27 @@ AGENT_SAID_INDENT = "  "  # under the name, past the mark and its space
 AGENT_FACT_SEPARATOR = " · "
 AGENT_SAID_CUT = "…"
 # Briefings held under a live block (a running `delegate_task`) are drawn in the live region until its boundary: the
-# newest `AGENT_HELD_SHOWN` whole, in a third of the rows at most, and the older ones as one muted row above them,
-# `● 9 more finished · 1 failed`, so the running call stays on screen. All of them are written whole at the boundary.
+# newest `AGENT_HELD_SHOWN` whole, in what the live region's room leaves once the live block, the fold row and their
+# spacers have theirs (and a quarter of the screen at most), and the rest as one muted row,
+# `● 9 more finished · 1 failed`, so the running call stays on screen. All are written whole at the boundary.
 AGENT_HELD_SHOWN = 3
-AGENT_HELD_SHARE = 3  # the newest briefings drawn whole take at most 1/3 of the live region's rows
+AGENT_HELD_SHARE = 4  # the newest briefings drawn whole take at most 1/4 of the screen's rows
+AGENT_HELD_RESERVE = 3  # the spacer above the held rows, the fold row and the spacer under it
 AGENT_HELD_MORE = "{count} more {outcome}"
 
 
 @dataclass
 class AgentDoneBlock:
     """A subagent that finished, briefed in the transcript as its `subagent.complete` arrives: `● <name> finished`
-    and its time and output tokens (`facts`), then the first lines of its reply, or its error (`said`)."""
+    and its time and output tokens (`facts`), a dag node's label (`title`), then the first lines of its reply, or its
+    error (`said`)."""
 
     name: str
     outcome: str = AGENT_FINISHED  # AGENT_FINISHED, AGENT_FAILED, AGENT_INTERRUPTED or AGENT_CANCELLED
     facts: tuple[str, ...] = ()  # `2m 14s`, `↓1.2k`: the row drops them from the last where it has no room
     said: tuple[str, ...] = ()  # its reply's or its error's lines, cleaned
     done: bool = True
+    title: str = ""  # a dag node's label, on one dim row under a `name` that is the node's id; "" for none
 
 
 @dataclass
@@ -1139,7 +1144,8 @@ def _tail_rows(block: Block, width: int, theme: Theme) -> list[Line]:
 
 
 def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Line]:
-    """`● <name> finished  2m 14s · ↓1.2k`, then what it said in up to `AGENT_SAID_ROWS` muted rows under the name.
+    """`● <name> finished  2m 14s · ↓1.2k`, then its `title` on one muted row when it has one (a dag node's label
+    under the node's id, cut with `…`), then what it said in up to `AGENT_SAID_ROWS` muted rows under the name.
 
     The mark is green only for a completed agent (red for a failure, muted
     `▪` interrupted and `○` cancelled), and the word after the bold name says
@@ -1164,22 +1170,28 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
     name = truncate(block.name, max(width - fixed - line_width(tail), 1))
     rows = [truncate_line((Span(mark, mark_style), Span(name, name_style), Span(word, word_style), *tail), width)]
     room = width - len(AGENT_SAID_INDENT)
-    if room < 1 or not block.said:
+    if room < 1:
+        return rows
+    if block.title:
+        rows.append((Span(AGENT_SAID_INDENT), Span(truncate(block.title, room), theme.muted)))
+    if not block.said:
         return rows
     said = render_lines(block.said[:AGENT_SAID_LINES], MarkdownState(), room, theme)[0]
     said = [row for row in said if row]
     more = len(said) > AGENT_SAID_ROWS or len(block.said) > AGENT_SAID_LINES
-    said = [tuple(Span(span.text, theme.muted) for span in row) for row in said[:AGENT_SAID_ROWS]]
+    # Cut to the room too: a wide character wrapped into fewer cells than it takes (a 1-cell room) still fits.
+    said = [truncate_line(tuple(Span(span.text, theme.muted) for span in row), room) for row in said[:AGENT_SAID_ROWS]]
     if more and said:
         said[-1] = (*truncate_line(said[-1], room - 1, ellipsis=""), Span(AGENT_SAID_CUT, theme.muted))
     return rows + [(Span(AGENT_SAID_INDENT), *row) for row in said]
 
 
-def _held_more_row(folded: list[AgentDoneBlock], width: int, theme: Theme) -> Line:
-    """The one muted row older held briefings fold into: `● 9 more finished · 1 failed`, counted by outcome."""
+def _held_more_row(folded: list[AgentDoneBlock], width: int, theme: Theme, more: bool = True) -> Line:
+    """The one muted row held briefings fold into, counted by outcome: `● 9 more finished · 1 failed` above the ones
+    drawn whole, `● 2 finished · 1 failed` when none is (`more` False)."""
     counts = {outcome: sum(1 for block in folded if block.outcome == outcome) for outcome in AGENT_DONE_MARKS}
     parts = [(count, outcome) for outcome, count in counts.items() if count]
-    said = [AGENT_HELD_MORE.format(count=count, outcome=outcome) if index == 0 else f"{count} {outcome}"
+    said = [AGENT_HELD_MORE.format(count=count, outcome=outcome) if index == 0 and more else f"{count} {outcome}"
             for index, (count, outcome) in enumerate(parts)]
     return truncate_line((Span(f"{AGENT_DONE_MARKS[AGENT_FINISHED]} {AGENT_FACT_SEPARATOR.join(said)}", theme.muted),),
                          width)
@@ -2198,8 +2210,12 @@ class Transcript:
 
     def live_lines(
         self, width: int, theme: Theme, max_rows: int | None = None, now: float | None = None, glint: bool = False,
+        room: int | None = None,
     ) -> list[Line]:
         """Everything not yet taken, as it shows now: the streaming tail, live thinking, running tools.
+
+        `room` is how many rows the live region gets above the working rows, for the briefings held under a live
+        block (`_held_rows`); None leaves them a quarter of `max_rows`.
 
         With `max_rows`, only the blocks that reach into the last `max_rows`
         rows are rendered, and of live thinking text only its last rows: the
@@ -2210,10 +2226,12 @@ class Transcript:
         The answer is kept until the transcript changes, a mark turns or a band
         moves, so asking again with the same width, limit and theme renders nothing.
         """
-        key = (self._version, width, max_rows, self._pulses(now), self._glints(now if glint else None))
+        if not any(isinstance(block, AgentDoneBlock) for block in self._held):
+            room = None  # read only for held briefings: a room that moved with none held renders nothing again
+        key = (self._version, width, max_rows, room, self._pulses(now), self._glints(now if glint else None))
         held = self._live_held
         if held is None or held[0] != key or held[1] is not theme:
-            held = self._live_held = (key, theme, self._render_live(width, theme, max_rows, now, glint))
+            held = self._live_held = (key, theme, self._render_live(width, theme, max_rows, now, glint, room))
         return list(held[2])
 
     def _pulses(self, now: float | None) -> tuple[bool, ...]:
@@ -2243,10 +2261,11 @@ class Transcript:
 
     def _render_live(
         self, width: int, theme: Theme, max_rows: int | None, now: float | None = None, glint: bool = False,
+        room: int | None = None,
     ) -> list[Line]:
         """`live_lines` rendered, from the last block up until `max_rows` rows are covered (all of them for None)."""
         rendered: list[tuple[bool, list[Line]]] = []  # (opens a block, its rows), the last block first
-        held = self._held_rows(width, theme, max_rows)  # under the live blocks
+        held = self._held_rows(width, theme, max_rows, room)  # under the live blocks
         rendered.extend(reversed(held))
         count = sum(len(rows) for _opens, rows in held)
         whole = True
@@ -2278,18 +2297,28 @@ class Transcript:
             seen = True
         return rows
 
-    def _held_rows(self, width: int, theme: Theme, max_rows: int | None) -> list[tuple[bool, list[Line]]]:
+    def _held_rows(
+        self, width: int, theme: Theme, max_rows: int | None, room: int | None,
+    ) -> list[tuple[bool, list[Line]]]:
         """The held blocks as the live region draws them, in order: every one whole but the briefings
-        (`AgentDoneBlock`) past the newest `AGENT_HELD_SHOWN`, or past what fits in a third of `max_rows`, which
-        fold into one row where the first of them stands (`_held_more_row`). Only what is drawn is rendered."""
+        (`AgentDoneBlock`) past the newest `AGENT_HELD_SHOWN`, or past what fits, which fold into one row where the
+        first of them stands (`_held_more_row`). What fits: `room` (the rows the live region gets above the working
+        rows) less the live block's rows and `AGENT_HELD_RESERVE`, and a quarter of `max_rows` at most; with no
+        `room`, that quarter. The running call keeps its rows before the newest briefing is drawn whole. Only what is
+        drawn is rendered."""
         briefings = [block for block in self._held if isinstance(block, AgentDoneBlock)]
+        fits = max_rows // AGENT_HELD_SHARE if max_rows is not None else None
+        if briefings and room is not None:
+            last = self.blocks[-1] if self.blocks and not self.blocks[-1].done else None
+            live = len(block_rows(last, width, theme)) if last is not None else 0
+            left = max(room - max(live, 1) - AGENT_HELD_RESERVE, 0)
+            fits = left if fits is None else min(fits, left)
         whole: dict[int, list[Line]] = {}
-        room = max_rows // AGENT_HELD_SHARE if max_rows is not None else None
         used = 0
         for block in reversed(briefings[-AGENT_HELD_SHOWN:]):
             rows = block_rows(block, width, theme)
-            if room is not None and used + len(rows) + 1 > room and (whole or len(briefings) > 1):
-                break  # the newest one alone is drawn whole whatever its height
+            if fits is not None and used + len(rows) + 1 > fits:
+                break
             whole[id(block)] = rows
             used += len(rows) + 1
         folded = [block for block in briefings if id(block) not in whole]
@@ -2300,7 +2329,7 @@ class Transcript:
             elif id(block) in whole:
                 drawn.append((True, whole[id(block)]))
             elif block is folded[0]:
-                drawn.append((True, [_held_more_row(folded, width, theme)]))
+                drawn.append((True, [_held_more_row(folded, width, theme, more=bool(whole))]))
         return drawn
 
     def shown_blocks(self) -> list[Block]:

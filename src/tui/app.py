@@ -7931,9 +7931,13 @@ class App(ModesMixin, AgentViewMixin):
     def _tail(self, cols: int) -> list[Line]:
         self.tail_spacer = False  # until the rows below say otherwise: a tail that raises (`_drawn`) has no spacer
         now = self.clock()
-        # Never more than the screen; running tools' marks pulse unless motion is reduced.
+        # Never more than the screen; running tools' marks pulse unless motion is reduced. Briefings held under a live
+        # block get what the last frame left the tail above its working rows (`Transcript.live_lines`'s `room`).
+        budget = self.frame_budget
+        room = (None if budget is None
+                else self.size[1] - (budget.total - budget.tail - budget.pad) - budget.floor - 1)
         lines = self.transcript.live_lines(cols, self.theme, max_rows=self.size[1], now=now if self.motion else None,
-                                           glint=self._aura_moves())
+                                           glint=self._aura_moves(), room=room)
         if not lines and self.transcript.taken_any:
             lines = [()]  # the spacer a block opens with, here between the transcript and the region under it
         compressing = self._compressing_since()

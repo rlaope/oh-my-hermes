@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import unittest
 
-from _delegation_graphs import dag_export_run
+from _delegation_graphs import dag_export_run, graph, lane, root
 from _tui_lines import line_text
 from test_tui_agent_view import agent_event, agent_app
 from test_tui_delegation_block import with_hud
@@ -99,6 +99,28 @@ class BriefingRowsTests(unittest.TestCase):
                 self.assertEqual(head[2].style, word_style)
                 self.assertEqual(head[0].style == theme.ok, outcome == AGENT_FINISHED)
                 self.assertEqual(head[-1].style, theme.faint, "the facts are dim")
+
+    def test_a_title_is_one_muted_row_between_the_head_and_what_it_said_cut_with_an_ellipsis(self) -> None:
+        long = "Port notify module to the new router and keep the webhook retries on their backoff schedule"
+        for outcome in (AGENT_FINISHED, AGENT_FAILED, AGENT_INTERRUPTED, AGENT_CANCELLED):
+            with self.subTest(outcome=outcome):
+                block = AgentDoneBlock("notify", outcome, ("1m 35s",), ("Ported.", "Retries kept."), title=long)
+                rows = block_rows(block, 60, DEFAULT_THEME)
+                self.assertEqual(line_text(rows[0]), f"{'▪' if outcome == AGENT_INTERRUPTED else '○' if outcome == AGENT_CANCELLED else '●'} notify {outcome}  1m 35s")
+                self.assertEqual(line_text(rows[1]), "  Port notify module to the new router and keep the webhook…")
+                self.assertEqual(rows[1][-1].style, DEFAULT_THEME.muted)
+                self.assertEqual([line_text(row) for row in rows[2:]], ["  Ported.", "  Retries kept."])
+        self.assertEqual(texts(AgentDoneBlock("notify", AGENT_FINISHED, ("4s",), (), title="Port notify"), 80),
+                         ["● notify finished  4s", "  Port notify"], "a title row with nothing said")
+
+    def test_a_title_row_keeps_to_the_width_in_cells_and_without_colour(self) -> None:
+        block = AgentDoneBlock("docs", AGENT_FINISHED, ("12s",), ("변경 사항을 확인했습니다.",), title="인증 모듈 문서 정리 " * 8)
+        for width in range(1, 60):
+            with self.subTest(width=width):
+                self.assertTrue(all(line_width(row) <= width for row in block_rows(block, width, DEFAULT_THEME)))
+        rows = block_rows(block, 40, without_colour(DEFAULT_THEME))
+        self.assertTrue(line_text(rows[1]).startswith("  인증 모듈") and line_text(rows[1]).endswith("…"), rows[1])
+        self.assertTrue(all(span.style.depth == NO_COLOR or span.style.fg is None for row in rows for span in row))
 
     def test_a_failure_shows_its_error_line_under_it(self) -> None:
         rows = texts(AgentDoneBlock("read the diff", AGENT_FAILED, ("31s",), ("provider timeout",)), 80)
@@ -234,7 +256,22 @@ class AppBriefingTests(unittest.TestCase):
         agent_event(app, "complete", FIRST, goal="implement the export button in the toolbar [dag:r1/button]",
                     status="completed", summary="Button added.")
         [block] = blocks_of(app, AgentDoneBlock)
-        self.assertEqual(block.name, "Export button")
+        self.assertEqual((block.name, block.title), ("button", "Export button"), "its handle, then its label")
+        rows = [row.rstrip() for row in drawn(app)]
+        head = next(index for index, row in enumerate(rows) if row.startswith("● button finished"))
+        self.assertEqual(rows[head + 1 : head + 3], ["  Export button", "  Button added."])
+
+    def test_a_node_whose_label_is_its_id_or_empty_has_no_title_row(self) -> None:
+        for label in ("button", "BUTTON", ""):
+            with self.subTest(label=label):
+                graph = dag_export_run()
+                next(node for node in graph["nodes"] if node["id"] == "d:r1:button")["title"] = label
+                app, _client = make_app(busy=False, clock=lambda: 0.0)
+                with_hud(app, graph)
+                agent_event(app, "start", FIRST, goal="do it [dag:r1/button]")
+                agent_event(app, "complete", FIRST, goal="do it [dag:r1/button]", status="failed", summary="boom")
+                [block] = blocks_of(app, AgentDoneBlock)
+                self.assertEqual((block.name, block.title), ("button", ""))
 
     def test_a_goal_no_node_binds_is_named_as_the_agent_list_names_it(self) -> None:
         app, _client = make_app(busy=False, clock=lambda: 0.0)
@@ -300,34 +337,56 @@ class HeldBriefingFoldTests(unittest.TestCase):
     """Briefings held under a running `delegate_task` fold in the live region, so the call stays on screen; all of
     them are written whole, in the order they finished, at the boundary."""
 
-    def run_delegation(self, rows: int, finished: int):
+    def run_delegation(self, rows: int, finished: int, dag: bool = False, long: bool = True):
+        """`finished` children finish under one running `delegate_task`; with `dag`, each is a node of a dag run
+        (`p<N>`, labelled `lane NN: check part N`), so its briefing carries a title row too."""
         app, _client = make_app(busy=True, rows=rows, cols=150, clock=lambda: 0.0)
+        if dag:
+            lanes = [lane(f"d:r1:p{number}", f"lane {number:02d}: check part {number}", "quick", "glm-5.3", "low",
+                          "running", order=number + 1) for number in range(finished)]
+            edges = [("root", item["id"], "dispatch") for item in lanes] + [("d:r1:p0", "d:r1:p1", "depends_on")]
+            with_hud(app, graph([root(), *lanes], edges))
         app._on_event(Event("message.start", SID, {}))
         app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "delegate_task", "context": f"{finished} tasks"}))
         for number in range(finished):
-            goal = f"lane {number:02d}: check part {number}"
+            goal = f"lane {number:02d}: check part {number}" + (f" [dag:r1/p{number}]" if dag else "")
             agent_event(app, "start", f"sa-{number}", goal=goal)
             status = "failed" if number % 7 == 3 else "completed"
             agent_event(app, "complete", f"sa-{number}", goal=goal, status=status, duration_seconds=30.0 + number,
-                        summary=f"Part {number} checked; the long reply runs on " + "and on " * 30)
+                        summary=f"Part {number} checked" + ("; the long reply runs on " + "and on " * 30 if long else "."))
+        drawn(app)  # a frame first: the next one sizes the held briefings by the rows this one left the tail
         return app
 
     def test_twenty_finished_under_a_running_call_keep_it_on_screen_and_the_live_region_bounded(self) -> None:
-        for rows in (42, 30):
-            with self.subTest(rows=rows):
-                app = self.run_delegation(rows, 20)
+        for rows, dag in ((42, False), (30, False), (42, True), (30, True)):
+            with self.subTest(rows=rows, dag=dag):
+                app = self.run_delegation(rows, 20, dag)
                 screen = [row.rstrip() for row in drawn(app)]
                 self.assertTrue(any("delegate_task(20 tasks)" in row for row in screen), screen)
                 more = [row for row in screen if row.startswith("● ") and " more " in row]
                 self.assertEqual(len(more), 1, screen)
                 live = app.transcript.live_lines(150, DEFAULT_THEME, max_rows=rows)
-                self.assertLessEqual(len(live), 2 + rows // 3 + 2, [line_text(row) for row in live])
-                whole = [row for row in screen if row.startswith("● lane")]
-                self.assertTrue(whole and whole[-1].startswith("● lane 19"), "the newest is drawn whole")
+                self.assertLessEqual(len(live), 2 + rows // 4 + 2, [line_text(row) for row in live])
+                newest = "● p19 " if dag else "● lane 19"
+                whole = [row for row in screen if row.startswith("● lane") or row.startswith("● p")]
+                self.assertTrue(whole and whole[-1].startswith(newest), "the newest is drawn whole")
+                if dag:
+                    self.assertIn("  lane 19: check part 19", screen, "with its title row")
                 self.assertEqual(len(held_of(app, AgentDoneBlock)), 20, "every one is still held")
 
+    def test_on_a_short_screen_the_call_row_wins_over_drawing_a_briefing_whole(self) -> None:
+        # 150x16 with the agent list or a dag tree under the composer: the room the tail gets above its working rows
+        # holds the call and one folded row, not a briefing whole, so the call stays on screen.
+        for dag in (False, True):
+            with self.subTest(dag=dag):
+                app = self.run_delegation(16, 2, dag)
+                screen = [row.rstrip() for row in drawn(app)]
+                self.assertTrue(any("delegate_task(2 tasks)" in row for row in screen), screen)
+                self.assertIn("● 2 finished", screen, "none drawn whole, so not `more`")
+                self.assertEqual(len(held_of(app, AgentDoneBlock)), 2)
+
     def test_the_fold_row_counts_by_outcome_and_the_boundary_writes_every_one_whole_in_order(self) -> None:
-        app = self.run_delegation(42, 8)
+        app = self.run_delegation(42, 8, long=False)
         screen = [row.rstrip() for row in drawn(app)]
         folded = held_of(app, AgentDoneBlock)[:-3]
         failed = sum(1 for block in folded if block.outcome == AGENT_FAILED)
@@ -339,7 +398,7 @@ class HeldBriefingFoldTests(unittest.TestCase):
                          [f"lane {number:02d}: check part {number}" for number in range(8)])
 
     def test_three_or_fewer_are_all_drawn_whole(self) -> None:
-        app = self.run_delegation(42, 3)
+        app = self.run_delegation(42, 3, long=False)
         screen = [row.rstrip() for row in drawn(app)]
         self.assertFalse([row for row in screen if " more " in row and row.startswith("● ")], screen)
         self.assertEqual(len([row for row in screen if row.startswith("● lane")]), 3)

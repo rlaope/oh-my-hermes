@@ -767,8 +767,11 @@ run and approval decision stays Hermes'; the screen is OMH's.
 - When a subagent finishes, the transcript says so in a short briefing, as
   Claude Code does for a teammate: `● <name> finished  1m 35s · ↓1.8k`, then
   the first lines of its reply, or its error, in up to two dim rows under the
-  name, ending in `…` where it said more. A dag node's child is named by its
-  node's label, any other agent by the short title the agent list shows. The
+  name, ending in `…` where it said more. A dag node's child is named by the
+  node's id (`● notify finished`), as Claude Code names a teammate by its
+  handle, with the node's label on one dim row under it, cut with `…` (none
+  when the label is the id); any other agent by the short title the agent
+  list shows, with no such row. The
   mark is green only for an agent that completed; a failed one reads `●
   <name> failed` in red with its error under it, an interrupted one `▪ <name>
   interrupted` and a cancelled one `○ <name> cancelled`, both muted. One
@@ -776,9 +779,11 @@ run and approval decision stays Hermes'; the screen is OMH's.
   starts. A briefing that arrives while a reply streams or a call runs waits
   under it and is written at the next block boundary, so it never splits a
   paragraph or a table; `/history` and Ctrl+O show it meanwhile. While more
-  than three wait under a running call (`delegate_task`), the newest three
-  are drawn whole and the older ones fold into one row above them (`● 9 more
-  finished · 1 failed`), so the call stays on screen; every one is written
+  than three wait under a running call (`delegate_task`), or more than the
+  rows left above the composer hold beside the call, the newest ones that fit
+  are drawn whole and the rest fold into one row above them (`● 9 more
+  finished · 1 failed`; `● 2 finished` when none fits whole), so the call
+  stays on screen; every one is written
   whole, in order, at the boundary. Briefings are the TUI's own rows, not
   part of the session Hermes stores: a resumed or rewound session is drawn
   again without them. The messenger's replies are unchanged.
