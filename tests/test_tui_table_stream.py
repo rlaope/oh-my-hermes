@@ -414,11 +414,23 @@ class TableStreamingTests(unittest.TestCase):
             "no-break space": lambda line: line.replace("|-", "| -"),
             "ideographic space": lambda line: "　" + line,
             "escape": lambda line: line.replace("---|", "\x1b[2m---\x1b[0m|", 1),
+            "bidi isolate": lambda line: line + "\u2069" if line.startswith("|-") else line,
+            "control": lambda line: line.replace("|-", "|\x07-", 1),
         }.items():
             with self.subTest(label):
                 blocks = [[change(line) for line in block] for block in (first, second)]
                 history = self.assert_streams_as_history(blocks, live_rows=8)
                 self.assertEqual([row[4] for row in history if row[4:5] in ("┌", "└")], ["┌", "└", "┌", "└"])
+
+    def test_a_long_line_of_dashes_is_searched_once_not_once_per_dash(self) -> None:
+        # #2598 review: a `-` between two starred runs backtracked over every dash of a line that fails at its end.
+        import time
+
+        line = "|" + "-" * 8000 + "x"
+        body = "| a | b |\n|---|---|\n" + "".join(f"| r{i} | v{i} |\n" for i in range(12)) + (line + "\n") * 5 + "| p"
+        started = time.perf_counter()
+        _stable_lines(body, cap=4)
+        self.assertLess(time.perf_counter() - started, 0.25)  # linear: about a millisecond; quadratic: seconds
 
     def test_a_reply_that_opens_with_a_code_fence_keeps_its_header_in_scrollback(self) -> None:
         # The fence's opening line draws no row: taken alone, it used the reply's first take, and no header was drawn.

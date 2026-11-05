@@ -484,9 +484,14 @@ def _display_lines(text: str) -> list[str]:
 
 
 _DIVIDER_MARKS = frozenset("|:- ")  # what a table's divider line is made of
-# A line that may be a divider, its spaces any but a line break (a "\r" a CRLF reply leaves, a no-break or an
-# ideographic space): a prefilter only, `opens_table` decides.
-_DIVIDER_LINE = re.compile(r"^[^\S\n]*\|(?:[|:\-]|[^\S\n])*-(?:[|:\-]|[^\S\n])*$", re.MULTILINE)
+# A line that may be a divider: its spaces any but a line break (a "\r" a CRLF reply leaves, a no-break or an
+# ideographic space), with any control or bidi control `clean_text` drops (`is_unpainted`) taken as one. A prefilter
+# only, `opens_table` decides. The `-` is required by a lookahead, not between two starred runs, so a long line of
+# dashes that fails at its end is searched once, not once per dash. Escapes are stripped before the search.
+_UNPAINTED = "\x00-\x08\x0e-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069"
+_DIVIDER_LINE = re.compile(
+    rf"^(?=[^\n]*-)(?:[^\S\n]|[{_UNPAINTED}])*\|(?:[|:\-{_UNPAINTED}]|[^\S\n])*$", re.MULTILINE
+)
 
 
 def _table_row(line: str) -> bool:
@@ -524,8 +529,8 @@ def _stable_lines(
         # of a next table; with one row, the table waits whole, so its columns are laid out over that row too.
         last = held
         run = "\n".join(lines[held:])
-        if strip_escapes(run) != run:  # a divider may carry escapes `clean_text` drops: search the lines without them
-            run = "\n".join(map(strip_escapes, lines[held:]))
+        if strip_escapes(run) != run:  # a divider may carry escapes: search the lines as `clean_text` leaves them
+            run = "\n".join(map(clean_text, lines[held:]))
         line_at, searched = held, 0
         for match in _DIVIDER_LINE.finditer(run):  # at C speed: a long run is searched on every take
             line_at += run.count("\n", searched, match.start())
