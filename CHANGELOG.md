@@ -129,6 +129,22 @@ All notable changes will be documented here.
   cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
   or an open question holds it, and a notice says to send `continue`. At most 2
   go between two prompts of the person's own; past that the old notice asks.
+- **A resumed session with work left goes on by itself in the OMH TUI.**
+  `omh --resume <id>`, `/resume` and the session picker opened the session
+  and waited for the person to write, so an interrupted turn or an open
+  dag-ulw run sat still. Now the TUI says "Resuming: {why}; sending
+  `continue` in 3 s · Esc cancels" and sends `continue` as a typed one goes,
+  when Hermes interrupted the session's last turn itself (a sleep past its
+  turn lease), or when the session holds a dag-ulw run that a turn would
+  move with no node running: nodes ready, back to settle, parked past their
+  wake time, or out with no child after a restart. The `continue`'s turn
+  then brings the run's own turn-start line. Hermes keeps no cause for an
+  interrupt, so each OMH TUI writes how a session's last turn ended to
+  `<omh_home>/tui/turn-ends.json` (the newest 128 sessions), the person's
+  Esc or `/stop` as they ask for it. It never goes on for the person's stop,
+  a session with a turn running (its own or another client's), a turn
+  Hermes resubmits itself after a crash, a run that needs repair, a draft,
+  a queued line or an open question.
 
 ## 4.0.6 - 2026-11-04
 
