@@ -34,9 +34,8 @@ from collections.abc import Mapping
 from typing import Final
 
 from .consistency_trigger import _edit_targets
+from .engagement_nudges import FILE_MUTATING_TOOLS
 from .tools.lsp_nav_tool import _workspace_root
-
-FILE_WRITE_TOOLS: Final = frozenset({"write_file", "patch"})
 
 # Under ``<omh_home>/runtime``: a directory (trailing ``/``) or one file.
 EVIDENCE_STORES: Final[Mapping[str, str]] = {
@@ -58,7 +57,7 @@ def evidence_write_directive(
     *, tool_name: object, tool_input: object, task_id: object, omh_home: str
 ) -> dict[str, str] | None:
     """A `block` naming the store, when this write lands in OMH evidence; else None."""
-    if str(tool_name or "") not in FILE_WRITE_TOOLS or not isinstance(tool_input, dict) or not omh_home:
+    if str(tool_name or "") not in FILE_MUTATING_TOOLS or not isinstance(tool_input, dict) or not omh_home:
         return None
     try:
         runtime_root = _comparable(os.path.join(os.path.expanduser(omh_home), "runtime"))

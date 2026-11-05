@@ -35,7 +35,7 @@ from typing import Any, Final
 from . import dag_run
 from .consistency_trigger import _edit_targets
 from .delegation_ledger import ROOT_WALK_LIMIT, read_ledger, root_session
-from .evidence_store_guard import FILE_WRITE_TOOLS
+from .engagement_nudges import FILE_MUTATING_TOOLS
 from .kanban_board_reader import conversation_session_ids
 from .tools.lsp_nav_tool import _workspace_root
 
@@ -49,7 +49,7 @@ def dag_scope_directive(
 ) -> dict[str, str] | None:
     """A `block` naming the node and its scope, when a node's child writes outside it; else None."""
     session = str(session_id or "").strip()
-    if str(tool_name or "") not in FILE_WRITE_TOOLS or not isinstance(tool_input, dict) or not session or not omh_home:
+    if str(tool_name or "") not in FILE_MUTATING_TOOLS or not isinstance(tool_input, dict) or not session or not omh_home:
         return None
     try:
         bound = _bound_node(session, Path(omh_home).expanduser(), Path(hermes_home).expanduser())
