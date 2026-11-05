@@ -48,8 +48,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If metrics do not cover the named service and time window, retain the cited incident notes, mark SLO and error-budget conclusions unresolved, and hand back the evidence and missing-evidence list with the uncovered window.
+- If remediation closure has no supporting reference, retain the source-backed reliability review, mark closure not_observed, and hand back the remediation follow-ups and missing closure evidence without claiming the fix completed.
 
 
 

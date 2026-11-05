@@ -47,8 +47,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If the reviewed target is missing, inspect the requested artifact or ask one target question.
-- If independent verification is unavailable, report the gap and avoid an approval-style claim.
+- If build or CI evidence is missing for the target release, retain the evidenced readiness_matrix/v1 rows, mark readiness unresolved, and hand back release_gate_verdict/v1 on HOLD with the missing evidence list.
+- If rollback owner, health thresholds, or recovery path is missing, retain the evidenced readiness_matrix/v1 rows, mark rollback readiness unresolved, and hand back rollback_and_monitoring_plan/v1 with the exact gaps.
 
 
 

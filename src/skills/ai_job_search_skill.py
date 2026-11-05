@@ -6,7 +6,7 @@ from importlib.resources import files
 import json
 import re
 
-from .catalog_types import ExpertQuestion, HermesSkillLine, ProcedureCheck, ProcedureStep, SkillDefinition, SkillExample
+from .catalog_types import ExpertQuestion, HermesSkillLine, ProcedureCheck, ProcedureBail, ProcedureStep, SkillDefinition, SkillExample
 
 _INPUTS = ('requested career action', 'supported candidate facts and preferences', 'approved private workspace and source scope')
 _OUTPUTS = ('profile.md and preferences.md', 'jobs.json and shortlist.md', 'versioned application drafts and review.md',
@@ -48,11 +48,29 @@ DEFINITION = SkillDefinition(
         ProcedureStep('career_frame', 'analysis', _INPUTS, _OUTPUTS[:1], ('career_scope',),
                       'Extract supported profile facts and explicit preferences for the current action; preserve unknowns and contradictions.'),
         ProcedureStep('career_discover', 'production', _INPUTS, _OUTPUTS[1:2], ('career_scope', 'career_sources'),
-                      'Use bounded native retrieval, capture source receipts, invoke validate/merge/summary and write an evidence-linked qualitative shortlist.'),
+                      'Use bounded native retrieval, capture source receipts, invoke validate/merge/summary and write an evidence-linked qualitative shortlist.',
+            on_fail=ProcedureBail(
+                still_stands=('profile.md and preferences.md',),
+                downgrade_to='not_observed',
+                handback='Return jobs.json and shortlist.md with receipts, unverified leads, and blocked sources (not empty results).',
+            ),
+        ),
         ProcedureStep('career_draft', 'production', _INPUTS, _OUTPUTS[2:4], ('career_claims', 'career_sources'),
-                      'Write versioned evidence-mapped application documents, review actual drafts, then prepare interviews from that exact version.'),
+                      'Write versioned evidence-mapped application documents, review actual drafts, then prepare interviews from that exact version.',
+            on_fail=ProcedureBail(
+                still_stands=('jobs.json and shortlist.md', 'profile.md and preferences.md'),
+                downgrade_to='tentative',
+                handback='Return versioned drafts and review.md with evidence gaps, review mode and the question blocking interview-prep.md.',
+            ),
+        ),
         ProcedureStep('career_track', 'validation', _INPUTS, _OUTPUTS[4:], ('career_state',),
-                      'Record only explicitly evidenced events with the companion, read back the tracker and report safe next actions.'),
+                      'Record only explicitly evidenced events with the companion, read back the tracker and report safe next actions.',
+            on_fail=ProcedureBail(
+                still_stands=('interview-prep.md and optional skill-gaps.md', 'jobs.json and shortlist.md', 'profile.md and preferences.md', 'versioned application drafts and review.md'),
+                downgrade_to='unresolved',
+                handback='Keep history; return helper exits, missing events, tracker read-back gaps, draft version and next actions.',
+            ),
+        ),
     ),
     artifact_expectations=(
         'Private authored Markdown and jobs.json are file contracts, not new OMH artifact RPCs; career data never belongs in the metadata-only runtime ledger.',

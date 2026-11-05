@@ -37,6 +37,12 @@ class SpecialistProcedureContractTests(unittest.TestCase):
                     "output_refs": list(step.output_refs),
                     "check_ids": list(step.check_ids),
                     "instruction": step.instruction,
+                    **({"on_fail": {
+                        "still_stands": list(step.on_fail.still_stands),
+                        "downgrade_to": step.on_fail.downgrade_to,
+                        "handback": step.on_fail.handback,
+                        "fallback_skill": step.on_fail.fallback_skill,
+                    }} if step.on_fail is not None else {}),
                 }
                 for step in definition.procedure_steps
             ]

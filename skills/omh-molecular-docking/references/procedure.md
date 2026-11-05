@@ -39,6 +39,7 @@ Explicitly run toolkit/scripts/dock.py in the chosen isolated Vina environment w
 - Input refs: `prepared receptor and ligand PDBQT paths`, `binding box and preparation provenance`, `approved local resource budget`
 - Output refs: `molecular_docking_run/v1 and real pose/score files`
 - Check IDs: `docking_input_check`, `docking_budget_check`
+- If this step fails: not_observed; still stands: `molecular_docking_preflight/v1`; hand back: Return molecular_docking_preflight/v1 with captured stdout, stderr, exit or deadline evidence and any partial pose/score files for backend review before a retry in a new output directory.
 
 ### `docking_verify` (validation)
 
@@ -47,3 +48,4 @@ Read poses.pdbqt, scores.json and manifest.json; reconcile saved pose energies a
 - Input refs: `prepared receptor and ligand PDBQT paths`, `binding box and preparation provenance`, `approved local resource budget`
 - Output refs: `molecular_docking_run/v1 and real pose/score files`
 - Check IDs: `docking_execution_check`
+- If this step fails: tentative; still stands: `molecular_docking_preflight/v1`; hand back: Return poses.pdbqt, scores.json and manifest.json with failed pose, energy, atom-record, hash or replay checks and engine version/platform limits; keep the docking run unverified.

@@ -48,8 +48,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If status evidence covers only part of the requested time window, retain the dated observations in the status summary, mark uncovered status not_observed, and hand back the missing periods and affected priorities.
+- If a blocker needs a code fix but no follow-up is accepted, retain the observed blocker and risk, mark remediation unresolved, and hand back the follow-up action for acceptance before delegation.
 
 ## Workflow Lane
 
