@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
+  on.** With that setting each delegated child works in a git worktree of its
+  own, made from the parent's last commit, so a dependent node and the verify
+  node started without the earlier nodes' edits, and verify could pass a tree
+  without the work. `omh_dag action=define` is now refused as
+  `worktree_isolation_on` with a line the model relays, naming
+  `hermes config set delegation.worktree_isolation false`, or do the work
+  without dag-ulw. A run defined before the setting was turned on still
+  settles its nodes but hands out no `delegate_task` call while it is on, and
+  `status` says why. OMH asks Hermes' own getters first, so its managed
+  config and environment count; outside Hermes it reads the profile's
+  `config.yaml` the way Hermes reads the key (a quoted `'false'` is on). It
+  never writes the setting. On a Docker or SSH terminal, where Hermes skips
+  isolation, nothing changes; a config that cannot be read counts as off, as
+  before.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`

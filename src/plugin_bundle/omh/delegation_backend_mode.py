@@ -53,6 +53,10 @@ class _Unsupported(ValueError):
     """A YAML shape the block reader will not interpret."""
 
 
+class Quoted(str):
+    """A quoted scalar, equal to its text: YAML never reads it as a bool, a number or null."""
+
+
 class _Flow:
     """A one-line flow collection other than ``[]``/``{}``, kept uninterpreted.
 
@@ -430,7 +434,7 @@ def _scalar(rest: str) -> Any:
         inner = value[1:end]
         if quote == '"' and "\\" in inner:
             raise _Unsupported("escaped scalar")
-        return inner
+        return Quoted(inner)
     for position, char in enumerate(value):
         if char == "#" and position and value[position - 1].isspace():
             value = value[:position].rstrip()
