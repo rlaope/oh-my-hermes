@@ -18,6 +18,22 @@ All notable changes will be documented here.
   terminal's own selection is still there with its bypass modifier (Shift,
   Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
   terminal's own wheel and selection on the main screen, as before.
+- **A dag-ulw verify node names which producer's scope holds each failure,
+  and a repair node is told the failed attempt's edits may still be on
+  disk.** A producer accepted earlier cannot be repaired, so a failing check
+  is repaired through the verify node, and nothing said which producer the
+  failing path belonged to. The verify node's task now carries a compact map
+  of its upstream producers' declared `write_scope` (their repairs and its
+  own included, cut at 600 characters on whole paths and producers) and asks
+  it to name in its handoff, for each failing check, the producer whose
+  scope holds the failing path, or `unattributed`: attribution by declared
+  scope, not proven cause. A repair node that writes files, in its first
+  cycle and in the re-plan cycle, now reads that the failed attempt's edits
+  may still be on disk and, in a git checkout, to inspect `git status
+  --short` and `git diff HEAD` on the failed nodes' scopes (its own scope
+  when the failed node was a verify node) before editing. There is still no
+  rollback: the worktree is shared. Every other node's task reads byte for
+  byte as before.
 - **dag-ulw refuses two nodes that write one file under different spellings.**
   `omh_dag` define, repair and extend refused a shared write scope with no
   direct edge only when both nodes wrote the same entry character for

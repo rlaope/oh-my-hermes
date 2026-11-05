@@ -86,6 +86,9 @@ MAX_SCOPE_ENTRIES: Final = 16
 MAX_SCOPE_CHARS: Final = 200
 OVERLAPS_NAMED: Final = 20  # pairs one write_scope_overlap refusal names; the rest are counted
 MAX_REASON_CHARS: Final = 200
+# The verify node's producer scope map and a repair node's `git diff` paths are cut at these lengths (per node turn).
+SCOPE_MAP_CHARS: Final = 600
+LEFTOVER_PATHS_CHARS: Final = 300
 MAX_REPAIR_CYCLES: Final = 2
 REPLAN_CYCLE: Final = MAX_REPAIR_CYCLES
 MAX_EXTEND_ROUNDS: Final = 2
@@ -1128,6 +1131,48 @@ def reads_for(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
     return reads
 
 
+def _fit(items: Sequence[str], limit: int, sep: str) -> tuple[list[str], int]:
+    """The leading ``items`` whose ``sep`` join fits ``limit`` (the first always), and how many were left out."""
+    shown = list(items[:1])
+    for item in items[1:]:
+        if len(sep.join([*shown, item])) > limit:
+            break
+        shown.append(item)
+    return shown, len(items) - len(shown)
+
+
+def _producer_scopes(record: Mapping[str, Any], node: Mapping[str, Any], preceding: set[str]) -> str:
+    """``id: path, path; ...`` for the producers a verify node follows (and their repairs, and its own), cut at
+    `SCOPE_MAP_CHARS` on whole paths and producers. Attribution by declared scope only: no write is observed."""
+    holders = preceding | {str(node["id"])}
+    rows = []
+    for item in record["nodes"]:
+        if is_producer(item) and (str(item["id"]) in preceding or item.get("repairs") in holders):
+            paths, left = _fit(item["write_scope"], SCOPE_MAP_CHARS, ", ")
+            rows.append(f"{item['id']}: {', '.join(paths)}" + (f" (+{left} more paths)" if left else ""))
+    shown, left = _fit(rows, SCOPE_MAP_CHARS, "; ")
+    return "; ".join(shown) + (f"; (+{left} more producers)" if left else "")
+
+
+def _leftovers_line(record: Mapping[str, Any], node: Mapping[str, Any]) -> str:
+    """A repair that writes starts from what earlier attempts left on disk (no rollback: the worktree is shared)."""
+    root = _root(node)
+    earlier = {root}
+    for group in (record.get("repairs") or {}).get(root, [])[:max(0, int(node.get("cycle") or 1) - 1)]:
+        earlier.update(group)
+    paths = sorted({path for item in record["nodes"] if str(item["id"]) in earlier for path in item["write_scope"]})
+    # `shlex.quote` is POSIX shell quoting; a Windows shell reads those quotes differently.
+    shown, left = _fit([shlex.quote(path) for path in paths or node["write_scope"]], LEFTOVER_PATHS_CHARS, " ")
+    more = f" (+{left} more paths)" if left else ""
+    check = (f"if this is a git checkout, inspect `git status --short -- {' '.join(shown)}`{more} and "
+             "`git diff HEAD` on the same paths")
+    if not paths:  # the failed root declared no scope (a verify node): earlier nodes' edits sit in this one's
+        return (f"Files in your SCOPE may already carry earlier nodes' edits: {check} before editing; keep what is "
+                "right, undo what is wrong in your SCOPE.")
+    return (f"The failed attempt's edits may still be on disk: {check} (or the files its handoff reported) before "
+            "editing; keep what is right, undo what is wrong in your SCOPE.")
+
+
 def task_for(
     record: Mapping[str, Any], node: Mapping[str, Any], omh_home: Path, derived: Mapping[str, Mapping[str, Any]]
 ) -> dict[str, str]:
@@ -1198,6 +1243,12 @@ def task_for(
                              "goal done.")
         lines.append("Check the complete run goal, not only this node's local VERIFY. "
                      "Name each unmet or unobserved goal criterion; producer claims are not verification evidence.")
+        scopes = _producer_scopes(record, node, preceding)
+        if scopes:
+            lines.append("In the handoff, name for each failing check the producer whose declared write_scope holds "
+                         f"its failing path, or `unattributed`: by declared scope, not proven cause. Scopes: {scopes}")
+    if node.get("repairs") and node["write_scope"]:
+        lines.append(_leftovers_line(record, node))
     lines.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
                  "say plainly that you are blocked and why; do not report blocked work as done.")
     # The marker ends the goal: Hermes previews each goal by its first 40 characters, and a person reads the label
