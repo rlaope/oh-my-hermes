@@ -263,6 +263,42 @@ class WheelTests(unittest.TestCase):
         self.assertNotEqual(opened, ended)
         self.assertEqual(app.composer.text, "draft")  # nothing typed
 
+    def test_the_wheel_down_back_to_the_end_leaves_the_view_the_wheel_opened(self) -> None:
+        app = main_app(rows=8)
+        for index in range(12):
+            app.transcript.add_notice(f"notice {index}")
+        drawn(app)
+        type_text(app, "draft")
+        for _ in range(3):
+            app._on_input(Mouse(WHEEL_UP, 5, 3))
+            drawn(app)
+        self.assertIsInstance(app.pager, HistoryPager)
+        app._on_input(Mouse(WHEEL_DOWN, 5, 3))
+        drawn(app)
+        self.assertIsNotNone(app.pager)  # still above the end
+        app._on_input(Mouse(WHEEL_DOWN, 5, 3))
+        drawn(app)
+        self.assertIsNotNone(app.pager)
+        app._on_input(Mouse(WHEEL_DOWN, 5, 3))  # the end again: the screen the wheel left
+        self.assertIsNone(app.pager)
+        self.assertEqual(app.composer.text, "draft")
+        app._on_input(Mouse(WHEEL_UP, 5, 3))  # one notch up and one down is a round trip
+        drawn(app)
+        self.assertIsNotNone(app.pager)
+        app._on_input(Mouse(WHEEL_DOWN, 5, 3))
+        self.assertIsNone(app.pager)
+
+    def test_the_wheel_down_keeps_a_view_opened_by_key_at_its_end(self) -> None:
+        app = main_app(rows=8)
+        for index in range(12):
+            app.transcript.add_notice(f"notice {index}")
+        drawn(app)
+        app._on_input(Key(CHAR, "o", ctrl=True))
+        drawn(app)
+        app._on_input(Mouse(WHEEL_DOWN, 5, 3))
+        drawn(app)
+        self.assertIsInstance(app.pager, HistoryPager)
+
     def test_the_wheel_does_nothing_while_a_drag_is_under_way(self) -> None:
         app = main_app()
         row, text = row_of(app, "first line"), column(app, "first line")
