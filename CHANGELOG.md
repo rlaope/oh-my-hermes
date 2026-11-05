@@ -8,6 +8,12 @@ All notable changes will be documented here.
   name in another file no longer continues the turn when every mention there
   is proven to need no change: another object's method of the same name, or
   an import whose calls bind the same way before and after the edit.
+- **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
+  of the hollow `○`.** Four finished agents in a row looked the same as four
+  that had not started. A completed agent now leads with `✓` in the done
+  green; the collapsed `N done` row is green only when every agent it
+  counts completed, else a muted `▪`.
+  Interrupted, failed, waiting and running agents keep their marks.
 
 ## 4.0.6 - 2026-11-04
 
