@@ -4,6 +4,29 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI briefs each subagent as it finishes, in the transcript.** A
+  finished subagent only changed its mark in the agent list under the
+  composer, so during a long dag-ulw run nobody saw what each child concluded
+  without opening its log. Each `subagent.complete` now writes one block
+  above the composer, as Claude Code does for a teammate: `● <name> finished
+  1m 35s · ↓1.8k`, then the first lines of the child's reply in up to two dim
+  rows, cut with `…`, with the reply's Markdown drawn as the reply is (no
+  `**`, backticks or `#`). A dag node's child is named by the node's id, as
+  Claude Code names a teammate by its handle (`● notify finished`), with the
+  node's label on one dim row under it; any other agent by its short title.
+  Only a completed agent's mark is green: a
+  failure reads `● <name> failed` in red with its error, an interrupted
+  child `▪ <name> interrupted`, a cancelled one `○ <name> cancelled`. A
+  briefing that arrives while a reply streams or a call (`delegate_task`)
+  runs waits under it and is written at the next block boundary, so it never
+  splits a paragraph or a table (`/history` and Ctrl+O show it meanwhile);
+  past three waiting under one running call, or past what the rows above
+  the composer hold beside it, the rest fold into one `● 9 more finished · 1
+  failed` row until the boundary writes them all.
+  Parallel children are briefed in the order they finished, and main never
+  is. Briefings are not part of the session Hermes stores, so a resumed or
+  rewound session is drawn without them. The rows erase on a scene look's ground
+  and keep every mark and word under `NO_COLOR`. The messenger is unchanged.
 - **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
   on.** With that setting each delegated child works in a git worktree of its
   own, made from the parent's last commit, so a dependent node and the verify

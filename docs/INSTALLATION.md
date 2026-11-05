@@ -656,7 +656,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   working row adds `MoA: refs 2/3`, then `MoA: aggregating…`.
 - While a turn has delegated work, the agent view under the info line lists
   its subagents as Claude Code's agent list does: `● main`, then one row per
-  agent, its mark (a spinner while it runs, `○` done, `✗` failed, `▪`
+  agent, its mark (a spinner while it runs, `✓` done, `○` cancelled, `✗` failed, `▪`
   interrupted, `◌` waiting for a worker), a short title (its goal up to the
   first field label such as `DELIVERABLE:` or the end of its first sentence,
   which an abbreviation such as `e.g.` does not end; a dag lane keeps its own
@@ -679,7 +679,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   runs or the run is over. The view stays
   while agents outlive the turn, each one's mark saying whether it still
   runs. With more agents than the view has rows, the running ones keep
-  theirs and the rest are counted on its last row (`○ 3 done`, or `+4 more ·
+  theirs and the rest are counted on its last row (`✓ 3 done`, or `+4 more ·
   1 waiting · 3 done`); in two rows or fewer `● main` gives its row up
   first. While the conversation's delegation graph is a DAG run (a lane
   waits on another, or a lane delegates), the view is the run's folding tree
@@ -764,6 +764,29 @@ run and approval decision stays Hermes'; the screen is OMH's.
   <text>`), and it and what `x` reports
   wait under the running call and are written at the next block boundary,
   so neither cuts that call off nor splits a reply.
+- When a subagent finishes, the transcript says so in a short briefing, as
+  Claude Code does for a teammate: `● <name> finished  1m 35s · ↓1.8k`, then
+  the first lines of its reply, or its error, in up to two dim rows under the
+  name, ending in `…` where it said more. A dag node's child is named by the
+  node's id (`● notify finished`), as Claude Code names a teammate by its
+  handle, with the node's label on one dim row under it, cut with `…` (none
+  when the label is the id); any other agent by the short title the agent
+  list shows, with no such row. The
+  mark is green only for an agent that completed; a failed one reads `●
+  <name> failed` in red with its error under it, an interrupted one `▪ <name>
+  interrupted` and a cancelled one `○ <name> cancelled`, both muted. One
+  briefing per agent, in the order they finished, and nothing when one
+  starts. A briefing that arrives while a reply streams or a call runs waits
+  under it and is written at the next block boundary, so it never splits a
+  paragraph or a table; `/history` and Ctrl+O show it meanwhile. While more
+  than three wait under a running call (`delegate_task`), or more than the
+  rows left above the composer hold beside the call, the newest ones that fit
+  are drawn whole and the rest fold into one row above them (`● 9 more
+  finished · 1 failed`; `● 2 finished` when none fits whole), so the call
+  stays on screen; every one is written
+  whole, in order, at the boundary. Briefings are the TUI's own rows, not
+  part of the session Hermes stores: a resumed or rewound session is drawn
+  again without them. The messenger's replies are unchanged.
 - The OMH TUI takes the mouse on the main screen once it can tell which row
   a report lands on (once the session's output has reached the bottom of the
   screen, or after Ctrl+L). A drag over the transcript or the rows under it

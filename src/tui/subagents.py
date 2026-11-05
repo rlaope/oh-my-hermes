@@ -57,7 +57,9 @@ or which `clear` dropped while it was still running, comes back the next time
 it reports. `complete` never makes one: a verdict on an agent that was never
 shown has no row to land on. A finished agent is frozen, so a repeated
 `complete` or a late frame cannot change its verdict, its time or its log,
-and a late `subagent.tail` can only fill a log that is still empty.
+and a late `subagent.tail` can only fill a log that is still empty. `apply`
+returns the agent a `complete` finished, once, with what it said in
+`Agent.reply`, which the app briefs in the transcript (`transcript.AgentDoneBlock`).
 
 Tokens. No frame before `subagent.complete` counts tokens, but Hermes adds
 each of the child's API calls to the `output_tokens` of the child's own row
@@ -205,6 +207,7 @@ class Agent:
     said: LogRow | None = None  # its latest thinking or reply line
     progress: LogRow | None = None  # its latest progress line, the names of its last calls
     progress_newest: bool = False  # `progress` came after `said`
+    reply: tuple[str, ...] = ()  # its `subagent.complete` summary, line by line: its reply, or its error
 
     @property
     def name(self) -> str:
@@ -420,8 +423,9 @@ class Roster:
 
     # ── input ──
 
-    def apply(self, event_type: str, payload: object, now: float) -> None:
-        """Fold one gateway event; `now` is the app's clock.
+    def apply(self, event_type: str, payload: object, now: float) -> Agent | None:
+        """Fold one gateway event; `now` is the app's clock. The agent this frame finished, else None: only a
+        `subagent.complete` for an agent the roster holds unfinished finishes one, once.
 
         An event type that is not one of the six above, a payload that is not
         an object, and a `subagent_id` that is missing, blank (the gateway
@@ -430,15 +434,19 @@ class Roster:
         """
         handler = self._handlers.get(event_type) if isinstance(event_type, str) else None
         if handler is None or not isinstance(payload, dict):
-            return
+            return None
         subagent_id = payload.get("subagent_id")
         if not isinstance(subagent_id, str) or not subagent_id.strip() or len(subagent_id) > ID_CHARS:
-            return
+            return None
+        before = self.agents.get(subagent_id)
+        open_before = before is not None and before.status not in FINISHED_STATUSES
         handler(subagent_id, payload, now)
         agent = self.agents.get(subagent_id)
-        if agent is not None:
-            self._frames += 1
-            agent.seen = self._frames
+        if agent is None:
+            return None
+        self._frames += 1
+        agent.seen = self._frames
+        return agent if open_before and agent is before and agent.status in FINISHED_STATUSES else None
 
     def token_sessions(self, now: float) -> tuple[str, ...]:
         """The child sessions whose state.db rows the HUD poller reads output tokens from, for `ingest_tokens`.
@@ -594,6 +602,7 @@ class Roster:
         if isinstance(tokens, int) and _bounded(tokens, MAX_TOKEN_COUNT):
             agent.output_tokens, agent.tokens_final = tokens, True
         summary = _lines(_text(payload.get("summary") or payload.get("text"))[:SUMMARY_CHARS])
+        agent.reply = tuple(summary)
         for line in summary:
             _push(agent, LOG_TEXT, line)
         if summary:  # its reply's first line, or its error
