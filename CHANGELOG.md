@@ -65,6 +65,18 @@ All notable changes will be documented here.
   Procedure steps name what survives each failure, Recovery Notes cover each
   skill's own blockers, and catalog checks keep both in place. The idea comes
   from PortSwigger Burp AT research skills.
+- **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
+  the machine sleeps past the session's turn lease, Hermes stops the running
+  turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
+  on." It now says it sends that `continue` in 3 s, with Esc to cancel, and then
+  sends it as a typed `continue` goes. It never does so for the person's own Esc,
+  `/stop` or interrupting prompt, for a turn that ended with an error, or for a
+  turn this TUI did not send (another client's on a shared gateway, whose stop
+  looks the same from here). Anything the person sends in the wait (a prompt,
+  `/stop`, `/help`, `/new`), a turn that starts, or another session opened
+  cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
+  or an open question holds it, and a notice says to send `continue`. At most 2
+  go between two prompts of the person's own; past that the old notice asks.
 - **The round-end check continues a turn less often.** A changed function's
   name in another file no longer continues the turn when every mention there
   is proven to need no change: another object's method of the same name, or
