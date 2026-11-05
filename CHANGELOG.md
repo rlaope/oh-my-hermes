@@ -19,6 +19,20 @@ All notable changes will be documented here.
   never writes the setting. On a Docker or SSH terminal, where Hermes skips
   isolation, nothing changes; a config that cannot be read counts as off, as
   before.
+- **dag-ulw review nodes route to the `review` category, and baselines stay
+  low.** The skill's difficulty-ladder rule now says a `role=review` node
+  takes the `review` category where the user's routes serve it, a `baseline`
+  node stays `quick` or `unspecified-low`, and a `verify` node, which judges
+  the run goal and baseline exemptions, climbs the ladder like any judgement.
+  Before, the planner put code reviews on `unspecified-high` in some runs and
+  on `review` or `unspecified-low` in others. A review node now costs more:
+  the shipped `review` chain runs the same models as `unspecified-high` at
+  `xhigh` instead of `medium`. `omh_dag` define, repair and extend also
+  return the advisory lint `review_not_review_category:<id>` for a declared
+  review node on another category. Like every lint finding, it never refuses
+  a run. It is not shown when Hermes' `model_map` backend offers no option
+  for `review` but does for `unspecified-high`. Verify nodes are not linted,
+  and neither are nodes whose label only reads like a review.
 - **A drag in the OMH TUI copies the transcript without the rail.** The main
   screen now takes the mouse: a drag over the transcript or the live rows
   selects the text (shown reversed) and copies it without the thin `┃` rail
@@ -80,6 +94,18 @@ All notable changes will be documented here.
   Procedure steps name what survives each failure, Recovery Notes cover each
   skill's own blockers, and catalog checks keep both in place. The idea comes
   from PortSwigger Burp AT research skills.
+- **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
+  the machine sleeps past the session's turn lease, Hermes stops the running
+  turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
+  on." It now says it sends that `continue` in 3 s, with Esc to cancel, and then
+  sends it as a typed `continue` goes. It never does so for the person's own Esc,
+  `/stop` or interrupting prompt, for a turn that ended with an error, or for a
+  turn this TUI did not send (another client's on a shared gateway, whose stop
+  looks the same from here). Anything the person sends in the wait (a prompt,
+  `/stop`, `/help`, `/new`), a turn that starts, or another session opened
+  cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
+  or an open question holds it, and a notice says to send `continue`. At most 2
+  go between two prompts of the person's own; past that the old notice asks.
 
 ## 4.0.6 - 2026-11-04
 
