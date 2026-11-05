@@ -245,9 +245,11 @@ class PromptSlot:
     answers: dict[str, str | None] = field(default_factory=dict)
     typing: bool = False  # a clarify question's text field is open: the composer is the field
     ticked: list[str] = field(default_factory=list)  # a multi-select question's ticked choices, in the order ticked
-    # The text field's words (the app's composer, set before each key and frame): kept while the arrows leave the
-    # field, shown on its row, and sent with the ticked choices from a multi-select question's Submit row.
+    # The text field's words (the app's composer, set before each key and frame), kept while the arrows leave the
+    # field: as its row shows them (a paste chip, an image token, as its label), and as Enter in the field would send
+    # them (`Composer.expanded`), which a multi-select question's Submit row sends with the ticked choices.
     draft: str = ""
+    draft_sent: str = ""
     # An approval's command and its `command_risk.segments`, read once instead of on every frame.
     _segments: tuple[str, list[command_risk.Segment]] | None = field(
         default=None, init=False, repr=False, compare=False,
@@ -376,7 +378,7 @@ class PromptSlot:
         """
         choices = self._current_choices()
         if index == self._submit_row():
-            return self._record_answer(_ticked_answer([*self.ticked, self.draft.strip()]))
+            return self._record_answer(_ticked_answer([*self.ticked, self.draft_sent.strip()]))
         if index < len(choices):
             if self._multi():
                 self._tick(index)
@@ -978,7 +980,7 @@ class PromptSlot:
         rows = [rule, *body, rule] if ruled else body
         if footer:
             kind = "field" if self.typing else "choice" if not self._multi() else "multi" if (
-                self.selected != self._submit_row()) else "send" if self.ticked or self.draft.strip() else "skip"
+                self.selected != self._submit_row()) else "send" if self.ticked or self.draft_sent.strip() else "skip"
             forms = tuple(form.format(send=self._submit_label()) for form in CLARIFY_FOOTERS[kind])
             said = [f"{form} · {waited}" for form in forms] + list(forms) if waited else list(forms)
             indent = " " * len(SLOT_BAR)

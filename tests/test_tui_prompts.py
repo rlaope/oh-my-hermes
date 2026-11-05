@@ -779,10 +779,10 @@ class MultiSelectTests(unittest.TestCase):
         self.assertEqual(clarify.selected, 4)
         self.assertEqual(lines_text(clarify.lines(80, DEFAULT_THEME, 12))[-1],
                          "  Enter to skip · ↑↓ to navigate · Esc to cancel")  # nothing ticked or typed: "" is skipped
-        clarify.draft = "pineapple"
+        clarify.draft_sent = "pineapple"
         self.assertEqual(lines_text(clarify.lines(80, DEFAULT_THEME, 12))[-1],
                          "  Enter to send · ↑↓ to navigate · Esc to cancel")
-        clarify.draft = " "
+        clarify.draft = clarify.draft_sent = " "
         clarify.handle_key(Key(DOWN))  # the list stops at Submit
         frame = clarify.handle_key(Key(ENTER)).frame
         self.assertEqual(frame, {"result": {"answers": {"q0": ""}}})
@@ -847,7 +847,7 @@ class SubmitRowTests(unittest.TestCase):
     def test_the_field_text_shows_on_its_row_and_goes_with_submit(self) -> None:
         clarify = slot("clarify", MULTI)
         clarify.handle_key(Key(CHAR, "2"))
-        clarify.draft = "pine\napple"  # what the field holds after the arrows left it
+        clarify.draft = clarify.draft_sent = "pine\napple"  # what the field holds after the arrows left it
         self.assertIn("      4. pine apple", body(lines_text(clarify.lines(80, DEFAULT_THEME, 12))))
         self.assertEqual(submitted(clarify).frame, {"result": {"answers": {"q0": '["ham","pine\\napple"]'}}})
 

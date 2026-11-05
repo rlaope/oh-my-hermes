@@ -21,7 +21,7 @@ from test_tui_modes import RecordingClient, make_app, type_text
 from omh.tui import app as app_module
 from omh.tui import prompts
 from omh.tui.gateway import Event, Response, ServerRequest
-from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key
+from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key, Paste
 from omh.tui.layout import MIN_COLS, allocate
 from omh.tui.app import BELL, App
 from omh.tui.pager import ALT_SCREEN_OFF, HistoryPager
@@ -172,6 +172,41 @@ class MultiSelectAppTests(unittest.TestCase):
         self.assertTrue([row for row in screen if "Enter to send" in row], screen)
         press(app, Key(ENTER))
         self.assertEqual(client.answers, [("srq-6", {"result": {"answers": {"q0": '["cheese","xy"]'}}})])
+
+    def test_submit_sends_a_pasted_or_image_answer_as_enter_in_the_field_does(self) -> None:
+        # Delta review of #2594: Submit sent the composer's raw text, so a paste chip went as its label. It sends
+        # what Enter in the open field sends (`Composer.expanded`): the paste whole, an image token as its label.
+        toppings = {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True}
+        pasted = "\n".join(f"line {n} of the pasted text" for n in range(1, 31))
+
+        def paste(app) -> None:
+            press(app, Paste(pasted))
+
+        def image(app) -> None:
+            press(app, Key(CHAR, "x"))
+            self.assertTrue(app.composer.insert_image("[Image #1]", object()))
+
+        for name, fill in (("paste", paste), ("image", image)):
+            sent = {}
+            for ending in ("field", "submit"):
+                app, client = make_app(busy=True)
+                app._on_server_request(ServerRequest("srq-6", "clarify", {"questions": [toppings]}))
+                armed(app)
+                press(app, Key(CHAR, "1"))
+                fill(app)
+                if ending == "submit":
+                    press(app, Key(DOWN))
+                    screen = drawn(app)
+                    self.assertTrue([row for row in screen if "[Pasted text #1" in row or "[Image #1]" in row], screen)
+                press(app, Key(ENTER))
+                sent[ending] = client.answers[0][1]["result"]["answers"]["q0"]
+            with self.subTest(name=name):
+                self.assertEqual(sent["submit"], sent["field"])
+                self.assertEqual(json.loads(sent["submit"])[0], "cheese")
+                if name == "paste":
+                    self.assertEqual(json.loads(sent["submit"])[1], pasted)
+                else:
+                    self.assertIn("[Image #1]", json.loads(sent["submit"])[1])
 
     def test_a_second_question_is_shown_before_the_first_answer_goes(self) -> None:
         first = {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True}

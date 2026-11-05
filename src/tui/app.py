@@ -4112,7 +4112,7 @@ class App(ModesMixin, AgentViewMixin):
             return  # in the first moment of a question every key is ignored: nothing typed, cleared or sent
         if self.slot is not None and _slot_owns(self.slot, event, self.composer.text):
             question = self.slot.question_index
-            self.slot.draft = self.composer.text  # the clarify field's words, which a Submit row sends
+            self._sync_draft(self.slot)  # the clarify field's words, which a Submit row sends
             answer = self.slot.handle_key(event)
             if isinstance(answer, TypeIt):
                 self.composer.handle(answer.key)  # the key that opened the clarify's text field is its first text
@@ -4293,6 +4293,11 @@ class App(ModesMixin, AgentViewMixin):
             self._set_composer(search.current() or search.original)
         if action in (SEARCH_ACCEPT, SEARCH_CANCEL):
             self.search = None
+
+    def _sync_draft(self, slot: PromptSlot) -> None:
+        """The open question's text field (the composer while a slot is open) to `slot`: as shown, and as Enter in
+        the field sends it, pastes whole (`Composer.expanded`)."""
+        slot.draft, slot.draft_sent = self.composer.shown(), self.composer.expanded()
 
     def _next_question(self, question: int) -> None:
         """After a key or a submit the open slot took, from its question number `question`: if it moved on.
@@ -6991,7 +6996,7 @@ class App(ModesMixin, AgentViewMixin):
         """The open question in the pager, every row of it (a long command whole); q or Esc goes back to it as it
         was, with nothing answered, and the pager closes with the question (`_close_slot`)."""
         if self.slot is not None:
-            self.slot.draft = self.composer.text
+            self._sync_draft(self.slot)
             lines = self.slot.whole_lines(self.size[0], self.theme, len(self.waiting_requests))
             self._show_pager(Pager(QUESTION_VIEW_TITLE, lines))
             self.question_view = self.pager
@@ -8654,7 +8659,7 @@ class App(ModesMixin, AgentViewMixin):
             # is a minute or more (`WAIT_SHOWN_SECONDS`); a fresh question says nothing about time.
             seconds = self.clock() - self.waiting_since if self.waiting_since is not None else 0.0
             waited = elapsed_text(seconds) if seconds >= WAIT_SHOWN_SECONDS else ""
-            self.slot.draft = self.composer.text  # the clarify field's words, shown on its row while the list has focus
+            self._sync_draft(self.slot)  # the clarify field's words, shown on its row while the list has focus
             return self.slot.lines(cols, self.theme, cap, waiting=len(self.waiting_requests), waited=waited)
         front = self._front_picker()  # the one `_on_input` gives the keys to
         if front is not None and front is self.launch_picker:
