@@ -48,6 +48,44 @@ All notable changes will be documented here.
   when the failed node was a verify node) before editing. There is still no
   rollback: the worktree is shared. Every other node's task reads byte for
   byte as before.
+- **A dag-ulw run that waits shows whole and moves, and says what it waits
+  on.** A run of up to 12 lanes (the transcript's own small-run measure)
+  shows every layer and node. A done layer of one node is one dim row
+  (`✓ layer 2 · <title>  model · accepted · ↓tokens`), consecutive ones stack,
+  and one blank row stands between layer groups. An open layer row no longer
+  repeats the counts its node rows say (`▾ layer 1 · 2 nodes`, `▾ layer 4`).
+  A bigger run folds consecutive done layers into one
+  `✓ layers 1–3 · 11 done` row, which opens to its layers, and opens only the
+  layers with a live node and the next layer still to come, which fitting
+  never shuts. The tree is at most 16 rows and still at most a third of the
+  screen; the owner's 6-node run is 14 rows at 150x42. Rows that do not fit
+  become one `+N more · /dag` row. A parked node was drawn `?` and counted
+  `unknown`, because the graph reader had no entry for the `parked` outcome.
+  It is now a waiting node with the status `parked` and the time since it
+  parked, and the header and its layer row count it as `parked`. One row
+  under it names what its park recorded it waits on, and nothing else: the
+  handle, named by its call (`terminal(uv run …)`) when it is one of the
+  session's background processes, then `until HH:MM` from its `wake_at`, then
+  its reason, and the process's own running time when the handle is one. The
+  parked and running times count on every second. The spinner turns on a
+  running or parked node's row. A waiting row, and a shut layer of waiting
+  nodes, carries a slow, faint dot cycle (`·` `··` `···`, one step a second).
+  Done rows, the done layers' row and a run that is not alive stay still,
+  and a done node's title is muted. This motion runs between turns too while
+  the run waits. While the terminal window is unfocused, the spinner and the
+  dots hold, as the wallpaper does (#2542), while the times keep counting,
+  redrawn once a second. An `unspecified-*` or unknown category no longer
+  draws a cell. Between turns, while something the session waits on still
+  runs, the working row's place above the composer says so, as it says a
+  turn runs: `✻ Waiting… (33m 47s · 1 agent · terminal)`. That is a delegated
+  child or dag-ulw node that wakes the parent as it ends (the running lanes
+  of the delegation graph the HUD reads), or a background
+  process Hermes will wake the session for (`notify_on_complete`, or
+  `watch_patterns` on a match). Each count shows only when it is not zero,
+  and the time is the longest wait. It has the working row's own spinner and
+  clock. A turn's working row takes over when a turn starts, and the row
+  goes when nothing is left to wait on. It is read from structure, never
+  from what the model said, and the info line is unchanged.
 - **dag-ulw refuses two nodes that write one file under different spellings.**
   `omh_dag` define, repair and extend refused a shared write scope with no
   direct edge only when both nodes wrote the same entry character for

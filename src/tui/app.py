@@ -206,6 +206,7 @@ from .panels import (
     HudSnapshot,
     catch_lines,
     dag_page_lines,
+    graph_is_dag,
     hud_chips,
     panel_lines,
     plan_room_collapsed,
@@ -522,6 +523,10 @@ COMPRESS_STARTED_NOTICE = "Compressing: Hermes summarizes the older turns with a
 # The working row's verb while a `/compress` is out and no turn runs (`App._compressing_since`). It offers no Esc:
 # with no turn running Esc arms the rewind and sends no interrupt, so it does not stop a compression.
 COMPRESSING_VERB = "Compressing"
+# Between turns, while something the session waits on still runs (a background process Hermes will wake it for, a
+# delegated child or dag-ulw node that wakes the parent as it ends), the working row says so, as it says a turn runs
+# (the owner, 2026-11-05: "걍 Musing마냥 … 계속 나오게"): `✻ Waiting… (33m 47s · 1 agent · terminal)`.
+ALERT_WAIT_VERB = "Waiting"
 # How long a `/compress` is waited for: Hermes' own budget for it (`hermes_cli/gateway_client.py` COMPRESS_RPC_TIMEOUT,
 # the compression ceiling plus slack), in place of `CALL_ANSWER_SECONDS`.
 COMPRESS_ANSWER_SECONDS = 660.0
@@ -2114,6 +2119,8 @@ class App(ModesMixin, AgentViewMixin):
         self.tree_selected: str | None = None  # the dag tree's highlighted row while the tree has the keys
         self.tree_folds: dict[str, bool] = {}  # the dag tree's rows the person folded (False) or opened (True)
         self.tree_run = ""  # the run those folds belong to (`dag_tree.run_key`); a new run, or session, starts none
+        self.tree_second = -1  # the whole wall second the tree's clocks were last drawn at (`_tree_second_due`)
+        self.alert_second = -1  # the same for the wait's row (`_pending_wait`)
         self.tree_state: TreeState | None = None  # what the tree's keys need, as the agent view last drew it
         # The dag run that is over, which the view no longer draws, and when its graph had last moved (`_run_gone`)
         self.retired_run: tuple[str, float] | None = None
@@ -2690,10 +2697,12 @@ class App(ModesMixin, AgentViewMixin):
         if self.redraw_at is not None:
             due.append(self.redraw_at)
         elif self._busy() or self._compressing_since() is not None or self._panel_live() or self._aura_live() \
-                or self.held_submits:
+                or self._tree_spins() or self.held_submits:
             due.append(self.last_render + self._tick_seconds())
         if self.redraw_at is None and (background := self._background_due_at()) is not None:
             due.append(background)  # the background row's clock: once a second, on the second
+        if self.redraw_at is None and (tree := self._tree_second_due_at()) is not None:
+            due.append(tree)  # the times on the dag tree's rows, the same way
         if self.redraw_at is None and self._wallpaper_moves():
             due.append(self.ambient_at + WALLPAPER_TICK_SECONDS)
         if self.path_due is not None and self.sid:
@@ -7459,6 +7468,26 @@ class App(ModesMixin, AgentViewMixin):
         payload = self.hud.payload if self.hud is not None else None
         return isinstance(payload, Mapping) and bool(payload.get("active"))
 
+    def _tree_spins(self) -> bool:
+        """Whether the dag tree the last frame drew moves (a running or parked node's spinner, a waiting row's dots,
+        `dag_tree.TreeState.moves`), or the wait's row turns (`_pending_wait`): with motion on and the window
+        focused, also between turns. Unfocused their motion holds (`_ambient_clock`), so nothing ticks for it at the
+        spinner's pace."""
+        return self.motion and self.decoder.unfocused_at is None and (
+            self.tree_state is not None and self.tree_state.moves or self._pending_wait() is not None)
+
+    def _tree_second_due_at(self) -> float | None:
+        """When, on the loop's clock, a time on the tree's rows or the wait's row next shows another second
+        (`TreeState.clocks`, `_pending_wait`: content that counts on focused or not); None without one."""
+        if not (self.tree_state is not None and self.tree_state.clocks) and self._pending_wait() is None:
+            return None
+        return self.clock() + 1.0 - self.wall_clock() % 1.0
+
+    def _tree_second_due(self) -> bool:
+        second = int(self.wall_clock())
+        return (self.tree_state is not None and self.tree_state.clocks and second != self.tree_second
+                or self._pending_wait() is not None and second != self.alert_second)
+
     def _aura_live(self) -> bool:
         """Whether the composer's `dag-ulw` aura moves now (`aura`): a token in the draft it draws, at the truecolor
         depth, with motion on, on a background its band shows on (`theme.aura_moves`), and while no list or tree
@@ -7643,8 +7672,8 @@ class App(ModesMixin, AgentViewMixin):
             return  # the screen is mid-reflow; the settled redraw paints it
         now = self.clock()
         due = (self._busy() or self._compressing_since() is not None or self._panel_live() or self._aura_live()
-               or bool(self.held_submits)) and now - self.last_render >= self._tick_seconds()
-        if not (self.dirty or due or self._background_due()):
+               or self._tree_spins() or bool(self.held_submits)) and now - self.last_render >= self._tick_seconds()
+        if not (self.dirty or due or self._background_due() or self._tree_second_due()):
             if self._wallpaper_moves() and now - self.ambient_at >= WALLPAPER_TICK_SECONDS:
                 self.ambient_at = now  # only the wallpaper's cells that moved: no frame is built
                 self.region.paint_ambient(self._ambient() or (), self.size[1])
@@ -8018,6 +8047,11 @@ class App(ModesMixin, AgentViewMixin):
         """The frame every spinner and sweep shows now; the first, always, with reduced motion."""
         return int(self.clock() / TICK_SECONDS) if self.motion else 0
 
+    def _held_frame(self) -> int:
+        """The spinner's frame at `_ambient_clock`: as `_spinner_frame` while the window has focus, held at the
+        moment it lost it while not (the dag tree's motion, `agent_view._tree_view`)."""
+        return int(self._ambient_clock() / TICK_SECONDS) if self.motion else 0
+
     def _tick_seconds(self) -> float:
         """How often the loop paints while something moves: each spinner step, once a second with reduced motion."""
         return TICK_SECONDS if self.motion else REDUCED_TICK_SECONDS
@@ -8056,8 +8090,10 @@ class App(ModesMixin, AgentViewMixin):
         if not lines and self.transcript.taken_any:
             lines = [()]  # the spacer a block opens with, here between the transcript and the region under it
         compressing = self._compressing_since()
+        alert = self._pending_wait() if compressing is None else None
         # A blank row above the working row, as between two blocks; the frame drops it first when rows are short.
-        self.tail_spacer = (self._busy() or compressing is not None) and bool(lines) and bool(lines[-1])
+        self.tail_spacer = (self._busy() or compressing is not None or alert is not None) and bool(lines) and bool(
+            lines[-1])
         if self.tail_spacer:
             lines.append(())
         if self._busy() and self.waiting_since is not None:
@@ -8119,14 +8155,63 @@ class App(ModesMixin, AgentViewMixin):
                    *working_spans(f"{COMPRESSING_VERB}…", frame, self.theme),
                    Span(f" ({elapsed_text(now - compressing)})", self.theme.muted))
             lines.append(truncate_line(row, cols))
+        elif alert is not None:
+            # What the session waits on: the working row's spinner and words, the longest wait's clock, then how many
+            # agents and terminals. The spinner holds while the window is unfocused (#2542); the clock counts on.
+            longest, agents, terminals = alert
+            facts = [elapsed_text(longest)]
+            facts += [f"{agents} agent{'' if agents == 1 else 's'}"] if agents else []
+            facts += ["terminal" if terminals == 1 else f"{terminals} terminals"] if terminals else []
+            frame = self._held_frame()
+            row = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
+                   *working_spans(f"{ALERT_WAIT_VERB}…", frame, self.theme),
+                   Span(f" ({' · '.join(facts)})", self.theme.muted))
+            lines.append(truncate_line(row, cols))
+            self.alert_second = int(self.wall_clock())
         return lines
+
+    def _pending_wait(self) -> tuple[float, int, int] | None:
+        """What the session waits on between turns, as (the longest wait's seconds, agents, terminals); None during a
+        turn and when nothing it waits on runs. Read from structure only, never from what the model said:
+        - the session's background processes still running that Hermes will wake it for (`notify_on_complete`, or
+          `watch_patterns` on a match), as their checkpoint records, none once one ended unreported (the info line
+          offers its result);
+        - the delegated children still running, which wake the parent as they end: the running or stuck lanes of the
+          delegation graph the HUD reads (a dag-ulw node, a `delegate_task` child), each with the graph's time
+          counted on since the HUD read it."""
+        if self._busy():
+            return None
+        wall = self.wall_clock()
+        times: list[float] = []
+        terminals = 0
+        if self.bg_done is None and self._background_live():
+            waking = [process for process in self.bg_running if process.notify or process.watched]
+            terminals = len(waking)
+            times += [wall - process.started_at for process in waking]
+        payload = self.hud.payload if self.hud is not None else None
+        graph = payload.get("delegation_graph") if isinstance(payload, Mapping) and not payload.get("error") else None
+        # A run its end print retired is over, whatever this read of the HUD still says (`_run_gone`).
+        live = isinstance(graph, Mapping) and graph.get("status") == "active" and not (
+            graph_is_dag(payload) and self._run_gone(graph))
+        lanes = [node for node in graph.get("nodes") or [] if isinstance(node, Mapping) and node.get("kind") != "root"
+                 and node.get("state") in ("running", "stuck")] if live else []
+        read_at = self.hud.received_at if self.hud is not None else 0.0
+        since = wall - read_at if 0 < read_at <= wall else 0.0
+        for lane in lanes:
+            elapsed = lane.get("elapsed_seconds")
+            if isinstance(elapsed, int | float) and not isinstance(elapsed, bool):
+                times.append(float(elapsed) + since)
+        agents = len(lanes)
+        if not terminals and not agents:
+            return None
+        return max(times, default=0.0), agents, terminals
 
     def _working_rows(self) -> int:
         """The tail's last rows that say a turn runs, as `_tail` draws them: the working (or waiting, or
         interrupting) row, and the tip under the working row from TIP_MIN_ROWS rows. The agent view leaves the tail
         these (`layout.allocate`'s `tail_floor`), so a short terminal never loses the row saying a turn runs."""
-        if not self._busy():
-            return int(self._compressing_since() is not None)  # the compression's row, with no tip
+        if not self._busy():  # the compression's row, or the wait's, with no tip
+            return int(self._compressing_since() is not None or self._pending_wait() is not None)
         if self._framed_wait():
             return 0  # `_tail` draws no row: the framed question's key row carries the wait's clock
         return 1 + int(self.size[1] >= TIP_MIN_ROWS and self.waiting_since is None and not self.interrupting)
