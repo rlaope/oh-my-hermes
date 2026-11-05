@@ -13,7 +13,9 @@ from __future__ import annotations
 import unittest
 
 from _tui_lines import line_text, lines_text
+from test_tui_modes import SID, drawn, make_app
 from omh.tui import prompts
+from omh.tui.gateway import Event, ServerRequest
 from omh.tui.keys import CHAR, DOWN, ENTER, Key
 from omh.tui.style import NO_COLOR
 from omh.tui.theme import DEFAULT_THEME, without_colour
@@ -292,6 +294,31 @@ class ToolRowTests(unittest.TestCase):
             with self.subTest(args=args):
                 self.assertEqual(summary(args), "Ship it? Now.")
         self.assertEqual(_call_summary({"name": "terminal", "context": "ls -la"}), "ls -la")
+
+
+class FramedWaitLayoutTests(unittest.TestCase):
+    """While a turn waits on a framed question, `_tail` draws no waiting row (the key row carries the clock), so the
+    layout keeps no row for one either: on a short terminal the reply's last line stands above the question, not a
+    blank row kept for a working row that is never drawn (#2575's review of #2573)."""
+
+    def test_on_a_short_terminal_the_replys_last_line_stays_above_the_question(self) -> None:
+        for rows, cols in ((8, 40), (9, 80), (10, 40)):
+            with self.subTest(rows=rows, cols=cols):
+                app, _client = make_app(busy=True, rows=rows, cols=cols)
+                app._on_event(Event("message.delta", SID, {"text": "short reply"}))
+                app._on_server_request(ServerRequest("srq-1", "clarify", {"session_id": SID, "questions": [
+                    {"qid": "q0", "question": "Which color?", "choices": ["red", "blue"], "multi_select": False}]}))
+                screen = drawn(app)
+                at = next(index for index, line in enumerate(screen) if "Which color" in line)
+                self.assertEqual(screen[at - 1], "┃   short reply")
+                self.assertEqual(app._working_rows(), 0)
+                self.assertFalse([line for line in screen if "Waiting" in line or "Working" in line])
+
+    def test_an_approval_keeps_its_waiting_row(self) -> None:
+        app, _client = make_app(busy=True, rows=24, cols=80)
+        app._on_server_request(ServerRequest("srq-1", "approval", {"command": "rm -rf ./x"}))
+        drawn(app)
+        self.assertEqual(app._working_rows(), 1)
 
 
 if __name__ == "__main__":
