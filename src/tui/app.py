@@ -6690,9 +6690,10 @@ class App(ModesMixin, AgentViewMixin):
             else:
                 after = lines[index - len(stable)] if index - len(stable) < len(lines) else None
             if after != self.selected_lines.get(doc):
-                self._drop_selection()
-                self.copy_note = Notification(SELECTION_DROPPED_NOTE, "warn", "")
-                self.copy_noted_at = self.clock()
+                if self.selection.dragging:  # nothing copied yet: say why the release will copy nothing
+                    self.copy_note = Notification(SELECTION_DROPPED_NOTE, "warn", "")
+                    self.copy_noted_at = self.clock()
+                self._drop_selection()  # a released one already copied: it goes quietly, its copy notice stays
                 return
 
     def _copy_key_dropped(self, event: Key | Paste | Mouse) -> bool:

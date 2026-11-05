@@ -544,6 +544,24 @@ class TurnTests(unittest.TestCase):
         self.assertIn("selection dropped: text moved", "\n".join(drawn(app)))
 
 
+    def test_a_copy_whose_notice_moves_the_draft_keeps_saying_it_copied(self) -> None:
+        # The review's probe: the region on the bottom rows, a drag over the draft; the copy notice's row moves the
+        # composer, so the released selection no longer holds its rows and goes, quietly.
+        app = main_app(rows=8)
+        for index in range(12):
+            app.transcript.add_notice(f"earlier {index}")
+        drawn(app)
+        type_text(app, "DRAFTTEXT here")
+        drawn(app)
+        row, at = row_of(app, "DRAFTTEXT"), column(app, "DRAFTTEXT")
+        drag(app, (at, row), (at + len("DRAFTTEXT here") - 1, row))
+        self.assertEqual(osc52(app), ["DRAFTTEXT here"])
+        for _frame in range(3):
+            screen = "\n".join(drawn(app))
+            self.assertIn(COPIED_NOTE.format(count=14), screen)
+            self.assertNotIn("dropped", screen)
+
+
 class ButtonTests(unittest.TestCase):
     def test_a_press_whose_release_never_comes_stops_holding_esc_once_reports_go_off(self) -> None:
         for leave in ("resize", "suspend"):
