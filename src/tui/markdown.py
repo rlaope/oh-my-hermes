@@ -178,8 +178,10 @@ def render_lines(
     while index < limit:
         source = sources[index]
         if state.table:
-            if not state.in_fence and source.strip().startswith("|") and len(split_table_row(clean_text(source))) >= 2:
-                # a table cut short by the cap on holding it back: the rest hangs on the columns it was given
+            cells = split_table_row(clean_text(source)) if source.strip().startswith("|") else []
+            if not state.in_fence and (len(cells) >= 2 or is_table_divider_cells(cells)):
+                # a table cut short by the cap on holding it back: the rest hangs on the columns it was given (a
+                # divider of any width is dropped there, never drawn raw)
                 table_rows, consumed, columns = table_rows_on(sources, index, state.table, width, theme, closed)
                 rows.extend(table_rows)
                 index += consumed
@@ -740,8 +742,10 @@ def _table_block(
                 # the `|---|` row between header and body: the line under the header, no cells of the table
                 index += 1
                 continue
-            if body and opens_table(sources[index - 1], sources[index]):
-                # this divider opens the next table: its header is the row before, which is not ours
+            before = split_table_row(clean_text(sources[index - 1]))
+            if body and not is_table_divider_cells(before) and opens_table(sources[index - 1], sources[index]):
+                # this divider opens the next table: its header is the row before, which is not ours (a dropped
+                # divider before it is no header, and the row before that is ours)
                 body.pop()
                 index -= 1
                 break

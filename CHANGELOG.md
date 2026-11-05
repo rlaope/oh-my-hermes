@@ -59,10 +59,12 @@ All notable changes will be documented here.
   never one guessed from the label. Any other agent keeps its bold short
   title, without a role or `@`, since Hermes' subagent frames carry no name to
   make a handle of. The agent list and the dag tree under the composer keep
-  their state colours. On a screen too short for the running call, the fold
-  row and the spacer between them, the fold row now drops its spacer, then
-  gives way entirely, so the call stays on screen. Sizing the held briefings
-  no longer renders a long streaming reply whole on every delta.
+  their state colours. On a screen too short to hold the running call, the
+  fold row and the spacer between them, the fold row first drops its spacer
+  and is then not drawn at all, so the call stays on screen. Under a streaming
+  reply that fills those rows, the fold row stays without its spacer, and the
+  reply's top rows give way. Sizing the held briefings no longer renders a
+  long streaming reply whole on every delta.
 - **The round-end checks also run after edits made through the shell.**
   Hermes calls OMH's round-end hook only after a `patch` or `write_file`, so
   a turn that edited files only with `sed`, a heredoc script or `cat >` got

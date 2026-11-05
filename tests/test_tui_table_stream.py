@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -19,6 +20,7 @@ from test_tui_modes import make_app
 from omh.tui.gateway import Event
 from omh.tui.markdown import MarkdownState, opens_table, render_lines
 from omh.tui.theme import DEFAULT_THEME as THEME
+from omh.tui import transcript as transcript_module
 from omh.tui.transcript import Transcript, _stable_lines
 
 SID = "b6af062a"
@@ -321,6 +323,7 @@ class TableStreamingTests(unittest.TestCase):
         cases = {
             "wider divider in a two-column body": "| a | b |\n|---|---|\n| 1 | 2 |\n|---|---|---|\n| 3 | 4 |",
             "second divider right after the first": "| a | b |\n|---|---|\n|---|---|\n| 1 | 2 |",
+            "narrower dividers after a row": "| a | b | c |\n|---|---|---|\n| 1 | 2 | 3 |\n|---|---|\n|---|---|",
         }
         for label, source in cases.items():
             with self.subTest(label):
@@ -349,32 +352,77 @@ class TableStreamingTests(unittest.TestCase):
         for cell in ["ah1", "ah2", "a0c1", "a0c2", "a1c1", "a1c2", "bh0", "bh1", "bh2", "b0c2", "b1c2"]:
             self.assertEqual(words.count(cell), 1, cell)
 
-    def test_a_table_right_after_a_released_one_gets_its_own_box_as_in_history(self) -> None:
-        first = ["| ah1 | ah2 |", "|---|---|"] + [f"| a{i}c1 | a{i}c2 |" for i in range(10)]
-        second = ["| bh1 | bh2 |", "|---|---|"] + [f"| b{i}c1 | b{i}c2 |" for i in range(2)]
-        text = "\n".join([*first, *second]) + "\n"
-        lines = text.split("\n")
+    def assert_streams_as_history(self, blocks: list[list[str]], live_rows: int) -> list[str]:
+        """`blocks` of source lines streamed a line, a block and three characters a delta: scrollback and the live
+        region together show what `/history` does, row for row. Returns `/history`'s rows."""
+        text = "\n".join(line for block in blocks for line in block) + "\n"
+        history: list[str] = []
         for label, pieces in {
-            "a line a delta": [line + "\n" for line in lines[:-1]],
-            "a table a delta": ["\n".join(first) + "\n", "\n".join(second) + "\n"],
+            "a line a delta": [line + "\n" for line in text.split("\n")[:-1]],
+            "a block a delta": ["\n".join(block) + "\n" for block in blocks],
             "three characters a delta": [text[at : at + 3] for at in range(0, len(text), 3)],
         }.items():
-            with self.subTest(label):
+            with self.subTest(label, live_rows=live_rows):
                 transcript = Transcript(clock=lambda: 100.0)
                 transcript.apply(ev("message.start"))
                 taken: list[str] = []
                 for piece in pieces:
                     transcript.apply(ev("message.delta", text=piece))
-                    taken += lines_text(transcript.take_stable_lines(WIDTH, THEME, live_rows=8))
-                self.assertGreater(len(taken), 8, "the first table was never released")
+                    taken += lines_text(transcript.take_stable_lines(WIDTH, THEME, live_rows=live_rows))
+                self.assertGreater(len(taken), live_rows // 2, "nothing was released while streaming")
                 transcript.apply(ev("message.complete", text="", status="complete"))
-                taken += lines_text(transcript.take_stable_lines(WIDTH, THEME, live_rows=8))
-                shown = taken + lines_text(transcript.live_lines(WIDTH, THEME, max_rows=8))
+                taken += lines_text(transcript.take_stable_lines(WIDTH, THEME, live_rows=live_rows))
+                shown = taken + lines_text(transcript.live_lines(WIDTH, THEME, max_rows=live_rows))
                 history = lines_text(transcript.history_lines(WIDTH, THEME, details=False))
                 self.assertEqual(shown, history)
-                self.assertEqual([row[4] for row in history if row[4:5] in ("┌", "└")], ["┌", "└", "┌", "└"])
-                header = next(at for at, row in enumerate(history) if "bh1" in row)
-                self.assertTrue(history[header - 1][4:].startswith("┌"), history[header - 1])
+        return history
+
+    def test_a_table_right_after_a_released_one_gets_its_own_box_as_in_history(self) -> None:
+        first = ["| ah1 | ah2 |", "|---|---|"] + [f"| a{i}c1 | a{i}c2 |" for i in range(10)]
+        second = ["| bh1 | bh2 |", "|---|---|"] + [f"| b{i}c1 | b{i}c2 |" for i in range(2)]
+        history = self.assert_streams_as_history([first, second], live_rows=8)
+        self.assertEqual([row[4] for row in history if row[4:5] in ("┌", "└")], ["┌", "└", "┌", "└"])
+        header = next(at for at, row in enumerate(history) if "bh1" in row)
+        self.assertTrue(history[header - 1][4:].startswith("┌"), history[header - 1])
+
+    def test_a_table_of_one_row_whose_row_heads_the_next_table_gets_its_own_box(self) -> None:
+        # #2592 review: a next table whose one row already made it tall released that row, and when the line after it
+        # was a divider, the row had been the header of the table after: the boxes merged.
+        first = ["| ah1 | ah2 |", "|---|---|"] + [f"| a{i}c1 | a{i}c2 |" for i in range(10)]
+        second = ["| bh1 | bh2 |", "|---|---|", "| ch1 has a long cell | and more words in this one |", "|---|---|"]
+        third = [f"| c{i}c1 | c{i}c2 |" for i in range(3)]
+        for live_rows in (6, 8):
+            history = self.assert_streams_as_history([first, second, third], live_rows)
+            self.assertEqual([row[4] for row in history if row[4:5] == "┌"], ["┌"] * 3)
+
+    def test_a_divider_after_a_released_table_is_never_drawn_raw(self) -> None:
+        # #2592 review: a one-cell divider-shaped line after a released table, and a run of dividers after a `|`
+        # line that is no row (which `/history` draws as a table of its own), reached scrollback raw.
+        released = ["| ha | hb | hc |", "|---|---|---|"] + [f"| r{i} | bb | ccc |" for i in range(6)]
+        for after in (["| --- |", "Paragraph after"], ["| x"] + ["|---|---|"] * 12 + ["Paragraph after"]):
+            with self.subTest(after=after[0]):
+                history = self.assert_streams_as_history([released, after], live_rows=8)
+                self.assertFalse([row for row in history if "|-" in row or "| -" in row], history)
+
+    def test_a_long_released_table_is_not_searched_line_by_line_on_every_take(self) -> None:
+        # #2592 review: looking for a next table in the released run cost every row of the run on every take.
+        transcript = Transcript(clock=lambda: 100.0)
+        transcript.apply(ev("message.start"))
+        transcript.apply(ev("message.delta", text="| a | b |\n|---|---|\n"))
+        for n in range(300):
+            transcript.apply(ev("message.delta", text=f"| r{n} | cell {n} |\n"))
+            transcript.take_stable_lines(WIDTH, THEME, live_rows=12)
+        calls: list[str] = []
+        real = transcript_module.opens_table
+
+        def counting(*args: str) -> bool:
+            calls.append(args[0])
+            return real(*args)
+
+        with patch.object(transcript_module, "opens_table", counting):
+            transcript.apply(ev("message.delta", text="| last | row |\n"))
+            transcript.take_stable_lines(WIDTH, THEME, live_rows=12)
+        self.assertLessEqual(len(calls), 4, calls)
 
     def test_a_continued_row_with_escapes_and_tabs_stays_on_the_frozen_columns(self) -> None:
         head = ["| hh1 | hh2 |", "|---|---|"] + [f"| r{i}q | s{i}q |" for i in range(8)]

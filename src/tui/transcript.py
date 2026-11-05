@@ -482,6 +482,16 @@ def _display_lines(text: str) -> list[str]:
     return _without_trailing_blanks(_source_lines(text))
 
 
+_DIVIDER_MARKS = frozenset("|:- ")  # what a table's divider line is made of
+_DIVIDER_LINE = re.compile(r"^[ \t]*\|[|:\- \t]*-[|:\- \t]*$", re.MULTILINE)  # a line that may be one
+
+
+def _table_row(line: str) -> bool:
+    """`line` goes on a table: a row of two cells or more, or a divider."""
+    cells = split_table_row(clean_text(line))
+    return len(cells) >= 2 or is_table_divider_cells(cells)
+
+
 def _stable_lines(
     text: str, final: bool = False, cap: int | None = None, height: Callable[[list[str]], int] | None = None
 ) -> list[str]:
@@ -506,21 +516,27 @@ def _stable_lines(
 
     if len(lines) - held > 2 and opens_table(lines[held], lines[held + 1]) and tall(held):
         # a table taller than the live region is released as it grows, on the columns it has. A next table in the
-        # run is held on its own until it is tall too. A released table's last row waits while the line after it
-        # may yet be a divider, as it is then the header of a next table; a header with its divider waits for a row.
+        # run (a header and its divider, the next table's held with them) is held on its own until it is tall too.
+        # A released table's last row waits while the line after it may yet be a divider, as it is then the header
+        # of a next table; with one row, the table waits whole, so its columns are laid out over that row too.
         last = held
-        for at in range(held + 2, len(lines) - 1):
-            header = split_table_row(clean_text(lines[at]))
-            if opens_table(lines[at], lines[at + 1]) and not is_table_divider_cells(header):
+        run = "\n".join(lines[held:])
+        line_at, searched = held, 0
+        for match in _DIVIDER_LINE.finditer(run):  # at C speed: a long run is searched on every take
+            line_at += run.count("\n", searched, match.start())
+            searched = match.start()
+            at = line_at - 1  # the header the divider-shaped line may open a table on
+            if at < held + 2 or not opens_table(lines[at], lines[at + 1]):
+                continue
+            # a divider-shaped header opens a table only where no table goes on (after a `|` line that is no row)
+            if not is_table_divider_cells(split_table_row(clean_text(lines[at]))) or not _table_row(lines[at - 1]):
                 last = at
         if last > held and not tall(last):
             return lines[:last]
-        if len(lines) - last > 3 and opens_table(lines[-2], lines[-1]):
-            return lines[:-2]
         after = clean_text(partial).strip()  # the line being written, "" before its first character
-        divider_yet = set(after) <= set("|:- ") and after[:1] in ("", "|")
-        if len(lines) - last > 3 and len(lines) == len(complete) and divider_yet:
-            return lines[:-1]
+        divider_yet = set(after) <= _DIVIDER_MARKS and after[:1] in ("", "|")
+        if len(lines) - last > 2 and len(lines) == len(complete) and divider_yet:
+            return lines[:-1] if len(lines) - last > 3 else lines[:last]
         return lines
     return _without_trailing_blanks(lines[:held])
 
