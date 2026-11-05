@@ -423,14 +423,17 @@ class TableStreamingTests(unittest.TestCase):
                 self.assertEqual([row[4] for row in history if row[4:5] in ("┌", "└")], ["┌", "└", "┌", "└"])
 
     def test_a_long_line_of_dashes_is_searched_once_not_once_per_dash(self) -> None:
-        # #2598 review: a `-` between two starred runs backtracked over every dash of a line that fails at its end.
+        # #2598 review: a `-` between two starred runs backtracked over every dash of a line that fails at its end, and
+        # a character both the space and the control alternative take (\x1c, \x85) backtracked exponentially.
         import time
 
-        line = "|" + "-" * 8000 + "x"
-        body = "| a | b |\n|---|---|\n" + "".join(f"| r{i} | v{i} |\n" for i in range(12)) + (line + "\n") * 5 + "| p"
-        started = time.perf_counter()
-        _stable_lines(body, cap=4)
-        self.assertLess(time.perf_counter() - started, 0.25)  # linear: about a millisecond; quadratic: seconds
+        head = "| a | b |\n|---|---|\n" + "".join(f"| r{i} | v{i} |\n" for i in range(12))
+        for fill in ("-", "-\x1c", "-\x85"):
+            with self.subTest(fill=repr(fill)):
+                line = "|" + fill * (8000 // len(fill)) + "x"
+                started = time.perf_counter()
+                _stable_lines(head + (line + "\n") * 5 + "| p", cap=4)
+                self.assertLess(time.perf_counter() - started, 2.0)  # linear: about a millisecond; else seconds or hours
 
     def test_a_reply_that_opens_with_a_code_fence_keeps_its_header_in_scrollback(self) -> None:
         # The fence's opening line draws no row: taken alone, it used the reply's first take, and no header was drawn.

@@ -488,7 +488,9 @@ _DIVIDER_MARKS = frozenset("|:- ")  # what a table's divider line is made of
 # ideographic space), with any control or bidi control `clean_text` drops (`is_unpainted`) taken as one. A prefilter
 # only, `opens_table` decides. The `-` is required by a lookahead, not between two starred runs, so a long line of
 # dashes that fails at its end is searched once, not once per dash. Escapes are stripped before the search.
-_UNPAINTED = "\x00-\x08\x0e-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069"
+# `_UNPAINTED` and `[^\S\n]` must stay disjoint (no \x1c-\x1f, no \x85: Python counts them as spaces): a character
+# both alternatives take is matched two ways, and a line of them backtracks exponentially.
+_UNPAINTED = "\x00-\x08\x0e-\x1b\x7f-\x84\x86-\x9f\u202a-\u202e\u2066-\u2069"
 _DIVIDER_LINE = re.compile(
     rf"^(?=[^\n]*-)(?:[^\S\n]|[{_UNPAINTED}])*\|(?:[|:\-{_UNPAINTED}]|[^\S\n])*$", re.MULTILINE
 )
