@@ -84,7 +84,7 @@
 }
 },
 {
-"anchors":"applicabl apply blocker book cours creator gap highest hit immediat immediately jit knowledg leverag payoff podcast recommend resourc right specific target topic unblock",
+"anchors":"applicabl blocker book cours creator gap highest hit immediat immediately jit knowledg leverag payoff podcast recommend resourc right specific target topic unblock",
 "hangul":"강의 당장 도움 되는 리에 리프 목표 브리 스트 에이 용할 이터 적용 주제 캐스 크리 팟캐 학습",
 "hangul_anchors":"강의 당장 도움 되는 리에 리프 목표 브리 에이 용할 이터 적용 주제 캐스 크리 팟캐 학습",
 "label":"omh-jit-learn",
@@ -430,7 +430,7 @@
 {
 "anchors":"blocker leadership operat ops priority queu weekly",
 "hangul":"로커 리뷰 리스 리즈 릴리 블로 상태 선순 순위 스크 우선 운영 주간",
-"hangul_anchors":"로커 리스 리즈 릴리 블로 상태 선순 순위 스크 우선 운영 주간",
+"hangul_anchors":"로커 리스 리즈 릴리 블로 상태 선순 순위 우선 운영 주간",
 "label":"omh-ops-review",
 "name":"ops-review",
 "situation":"Recurring operating status and blockers",
@@ -446,7 +446,7 @@
 {
 "anchors":"history item meet minut operat organiz retro retrospectiv rhythm scrum sprint standup",
 "hangul":"결정 관리 기록 리듬 린트 스크 스토 스프 아이 액션 운영 의록 이템 크럼 토리 프린 회고 회의 히스",
-"hangul_anchors":"결정 관리 기록 리듬 린트 스크 스토 스프 아이 액션 운영 의록 이템 크럼 토리 프린 회고 회의 히스",
+"hangul_anchors":"결정 관리 기록 리듬 린트 스토 스프 아이 액션 운영 의록 이템 크럼 토리 프린 회고 회의 히스",
 "label":"omh-operating-rhythm",
 "name":"operating-rhythm",
 "situation":"Team minutes, retros, and decision history to keep",
@@ -578,7 +578,7 @@
 {
 "anchors":"accessibility ai animation beautiful broken brutalism component core front frontend generic js land layout library lighthous market motion neobrutalism neobrutalist parallax polish premium react responsiv shadcn slop styl system terminal threej tooltip tui ui ux visual vital wcag webgl",
 "hangul":"고급 근성 급스 깨짐 네오 니메 드러 드럽 디자 딩페 랙스 랜딩 러운 럴랙 럽게 레이 려하 로고 론트 루탈 리즘 마키 메이 반응 부드 브루 스러 스럽 스크 스타 스트 스플 아웃 애니 엔드 연스 오브 응형 이션 이아 이지 일링 자연 자인 접근 차트 크롤 타일 탈리 테마 텍스 트엔 패럴 페이 푸터 프론 플릿 하게 화려 화면",
-"hangul_anchors":"고급 근성 급스 깨짐 네오 니메 드러 드럽 디자 딩페 랙스 랜딩 러운 럴랙 럽게 려하 로고 론트 루탈 리즘 마키 메이 반응 부드 브루 스러 스럽 스크 스타 스플 아웃 애니 엔드 연스 오브 응형 이션 이아 이지 일링 자연 자인 접근 차트 크롤 타일 탈리 테마 텍스 트엔 패럴 페이 푸터 프론 플릿 하게 화려 화면",
+"hangul_anchors":"고급 근성 급스 깨짐 네오 니메 드러 드럽 디자 딩페 랙스 랜딩 러운 럴랙 럽게 려하 로고 론트 루탈 리즘 마키 메이 반응 부드 브루 스러 스럽 스타 스플 아웃 애니 엔드 연스 오브 응형 이션 이아 이지 일링 자연 자인 접근 차트 크롤 타일 탈리 테마 텍스 트엔 패럴 페이 푸터 프론 플릿 하게 화려 화면",
 "label":"omh-frontend",
 "name":"frontend",
 "situation":"Building or polishing a web or terminal UI",
@@ -661,7 +661,7 @@
 {
 "anchors":"400 a11y aa accessibility accessibl ada appearanc architect aria background blind color complianc contrast focus hard keyboard name navigation ratio reader reflow role screen screenreader size tab target touch trap usabl valu wcag websit zoom",
 "hangul":"감사 검사 검토 게이 근성 내비 대비 리더 린리 명도 보드 비게 순서 스크 이션 접근 커스 크기 크린 키보 타깃 터치 포커 표시",
-"hangul_anchors":"감사 검사 검토 게이 근성 내비 대비 리더 린리 명도 보드 비게 순서 스크 이션 접근 커스 크기 크린 키보 타깃 터치 포커 표시",
+"hangul_anchors":"감사 검사 검토 게이 근성 내비 대비 리더 린리 명도 보드 비게 순서 이션 접근 커스 크기 크린 키보 타깃 터치 포커 표시",
 "label":"omh-accessibility-audit",
 "name":"accessibility-audit",
 "situation":"Screen-reader or keyboard accessibility gaps",
@@ -677,7 +677,7 @@
 {
 "anchors":"analyz assuranc broken browser button cjk click clip consol cut dead imag interaction keyboard layout link look mobil navigation network pixel regression render responsiv right screenshot terminal tui ui viewport visual wrong",
 "hangul":"검증 글자 깨짐 레이 렌더 린샷 문제 미널 바꿈 비교 비주 스크 시각 아웃 이아 잘림 주얼 줄바 크린 터미 픽셀 한글 화면",
-"hangul_anchors":"검증 글자 깨짐 렌더 린샷 문제 미널 바꿈 비교 비주 스크 시각 아웃 이아 잘림 주얼 줄바 크린 터미 픽셀 한글 화면",
+"hangul_anchors":"검증 글자 깨짐 렌더 린샷 문제 미널 바꿈 비교 비주 시각 아웃 이아 잘림 주얼 줄바 크린 터미 픽셀 한글 화면",
 "label":"omh-visual-qa",
 "name":"visual-qa",
 "situation":"Rendered UI needing a visual verdict",
@@ -1008,7 +1008,7 @@
 {
 "anchors":"acceptanc approach consensus criteria dangerous implement ralplan refactor reviewabl risky safety sign unsaf",
 "hangul":"가능 검증 검토 계획 능한 단위 대안 드베 리뷰 리서 리스 리팩 베이 비교 서치 스크 웹리 위험 이스 있게 있는 조사 코드 터링 팩터 험한",
-"hangul_anchors":"가능 검증 검토 계획 능한 단위 대안 드베 리서 리스 리팩 베이 비교 서치 스크 웹리 위험 이스 있게 있는 조사 터링 팩터 험한",
+"hangul_anchors":"가능 검증 검토 계획 능한 단위 대안 드베 리서 리스 리팩 베이 비교 서치 웹리 위험 이스 있게 있는 조사 터링 팩터 험한",
 "label":"ulw-plan",
 "name":"ralplan",
 "situation":"High-stakes technical proposal needing approval",
@@ -1801,6 +1801,23 @@
 }
 },
 {
+"anchors":"agreement count diagram disagree flow includ inter literatur meta prisma rater result study systematic",
+"hangul":"계적 고찰 기준 리닝 문헌 선별 스크 제외 체계 크리 포함 헌고",
+"hangul_anchors":"계적 고찰 기준 리닝 문헌 선별 제외 체계 크리 포함 헌고",
+"label":"omh-systematic-review",
+"name":"systematic-review",
+"situation":"Literature screening against frozen criteria",
+"terms":{
+"1":"blind decision deterministic frozen independent kept merg miss open person record visibl",
+"2":"against analysis apply befor conflict count diagram disagree dual flow includ inter meta rater result search study titl",
+"3":"agreement",
+"4":"abstract prisma rapid scop",
+"5":"exclusion inclusion literatur",
+"6":"criteria reviewer screen",
+"7":"review systematic"
+}
+},
+{
 "anchors":"authoritativ conversion coordinat cover coverag declar declaration differ footprint geojson geospatial measurement pair parcel polygon shar sum uniqu wrong",
 "hangul":"",
 "hangul_anchors":"",
@@ -2199,7 +2216,7 @@
 {
 "anchors":"adopt adoption affordabl agentchat agy antigravity assistant audio auth auto awar backend barg behavior blockchain bridg chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency demo devic discovery enough evaluat gateway genai generat generation graph handl home identity integration integrity keychain maco mailbox matrix messag microsoft minivers multimodal nextcloud oauth oci onequery oracl pair peer platform plugin privat real realtim receipt reliabl safety screenshot smart social solana spoken sql stack transaction trial universal video voic weather websocket windy windymail wire workspac wxtrain xmr",
 "hangul":"그인 기기 기준 넥터 데모 도입 라우 러그 리스 마트 멀티 모달 비도 비용 생성 스마 스크 스턴 시스 어시 연동 영상 외부 우팅 인증 자동 제어 제품 준비 채택 커넥 턴트 트홈 티모 플러 홈어",
-"hangul_anchors":"그인 기기 기준 넥터 데모 도입 라우 러그 리스 마트 멀티 모달 비도 비용 생성 스마 스크 스턴 시스 어시 연동 영상 외부 우팅 인증 자동 제어 제품 채택 커넥 턴트 트홈 티모 플러 홈어",
+"hangul_anchors":"그인 기기 기준 넥터 데모 도입 라우 러그 리스 마트 멀티 모달 비도 비용 생성 스마 스턴 시스 어시 연동 영상 외부 우팅 인증 자동 제어 제품 채택 커넥 턴트 트홈 티모 플러 홈어",
 "label":"omh-external-connector-readiness",
 "name":"external-connector-readiness",
 "situation":"Evaluating a plugin, connector, or API for adoption",
@@ -2268,7 +2285,7 @@
 {
 "anchors":"audio clip extract extraction field graphic imag input media meet ocr pars photo pictur podcast pull receipt say screenshot timestamp transcrib transcript transcription video webinar youtub",
 "hangul":"녹음 디오 라인 린샷 미지 샷에 수증 스크 스탬 스트 영상 영수 오디 요약 유튜 음성 이미 임라 임스 전사 지에 추출 크린 타임 탬프 텍스 튜브 회의",
-"hangul_anchors":"녹음 디오 라인 린샷 미지 샷에 수증 스크 스탬 영상 영수 오디 유튜 음성 이미 임라 임스 전사 지에 추출 크린 타임 탬프 텍스 튜브 회의",
+"hangul_anchors":"녹음 디오 라인 린샷 미지 샷에 수증 스탬 영상 영수 오디 유튜 음성 이미 임라 임스 전사 지에 추출 크린 타임 탬프 텍스 튜브 회의",
 "label":"omh-media-input",
 "name":"media-input-operator",
 "situation":"Audio, video, or screenshot to process",

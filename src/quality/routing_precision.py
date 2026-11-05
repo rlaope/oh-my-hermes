@@ -186,6 +186,16 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("sprite-soda-brand", "The soda brand is not a game sprite", "Explain the Sprite soda brand history.", "answer_directly", "direct_answer", "sprite-forge"),
     RoutingPrecisionCase("sprite-spreadsheet-sheet", "A spreadsheet sheet is not a sprite sheet", "Explain what a spreadsheet sheet tab is.", "answer_directly", "direct_answer", "sprite-forge"),
     RoutingPrecisionCase("gis-map-metaphor", "Map prose needs no coordinate computation", "Explain the map metaphor in this essay.", "answer_directly", "direct_answer", "geospatial-analysis"),
+    # systematic-review: review, screening and criteria words in another sense
+    # stay off literature screening (the skill's holdback in recommend.py).
+    RoutingPrecisionCase("sysrev-pr-systematically", "Reviewing a PR systematically is code review", "review this PR systematically", "answer_clarification", "", "systematic-review"),
+    RoutingPrecisionCase("sysrev-job-applicants", "Screening job applicants is hiring, not literature screening", "screen these job applicants against our criteria", "answer_clarification", "", "systematic-review"),
+    RoutingPrecisionCase("sysrev-support-tickets", "Ticket exclusion criteria are not a review protocol", "Screen these support tickets against our exclusion criteria", "answer_clarification", "", "systematic-review"),
+    # No forbidden_candidate: the sentence holds the whole `rapid review` phrase,
+    # so the clarify shortlist may offer it; the case pins that it never dispatches.
+    RoutingPrecisionCase("sysrev-rapid-pr-review", "A rapid PR review is code review", "Give me a rapid review of this PR before lunch", "answer_clarification", ""),
+    RoutingPrecisionCase("sysrev-paper-abstract", "Writing a title and abstract is paper writing", "Write the abstract and title for my paper", "answer_clarification", "", "systematic-review"),
+    RoutingPrecisionCase("sysrev-trial-inclusion", "One trial's inclusion criteria are not a screening run", "Check the inclusion criteria for this clinical trial", "answer_clarification", "", "systematic-review"),
     RoutingPrecisionCase("bio-ui-variant", "Variant vocabulary alone is not biological evidence", "Explain the word variant in a UI experiment.", "answer_directly", "direct_answer", "biomedical-evidence"),
     RoutingPrecisionCase("docking-boat-reservation", "Boat docking is not a molecular search", "Explain the boat docking reservation policy.", "answer_directly", "direct_answer", "molecular-docking"),
     RoutingPrecisionCase(
@@ -10044,6 +10054,13 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("repro-audit-score-metric", "A score check against a paper's reported metric", "Check whether my HellaSwag score matches the paper's reported acc_norm", "dispatch", "repro-audit", "prepare_repro_audit", "repro_audit"),
     RoutingInterventionCase("repro-audit-metric-tail", "The compared metric may close the request", "Compare my HellaSwag score with the paper's reported metric", "dispatch", "repro-audit", "prepare_repro_audit", "repro_audit"),
     RoutingInterventionCase("repro-audit-courtesy-lead", "A courtesy opener still leads with the comparison", "Can you compare my HellaSwag log with the paper's numbers?", "dispatch", "repro-audit", "prepare_repro_audit", "repro_audit"),
+    RoutingInterventionCase("sysrev-title-abstract-scoping", "Title and abstract screening for a scoping review", "Help me do title and abstract screening for my scoping review", "dispatch", "systematic-review", "prepare_systematic_review", "systematic_review"),
+    RoutingInterventionCase("sysrev-dual-reviewer-rapid", "Dual reviewer screening for a rapid review", "Set up dual reviewer screening for my rapid review records", "dispatch", "systematic-review", "prepare_systematic_review", "systematic_review"),
+    RoutingInterventionCase("sysrev-prisma-literature", "A systematic literature review with PRISMA screening", "Run a systematic literature review on sleep quality with PRISMA screening", "dispatch", "systematic-review", "prepare_systematic_review", "systematic_review"),
+    RoutingInterventionCase("sysrev-ko-pack", "The Korean pack phrase reaches literature screening", "체계적 문헌고찰 스크리닝을 도와줘", "dispatch", "systematic-review", "prepare_systematic_review", "systematic_review"),
+    # systematic-review negative controls that dispatch to their real owner.
+    RoutingInterventionCase("sysrev-systematic-code-review", "A systematic code review stays code review", "do a systematic code review of this PR", "dispatch", "code-review", "choose_executor", "handoff"),
+    RoutingInterventionCase("sysrev-find-papers", "Finding papers is source finding, not screening", "find papers about diffusion models", "dispatch", "source-finder", "prepare_source_finder_plan", "source_finder"),
     RoutingInterventionCase("sprite-game-character-sheet", "A game character sheet request reaches QC-gated frame processing", "Make a pixel sprite sheet for my game character.", "dispatch", "sprite-forge", "prepare_sprite_forge", "sprite_forge"),
     RoutingInterventionCase("gis-metric-overlay", "Supplied geometry requires actual metric computation", "Intersect these two GeoJSON layers in a metric CRS and compute overlap area.", "dispatch", "geospatial-analysis", "prepare_geospatial_analysis", "geospatial_analysis"),
     RoutingInterventionCase("bio-public-source-comparison", "Public claims require source-labelled reconciliation", "Cross-check this public BRAF V600E melanoma query with a ClinVar cross-check and trial registry records, retaining disagreements and update dates.", "dispatch", "biomedical-evidence", "prepare_biomedical_evidence", "biomedical_evidence"),

@@ -15,6 +15,8 @@ PORTABILITY_HERMES_ONLY = "hermes-only"
 _PORTABILITY: dict[str, str] = {
     # Exact local comparison uses OMH paper commands, with no evaluator runtime.
     'omh-repro-audit': PORTABILITY_REQUIRES_OMH_CLI,
+    # Freeze, prepare and merge run through `omh research screening`.
+    'omh-systematic-review': PORTABILITY_REQUIRES_OMH_CLI,
     # required_inputs require Hermes skill discovery; final_checklist owns wrapper routing.
     'omh-routing': PORTABILITY_HERMES_ONLY,
     # required_inputs use leading /omh wrapper intake and live full-catalog routing, not host skill nomination.

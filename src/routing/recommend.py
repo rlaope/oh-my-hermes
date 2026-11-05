@@ -1719,6 +1719,11 @@ _SKILL_POLICIES = {
         evidence_boundary="A prepared audit is not imported evidence review, completed evaluation or scientific reproduction. Missing conditions and human confirmation remain unknown.",
         wrapper_guidance="Select acc or acc_norm explicitly, import supplied local Harness results, preserve original and derived hashes, and audit normalized conditions without running a model.",
     ),
+    "systematic-review": RecommendationPolicy(
+        next_action="prepare_systematic_review",
+        evidence_boundary="A prepared screening plan is not reviewer answers, a merge, adjudication or a review team's decision. Agreement is not accuracy; same-model reviewers are not independent.",
+        wrapper_guidance="Agree and freeze the criteria and exclusion codes, prepare blind batches, give reviewers A and B only their own task files, merge, and report conflicts, pending records, agreement and the independence label.",
+    ),
     "paper-learning": RecommendationPolicy(
         next_action="prepare_paper_learning",
         evidence_boundary=(
@@ -2897,6 +2902,9 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     }),
     # Sheet/pixel/game/character words alone must not reach sprite processing.
     "sprite-forge": frozenset({"sprite", "sheet", "pixel", "art", "character", "game", "frames", "2d", "animation"}),
+    # Review, screening and criteria words alone must not reach literature
+    # screening: a systematic code review or applicant screening stays elsewhere.
+    "systematic-review": frozenset({"rapid", "review", "reviewer", "dual", "screening", "title", "abstract", "inclusion", "exclusion", "criteria"}),
     "geospatial-analysis": frozenset({"analysis", "overlay", "spatial", "intersection", "intersect", "layers", "compute", "overlap", "area"}),
     "biomedical-evidence": frozenset({"evidence", "reconciliation", "cross", "check", "variant", "matrix", "capture"}),
     "molecular-docking": frozenset({"molecular", "docking", "rigid", "receptor", "ligand", "poses"}),

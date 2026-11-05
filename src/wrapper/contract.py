@@ -233,6 +233,7 @@ VISIBLE_ACTIONS = (
     "show_acquisition_status",
     "prepare_learning_brief",
     "prepare_repro_audit",
+    "prepare_systematic_review",
     "prepare_paper_learning",
     "choose_explanation_level",
     "show_paper_source_requirements",
@@ -684,6 +685,7 @@ _CONTEXT_PRIMER_GROUPS = (
 _RETAINED_DELEGATION_SKILLS = set(retained_delegation_skill_names())
 _DIRECT_WORKFLOW_SKILLS = {
     "repro-audit",
+    "systematic-review",
     "geospatial-analysis",
     "biomedical-evidence",
     "molecular-docking",
@@ -1112,6 +1114,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_source_finder_plan": ("prepare_source_finder_plan", "Prepare sources"),
     "prepare_learning_brief": ("prepare_learning_brief", "Confirm learning target"),
     "prepare_repro_audit": ("prepare_repro_audit", "Prepare result audit"),
+    "prepare_systematic_review": ("prepare_systematic_review", "Prepare screening"),
     "prepare_paper_learning": ("prepare_paper_learning", "Prepare paper learning"),
     "prepare_workspace_audit": ("prepare_workspace_audit", "Prepare audit"),
     "prepare_production_audit": ("prepare_production_audit", "Audit production"),
@@ -2080,6 +2083,17 @@ _DELIVERY_RUNTIME_CHAT_CARDS: dict[str, dict[str, object]] = {
 }
 
 _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
+    "systematic-review": {
+        "kind": "systematic_review",
+        "headline": "Screen records against criteria you freeze first, with two blind reviewers.",
+        "body": "Agree the inclusion and exclusion criteria and exclusion codes, then I freeze them, prepare blind batches for reviewers A and B, merge their answers and show every conflict and pending record. Agreement is between reviewers, not accuracy.",
+        "phase": "systematic_review_prepared",
+        "next_action": "prepare_systematic_review",
+        "artifact_schema": "screening_merge/v1",
+        "actions": [{"id": "prepare_systematic_review", "label": "Prepare screening", "style": "primary"}],
+        "recommended_flow": ["freeze_criteria", "prepare_blind_batches", "dispatch_two_reviewers", "merge_and_resolve_conflicts"],
+        "evidence_not_observed": ["reviewer answers", "merge output", "adjudication", "review team verification"],
+    },
     "repro-audit": {
         "kind": "repro_audit",
         "headline": "Compare existing evaluation records with reported conditions.",

@@ -55,6 +55,7 @@ from ..source_finder import (
 )
 
 from .repro_audit_skill import DEFINITION as REPRO_AUDIT_DEFINITION
+from .systematic_review_skill import DEFINITION as SYSTEMATIC_REVIEW_DEFINITION
 from .dag_ulw_skill import DEFINITION as DAG_ULW_DEFINITION
 from .decision_prototype_skill import DEFINITION as DECISION_PROTOTYPE_DEFINITION
 from .jev_skills import JEV_DEFINITIONS
@@ -12177,6 +12178,7 @@ _DEFINITIONS.extend(
         SALES_PIPELINE_DEFINITION,
         SHOW_REEL_DEFINITION,
         REPRO_AUDIT_DEFINITION,
+        SYSTEMATIC_REVIEW_DEFINITION,
         GEOSPATIAL_ANALYSIS_DEFINITION,
         SPRITE_FORGE_DEFINITION,
         BIOMEDICAL_EVIDENCE_DEFINITION,

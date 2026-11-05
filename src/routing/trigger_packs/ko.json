@@ -4,6 +4,7 @@
   "skills": {
     "show-reel": ["제품 쇼케이스 영상"],
     "sprite-forge": ["도트 캐릭터", "스프라이트 시트", "도트 스프라이트"],
+    "systematic-review": ["체계적 문헌고찰", "PRISMA 스크리닝", "포함 제외 기준 선별"],
     "codebase-uml": [
       "코드베이스 시각화",
       "코드베이스 시각화해줘",

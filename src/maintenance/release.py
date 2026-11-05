@@ -196,7 +196,9 @@ CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "co
 # 13243 -> 13328: one index line for the new `sprite-forge` skill; its name
 # and visible description window (+85). Re-derived from the producer.
 # Merged with main: 13327 (main) + 85 = 13412, re-derived from the producer.
-SKILL_INDEX_CHAR_LIMIT = 13412
+# 13412 -> 13502: one `systematic-review` index line plus newline (+90),
+# measured from the producer; no headroom.
+SKILL_INDEX_CHAR_LIMIT = 13502
 # The longest single skill line in that index. Every description is already cut
 # to 60 characters, so what moves this is a longer skill name.
 SKILL_INDEX_LINE_CHAR_LIMIT = 100
@@ -953,7 +955,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72455
 # it, a `role=baseline` node stays `quick` or `unspecified-low`, and a
 # `role=verify` node, which judges the run goal, climbs the ladder (+247).
 # Measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533758
+# 533758 -> 536969: one `systematic-review` capability row (3209) plus its
+# separator (+3211); no other row moved. Measured from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536969
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1061,7 +1065,9 @@ FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 142635 -> 143595: one 958-character standalone `sprite-forge` summary +
 # separator (+960); the method and Pillow companion stay on demand.
 # Merged with main: 143564 (main) + 960 = 144524, re-derived from the producer.
-STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 144524
+# 144524 -> 145471: one 945-character standalone `systematic-review` row plus
+# separator (+947); the procedure stays in the skill body.
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 145471
 STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # ULW fold context ceiling (issue #954, PR D). The limit is the pre-D measured
 # value of the full profile's `skill_body` chars on `main` @ acb9a060, in the

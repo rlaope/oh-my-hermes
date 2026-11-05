@@ -63,7 +63,10 @@ class SkillContextCostTests(unittest.TestCase):
         # (1,350 bytes) is preserved, not widened.
         # Merged with main: 126,593 + 1,943 + 2,007 = 130,543 measured, plus the
         # same 1,350 allowance = 131,893.
-        self.assertLess(profile["repeated"]["bytes"], 131_893)
+        # 131,893 -> 133,335: the tree now measures 131,985 with systematic-review's
+        # mandatory Workflow Lane (497) and Runtime Evidence (1,446) rails (+1,943
+        # over 130,042); the same 1,350 allowance is kept, not widened.
+        self.assertLess(profile["repeated"]["bytes"], 133_335)
 
     def test_repro_audit_context_increment_stays_bounded(self) -> None:
         from omh.skills.context_cost import _skill_context_cost_profile
@@ -106,8 +109,9 @@ class SkillContextCostTests(unittest.TestCase):
         # feature changes opening actions only, never indexed descriptions.
         # Career adds its bounded 86-character entry; repro-audit its 84-character one;
         # sprite-forge its line + newline (13,243 -> 13,328); merged with main's
-        # repro-audit line, 13,327 + 85 = 13,412.
-        self.assertEqual(skill_index_chars(), 13_412)
+        # repro-audit line, 13,327 + 85 = 13,412; systematic-review its line +
+        # newline (+90).
+        self.assertEqual(skill_index_chars(), 13_502)
         # research and web-research add the shipped `ru` trigger pack's routing
         # signals (+446 and +316 bytes, after its review dropped the everyday
         # and nested phrases) to their pre-feature bodies; the search guidance
