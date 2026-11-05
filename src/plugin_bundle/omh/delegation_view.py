@@ -321,7 +321,8 @@ def _status_parts(node: Mapping[str, Any]) -> tuple[str, float | None]:
     word = clean_text(node.get("status")) or _state(node)
     elapsed = node.get("elapsed_seconds")
     if isinstance(elapsed, (int, float)) and not isinstance(elapsed, bool) and 0 <= elapsed < ELAPSED_LIMIT:
-        if _state(node) in ("running", "stuck", "done", "failed", "interrupted"):
+        # A parked node's figure is the time since it parked (`delegation_graph._parked_fields`).
+        if _state(node) in ("running", "stuck", "done", "failed", "interrupted") or node.get("parked") is True:
             return word, float(elapsed)
     return word, None
 
@@ -387,7 +388,9 @@ def _category(node: Mapping[str, Any]) -> str:
     return f"@{label}" if label else UNKNOWN_FIELD
 
 
-STATE_ORDER: Final = ("running", "stuck", "failed", "dispatched", "waiting", "interrupted", "unknown", "done")
+STATE_ORDER: Final = (
+    "running", "stuck", "failed", "dispatched", "parked", "waiting", "interrupted", "unknown", "done",
+)
 
 
 def header_parts(graph: Mapping[str, Any], charset: Charset = UNICODE) -> tuple[str, str]:
@@ -401,7 +404,8 @@ def header_parts(graph: Mapping[str, Any], charset: Charset = UNICODE) -> tuple[
     sep = charset.separator
     counts: dict[str, int] = {}
     for node in lanes:
-        state = _state(node)
+        # A parked node is a waiting one (`delegation_graph._parked_fields`), counted apart as its layer counts it.
+        state = "parked" if node.get("parked") is True else _state(node)
         counts[state] = counts.get(state, 0) + 1
     tally = [f"{counts[state]:,} {state}" for state in STATE_ORDER if counts.get(state)]
     hidden = graph.get("hidden_nodes")
