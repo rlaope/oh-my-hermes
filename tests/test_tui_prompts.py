@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 import sys
 import unittest
@@ -490,7 +491,9 @@ class SlotBarTests(unittest.TestCase):
                 # A framed clarify question's rules and key row hang off nothing; its question and choices do.
                 rows = [row for row in rows if line_text(row).startswith(prompts.SLOT_BAR)]
                 self.assertTrue(rows)
-                self.assertEqual(bar_styles(rows), {DEFAULT_THEME.muted})  # a question is no state: grey
+                # A question is no state: grey. A framed clarify's bar is a gutter, which a drag never copies.
+                framed = method == "clarify"
+                self.assertEqual(bar_styles(rows), {replace(DEFAULT_THEME.muted, gutter=framed)})
                 self.assertTrue(all(line_width(row) <= 60 for row in rows))
 
 

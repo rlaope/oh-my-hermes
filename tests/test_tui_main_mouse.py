@@ -698,6 +698,58 @@ class SlotAndViewTests(unittest.TestCase):
         self.assertIn("hermes says so", screen)
 
 
+class FramedPickerTests(unittest.TestCase):
+    """#2573's clarify picker, framed like Claude Code's question: rules above and under it, a key row under them."""
+
+    QUESTION = {"session_id": "s", "questions": [
+        {"qid": "q0", "question": "Which color do you prefer?", "choices": ["red (Recommended)", "blue"],
+         "multi_select": False}]}
+
+    def picker(self) -> App:
+        app = main_app(rows=24)
+        app._on_server_request(ServerRequest("srq-1", "clarify", self.QUESTION))
+        drawn(app)
+        return app
+
+    def test_a_drag_over_the_framed_picker_copies_the_question_and_choices_only(self) -> None:
+        app = self.picker()
+        screen = drawn(app)
+        top = next(index for index, line in enumerate(screen) if "Which color" in line)  # the rule is the row above
+        keys = next(index for index, line in enumerate(screen) if "Enter to select" in line) + 1
+        self.assertTrue(screen[top - 1].startswith("─"))
+        drag(app, (1, top), (60, keys))  # from the top rule through the key row
+        self.assertEqual(osc52(app), ["Which color do you prefer?\n\n1. red (Recommended)\n2. blue\n3. Type something."])
+        highlighted = [reversed_columns(app, row + 1) for row in (top - 1, keys - 2, keys - 1)]
+        self.assertEqual(highlighted, [[], [], []])  # the rules and the key row are never highlighted
+
+    def test_the_wheel_while_it_is_open_opens_the_question_view_without_its_key_row_or_rules(self) -> None:
+        app = self.picker()
+        app._on_input(Mouse(WHEEL_UP, 5, 3))
+        self.assertIs(app.pager, app.question_view)
+        page = "\n".join(drawn(app))
+        self.assertIn("Which color do you prefer?", page)
+        self.assertNotIn("Enter to select", page)
+        self.assertNotIn("─" * 20, page)
+
+    def test_during_a_turn_it_copies_too_and_its_key_rows_clock_never_drops_a_drag(self) -> None:
+        # While a framed question waits, `_tail` draws no working row (its key row carries the wait's clock), so the
+        # picker is a stable row a drag may hold during the turn as well; the clock moving is a gutter's change.
+        now = [100.0]
+        app = main_app(rows=24, clock=lambda: now[0])
+        app.turn_pending = True
+        app._on_server_request(ServerRequest("srq-1", "clarify", self.QUESTION))
+        screen = drawn(app)
+        self.assertFalse([line for line in screen if "Working" in line])
+        keys = next(index for index, line in enumerate(screen) if "Enter to select" in line) + 1
+        press(app, 1, row_of(app, "Which color"))
+        move(app, 60, keys)
+        for _minute in range(3):
+            now[0] += 61.0
+            drawn(app)
+        release(app, 60, keys)
+        self.assertEqual(osc52(app), ["Which color do you prefer?\n\n1. red (Recommended)\n2. blue\n3. Type something."])
+
+
 class DefaultAgentListTests(unittest.TestCase):
     def test_a_list_click_selects_nothing_and_the_wheel_over_the_list_opens_nothing(self) -> None:
         app, _client = agent_app(environ=MOUSE)

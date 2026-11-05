@@ -777,9 +777,13 @@ run and approval decision stays Hermes'; the screen is OMH's.
   are never selected, and while a turn runs neither are the working row,
   its tip and the rows under them: a drag carried onto them runs to the end
   of the last row above them, so dragging to the bottom of the screen
-  copies the transcript. During a turn that puts an open question and your
-  draft out of a drag's reach too; the wheel up opens the question's own
-  view (Ctrl+O's), where a drag copies it. A drag over the transcript's rows stays on them
+  copies the transcript. During a turn that puts your draft out of a drag's
+  reach too, and an approval or a value prompt, which sit under the row
+  counting how long Hermes has waited; the wheel up opens the question's own
+  view (Ctrl+O's), where a drag copies it. A question with choices, framed
+  between two rules, has no such row and can be dragged over during a turn
+  as well; its rules, its bar, the `❯` on the highlighted choice and its
+  key row are never copied, only the question and the choices. A drag over the transcript's rows stays on them
   while output scrolls the screen; one over the live rows that change (a
   reply still streaming, the panels, the composer) is dropped, highlight
   and all, and copies nothing as soon as the rows under it change, and the

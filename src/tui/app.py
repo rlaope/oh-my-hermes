@@ -1740,6 +1740,12 @@ def _menu_lines(entries: list[tuple[str, str]], index: int, width: int, max_rows
 _PICKER_KEYS = {UP: KEY_UP, DOWN: KEY_DOWN, LEFT: KEY_LEFT, RIGHT: KEY_RIGHT, ENTER: KEY_ENTER, ESCAPE: KEY_QUIT}
 
 
+def _copied_part(line: Line) -> Line:
+    """The spans of `line` a selection copies: all but its gutters (a rail, a rule, a key row's clock), so a gutter that
+    changes on its own (a framed question's wait) never ends a selection over the text beside it."""
+    return tuple(span for span in line if not span.style.gutter)
+
+
 def picker_key(event: Key | Paste | Mouse) -> str:
     """One decoded key as an OMH picker's key token. Raw mode makes Ctrl+C a key, and it cancels like Esc."""
     if not isinstance(event, Key) or event.alt:
@@ -6641,6 +6647,8 @@ class App(ModesMixin, AgentViewMixin):
             return first - 1
         limit = budget.total - budget.agents - budget.info  # the info line's row
         working = min(self._working_rows(), budget.tail)
+        if self.waiting_since is not None and self.slot is not None and self.slot.framed:
+            working = 0  # a framed question carries the wait's clock on its key row (a gutter): `_tail` draws no row
         if working:
             limit = min(limit, budget.sticky_gap + budget.sticky + budget.tail + budget.pad - working)
         return first + limit - 1
@@ -6656,10 +6664,10 @@ class App(ModesMixin, AgentViewMixin):
         return self.pager is not None
 
     def _note_selected_lines(self) -> None:
-        """Keep each selected row's line as the screen shows it now, to tell later whether the row still shows it."""
+        """Keep each selected row's text as the screen shows it now, to tell later whether the row still shows it."""
         held = self.selection.rows
         self.selected_lines = {} if held is None else {
-            doc: self.region.doc_line(doc) or () for doc in range(held[0], held[1] + 1)}
+            doc: _copied_part(self.region.doc_line(doc) or ()) for doc in range(held[0], held[1] + 1)}
 
     def _keep_selection_true(self, stable: Sequence[Line], lines: Sequence[Line]) -> None:
         """Before a frame that flushes `stable` and draws `lines`: let the main screen's selection go, copying nothing,
@@ -6690,7 +6698,7 @@ class App(ModesMixin, AgentViewMixin):
                 after = stable[index]
             else:
                 after = lines[index - len(stable)] if index - len(stable) < len(lines) else None
-            if after != self.selected_lines.get(doc):
+            if (None if after is None else _copied_part(after)) != self.selected_lines.get(doc):
                 if self.selection.dragging:  # nothing copied yet: say why the release will copy nothing
                     self.copy_note = Notification(SELECTION_DROPPED_NOTE, "warn", "")
                     self.copy_noted_at = self.clock()
