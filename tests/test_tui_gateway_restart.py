@@ -228,8 +228,13 @@ class ProfileChoiceTests(unittest.TestCase):
                                                GATEWAY_CANCEL_CHOICE])
         screen = "\n".join(drawn(app))
         self.assertIn("Restart this profile (kami)", screen)
-        self.assertIn("only kami reconnects; new OMH code is not loaded", screen)  # the choice's dim description
+        # The choice's dim description: Hermes re-serves the profile without draining, so its turns stop now.
+        self.assertIn("its running turns stop now; only kami reconnects; no new OMH code", screen)
         self.assertIn("Restart the whole gateway", screen)
+        self.assertEqual(question["question"].splitlines()[1],
+                         "On a whole-gateway restart, running work (turns, cron jobs) finishes first, up to 30 min "
+                         "(Hermes' restart_after_turn_timeout); new turns wait meanwhile.",
+                         "the drain is the whole gateway's, not the profile's")
         self.assertEqual(started, [])
 
     def test_this_profile_runs_hermes_restart_for_it_and_says_hermes_words_after(self) -> None:
@@ -358,7 +363,7 @@ class ReattachTests(unittest.TestCase):
 
     def test_commands_that_call_the_gateway_wait_and_the_tuis_own_go(self) -> None:
         for line in ("/gateway", "/gateway status", "/new", "/sessions other-1", "/steer go on", "/model gpt-x",
-                     "/effort high", "!ls", "/usage"):
+                     "/effort high", "!ls", "/usage", "/image shot.png", "/paste"):
             with self.subTest(line=line):
                 app, old, _spawner, _started, now = restart_app()
                 confirm(app, now)
@@ -594,9 +599,13 @@ class ImpactTests(unittest.TestCase):
             "Running work (turns, cron jobs) finishes first, up to 10 min (Hermes' restart_after_turn_timeout); new "
             "turns wait meanwhile.",
         ])
-        stopped = RestartImpact(None, Gateway("running", True, 1, active_agents=1))
-        self.assertEqual(gateway_restart.impact_lines(stopped, busy=False)[1],
-                         "Running work (turns, cron jobs) would be interrupted.")
+        # No `--external-supervisor` in its argv: Hermes' own systemd or launchd service still drains it (SIGUSR1),
+        # which the record cannot tell, so neither "finishes first" nor "interrupted" is claimed alone.
+        unflagged = RestartImpact(None, Gateway("running", True, 1, active_agents=1), wait_seconds=600)
+        self.assertEqual(gateway_restart.impact_lines(unflagged, busy=False)[1],
+                         "Running work (turns, cron jobs) finishes first, up to 10 min (Hermes' "
+                         "restart_after_turn_timeout); new turns wait meanwhile if a service (systemd, launchd) runs "
+                         "this gateway; otherwise it is interrupted.")
         no_wait = RestartImpact(None, Gateway("running", True, 1, supervised=True), wait_seconds=0)
         self.assertEqual(gateway_restart.impact_lines(no_wait, busy=True), [
             "no bots connected · 1 running",

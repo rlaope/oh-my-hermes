@@ -43,7 +43,9 @@ terminal's foreground (`user`) or grey (`muted`). The palette's own accent
 is the banner title's alone (`brand`). A call's name is
 drawn in its tool family's hue (`kinds`, in `KIND_FAMILIES` order, from
 `KIND_HUES`), kept clear of every state hue, and a `/name` that resolves to a
-command or skill takes the skill hue, bold (`slash`).
+command or skill takes the skill hue, bold (`slash`). A finished subagent's
+`@handle` takes a hue of its own (`agents`, from `AGENT_HUES`, `agent_style`),
+also clear of every state hue.
 
 Outcomes sit on bands (`ok_band` behind what the person allowed,
 `error_band` behind a denial or a failure): light tints of the palette's diff
@@ -88,6 +90,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
+import hashlib
 
 from ..skin_pack import (
     SkinTheme,
@@ -152,6 +155,17 @@ KIND_HUES = {
     "skill": ("#D58CF0", "#9E58B8"), "shell": ("#E3B341", "#996C00"), "file": ("#F8A87E", "#AB6239"),
     "web": ("#C5DE70", "#687C00"), "dag": ("#F778BA", "#BF4588"),
 }
+# A subagent's handle (`@<node id>`) in its briefing (`transcript.AgentDoneBlock`), after Claude Code's coloured
+# `@teammate`: one of these hues (on a dark background, on a light one), picked by the node's place in its run's
+# definition order (`agent_style`), so the first seven nodes of a run differ and an agent keeps its colour on every
+# row, every redraw, in `/history` and after a resume; a handle with no such place by a stable hash. At OKLCH 60,
+# 95, 175, 210, 285, 315 and 345 degrees, each keeps 23 degrees or more from every skin's state hues (failed red 11
+# to 25, done green 128 to 147, running blue 253) and 30 or more from the next; built at one lightness and chroma per
+# side, so none stands out, and lifted to 4.5:1 as the kinds are.
+AGENT_HUES = (
+    ("#F6AB6B", "#9A5505"), ("#D6BD5C", "#7F6700"), ("#59D7B9", "#007E65"), ("#47D2E8", "#007A8F"),
+    ("#B6B3FF", "#635DAB"), ("#DBA6F3", "#835198"), ("#F59ECF", "#984979"),
+)
 # The aura a `dag-ulw` in the composer takes (`aura`, `aura_glint`): violet, magenta, pink and lavender (on a dark
 # background, on a light one), stepped over `AURA_STEPS` across the word and across each rule, and the same steps
 # mixed `AURA_GLINT_SHARE` of the way toward a near-white lavender (a deep violet on a light background) for the
@@ -336,6 +350,7 @@ class Theme:
     background_word: Style  # the background-process row's `background` and spinner: bold, `label` a step dimmer
     aura: tuple[Style, ...] = ()  # a `dag-ulw` in the composer and the rules around it, bold, `AURA_STOPS` stepped
     aura_glint: tuple[Style, ...] = ()  # the same steps toward `AURA_GLINT`: the band that sweeps through them
+    agents: tuple[Style, ...] = ()  # a subagent's handle, bold, in one of `AGENT_HUES` (`agent_style`)
     prompt_band: Style = Style()  # behind a prompt you sent, edge to edge (`with_prompt_band`); none until set
     catch_mark: tuple[Style, ...] = ()  # a catch row's `✦ OMH`, cell by cell, bold, through the launch look's logo
     catch_words: Style = Style()  # what a catch row says: the launch look's label colour (`with_catch_colours`);
@@ -355,6 +370,19 @@ class Theme:
 def aura_moves(theme: Theme) -> bool:
     """Whether the theme's aura has its gradient and band (`AURA_GLINT_MIN_CONTRAST`), or is the still bold look."""
     return bool(theme.aura) and theme.aura[0].fg is not None
+
+
+def agent_style(handle: str, theme: Theme, index: int | None = None) -> Style:
+    """A subagent's handle: bold, in a hue of `Theme.agents`. A dag node's `index`, its place in its run's definition
+    order, picks it, cycling only once every hue is used, so the nodes of one run differ (and neighbours always);
+    without one, a stable hash of `handle`, the same in every process (`hash` is salted per process). Bold in the
+    terminal's foreground with no hues."""
+    if not theme.agents:
+        return theme.user
+    if index is not None:
+        return theme.agents[index % len(theme.agents)]
+    digest = hashlib.blake2s(handle.encode("utf-8", "surrogatepass"), digest_size=8).digest()
+    return theme.agents[int.from_bytes(digest, "big") % len(theme.agents)]
 
 
 def tool_family(name: str) -> str:
@@ -604,6 +632,7 @@ def build_theme(skin: SkinTheme, background: str | None = None) -> Theme:
         faint=Style(fg=grey("faint", TEXT_CONTRAST)),
         brand=Style(fg=read("ui_accent"), bold=True),
         kinds=tuple(Style(fg=hue(family), bold=True) for family in KIND_FAMILIES),
+        agents=tuple(Style(fg=_lifted(pair[side], ink, surface, TEXT_CONTRAST), bold=True) for pair in AGENT_HUES),
         slash=Style(fg=hue("skill"), bold=True),
         background_word=Style(fg=_lifted(_mix(read("ui_label"), surface, BACKGROUND_WORD_SHARE), ink, surface,
                                          TEXT_CONTRAST), bold=True),
@@ -701,7 +730,7 @@ def with_launch_look(theme: Theme, skin: SkinTheme, background: str | None, look
 # catch row's words) and as marks, single and stepped. Styles with a background of their own (bands, the pager's bar,
 # an approval's choices) are measured against that band and keep their colours.
 WORD_ROLES = ("slash", "menu_current", "catch_words", "background_word")
-WORD_STEPS = ("kinds", "dag_words", "aura", "aura_glint")
+WORD_STEPS = ("kinds", "agents", "dag_words", "aura", "aura_glint")
 MARK_STEPS = ("dag_edges", "catch_mark")
 
 
