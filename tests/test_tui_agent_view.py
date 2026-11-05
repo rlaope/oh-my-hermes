@@ -279,7 +279,7 @@ class ViewTests(unittest.TestCase):
         app, _client = agent_app(busy=False, frames=FRAMES, cols=80)
         self.assertEqual(info_left(app), CHIP)
         rows = view_text(app)
-        self.assertEqual([row[:4] for row in rows], ["  ● ", "  ○ ", "  ✗ "])
+        self.assertEqual([row[:4] for row in rows], ["  ● ", "  ✓ ", "  ✗ "])
 
     def test_a_narrow_row_drops_the_right_side_and_keeps_the_count_whole(self) -> None:
         patched = mock.patch("omh.tui.app.__version__", "9.9.9")  # the badge's version, fixed: the gap is a width
@@ -510,7 +510,7 @@ class OneAgentSurfaceTests(unittest.TestCase):
         self.assertEqual(info_left(app), CHIP)
         self.assertEqual(view_text(app), VIEW)
         relay(app, FRAMES)
-        self.assertEqual([row[:4] for row in view_text(app)], ["  ● ", "  ○ ", "  ✗ "])
+        self.assertEqual([row[:4] for row in view_text(app)], ["  ● ", "  ✓ ", "  ✗ "])
         for state in ("idle", "running", "agents running"):
             self.assertNotIn(state, mode_row(app))
 
