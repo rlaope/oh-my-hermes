@@ -783,7 +783,7 @@ class Composer:
                 return self._normal_char(event.char)
             return None
         if self._prefix in ("f", "F", "t", "T"):
-            if event.name == CHAR and not (event.ctrl or event.alt or event.shift or event.reported_shift):
+            if event.name == CHAR and not (event.ctrl or event.alt):  # a reported Shift is in the char already
                 return self._normal_char(event.char)
             self._drop_pending()
             return NOTHING

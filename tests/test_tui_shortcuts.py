@@ -909,6 +909,23 @@ class PendingCharSearchShortcutTests(unittest.TestCase):
                         self.assertFalse(app.composer.pending)
                         self.assertEqual(client.calls, [])
 
+    def test_ctrl_c_and_esc_cancel_a_pending_search_and_do_nothing_else(self) -> None:
+        # As in Vim: the key drops the half-typed search; the draft stays, nothing is sent or interrupted, and Esc
+        # arms no rewind. The next Ctrl+C is an ordinary one again.
+        for search in ("f", "F", "t", "T"):
+            for event in (Key(CHAR, "c", ctrl=True), Key(ESCAPE)):
+                with self.subTest(search=search, event=event):
+                    app, client = self.pending_app("2d3" + search)
+                    app._on_input(event)
+                    self.assertFalse(app.composer.pending)
+                    self.assertEqual((app.composer.text, app.composer.caret, app.composer.normal),
+                                     ("aXbXcXdXeXfXgX", 0, True))
+                    self.assertIsNone(app.escape_armed)
+                    self.assertIsNone(app.exit_code)
+                    self.assertEqual(client.calls, [])
+                    app._on_input(Key(CHAR, "X"))  # no stale target: a backward delete at column zero
+                    self.assertEqual(app.composer.text, "aXbXcXdXeXfXgX")
+
     def test_pending_search_preserves_paste_and_shared_undo_redo(self) -> None:
         for event in (Paste("!"), Key(CHAR, "_", ctrl=True), Key(CHAR, "-", ctrl=True),
                       Key(CHAR, "y", ctrl=True), Key(CHAR, "r", ctrl=True)):

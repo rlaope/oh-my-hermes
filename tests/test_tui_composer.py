@@ -911,6 +911,18 @@ class VimCharSearchTests(unittest.TestCase):
                 self.cleared(composer)
                 self.assertEqual(getattr(composer, "_last_search", None), ("f", target))
 
+    def test_shifted_targets(self) -> None:
+        # A kitty or modifyOtherKeys terminal reports Shift beside the shifted character ("X", not "x"): the
+        # target is that character, so fX, f( and t: search as they do on a legacy terminal.
+        for kind, target, caret in (("f", "X", 4), ("f", "(", 1), ("t", ":", 2), ("F", "X", 4)):
+            with self.subTest(kind=kind, target=target):
+                composer = self.normal("a(b:XQ:X", 5 if kind == "F" else 0)
+                composer.handle(Key(CHAR, kind, reported_shift=kind.isupper()))
+                composer.handle(Key(CHAR, target, reported_shift=True))
+                self.assertEqual((composer.caret, composer.normal), (caret, True))
+                self.assertEqual(composer._last_search, (kind, target))
+                self.cleared(composer)
+
     def test_cancel(self) -> None:
         # Cover all f/F/t/T with standalone and d/c/y pending counts, including 2d3f.
         # Escape, BACKSPACE, DELETE, Enter, arrows, modified CHAR and invalid CHAR cancel
@@ -926,8 +938,6 @@ class VimCharSearchTests(unittest.TestCase):
             Key(DOWN),
             Key(CHAR, "a", ctrl=True),
             Key(CHAR, "a", alt=True),
-            Key(CHAR, "a", shift=True),
-            Key(CHAR, "a", reported_shift=True),
             Key(CHAR, "\x00"),
             Key(CHAR, "multi"),
         )
