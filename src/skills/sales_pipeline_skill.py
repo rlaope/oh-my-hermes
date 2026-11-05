@@ -19,7 +19,7 @@ as data-model observations only.
 
 from __future__ import annotations
 
-from .catalog_types import SPECIALIST_DOMAIN_HANDOFF_BOUNDARY, ExpertQuestion, ProcedureCheck, ProcedureStep, SkillDefinition, SkillExample
+from .catalog_types import SPECIALIST_DOMAIN_HANDOFF_BOUNDARY, ExpertQuestion, ProcedureCheck, ProcedureBail, ProcedureStep, SkillDefinition, SkillExample
 
 
 SALES_PIPELINE_SCOPE = "sales_pipeline_scope/v1"
@@ -206,6 +206,11 @@ DEFINITION = SkillDefinition(
             (SALES_PIPELINE_SCOPE,),
             ("sales_pipeline_scope_check",),
             "Record the opaque source reference, as-of time, horizon and cohort, included motions and owners, currency and conversion basis, amount semantics, stage and forecast-category definitions, freshness, duplicates, missing owners, and data-quality gaps; return `HOLD` with the exact blocking gap before calculating or ranking anything.",
+            on_fail=ProcedureBail(
+                still_stands=(),
+                downgrade_to='unresolved',
+                handback='Return sales_pipeline_scope/v1 as unresolved with the exact missing or stale timestamp, undefined semantics, currency basis, duplicate, or ownership gap; perform no calculation or ranking.',
+            ),
         ),
         ProcedureStep(
             "sales_pipeline_assess_health",
@@ -230,6 +235,11 @@ DEFINITION = SkillDefinition(
             (SALES_OUTCOME_LEARNING_ANNEX, SALES_RENEWAL_RISK_ANNEX),
             ("sales_outcome_learning_check", "sales_renewal_risk_check"),
             "When supplied evidence supports it, prepare the won/lost/unqualified learning annex by bounded cohort with contradictions and research follow-ups, and the renewal-risk annex with horizon, health, utilization, support, budget, and staffing signals, open risks, expansion hypotheses, and owner; otherwise emit each annex as `unsupported` with the missing evidence named.",
+            on_fail=ProcedureBail(
+                still_stands=('sales_pipeline_scope/v1', 'sales_pipeline_health/v1', 'sales_forecast_assessment/v1'),
+                downgrade_to='tentative',
+                handback='Return tentative sales_outcome_learning_annex/v1 and sales_renewal_risk_annex/v1 drafts with their cohort, source, contradiction, and owner gaps; mark unsupported annexes unsupported.',
+            ),
         ),
         ProcedureStep(
             "sales_pipeline_validate_handoff",
@@ -243,6 +253,11 @@ DEFINITION = SkillDefinition(
                 "sales_pipeline_handoff_check",
             ),
             "Select account follow-ups with owner, due date, exit criterion, and evidence reference, list proposed CRM object/field/value corrections with evidence, owner, and approval state, name the sibling route for discovery, feedback, calculation, or finance work, and return the review disposition with mutation, storage, sync, alert, and communication left to the connector boundary.",
+            on_fail=ProcedureBail(
+                still_stands=('sales_pipeline_scope/v1', 'sales_pipeline_health/v1', 'sales_forecast_assessment/v1', 'sales_outcome_learning_annex/v1', 'sales_renewal_risk_annex/v1'),
+                downgrade_to='unresolved',
+                handback='Return the unresolved sales_pipeline_handoff/v1 with missing follow-up owners, due dates, exit criteria, evidence, or CRM approvals named; keep CRM changes proposed and mutation not_observed.',
+            ),
         ),
     ),
     artifact_expectations=(

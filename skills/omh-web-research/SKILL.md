@@ -63,7 +63,7 @@ Bad example:
 - If the web is unreachable, name the retrieval gap and stop rather than substituting recalled facts.
 - If no archive access exists or the capture provider's paid authority is exhausted, record a temporal retrieval gap with no network action and keep the as-of claim in the annex; never substitute the current page for it.
 - If sources conflict, present both with their retrieval dates and say which one is primary.
-- If leads keep expanding past one round, hand the question to `research` with the sources already gathered.
+- If leads keep expanding past one round, hand the question to `ulw-research` with the sources already gathered.
 
 ## Workflow Lane
 

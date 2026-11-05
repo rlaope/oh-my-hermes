@@ -46,8 +46,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If the expected behavior is unclear, route back to plan before running adversarial checks.
-- If verification fails, return to fix or research with the failed signal instead of advancing.
+- If a scenario needs a real install or external service the harness cannot reach, retain other observed pass/fail evidence, mark that scenario not_observed, and hand back its manual test guide with setup, do, expect, and broken signals.
+- If a hostile browser scenario would submit, buy, send, or delete on a live target without approval, retain read-only scenario results, mark that action not_observed, and hand back the target and exact action for user approval.
+- If a failing browser scenario has no screenshot or console readback, keep its observed failure, mark diagnosis tentative, and hand back the scenario, target, and missing capture for a bounded rerun.
 
 
 

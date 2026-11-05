@@ -61,7 +61,7 @@ Bad example:
 - If the time or command budget runs out, record `timeout` with whatever was observed so far and leave interpretation as unresolved questions.
 - If observations do not falsify or support the hypothesis, record `inconclusive` with the evidence limits rather than choosing an option.
 - If cleanup fails, keep the artifact at its last observed cleanup state, name the residual scratch identity, and never report `discarded`.
-- If the user asks to ship the prototype, summarize the receipt and route to `ralplan`; promotion needs an accepted plan and its own implementation handoff.
+- If the user asks to ship the prototype, summarize the receipt and route to `ulw-plan`; promotion needs an accepted plan and its own implementation handoff.
 
 
 
