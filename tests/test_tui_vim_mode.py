@@ -143,7 +143,8 @@ class NormalNeverTypesTests(unittest.TestCase):
             with self.subTest(char=char):
                 composer = normal("one two", 2)
                 self.assertEqual(composer.handle(Key(CHAR, char)).kind, NONE)
-                self.assertEqual(state(composer), ("one two", 2, VIM_NORMAL))
+                label = f"{VIM_NORMAL} · SPC" if char == " " else VIM_NORMAL
+                self.assertEqual(state(composer), ("one two", 2, label))
 
     def test_digits_are_a_count_and_never_text(self) -> None:
         composer = normal("abc", 0)

@@ -179,6 +179,7 @@ from .keys import (
     MOUSE_REPORT_SECONDS,
     RIGHT,
     SSH_BURST_SECONDS,
+    TAB,
     UP,
     WHEEL_DOWN,
     WHEEL_UP,
@@ -3972,6 +3973,7 @@ class App(ModesMixin, AgentViewMixin):
         self.slot_arm_seconds = REPORTING_SLOT_ARM_SECONDS if self._reports_may_arrive() else SLOT_ARM_SECONDS
         self._settle_list()  # a question has the keys now: the agent list gives them up
         self._alert_question(opened)
+        self.composer._drop_pending()
         if opened.wants_text:
             # An answer to Hermes is typed into a composer of its own, which records no history.
             self.slot_draft, self.composer = self.composer, Composer(masked=opened.masked, records_history=False)
@@ -4016,6 +4018,7 @@ class App(ModesMixin, AgentViewMixin):
         self.question_view = None
         if slot is not None and self.slot_draft is not None:
             self.composer, self.slot_draft = self.slot_draft, None
+        self.composer._drop_pending()
         while self.slot is None and self.waiting_requests:
             self._on_server_request(self.waiting_requests.popleft())
         if self.slot is None and self.waiting_since is not None:  # nothing waits on the person any more
@@ -4035,6 +4038,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         self.tell_turn_runs = self._busy()
         draft = self.composer
+        draft._drop_pending()
         self.tell_draft = draft
         self.composer = Composer(history=draft.history, on_record=draft.on_record)
 
@@ -4044,6 +4048,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         typed = self.composer.expanded()
         self.composer, self.tell_draft = self.tell_draft, None
+        self.composer._drop_pending()
         self.composer.record(typed, sent=False)
 
     def _tell(
@@ -4106,8 +4111,12 @@ class App(ModesMixin, AgentViewMixin):
             elif not self.pager.handle_key(event, self.size[1]):
                 self._leave_pager()
             return
+        if self.slot is None and self._front_picker() is not None:
+            self.composer._drop_pending()  # the picker owns input, including display keys that return below
         if self._display_key(event):
             return
+        if self.composer.leader and isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c":
+            self.composer._drop_pending()  # Ctrl+C does what it does unarmed, a question's text field included
         if self.slot is not None and self._slot_arming(event):
             return  # in the first moment of a question every key is ignored: nothing typed, cleared or sent
         if self.slot is not None and _slot_owns(self.slot, event, self.composer.text):
@@ -4122,6 +4131,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         front = self._front_picker() if self.slot is None else None
         if front is None and self.slot is None and self.picker is not None and self._picker_arms(event):
+            self.composer._drop_pending()
             self._picker_key(event)
             return
         if front is not None:  # the one drawn (`_slot_lines`) has the keys
@@ -4135,6 +4145,8 @@ class App(ModesMixin, AgentViewMixin):
                 self._rewind_picker_key(event)
             else:
                 self._model_picker_key(event)
+            return
+        if self.slot is None and self.list_selected is None and self.tree_selected is None and self._leader_key(event):
             return
         if self.slot is None and self._agent_list_key(event):
             return
@@ -4243,17 +4255,72 @@ class App(ModesMixin, AgentViewMixin):
         if self.history_file is not None:
             append_entry(self.history_file, text)
 
+    def _leader_matches(self, event: Key | Paste, *chars: str) -> bool:
+        """Take an unmodified NORMAL follower only while the main composer owns the keys."""
+        if not (
+            self.slot is None and self._front_picker() is None and self.composer.normal and self.composer.leader
+            and isinstance(event, Key) and event.name == CHAR and event.char in chars
+            and not (event.ctrl or event.alt or event.shift or event.reported_shift)
+        ):
+            return False
+        self.composer._drop_pending()
+        return True
+
+    def _leader_key(self, event: Key | Paste) -> bool:
+        """Resolve the pending leader before any global key or editing command can take its follower."""
+        if not (self.composer.normal and self.composer.leader):
+            return False
+        if isinstance(event, Paste):
+            self.composer._drop_pending()
+            if self._attachment_input(event):
+                return True
+            self._on_composer(self._edit(self.composer, event), event)
+            return True
+        if isinstance(event, Key) and event.name == ENTER and not (
+            event.ctrl or event.alt or event.shift or event.reported_shift
+        ):
+            self.composer._drop_pending()
+            self.escape_armed = None
+            if not self.composer.text and self._steer_keys_live() and self._queue_head_steers():
+                self._send_queued_now()
+            else:
+                self._on_composer(self._edit(self.composer, event), event, steer=True)
+            return True
+        if isinstance(event, Key) and event.name == ESCAPE:
+            return self._escape(event)
+        if not isinstance(event, Key) or event.name != CHAR or event.ctrl or event.alt or event.shift or event.reported_shift:
+            self._on_composer(self._edit(self.composer, event), event)
+            return True
+        if self._sessions_key(event) or self._board_key(event) or self._plan_fold_key(event) or self._search_open_key(event):
+            return True
+        if self._leader_matches(event, "m"):
+            self._mode_key(Key(TAB, shift=True))
+        elif self._leader_matches(event, "t"):
+            self._effort_key(Key(CHAR, "t", ctrl=True))
+        elif self._leader_matches(event, "c"):
+            self.escape_armed = None
+            if self._busy():
+                self._interrupt()
+            elif self.composer.text:
+                self.composer.record(self.composer.expanded(), sent=False)
+                self._set_composer("")
+        else:
+            # Composer consumes every unmatched Key (modified keys included); Paste keeps its usual behavior.
+            self._on_composer(self._edit(self.composer, event), event)
+        return True
+
     def _search_open_key(self, event: Key | Paste) -> bool:
         """Ctrl+R opens the search over the composer's history in the slot; in vim mode's NORMAL it is the composer's
         redo."""
-        if not isinstance(event, Key) or event != Key(CHAR, "r", ctrl=True) or self.composer.normal:
+        leader = self._leader_matches(event, "r", "/")
+        if not leader and (not isinstance(event, Key) or event != Key(CHAR, "r", ctrl=True) or self.composer.normal):
             return False
         self.search = HistorySearch(list(self.composer.history), self.composer.text)
         return True
 
     def _sessions_key(self, event: Key | Paste) -> bool:
         """Ctrl+X opens the session picker, the key Hermes' own TUI gives it; `/sessions` does the same."""
-        if not isinstance(event, Key) or event != Key(CHAR, "x", ctrl=True):
+        if not self._leader_matches(event, "s") and (not isinstance(event, Key) or event != Key(CHAR, "x", ctrl=True)):
             return False
         self._sessions("")
         return True
@@ -4262,22 +4329,23 @@ class App(ModesMixin, AgentViewMixin):
         """Ctrl+P folds the plan to its header or expands it, for the rest of the session (a new plan keeps the
         choice); a key that does nothing is the composer's while no plan shows, and while the plan is its header
         alone for want of rows, where neither folding nor expanding it changes what shows (its header offers no key)."""
-        if not isinstance(event, Key) or event != Key(CHAR, "p", ctrl=True):
+        leader = self._leader_matches(event, "p")
+        if not leader and (not isinstance(event, Key) or event != Key(CHAR, "p", ctrl=True)):
             return False
         if self._menu_rows():
-            return False
+            return leader
         payload = self.hud.payload if self.hud is not None else None
         if plan_state(payload) != "open" or not self.panel_shown:  # a menu over the plan: nothing to fold where seen
-            return False
+            return leader
         if self.plan_room_collapsed:
-            return False
+            return leader
         self.plan_folded = not self.plan_folded
         self.dirty = True
         return True
 
     def _board_key(self, event: Key | Paste) -> bool:
         """Ctrl+S opens the bot board; `/bots` does the same. Raw mode turns IXON off, so the key reaches the TUI."""
-        if not isinstance(event, Key) or event != Key(CHAR, "s", ctrl=True):
+        if not self._leader_matches(event, "b") and (not isinstance(event, Key) or event != Key(CHAR, "s", ctrl=True)):
             return False
         self._bots("")
         return True
@@ -4376,8 +4444,10 @@ class App(ModesMixin, AgentViewMixin):
         Ctrl+O while Hermes asks something pages that question whole instead
         and answers nothing (`_question_view`).
         """
-        if not isinstance(event, Key) or event.name != CHAR or not event.ctrl or event.alt:
+        if not isinstance(event, Key) or event.name != CHAR or not event.ctrl or event.alt or event.char not in ("o", "l", "z"):
             return False
+        if self.composer.leader:
+            self.composer._drop_pending()  # it works over an armed Vim leader, which it cancels
         if event.char == "o":
             if self.slot is None:
                 self._details_view()
@@ -4385,10 +4455,8 @@ class App(ModesMixin, AgentViewMixin):
                 self._question_view()
         elif event.char == "l":
             self._redraw("")
-        elif event.char == "z":
-            self._suspend()
         else:
-            return False
+            self._suspend()
         return True
 
     def _suspend(self) -> None:
@@ -7579,6 +7647,7 @@ class App(ModesMixin, AgentViewMixin):
         self._stop_board_reader()  # a board this replaces reads no more
         self.pager = pager
         self.log_agent = ""
+        self.composer._drop_pending()
 
     def _leave_pager(self) -> None:
         self.pager = None
@@ -7586,6 +7655,7 @@ class App(ModesMixin, AgentViewMixin):
         self.log_agent = ""
         self._stop_board_reader()
         self.terminal.write(ALT_SCREEN_OFF + self._caret_visibility())
+        self.composer._drop_pending()
         if self.redraw_after_pager:
             self.redraw_after_pager = False
             self._full_redraw()

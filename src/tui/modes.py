@@ -122,7 +122,7 @@ def mode_label(mode: str, theme: Theme, form: int = 0) -> Line:
 def editing_label(editing: str, mode: str, theme: Theme, form: int = 0) -> Line:
     """The mode's label (`mode_label`), after vim mode's editing mode (`INSERT` or `NORMAL`, "" with vim mode off).
 
-    The editing mode has one form: it stays whole while the mode's label shortens.
+    The editing mode (including NORMAL · SPC while its leader is armed) stays whole as the mode label shortens.
     """
     own = mode_label(mode, theme, form)
     if not editing:

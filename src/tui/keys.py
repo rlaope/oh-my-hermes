@@ -971,6 +971,16 @@ class KeyDecoder:
         return Paste(_paste_text(bytes(body[:end])))
 
 
+def is_leader_key(event: Key | Paste) -> bool:
+    """Whether `event` is a plain Space, with no modifier (including reported Shift)."""
+    return (
+        isinstance(event, Key)
+        and event.name == CHAR
+        and event.char == " "
+        and not (event.ctrl or event.alt or event.shift or event.reported_shift)
+    )
+
+
 def list_nav_step(event: Key | Paste) -> int:
     """Return navigation delta for list/picker items: +1 (down) or -1 (up), else 0.
 

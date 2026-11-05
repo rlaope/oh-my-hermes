@@ -2831,6 +2831,98 @@ class KeyTests(AppTestCase):
         self.assertEqual(submitted["params"], {"session_id": LIVE_ID, "text": "line one\nline two"})
 
 
+class LeaderWorkflowTests(unittest.TestCase):
+    def armed(self, text="", *, busy=False):
+        from test_tui_modes import make_app, type_text
+        app, client = make_app(busy=busy)
+        app.composer.set_vim(True)
+        type_text(app, text)
+        app._on_input(Key(ESCAPE))
+        app._on_input(Key(CHAR, " "))
+        self.assertTrue(app.composer.leader)
+        return app, client
+
+    def test_leader_enter_executes_submit(self) -> None:
+        from test_tui_modes import SID
+        app, client = self.armed("a prompt")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [("prompt.submit", {"session_id": SID, "text": "a prompt"})])
+        self.assertEqual(app.composer.text, "")
+        self.assertFalse(app.composer.leader)
+        self.assertEqual(app.composer.vim_label, "INSERT")
+        self.assertFalse(app.composer._undo)
+
+    def test_leader_enter_steers_typed_text_during_turn(self) -> None:
+        from test_tui_modes import SID
+        app, client = self.armed("use this", busy=True)
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [("session.steer", {"session_id": SID, "text": "use this"})])
+        self.assertFalse(app.composer.leader)
+        self.assertEqual(app.composer.text, "")
+
+    def test_leader_enter_sends_oldest_queued_prompt_now(self) -> None:
+        from test_tui_modes import SID, queue
+        app, client = self.armed(busy=True)
+        queue(app, "first", "second")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [("session.steer", {"session_id": SID, "text": "first"})])
+        self.assertEqual([line.text for line in app.queued], ["second"])
+        self.assertFalse(app.composer.leader)
+
+    def test_leader_enter_leaves_ineligible_queue_head_in_place(self) -> None:
+        from omh.tui.app import QueuedLine
+        app, client = self.armed(busy=True)
+        head = QueuedLine("ls", "!ls", shell=True)
+        app.queued.append(head)
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [])
+        self.assertEqual(list(app.queued), [head])
+        self.assertFalse(app.composer.leader)
+
+    def test_leader_c_interrupts_turn_and_keeps_draft(self) -> None:
+        from test_tui_modes import SID
+        for text in ("", "keep draft"):
+            with self.subTest(text=text):
+                app, client = self.armed(text, busy=True)
+                app._on_input(Key(CHAR, "c"))
+                self.assertEqual(client.calls, [("session.interrupt", {"session_id": SID})])
+                self.assertTrue(app.interrupting)
+                self.assertEqual(app.composer.text, text)
+                self.assertFalse(app.composer.leader)
+                self.assertEqual(app.composer.vim_label, "NORMAL")
+
+    def test_leader_c_clears_draft_into_local_history_only(self) -> None:
+        app, client = self.armed("draft")
+        recorded = []
+        app.composer.on_record = recorded.append
+        app._on_input(Key(CHAR, "c"))
+        self.assertEqual((app.composer.text, app.composer.history), ("", ["draft"]))
+        self.assertEqual(recorded, [])
+        self.assertEqual(client.calls, [])
+        self.assertIsNone(app.exit_code)
+        self.assertFalse(app.composer.leader)
+
+    def test_leader_c_on_empty_idle_composer_does_not_exit(self) -> None:
+        app, client = self.armed()
+        app._on_input(Key(CHAR, "c"))
+        self.assertEqual(client.calls, [])
+        self.assertEqual(app.composer.text, "")
+        self.assertIsNone(app.exit_code)
+        self.assertFalse(app.composer.leader)
+
+    def test_modified_workflow_followers_are_swallowed_without_actions(self) -> None:
+        for modifier in ("ctrl", "alt", "shift", "reported_shift"):
+            for name, char in ((ENTER, ""), (CHAR, "c")):
+                if (modifier, char) == ("ctrl", "c"):
+                    continue  # Ctrl+C keeps its own meaning (test_ctrl_c_over_an_armed_leader_matches_the_unarmed_press)
+                with self.subTest(modifier=modifier, name=name):
+                    app, client = self.armed("keep", busy=True)
+                    app._on_input(Key(name, char, **{modifier: True}))
+                    self.assertEqual(client.calls, [])
+                    self.assertEqual(app.composer.text, "keep")
+                    self.assertFalse(app.composer.leader)
+
+
 class TallTableCapTests(unittest.TestCase):
     def test_the_frame_path_gives_the_transcript_the_live_region_height(self) -> None:
         from test_tui_modes import drawn, make_app

@@ -134,6 +134,7 @@ from .keys import (
     UP,
     Key,
     Paste,
+    is_leader_key,
 )
 from .style import DEFAULT_STYLE, Line, Span, Style
 from .width import TAB_CELLS, cell_width, cluster_width, clusters, is_control, truncate
@@ -442,6 +443,7 @@ class Composer:
     _operator: str = field(default="", init=False, repr=False, compare=False)
     _op_count: str = field(default="", init=False, repr=False, compare=False)
     _prefix: str = field(default="", init=False, repr=False, compare=False)
+    _leader: bool = field(default=False, init=False, repr=False, compare=False)
     _register: _Register | None = field(default=None, init=False, repr=False, compare=False)
     _changing: bool = field(default=False, init=False, repr=False, compare=False)  # a change went to INSERT
     _paste_count: int = field(default=0, init=False, repr=False, compare=False)
@@ -691,6 +693,10 @@ class Composer:
     # -- key handling ---------------------------------------------------------
 
     def handle(self, event: Key | Paste) -> ComposerAction:
+        # Followers are consumed before even the shared undo/redo chords can dispatch.
+        if self._leader and isinstance(event, Key):
+            self._drop_pending()
+            return NOTHING
         if isinstance(event, Key) and event.name == CHAR and event.ctrl and not event.alt:
             redo = event.char == REDO_CHAR or (self.normal and event.char == VIM_REDO_CHAR)
             if event.char in UNDO_CHARS or redo:
@@ -732,14 +738,22 @@ class Composer:
         """`VIM_INSERT` or `VIM_NORMAL` while vim mode is on, else ""."""
         if not self.vim or self.masked:
             return ""
+        if self.normal and self._leader:
+            return f"{VIM_NORMAL} · SPC"
         return VIM_NORMAL if self.normal else VIM_INSERT
 
     @property
+    def leader(self) -> bool:
+        """Whether a Vim leader sequence is waiting for its next key."""
+        return self._leader
+
+    @property
     def pending(self) -> bool:
-        """Whether a NORMAL command is half typed (a count, an operator, a `g` or an `r`), which Esc drops."""
-        return bool(self._count or self._operator or self._op_count or self._prefix)
+        """Whether a NORMAL command or leader is half typed, which Esc drops."""
+        return bool(self._count or self._operator or self._op_count or self._prefix or self._leader)
 
     def _drop_pending(self) -> None:
+        self._leader = False
         self._count = self._operator = self._op_count = self._prefix = ""
 
     def _modal(self, event: Key | Paste) -> ComposerAction | None:
@@ -760,6 +774,10 @@ class Composer:
                 self._enter_normal()
                 return self._normal_char(event.char)
             return None
+        if is_leader_key(event) and not (self._operator or self._prefix):
+            self._drop_pending()  # a count does not carry into a leader sequence
+            self._leader = True
+            return NOTHING
         if event.name == CHAR and ((not event.ctrl and not event.alt) or legacy_alt):
             return self._normal_char(event.char)
         if event.name in (BACKSPACE, DELETE) and not (event.ctrl or event.alt or event.shift):

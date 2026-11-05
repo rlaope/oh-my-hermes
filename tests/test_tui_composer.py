@@ -46,6 +46,7 @@ from omh.tui.keys import (
     Key,
     KeyDecoder,
     Paste,
+    is_leader_key,
 )
 from omh.tui.style import Style
 from omh.tui import composer as composer_module
@@ -77,6 +78,150 @@ def press(composer: Composer, *keys: Key) -> ComposerAction:
 
 def at(text: str, caret: int) -> Composer:
     return Composer(text=text, caret=caret)
+
+
+class ComposerLeaderTests(unittest.TestCase):
+    def normal_composer(self) -> Composer:
+        composer = Composer(vim=True)
+        typed(composer, "abcd")
+        composer.handle(Key(ESCAPE))
+        composer.handle(Key(CHAR, "0"))
+        return composer
+
+    def test_normal_mode_space_arms_leader(self) -> None:
+        for text in ("", "abcd", "한글 👩‍💻"):
+            with self.subTest(text=text):
+                composer = Composer(text=text, caret=0, vim=True)
+                composer.handle(Key(ESCAPE))
+                before = (composer.text, composer.caret)
+                self.assertFalse(composer.leader)
+                self.assertFalse(composer.pending)
+                self.assertEqual(composer.handle(Key(CHAR, " ")), ComposerAction(NONE))
+                self.assertTrue(composer.leader)
+                self.assertTrue(composer.pending)
+                self.assertTrue(composer.normal)
+                self.assertEqual((composer.text, composer.caret), before)
+
+    def test_leader_property_is_read_only(self) -> None:
+        composer = self.normal_composer()
+        with self.assertRaises(AttributeError):
+            setattr(composer, "leader", True)
+
+    def test_all_key_followers_cancel_without_dispatch(self) -> None:
+        followers = [Key(CHAR, char) for char in " zhidrcgxup123"]
+        followers += [Key(name) for name in (ESCAPE, ENTER, TAB, BACKSPACE, DELETE, LEFT, RIGHT, UP, DOWN, HOME, END, UNKNOWN)]
+        followers += [ctrl(char) for char in "_-rycd"]
+        followers += [Key(CHAR, " ", **{modifier: True}) for modifier in ("ctrl", "alt", "shift", "reported_shift")]
+        for event in followers:
+            with self.subTest(event=event):
+                composer = self.normal_composer()
+                composer.handle(Key(CHAR, " "))
+                before = (composer.text, composer.caret, list(composer._undo), list(composer._redo))
+                self.assertEqual(composer.handle(event), ComposerAction(NONE))
+                self.assertFalse(composer.leader)
+                self.assertFalse(composer.pending)
+                self.assertTrue(composer.normal)
+                self.assertEqual((composer.text, composer.caret, composer._undo, composer._redo), before)
+
+    def test_leader_follower_does_not_redo_a_real_history_step(self) -> None:
+        composer = self.normal_composer()
+        composer.handle(ctrl("_"))
+        self.assertEqual(composer.text, "")
+        self.assertTrue(composer._redo)
+        typed(composer, " ")
+        before = (composer.text, composer.caret, list(composer._undo), list(composer._redo))
+        self.assertEqual(composer.handle(ctrl("r")), ComposerAction(NONE))
+        self.assertEqual((composer.text, composer.caret, composer._undo, composer._redo), before)
+        self.assertFalse(composer.leader)
+        self.assertFalse(composer.pending)
+        composer.handle(ctrl("r"))
+        self.assertEqual(composer.text, "abcd")
+
+    def test_consumed_follower_does_not_swallow_the_next_command(self) -> None:
+        composer = self.normal_composer()
+        typed(composer, " x")
+        self.assertEqual(composer.text, "abcd")
+        typed(composer, "x")
+        self.assertEqual(composer.text, "bcd")
+
+    def test_insert_and_non_vim_mode_space_types_character(self) -> None:
+        for vim, masked in ((False, False), (True, False), (False, True), (True, True)):
+            with self.subTest(vim=vim, masked=masked):
+                composer = Composer(vim=vim, masked=masked)
+                composer.handle(Key(CHAR, " "))
+                self.assertEqual(composer.text, " ")
+                self.assertFalse(composer.leader)
+                self.assertFalse(composer.pending)
+
+    def test_is_leader_key_modifier_rejection(self) -> None:
+        modifiers = ("ctrl", "alt", "shift", "reported_shift")
+        for bits in range(1 << len(modifiers)):
+            flags = {name: bool(bits & (1 << index)) for index, name in enumerate(modifiers)}
+            with self.subTest(flags=flags):
+                event = Key(CHAR, " ", **flags)
+                self.assertEqual(is_leader_key(event), not any(flags.values()))
+                composer = self.normal_composer()
+                composer.handle(event)
+                self.assertEqual(composer.leader, not any(flags.values()))
+        for event in (Key(CHAR, "x"), Key(ENTER, " "), Key(CHAR, "\t"), Paste(" ")):
+            with self.subTest(event=event):
+                self.assertFalse(is_leader_key(event))
+        self.assertTrue(is_leader_key(Key(CHAR, " ", protocol=True)))
+
+    def test_reported_plain_space_arms_leader(self) -> None:
+        for raw in (b" ", b"\x1b[32u", b"\x1b[32;1u", b"\x1b[27;1;32~"):
+            with self.subTest(raw=raw):
+                events = KeyDecoder().feed(raw)
+                self.assertEqual(len(events), 1)
+                composer = self.normal_composer()
+                composer.handle(events[0])
+                self.assertTrue(composer.leader)
+
+    def test_operator_and_prefix_precedence_over_leader(self) -> None:
+        for command, expected in (("r", " bcd"), ("d", "abcd"), ("c", "abcd"), ("y", "abcd"), ("g", "abcd")):
+            with self.subTest(command=command):
+                composer = self.normal_composer()
+                typed(composer, command)
+                self.assertTrue(composer.pending)
+                composer.handle(Key(CHAR, " "))
+                self.assertEqual(composer.text, expected)
+                self.assertFalse(composer.leader)
+                self.assertFalse(composer.pending)
+                self.assertTrue(composer.normal)
+
+    def test_count_is_cleared_when_leader_arms(self) -> None:
+        composer = self.normal_composer()
+        typed(composer, "3 ")
+        self.assertTrue(composer.leader)
+        typed(composer, "zx")
+        self.assertEqual(composer.text, "bcd")
+        self.assertFalse(composer.pending)
+
+    def test_drop_pending_and_mode_transitions_reset_leader(self) -> None:
+        for transition in ("_drop_pending", "_enter_insert", "_enter_normal", "vim_off", "vim_on"):
+            with self.subTest(transition=transition):
+                composer = self.normal_composer()
+                typed(composer, " ")
+                if transition.startswith("vim_"):
+                    composer.set_vim(transition == "vim_on")
+                else:
+                    getattr(composer, transition)()
+                self.assertFalse(composer.leader)
+                self.assertFalse(composer.pending)
+                if transition in ("_enter_insert", "vim_off", "vim_on"):
+                    self.assertFalse(composer.normal)
+                    typed(composer, " ")
+                    self.assertEqual(composer.text, " abcd")
+                    self.assertFalse(composer.leader)
+
+    def test_paste_resets_leader_and_preserves_paste_insertion(self) -> None:
+        composer = self.normal_composer()
+        typed(composer, " ")
+        self.assertEqual(composer.handle(Paste("hello ")), ComposerAction(NONE))
+        self.assertEqual(composer.text, "hello abcd")
+        self.assertTrue(composer.normal)
+        self.assertFalse(composer.leader)
+        self.assertFalse(composer.pending)
 
 
 class InsertTests(unittest.TestCase):
