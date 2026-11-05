@@ -52,8 +52,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If a stop condition is missing, retain the recurring request and cadence, mark the choice among cron, heartbeat, loop, and native goal unresolved, and hand back recurring_surface_comparison/v1 with the stop-condition question.
+- If overlap, missed-run, retry, backfill, or failure-pause decisions remain open, retain prepared_native_blueprint/v1, mark activation unresolved, and hand back the missing policy choices and native-runtime limits before activation.
+- If no run reference exists for the saved intent revision, retain hermes_recurring_intent/v1, mark execution and delivery not_observed, and hand back `hermes cron runs` and `hermes cron incidents` as the next status checks.
 
 ## Workflow Lane
 

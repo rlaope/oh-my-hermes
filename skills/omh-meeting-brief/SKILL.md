@@ -50,8 +50,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If participants, purpose, or decision owner are missing, ask for the one field that changes the agenda.
-- If minutes or decisions were not observed, keep the output as prep rather than record.
+- If decision topics lack known context, retain the supplied meeting goal and audience, mark the agenda tentative, and hand back discussion prompts and the decisions-needed list with its open questions.
+- If action owners, due dates, or acceptance conditions are absent from a meeting record, retain the prepared agenda and prompts, mark action ownership not_observed, and hand back the action-item template with those columns marked unknown.
+- If follow-up coding lacks observed decisions or an accepted plan, retain the meeting brief, mark the coding handoff unresolved, and hand back the decisions needed rather than an implementation claim.
 
 ## Workflow Lane
 

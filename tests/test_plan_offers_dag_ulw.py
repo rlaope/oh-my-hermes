@@ -54,7 +54,9 @@ class PlanOffersDagUlwTests(unittest.TestCase):
 
     def test_ralplan_hands_on_to_dag_ulw_in_hermes_only(self) -> None:
         hermes = _hermes_body("ralplan")
-        self.assertIn("(`dag-ulw` when the accepted lanes form a graph with a verification lane, `ultrawork`", hermes)
+        # Recovery Notes render siblings under their loadable labels, so the
+        # `ultrawork` follow-on reads as `ulw-work` in the Hermes body.
+        self.assertIn("(`dag-ulw` when the accepted lanes form a graph with a verification lane, `ulw-work`", hermes)
         self.assertIn("so `dag-ulw` nodes or `ultrawork` board rows come from the plan", hermes)
         self.assertNotIn("dag-ulw", _portable_body("ulw-plan/SKILL.md"))
 

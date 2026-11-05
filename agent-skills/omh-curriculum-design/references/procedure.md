@@ -45,6 +45,7 @@ Before sequencing instruction, define acceptable assessment evidence, rubric cri
 - Input refs: `learners`, `learning goal`, `prerequisites`, `constraints`
 - Output refs: `curriculum_alignment_map/v1`
 - Check IDs: `curriculum_outcome_evidence_alignment_check`
+- If this step fails: tentative; still stands: `curriculum_learner_outcome_brief/v1`; hand back: Return the draft curriculum_alignment_map/v1 with orphan outcomes, unmatched assessments, performance-condition mismatches and missing rubric or formative evidence identified for revision.
 
 ### `curriculum_design_sequence_scaffolds` (production)
 
@@ -53,6 +54,7 @@ Design activities from the evidence backward, including diagnosis, modeling wher
 - Input refs: `learners`, `learning goal`, `prerequisites`, `constraints`
 - Output refs: `curriculum_sequence_design/v1`
 - Check IDs: `curriculum_scaffolding_inclusion_check`
+- If this step fails: tentative; still stands: `curriculum_learner_outcome_brief/v1`, `curriculum_alignment_map/v1`; hand back: Return the draft curriculum_sequence_design/v1 with missing practice, feedback or scaffold fading and unaddressed learner barriers tied to the access or equivalent-demonstration choices needing revision.
 
 ### `curriculum_validate_alignment` (validation)
 
@@ -61,6 +63,7 @@ Record criterion-level PASS, REVISE, or BLOCKED findings, exact misalignments an
 - Input refs: `learners`, `learning goal`, `prerequisites`, `constraints`
 - Output refs: `curriculum_validation_disposition/v1`
 - Check IDs: `curriculum_intake_readiness_check`, `curriculum_outcome_evidence_alignment_check`, `curriculum_scaffolding_inclusion_check`, `curriculum_validation_revision_check`
+- If this step fails: unresolved; still stands: `curriculum_learner_outcome_brief/v1`; hand back: Return curriculum_validation_disposition/v1 with criterion-level gaps, learner impact, required revisions, owner decisions and missing evidence; expert or learner review plans remain prepared until observed.
 
 ### `curriculum_revise_revalidate` (validation)
 
@@ -69,3 +72,4 @@ Apply approved revisions to the affected artifacts, rerun the named checks, and 
 - Input refs: `learners`, `learning goal`, `prerequisites`, `constraints`
 - Output refs: `curriculum_alignment_map/v1`, `curriculum_sequence_design/v1`, `curriculum_validation_disposition/v1`
 - Check IDs: `curriculum_outcome_evidence_alignment_check`, `curriculum_scaffolding_inclusion_check`, `curriculum_validation_revision_check`
+- If this step fails: unresolved; still stands: `curriculum_learner_outcome_brief/v1`, `curriculum_validation_disposition/v1`; hand back: Return the prior curriculum_validation_disposition/v1 with pending revisions, owner decisions and failed revalidation checks for the alignment map and sequence; keep required unobserved reviews BLOCKED.

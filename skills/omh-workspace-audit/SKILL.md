@@ -49,8 +49,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If an in-scope plugin, MCP, or runtime surface cannot be inspected, retain the observed surface_inventory/v1 entries, mark that surface not_observed, and hand back the evidence gap rather than call it a missing capability.
+- If config risks cannot be checked without exposing secret values, retain redacted key names and paths, mark those checks unresolved, and hand back config_security_findings/v1 with risk categories for later remediation.
 
 ## Workflow Lane
 

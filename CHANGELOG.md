@@ -41,6 +41,22 @@ All notable changes will be documented here.
   `--channel preview` instead of updating to a release and recording it as a
   `main` build.
 
+- **A dag-ulw verify node names which producer's scope holds each failure,
+  and a repair node is told the failed attempt's edits may still be on
+  disk.** A producer accepted earlier cannot be repaired, so a failing check
+  is repaired through the verify node, and nothing said which producer the
+  failing path belonged to. The verify node's task now carries a compact map
+  of its upstream producers' declared `write_scope` (their repairs and its
+  own included, cut at 600 characters on whole paths and producers) and asks
+  it to name in its handoff, for each failing check, the producer whose
+  scope holds the failing path, or `unattributed`: attribution by declared
+  scope, not proven cause. A repair node that writes files, in its first
+  cycle and in the re-plan cycle, now reads that the failed attempt's edits
+  may still be on disk and, in a git checkout, to inspect `git status
+  --short` and `git diff HEAD` on the failed nodes' scopes (its own scope
+  when the failed node was a verify node) before editing. There is still no
+  rollback: the worktree is shared. Every other node's task reads byte for
+  byte as before.
 - **dag-ulw refuses two nodes that write one file under different spellings.**
   `omh_dag` define, repair and extend refused a shared write scope with no
   direct edge only when both nodes wrote the same entry character for
@@ -65,6 +81,13 @@ All notable changes will be documented here.
   green; the collapsed `N done` row is green only when every agent it
   counts completed, else a muted `▪`.
   Interrupted, failed, waiting and running agents keep their marks.
+
+- **A skill that fails partway now says what it already proved.** It lowers the
+  affected result to tentative, unresolved, or not_observed, and hands back what
+  the person needs to continue instead of presenting partial work as finished.
+  Procedure steps name what survives each failure, Recovery Notes cover each
+  skill's own blockers, and catalog checks keep both in place. The idea comes
+  from PortSwigger Burp AT research skills.
 
 ## 4.0.6 - 2026-11-04
 
