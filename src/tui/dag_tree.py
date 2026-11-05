@@ -72,7 +72,7 @@ stuck, failed and parked nodes open, and so does a node with one of them
 under it (an extend round hangs under the done verification
 that found the gap); done, waiting and handed-out ones stay shut. What the
 person folds or opens (`overrides`) wins. A layer with work moving lists
-its quiet nodes only while there are at most `QUIET_SHOWN`; more fold into
+its quiet nodes, in a bigger run, only while there are at most `QUIET_SHOWN`; more fold into
 its `more` row from the start, however much room is left. A tree
 taller than `cap` rows first shuts the quiet layers (no node running, stuck,
 failed or parked), all-done ones first; then, in a layer with work moving, folds its
@@ -516,11 +516,12 @@ def _fitted(layers: Sequence[_Item], overrides: Mapping[str, bool], cap: int) ->
         and overrides.get(item.key, item.key in opened if item.node is None else _active(item))
         for item in every
     }
-    # A layer with work moving lists its quiet nodes only while they are few: more fold into one row from the start,
-    # whatever room there is, so the running ones are what the tree shows.
+    # In a bigger run (layers named, none small) a layer with work moving lists its quiet nodes only while they are
+    # few: more fold into one row from the start, whatever room there is, so the running ones are what the tree shows.
+    big = _labelled(layers) and not any(layer.small for layer in layers)
     expanded.update({
         MORE_KEY + layer.label: overrides.get(
-            MORE_KEY + layer.label, not (_active(layer) and len(_quiet(layer)) > QUIET_SHOWN),
+            MORE_KEY + layer.label, not (big and _active(layer) and len(_quiet(layer)) > QUIET_SHOWN),
         )
         for layer in layers
     })
