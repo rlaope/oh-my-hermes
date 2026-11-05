@@ -720,7 +720,7 @@ def _ready(
         )
     if action in ("define", "repair", "extend"):
         extra["topology"] = record["topology"]
-        extra["lint"] = record["lint"]
+        extra["lint"] = served_lint(record["lint"], omh_home, hermes_home)
     if mine:
         say = " ".join(part for part in (say, (
             f"The one-shot child budget is spent (delegation.oneshot_max_children is {budget['limit']}, "
@@ -761,6 +761,19 @@ def _backend_say(calls: list[dict[str, Any]]) -> str:
         return text
     return (f"Hermes routes children with its {backend} backend, which OMH does not route: do not call "
             "omh_delegate_route, and pass the tasks unchanged.")
+
+
+def served_lint(findings: list[str], omh_home: Path, hermes_home: Path) -> list[str]:
+    """The run's lint as the parent reads it: `review_not_review_category` is dropped where Hermes' model_map backend
+    offers no option for `review` but some for `unspecified-high`, so the advice never moves a node to a category the
+    user's options cannot run. The stored record keeps the finding."""
+    marker = "review_not_review_category:"
+    if not any(finding.startswith(marker) for finding in findings):
+        return findings
+    options = (delegation_backend(omh_home, hermes_home) or {}).get("options") or {}
+    if options.get("unspecified-high") and not options.get("review"):
+        return [finding for finding in findings if not finding.startswith(marker)]
+    return findings
 
 
 def delegation_backend(omh_home: Path, hermes_home: Path) -> dict[str, Any] | None:
