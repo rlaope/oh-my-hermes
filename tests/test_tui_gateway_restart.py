@@ -5,8 +5,10 @@ says the restart interrupts and offers Restart or Cancel. Restart runs
 `hermes gateway restart --yes --detach` on Hermes' interpreter for the
 session's profile (`gateway_restart.restart_spawn`), a crash respawn waits
 while it runs, and once it ended the TUI reattaches to the same session id,
-keeping the composer's draft and sending nothing again. A failure, or a
-command still running past its wait, says so with the command to run instead.
+keeping the composer's draft and sending nothing again, however long Hermes'
+command takes (a service-run gateway lets running work finish first). A named
+profile the shared gateway serves picks between that profile and the whole
+gateway. A failure says so with the command to run instead.
 Every case drives an `App` over recording clients and a fake restart run: no
 gateway, no Hermes, no process.
 """
@@ -38,23 +40,28 @@ from omh.tui.app import (
     GATEWAY_RESTART_CHOICE,
     GATEWAY_RESTART_HELD_NOTICE,
     GATEWAY_RESTART_QUESTION,
+    GATEWAY_PROFILE_CHOICE,
+    GATEWAY_PROFILE_REATTACHED_NOTICE,
     GATEWAY_RESTART_SECONDS,
+    GATEWAY_RESTART_SLOW,
     GATEWAY_RESTART_STARTED,
     GATEWAY_RESTART_STDIO,
     GATEWAY_RESTART_UNREATTACHABLE,
     GATEWAY_SAME_OWNER_NOTICE,
+    GATEWAY_UNKNOWN_OWNER_NOTICE,
+    GATEWAY_WHOLE_CHOICE,
     RESPAWNED_NOTICE,
     SLOT_ARM_SECONDS,
     App,
 )
 from omh.tui.bot_board import Gateway, Platform
-from omh.tui.gateway import GatewayExited, GatewayUnavailable
+from omh.tui.gateway import GatewayCallError, GatewayExited, GatewayTimeout, GatewayUnavailable
 from omh.tui.gateway_restart import RestartImpact, RestartResult
 from omh.tui.keys import DOWN, ENTER, ESCAPE, Key
 from omh.tui.transcript import NOTICE_ERROR, NOTICE_WARN
 
 HOST = Gateway(
-    "running", True, 4242, active_agents=2, served=("default", "kami"),
+    "running", True, 4242, active_agents=2, served=("default", "kami"), supervised=True,
     platforms=(Platform("kami:discord", "connected", current=True), Platform("telegram", "connected", current=True),
                Platform("feishu", "connected", current=False)),
 )
@@ -113,7 +120,8 @@ def ask(app: App, now: list[float]) -> None:
 
 
 def pick(app: App, choice: str) -> None:
-    if choice == GATEWAY_CANCEL_CHOICE:
+    (question,) = app.slot.params["questions"]  # type: ignore[union-attr]
+    for _ in range(question["choices"].index(choice)):
         app._on_input(Key(DOWN))
     app._on_input(Key(ENTER))
 
@@ -121,6 +129,11 @@ def pick(app: App, choice: str) -> None:
 def confirm(app: App, now: list[float]) -> None:
     ask(app, now)
     pick(app, GATEWAY_RESTART_CHOICE)
+
+
+def served(**overrides: object) -> RestartImpact:
+    """The shared gateway's record, for a session in profile kami that it serves."""
+    return RestartImpact(None, HOST, "kami", **overrides)  # type: ignore[arg-type]
 
 
 class ConfirmTests(unittest.TestCase):
@@ -133,9 +146,9 @@ class ConfirmTests(unittest.TestCase):
         (question,) = slot.params["questions"]
         self.assertEqual(question["choices"], [GATEWAY_RESTART_CHOICE, GATEWAY_CANCEL_CHOICE])
         self.assertEqual(question["question"].splitlines(), [
-            "Hermes' gateway (pid 4242) serves 2 profiles: default, kami.",
-            "Messenger bots stop answering until it is back: kami:discord, telegram.",  # not the old process's feishu
-            "2 running turns would be interrupted, this session's included.",
+            "profiles: default, kami · bots: kami:discord, telegram · 2 running",  # not the old process's feishu
+            "Running work (turns, cron jobs, this session's turn included) finishes first, up to 30 min (Hermes' "
+            "restart_after_turn_timeout); new turns wait meanwhile.",
             GATEWAY_RESTART_QUESTION,
         ])
         self.assertIn(GATEWAY_RESTART_QUESTION, "\n".join(drawn(app)))
@@ -204,6 +217,52 @@ class ConfirmTests(unittest.TestCase):
         self.assertTrue(any("/gateway" in said and "Restart Hermes' gateway" in said for said in notices(app)))
 
 
+class ProfileChoiceTests(unittest.TestCase):
+    def test_a_served_profile_picks_between_itself_and_the_whole_gateway(self) -> None:
+        app, _old, _spawner, started, now = restart_app(impact=served())
+        app.launch_profile = "kami"
+        ask(app, now)
+        (question,) = app.slot.params["questions"]  # type: ignore[union-attr]
+        self.assertEqual(question["choices"], [GATEWAY_PROFILE_CHOICE.format(profile="kami"), GATEWAY_WHOLE_CHOICE,
+                                               GATEWAY_CANCEL_CHOICE])
+        screen = "\n".join(drawn(app))
+        self.assertIn("Restart this profile (kami)", screen)
+        self.assertIn("only kami reconnects; new OMH code is not loaded", screen)  # the choice's dim description
+        self.assertIn("Restart the whole gateway", screen)
+        self.assertEqual(started, [])
+
+    def test_this_profile_runs_hermes_restart_for_it_and_says_hermes_words_after(self) -> None:
+        app, _old, spawner, started, now = restart_app(impact=served())
+        app.launch_profile = "kami"
+        ask(app, now)
+        pick(app, GATEWAY_PROFILE_CHOICE.format(profile="kami"))
+        ((spawn, _wake, run),) = started
+        self.assertEqual(spawn.argv[-6:], ("-p", "kami", "gateway", "restart", "--yes", "--detach"))
+        self.assertIn(GATEWAY_RESTART_STARTED.format(command="hermes -p kami gateway restart"), notices(app))
+        run.finish(0, ("Profile 'kami' restarted by the host gateway.",))
+        app._step()
+        said = notices(app)
+        self.assertIn(GATEWAY_PROFILE_REATTACHED_NOTICE.format(session=STORED, profile="kami"), said)
+        self.assertIn("Profile 'kami' restarted by the host gateway.", "\n".join(said))
+        self.assertFalse([line for line in said if "now runs OMH" in line])
+        self.assertEqual(len(spawner.made), 1)
+
+    def test_the_whole_gateway_is_hermes_restart_of_the_default_profile(self) -> None:
+        app, _old, _spawner, started, now = restart_app(impact=served())
+        app.launch_profile = "kami"
+        ask(app, now)
+        pick(app, GATEWAY_WHOLE_CHOICE)
+        ((spawn, _wake, _run),) = started
+        self.assertEqual(spawn.argv, RESTART_ARGV)  # `-p default`, as Hermes' Desktop addresses the shared process
+        self.assertIn(GATEWAY_RESTART_STARTED.format(command="hermes -p default gateway restart"), notices(app))
+
+    def test_the_default_profile_keeps_one_restart(self) -> None:
+        app, _old, _spawner, _started, now = restart_app()
+        ask(app, now)
+        (question,) = app.slot.params["questions"]  # type: ignore[union-attr]
+        self.assertEqual(question["choices"], [GATEWAY_RESTART_CHOICE, GATEWAY_CANCEL_CHOICE])
+
+
 class ReattachTests(unittest.TestCase):
     def test_a_finished_restart_reattaches_to_the_same_session_and_keeps_the_draft(self) -> None:
         app, old, spawner, started, now = restart_app()
@@ -264,12 +323,19 @@ class ReattachTests(unittest.TestCase):
         self.assertLess(len(spawner.made), 200)  # tried once a second, not without a pause
         self.assertEqual(app.respawned_at, [])
 
-    def test_the_same_owner_after_the_restart_is_said(self) -> None:
-        app, _old, _spawner, started, now = restart_app(resume={**RESUMED, "authority_epoch": EPOCH_BEFORE})
-        confirm(app, now)
-        started[0][2].finish(0)
-        app._step()
-        self.assertIn(GATEWAY_SAME_OWNER_NOTICE.format(session=STORED), notices(app, NOTICE_WARN))
+    def test_an_exit_0_with_the_same_owner_or_none_named_is_said_with_hermes_words(self) -> None:
+        linger = ("Cannot restart gateway as a service — linger is not enabled.",)
+        for epoch, notice in ((EPOCH_BEFORE, GATEWAY_SAME_OWNER_NOTICE), (None, GATEWAY_UNKNOWN_OWNER_NOTICE)):
+            with self.subTest(epoch=epoch):
+                resumed = {**RESUMED, "authority_epoch": epoch} if epoch is not None else dict(RESUMED)
+                app, _old, _spawner, started, now = restart_app(resume=resumed)
+                confirm(app, now)
+                started[0][2].finish(0, linger)
+                app._step()
+                said = notices(app)
+                self.assertIn(notice.format(session=STORED), notices(app, NOTICE_WARN))
+                self.assertIn(linger[0], "\n".join(said))
+                self.assertNotIn(GATEWAY_REATTACHED_NOTICE.format(session=STORED), said)
 
     def test_a_prompt_sent_while_it_restarts_stays_in_the_composer(self) -> None:
         app, old, _spawner, _started, now = restart_app()
@@ -279,6 +345,57 @@ class ReattachTests(unittest.TestCase):
         self.assertEqual(old.named("prompt.submit"), [])
         self.assertEqual(app.composer.text, "hello")
         self.assertIn(GATEWAY_RESTART_HELD_NOTICE, notices(app, NOTICE_WARN))
+        self.assertIn("Esc or Ctrl+C still interrupts", GATEWAY_RESTART_HELD_NOTICE)
+
+    def test_stop_goes_while_it_restarts(self) -> None:
+        app, old, _spawner, _started, now = restart_app(busy=True)
+        confirm(app, now)
+        type_text(app, "/stop")
+        app._on_input(Key(ENTER))
+        self.assertEqual(old.named("slash.exec"), [{"command": "stop", "session_id": SID}])
+        self.assertNotIn(GATEWAY_RESTART_HELD_NOTICE, notices(app, NOTICE_WARN))
+
+    def test_commands_that_call_the_gateway_wait_and_the_tuis_own_go(self) -> None:
+        for line in ("/gateway", "/gateway status", "/new", "/sessions other-1", "/steer go on", "/model gpt-x",
+                     "/effort high", "!ls", "/usage"):
+            with self.subTest(line=line):
+                app, old, _spawner, _started, now = restart_app()
+                confirm(app, now)
+                calls = list(old.calls)
+                type_text(app, line)
+                app._on_input(Key(ENTER))
+                self.assertEqual(old.calls, calls)
+                self.assertEqual(app.composer.text, line)
+                self.assertIn(GATEWAY_RESTART_HELD_NOTICE, notices(app, NOTICE_WARN))
+        app, old, _spawner, _started, now = restart_app()
+        confirm(app, now)
+        type_text(app, "/details")
+        app._on_input(Key(ENTER))
+        self.assertNotIn(GATEWAY_RESTART_HELD_NOTICE, notices(app, NOTICE_WARN))
+
+    def test_a_resume_refused_or_unanswered_is_tried_again(self) -> None:
+        for error in (GatewayCallError("session.resume", 4003, "runtime_draining"), GatewayTimeout("session.resume", 30)):
+            with self.subTest(error=type(error).__name__):
+                later = RespawnClient(resume={**RESUMED, "authority_epoch": EPOCH_AFTER})
+                app, _old, spawner, started, now = restart_app(spawner=Spawner(RespawnClient(resume=error), later))
+                confirm(app, now)
+                started[0][2].finish(0)
+                app._step()
+                self.assertEqual(len(spawner.made), 2)
+                self.assertIs(app.client, later)
+                self.assertIsNone(app.exit_code)
+                self.assertEqual(spawner.made[0].closed, 1)
+
+    def test_ctrl_c_while_the_reattach_waits_leaves(self) -> None:
+        spawner = Spawner(*[RespawnClient(start_error=GatewayUnavailable("starting", returncode=69)) for _ in range(5)])
+        app, _old, spawner, started, now = restart_app(spawner=spawner)
+        confirm(app, now)
+        app.terminal.read = lambda timeout, wake=None: b"\x03" if timeout == 0.0 else b""  # type: ignore[method-assign]
+        started[0][2].finish(0)
+        app._step()
+        self.assertEqual(app.exit_code, 1)
+        self.assertEqual(len(spawner.made), 1)  # it left in the pause after the first try
+        self.assertIn("you left while the Hermes gateway was starting again", app.farewell)
 
     def test_a_running_turn_on_the_old_gateway_is_said_lost(self) -> None:
         app, old, _spawner, started, now = restart_app(busy=True)
@@ -311,17 +428,35 @@ class FailureTests(unittest.TestCase):
         app._step()
         self.assertIn("could not start /opt/hermes/venv/bin/python", notices(app, NOTICE_ERROR)[-1])
 
-    def test_past_its_wait_it_says_so_and_a_gone_gateway_respawns_as_after_a_crash(self) -> None:
-        app, old, spawner, _started, now = restart_app()
+    def test_a_command_still_draining_past_the_cap_holds_the_respawn_until_it_ends(self) -> None:
+        app, old, spawner, started, now = restart_app(busy=True)
+        confirm(app, now)
+        now[0] += GATEWAY_RESTART_SECONDS + 1
+        app._step()
+        slow = GATEWAY_RESTART_SLOW.format(seconds=GATEWAY_RESTART_SECONDS)
+        self.assertIn(slow, notices(app, NOTICE_WARN))
+        old.inbox.append(GatewayExited(69))  # Hermes' drain ended and the old gateway went down
+        app._step()
+        now[0] += 600
+        app._step()
+        self.assertEqual(spawner.made, [])  # no crash respawn while Hermes' command still runs
+        self.assertEqual(notices(app, NOTICE_WARN).count(slow), 1)
+        self.assertIn("restarting Hermes' gateway…", "\n".join(drawn(app)))
+        started[0][2].finish(0)
+        app._step()
+        self.assertEqual(len(spawner.made), 1)
+        self.assertEqual(app.respawned_at, [])  # the restart's reattach, not one of the crash respawn's three
+        self.assertIn(GATEWAY_REATTACHED_NOTICE.format(session=STORED), notices(app))
+        self.assertNotIn(RESPAWNED_NOTICE.format(session=STORED), notices(app))
+
+    def test_a_failure_after_the_gateway_went_away_respawns_as_after_a_crash(self) -> None:
+        app, old, spawner, started, now = restart_app()
         confirm(app, now)
         old.inbox.append(GatewayExited(1))
         app._step()
-        self.assertEqual(spawner.made, [])
-        now[0] += GATEWAY_RESTART_SECONDS + 1
+        started[0][2].finish(1, ("✗ Gateway service restart failed.",))
         app._step()
-        self.assertTrue(any(f"has not finished after {GATEWAY_RESTART_SECONDS:g} s" in said
-                            for said in notices(app, NOTICE_WARN)))
-        self.assertEqual(len(spawner.made), 1)  # the crash respawn, under its own limit
+        self.assertEqual(len(spawner.made), 1)
         self.assertEqual(len(app.respawned_at), 1)
         self.assertIn(RESPAWNED_NOTICE.format(session=STORED), notices(app))
 
@@ -364,6 +499,7 @@ class SpawnTests(unittest.TestCase):
         self.assertEqual(gateway_restart.manual_command("kami"), "hermes -p kami gateway restart")
         self.assertEqual(gateway_restart.manual_command("default"), "hermes gateway restart")
         self.assertEqual(gateway_restart.manual_command("custom"), "hermes gateway restart")
+        self.assertEqual(gateway_restart.manual_command("default", explicit=True), "hermes -p default gateway restart")
 
     def test_the_spawn_takes_no_tui_variable_and_runs_from_hermes_source_root(self) -> None:
         environ = {**ENVIRON, "OMH_TUI_SESSION_FILE": "/tmp/x", "HERDR_PANE_ID": "p1", "HERMES_HOME": "/h"}
@@ -371,6 +507,8 @@ class SpawnTests(unittest.TestCase):
         self.assertEqual(spawn.argv[-6:], ("-p", "kami", "gateway", "restart", "--yes", "--detach"))
         self.assertNotIn("OMH_TUI_SESSION_FILE", spawn.env)
         self.assertNotIn("HERDR_PANE_ID", spawn.env)
+        marked = gateway_restart.restart_spawn({**environ, "_HERMES_GATEWAY": "1", "HERMES_GATEWAY_MODE": "x"}, "kami")
+        self.assertFalse(set(gateway_restart.GATEWAY_MARKERS) & set(marked.env))  # as Hermes' updater strips them
         self.assertEqual(spawn.env["HERMES_HOME"], "/h")
         self.assertEqual(spawn.cwd, "/opt/hermes")
 
@@ -416,24 +554,26 @@ class SpawnTests(unittest.TestCase):
 
 
 class ImpactTests(unittest.TestCase):
-    def test_the_shared_gateway_of_a_served_profile_restarts_only_that_profile(self) -> None:
+    def setUp(self) -> None:
+        top = tempfile.mkdtemp(prefix="omh-gateway-impact-")
+        self.addCleanup(shutil.rmtree, top, ignore_errors=True)
+        self.top = Path(top)
+
+    def test_a_served_profile_reads_the_shared_gateways_record(self) -> None:
         records = {"/r/profiles/kami": Gateway("", False), "/r": HOST}
         with patch.object(bot_board, "read_gateway", lambda home: records[str(home)]):
             impact = gateway_restart.read_impact({"HERMES_HOME": "/r/profiles/kami"}, "kami")
         self.assertEqual((str(impact.home), impact.profile), ("/r", "kami"))
-        self.assertEqual(impact.platforms, ("kami:discord",))
-        lines = gateway_restart.impact_lines(impact, busy=False)
-        self.assertEqual(lines[0], "Hermes restarts only profile kami inside its shared gateway (pid 4242).")
-        self.assertIn("those in profile kami would be interrupted", lines[2])
+        self.assertEqual(impact.platforms, ("kami:discord", "telegram"))
+        self.assertEqual(gateway_restart.impact_lines(impact, busy=False)[0],
+                         "profiles: default, kami · bots: kami:discord, telegram · 2 running")
 
     def test_a_profile_with_its_own_gateway_reads_its_own_record(self) -> None:
         own = Gateway("running", True, 99)
         with patch.object(bot_board, "read_gateway", lambda home: own):
             impact = gateway_restart.read_impact({"HERMES_HOME": "/r/profiles/solo"}, "solo")
         self.assertEqual((str(impact.home), impact.gateway, impact.profile), ("/r/profiles/solo", own, ""))
-        self.assertEqual(gateway_restart.impact_lines(impact, busy=False), [
-            "Hermes' gateway (pid 99).", "No messenger platform is connected to it.", "No turn is running on it.",
-        ])
+        self.assertEqual(gateway_restart.impact_lines(impact, busy=False), ["no bots connected · nothing running"])
 
     def test_no_live_record_is_said_unknown(self) -> None:
         with patch.object(bot_board, "read_gateway", lambda home: Gateway("", False, problem="no gateway record")):
@@ -446,13 +586,41 @@ class ImpactTests(unittest.TestCase):
         with patch.object(bot_board, "read_gateway", lambda home: records[str(home)]):
             self.assertIsNone(gateway_restart.read_impact({"HERMES_HOME": "/r/profiles/kami"}, "kami").gateway)
 
-    def test_turn_counts(self) -> None:
-        idle = RestartImpact(None, Gateway("running", True, 1, active_agents=1))
-        self.assertEqual(gateway_restart.impact_lines(idle, busy=False)[2],
-                         "1 running turn in other sessions would be interrupted.")
-        lone = RestartImpact(None, Gateway("running", True, 1))
-        self.assertEqual(gateway_restart.impact_lines(lone, busy=True)[2],
-                         "This session's running turn would be interrupted.")
+    def test_a_service_run_gateway_lets_running_work_finish_and_any_other_interrupts_it(self) -> None:
+        drained = RestartImpact(None, Gateway("running", True, 1, active_agents=1, supervised=True), wait_seconds=600)
+        self.assertEqual(gateway_restart.impact_lines(drained, busy=False), [
+            "no bots connected · 1 running",
+            "Running work (turns, cron jobs) finishes first, up to 10 min (Hermes' restart_after_turn_timeout); new "
+            "turns wait meanwhile.",
+        ])
+        stopped = RestartImpact(None, Gateway("running", True, 1, active_agents=1))
+        self.assertEqual(gateway_restart.impact_lines(stopped, busy=False)[1],
+                         "Running work (turns, cron jobs) would be interrupted.")
+        no_wait = RestartImpact(None, Gateway("running", True, 1, supervised=True), wait_seconds=0)
+        self.assertEqual(gateway_restart.impact_lines(no_wait, busy=True), [
+            "no bots connected · 1 running",
+            "Running work (turns, cron jobs, this session's turn included) would be interrupted.",
+        ])
+
+    def test_the_wait_is_read_from_the_gateway_homes_config(self) -> None:
+        home = self.top / "home"
+        home.mkdir()
+        self.assertEqual(gateway_restart.after_turn_seconds(home), gateway_restart.DEFAULT_AFTER_TURN_SECONDS)
+        (home / "config.yaml").write_text("agent:\n  restart_after_turn_timeout: 120\n", encoding="utf-8")
+        self.assertEqual(gateway_restart.after_turn_seconds(home), 120.0)
+        (home / "config.yaml").write_text("agent:\n  restart_after_turn_timeout: soon\n", encoding="utf-8")
+        self.assertEqual(gateway_restart.after_turn_seconds(home), gateway_restart.DEFAULT_AFTER_TURN_SECONDS)
+
+    def test_the_board_reads_a_service_run_gateway_from_its_argv(self) -> None:
+        home = self.top / "svc"
+        home.mkdir()
+        record = {"pid": 1, "start_time": 1, "gateway_state": "running",
+                  "argv": ["/h/hermes_cli/main.py", "gateway", "run", "--external-supervisor"]}
+        (home / "gateway_state.json").write_text(json.dumps(record), encoding="utf-8")
+        self.assertTrue(bot_board.read_gateway(home).supervised)
+        record["argv"] = ["/h/hermes_cli/main.py", "gateway", "run"]
+        (home / "gateway_state.json").write_text(json.dumps(record), encoding="utf-8")
+        self.assertFalse(bot_board.read_gateway(home).supervised)
 
 
 if __name__ == "__main__":

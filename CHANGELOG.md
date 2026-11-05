@@ -94,14 +94,17 @@ All notable changes will be documented here.
 - **`/gateway restart` restarts Hermes' gateway from inside the OMH TUI and
   picks the session back up.** After `omh update` the running gateway kept
   the old OMH code until someone ran `hermes gateway restart` in another
-  terminal and came back. Now the TUI first names what a restart interrupts
+  terminal and came back. Now the TUI first names what a restart affects
   (the profiles the gateway serves, its connected messenger bots, its running
-  turns, this session's own), runs Hermes' own restart only once you pick
+  work, this session's own), runs Hermes' own restart only once you pick
   Restart, and reattaches to the same session with your draft kept and
-  nothing sent again; once the gateway is back it says so, and that it now
-  runs the newer OMH when its files show it was behind. A refused or failed
-  restart says why and the command to run instead. Bare `/gateway` is still
-  Hermes' platform status.
+  nothing sent again. A gateway a service runs lets running work finish
+  first, up to Hermes' `restart_after_turn_timeout`, and the TUI waits for
+  it. Once the gateway is back it says so, and that it now runs the newer OMH
+  when its files show it was behind. In a named profile the shared gateway
+  serves you pick that profile alone, which does not load new OMH code, or
+  the whole gateway, which does. A refused or failed restart says why and the
+  command to run instead. Bare `/gateway` is still Hermes' platform status.
 
 ## 4.0.6 - 2026-11-04
 

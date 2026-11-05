@@ -7,7 +7,12 @@ gateway's own record says the restart interrupts (`read_impact`), and on
 "Restart" runs Hermes' CLI exactly as Hermes' updater runs it for a profile
 (`hermes_cli/update_restart_recovery.py`): `<HERMES_PYTHON> -m hermes_cli.main
 -p <profile> gateway restart --yes --detach`, with the interpreter and import
-path the launcher handed the TUI (`restart_spawn`). `--yes` is Hermes' own
+path the launcher handed the TUI (`restart_spawn`). A named profile the shared
+gateway serves gets two restarts to pick from: Hermes' own for that profile,
+which only re-serves it inside the shared process (its code is not loaded
+again), and the whole gateway, addressed as `-p default` the way Hermes'
+Desktop addresses the process that serves a profile
+(`web_server_gateway._gateway_subcommand`). `--yes` is Hermes' own
 "interrupt them deliberately" flag, standing for the confirmation the person
 just gave; `--detach` keeps this short-lived call from becoming the gateway
 itself where no service runs one. Hermes decides everything else: the service
@@ -23,9 +28,14 @@ keeps only the output's last lines, in memory, for a failure to name.
 The impact is read from files only, the way the bot board reads them
 (`bot_board.read_gateway`): `gateway_state.json` of the gateway that serves
 the TUI's profile, whose pid is checked with signal 0 against the start time it
-records. It counts the turns the gateway runs and names the messenger
-platforms connected to it; who else merely has a session open there is not
-recorded, and a home with no live record is said to be unknown.
+records. It counts the work the gateway runs (Hermes' `_active_work_count`:
+turns and cron jobs) and names the messenger platforms connected to it; who
+else merely has a session open there is not recorded, and a home with no live
+record is said to be unknown. A gateway a service runs (`--external-supervisor`
+in its recorded argv) drains on a restart: Hermes lets running work finish
+first, up to `agent.restart_after_turn_timeout` from the gateway home's
+config, and new turns wait meanwhile; any other gateway is stopped, which
+interrupts it.
 """
 
 from __future__ import annotations
@@ -51,6 +61,12 @@ HERMES_MAIN = "hermes_cli.main"
 DEFAULT_PROFILE = "default"
 # Hermes' launcher names a home outside `profiles/` this way; no `-p` can address it.
 CUSTOM_PROFILE = "custom"
+# What Hermes' updater takes out of a restart's environment (`update_restart_recovery._GATEWAY_MARKERS`): inherited,
+# they would make the command read as running inside the gateway.
+GATEWAY_MARKERS = ("_HERMES_GATEWAY", "HERMES_GATEWAY", "HERMES_GATEWAY_MODE")
+# Hermes' default `agent.restart_after_turn_timeout` (`hermes_cli/config_defaults.py`), in seconds.
+DEFAULT_AFTER_TURN_SECONDS = 1800.0
+CONFIG_FILE = "config.yaml"
 OUTPUT_TAIL_BYTES = 8 << 10
 OUTPUT_TAIL_LINES = 6
 CONNECTED = "connected"  # a platform adapter Hermes reports as up (`gateway_state.json` `platforms.<name>.state`)
@@ -72,10 +88,13 @@ def _profile_name(name: str) -> bool:
     return 0 < len(name) <= 64 and name[0] not in "_-" and set(name) <= allowed
 
 
-def manual_command(profile: str) -> str:
-    """What the person runs in a terminal to do the same: the command Hermes' own refusals print."""
+def manual_command(profile: str, *, explicit: bool = False) -> str:
+    """What the person runs in a terminal to do the same: the command Hermes' own refusals print. `explicit` names
+    `-p default` too: the whole gateway asked for from a named profile's session."""
     args = profile_args(profile)
-    return f"hermes -p {args[1]} gateway restart" if args and args[1] != DEFAULT_PROFILE else "hermes gateway restart"
+    if args and (explicit or args[1] != DEFAULT_PROFILE):
+        return f"hermes -p {args[1]} gateway restart"
+    return "hermes gateway restart"
 
 
 def restart_spawn(environ: Mapping[str, str], profile: str) -> GatewaySpawn:
@@ -84,8 +103,9 @@ def restart_spawn(environ: Mapping[str, str], profile: str) -> GatewaySpawn:
     root, as Hermes' own app runs its CLI actions, not from the session's folder."""
     child = gateway_spawn(environ)
     python, src_root = environ["HERMES_PYTHON"], environ["HERMES_PYTHON_SRC_ROOT"]
+    env = {name: value for name, value in child.env.items() if name not in GATEWAY_MARKERS}
     return GatewaySpawn(argv=(python, "-m", HERMES_MAIN, *profile_args(profile), *RESTART_ARGS), cwd=src_root,
-                        env=child.env)
+                        env=env)
 
 
 @dataclass(frozen=True)
@@ -147,26 +167,25 @@ def _tail(output: IO[bytes]) -> tuple[str, ...]:
     return tuple(lines[-OUTPUT_TAIL_LINES:])
 
 
-# ── what the restart interrupts ───────────────────────────────────────────
+# ── what the restart interrupts ──────────────────────────────────────────
 
 
 @dataclass(frozen=True)
 class RestartImpact:
     """What the gateway's record says a restart interrupts. `gateway` is None when no live record was found."""
 
-    home: Path | None  # the home whose record it is: also where its starts ledger and plugin bundle are
+    home: Path | None  # the home whose record it is: also where its starts ledger, plugin bundle and config are
     gateway: Gateway | None
-    profile: str = ""  # a named profile the shared gateway serves: Hermes restarts only that profile inside it
+    profile: str = ""  # a named profile the shared gateway serves: it can restart alone, or with the whole gateway
+    wait_seconds: float = DEFAULT_AFTER_TURN_SECONDS  # how long a draining restart lets running work finish
 
     @property
     def platforms(self) -> tuple[str, ...]:
-        """The messenger platforms connected on it now; only the profile's own when only the profile restarts."""
+        """The messenger platforms connected on it now (stamped by the process that runs now)."""
         if self.gateway is None:
             return ()
-        names = [platform.name for platform in self.gateway.platforms if platform.current and platform.state == CONNECTED]
-        if self.profile:
-            names = [name for name in names if name.startswith(f"{self.profile}:")]
-        return tuple(names)
+        return tuple(platform.name for platform in self.gateway.platforms
+                     if platform.current and platform.state == CONNECTED)
 
 
 def read_impact(environ: Mapping[str, str], profile: str) -> RestartImpact:
@@ -186,52 +205,62 @@ def read_impact(environ: Mapping[str, str], profile: str) -> RestartImpact:
     if named:
         own = read_gateway(current)
         if own.live and not own.elsewhere:
-            return RestartImpact(current, own)
+            return RestartImpact(current, own, wait_seconds=after_turn_seconds(current))
     host = read_gateway(root)
     if not host.live or host.elsewhere:
         return RestartImpact(None, None)
     if named and current.name not in host.served:
         return RestartImpact(None, None)
-    return RestartImpact(root, host, current.name if named else "")
+    return RestartImpact(root, host, current.name if named else "", after_turn_seconds(root))
+
+
+def after_turn_seconds(home: Path) -> float:
+    """`agent.restart_after_turn_timeout` from the gateway home's `config.yaml`, as Hermes reads it (a number of
+    seconds, at least 0); Hermes' default when the file, the key or the number is missing."""
+    from .bot_board import CONFIG_BYTES, _bounded_text, _config_text
+
+    text, _problem = _bounded_text(home / CONFIG_FILE, CONFIG_BYTES)
+    raw = _config_text(text, ("agent", "restart_after_turn_timeout")) if text is not None else None
+    if raw is None:
+        return DEFAULT_AFTER_TURN_SECONDS
+    try:
+        seconds = float(raw.strip().strip("'\""))
+    except ValueError:
+        return DEFAULT_AFTER_TURN_SECONDS
+    return max(seconds, 0.0) if seconds == seconds and seconds != float("inf") else DEFAULT_AFTER_TURN_SECONDS
 
 
 def _names(names: tuple[str, ...]) -> str:
     shown = ", ".join(names[:NAMES_SHOWN])
-    return f"{shown} and {len(names) - NAMES_SHOWN} more" if len(names) > NAMES_SHOWN else shown
+    return f"{shown} +{len(names) - NAMES_SHOWN}" if len(names) > NAMES_SHOWN else shown
+
+
+def _duration(seconds: float) -> str:
+    return f"{seconds / 60:g} min" if seconds >= 60 else f"{seconds:g} s"
 
 
 def impact_lines(impact: RestartImpact, busy: bool) -> list[str]:
-    """At most three lines naming what the restart interrupts, as far as the record says; plainly unknown without
-    one. `busy`: this session's own turn runs."""
+    """At most three short lines naming what the restart interrupts, as far as the record says; plainly unknown
+    without one. `busy`: this session's own turn runs."""
     gateway = impact.gateway
-    own_turn = "This session's running turn would be interrupted too." if busy else ""
     if gateway is None:
-        return [line for line in (
-            "Hermes keeps no live record of this gateway, so who else uses it is unknown here: other sessions' "
-            "turns and messenger bots on it would be interrupted too.",
-            own_turn,
-        ) if line]
+        lines = ["Hermes keeps no live record of this gateway, so who else uses it is unknown here: running work "
+                 "and messenger bots on it would be interrupted too."]
+        if busy:
+            lines.append("This session's running turn would be interrupted too.")
+        return lines
     platforms = impact.platforms
-    if impact.profile:
-        head = (f"Hermes restarts only profile {impact.profile} inside its shared gateway (pid {gateway.pid}).")
-    elif gateway.served:
-        count = len(gateway.served)
-        head = (f"Hermes' gateway (pid {gateway.pid}) serves {count} profile{'' if count == 1 else 's'}: "
-                f"{_names(gateway.served)}.")
-    else:
-        head = f"Hermes' gateway (pid {gateway.pid})."
-    bots = (f"Messenger bots stop answering until it is back: {_names(platforms)}." if platforms
-            else "No messenger platform is connected to it.")
-    turns = gateway.active_agents
-    if impact.profile and turns:
-        work = (f"It runs {turns} turn{'' if turns == 1 else 's'} across all its profiles; those in profile "
-                f"{impact.profile} would be interrupted.")
-    elif turns and busy:
-        work = f"{turns} running turn{'' if turns == 1 else 's'} would be interrupted, this session's included."
-    elif turns:
-        work = f"{turns} running turn{'' if turns == 1 else 's'} in other sessions would be interrupted."
-    elif busy:
-        work = "This session's running turn would be interrupted."
-    else:
-        work = "No turn is running on it."
-    return [head, bots, work]
+    work = gateway.active_agents
+    parts = [f"profiles: {_names(gateway.served)}"] if gateway.served else []
+    parts.append(f"bots: {_names(platforms)}" if platforms else "no bots connected")
+    parts.append(f"{work} running" if work else ("1 running" if busy else "nothing running"))
+    lines = [" · ".join(parts)]
+    if work or busy:
+        mine = ", this session's turn included" if busy else ""
+        if gateway.supervised and impact.wait_seconds > 0:
+            lines.append(f"Running work (turns, cron jobs{mine}) finishes first, up to "
+                         f"{_duration(impact.wait_seconds)} (Hermes' restart_after_turn_timeout); new turns wait "
+                         "meanwhile.")
+        else:
+            lines.append(f"Running work (turns, cron jobs{mine}) would be interrupted.")
+    return lines

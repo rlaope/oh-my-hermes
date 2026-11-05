@@ -325,8 +325,9 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
         "the OMH TUI's `/gateway restart`, only after the person typed it and picked Restart in the slot: one fixed "
         "`<HERMES_PYTHON> -m hermes_cli.main [-p <profile>] gateway restart --yes --detach`, Hermes' own restart "
         "command as Hermes' updater runs it, on the interpreter and import path Hermes' launcher handed the TUI; the "
-        "profile is the one Hermes named for the session, checked against Hermes' profile id rule. It signals no "
-        "process itself and is never reached from a prepared-handoff path."
+        "profile is the one Hermes named for the session, or `default` when the person picked the whole shared gateway, "
+        "checked against Hermes' profile id rule. It signals no process itself and is never reached from a "
+        "prepared-handoff path."
     ),
     "src/commands/setup.py": (
         "`omh setup` / `omh update` -- pip self-update, CLI re-entry after update, and the "
