@@ -435,6 +435,12 @@ def _unattended(platform: str, delegated: bool) -> bool:
     )
 
 
+def attended_turn(platform: object, *, delegated: bool = False) -> bool:
+    """Whether a person types this turn's messages and is there to answer: the platform rule above
+    (`ATTENDED_PLATFORMS`, a single-query run, a kanban task process, a delegated child), for other gates."""
+    return not _unattended(str(platform or "").strip().casefold(), delegated)
+
+
 def _remember(table: "OrderedDict[str, Any]", key: str, value: Any) -> None:
     _ = table.pop(key, None)
     table[key] = value
