@@ -71,7 +71,9 @@ others stay shut, and a run of settled layers is one shut row. Running,
 stuck, failed and parked nodes open, and so does a node with one of them
 under it (an extend round hangs under the done verification
 that found the gap); done, waiting and handed-out ones stay shut. What the
-person folds or opens (`overrides`) wins. A tree
+person folds or opens (`overrides`) wins. A layer with work moving lists
+its quiet nodes only while there are at most `QUIET_SHOWN`; more fold into
+its `more` row from the start, however much room is left. A tree
 taller than `cap` rows first shuts the quiet layers (no node running, stuck,
 failed or parked), all-done ones first; then, in a layer with work moving, folds its
 quiet nodes into one row at the layer's end (`▸ 12 more · 9 waiting · 3
@@ -119,6 +121,7 @@ LEAF = "  "
 DETAIL_LEAD = "› "
 STEP = 4  # cells a node's detail rows and the nodes nested under it sit right of its triangle
 DETAIL_ROWS = 2
+QUIET_SHOWN = 3  # a layer with work moving shows at most this many quiet nodes as rows; more fold into its `more` row
 LAYER_KEY = "layer:"
 OTHERS_KEY = "others:"  # the group of the roster's agents no node is bound to; `agent:` + its id for each of them
 OTHERS = "other agents"
@@ -513,7 +516,14 @@ def _fitted(layers: Sequence[_Item], overrides: Mapping[str, bool], cap: int) ->
         and overrides.get(item.key, item.key in opened if item.node is None else _active(item))
         for item in every
     }
-    expanded.update({MORE_KEY + layer.label: overrides.get(MORE_KEY + layer.label, True) for layer in layers})
+    # A layer with work moving lists its quiet nodes only while they are few: more fold into one row from the start,
+    # whatever room there is, so the running ones are what the tree shows.
+    expanded.update({
+        MORE_KEY + layer.label: overrides.get(
+            MORE_KEY + layer.label, not (_active(layer) and len(_quiet(layer)) > QUIET_SHOWN),
+        )
+        for layer in layers
+    })
     expanded.update({run.key: overrides.get(run.key, False) for run in _settled_runs(layers)})
 
     def fits() -> bool:

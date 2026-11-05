@@ -226,6 +226,10 @@ All notable changes will be documented here.
   clock. A turn's working row takes over when a turn starts, and the row
   goes when nothing is left to wait on. It is read from structure, never
   from what the model said, and the info line is unchanged.
+- **The OMH TUI's dag tree lists the nodes that run, not every finished one.**
+  A layer with work moving shows at most three of its quiet nodes as rows;
+  more fold into its `▸ N more` row from the start, however tall the
+  terminal is. Opening that row still lists them.
 - **dag-ulw refuses two nodes that write one file under different spellings.**
   `omh_dag` define, repair and extend refused a shared write scope with no
   direct edge only when both nodes wrote the same entry character for
