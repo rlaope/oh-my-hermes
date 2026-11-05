@@ -331,6 +331,44 @@ reports from then on (measured on herdr 0.9.5: the pane stayed at `working`,
 or left the list); a gateway daemon started from the child would also keep the
 pane's id after the pane closed.
 
+## Restarting Hermes' gateway
+
+`/gateway restart`, and only that typed by the person, restarts Hermes'
+gateway (`src/tui/gateway_restart.py`, in INVARIANT 1's
+`PROCESS_SPAWN_ALLOWLIST`); `/gateway` with anything else goes to Hermes as
+typed. It is offered only attached to a shared gateway, with a session to
+reattach to. It first asks in the slot, naming what the gateway's record
+(`gateway_state.json`, read as the bot board reads it) says the restart
+affects: the profiles it serves, the messenger platforms connected to it, the
+work it runs (turns and cron jobs), and this session's own turn; for a gateway
+a service runs (`--external-supervisor` in its recorded argv) that running
+work finishes first, up to `agent.restart_after_turn_timeout` read from the
+gateway home's `config.yaml`, and otherwise it is interrupted; without a live
+record it says who else uses the gateway is unknown. In a named profile the
+shared gateway serves it offers two restarts: that profile alone (Hermes
+re-serves it inside the shared process; new OMH code is not loaded) and the
+whole gateway (`-p default`, as Hermes' Desktop addresses that process).
+Nothing runs unless the person picks one. Then it runs Hermes' own command as
+Hermes' updater runs it, `<HERMES_PYTHON> -m hermes_cli.main -p <profile>
+gateway restart --yes --detach`, with the interpreter and import path the
+launcher handed the TUI and without Hermes' gateway markers, in a session of
+its own, stdin closed and its output in an unnamed temporary file (unlinked
+as it is created) of which only the last lines are read back, into memory.
+Hermes decides the rest (the service manager, the drain, a profile its shared
+gateway serves); the TUI signals no gateway and kills no process. While the
+command runs, however long, the TUI respawns no gateway child, and sends
+nothing that calls the gateway except `/stop` (what else the person sends
+goes back to the composer; Esc and Ctrl+C still interrupt); past 180 s it
+says once that it still waits. Once the command succeeds it reattaches to the
+same session as a respawn does, outside the respawn's limit, trying a gateway
+that is not answering, or not resuming, again each second for up to 60 s; the
+composer's draft stays and nothing is sent again. Exit 0 alone is not taken
+for a restart: only a changed owner epoch says the gateway is back, and
+otherwise Hermes' own last lines are shown. It says the gateway now runs the
+newer OMH only when the gateway's recorded start had preceded the plugin
+bundle's install before the restart and no longer does after it. A failure
+says Hermes' words and the command to run instead.
+
 ## Job control, and what OMH does not do
 
 Ctrl+Z stops the process group, the gateway child with it, as Hermes' own CLI's

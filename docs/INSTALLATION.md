@@ -1576,7 +1576,17 @@ profile archive, not the transcript, so the first `/export` says so and the
 next one runs it), and `/reload-skills` (Hermes re-scans its
 skills for this session and the TUI reads its command list again, so a skill
 installed since the start, by `omh update` or `/skills install`, runs as
-`/<name>` without a restart). Claude Code's `/cost`, `/permissions` and
+`/<name>` without a restart), and `/gateway restart` (restarts Hermes'
+gateway and reattaches to the same session: it first names the gateway's
+profiles, its connected messenger bots and its running work, and runs nothing
+until you pick Restart. It then runs Hermes' own `hermes gateway restart`; a
+gateway a service runs lets running work finish first, up to Hermes'
+`restart_after_turn_timeout`, and new turns wait meanwhile. Restarting the
+whole gateway loads new OMH plugin code after `omh update`. In a named
+profile the shared gateway serves, you pick that profile alone (only it
+reconnects, and new OMH code is not loaded) or the whole gateway. Your draft
+stays and nothing is sent again; a failure says why and the command to run
+in a terminal; bare `/gateway` stays Hermes' platform status). Claude Code's `/cost`, `/permissions` and
 `/compact` run Hermes' `/usage`, `/approvals` and `/compress` (`here [N]`, a
 focus topic, or `--preview`; Hermes refuses a compression while a turn runs,
 and the TUI says to run it again once the turn ends). Hermes' shared gateway,

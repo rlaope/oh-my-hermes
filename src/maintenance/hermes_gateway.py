@@ -512,6 +512,18 @@ def _running_gateway_record(hermes_home: Path, now: float) -> dict[str, object] 
     return record
 
 
+def stale_bundle_version(hermes_home: Path) -> str | None:
+    """The OMH version of the plugin bundle a gateway in this home has not loaded: its manifest's `version` while
+    the last recorded start precedes the bundle's install ("" when the manifest names none); None when the files
+    do not prove a stale gateway. Read before and after `/gateway restart`, on the same evidence as the hint."""
+    if _stale_bundle_times(hermes_home) is None:
+        return None
+    plugin_dir = hermes_home / "plugins" / "omh"
+    manifest = read_plugin_manifest(plugin_dir) if _regular_file(plugin_dir / PLUGIN_MANAGED_MANIFEST) else None
+    version = manifest.get("version") if manifest else None
+    return version.strip() if isinstance(version, str) else ""
+
+
 def _stale_bundle_times(hermes_home: Path) -> tuple[str, str] | None:
     """The last recorded gateway start and the bundle's install, as UTC stamps, when the start is the earlier."""
     if not _pid_record_names_home(hermes_home):

@@ -216,6 +216,20 @@ All notable changes will be documented here.
   cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
   or an open question holds it, and a notice says to send `continue`. At most 2
   go between two prompts of the person's own; past that the old notice asks.
+- **`/gateway restart` restarts Hermes' gateway from inside the OMH TUI and
+  picks the session back up.** After `omh update` the running gateway kept
+  the old OMH code until someone ran `hermes gateway restart` in another
+  terminal and came back. Now the TUI first names what a restart affects
+  (the profiles the gateway serves, its connected messenger bots, its running
+  work, this session's own), runs Hermes' own restart only once you pick
+  Restart, and reattaches to the same session with your draft kept and
+  nothing sent again. A gateway a service runs lets running work finish
+  first, up to Hermes' `restart_after_turn_timeout`, and the TUI waits for
+  it. Once the gateway is back it says so, and that it now runs the newer OMH
+  when its files show it was behind. In a named profile the shared gateway
+  serves you pick that profile alone, which does not load new OMH code, or
+  the whole gateway, which does. A refused or failed restart says why and the
+  command to run instead. Bare `/gateway` is still Hermes' platform status.
 - **A resumed session with work left goes on by itself in the OMH TUI.**
   `omh --resume <id>`, `/resume` and the session picker opened the session
   and waited for the person to write, so an interrupted turn or an open
