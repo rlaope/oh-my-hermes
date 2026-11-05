@@ -1,0 +1,5 @@
+[
+  {"code": "E1", "label": "Wrong population"},
+  {"code": "E2", "label": "Wrong study design"},
+  {"code": "E3", "label": "No HbA1c outcome"}
+]

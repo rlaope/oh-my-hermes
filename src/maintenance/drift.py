@@ -989,7 +989,13 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # fix/design-hint-precision: a concept question and a Korean
             # remark under a busy-path gateway origin never dispatch
             # gateway-intent-card (+2).
-            expected=1390,
+            # systematic-review: a PR reviewed systematically, job applicants,
+            # support tickets, a rapid PR review, a paper's title and abstract
+            # and one trial's inclusion criteria stay off literature screening (+6).
+            # A Korean manuscript, paper search and PRISMA diagram, five reviews
+            # of a pointed-at software object, logging practices and our test
+            # coverage stay off it too (+10).
+            expected=1406,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1578,7 +1584,12 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # fix/design-hint-precision: a demo-video request, a Korean
             # build-fix request and a PR review under a busy-path gateway
             # origin route as they do bare (+3).
-            expected=1239,
+            # systematic-review: four screening requests (one through the ko
+            # pack) plus a systematic code review and a find-papers request that
+            # keep their own owners (+6). A Korean two-reviewer abstract screen, a
+            # statin-trial review and a telehealth scoping review reach it, and a
+            # plain PR review clarifies toward code-review (+4).
+            expected=1249,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

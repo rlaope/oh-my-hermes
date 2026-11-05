@@ -1719,6 +1719,11 @@ _SKILL_POLICIES = {
         evidence_boundary="A prepared audit is not imported evidence review, completed evaluation or scientific reproduction. Missing conditions and human confirmation remain unknown.",
         wrapper_guidance="Select acc or acc_norm explicitly, import supplied local Harness results, preserve original and derived hashes, and audit normalized conditions without running a model.",
     ),
+    "systematic-review": RecommendationPolicy(
+        next_action="prepare_systematic_review",
+        evidence_boundary="A prepared screening plan is not reviewer answers, a merge, adjudication or a review team's decision. Agreement is not accuracy; same-model reviewers are not independent.",
+        wrapper_guidance="Agree and freeze the criteria and exclusion codes, prepare blind batches, give reviewers A and B only their own task files, merge, and report conflicts, pending records, agreement and the independence label.",
+    ),
     "paper-learning": RecommendationPolicy(
         next_action="prepare_paper_learning",
         evidence_boundary=(
@@ -2897,6 +2902,9 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     }),
     # Sheet/pixel/game/character words alone must not reach sprite processing.
     "sprite-forge": frozenset({"sprite", "sheet", "pixel", "art", "character", "game", "frames", "2d", "animation"}),
+    # Review, screening and criteria words alone must not reach literature
+    # screening: a systematic code review or applicant screening stays elsewhere.
+    "systematic-review": frozenset({"rapid", "review", "reviewer", "dual", "screening", "title", "abstract", "inclusion", "exclusion", "criteria"}),
     "geospatial-analysis": frozenset({"analysis", "overlay", "spatial", "intersection", "intersect", "layers", "compute", "overlap", "area"}),
     "biomedical-evidence": frozenset({"evidence", "reconciliation", "cross", "check", "variant", "matrix", "capture"}),
     "molecular-docking": frozenset({"molecular", "docking", "rigid", "receptor", "ligand", "poses"}),
@@ -4813,6 +4821,11 @@ def _score_definition(
     if definition.name == "failure-signal-audit" and _failure_signal_audit_explicit_match(normalized_query):
         score += 34
         matched.add("direct:failure_signal_audit")
+    # A review phrase OF a topic is the literature sense; one phrase's worth,
+    # so the bare `review` other skills credit no longer leads it.
+    if definition.name == "systematic-review" and _systematic_review_names_a_topic(normalized_query):
+        score += 6
+        matched.add("direct:literature_review_topic")
     if ecosystem_identity_connector_match:
         score += 36
         matched.add("direct:ecosystem_identity_connector")
@@ -6187,6 +6200,65 @@ def _repro_audit_offers_itself(normalized_query: str, query_tokens: set[str]) ->
     return not any(_REPRO_AUDIT_EXECUTION.fullmatch(word) for word in words)
 
 
+# `systematic-review` reads what its review phrase is a review OF. A literature
+# review names a topic: "a systematic review of statin trials", "a scoping
+# review of telehealth in rural clinics". A software review names something
+# the person owns or points at: "a systematic review of our error handling",
+# "a rapid review of the auth module". A topic carries no owner, pointer or
+# software word anywhere in its clause ("security risks in our app" is the
+# person's own app). A topic earns the skill one phrase's worth more, so the
+# bare `review` code-review credits no longer outranks the whole phrase; a
+# pointed-at software object withdraws the skill from the shortlist. A
+# literature word anywhere ("the migration literature") keeps the skill.
+_SYSTEMATIC_REVIEW_PHRASE = re.compile(r"\b(?:systematic(?: literature)?|scoping|rapid) review\b")
+_SYSTEMATIC_REVIEW_WORD = re.compile(r"[^\W_]+(?:-[^\W_]+)*")
+_SYSTEMATIC_REVIEW_TOPIC_LINKS = frozenset({"of", "on", "about"})
+_SYSTEMATIC_REVIEW_OWNED_OBJECT = frozenset({"the", "this", "that", "these", "those", "our", "my", "your", "their", "its", "all"})
+_SYSTEMATIC_REVIEW_SOFTWARE_WORDS = frozenset(
+    {
+        "code", "codebase", "repo", "repository", "pr", "prs", "diff", "branch", "commit", "commits", "module", "modules",
+        "microservice", "microservices", "api", "apis", "endpoint", "endpoints", "function", "functions", "migration",
+        "migrations", "schema", "auth", "handling", "bug", "bugs", "app", "apps", "service", "services", "stack",
+        "logging", "logs", "tests", "testing", "deployment", "deployments", "infrastructure", "database", "databases",
+        "frontend", "backend", "dependencies", "configuration", "monitoring", "observability", "exceptions", "errors",
+        "error",
+    }
+)
+_SYSTEMATIC_REVIEW_LITERATURE_WORDS = frozenset(
+    {"literature", "studies", "study", "trials", "trial", "papers", "articles", "abstracts", "records", "evidence"}
+)
+
+
+def _systematic_review_objects(normalized_query: str) -> list[list[str]]:
+    """The words after each `of`/`on`/`about` that follows a review phrase."""
+    objects: list[list[str]] = []
+    for match in _SYSTEMATIC_REVIEW_PHRASE.finditer(normalized_query):
+        rest = _SYSTEMATIC_REVIEW_WORD.findall(re.split(r"[.!?;](?:\s|$)", normalized_query[match.end():], maxsplit=1)[0])
+        if len(rest) >= 2 and rest[0] in _SYSTEMATIC_REVIEW_TOPIC_LINKS:
+            objects.append(rest[1:])
+    return objects
+
+
+def _systematic_review_offers_itself(normalized_query: str, query_tokens: set[str]) -> bool:
+    """Withdraw from a review of a pointed-at software object."""
+    del query_tokens
+    if _SYSTEMATIC_REVIEW_LITERATURE_WORDS & set(_SYSTEMATIC_REVIEW_WORD.findall(normalized_query)):
+        return True
+    return not any(
+        words[0] in _SYSTEMATIC_REVIEW_OWNED_OBJECT and _SYSTEMATIC_REVIEW_SOFTWARE_WORDS & set(words)
+        for words in _systematic_review_objects(normalized_query)
+    )
+
+
+def _systematic_review_names_a_topic(normalized_query: str) -> bool:
+    """A review phrase followed by a topic: nothing owned, pointed at or software in its clause."""
+    return any(
+        words[0] not in _SYSTEMATIC_REVIEW_OWNED_OBJECT
+        and not (_SYSTEMATIC_REVIEW_SOFTWARE_WORDS | _SYSTEMATIC_REVIEW_OWNED_OBJECT - {"the", "all"}) & set(words)
+        for words in _systematic_review_objects(normalized_query)
+    )
+
+
 @lru_cache(maxsize=1)
 def _spend_gate_trigger_phrases() -> tuple[str, ...]:
     definition = next(item for item in builtin_definitions() if item.name == "spend-gate")
@@ -6266,6 +6338,9 @@ _SKILL_OFFERS_ITSELF: dict[str, Callable[[str, set[str]], bool]] = {
     # HellaSwag record with a paper's report, every word from an allow list
     # (`_repro_audit_offers_itself`). No boost, no stand-down.
     "repro-audit": _repro_audit_offers_itself,
+    # `systematic-review`: not a review of a pointed-at software object
+    # (`_systematic_review_offers_itself`). No stand-down.
+    "systematic-review": _systematic_review_offers_itself,
 }
 # A skill whose admission reads where the data goes reads a stricter predicate
 # when the masker removed quoted, code, link or relayed text from the message

@@ -32,6 +32,7 @@ from ..workflows.research_receipt_check import (
     check_draft_receipts,
 )
 from .common import _command_hermes_session_id, _paths, _print_json, _wants_json
+from .research_screening import add_screening_commands
 
 
 def _receipts_verify_exit_code(payload: Any) -> int:
@@ -307,3 +308,4 @@ def _add_research_commands(sub) -> None:
     )
     grade.add_argument("--json", action="store_true", help="Print the research_eval_litqa2_grade/v1 payload.")
     grade.set_defaults(func=cmd_research_eval_litqa2_grade)
+    add_screening_commands(research_sub)

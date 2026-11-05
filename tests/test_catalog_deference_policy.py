@@ -320,9 +320,12 @@ NON_SKILL_BACKTICKS = frozenset(
 # `show-reel`'s idea-video lane defers a recording that already exists
 # (summary, transcript, captions, trim) to `media-input-operator`; one case,
 # one pair, no new owner.
-EXPECTED_DEFERENCE_CASES = 407
-EXPECTED_DEFERENCE_PAIRS = 423
-EXPECTED_DEFERRING_OWNERS = 120
+# `systematic-review` defers topic discovery to `source-finder`, one supplied
+# paper to `paper-learning` and a HellaSwag log check to `repro-audit`; no
+# sibling gains a statement pointing back. Three cases, three pairs, one owner.
+EXPECTED_DEFERENCE_CASES = 410
+EXPECTED_DEFERENCE_PAIRS = 426
+EXPECTED_DEFERRING_OWNERS = 121
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.
@@ -384,8 +387,14 @@ _SPEND_GATE_BY_DESIGN = (
 DELIBERATELY_UNREACHABLE: dict[tuple[str, str], str] = {
     ("automation-blueprint", "spend-gate"): _SPEND_GATE_BY_DESIGN,
     ("browser-operator", "spend-gate"): _SPEND_GATE_BY_DESIGN,
+    ("systematic-review", "repro-audit"): (
+        "by design (#2242 review): repro-audit is offered only to a whole request that is one comparison of the "
+        "person's own HellaSwag record with a paper, every word from its allow list (_repro_audit_offers_itself); "
+        "a Do-Not-Use line is not such a request. 'Compare my HellaSwag log with the paper' reaches it."
+    ),
 }
-EXPECTED_DELIBERATELY_UNREACHABLE_COUNT = 2
+# systematic-review's repro-audit statement adds the third pair (+1).
+EXPECTED_DELIBERATELY_UNREACHABLE_COUNT = 3
 
 
 def _deference_cases() -> list[tuple[str, tuple[str, ...], str]]:

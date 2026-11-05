@@ -62,9 +62,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # line now opens "Accumulated tech debt or architecture deepening..."
         # at the same cut, so the length stays; restoring that one line
         # reproduces 4c6beb2a...076e.
-        self.assertEqual(_digest(legacy), '61fb09020952f57a382da73e315a41ae7a38b50ae7a2e3d43626c4664c4f7f9b')
-        self.assertEqual(len('\n'.join(legacy)), 13326)
-        delta = len('\n'.join(lines)) - 13326
+        # 13326 -> 13416 and the digest re-derived: systematic-review adds one
+        # index line (+90 with its newline); dropping only that line reproduces
+        # 61fb0902...f7f9b / 13326.
+        self.assertEqual(_digest(legacy), '4b82ff50629ea1e2db50d5994ab8bc0f65094b9e432f0f5c91aed98b046d5ca5')
+        self.assertEqual(len('\n'.join(legacy)), 13416)
+        delta = len('\n'.join(lines)) - 13416
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, INDEX_DELTA_CAP)
         # A catalog ratchet is exact; do not carry the old row's unused slack.
@@ -130,11 +133,14 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # `role=review` node to `review`, keeps `role=baseline` low and has `role=verify` climb
             # the ladder (+247, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and
             # the pin before it was b8552607...5e6b.
-            (skill_capabilities, 530686, FULL_ROW_DELTA_CAP,
-             '2cb9a1ffbf86b048998fe3ae86687f60893a408a4b33af1dab1b4e6a728cca80',
+            # 530686 -> 533897 and 143589 -> 144536: systematic-review adds one row to each
+            # producer (+3211 full, +947 standalone); dropping only that row reproduces
+            # 2cb9a1ff...ca80 and 7971eca9...7617.
+            (skill_capabilities, 533897, FULL_ROW_DELTA_CAP,
+             'e6484100710e1a95d558b55fd105129a7cdaa418aabd8e9ee71a174143c19d8b',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
-            (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
-             '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
+            (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
+             '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
              release.STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
         ):
             with self.subTest(producer=producer.__name__):
@@ -170,13 +176,17 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # `, `sprite-forge`` operator token (+16): 32874 -> 33095. Removing only
         # those reproduces the previous pin 6c130e8ecad1e2ea6fada96a8f3b555b3b80f40d63ec64ea6872c1c49bf941e4.
         # Merged with main: 33096 + 221 = 33317 and the digest re-derived.
-        self.assertEqual(_digest(legacy), '29ebe70fe2183974cd9c8d8ad9859f93d5e2ca3f3c442d3e81be2ddb635b7063')
+        # 33317 -> 33593 and the digest re-derived: the systematic-review
+        # trigger row (255 bytes) and its researcher token (+21); removing
+        # only those reproduces 29ebe70f...7063.
+        self.assertEqual(_digest(legacy), 'caa4437572df136f2fc5d2e4f3b7a5a3c6997306d9595e56e422604fc26a9ec3')
         baseline = len(''.join(legacy).encode())
-        self.assertEqual(baseline, 33317)
+        self.assertEqual(baseline, 33593)
         # 33_100 -> 33_318: main's ru pack and repro-audit (+222 over 32874) used
         # the gate's room and sprite-forge adds its 221-byte row and token; each
         # side alone fit, the merged tree measures 33317. The gate stays exact.
-        self.assertLess(baseline, 33_318)  # The existing content keeps its old gate.
+        # 33_318 -> 33_594: systematic-review's 276 bytes; the gate stays exact.
+        self.assertLess(baseline, 33_594)  # The existing content keeps its old gate.
         self.assertLessEqual(len(registry.encode()) - baseline, REGISTRY_DELTA_CAP)
 
     def test_repeated_growth_is_only_mandatory_rails_and_existing_bodies_survive(self) -> None:
@@ -196,8 +206,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # Reconstruct that one measured, same-length membership change.
             # The vi trigger rewording also moved five lane bodies, which is
             # why this digest is no longer the clean-base one.
-            # repro-audit's own lane membership makes it +27 -> +26.
-            restored = ''.join(body.replace('`+27 more`', '`+26 more`')
+            # repro-audit's own lane membership makes it +27 -> +26, and
+            # systematic-review's makes it +28 -> +27.
+            restored = ''.join(body.replace('`+28 more`', '`+27 more`')
                                if heading == 'Workflow Lane' and '**Research and company ops**' in body
                                else body for heading, body in parts)
             legacy_hashes[template.name] = hashlib.sha256(restored.encode()).hexdigest()
@@ -347,7 +358,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # dag-ulw's category-ladder line sends a `role=review` node to `review`, keeps `role=baseline`
         # low and has `role=verify` climb the ladder; only dag-ulw moves. Re-derived on the tree merged
         # with main after the bail points; main's pin before it was fb4303cb...1fcf.
-        self.assertEqual(_digest(legacy_hashes), '2b0982e6ec972a7bc5c91190a5fed140bd8790a8c9408b0e1bdddb1ce7c38db3')
+        # systematic-review joins the research lane (+27 -> +28 more) with its narrowed Korean pack;
+        # restoring +28 -> +27 and dropping it reproduces 2b0982e6...8db3.
+        self.assertEqual(_digest(legacy_hashes), '5404bf98149708d4ee110e9bc62a86ba531a339b04817063d927fd559ca32229')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -359,14 +372,16 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Recovery Notes replace the planning-category defaults it repeated
         # (-501); swapping only that body back to main's restores 128600.
         # Skill-specific bail notes remove duplicate Recovery Notes; the measured count falls, with all ceilings unchanged.
-        self.assertEqual(legacy['repeated']['bytes'], 120488)
+        # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
+        self.assertEqual(legacy['repeated']['bytes'], 122431)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
         # 126,000 -> 127,943: repro-audit's 1,943 rails, bounded by its own test.
         # 126_000 -> 128_007: the same measured +2007 as above; no new headroom.
         # Merged with main: 126,000 + 1,943 + 2,007 = 129,950.
-        self.assertLess(current['repeated']['bytes'] - REPEATED_DELTA_CAP, 129_950)
+        # 129,950 -> 131,893: systematic-review's measured +1,943 rails.
+        self.assertLess(current['repeated']['bytes'] - REPEATED_DELTA_CAP, 131_893)
         feature_refs = [t for t in refs if t.skill_name == FEATURE]
         self.assertEqual(len(feature_refs), 6)
         self.assertLessEqual(sum(len(t.content.encode()) for t in feature_refs), 19397)

@@ -94,7 +94,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # loader migration, Korean messages with "OMH가" that read as on main,
         # OMH ignoring files, and a filler adverb, a why-question about a
         # parser and "Hermes with OMH" before a task stay off it too.
-        self.assertEqual(payload["summary"]["case_count"], 1390)
+        # systematic-review adds six review, screening and criteria controls.
+        self.assertEqual(payload["summary"]["case_count"], 1406)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -253,7 +254,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # a Korean "정리해 둬" keeps toolbelt-readiness, OMH missing a test
         # before an add-tests request keeps ultrawork, and two reports quoting
         # the user's own migrate / rewrite ask reach workflow-learning.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1239)
+        # systematic-review adds four screening requests and two owner-keeping controls.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1249)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

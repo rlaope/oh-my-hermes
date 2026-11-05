@@ -55,7 +55,8 @@ class SkillRecordTests(unittest.TestCase):
         # The career method adds its own evidence-bound next action.
         # repro-audit adds its own curated policy (+1 skill).
         # sprite-forge adds a `_SKILL_POLICIES` entry (+1 skill).
-        self.assertEqual(counts, Counter({"skill": 125, "category": 27, "role": 9}))
+        # systematic-review adds its own curated policy (+1 skill).
+        self.assertEqual(counts, Counter({"skill": 126, "category": 27, "role": 9}))
         self.assertEqual(counts["default"], 0)
 
     def test_next_action_label_is_the_action_copy_label(self) -> None:

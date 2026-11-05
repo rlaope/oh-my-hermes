@@ -318,7 +318,10 @@ class RouterContentTests(unittest.TestCase):
         # the skills added since the last raise had used the rest); ~2.8%
         # headroom kept.
         # Three optional science index entries; no eager toolkit bytes.
-        self.assertLess(len(rendered.encode("utf-8")), 33_000)
+        # 33,000 -> 33,194: `systematic-review` adds one 194-byte index line
+        # (32,978 -> 33,172 measured); the existing 22-byte allowance is kept,
+        # not widened.
+        self.assertLess(len(rendered.encode("utf-8")), 33_194)
         for line in rendered.splitlines():
             self.assertLess(len(line.encode("utf-8")), 400, line)
 
@@ -507,10 +510,18 @@ class RouterContentTests(unittest.TestCase):
             # main's 33,340 (ru pack and repro-audit rows) plus sprite-forge's
             # 221-byte row and operator token. Each side alone fit; main's
             # 4-byte headroom is kept, not widened.
-            limit = 33_565 if (
-                template.skill_name == "oh-my-hermes"
-                and template.relative_path == "references/workflow-registry.md"
-            ) else 33_100
+            # 33,565 -> 33,841: `systematic-review` adds its 255-byte trigger
+            # row and 21-byte researcher token (33,561 -> 33,837 measured); the
+            # same 4-byte headroom is kept.
+            # catalog-index takes its own ceiling, the one the index test
+            # above holds: `systematic-review`'s 194-byte line moves it past
+            # 33,100 (33,172 measured).
+            if template.skill_name == "oh-my-hermes" and template.relative_path == "references/workflow-registry.md":
+                limit = 33_841
+            elif template.skill_name == "oh-my-hermes" and template.relative_path == "references/catalog-index.md":
+                limit = 33_194
+            else:
+                limit = 33_100
             self.assertLess(len(template.content.encode("utf-8")), limit, template.relative_path)
 
         schemas = (
