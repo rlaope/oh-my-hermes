@@ -574,7 +574,7 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
-### 2026-11-04 round end after shell-only edits: base vs on (`transform_tool_result`)
+### 2026-11-04 round end after shell-only edits: base vs on (`transform_tool_result`), gate failed
 
 Pre-registered before its first live run.
 
@@ -884,6 +884,53 @@ recounted from the raw records by separate code.
   counts. The clause has no exception for it.
 - **If v3 fails:** nothing from this branch ships. The next candidate is chosen from the diagnosis
   of the failing runs, under its own pre-registration.
+
+#### Measurement 3 result (2026-11-05): gate failed on clauses 2 and 4; the branch does not merge
+
+Counted runs 2026-11-05 08:23-09:08 KST, after OPT-L's Registration 2 released the shared lock:
+s55 and h45 in D and S, luna and sol in S. 372 runs, 0 crashes or incomplete runs, so the strict
+and re-run readings are the same. Recomputed by `OPT/opt-m/gate.py` (`gate-strict.json`) and
+recounted from the raw records by separate code; the two agree.
+
+| Clause | Result |
+| --- | --- |
+| 1. No template loses a pass, pooled | PASS: no template lower; I-KWARG 21 -> 24, I-SIGNATURE 18 -> 24 |
+| 2. Shell notes on controls | **FAIL**: 2, both export notes on h45 S `L-RENAME-EXPORTS` (391553, 452989), both runs passed |
+| 3. Continues on controls, on <= base | PASS: 12 -> 12 |
+| 4. No on run above 3x its cell's base median tokens | **FAIL**: luna S `I-SIGNATURE-452989`, 157,648 against a median of 39,745 |
+| 5a. Coverage and fidelity against the replay | PASS: 82 on-arm shell-only runs, each on its recorded tree digest, live notes equal replayed notes |
+| 5b. Shell-only positives | PASS: 33/41 -> 39/39 |
+
+Totals: 177/186 -> 186/186 passes, 15.38M -> 15.27M tokens. 16 shell notes.
+
+Where the shell route acted, the cells moved:
+- h45 S I-KWARG: 2/4 -> 4/4;
+- h45 S I-SIGNATURE: 2/4 -> 4/4;
+- luna S I-SIGNATURE: 0/4 -> 4/4.
+
+No run got a second note in the same turn, so v3's change (each check once per turn) did not occur
+live.
+
+**The two failed clauses.**
+- **Clause 2, an export note on the export check's control, true when read.** In
+  `L-RENAME-EXPORTS-391553`, Haiku's second `sed` renamed the package import but not the `__all__`
+  entry. The note named `store/__init__.py:10` (`__all__` lists `fetch_rows`) after that message,
+  and the model's next message fixed it. The control is defined by its correct final state (no
+  dangling export), and the clause counts any note on it, including one on a mid-edit state that
+  was broken when the model read it.
+- **Clause 4, a token outlier in a run the shell route did not act on.** In
+  `I-SIGNATURE-452989`, luna edited with `patch` despite the shell rule. Main's own `pre_verify`
+  caller check (the same code in both arms) continued the turn, and the model then fixed
+  `cli.py` and `invoices.py` and passed. Every base luna S I-SIGNATURE run failed (0/4) and
+  stopped early, which sets the low median.
+
+**Next candidate** (not built, not measured), if the owner wants another round:
+- Each clause failed on a behaviour the clause did not anticipate rather than on a wrong note. The
+  pre-registered clauses would have to change (for example, clause 2 counting only notes that
+  name a line still broken at the turn's end, and clause 4 counting only runs the shell route
+  acted on).
+- That is a change of the gate, not of the product. It needs the owner's decision and a new
+  pre-registration.
 
 ### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
 
