@@ -27,7 +27,7 @@ import unittest
 from unittest.mock import patch
 
 from _delegation_graphs import graph, lane, root
-from test_tui_agent_view import mode_row, view_text, with_graph
+from test_tui_agent_view import agent_event, mode_row, view_text, with_graph
 from test_tui_modes import drawn, make_app
 from omh.tui.background import BackgroundProcess, tool_call
 from omh.tui.keys import CHAR, Key
@@ -470,7 +470,7 @@ class WaitingRowTests(unittest.TestCase):
                 screen = drawn(app)
                 rule = next(at for at, row in enumerate(screen) if row.startswith("─"))
                 (row,) = self.waiting(app)
-                self.assertEqual(row[2:], f"Waiting… (10m 6s · {CALL})")
+                self.assertEqual(row[2:], "Waiting… (10m 6s · terminal)")
                 self.assertIn(row[0], WORKING_GLYPHS)
                 self.assertLess(screen.index(row), rule, "above the composer, where the working row stands")
                 self.assertEqual(app._working_rows(), 1)
@@ -505,6 +505,58 @@ class WaitingRowTests(unittest.TestCase):
         wall[0] += 0.25  # a quarter into the second: the next frame is due at the next second, no sooner
         self.assertAlmostEqual(app._read_timeout(), 0.75, places=6, msg="the clock asks for a frame each second")
         self.assertLess(app._read_timeout(), IDLE_READ_SECONDS)
+
+
+class WaitingAgentsTests(unittest.TestCase):
+    """The same row counts the delegated children still running, which wake the parent as they end (the owner's
+    screenshot of 2026-11-05: a dag node running 33m 47s between turns, nothing above the composer saying so):
+    `✻ Waiting… (33m 47s · 1 agent · terminal)`, from the HUD graph's running lanes; never from the model's text."""
+
+    def app(self, *, lanes: tuple[float, ...] = (), terminals: int = 0, busy: bool = False, graph: bool = True):
+        from omh.tui.panels import HudSnapshot
+
+        clock, wall = [100.0], [PARKED_AT + 2000]
+        app, _client = make_app(busy=busy, rows=50, cols=150, clock=lambda: clock[0], wall_clock=lambda: wall[0])
+        app.bg_session = app.stored_id
+        app.bg_running = tuple(BackgroundProcess(f"proc_{number}", None, False, None, "uv run pytest", PARKED_AT, True,
+                                                 False) for number in range(terminals))
+        built = screenshot_run()
+        for number, elapsed in enumerate(lanes):
+            built["nodes"].append(lane(node_id(f"run-{number}"), f"Running {number}", "quick", SONNET, "low",
+                                       "running", elapsed=elapsed, order=40 + number, group="layer 4"))
+            built["edges"].append({"from": node_id("t3"), "to": node_id(f"run-{number}"), "kind": "depends_on"})
+        with_graph(app, built if graph else None)
+        app.hud = HudSnapshot(app.hud.session_id, app.hud.payload, wall[0])  # read just now
+        return app, clock, wall
+
+    @staticmethod
+    def waiting(app) -> list[str]:
+        return [row[2:] for row in drawn(app) if "Waiting…" in row]
+
+    def test_a_running_dag_node_alone_is_one_agent_with_its_time(self) -> None:
+        app, _clock, wall = self.app(lanes=(2027.0,))
+        self.assertEqual(self.waiting(app), ["Waiting… (33m 47s · 1 agent)"])
+        wall[0] += 1
+        self.assertEqual(self.waiting(app), ["Waiting… (33m 48s · 1 agent)"], "counted on since the HUD read it")
+
+    def test_agents_and_terminals_together_the_longest_wait_and_plural_counts(self) -> None:
+        app, _clock, _wall = self.app(lanes=(2027.0, 30.0), terminals=2)
+        self.assertEqual(self.waiting(app), ["Waiting… (33m 47s · 2 agents · 2 terminals)"])
+        app, _clock, _wall = self.app(lanes=(5.0,), terminals=1)
+        self.assertEqual(self.waiting(app), ["Waiting… (33m 20s · 1 agent · terminal)"], "the terminal waited longer")
+
+    def test_the_rosters_agents_alone_draw_no_row(self) -> None:
+        # The count is the HUD reader's: its delegation graph's running lanes. The roster's frames alone (no graph read
+        # yet) say nothing of whether the child wakes the parent, so they draw no row.
+        app, _clock, _wall = self.app(graph=False)
+        agent_event(app, "start", "sa-1", goal="Rebase the PR", child_session_id="child-1")
+        self.assertEqual(self.waiting(app), [])
+
+    def test_nothing_pending_or_a_turn_running_draws_no_row(self) -> None:
+        app, _clock, _wall = self.app()
+        self.assertEqual(self.waiting(app), [], "the parked node and the waiting ones are no running agent")
+        app, _clock, _wall = self.app(lanes=(60.0,), terminals=1, busy=True)
+        self.assertEqual(self.waiting(app), [], "a turn's working row is the turn's")
 
 
 class ParkedGraphTests(unittest.TestCase):

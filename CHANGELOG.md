@@ -31,14 +31,17 @@ All notable changes will be documented here.
   the run waits. While the terminal window is unfocused, the spinner and the
   dots hold, as the wallpaper does (#2542), while the times keep counting,
   redrawn once a second. An `unspecified-*` or unknown category no longer
-  draws a cell. Between turns, while a background process Hermes will wake
-  the session for still runs (`notify_on_complete`, or `watch_patterns` on a
-  match), the working row's place above the composer says the session waits
-  on it, as the working row says a turn runs: `✻ Waiting… (10m 6s ·
-  terminal(<command>))`. It has the working row's own spinner and clock. A
-  turn's working row takes over when a turn starts, and the row goes when
-  the process ends. The state is read from the process's flags, never from
-  what the model said, and the info line is unchanged.
+  draws a cell. Between turns, while something the session waits on still
+  runs, the working row's place above the composer says so, as it says a
+  turn runs: `✻ Waiting… (33m 47s · 1 agent · terminal)`. That is a delegated
+  child or dag-ulw node that wakes the parent as it ends (the running lanes
+  of the delegation graph the HUD reads), or a background
+  process Hermes will wake the session for (`notify_on_complete`, or
+  `watch_patterns` on a match). Each count shows only when it is not zero,
+  and the time is the longest wait. It has the working row's own spinner and
+  clock. A turn's working row takes over when a turn starts, and the row
+  goes when nothing is left to wait on. It is read from structure, never
+  from what the model said, and the info line is unchanged.
 - **`dag-ulw` is offered where a plan's follow-on is chosen.** On Hermes'
   own `/plan` turn, whose reply offers to carry the plan out, the model is
   asked to also name `dag-ulw` as one option when the plan's tasks form a
