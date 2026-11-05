@@ -107,6 +107,25 @@ class FrameTests(unittest.TestCase):
         self.assertTrue(asked.style.bold)
         self.assertEqual(asked.style.depth, NO_COLOR)
 
+    def test_a_multi_select_question_keeps_its_submit_row_without_colour_and_when_narrow(self) -> None:
+        multi = {"questions": [{**ENGLISH["questions"][0], "multi_select": True}]}
+        question = slot(multi)
+        question.handle_key(Key(ENTER))  # ticks the first choice, sends nothing
+        plain = lines_text(question.lines(150, without_colour(DEFAULT_THEME), 30))
+        self.assertEqual(plain, lines_text(question.lines(150, DEFAULT_THEME, 30)))
+        self.assertIn("▌          Submit", plain)
+        self.assertTrue([row for row in plain if row.startswith("▌ ❯ [x] 1. ")], plain)
+        for width, footer in ((60, "  Enter to tick · ↓ Submit to send · Esc to cancel"),
+                              (40, "  Enter to tick · Esc to cancel"), (24, "  Esc to cancel")):
+            with self.subTest(width=width):
+                drawn = lines_text(question.lines(width, DEFAULT_THEME, 30))
+                self.assertEqual(drawn[-1], footer)
+                self.assertIn("▌          Submit", drawn)
+                self.assertTrue(all(cell_width(row) <= width for row in drawn), drawn)
+        for _ in range(9):
+            question.handle_key(Key(DOWN))  # the list stops at Submit, whose key row says Enter sends
+        self.assertEqual(lines_text(question.lines(40, DEFAULT_THEME, 30))[-1], "  Enter to send · Esc to cancel")
+
     def test_a_narrow_terminal_wraps_and_shortens_the_key_row(self) -> None:
         drawn = text(KOREAN, width=60)
         self.assertEqual(drawn[0], prompts.FRAME_RULE * 60)
@@ -162,7 +181,8 @@ class FrameTests(unittest.TestCase):
         multi = {"questions": [{**ENGLISH["questions"][0], "multi_select": True}]}
         drawn = text(multi)
         self.assertEqual(drawn[-1],
-                         "  Space to tick · Enter to send · ↑↓ to navigate · Esc to cancel")
+                         "  Enter to tick · Enter on Submit to send · ↑↓ to navigate · Esc to cancel")
+        self.assertIn("▌          Submit", drawn)
         self.assertIn("▌ Merge the alternative anyway? (choose one or more)", drawn)
         closed = {"questions": [{**ENGLISH["questions"][0], prompts.CLOSED_CHOICES: True}]}
         self.assertEqual(text(closed)[-1], "  Enter to select · ↑↓ to navigate · Esc to cancel")

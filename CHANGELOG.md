@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A tick-box question in the OMH TUI no longer sends on the first press.**
+  When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
+  choice sent the question at once: with nothing ticked it answered with
+  the highlighted choice alone and moved on, so a person who pressed Enter
+  to tick lost the rest of their picks. Now Enter, Space and a digit on a
+  choice only tick or untick it, as in Claude Code's question. The list
+  ends with a `Submit` row (`Next` while more questions follow), and Enter
+  there sends the ticked choices with any text typed in the `Type
+  something.` field, which stays on that row when the arrows leave the
+  field; with neither, the key row says `Enter to skip` and the question
+  reads as skipped. Enter in the open field still sends the typed answer
+  with the ticked choices. A question with several parts shows each one
+  before the last is sent. A single-choice question is unchanged: a digit
+  or Enter still picks and sends.
+
 - **A table that follows a released one with no blank line between gets its
   own box in scrollback, as in `/history`.** The OMH TUI used to draw the
   second table's header as a body row of the first and drop its divider.
