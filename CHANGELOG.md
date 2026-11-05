@@ -20,6 +20,12 @@ All notable changes will be documented here.
   when the failed node was a verify node) before editing. There is still no
   rollback: the worktree is shared. Every other node's task reads byte for
   byte as before.
+- **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
+  of the hollow `○`.** Four finished agents in a row looked the same as four
+  that had not started. A completed agent now leads with `✓` in the done
+  green; the collapsed `N done` row is green only when every agent it
+  counts completed, else a muted `▪`.
+  Interrupted, failed, waiting and running agents keep their marks.
 
 ## 4.0.6 - 2026-11-04
 
