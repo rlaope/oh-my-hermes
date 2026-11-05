@@ -722,6 +722,28 @@ class FramedPickerTests(unittest.TestCase):
         highlighted = [reversed_columns(app, row + 1) for row in (top - 1, keys - 2, keys - 1)]
         self.assertEqual(highlighted, [[], [], []])  # the rules and the key row are never highlighted
 
+    def test_its_frame_paints_the_bytes_it_did_before_it_was_a_gutter(self) -> None:
+        # The bar beside the context and the "more choices" marker share one look: one SGR run each row, as before the
+        # bar and the marker became gutters (`style.joins`), so OMH_TUI_MOUSE=0 writes the bytes it always wrote.
+        context = {"qid": "q0", "question": "Some context first.\nWhich one?", "choices": ["red", "blue"],
+                   "multi_select": False}
+        many = {"qid": "q0", "question": "Which one?", "choices": [f"choice {n}" for n in range(30)],
+                "multi_select": False}
+        for question, painted, copied_not in ((context, r"\x1b\[[0-9;]*m▌ Some context first\.\x1b\[0m", "▌"),
+                                              (many, r"\x1b\[[0-9;]*m▌   … \+\d+ more choices", "more choices")):
+            for rows, cols in ((24, 60), (30, 80)):
+                with self.subTest(question=question["question"][:10], rows=rows, cols=cols):
+                    app = main_app(NATIVE, rows=rows, cols=cols)
+                    app._on_server_request(ServerRequest("srq-1", "clarify", {"session_id": "s", "questions": [question]}))
+                    drawn(app)
+                    self.assertRegex("".join(app.terminal.writes), painted)  # type: ignore[attr-defined]
+                    mouse = main_app(rows=rows, cols=cols)  # the same picker where the main screen takes the mouse
+                    mouse._on_server_request(ServerRequest("srq-1", "clarify", {"session_id": "s", "questions": [question]}))
+                    screen = drawn(mouse)
+                    last = max(index for index, line in enumerate(screen) if line.startswith("▌")) + 1
+                    drag(mouse, (1, row_of(mouse, "Which one")), (cols, last))
+                    self.assertNotIn(copied_not, osc52(mouse)[0])
+
     def test_the_wheel_while_it_is_open_opens_the_question_view_without_its_key_row_or_rules(self) -> None:
         app = self.picker()
         app._on_input(Mouse(WHEEL_UP, 5, 3))

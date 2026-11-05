@@ -643,7 +643,9 @@ class PromptSlot:
         forms = list(MORE_APPROVAL_CHOICES) if self.method == "approval" else [form.format(**said) for form in MORE_CHOICES]
         if ticked:
             forms[-1] = f"  … {ticked} ticked · ctrl+o"
-        marker: Line = (Span(next((form for form in forms if cell_width(form) <= width), forms[-1]), theme.muted),)
+        # The marker says what the picker left out: no text of the question, so a gutter (`_framing`) a drag never copies.
+        marker: Line = (Span(next((form for form in forms if cell_width(form) <= width), forms[-1]),
+                             _framing(theme.muted)),)
         return ([*rows, marker] if last < len(choices) - 1 else [marker, *rows]), False
 
     def _is_ticked(self, index: int) -> bool:
@@ -987,8 +989,9 @@ def _without_recommended(text: object) -> str:
 
 
 def _framing(style: Style) -> Style:
-    """`style` as a gutter: a cell that frames the question, never highlighted or copied by a drag."""
-    return replace(style, gutter=True)
+    """`style` as a gutter: a cell that frames the question, never highlighted or copied by a drag, painted as one run
+    with a neighbour of its look (`style.joins`), as it was before it was a gutter."""
+    return replace(style, gutter=True, joins=True)
 
 
 def _barred(row: Line, bar: Span, width: int) -> Line:

@@ -493,7 +493,7 @@ class SlotBarTests(unittest.TestCase):
                 self.assertTrue(rows)
                 # A question is no state: grey. A framed clarify's bar is a gutter, which a drag never copies.
                 framed = method == "clarify"
-                self.assertEqual(bar_styles(rows), {replace(DEFAULT_THEME.muted, gutter=framed)})
+                self.assertEqual(bar_styles(rows), {replace(DEFAULT_THEME.muted, gutter=framed, joins=framed)})
                 self.assertTrue(all(line_width(row) <= 60 for row in rows))
 
 

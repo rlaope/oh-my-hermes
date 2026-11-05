@@ -138,6 +138,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from functools import lru_cache
 import unicodedata
 
@@ -271,13 +272,23 @@ def paint_line(line: Line, width: int, ground: str | None = None) -> str:
     last span is empty and has a background (`style.fill`) erases with that
     background, which a terminal paints to the right edge (background colour
     erase), so a band reaches the edge without trailing spaces to copy.
+    A gutter that `joins` is painted as one run with a neighbour of the same
+    look (a framed question's bar and its context), so marking it a gutter
+    changes what a drag copies and not the bytes.
     """
     fill = line[-1].style if line and is_fill(line[-1]) else None
     clipped = truncate_line(without_controls(line), width, ellipsis="")
-    parts: list[str] = []
+    runs: list[tuple[Style, str]] = []
     for span in clipped:
-        sgr = span.style.sgr()
-        parts.append(f"{sgr}{span.text}{SGR_RESET}" if sgr else span.text)
+        look = replace(span.style, gutter=False, joins=False) if span.style.joins else span.style
+        if runs and runs[-1][0] == look:
+            runs[-1] = (look, runs[-1][1] + span.text)
+        else:
+            runs.append((look, span.text))
+    parts: list[str] = []
+    for look, text in runs:
+        sgr = look.sgr()
+        parts.append(f"{sgr}{text}{SGR_RESET}" if sgr else text)
     if line_width(clipped) < width:
         parts.append(f"{fill.sgr()}{ERASE_TO_LINE_END}{SGR_RESET}" if fill is not None
                      else on_ground(ERASE_TO_LINE_END, ground))
