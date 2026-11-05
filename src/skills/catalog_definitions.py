@@ -232,6 +232,11 @@ _GROUNDED_CITATIONS_VERIFY_RULE = (
     "not - and `verify --evidence` also fails a draft whose cited source carries no verbatim quote. An exit `0` "
     "whose `info: stats:` line reads `0 distinct source(s) cited` checked nothing and is reported as `not_observed`"
 )
+_GROUNDED_CITATIONS_RECEIPTS_RULE = (
+    "After that verify, run `omh research receipts verify --citations <ledger> --draft <draft>` and report its fetched "
+    "coverage from the run, or as `not_observed`; a receipt proves only that the page was opened in this session tree, "
+    "never that it supports the claim"
+)
 
 # A blocked source, as `research` and `web-research` recover it. Hermes bundles
 # `blocked-page-recovery` and no other host does, so the portable bodies say
@@ -1766,7 +1771,7 @@ _DEFINITIONS = [
             "Revise the search plan when new evidence exposes a gap or contradiction instead of stopping at the first pass.",
             "Record contested claims with two independent original groups/domains, primary support and an observed counter-search, or keep them unresolved; use `references/evidence-records.md` for records. Agent/operator validation: `python -m omh.workflows.research_dossier <json-file>`.",
             "Separate direct evidence, citation links, retrieval dates, inference, confidence, and residual uncertainty.",
-            f"{_GROUNDED_CITATIONS_REGISTER_RULE}. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} Use parent-only serialized writes: lanes return observed source entries and quote refs; the parent registers URLs, attaches quotes, and remaps lane ids before drafting. Lanes never write the shared ledger. When a human briefing is written, report the citation check from a run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}. It is a citation check, not fact verification, and it never stands in for the contested-claim gate. Without the skill, keep each source's URL and retrieval date in the research notes and report the citation check as `not_observed`.",
+            f"{_GROUNDED_CITATIONS_REGISTER_RULE}. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} Use parent-only serialized writes: lanes return observed source entries and quote refs; the parent registers URLs, attaches quotes, and remaps lane ids before drafting. Lanes never write the shared ledger. When a human briefing is written, report the citation check from a run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}. It is a citation check, not fact verification, and it never stands in for the contested-claim gate. {_GROUNDED_CITATIONS_RECEIPTS_RULE}. Without the skill, keep each source's URL and retrieval date in the research notes and report the citation check as `not_observed`.",
             "Name retrieval gaps when Hermes or the wrapper cannot access the web.",
             "For AI or usability research, separate target-user/task assumptions, measured or reported usability dimensions, and generalizability limits from the evidence.",
             "Decompose the question into orthogonal research axes and disambiguate named entities before any deep reading.",
@@ -1929,7 +1934,7 @@ _DEFINITIONS = [
             "Cross-check a contested claim against a second independent domain, or state that it stays unverified.",
             "Keep historical-capture evidence and live-page evidence as two typed surfaces for a point-in-time or then-versus-now question; capture time, publication time, and retrieval time are independent clocks and none substitutes for another.",
             f"{_GROUNDED_CITATIONS_REGISTER_RULE}, before any prose is written; cite a source only by the id the ledger gave it, written `[n]`. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} Mark background that rests on model knowledge `[unverified]` instead of citing it: the marker is for background the answer does not rest on and never carries the answer, and a contested claim with a single source keeps its citation and is stated as uncorroborated. The ledger id sits beside the source class and the retrieval date and replaces neither. Without the skill, list each source when it is retrieved and cite it at the claim it supports.",
-            f"When that ledger is in use, report the citation check from a run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}, and so is an answer given only in chat: `verify` reads a draft file and exits `2` without one, so write the answer to a file first when the check matters. The run compares cited ids and the Sources block with the ledger; it does not test whether a claim is true, so a passing citation check is never reported as fact verification. Without the ledger the citation check is `not_observed`.",
+            f"When that ledger is in use, report the citation check from a run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}, and so is an answer given only in chat: `verify` reads a draft file and exits `2` without one, so write the answer to a file first when the check matters. The run compares cited ids and the Sources block with the ledger; it does not test whether a claim is true, so a passing citation check is never reported as fact verification. {_GROUNDED_CITATIONS_RECEIPTS_RULE}. Without the ledger the citation check is `not_observed`.",
             "Stop at the answer: one retrieval round settles a lookup, and an expanding lead list means the request belongs to `research`.",
             "Report what retrieval did not yield rather than closing the gap from recall.",
         ),
@@ -2269,7 +2274,7 @@ _DEFINITIONS = [
             "Record each material claim as a compact evidence row: claim, source, source class (upstream official, practitioner heuristic, or unattributed), source date, confidence, and unresolved conflict.",
             "Keep claims that lack corroboration in an explicit unresolved list instead of asserting or silently dropping them.",
             "Separate observed sources, source quality, source diversity, inferred trends, and unresolved uncertainty.",
-            f"{_GROUNDED_CITATIONS_REGISTER_RULE}, and carry two more fields on every evidence row: the ledger id written as `[n]` - a bare number in a cell is not a citation to `verify`, so that row would go unchecked - and the verbatim quote attached with `sources.py quote <id> --text <quote> --from <page text file>`, which rejects wording that file does not contain. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} A row whose quote could not be attached says so, and a claim that rests on model knowledge is marked `[unverified]` and listed as unresolved, never entered as evidence. Run `sources.py verify <draft> --evidence`, since every evidence row is meant to carry its quote, and report the citation check from that run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}; it is a citation check, not fact verification. Without the skill, keep the source and its quoted wording in the row and report the citation check as `not_observed`.",
+            f"{_GROUNDED_CITATIONS_REGISTER_RULE}, and carry two more fields on every evidence row: the ledger id written as `[n]` - a bare number in a cell is not a citation to `verify`, so that row would go unchecked - and the verbatim quote attached with `sources.py quote <id> --text <quote> --from <page text file>`, which rejects wording that file does not contain. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} A row whose quote could not be attached says so, and a claim that rests on model knowledge is marked `[unverified]` and listed as unresolved, never entered as evidence. Run `sources.py verify <draft> --evidence`, since every evidence row is meant to carry its quote, and report the citation check from that run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}; it is a citation check, not fact verification. {_GROUNDED_CITATIONS_RECEIPTS_RULE}. Without the skill, keep the source and its quoted wording in the row and report the citation check as `not_observed`.",
             "Use the brief to feed strategy or meeting work without calling it execution evidence.",
             "For a market question, fix the decision audience, buyer/segment/geography, source cutoff, period/currency/base year, units and denominator before synthesis; leave missing values unknown. Use `market-research` for scoped TAM/SAM/SOM, customer/JTBD evidence, and comparable competitor/pricing methods instead of improvising a market model inside the brief.",
             "Write each finding with source IDs and dates, observed, vendor-asserted, or inferred status, assumptions, decision implication, contrary evidence, confidence limit, and next verification owner. Keep failed-source coverage visible, not a claim that no evidence exists; lead with what changes the decision and attach only relevant method worksheets.",
@@ -7247,7 +7252,7 @@ _DEFINITIONS = [
             "Start from observed repo facts and source/web evidence when freshness or external behavior matters.",
             "Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.",
             "Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.",
-            "List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `ultrawork` can prepare board rows from the plan without re-planning; planning itself stays a bounded in-session lane.",
+            "List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `dag-ulw` nodes or `ultrawork` board rows come from the plan without re-planning; planning itself stays a bounded in-session lane.",
             ADAPTATION_QUALITY_READ_RULE,
             *_RALPLAN_IDEAL_STATE_BAR,
             *_PLAN_AMBITION_BAR,
@@ -7296,7 +7301,10 @@ _DEFINITIONS = [
         recovery_notes=(
             "If requirements are still fuzzy, route back to deep-interview before planning.",
             "If current-source evidence is missing, route a `research` step before accepting the plan.",
-            "If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.",
+            PortableLine(
+                "If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.",
+                "If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.",
+            ),
         ),
         situations=(
             "plan this so it can be reviewed",
@@ -7344,7 +7352,7 @@ _DEFINITIONS = [
             "artifact_expectations": "a8eb07c3491b92fb1f72dc0bbd8bd5da29398f9b8aa6cae9b64b2b2c5aa3bae6",
             "safety_rules": "72126c765975b034ab683d27aa0349dbe84c564e45f29832f2b8424a1b3d28cc",
             "opening_steps": "f839a5ee9ecaca2834a76d29b601f18e03ca292e0abc0b2af5c92274b5fa4c7e",
-            "quality_bar": "49e2e4c0ed3087467d5c5f06f247e79977916873d5055f264a09a2823bd936b7",
+            "quality_bar": "f5ffeed8483244fd0c5f9ed2e606ffe5b7871c20906c0208cf1bc683b38e0fa9",
             "why_this_exists": "7c8d4e7c04114ed3e5fa532095f54cbd4f36aa5333d34f873c40d516f27c29e1",
         },
     ),
@@ -7722,7 +7730,10 @@ _DEFINITIONS = [
             "Ship the files table with the plan: one row per file with action, phase, and blocks/blocked-by; a row without a phase is unplanned work.",
             "Size verification to the blast radius, not to optimism: a phase touching public surfaces or persisted shapes carries the full gate, not the fast one.",
             "For a dependency or framework upgrade, read four inputs before ordering phases — advisory and end-of-life intake, the licence delta at the target version, the upstream migration guide item by item against this codebase, and lockfile handling in the same commit as the manifest; a breaking change nobody checked is a gap, not a pass. The full contract is `omh-refactor-plan/references/dependency-upgrade.md`.",
-            "Stop at the approval gate and hand the user the go/no-go, whole plan or first phase.",
+            PortableLine(
+                "Stop at the approval gate and hand the user the go/no-go, whole plan or first phase; when the approved phases split into groups with disjoint files plus a verification step, a whole-plan go may also name `dag-ulw` with the fit reason in one line, started only on the user's explicit go-ahead: the phase order becomes `depends_on` and each phase's verification command its node's VERIFY. `dag-ulw` runs without pausing between phases and neither commits nor rolls back, so say the per-phase commits are cut after the run and the rollback points stay with the user, or take the first-phase path.",
+                "Stop at the approval gate and hand the user the go/no-go, whole plan or first phase.",
+            ),
         ),
         why_this_exists=(
             "`refactor-plan` exists because boundary-changing refactors bounced between goal planning and "

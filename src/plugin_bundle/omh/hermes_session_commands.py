@@ -418,11 +418,15 @@ _FOLDED_FRAMES = tuple(
 )
 
 
-def _opens_with_frame(text: str) -> bool:
+# `/plan`'s frame alone, for `host_plan_turn`.
+_FOLDED_PLAN_FRAMES = tuple(frame for frame in _FOLDED_FRAMES if frame.opening == _fold("[/plan — plan mode]"))
+
+
+def _opens_with_frame(text: str, frames: tuple[HostFrame, ...] = _FOLDED_FRAMES) -> bool:
     first, _, rest = text.replace("\r\n", "\n").partition("\n")
     first = first.rstrip()
     rest = rest.lstrip("\n")
-    for frame in _FOLDED_FRAMES:
+    for frame in frames:
         if frame.holds:
             opens = first.startswith(frame.opening) and frame.holds in first[len(frame.opening):]
         elif frame.open_ended:
@@ -625,6 +629,19 @@ def host_command_turn(message: object) -> bool:
     routes on its invocation as typed (`person_request_text`).
     """
     return isinstance(message, str) and _host_command_turn(message)
+
+
+def host_plan_turn(message: object) -> bool:
+    """Whether Hermes opened this turn from `/plan`'s template, read as `host_command_turn` reads every frame."""
+    if not isinstance(message, str):
+        return False
+    text = _after_gateway_material(message)
+    if text.startswith(HOST_BLOCK_OPENERS):
+        return False
+    sender = SENDER_PREFIX.match(text)
+    return _opens_with_frame(_fold(text), _FOLDED_PLAN_FRAMES) or (
+        bool(sender) and _opens_with_frame(_fold(text[sender.end():]), _FOLDED_PLAN_FRAMES)
+    )
 
 
 def _interval_term(term: str) -> bool:

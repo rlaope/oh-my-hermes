@@ -65,7 +65,7 @@ Bad example:
 
 - If requirements are still fuzzy, route back to deep-interview before planning.
 - If current-source evidence is missing, route a `research` step before accepting the plan.
-- If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
+- If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
 
 ## Workflow Lane
 
@@ -92,7 +92,7 @@ Quality bar:
 - Start from observed repo facts and source/web evidence when freshness or external behavior matters.
 - Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.
 - Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.
-- List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `ultrawork` can prepare board rows from the plan without re-planning; planning itself stays a bounded in-session lane.
+- List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `dag-ulw` nodes or `ultrawork` board rows come from the plan without re-planning; planning itself stays a bounded in-session lane.
 - When adapting an existing capability, load `skill_view(name='omh-verification-gate', file_path='references/adaptation-quality.md')` before accepting a plan, dispatching work, or claiming completion; carry its criteria and comparisons into tasks and evidence.
 - Before comparing options, write the target state: name each consumer of the result (a person, a maintainer, or a program reading its output), their current workflow on this surface, the state in which that workflow keeps working with no new friction or loss, and every difference between current and target, each with why it matters.
 - Record a `Success criteria` table with columns `Criterion | Task | Verification scenario`, one row per target-state difference naming its owning task and the scenario that shows the difference closed; these rows are the acceptance criteria above, extended to the target state.
