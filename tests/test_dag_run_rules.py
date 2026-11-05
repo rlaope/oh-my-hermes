@@ -1242,6 +1242,46 @@ class ReviewCategoryLintTests(unittest.TestCase):
                 record = dag_run.new_record(PARENT, "feat", "", "", definitions, time.time())
                 self.assertEqual(record["lint"], [])
 
+    def test_a_review_only_guessed_from_a_label_or_a_stored_node_is_not_linted(self) -> None:
+        """Only a declared `role=review` is asked to move: a role-less node whose label reads like a review runs as a
+        build node, and a node stored before nodes carried a role (read through `guessed_role` on repair and extend)
+        was never declared one."""
+        with homes():
+            result = call(action="define", run="feat", nodes=[
+                node("fix", category="unspecified-high", label="Address review findings", scope=("src/api.py",)),
+                node("check", depends_on=("fix",), role="verify"),
+            ])
+        self.assertEqual(result["status"], "ok", result)
+        self.assertNotIn("review_not_review_category:fix", result["lint"])
+        legacy = stored(node("diff", category="unspecified-high", label="Code review"))
+        self.assertEqual(dag_run.node_role(legacy), "review")
+        self.assertFalse(any(finding.startswith("review_not_review_category:") for finding in dag_run.lint([legacy])))
+
+    def test_a_model_map_backend_with_no_review_option_drops_the_finding_from_the_reply(self) -> None:
+        """Mutation: keep the finding when `review` has no option, or drop it when `review` has one."""
+        def options(*rows: tuple[str, str, str]) -> str:
+            lines = ["delegation:", "  backend: model_map", "  backends:", "    model_map:",
+                     f"      default: {rows[-1][0]}", "      options:"]
+            for name, model, effort in rows:
+                lines += [f"        - name: {name}", f"          model: {model}", f"          reasoning_effort: {effort}"]
+            return "\n".join(lines) + "\n"
+
+        unserved = options(("sol", "openai/gpt-6.1-sol", "medium"), ("opus", "claude-opus-5-5", "medium"),
+                           ("flash", "glm-5.3-flash", "low"))
+        served = options(("sol", "openai/gpt-6.1-sol", "medium"), ("sol-x", "openai/gpt-6.1-sol", "xhigh"),
+                         ("flash", "glm-5.3-flash", "low"))
+        definitions = [node("api", scope=("src/api.py",)),
+                       node("diff", category="unspecified-high", depends_on=("api",), role="review"),
+                       node("check", depends_on=("api", "diff"), role="verify")]
+        for name, config, shown in (("review unserved", unserved, False), ("review served", served, True)):
+            with self.subTest(case=name), homes() as home:
+                slots_table(home)
+                (home.hermes / "config.yaml").write_text(config, encoding="utf-8")
+                result = call(action="define", run="feat", nodes=definitions)
+                self.assertEqual(result["status"], "ok", result)
+                self.assertEqual("review_not_review_category:diff" in result["lint"], shown, result["lint"])
+                self.assertIn("review_not_review_category:diff", record_of(home)["lint"])
+
     def test_a_run_with_no_review_node_keeps_only_no_review_node(self) -> None:
         record = dag_run.new_record(PARENT, "feat", "", "", [
             node("api", category="unspecified-high", scope=("src/api.py",)),
