@@ -222,7 +222,10 @@ class AppBriefingTests(unittest.TestCase):
         self.assertEqual(kinds, [AssistantBlock, AgentDoneBlock, TurnSummaryBlock])
         history = [line_text(row) for row in app.transcript.history_lines(100, DEFAULT_THEME, details=False)]
         sentence = next(index for index, row in enumerate(history) if "The first sentence" in row)
-        table = [index for index, row in enumerate(history) if row.split()[1:] in (["a", "b"], ["───", "───"], ["1", "2"])]
+        # The table is a box (#2590): its rows are the ones whose text opens with a border, `┌`, `│`, `├` or `└`.
+        table = [index for index, row in enumerate(history) if row.split()[1:2] and row.split()[1][0] in "┌│├└"]
+        self.assertEqual([history[index].split()[1:] for index in table if "│" in history[index]],
+                         [["│", "a", "│", "b", "│"], ["│", "1", "│", "2", "│"]])
         brief = next(index for index, row in enumerate(history) if row.startswith("● find usages"))
         self.assertTrue(table and sentence < min(table) and max(table) < brief, history)
         self.assertEqual(table, list(range(min(table), max(table) + 1)), "the table is whole")
