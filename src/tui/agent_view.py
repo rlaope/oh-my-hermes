@@ -788,15 +788,20 @@ class AgentViewMixin:
 
     def _brief_finished(self, agent: Agent) -> None:
         """Brief an agent its `subagent.complete` just finished in the transcript (`transcript.AgentDoneBlock`), with
-        its time, its output tokens and what it said. A dag node's child is named by the node's id, as Claude Code
-        names a teammate by its handle, with the node's label on a row of its own under it (none when the label is
-        empty or the id itself); any other agent by its short title, as the list names it, with no such row. Held
+        its time, its output tokens and what it said. A dag node's child is named by the node's id, `@<id>` in a hue
+        of its own, as Claude Code names a teammate by its handle, with the node's label on a row of its own under it
+        (none when the label is empty or the id itself). Until the HUD's graph binds the node, the id is the one its
+        goal's `[dag:<run>/<node>]` marker names (`Agent.dag_node`) and the row under it its short title. Any other
+        agent is named by its short title, as the list names it, with no such row and no `@`: Hermes' subagent frames
+        carry no name or role to make a handle of (`subagents`). Held
         under what is live and written at the next block boundary (`Transcript.add_aside`), so it never splits a
         streaming reply or cuts off a running call."""
         payload = self.hud.payload if self.hud is not None else None
         handle = title = ""
         if isinstance(payload, Mapping) and not payload.get("error") and graph_is_dag(payload):
             handle, title = bound_node(payload["delegation_graph"], self.roster, agent)
+        if not handle and agent.dag_node:
+            handle, title = agent.dag_node.rpartition(":")[2], short_title(agent.goal)
         if title.casefold() == handle.casefold():
             title = ""
         tokens = f"{TOKENS_MARK}{compact_count(agent.output_tokens)}" if agent.output_tokens else ""
@@ -804,7 +809,7 @@ class AgentViewMixin:
         facts = tuple(fact for fact in (elapsed_text(elapsed) if elapsed >= 1 else "", tokens) if fact)  # no `0s`
         outcome = AGENT_OUTCOMES.get(agent.status, AGENT_FAILED)
         self.transcript.add_aside(AgentDoneBlock(handle or short_title(agent.goal) or agent.name, outcome, facts,
-                                                 agent.reply, title=title))
+                                                 agent.reply, title=title, handle=bool(handle)))
 
     def _forget_agents(self, dropped: frozenset[str]) -> None:
         """Forget a pending `x`, a picked steer and the tail misses of the agents the roster just `dropped`."""

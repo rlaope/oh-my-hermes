@@ -76,8 +76,9 @@ A subagent that finishes is briefed as a block of its own (`AgentDoneBlock`, the
 owner's ask of 2026-11-05, after Claude Code's `● Teammate @x finished`):
 `● <name> finished  1m 35s · ↓1.8k`, the mark green only for a completed agent
 (`● … failed` in red, `▪ … interrupted` and `○ … cancelled` muted); a dag
-node's child is named by the node's id with the node's label on one muted row
-under it; then the first lines of its reply, or its error, in at most two
+node's child is named by the node's id as a handle, `@<id>` in a hue of its own
+(`theme.agent_style`, the same for that id on every row), with the node's label
+on one muted row under it; then the first lines of its reply, or its error, in at most two
 muted rows under the name, ending in `…` where it said more. The app writes it as an aside
 (`add_aside`), so it waits under a streaming reply or a running call and is
 written at the next block boundary, in the order the agents finished. Past
@@ -131,7 +132,7 @@ from .markdown import (
 )
 from .style import NO_COLOR, Line, Span, Style, fill
 from .slash import slash_spans, slash_token_ranges
-from .theme import TOOL_FAMILIES, Theme, kind_style, on_band
+from .theme import TOOL_FAMILIES, Theme, agent_style, kind_style, on_band
 from .width import cell_width, cluster_width, clusters, line_width, truncate, truncate_left, truncate_line
 
 TOOL_GENERATING = "generating"
@@ -350,6 +351,7 @@ class AgentDoneBlock:
     said: tuple[str, ...] = ()  # its reply's or its error's lines, cleaned
     done: bool = True
     title: str = ""  # a dag node's label, on one dim row under a `name` that is the node's id; "" for none
+    handle: bool = False  # `name` is a dag node's id, drawn `@<name>` in its own hue (`theme.agent_style`)
 
 
 @dataclass
@@ -1151,7 +1153,9 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
 
     The mark is green only for a completed agent (red for a failure, muted
     `▪` interrupted and `○` cancelled), and the word after the bold name says
-    which, so colour is never the only signal. A row too narrow drops the
+    which, so colour is never the only signal. A `handle` is `@<name>` in the
+    hue its name hashes to (`agent_style`), whatever the outcome: the colour
+    names the agent, not how it ended. A row too narrow drops the
     facts from the last, then cuts the name; the word stays. What it said is
     drawn as the reply would be (`render_lines`: no `**`, `#` or backticks
     left), all in one muted tone, and the last row shown ends in `…` where
@@ -1159,17 +1163,21 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
     """
     mark_style = {AGENT_FINISHED: theme.ok, AGENT_FAILED: theme.error}.get(block.outcome, theme.muted)
     word_style = {AGENT_FINISHED: theme.text, AGENT_FAILED: theme.error}.get(block.outcome, theme.muted)
-    name_style = replace(theme.text if block.outcome in (AGENT_FINISHED, AGENT_FAILED) else theme.muted, bold=True)
+    if block.handle:
+        name_style = agent_style(block.name, theme)
+    else:
+        name_style = replace(theme.text if block.outcome in (AGENT_FINISHED, AGENT_FAILED) else theme.muted, bold=True)
+    shown = f"@{block.name}" if block.handle else block.name
     mark = f"{AGENT_DONE_MARKS.get(block.outcome, AGENT_DONE_MARKS[AGENT_CANCELLED])} "
     word = f" {block.outcome}"
     fixed = cell_width(mark) + cell_width(word)
     facts = ""
     for count in range(len(block.facts), -1, -1):
         facts = AGENT_FACT_SEPARATOR.join(block.facts[:count])
-        if fixed + cell_width(block.name) + (cell_width(COLUMN_GAP + facts) if facts else 0) <= width:
+        if fixed + cell_width(shown) + (cell_width(COLUMN_GAP + facts) if facts else 0) <= width:
             break
     tail: Line = (Span(COLUMN_GAP + facts, theme.faint),) if facts else ()
-    name = truncate(block.name, max(width - fixed - line_width(tail), 1))
+    name = truncate(shown, max(width - fixed - line_width(tail), 1))
     rows = [truncate_line((Span(mark, mark_style), Span(name, name_style), Span(word, word_style), *tail), width)]
     room = width - len(AGENT_SAID_INDENT)
     if room < 1:
@@ -2272,28 +2280,28 @@ class Transcript:
         self, width: int, theme: Theme, max_rows: int | None, now: float | None = None, glint: bool = False,
         room: int | None = None,
     ) -> list[Line]:
-        """`live_lines` rendered, from the last block up until `max_rows` rows are covered (all of them for None)."""
+        """`live_lines` rendered, from the last block up until `max_rows` rows are covered (all of them for None).
+
+        With briefings held and a `room`, the live block is rendered first, once, and its rows measured for
+        `_held_rows`: a long streaming reply is not rendered whole again on every delta to size them."""
         rendered: list[tuple[bool, list[Line]]] = []  # (opens a block, its rows), the last block first
-        held = self._held_rows(width, theme, max_rows, room)  # under the live blocks
+        ahead: tuple[bool, list[Line]] | None = None  # the live block's, rendered before the held rows
+        last = len(self.blocks) - 1
+        if (room is not None and last >= self._cursor and not self.blocks[last].done
+                and any(isinstance(block, AgentDoneBlock) for block in self._held)):
+            ahead = self._live_block_rows(last, width, theme, max_rows, now, glint)
+        held = self._held_rows(width, theme, max_rows, room, len(ahead[1]) if ahead is not None else 0)
         rendered.extend(reversed(held))
         count = sum(len(rows) for _opens, rows in held)
         whole = True
-        for index in range(len(self.blocks) - 1, self._cursor - 1, -1):
+        for index in range(last, self._cursor - 1, -1):
             if max_rows is not None and count >= max_rows:
                 whole = False  # the blocks above are above the rows asked for
                 break
-            block = self.blocks[index]
-            opens_block = True
-            if index == self._cursor and isinstance(block, AssistantBlock):
-                rest = _display_lines(block.text)[self._cursor_lines :]
-                opens_block = self._cursor_lines == 0
-                reply_rows = self._growing_rows(rest, _reply_width(width), theme)
-                if max_rows is not None and len(reply_rows) > max_rows:  # its top rows are above the rows asked for
-                    reply_rows, opens_block = reply_rows[-max_rows:], False
-                block_lines = _marked(reply_rows, opens_block, theme, width, block.model)
-            else:  # only the last block can be live thinking, the one kind the limit shortens, so it gets all of it
-                block_lines = block_rows(block, width, theme, self.details_expanded and not block.done, max_rows, now,
-                                         glint)
+            if index == last and ahead is not None:
+                opens_block, block_lines = ahead
+            else:
+                opens_block, block_lines = self._live_block_rows(index, width, theme, max_rows, now, glint)
             if block_lines:
                 rendered.append((opens_block, block_lines))
                 count += len(block_lines)
@@ -2306,21 +2314,42 @@ class Transcript:
             seen = True
         return rows
 
+    def _live_block_rows(
+        self, index: int, width: int, theme: Theme, max_rows: int | None, now: float | None, glint: bool,
+    ) -> tuple[bool, list[Line]]:
+        """Block `index`'s rows as the live region draws them, and whether it opens a block there (a reply the
+        cursor took the start of continues one)."""
+        block = self.blocks[index]
+        if index == self._cursor and isinstance(block, AssistantBlock):
+            rest = _display_lines(block.text)[self._cursor_lines :]
+            opens_block = self._cursor_lines == 0
+            reply_rows = self._growing_rows(rest, _reply_width(width), theme)
+            if max_rows is not None and len(reply_rows) > max_rows:  # its top rows are above the rows asked for
+                reply_rows, opens_block = reply_rows[-max_rows:], False
+            return opens_block, _marked(reply_rows, opens_block, theme, width, block.model)
+        # Only the last block can be live thinking, the one kind the limit shortens, so it gets all of it.
+        return True, block_rows(block, width, theme, self.details_expanded and not block.done, max_rows, now, glint)
+
     def _held_rows(
-        self, width: int, theme: Theme, max_rows: int | None, room: int | None,
+        self, width: int, theme: Theme, max_rows: int | None, room: int | None, live: int = 0,
     ) -> list[tuple[bool, list[Line]]]:
         """The held blocks as the live region draws them, in order: every one whole but the briefings
         (`AgentDoneBlock`) past the newest `AGENT_HELD_SHOWN`, or past what fits, which fold into one row where the
         first of them stands (`_held_more_row`). What fits: `room` (the rows the live region gets above the working
-        rows) less the live block's rows and `AGENT_HELD_RESERVE`, and a quarter of `max_rows` at most; with no
-        `room`, that quarter. The running call keeps its rows before the newest briefing is drawn whole. Only what is
-        drawn is rendered."""
+        rows) less the live block's `live` rows and `AGENT_HELD_RESERVE`, and a quarter of `max_rows` at most; with no
+        `room`, that quarter. The running call keeps its rows before the newest briefing is drawn whole, and before
+        the fold row: where `room` holds the live block and the fold row but not the spacer above it, the fold row
+        goes without it, and where it holds the live block alone, no briefing is drawn (all are still written at the
+        boundary). Only what is drawn is rendered."""
         briefings = [block for block in self._held if isinstance(block, AgentDoneBlock)]
         fits = max_rows // AGENT_HELD_SHARE if max_rows is not None else None
+        spaced = True  # the fold row keeps the spacer above it
         if briefings and room is not None:
-            last = self.blocks[-1] if self.blocks and not self.blocks[-1].done else None
-            live = len(block_rows(last, width, theme)) if last is not None else 0
-            left = max(room - max(live, 1) - AGENT_HELD_RESERVE, 0)
+            spare = room - max(live, 1)
+            if spare < 1:
+                briefings = []
+            spaced = spare >= 2
+            left = max(spare - AGENT_HELD_RESERVE, 0)
             fits = left if fits is None else min(fits, left)
         whole: dict[int, list[Line]] = {}
         used = 0
@@ -2337,8 +2366,8 @@ class Transcript:
                 drawn.append((True, block_rows(block, width, theme)))
             elif id(block) in whole:
                 drawn.append((True, whole[id(block)]))
-            elif block is folded[0]:
-                drawn.append((True, [_held_more_row(folded, width, theme, more=bool(whole))]))
+            elif folded and block is folded[0]:
+                drawn.append((spaced, [_held_more_row(folded, width, theme, more=bool(whole))]))
         return drawn
 
     def shown_blocks(self) -> list[Block]:

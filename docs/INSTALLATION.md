@@ -768,10 +768,13 @@ run and approval decision stays Hermes'; the screen is OMH's.
   Claude Code does for a teammate: `● <name> finished  1m 35s · ↓1.8k`, then
   the first lines of its reply, or its error, in up to two dim rows under the
   name, ending in `…` where it said more. A dag node's child is named by the
-  node's id (`● notify finished`), as Claude Code names a teammate by its
-  handle, with the node's label on one dim row under it, cut with `…` (none
-  when the label is the id); any other agent by the short title the agent
-  list shows, with no such row. The
+  node's id as a handle (`● @notify finished`), as Claude Code names a
+  teammate, bold in a hue of its own that stays the same for that id on every
+  row (plain bold under `NO_COLOR`), with the node's label on one dim row under
+  it, cut with `…` (none when the label is the id). Until the HUD binds the
+  node, the id is the one the child's `[dag:<run>/<node>]` marker names. Any
+  other agent is named by the short title the agent list shows, with no `@`
+  and no such row, since Hermes' subagent frames carry no name. The
   mark is green only for an agent that completed; a failed one reads `●
   <name> failed` in red with its error under it, an interrupted one `▪ <name>
   interrupted` and a cancelled one `○ <name> cancelled`, both muted. One
@@ -782,8 +785,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   than three wait under a running call (`delegate_task`), or more than the
   rows left above the composer hold beside the call, the newest ones that fit
   are drawn whole and the rest fold into one row above them (`● 9 more
-  finished · 1 failed`; `● 2 finished` when none fits whole), so the call
-  stays on screen; every one is written
+  finished · 1 failed`; `● 2 finished` when none fits whole, without the
+  blank row above it, or no row at all, where the screen is too short), so
+  the call stays on screen; every one is written
   whole, in order, at the boundary. Briefings are the TUI's own rows, not
   part of the session Hermes stores: a resumed or rewound session is drawn
   again without them. The messenger's replies are unchanged.
