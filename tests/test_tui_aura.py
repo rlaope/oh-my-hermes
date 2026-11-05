@@ -124,7 +124,9 @@ class DrawTests(unittest.TestCase):
             self.assertEqual(text_of(top), AURA_RULE * 83, "heavy, full width, in the same cells")
             self.assertGreaterEqual(len({span.style.fg for span in top}), 8, "a gradient across the width")
             cells = [span.style for span in top for _char in span.text]
-            bands.append([at for at, style in enumerate(cells) if style in set(DEFAULT_THEME.aura_glint)])
+            # The rule is a gutter (never copied by a drag); its glint is the theme's glint.
+            bands.append([at for at, style in enumerate(cells)
+                          if replace(style, gutter=False) in set(DEFAULT_THEME.aura_glint)])
         self.assertEqual(len(bands[1]), RULE_GLINT_CELLS)
         self.assertNotEqual(bands[0], bands[1], "the band travels along it")
         self.assertEqual(len(frame_for("dag ulw migrate").lines), len(frame_for("migrate").lines), "no row added")
@@ -175,7 +177,7 @@ class DrawTests(unittest.TestCase):
                     self.assertGreater(len({style.fg for style in lit}), 4)
                 else:
                     self.assertEqual(set(lit), {replace(DEFAULT_THEME.slash, fg=None)}, "bold, the draft's own colour")
-                    self.assertEqual(top, (Span(AURA_RULE * 80, replace(theme.rule, bold=True)),))
+                    self.assertEqual(top, (Span(AURA_RULE * 80, replace(theme.rule, bold=True, gutter=True)),))
                     self.assertEqual(top, bottom)
 
     def test_every_moving_aura_reads_on_every_skin_and_grey(self) -> None:

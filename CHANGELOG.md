@@ -4,10 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **The round-end check continues a turn less often.** A changed function's
-  name in another file no longer continues the turn when every mention there
-  is proven to need no change: another object's method of the same name, or
-  an import whose calls bind the same way before and after the edit.
+- **A drag in the OMH TUI copies the transcript without the rail.** The main
+  screen now takes the mouse: a drag over the transcript or the live rows
+  selects the text (shown reversed) and copies it without the thin `┃` rail
+  or a reply's margin, which stay drawn as before; the row above the composer
+  says `copied N chars`, and a double click copies a word, a triple click a
+  row. The wheel up opens the transcript view (Ctrl+O's), one notch up from
+  where the screen was. It works on every terminal that reports the mouse,
+  inside tmux with `mouse` on or off; a row the TUI cannot map for certain
+  (the shell's output above the session) is never guessed at, a drag whose
+  live rows change under it is dropped and copies nothing, Ctrl+C right after
+  a drag only drops the selection, and the
+  terminal's own selection is still there with its bypass modifier (Shift,
+  Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
+  terminal's own wheel and selection on the main screen, as before.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check
@@ -55,6 +65,10 @@ All notable changes will be documented here.
   Procedure steps name what survives each failure, Recovery Notes cover each
   skill's own blockers, and catalog checks keep both in place. The idea comes
   from PortSwigger Burp AT research skills.
+- **The round-end check continues a turn less often.** A changed function's
+  name in another file no longer continues the turn when every mention there
+  is proven to need no change: another object's method of the same name, or
+  an import whose calls bind the same way before and after the edit.
 
 ## 4.0.6 - 2026-11-04
 
