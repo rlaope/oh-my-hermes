@@ -114,7 +114,8 @@ class EvidenceStoreWritesAreBlockedTest(_Home):
         link = self.workspace / "evidence"
         link.symlink_to(self.home / "runtime", target_is_directory=True)
         self.assertBlocked(self.write("evidence/delegation/x.json", session=f"{SESSION}-link"), "delegation/")
-        with mock.patch.dict(os.environ, {"HOME": str(self.home.parent)}):
+        # USERPROFILE beside HOME: ntpath.expanduser reads USERPROFILE on Windows.
+        with mock.patch.dict(os.environ, {"HOME": str(self.home.parent), "USERPROFILE": str(self.home.parent)}):
             self.assertBlocked(self.write("~/omh/runtime/todo.json", session=f"{SESSION}-tilde"), "todo.json")
 
     def test_a_relative_path_from_a_workspace_inside_the_home_is_blocked(self) -> None:
