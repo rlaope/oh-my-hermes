@@ -4,6 +4,29 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI draws Markdown tables as boxes, and a table wider than the
+  terminal wraps inside its columns.** Every table is now a box like Claude
+  Code's: `┌─┬─┐` borders in the rule colour, the header bold in the look's
+  brand colour, a `├─┼─┤` line under the header and under every body row,
+  and a cell of padding inside each side. This changes the look of tables
+  that fit too: they no longer use the `─` band under the header. A table
+  wider than the terminal used to show its raw source (`| a | b |` rows and
+  the `|---|---|` divider). Now its short columns keep their whole width,
+  and the long columns share the rest of the row. Each cell wraps inside
+  its column, and a word too long for the column breaks across rows (a path
+  or URL after a `/`). Cells show their inline markup (`code`, **bold**,
+  links), and a code span keeps its style when it wraps. The borders are
+  not copied by a drag; NO_COLOR keeps them. Only when a terminal is too
+  narrow for columns of 8 cells is each body row drawn as `header: value`
+  lines instead. A table taller than the live region is now also released
+  by the rows it draws, not only by its source lines. In scrollback, its
+  last released row has no bottom border until the table ends; the live
+  region shows the box closed in the meantime. A
+  row that arrives after the release keeps the columns already drawn at
+  least as wide as they are, and takes the rest of the row's width for the
+  cells that want it. Its border line meets both rows' columns. `/history`
+  lays the whole table out again. Alignment colons (`:---:`) are still not
+  drawn.
 - **`/gateway restart` says what each choice stops.** In a named profile the
   shared gateway serves, "Restart this profile" now says that profile's
   running turns stop now, since Hermes re-serves it without waiting. The

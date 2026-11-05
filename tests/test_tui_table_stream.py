@@ -78,14 +78,13 @@ class TableStreamingTests(unittest.TestCase):
         self.step(ev("message.delta", text="| X | Y |\n"))
         self.step(ev("message.delta", text="| --- | --- |\n"))
         live = self.live()
-        # Decided the frame the divider lands: aligned header + separator band.
-        self.assertIn("┃   X    Y  ", live)
-        self.assertTrue(any("───" in row for row in live), f"no separator band in {live!r}")
+        # Decided the frame the divider lands: the header in a closed box.
+        self.assertEqual(live[1:], ["┃   ┌─────┬─────┐", "┃   │ X   │ Y   │", "┃   └─────┴─────┘"])
         self.assertFalse(any("| ---" in row for row in live), f"raw divider in {live!r}")
         self.step(ev("message.delta", text="| 1 | a |\n"))
-        self.assertIn("┃   1    a  ", self.live())
+        self.assertIn("┃   │ 1   │ a   │", self.live())
         self.step(ev("message.delta", text="| 2 | b |"))
-        self.assertIn("┃   2    b  ", self.live())
+        self.assertIn("┃   │ 2   │ b   │", self.live())
         # Nothing table-shaped was flushed early: the whole table is still live
         # (and pretty, matching history at every frame via step's invariant).
         self.assertEqual(self.taken, [])
@@ -100,18 +99,18 @@ class TableStreamingTests(unittest.TestCase):
         flushed = self.step(ev("message.complete", text=TABLE_TEXT, status="complete"))
         self.assertTrue(self.transcript.blocks[-1].done)
         self.assertEqual(self.live(), [])
-        self.assertIn("┃   X    Y  ", flushed)
-        self.assertIn("┃   1    a  ", flushed)
-        self.assertIn("┃   2    b  ", flushed)
-        self.assertTrue(any("───" in row for row in flushed), f"no separator band in {flushed!r}")
+        self.assertEqual(flushed[1:], [
+            "┃   ┌─────┬─────┐", "┃   │ X   │ Y   │", "┃   ├─────┼─────┤", "┃   │ 1   │ a   │",
+            "┃   ├─────┼─────┤", "┃   │ 2   │ b   │", "┃   └─────┴─────┘",
+        ])
         self.assert_no_raw_rows_taken()
 
     def test_table_renders_after_message_complete_without_any_delta(self) -> None:
         self.step(ev("message.start"))
         flushed = self.step(ev("message.complete", text=TABLE_TEXT, status="complete"))
         self.assertTrue(self.transcript.blocks[-1].done)
-        self.assertIn("┃   X    Y  ", flushed)
-        self.assertTrue(any("───" in row for row in flushed), f"no separator band in {flushed!r}")
+        self.assertIn("┃   │ X   │ Y   │", flushed)
+        self.assertIn("┃   └─────┴─────┘", flushed)
         self.assert_no_raw_rows_taken()
 
     # (c) Non-table text is unchanged by the hold-back.
@@ -135,7 +134,7 @@ class TableStreamingTests(unittest.TestCase):
         )
         self.assertFalse(any("─" in row for row in self.taken), "plain text gained a separator band")
 
-    # (d) Cell content: wide characters, escaped pipes, a table wider than the row.
+    # (d) Cell content: wide characters, escaped pipes, a table wider than the row (more in test_tui_table_wrap).
 
     def render(self, source: str, width: int = WIDTH) -> list[str]:
         rows, _state = render_lines(source.split("\n"), MarkdownState(), width, THEME)
@@ -143,25 +142,26 @@ class TableStreamingTests(unittest.TestCase):
 
     def test_wide_characters_align_by_cell_width(self) -> None:
         rows = self.render("| 名前 | b |\n|---|---|\n| 日本語 | x |\n| ab | y |")
-        self.assertTrue(rows[2].startswith("日本語  x"))
-        self.assertTrue(rows[3].startswith("ab      y"))
+        self.assertTrue(rows[3].startswith("│ 日本語 │ x"))
+        self.assertTrue(rows[5].startswith("│ ab     │ y"))
 
     def test_escaped_pipe_stays_inside_its_cell(self) -> None:
         rows = self.render("| a | b |\n|---|---|\n| x \\| y | z |")
-        self.assertIn("x | y", rows[2])
-        self.assertIn("z", rows[2])
+        self.assertEqual(rows[3], "│ x | y │ z   │")
 
-    def test_table_wider_than_the_row_stays_plain_text(self) -> None:
+    def test_table_wider_than_the_row_wraps_its_cells_instead_of_staying_plain_text(self) -> None:
         wide = "a" * 30
         rows = self.render(f"| {wide} | {wide} |\n|---|---|\n| 1 | 2 |", width=40)
-        self.assertEqual("".join(rows).replace(" ", "").count("|---|---|"), 1)
-        self.assertFalse(any(set(row.strip()) == {"─", " "} for row in rows))
+        self.assertFalse(any("|" in row for row in rows), rows)
+        self.assertEqual((rows[0][0], rows[-1][0]), ("┌", "└"), rows)
+        self.assertEqual("".join(rows).count("a"), 60)
+        self.assertTrue(all(len(row) <= 40 for row in rows), rows)
 
     def test_pipe_lines_inside_a_code_fence_stay_code(self) -> None:
         rows = self.render("```\n| a | b |\n|---|---|\n```")
         self.assertEqual(rows[:2], ["| a | b |", "|---|---|"])
 
-    # (e) Review follow-ups: exit, control characters, partial dividers, plain fallback.
+    # (e) Review follow-ups: exit, control characters, partial dividers.
 
     def test_exit_take_releases_held_table_rows(self) -> None:
         self.step(ev("message.start"))
@@ -185,9 +185,9 @@ class TableStreamingTests(unittest.TestCase):
 
     def test_control_characters_do_not_shift_columns(self) -> None:
         rows = self.render("| \x1b[1ma\x1b[0m | b |\n|---|---|\n| \x1b[31mred\x1b[0m | x |\n| t\tz | y |")
-        self.assertTrue(rows[2].startswith("red"))
-        self.assertEqual(rows[2].index("x"), rows[0].index("b"))
-        self.assertEqual(rows[3].index("y"), rows[0].index("b"))
+        self.assertTrue(rows[3].startswith("│ red"))
+        self.assertEqual(rows[3].index("x"), rows[1].index("b"))
+        self.assertEqual(rows[5].index("y"), rows[1].index("b"))
 
     def test_divider_with_escape_sequences_still_opens_the_table(self) -> None:
         self.assertTrue(opens_table("| a | b |", "|\x1b[2m---\x1b[0m|---|"))
@@ -205,22 +205,6 @@ class TableStreamingTests(unittest.TestCase):
             self.step(ev("message.delta", text=f"| X | Y |\n{tail}"))
             shown.append(any("─" in row for row in self.live()))
         self.assertEqual(shown, sorted(shown))
-
-    def test_indented_overwide_table_stays_plain_text(self) -> None:
-        cell = "a" * 17
-        source = f"  | {cell} | {cell} |\n  |---|---|\n  | 1 | 2 |"
-        rows = self.render(source, width=37)  # the columns fit (36) but not behind the indent
-        self.assertFalse(any("─" in row for row in rows))
-
-    def test_overwide_table_rows_equal_the_plain_text_render(self) -> None:
-        wide = "a" * 30
-        lines = [f"| {wide} | **b** |", "|---|---|", "| 1 | 2 |"]
-        plain = []
-        for line in lines:
-            rows, _state = render_lines([line], MarkdownState(), 30, THEME)
-            plain.extend(rows)
-        rows, _state = render_lines(lines, MarkdownState(), 30, THEME)
-        self.assertEqual(rows, plain)
 
 
     # (f) A table taller than the live region is released as it grows.
@@ -291,7 +275,7 @@ class TableStreamingTests(unittest.TestCase):
         text = " ".join(rows).split()
         for cell in ("a", "b", "1", "2", "c", "d", "e", "x", "y", "z"):
             self.assertEqual(sum(1 for word in text if word == cell), 1, cell)
-        self.assertEqual(sum(1 for row in rows if "─" in row), 2, "each table has its own band")
+        self.assertEqual([row[0] for row in rows if row[:1] in ("┌", "└")], ["┌", "└", "┌", "└"], "each table its own box")
         streamed = Transcript(clock=lambda: 100.0)
         streamed.apply(ev("message.start"))
         streamed.apply(ev("message.delta", text=source))

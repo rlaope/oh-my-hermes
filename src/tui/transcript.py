@@ -479,11 +479,16 @@ def _display_lines(text: str) -> list[str]:
     return _without_trailing_blanks(_source_lines(text))
 
 
-def _stable_lines(text: str, final: bool = False, cap: int | None = None) -> list[str]:
+def _stable_lines(
+    text: str, final: bool = False, cap: int | None = None, height: Callable[[list[str]], int] | None = None
+) -> list[str]:
     """The source lines that can no longer change: complete ones, minus trailing blanks.
 
     A trailing run of `|` lines is held back too: a header is decided only
-    once its divider has arrived, and taken rows are never repainted.
+    once its divider has arrived, and taken rows are never repainted. A held
+    table of more than `cap` lines, or with a body row and more than `cap`
+    rows by `height` (the rows the held lines draw: wrapped cells take
+    several), is released as it grows.
     """
     lines = _without_trailing_blanks(_source_lines(text)[:-1])
     if final:  # the last take, at exit: nothing is left to wait for, so a complete `|` row goes out
@@ -491,7 +496,9 @@ def _stable_lines(text: str, final: bool = False, cap: int | None = None) -> lis
     held = len(lines)
     while held and lines[held - 1].strip().startswith("|"):
         held -= 1
-    if cap is not None and len(lines) - held > cap and opens_table(lines[held], lines[held + 1]):
+    if cap is not None and len(lines) - held > 2 and opens_table(lines[held], lines[held + 1]) and (
+        len(lines) - held > cap or height is not None and height(lines[held:]) > cap
+    ):
         return lines  # a table taller than the live region is released as it grows, on the columns it has
     return _without_trailing_blanks(lines[:held])
 
@@ -2149,11 +2156,18 @@ class Transcript:
         self, block: AssistantBlock, width: int, theme: Theme, final: bool = False, live_rows: int | None = None
     ) -> list[Line]:
         cap = max(live_rows // 2, 4) if live_rows else None
-        sources = _display_lines(block.text) if block.done else _stable_lines(block.text, final, cap)
+
+        def height(run: list[str]) -> int:
+            return len(table_block(run, 0, _reply_width(width), theme)[0])
+
+        sources = _display_lines(block.text) if block.done else _stable_lines(block.text, final, cap, height)
         fresh = sources[self._cursor_lines :]
-        if not fresh:
+        ending = block.done or final  # nothing more of the reply will come: a table left open is closed
+        if not fresh and not (ending and self._cursor_state.table):
             return []
-        rows, self._cursor_state = render_lines(fresh, self._cursor_state, _reply_width(width), theme)
+        rows, self._cursor_state = render_lines(fresh, self._cursor_state, _reply_width(width), theme, closed=ending)
+        if not fresh:
+            self._version += 1  # only the open table's bottom was taken: the live rows drawn with it are stale
         opens_block = self._cursor_lines == 0
         self._cursor_lines = len(sources)
         return self._spaced(_marked(rows, opens_block, theme, width, block.model), opens_block)
