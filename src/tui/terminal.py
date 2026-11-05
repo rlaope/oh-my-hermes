@@ -31,8 +31,11 @@ first key that arrives as a report.
 Mouse reporting is off unless `set_mouse(True)` turns it on, and then only
 clicks and the wheel are reported, in SGR form. `set_mouse(True, drag=True)`
 adds the motion of a held button (the pager's drag to select); motion with no
-button held is never asked for. Every exit turns both off again
-(`mouse_reporting` and `mouse_drag` say whether they are on).
+button held is never asked for. Entering and every exit turn every mouse mode
+off (`MOUSE_MODES_RESET`), so a mode another program left on, such as a killed
+Hermes TUI's motion reports, cannot take the person's drag selection for the
+whole session or outlive it (`mouse_reporting` and `mouse_drag` say whether
+they are on).
 
 Focus reports are asked for on every terminal, as Hermes' own TUI asks
 (hermes-ink `App.tsx`, DECSET 1004): one that speaks them sends `ESC [ I`
@@ -115,15 +118,21 @@ MOUSE_REPORTING_ON = f"{CSI}?1000h{CSI}?1006h"
 MOUSE_DRAG_ON = f"{CSI}?1002h"
 MOUSE_DRAG_OFF = f"{CSI}?1002l"
 MOUSE_REPORTING_OFF = f"{CSI}?1006l{MOUSE_DRAG_OFF}{CSI}?1000l"
+# Every mouse mode off, the encodings first and then the tracking: SGR pixels (1016), urxvt (1015), SGR (1006),
+# UTF-8 (1005), any motion (1003), a held button's motion (1002), highlight (1001), clicks (1000), X10 (9). The
+# same list Hermes' own TUI writes on start and on exit (`ui-tui/src/lib/terminalModes.ts`): a program killed with
+# a mode on leaves the terminal reporting, and a terminal that reports keeps the person's drag from selecting.
+MOUSE_MODES_RESET = "".join(f"{CSI}?{mode}l" for mode in (1016, 1015, 1006, 1005, 1003, 1002, 1001, 1000, 9))
 # Written on exit even after a crash mid-frame: the screen hides the cursor and
 # turns autowrap off while it paints, and a shell must not inherit either. The
 # key, mouse and focus reports are switched off whether or not they were asked for, as
 # Hermes' own TUI does on every exit (hermes-ink `ink.tsx`, its signal-exit path
-# too), so no exit path depends on remembering whether they were asked for. The cursor shape is the exception: it
+# too), so no exit path depends on remembering whether they were asked for; the mouse modes all go, not only the
+# ones `set_mouse` asks for (`MOUSE_MODES_RESET`). The cursor shape is the exception: it
 # is the shell's own unless `set_cursor_shape` changed it, so it is put back only then (`Terminal._restore`).
 RESTORE_SEQUENCE = (
     f"{SGR_RESET}{AUTOWRAP_ON}{SHOW_CURSOR}{MODIFY_OTHER_KEYS_OFF}{KITTY_KEYBOARD_POP}"
-    f"{MOUSE_REPORTING_OFF}{FOCUS_REPORTING_OFF}{BRACKETED_PASTE_OFF}"
+    f"{MOUSE_MODES_RESET}{FOCUS_REPORTING_OFF}{BRACKETED_PASTE_OFF}"
 )
 
 # Terminals asked for the richer key reports, by the name Hermes' own TUI gives
@@ -375,7 +384,9 @@ class Terminal:
         entered = False
         try:
             self._install_winch()
-            self.write(BRACKETED_PASTE_ON + FOCUS_REPORTING_ON + self._keyboard_request)
+            # Mouse modes another program left on (a killed Hermes TUI leaves 1003) go off first: `mouse_reporting`
+            # starts False, so the terminal must not be reporting either.
+            self.write(MOUSE_MODES_RESET + BRACKETED_PASTE_ON + FOCUS_REPORTING_ON + self._keyboard_request)
             self.keyboard_protocol = bool(self._keyboard_request)
             entered = True
         finally:

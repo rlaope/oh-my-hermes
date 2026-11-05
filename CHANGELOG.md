@@ -21,6 +21,15 @@ All notable changes will be documented here.
   question has waited. The tool row says how many choices it offers instead
   of repeating the question. A pick still answers with Hermes' own choice
   string.
+- **A drag selects text in the OMH TUI again after another program left the
+  mouse on.** Hermes' own TUI turns on mouse modes 1000, 1002, 1003 and 1006,
+  and a crash or `kill -9` leaves them on in the tab. The OMH TUI never asked
+  for them, so it dropped every report, and the terminal kept the drag for
+  itself: no selection, nothing to copy, for the whole session. Entering now
+  switches every mouse mode off (9, 1000, 1001, 1002, 1003, 1005, 1006, 1015,
+  1016, the list Hermes resets), and every exit, a stop with Ctrl+Z included,
+  switches them all off again, where it used to switch off only 1000, 1002
+  and 1006 and let a leftover 1003 outlive the session.
 - **`dag-ulw` is offered where a plan's follow-on is chosen.** On Hermes'
   own `/plan` turn, whose reply offers to carry the plan out, the model is
   asked to also name `dag-ulw` as one option when the plan's tasks form a
