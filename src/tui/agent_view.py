@@ -777,9 +777,9 @@ class AgentViewMixin:
         streaming reply or cuts off a running call."""
         payload = self.hud.payload if self.hud is not None else None
         handle = title = role = ""
-        hue: int | None = None
+        node_index: int | None = None
         if isinstance(payload, Mapping) and not payload.get("error") and graph_is_dag(payload):
-            handle, title, role, hue = bound_node(payload["delegation_graph"], self.roster, agent)
+            handle, title, role, node_index = bound_node(payload["delegation_graph"], self.roster, agent)
         if not handle and agent.dag_node:
             handle, title = agent.dag_node.rpartition(":")[2], short_title(agent.goal)
         if title.casefold() == handle.casefold():
@@ -790,7 +790,7 @@ class AgentViewMixin:
         outcome = AGENT_OUTCOMES.get(agent.status, AGENT_FAILED)
         self.transcript.add_aside(AgentDoneBlock(handle or short_title(agent.goal) or agent.name, outcome, facts,
                                                  agent.reply, title=title, handle=bool(handle), role=role,
-                                                 hue=hue))
+                                                 node_index=node_index))
 
     def _forget_agents(self, dropped: frozenset[str]) -> None:
         """Forget a pending `x`, a picked steer and the tail misses of the agents the roster just `dropped`."""

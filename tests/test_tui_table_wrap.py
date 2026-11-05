@@ -386,7 +386,9 @@ class WideTableStreamingTests(unittest.TestCase):
         long = " ".join(f"word{n}" for n in range(60))
         text = "| a | b |\n|---|---|\n" + "".join(f"| r{n} | {long} |\n" for n in range(3))
         self.assertEqual(_stable_lines(text, cap=6), [])  # five lines held: under the line cap
-        self.assertEqual(len(_stable_lines(text, cap=6, height=lambda run: 40)), 5)
+        # released, but its last row waits for the next line: it may be the header of a next table
+        self.assertEqual(len(_stable_lines(text, cap=6, height=lambda run: 40)), 4)
+        self.assertEqual(len(_stable_lines(text + "after", cap=6, height=lambda run: 40)), 5)
         self.assertEqual(_stable_lines("| a | b |\n|---|---|\n", cap=1, height=lambda run: 40), [])
         transcript = Transcript(clock=lambda: 100.0)
         transcript.apply(ev("message.start"))

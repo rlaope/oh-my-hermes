@@ -159,9 +159,9 @@ KIND_HUES = {
 # `@teammate`: one of these hues (on a dark background, on a light one), picked by the node's place in its run's
 # definition order (`agent_style`), so the first seven nodes of a run differ and an agent keeps its colour on every
 # row, every redraw, in `/history` and after a resume; a handle with no such place by a stable hash. At OKLCH 60,
-# 95, 175, 210, 285, 315 and 345 degrees, each keeps 23 degrees or more from every skin's state hues (failed red 11
-# to 25, done green 128 to 147, running blue 253) and 30 or more from the next; built at one lightness and chroma per
-# side, so none stands out, and lifted to 4.5:1 as the kinds are.
+# 95, 175, 210, 285, 315 and 345 degrees, each keeps 23 degrees or more from every skin's state hues (failed red 10.4
+# to 25.2, done green 128 to 147, running blue 253) and 29.5 or more from the next; built at one lightness and chroma
+# per side, so none stands out, and lifted to 4.5:1 as the kinds are.
 AGENT_HUES = (
     ("#F6AB6B", "#9A5505"), ("#D6BD5C", "#7F6700"), ("#59D7B9", "#007E65"), ("#47D2E8", "#007A8F"),
     ("#B6B3FF", "#635DAB"), ("#DBA6F3", "#835198"), ("#F59ECF", "#984979"),

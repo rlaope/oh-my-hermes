@@ -133,7 +133,9 @@ class LayoutCacheTests(unittest.TestCase):
         self.assertEqual(widths[0], widths[1])
 
 
-def with_hud(app, graph: dict | None, received_at: float | None = None) -> None:
+def with_hud(app, graph: dict | None, received_at: float | None = 0.0) -> None:
+    """`app.hud` as a HUD snapshot of `graph`, read at `received_at` (None: a payload with no read time, which the
+    `/dag` pager dates by its own clock)."""
     payload = {"privacy": "metadata_only"}
     if graph is not None:
         payload["delegation_graph"] = graph
@@ -257,7 +259,7 @@ class DagCommandTests(unittest.TestCase):
     def test_a_drawing_kept_after_the_graph_is_gone_says_it_is_not_live(self) -> None:
         now = [100.0]
         app, _client = make_app(rows=60, cols=100, wall_clock=lambda: now[0])
-        with_hud(app, dag_export_run())
+        with_hud(app, dag_export_run(), received_at=100.0)
         send(app, "/dag")
         rows = screen(app)
         self.assertEqual(rows[0], "OMH / DAG · 5 tasks", "live: no note")
@@ -279,7 +281,7 @@ class DagCommandTests(unittest.TestCase):
         and the note says so, not 10 s (the redraw)."""
         now = [100.0]
         app, _client = make_app(rows=60, cols=100, wall_clock=lambda: now[0])
-        with_hud(app, dag_export_run())
+        with_hud(app, dag_export_run(), received_at=None)  # no read time: dated when first drawn, not at each redraw
         send(app, "/dag")
         screen(app)
         now[0] = 200.0
