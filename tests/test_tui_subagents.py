@@ -742,6 +742,18 @@ class ViewTests(unittest.TestCase):
         self.assertFalse("✓" in line_text(stopped))
         self.assertNotEqual(style_of(stopped, "▪"), THEME.ok)
 
+    def test_a_cancelled_agent_gets_no_green_check(self) -> None:
+        for status in ("cancelled", "canceled"):
+            with self.subTest(status=status):
+                roster = Roster()
+                feed(roster, "start", subagent_id="sa-x", goal="odd end")
+                feed(roster, "complete", subagent_id="sa-x", status=status)
+                row = roster.view_lines(40, THEME, 0, 7, 0.0)[1]
+                self.assertEqual(line_text(row)[:4], "  ○ ")
+                self.assertEqual(style_of(row, "○"), THEME.muted)
+                self.assertEqual(roster.agents["sa-x"].status, "ended")
+                self.assertNotIn("✓", line_text(roster.view_lines(40, THEME, 0, 2, 0.0)[-1]))
+
     def test_the_collapsed_done_row_is_green_only_when_every_cut_agent_completed(self) -> None:
         for second, row_text, style in (("completed", "✓ 2 done", THEME.ok), ("interrupted", "▪ 2 done", THEME.muted)):
             with self.subTest(second=second):
