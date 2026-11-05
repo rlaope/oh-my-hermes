@@ -27,6 +27,20 @@ All notable changes will be documented here.
   cells that want it. Its border line meets both rows' columns. `/history`
   lays the whole table out again. Alignment colons (`:---:`) are still not
   drawn.
+- **The round-end checks also run after edits made through the shell.**
+  Hermes calls OMH's round-end hook only after a `patch` or `write_file`, so
+  a turn that edited files only with `sed`, a heredoc script or `cat >` got
+  no export, test or caller check at all; about half of Sonnet's coding
+  turns edit that way. Now, after a `terminal` or `execute_code` call that
+  changed a Python file in a turn with no `patch` / `write_file`, OMH builds
+  the same three notes from the files on disk and adds any that name a
+  broken line to that call's result. Each check speaks at most once per
+  turn, so an early caller note does not silence a later test note. When
+  one message holds several commands, only the last one is looked at, so a
+  note never names a line a later command of the same message already
+  fixed. A command that changed no Python file, and every turn that used
+  `patch` or `write_file`, is left as before.
+
 - **The OMH TUI briefs each subagent as it finishes, in the transcript.** A
   finished subagent only changed its mark in the agent list under the
   composer, so during a long dag-ulw run nobody saw what each child concluded

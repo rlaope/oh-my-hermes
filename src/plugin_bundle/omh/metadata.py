@@ -36,6 +36,7 @@ REQUIRED_HOOKS = ("on_session_end", "pre_llm_call", "pre_tool_call")
 # capability; no native board action may be armed for receipt correlation.
 OPTIONAL_HOOKS = (
     "on_session_start",
+    "post_api_request",
     "post_tool_call",
     "pre_verify",
     "subagent_start",
