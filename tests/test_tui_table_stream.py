@@ -252,12 +252,13 @@ class TableStreamingTests(unittest.TestCase):
             self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=12)))
         self.transcript.apply(ev("message.delta", text="| late | " + "w" * 20 + " |\n"))
         self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=12)))
+        self.transcript.apply(ev("message.complete", text="", status="complete"))
+        self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=12)))
         early = next(row for row in self.taken if f"{name(1)} " in row + " ")
         wide = next(row for row in self.taken if "late" in row)
         self.assertLess(len(early.rstrip()), len(wide.rstrip()))
-        self.assertEqual(early.index("s1"), next(row for row in self.taken if name(17) in row).index("s17"))
-        self.transcript.apply(ev("message.complete", text="", status="complete"))
-        self.taken.extend(lines_text(self.transcript.take_stable_lines(WIDTH, THEME, live_rows=12)))
+        # a later row as narrow as the frozen columns (frozen at the release, the row after it still held) keeps them
+        self.assertEqual(early.index("s1"), next(row for row in self.taken if f"{name(16)} " in row).index("s16"))
         words = [word for row in self.taken for word in row.split()]
         for cell in ["a", "b", "late", "w" * 20] + [name(n) for n in range(1, 20)] + [f"s{n}" for n in range(1, 20)]:
             self.assertEqual(words.count(cell), 1, cell)
@@ -347,6 +348,33 @@ class TableStreamingTests(unittest.TestCase):
         words = self.tokens(self.stream_released(source))
         for cell in ["ah1", "ah2", "a0c1", "a0c2", "a1c1", "a1c2", "bh0", "bh1", "bh2", "b0c2", "b1c2"]:
             self.assertEqual(words.count(cell), 1, cell)
+
+    def test_a_table_right_after_a_released_one_gets_its_own_box_as_in_history(self) -> None:
+        first = ["| ah1 | ah2 |", "|---|---|"] + [f"| a{i}c1 | a{i}c2 |" for i in range(10)]
+        second = ["| bh1 | bh2 |", "|---|---|"] + [f"| b{i}c1 | b{i}c2 |" for i in range(2)]
+        text = "\n".join([*first, *second]) + "\n"
+        lines = text.split("\n")
+        for label, pieces in {
+            "a line a delta": [line + "\n" for line in lines[:-1]],
+            "a table a delta": ["\n".join(first) + "\n", "\n".join(second) + "\n"],
+            "three characters a delta": [text[at : at + 3] for at in range(0, len(text), 3)],
+        }.items():
+            with self.subTest(label):
+                transcript = Transcript(clock=lambda: 100.0)
+                transcript.apply(ev("message.start"))
+                taken: list[str] = []
+                for piece in pieces:
+                    transcript.apply(ev("message.delta", text=piece))
+                    taken += lines_text(transcript.take_stable_lines(WIDTH, THEME, live_rows=8))
+                self.assertGreater(len(taken), 8, "the first table was never released")
+                transcript.apply(ev("message.complete", text="", status="complete"))
+                taken += lines_text(transcript.take_stable_lines(WIDTH, THEME, live_rows=8))
+                shown = taken + lines_text(transcript.live_lines(WIDTH, THEME, max_rows=8))
+                history = lines_text(transcript.history_lines(WIDTH, THEME, details=False))
+                self.assertEqual(shown, history)
+                self.assertEqual([row[4] for row in history if row[4:5] in ("┌", "└")], ["┌", "└", "┌", "└"])
+                header = next(at for at, row in enumerate(history) if "bh1" in row)
+                self.assertTrue(history[header - 1][4:].startswith("┌"), history[header - 1])
 
     def test_a_continued_row_with_escapes_and_tabs_stays_on_the_frozen_columns(self) -> None:
         head = ["| hh1 | hh2 |", "|---|---|"] + [f"| r{i}q | s{i}q |" for i in range(8)]

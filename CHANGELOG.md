@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A table that follows a released one with no blank line between gets its
+  own box in scrollback, as in `/history`.** The OMH TUI used to draw the
+  second table's header as a body row of the first and drop its divider.
+  While a tall table streams, its last row now waits until the next line
+  shows it is no divider.
 - **The OMH TUI draws Markdown tables as boxes, and a table wider than the
   terminal wraps inside its columns.** Every table is now a box like Claude
   Code's: `┌─┬─┐` borders in the rule colour, the header bold in the look's

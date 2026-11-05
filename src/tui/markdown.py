@@ -686,13 +686,20 @@ def table_rows_on(
 ) -> tuple[list[Line], int, TableColumns | None]:
     """Body rows from `sources[first]` on columns already given: (rows, count of lines consumed, the columns the
     next row hangs on). See `_body_lines`. The table is closed (`_table_end`, and no columns returned) when a line
-    after its rows ends it, or at the end of `sources` when `closed`."""
+    after its rows ends it, a divider that opens the next table on the row before it, or at the end of `sources`
+    when `closed`."""
     body: list[list[str]] = []
     index = first
     while index < len(sources) and sources[index].strip().startswith("|"):
         cells = split_table_row(clean_text(sources[index]))
         if is_table_divider_cells(cells):
-            index += 1  # the row before it is already out: a next table goes on these columns, dividers dropped
+            before = split_table_row(clean_text(sources[index - 1])) if index > first else []
+            if before and not is_table_divider_cells(before) and opens_table(sources[index - 1], sources[index]):
+                # this divider opens the next table: its header is the row before, which is not ours
+                body.pop()
+                index -= 1
+                break
+            index += 1  # a divider that opens nothing here is dropped, never drawn raw
             continue
         if len(cells) < 2:
             break

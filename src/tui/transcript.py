@@ -125,7 +125,9 @@ from .markdown import (
     GrowingLine,
     MarkdownState,
     clean_text,
+    is_table_divider_cells,
     opens_table,
+    split_table_row,
     table_block,
     render_growing,
     render_lines,
@@ -490,16 +492,35 @@ def _stable_lines(
     rows by `height` (the rows the held lines draw: wrapped cells take
     several), is released as it grows.
     """
-    lines = _without_trailing_blanks(_source_lines(text)[:-1])
+    *complete, partial = _source_lines(text)
+    lines = _without_trailing_blanks(complete)
     if final:  # the last take, at exit: nothing is left to wait for, so a complete `|` row goes out
         return lines
     held = len(lines)
     while held and lines[held - 1].strip().startswith("|"):
         held -= 1
-    if cap is not None and len(lines) - held > 2 and opens_table(lines[held], lines[held + 1]) and (
-        len(lines) - held > cap or height is not None and height(lines[held:]) > cap
-    ):
-        return lines  # a table taller than the live region is released as it grows, on the columns it has
+
+    def tall(at: int) -> bool:
+        return cap is not None and (len(lines) - at > cap or height is not None and height(lines[at:]) > cap)
+
+    if len(lines) - held > 2 and opens_table(lines[held], lines[held + 1]) and tall(held):
+        # a table taller than the live region is released as it grows, on the columns it has. A next table in the
+        # run is held on its own until it is tall too. A released table's last row waits while the line after it
+        # may yet be a divider, as it is then the header of a next table; a header with its divider waits for a row.
+        last = held
+        for at in range(held + 2, len(lines) - 1):
+            header = split_table_row(clean_text(lines[at]))
+            if opens_table(lines[at], lines[at + 1]) and not is_table_divider_cells(header):
+                last = at
+        if last > held and not tall(last):
+            return lines[:last]
+        if len(lines) - last > 3 and opens_table(lines[-2], lines[-1]):
+            return lines[:-2]
+        after = clean_text(partial).strip()  # the line being written, "" before its first character
+        divider_yet = set(after) <= set("|:- ") and after[:1] in ("", "|")
+        if len(lines) - last > 3 and len(lines) == len(complete) and divider_yet:
+            return lines[:-1]
+        return lines
     return _without_trailing_blanks(lines[:held])
 
 
