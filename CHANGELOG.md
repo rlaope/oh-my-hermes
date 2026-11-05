@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
+  on.** With that setting each delegated child works in a git worktree of its
+  own, made from the parent's last commit, so a dependent node and the verify
+  node started without the earlier nodes' edits, and verify could pass a tree
+  without the work. `omh_dag action=define` is now refused as
+  `worktree_isolation_on` with a line the model relays: turn the setting off
+  for this profile, or do the work without dag-ulw. A run defined before the
+  setting was turned on still settles its nodes but hands out no
+  `delegate_task` call while it is on. OMH only reads the profile's
+  `config.yaml` and never writes it; a config it cannot read counts as off,
+  as before. The check does not tell apart a session where Hermes skips
+  isolation anyway (outside git, a terminal that is not local).
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and

@@ -433,6 +433,107 @@ class SettleTests(unittest.TestCase):
         self.assertEqual(result["reason"], "node_not_out")
 
 
+class WorktreeIsolationTests(unittest.TestCase):
+    """Hermes' `delegation.worktree_isolation` gives each child a worktree of its own from the parent's HEAD.
+
+    A dependent or the verify node would then start without the earlier nodes' edits, so a run is never defined
+    with it on, and a run defined before it was turned on hands out no call while it is on.
+    """
+
+    def _config(self, home, text: bytes | str) -> None:
+        path = home.hermes / "config.yaml"
+        if isinstance(text, bytes):
+            path.write_bytes(text)
+        else:
+            path.write_text(text, encoding="utf-8")
+
+    def test_define_is_refused_while_isolation_is_on_and_keeps_no_record(self) -> None:
+        for value in ("true", "True", "yes", "ON", "1", "'true'", "true  # one tree per child"):
+            with self.subTest(value=value), homes() as home:
+                slots_table(home)
+                self._config(home, f"delegation:\n  max_concurrent_children: 3\n  worktree_isolation: {value}\n")
+                result = call(action="define", run="feat", nodes=FEATURE)
+                self.assertEqual((result["status"], result["reason"]), ("refused", "worktree_isolation_on"), result)
+                self.assertEqual(result["say"], dag_tool.WORKTREE_ISOLATION_REFUSED)
+                self.assertIn("delegation.worktree_isolation", result["say"])
+                self.assertIsNone(dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat")))
+
+    def test_isolation_off_or_absent_defines_as_before(self) -> None:
+        configs: dict[str, bytes | str | None] = {
+            "absent": None,
+            "false": "delegation:\n  worktree_isolation: false\n",
+            "off": "delegation:\n  worktree_isolation: off\n",
+            "zero": "delegation:\n  worktree_isolation: 0\n",
+            "other_section": "terminal:\n  worktree_isolation: true\n",
+            "not_one_line": "delegation:\n  worktree_isolation:\n    - true\n",
+        }
+        expected = None
+        for name, text in configs.items():
+            with self.subTest(config=name), homes() as home:
+                slots_table(home)
+                if text is not None:
+                    self._config(home, text)
+                result = call(action="define", run="feat", nodes=FEATURE)
+                self.assertEqual(result["status"], "ok", result)
+                self.assertNotIn("worktree_isolation", result.get("say", ""))
+                shape = ([c["nodes"] for c in result["calls"]], result.get("say", ""), result["state"])
+                expected = expected or shape
+                self.assertEqual(shape, expected)
+
+    def test_an_unreadable_config_counts_as_off_and_define_answers_as_before(self) -> None:
+        """Fail-open only on a read failure: the guard says off, and define answers as it did without the guard."""
+        for name in ("not_utf8", "directory"):
+            answers = []
+            for guarded in (True, False):
+                with self.subTest(config=name, guarded=guarded), homes() as home:
+                    slots_table(home)
+                    if name == "directory":
+                        (home.hermes / "config.yaml").mkdir()
+                    else:
+                        self._config(home, b"delegation:\n  worktree_isolation: true\n  note: \xff\xfe\n")
+                    self.assertFalse(dag_tool.worktree_isolation_on(home.hermes))
+                    with nullcontext() if guarded else patch.object(dag_tool, "worktree_isolation_on",
+                                                                    return_value=False):
+                        answers.append(call(action="define", run="feat", nodes=FEATURE))
+            self.assertEqual(answers[0], answers[1])
+            self.assertNotEqual(answers[0].get("reason"), "worktree_isolation_on")
+
+    def test_a_run_defined_before_isolation_hands_out_nothing_while_it_is_on(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            self._config(home, "delegation:\n  max_concurrent_children: 10\n")
+            call(action="define", run="feat", nodes=FEATURE)
+            child_started(home, "feat", "api")
+            handoff(home, "feat", "api")
+            stop(home, "child-api", now=time.time())
+            self._config(home, "delegation:\n  max_concurrent_children: 10\n  worktree_isolation: true\n")
+            settled = call(action="settle", run="feat", node="api", outcome="accepted")
+            ready = call(action="ready", run="feat")
+            self._config(home, "delegation:\n  max_concurrent_children: 10\n  worktree_isolation: false\n")
+            after = call(action="ready", run="feat")
+        # The outcome is still recorded; only the next node does not go out.
+        self.assertEqual(settled["settled"], {"node": "api", "outcome": "accepted"})
+        self.assertEqual(settled["counts"]["done"], 1)
+        self.assertEqual(settled["calls"], [])
+        self.assertTrue(settled["say"].endswith(dag_tool.WORKTREE_ISOLATION_HELD), settled["say"])
+        self.assertNotIn("held_for_slots", settled)
+        self.assertEqual(ready["calls"], [])
+        self.assertIn(dag_tool.WORKTREE_ISOLATION_HELD, ready["say"])
+        self.assertEqual([c["nodes"] for c in after["calls"]], [["docs"]])
+        self.assertNotIn("worktree_isolation", after.get("say", ""))
+
+    def test_the_setting_is_read_without_writing_the_config(self) -> None:
+        text = "delegation:\n  worktree_isolation: yes\n"
+        with homes() as home:
+            self._config(home, text)
+            before = (home.hermes / "config.yaml").stat()
+            self.assertTrue(dag_tool.worktree_isolation_on(home.hermes))
+            call(action="define", run="feat", nodes=FEATURE)
+            after = (home.hermes / "config.yaml").stat()
+            self.assertEqual((home.hermes / "config.yaml").read_text(encoding="utf-8"), text)
+        self.assertEqual((before.st_ino, before.st_mtime_ns), (after.st_ino, after.st_mtime_ns))
+
+
 FILE_ANSWER = {"output": "OMH_HANDOFF_FILE\n", "returncode": 0}
 # A terminal whose home does not qualify: the run keeps this host's handoff path, as before the backend was read.
 HOME_UNUSABLE = {"output": "OMH_BACKEND_HOME_UNUSABLE\n", "returncode": 0}

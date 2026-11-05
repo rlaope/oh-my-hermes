@@ -28,6 +28,12 @@ Hermes' own live environment for the child (`backend_handoff`), under the
 host check's rule; when that cannot be read, the node is accepted with
 ``handoff_checked: false``, and an interrupted read settles nothing. A
 local backend, or one this does not read, keeps the host check alone.
+
+With Hermes' `delegation.worktree_isolation` on, each child would work in a
+worktree of its own made from the parent's HEAD, without the earlier nodes'
+edits. `define` is then refused (`worktree_isolation_on`), and for a run
+defined before, `ready` hands out no `delegate_task` call and says why; a
+config that cannot be read counts as off.
 """
 from __future__ import annotations
 
@@ -97,6 +103,20 @@ TERMINAL_FIRST = ("No node was handed out: the children write their handoff file
                   "`pwd`; a file tool brings it up too), then call omh_dag action=ready.")
 TERMINAL_INTERRUPTED = ("No node was handed out: reading where the children write their handoff files in the {backend} "
                         "terminal was interrupted. Call omh_dag action=ready again.")
+# Hermes' `delegation.worktree_isolation` gives each delegated child its own git worktree and branch from the parent's
+# HEAD (`tools/subagent_worktree.py`). A dag run's dependents and its verify node read the earlier nodes' edits from
+# one shared tree, so with it on a verify node could pass a tree without the work: `define` is refused and `ready`
+# hands out nothing. OMH never writes the setting.
+WORKTREE_ISOLATION_WHY = (
+    "dag-ulw needs its delegated nodes to share one worktree, and this profile turns on Hermes' "
+    "delegation.worktree_isolation: each node would start from the last commit without the earlier nodes' edits, so "
+    "the verify node could pass a tree without the work.")
+WORKTREE_ISOLATION_REFUSED = (
+    WORKTREE_ISOLATION_WHY + " Ask the person to set delegation.worktree_isolation to false for this profile (OMH "
+    "never changes it), then define the run again; or do the work without dag-ulw.")
+WORKTREE_ISOLATION_HELD = (
+    "No node was handed out: " + WORKTREE_ISOLATION_WHY + " Ask the person to set it to false for this profile (OMH "
+    "never changes it), then call omh_dag action=ready.")
 _HOME_LINE, _HOME_UNUSABLE = "OMH_BACKEND_HOME=", "OMH_BACKEND_HOME_UNUSABLE"
 # A home a handoff root may sit in: absolute, plain characters, and not one of the temp directories every user can
 # write, where another user could plant a handoff file.
@@ -386,6 +406,8 @@ def _wave_budget(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
 def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durable: str, segments: list[str],
             now: float, shown: set[str] | None, task: str, *, limits: dag_run.Limits = dag_run.DEFAULT_LIMITS,
             ignored: tuple[str, ...] = ()) -> str:
+    if worktree_isolation_on(hermes_home):
+        raise dag_run.DagRefusal("worktree_isolation_on", WORKTREE_ISOLATION_REFUSED)
     run = dag_run.valid_id(args.get("run"), "invalid_run_id", "Give the run a short lowercase id (a-z, 0-9, -).")
     budget = oneshot_budget(hermes_home, segments)
     record = dag_run.new_record(durable, run, args.get("name"), args.get("goal"), args.get("nodes"), now,
@@ -500,6 +522,24 @@ def free_slots(hermes_home: Path, *, pid: int | None = None) -> dict[str, Any]:
     free = max(0, cap - len(used)) if basis == "state_db" else min(UNREAD_SLOTS, cap)
     return {"cap": cap, "running_calls": len(used) if basis == "state_db" else None, "free": free, "basis": basis,
             "independent_completions": str(settings.get("independent_completions", "")).casefold() in ("true", "yes", "on")}
+
+
+def worktree_isolation_on(hermes_home: Path) -> bool:
+    """Whether this profile's config.yaml turns on Hermes' `delegation.worktree_isolation`. Read-only.
+
+    Read as Hermes' YAML loader reads it: ``true``, ``yes``, ``on`` (any case)
+    or a nonzero integer. Absent, any other value, or a config this cannot
+    read counts as off, which keeps today's behaviour. Where Hermes skips
+    isolation anyway (outside git, a terminal that is not local) is not told
+    apart: the key on counts as on.
+    """
+    raw = read_delegation_settings(hermes_home, ("worktree_isolation",)).get("worktree_isolation", "").casefold()
+    if raw in ("true", "yes", "on"):
+        return True
+    try:
+        return int(raw) != 0
+    except ValueError:
+        return False
 
 
 def _cap(configured: object) -> int:
@@ -685,7 +725,9 @@ def _ready(
         if root is not None:
             record["handoff_root"] = root
             pinned = True
-    calls, held = ([], []) if waits else dag_run.calls_for(
+    # A run defined before the person turned isolation on: nothing goes to a child while it is on.
+    isolated = bool(set(offered) - set(coding)) and worktree_isolation_on(hermes_home)
+    calls, held = ([], []) if waits or isolated else dag_run.calls_for(
         record, derived, free_slots=slots["free"], per_call=slots["cap"], omh_home=omh_home, now=now, skip=coding,
         task_budget=task_budget, backend=delegation_backend(omh_home, hermes_home), limits=limits)
     # With the one-shot budget spent, a held node never gets a child: once nothing else is out, it is the parent's.
@@ -741,6 +783,8 @@ def _ready(
     if waits:
         instruction = TERMINAL_INTERRUPTED if waits == "interrupted" else TERMINAL_FIRST
         say = " ".join(part for part in (say, instruction.format(backend=record["backend"])) if part)
+    if isolated:
+        say = " ".join(part for part in (say, WORKTREE_ISOLATION_HELD) if part)
     say = " ".join(part for part in (say, note) if part)
     return _result(action, record, derived, shown, say=say, extra=extra, now=now, limits=limits, ignored=ignored)
 
