@@ -58,10 +58,8 @@ def _fixture_rows() -> list[dict]:
 class _Workspace(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
-
-    def tearDown(self) -> None:
-        self._tmp.cleanup()
 
     def prepare(self, name: str = "out", *, sample: int = 5, seed: int = SEED) -> Path:
         out = self.root / name
