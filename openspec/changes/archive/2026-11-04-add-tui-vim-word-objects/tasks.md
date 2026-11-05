@@ -1,6 +1,6 @@
 # Tasks
 
-Planning-only: all work below is future work, apply unauthorized. Creating these documents completes no implementation task.
+Shipment reconciliation: implemented, independently verified and mechanically archived; current Human SHIP IT approval authorizes delivery/publication. Task 3.1 is complete; 3.2 remains unchecked because native closure evidence was never produced. See [verification-evidence.md](verification-evidence.md). Historical planning/audit snapshots are not current implementation status.
 
 ## 1. Contract and Implementation
 - [x] 1.1 Human accepts WO-1..WO-7 semantics and authorizes a named implementation worktree; independently audit the proposed plan and record exact revisions.
@@ -42,12 +42,12 @@ Planning-only: all work below is future work, apply unauthorized. Creating these
   - Evidence: `../../../../evidence/word-gates/report.md`, `rc1-*.log`, and exact baseline/restored manifests in the named implementation run root; reverse/check, 171 original regressions, caret-11 oracle, 3528 full TUI tests (one existing skip), restore/check, and 36 enabled feature/leader tests passed.
 
 ## 3. Completion
-- [ ] 3.1 Independent auditor replays every acceptance assertion and `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests /opt/homebrew/bin/python3 -B -m unittest discover -s tests -p 'test_tui*.py' -q` on the exact candidate; all missing/stale/failing assertions block delivery.
+- [x] 3.1 Independent auditor replays every acceptance assertion and `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests /opt/homebrew/bin/python3 -B -m unittest discover -s tests -p 'test_tui*.py' -q` on the exact candidate; all missing/stale/failing assertions block delivery.
   - Done when: every acceptance row passes with current candidate-bound evidence and regression output.
   - Negative check: baseline-only or wrong-candidate output is rejected.
-  - Evidence: future verification-evidence.md independent replay.
+  - Evidence: [verification-evidence.md](verification-evidence.md), final-candidate acceptance and full TUI replay; the existing Windows-only regression skip is disclosed.
 - [ ] 3.2 Perform branch-delta review and Human delivery decision; keep later character-search slice separate, record amendments/observation/closure only after actual execution.
   - Done when: all above tasks are truly complete and observed, not merely planned.
   - Verify: OpenSpec status and closure evidence after implementation.
   - Negative check: planning validation alone never closes implementation.
-  - Evidence: future evidence/amendment/observation/closure artifacts, not generated in this task.
+  - Evidence: [verification-evidence.md](verification-evidence.md). Branch-delta review, targeted R1/R2 closure and Human SHIP IT are observed; native amendment/observation/closure is NON_RUN. Leave this composite task unchecked rather than infer closure from mechanical archive or approval.

@@ -1,5 +1,7 @@
 # Acceptance Plan
 
+Archived planning contract: the prospective language below is preserved as the pre-implementation record, not current status. Implementation and independent replay are observed; Human SHIP IT now authorizes delivery/publication. Native lifecycle remains NON_RUN. See [verification-evidence.md](verification-evidence.md) and [tasks.md](tasks.md) for current evidence and incomplete conjuncts.
+
 Lifecycle: `planning -> opsx-audit -> opsx-apply -> opsx-qa -> codereview:branch-delta -> opsx-archive`.
 Every feature check below is PLANNED / UNEXECUTED. The future implementer adds `VimWordObjectTests` in existing `tests/test_tui_composer.py` with exactly these methods; the independent auditor reruns them on the candidate. Each method asserts the complete scenario outcome and enumerates its table-driven subcases. Spec scenario text is the semantic oracle; passing only text assertions is insufficient where caret/mode/pending/register/undo are specified.
 

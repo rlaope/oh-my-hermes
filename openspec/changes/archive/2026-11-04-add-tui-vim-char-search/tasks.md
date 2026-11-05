@@ -1,6 +1,6 @@
 # Tasks
 
-Apply status: implementation and local integration/rollback executed on the authorized Slice 1 behavioral-QA parent. Evidence: `/Users/danrio/.hermes/cache/scratch/tui-vim-apply-20261104/evidence/char-apply/`. Independent QA, narrow controls, branch-delta review, native lifecycle admission and Human release/archive permission remain open.
+Shipment reconciliation: implementation, manifest binding, independent acceptance/control replay, branch-delta review and targeted R1/R2 closure are observed. Current Human SHIP IT approval authorizes delivery/publication and reconciles archive permission; it does not retroactively prove permission preceded mechanical archival. Native lifecycle admission remains NON_RUN, so task 3.2 stays unchecked. See [verification-evidence.md](verification-evidence.md).
 
 ## 1. Implementation
 - [x] 1.1 CS-1/CS-3: implement atom-safe line-bounded resolver in src/tui/composer.py and direction/atomic/count/miss methods of test_tui_composer.VimCharSearchTests in tests/test_tui_composer.py.
@@ -30,15 +30,15 @@ Apply status: implementation and local integration/rollback executed on the auth
   - Verify: pinned `-m unittest test_tui_composer test_tui_shortcuts -q` then pinned `-m unittest discover -s tests -p 'test_tui*.py' -q` and actual accepted word-object suite.
   - Negative check: pinned `-m unittest test_tui_composer.VimCharSearchTests.test_isolation -v`; pending space target must not become leader.
   - Evidence: future evidence/cs-isolation.txt and regression logs.
-- [ ] 2.2 Bind accepted artifact hashes, accepted slice-1 parent, concrete candidate root, source hashes and fresh environment digest into future evidence/candidate-manifest.json. Capture owned hunk patch/hash; verify no undeclared files, locks/config/generated output. Independent owner replays every acceptance row; no stale baseline digest accepted.
+- [x] 2.2 Bind accepted artifact hashes, accepted slice-1 parent, concrete candidate root, source hashes and fresh environment digest into future evidence/candidate-manifest.json. Capture owned hunk patch/hash; verify no undeclared files, locks/config/generated output. Independent owner replays every acceptance row; no stale baseline digest accepted.
 - [x] 2.3 Exercise hunk-level rollback in authorized disposable candidate only: reverse-check owned patch, reverse-apply, prove word objects/unrelated hunks preserved, replay regression floor, then restore only approved patch if needed. Never whole-file reset; overlapping hunks block and escalate.
 
 ## 3. Completion
-- [ ] 3.1 Every acceptance assertion and declared subcase has candidate-bound happy/negative/boundary evidence with independent replay; zero skips/placeholders in future evidence; all CS-1..CS-7 and original/sibling regressions pass.
+- [x] 3.1 Every acceptance assertion and declared subcase has candidate-bound happy/negative/boundary evidence with independent replay; zero skips/placeholders in future evidence; all CS-1..CS-7 and original/sibling regressions pass.
 - [ ] 3.2 Re-run strict change validation, audit/QA/review gates and obtain separate Human release/archive permission; do not confuse ready planning artifacts with implementation or lifecycle completion.
 
 All “pinned” test arguments above expand exactly to this executable invocation, run from approved candidate root:
 ```sh
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests /opt/homebrew/bin/python3 -B
 ```
-Append the written `-m unittest ...` arguments. Full per-assertion commands are in acceptance-plan.md. The original Homebrew focused invocation passed; full TUI replay used the isolated `setup/word-gates/venv/bin/python`, pinned Node v26.12.1 and CommonJS fixture boundary from the repair handoff. Task 2.2 stays open because independent replay is outstanding despite the captured local manifest. Tasks 3.1/3.2 remain open; no native admission, independent QA/review or release/archive permission is claimed.
+Append the written `-m unittest ...` arguments. Full per-assertion commands are in acceptance-plan.md. The original Homebrew focused invocation passed; full TUI replay used the isolated `setup/word-gates/venv/bin/python`, pinned Node v26.12.1 and CommonJS fixture boundary from the repair handoff. Tasks 2.2 and 3.1 are now supported by the captured manifest, independent QA binding/control replay and final-candidate replay (see verification-evidence.md). Acceptance has zero skips/placeholders; full regression discovery retains one unchanged Windows-only skip. Task 3.2 remains open only for unobserved native admission/closure, not missing Human delivery approval.

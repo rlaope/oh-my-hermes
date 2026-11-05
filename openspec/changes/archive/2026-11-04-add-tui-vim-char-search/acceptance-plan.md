@@ -1,5 +1,7 @@
 # Acceptance Plan
 
+Archived planning contract: the prospective language below is preserved as the pre-implementation record, not current status. Implementation and independent replay are observed; Human SHIP IT now authorizes delivery/publication. Native lifecycle remains NON_RUN. See [verification-evidence.md](verification-evidence.md) and [tasks.md](tasks.md) for current evidence and incomplete conjuncts.
+
 Lifecycle: `planning -> opsx-audit -> opsx-apply -> opsx-qa -> codereview:branch-delta -> opsx-archive`.
 Status: predeclared future checks, NOT executed feature tests. Every assertion below is UNPROVEN. Baseline probes and 25 leader tests in findings.md are not acceptance evidence.
 

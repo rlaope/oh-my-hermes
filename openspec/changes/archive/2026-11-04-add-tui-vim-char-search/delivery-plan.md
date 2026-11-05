@@ -1,5 +1,7 @@
 # Delivery Plan
 
+Archived planning contract: the prospective language below is preserved as the pre-implementation record, not current status. Implementation and independent replay are observed; Human SHIP IT now authorizes delivery/publication. Native lifecycle remains NON_RUN. See [verification-evidence.md](verification-evidence.md) and [tasks.md](tasks.md) for current evidence and incomplete conjuncts.
+
 ## Atomic Candidate
 Planning candidate includes this change directory only. Read-only source, shared workspace ground/config and sibling word-object artifacts are inputs, not outputs.
 | kind | canonical path | inclusion reason |
