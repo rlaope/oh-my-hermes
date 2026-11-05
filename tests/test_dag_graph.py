@@ -186,6 +186,15 @@ class GraphTests(unittest.TestCase):
         self.assertEqual({node["id"]: node["cycle"] for node in second["nodes"] if "cycle" in node},
                          {"d:export:fix2": 2})
 
+    def test_each_node_carries_its_role(self) -> None:
+        # The TUI names a finished child's briefing by it (`● verify @verify finished`): the declared role, `build`
+        # where none was declared, as `dag_run.node_role` reads it.
+        with homes() as home:
+            defined(home)
+            graph = build_delegation_graph(home.omh, home.hermes, PARENT)
+        roles = {node["id"]: node.get("role") for node in graph["nodes"] if node.get("dag_node")}
+        self.assertEqual(roles, {"d:export:api": "build", "d:export:ui": "build", "d:export:verify": "verify"})
+
     def test_added_nodes_hang_below_where_they_came_from(self) -> None:
         with homes() as home:
             defined(home)

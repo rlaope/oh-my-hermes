@@ -768,13 +768,15 @@ run and approval decision stays Hermes'; the screen is OMH's.
   Claude Code does for a teammate: `● <name> finished  1m 35s · ↓1.8k`, then
   the first lines of its reply, or its error, in up to two dim rows under the
   name, ending in `…` where it said more. A dag node's child is named by the
-  node's id as a handle (`● @notify finished`), as Claude Code names a
-  teammate, bold in a hue of its own that stays the same for that id on every
+  node's role and its id as a handle (`● build @notify finished`, `● verify
+  @check failed`), as Claude Code names a teammate, the handle bold in a hue
+  of its own that stays the same for that id on every
   row (plain bold under `NO_COLOR`), with the node's label on one dim row under
-  it, cut with `…` (none when the label is the id). Until the HUD binds the
-  node, the id is the one the child's `[dag:<run>/<node>]` marker names. Any
-  other agent is named by the short title the agent list shows, with no `@`
-  and no such row, since Hermes' subagent frames carry no name. The
+  it, cut with `…` (none when the label is the id). Until the HUD holds the
+  node, the id is the one the child's `[dag:<run>/<node>]` marker names, with
+  no role. Any
+  other agent is named by the short title the agent list shows, with no role,
+  no `@` and no such row, since Hermes' subagent frames carry no name. The
   mark is green only for an agent that completed; a failed one reads `●
   <name> failed` in red with its error under it, an interrupted one `▪ <name>
   interrupted` and a cancelled one `○ <name> cancelled`, both muted. One

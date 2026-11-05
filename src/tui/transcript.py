@@ -76,9 +76,10 @@ A subagent that finishes is briefed as a block of its own (`AgentDoneBlock`, the
 owner's ask of 2026-11-05, after Claude Code's `● Teammate @x finished`):
 `● <name> finished  1m 35s · ↓1.8k`, the mark green only for a completed agent
 (`● … failed` in red, `▪ … interrupted` and `○ … cancelled` muted); a dag
-node's child is named by the node's id as a handle, `@<id>` in a hue of its own
-(`theme.agent_style`, the same for that id on every row), with the node's label
-on one muted row under it; then the first lines of its reply, or its error, in at most two
+node's child is named by its role and its id as a handle, `● build @notify
+finished` (the role plain, `@<id>` in a hue of its own, `theme.agent_style`, the
+same for that id on every row), with the node's label on one muted row under
+it; then the first lines of its reply, or its error, in at most two
 muted rows under the name, ending in `…` where it said more. The app writes it as an aside
 (`add_aside`), so it waits under a streaming reply or a running call and is
 written at the next block boundary, in the order the agents finished. Past
@@ -352,6 +353,7 @@ class AgentDoneBlock:
     done: bool = True
     title: str = ""  # a dag node's label, on one dim row under a `name` that is the node's id; "" for none
     handle: bool = False  # `name` is a dag node's id, drawn `@<name>` in its own hue (`theme.agent_style`)
+    role: str = ""  # a dag node's role (`build`, `verify`, …), plain, before the handle; "" for none
 
 
 @dataclass
@@ -1155,7 +1157,8 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
     `▪` interrupted and `○` cancelled), and the word after the bold name says
     which, so colour is never the only signal. A `handle` is `@<name>` in the
     hue its name hashes to (`agent_style`), whatever the outcome: the colour
-    names the agent, not how it ended. A row too narrow drops the
+    names the agent, not how it ended. A `role` goes before it, plain, as
+    Claude Code's `Teammate`; a row too narrow cuts the handle before the role. A row too narrow drops the
     facts from the last, then cuts the name; the word stays. What it said is
     drawn as the reply would be (`render_lines`: no `**`, `#` or backticks
     left), all in one muted tone, and the last row shown ends in `…` where
@@ -1163,14 +1166,16 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
     """
     mark_style = {AGENT_FINISHED: theme.ok, AGENT_FAILED: theme.error}.get(block.outcome, theme.muted)
     word_style = {AGENT_FINISHED: theme.text, AGENT_FAILED: theme.error}.get(block.outcome, theme.muted)
+    plain = theme.text if block.outcome in (AGENT_FINISHED, AGENT_FAILED) else theme.muted
     if block.handle:
         name_style = agent_style(block.name, theme)
     else:
-        name_style = replace(theme.text if block.outcome in (AGENT_FINISHED, AGENT_FAILED) else theme.muted, bold=True)
+        name_style = replace(plain, bold=True)
     shown = f"@{block.name}" if block.handle else block.name
     mark = f"{AGENT_DONE_MARKS.get(block.outcome, AGENT_DONE_MARKS[AGENT_CANCELLED])} "
+    lead: Line = (Span(f"{block.role} ", plain),) if block.role else ()
     word = f" {block.outcome}"
-    fixed = cell_width(mark) + cell_width(word)
+    fixed = cell_width(mark) + line_width(lead) + cell_width(word)
     facts = ""
     for count in range(len(block.facts), -1, -1):
         facts = AGENT_FACT_SEPARATOR.join(block.facts[:count])
@@ -1178,7 +1183,8 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
             break
     tail: Line = (Span(COLUMN_GAP + facts, theme.faint),) if facts else ()
     name = truncate(shown, max(width - fixed - line_width(tail), 1))
-    rows = [truncate_line((Span(mark, mark_style), Span(name, name_style), Span(word, word_style), *tail), width)]
+    rows = [truncate_line((Span(mark, mark_style), *lead, Span(name, name_style), Span(word, word_style), *tail),
+                          width)]
     room = width - len(AGENT_SAID_INDENT)
     if room < 1:
         return rows

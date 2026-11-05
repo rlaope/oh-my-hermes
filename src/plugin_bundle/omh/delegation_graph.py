@@ -73,6 +73,7 @@ from .dag_run import (
     derive,
     goal_verdict,
     handoff_unchecked,
+    node_role,
     run_state,
     session_runs,
 )
@@ -945,7 +946,8 @@ def _dag_nodes(
 
     A node a repair or an extend round added also gets an edge from where it
     came from (`dag_origin`) when nothing else of its own group leads to it,
-    so the drawing shows it below that node. A parked node is a waiting one
+    so the drawing shows it below that node. Each node carries its role (`role`, `dag_run.node_role`: build,
+    baseline, verify or review), which the TUI names a finished child's briefing by. A parked node is a waiting one
     marked `parked`, with what its attempt recorded it waits on (`parked_at`,
     `wake_at`, `wait_handle`, `wait_reason`); its elapsed time is the time
     since it parked.
@@ -975,7 +977,7 @@ def _dag_nodes(
             "category": _text(node.get("category"), 40) or "?", "category_source": "dag_plan", "model": "?",
             "effort": "", "state": state, "status": status, "elapsed_seconds": None, "order": order,
             "group": group, "waits_on": len(info["waits_on"]) if info["state"] == "waiting" else 0,
-            "dag_node": node_id, "dag_origin": origin,
+            "dag_node": node_id, "dag_origin": origin, "role": node_role(node),
         }
         summary = _prompt_summary(node.get("prompt"))
         if summary:

@@ -545,6 +545,79 @@ class HandleNamingTests(unittest.TestCase):
         self.assertTrue(any(row.startswith("● find usages") for row in drawn(app)))
 
 
+def dag_app(role: object = None, *, bind: bool = True):
+    """An app whose HUD graph holds node `button` (its `role` set unless None), and a child of it that finished."""
+    run = dag_export_run()
+    node = next(item for item in run["nodes"] if item["id"] == "d:r1:button")
+    if role is not None:
+        node["role"] = role
+    app, _client = make_app(busy=False, cols=120, clock=lambda: 0.0)
+    with_hud(app, run if bind else None, received_at=0.0)
+    goal = "implement the export button in the toolbar [dag:r1/button]"
+    agent_event(app, "start", FIRST, goal=goal)
+    agent_event(app, "complete", FIRST, goal=goal, status="failed" if role == "verify" else "completed",
+                duration_seconds=95.0, output_tokens=2000, summary="Done.")
+    [block] = blocks_of(app, AgentDoneBlock)
+    return app, block
+
+
+class RoleTests(unittest.TestCase):
+    """The owner's pick of 2026-11-05: the node's role stands where Claude Code writes `Teammate`,
+    `● build @notify finished`, plain; the handle keeps its own hue."""
+
+    def test_each_role_stands_before_the_handle(self) -> None:
+        for role in ("build", "baseline", "verify", "review"):
+            with self.subTest(role=role):
+                app, block = dag_app(role)
+                self.assertEqual((block.role, block.name, block.handle), (role, "button", True))
+                word = "failed" if role == "verify" else "finished"
+                self.assertIn(f"● {role} @button {word}  1m 35s · ↓2k", [row.rstrip() for row in drawn(app)])
+                head = block_rows(block, 120, DEFAULT_THEME)[0]
+                self.assertEqual([span.text for span in head[:3]], ["● ", f"{role} ", "@button"])
+                self.assertEqual(head[1].style, DEFAULT_THEME.text, "the role is plain")
+                self.assertEqual(head[2].style, agent_style("button", DEFAULT_THEME), "the handle keeps its hue")
+
+    def test_a_graph_that_records_no_role_or_another_word_gives_none(self) -> None:
+        # A graph from an OMH before nodes exported their role, or a word that is not a role: nothing is guessed from
+        # the label.
+        for role in (None, "", "tester", 3):
+            with self.subTest(role=role):
+                app, block = dag_app(role)
+                self.assertEqual((block.role, block.name), ("", "button"))
+                self.assertTrue(any(row.startswith("● @button finished") for row in drawn(app)))
+
+    def test_a_child_the_hud_holds_no_node_for_has_no_role(self) -> None:
+        _app, block = dag_app("verify", bind=False)
+        self.assertEqual((block.role, block.name, block.handle), ("", "button", True))
+
+    def test_an_agent_with_no_node_has_no_role_and_no_handle(self) -> None:
+        app, _client = agent_app(busy=False)
+        agent_event(app, "complete", FIRST, status="completed", summary="Found 3 call sites.")
+        [block] = blocks_of(app, AgentDoneBlock)
+        self.assertEqual((block.role, block.handle), ("", False))
+        self.assertTrue(any(row.startswith("● find usages of old_api") for row in drawn(app)))
+
+    def test_no_color_keeps_the_role_and_a_plain_bold_handle(self) -> None:
+        block = AgentDoneBlock("check", AGENT_FAILED, ("2m 10s",), ("boom",), handle=True, role="verify")
+        rows = block_rows(block, 80, without_colour(DEFAULT_THEME))
+        self.assertEqual(line_text(rows[0]), "● verify @check failed  2m 10s")
+        self.assertTrue(rows[0][2].style.bold)
+        self.assertTrue(all(span.style.depth == NO_COLOR or span.style.fg is None for row in rows for span in row))
+
+    def test_a_narrow_row_drops_the_facts_then_cuts_the_handle_and_keeps_role_and_word(self) -> None:
+        block = AgentDoneBlock("a-rather-long-node-id", AGENT_FINISHED, ("2m 14s", "↓1.2k"), handle=True,
+                               role="baseline")
+        self.assertEqual(texts(block, 60)[0], "● baseline @a-rather-long-node-id finished  2m 14s · ↓1.2k")
+        self.assertEqual(texts(block, 50)[0], "● baseline @a-rather-long-node-id finished  2m 14s")
+        self.assertEqual(texts(block, 30)[0], "● baseline @a-rather… finished")
+        for width in range(1, 70):
+            with self.subTest(width=width):
+                self.assertTrue(all(line_width(row) <= width for row in block_rows(block, width, DEFAULT_THEME)))
+        muted = block_rows(AgentDoneBlock("x", AGENT_INTERRUPTED, handle=True, role="review"), 40, DEFAULT_THEME)[0]
+        role_span = next(span for span in muted if "review" in span.text)
+        self.assertEqual(role_span.style, DEFAULT_THEME.muted, "an interrupted node's role is muted, as its word")
+
+
 class ShortScreenHeldTests(unittest.TestCase):
     """#2586 review: on a screen whose tail cannot hold the call, a spacer and the fold row, the call still wins."""
 

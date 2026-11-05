@@ -4,18 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **A finished dag child's briefing names it by a coloured handle.** As
-  Claude Code writes `● Teammate @x finished`, a dag node's child now reads
-  `● @notify finished`, the handle bold in a hue of its own. The hue comes
+- **A finished dag child's briefing names it by its role and a coloured
+  handle.** As Claude Code writes `● Teammate @x finished`, a dag node's child
+  now reads `● build @notify finished` (`verify`, `review`, `baseline`: the
+  role the node was defined with, which the delegation graph now carries), the
+  handle bold in a hue of its own. The hue comes
   from a stable hash of the node id over seven hues kept clear of the
   running, done and failed colours, so one agent keeps its colour on every row,
   every redraw and in `/history`. Each hue reads at 4.5:1 on every launch look
   and scene ground, light and dark. The `●` mark still shows the outcome, and
   under `NO_COLOR` the handle is plain bold. A child whose node the HUD has not
   bound yet takes the id its goal's `[dag:<run>/<node>]` marker names, with
-  its short title on the row under it. Any other agent keeps its bold short
-  title without `@`, since Hermes' subagent frames carry no name to make a
-  handle of. The agent list and the dag tree under the composer keep their
+  its short title on the row under it and no role until the graph holds the
+  node; a graph from an OMH that exported no role shows none, never one guessed
+  from the label. Any other agent keeps its bold short title, without a role
+  or `@`, since Hermes' subagent frames carry no name to make a handle of. The agent list and the dag tree under the composer keep their
   state colours. On a screen too short for the running call, the fold row and
   the spacer between them, the fold row now drops its spacer, then gives way
   entirely, so the call stays on screen. Sizing the held briefings no longer
