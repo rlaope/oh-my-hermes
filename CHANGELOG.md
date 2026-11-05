@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A drag in the OMH TUI copies the transcript without the rail.** The main
+  screen now takes the mouse: a drag over the transcript or the live rows
+  selects the text (shown reversed) and copies it without the thin `┃` rail
+  or a reply's margin, which stay drawn as before; the row above the composer
+  says `copied N chars`, and a double click copies a word, a triple click a
+  row. The wheel up opens the transcript view (Ctrl+O's), one notch up from
+  where the screen was. It works on every terminal that reports the mouse,
+  inside tmux with `mouse` on or off; a row the TUI cannot map for certain
+  (the shell's output above the session) is never guessed at, and the
+  terminal's own selection is still there with its bypass modifier (Shift,
+  Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
+  terminal's own wheel and selection on the main screen, as before.
 - **`dag-ulw` is offered where a plan's follow-on is chosen.** On Hermes'
   own `/plan` turn, whose reply offers to carry the plan out, the model is
   asked to also name `dag-ulw` as one option when the plan's tasks form a

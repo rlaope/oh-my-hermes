@@ -31,7 +31,9 @@ cell (released where it was pressed, with no motion) ended less than
 drag. The wheel does nothing while a drag is under way (a trackpad's inertia
 keeps sending it). The selection is of the page on the screen, so a key, a
 scroll or the next press lets it go. `note` is a row the footer's last row
-shows instead, while the app keeps it there (what a copy did).
+shows instead, while the app keeps it there (what a copy did). The
+selection itself is `Selection`, which the main screen uses too, over the
+rows its live region printed (`App._screen_mouse`).
 """
 
 from __future__ import annotations
@@ -84,14 +86,8 @@ class Pager:
     # The look's ground the last frame erased on (`screen.on_ground`), None for none.
     _ground: str | None = field(default=None, init=False, repr=False, compare=False)
     _shown: list[Line] = field(default_factory=list, init=False, repr=False, compare=False)  # the last frame's page
-    # The selection's first and last cell as the mouse made them (either can be the earlier one), whether a drag is
-    # still making it, the press the button is still down for (its cell and its click count) and whether the
-    # pointer left that cell since, and the last plain click (its cell, when it was released, its click count).
-    _selection: tuple[Cell, Cell] | None = field(default=None, init=False, repr=False, compare=False)
-    _dragging: bool = field(default=False, init=False, repr=False, compare=False)
-    _down: tuple[Cell, int] | None = field(default=None, init=False, repr=False, compare=False)
-    _moved: bool = field(default=False, init=False, repr=False, compare=False)
-    _click: tuple[Cell, float, int] | None = field(default=None, init=False, repr=False, compare=False)
+    # What the mouse selected on the page, by the page's screen rows.
+    _selection: Selection = field(default_factory=lambda: Selection(), init=False, repr=False, compare=False)
 
     def invalidate(self) -> None:
         """Forget what is on the screen: the next frame paints every row."""
@@ -129,81 +125,31 @@ class Pager:
     def handle_mouse(self, event: Mouse, rows: int, now: float) -> str:
         """Act on one report; the text to copy when a drag ends or a double or triple click picks a word or a row,
         else "" (a press, a drag still moving, a plain click, the wheel, a selection of nothing but blanks)."""
+        selection = self._selection
         if event.button in (WHEEL_UP, WHEEL_DOWN):
-            if event.pressed and not self._dragging:
-                self.clear_selection()
+            if event.pressed and not selection.dragging:
+                selection.clear()
                 self._scroll(WHEEL_LINES if event.button == WHEEL_DOWN else -WHEEL_LINES, rows)
             return ""
         body = self.body_rows(rows)
         cell = (min(event.y, body) - 1, event.x - 1)  # a report counts from 1; one under the page is on its last row
         if event.button == BUTTON_LEFT and event.pressed and not event.motion:
-            return self._pressed(cell, event.y > body, now)
-        down = self._down
-        if down is None:
-            return ""
+            return selection.press(None if event.y > body else cell, now, self._line)
         if event.motion and event.pressed:  # the held button's motion
-            self._moved = self._moved or cell != down[0]
-            if self._dragging and self._selection is not None:
-                self._selection = (self._selection[0], cell)
+            selection.move(cell)
             return ""
-        if event.pressed:
-            return ""
-        self._down = None
-        self._click = (down[0], now, down[1]) if not self._moved else None  # a plain click, timed from its release
-        if not self._dragging or self._selection is None:
-            return ""
-        self._dragging = False
-        return self._selected() if self._selection[0] != self._selection[1] else self.clear_selection()
+        return "" if event.pressed else selection.release(now, self._line)
 
     def clear_selection(self) -> str:
-        self._selection, self._dragging = None, False
-        return ""
+        return self._selection.clear()
 
-    def _pressed(self, cell: Cell, under_page: bool, now: float) -> str:
-        """A left press: the start of a drag, or with the one or two before it on the same cell, a word or a row."""
-        last, self._click = self._click, None
-        count = last[2] % 3 + 1 if last is not None and last[0] == cell and now - last[1] <= CLICK_SECONDS else 1
-        self.clear_selection()
-        if under_page:
-            self._down = None
-            return ""
-        self._down, self._moved = (cell, count), False
-        if count == 1:
-            self._selection, self._dragging = (cell, cell), True
-            return ""
-        row, column = cell
-        bounds = _word_at(self._shown[row] if row < len(self._shown) else (), column) if count == 2 else (0, ROW_END)
-        if bounds is None:
-            return ""
-        self._selection = ((row, bounds[0]), (row, bounds[1]))
-        return self._selected()
+    def _line(self, row: int) -> Line:
+        """The line the last frame showed on body row `row`; () past the page's end."""
+        return self._shown[row] if 0 <= row < len(self._shown) else ()
 
     def _span_on(self, row: int) -> tuple[int, int] | None:
         """The first and last column the selection holds on screen row `row`; None off it."""
-        if self._selection is None:
-            return None
-        first, last = sorted(self._selection)
-        if not first[0] <= row <= last[0]:
-            return None
-        return first[1] if row == first[0] else 0, last[1] if row == last[0] else ROW_END
-
-    def _selected(self) -> str:
-        """The selection's text, row by row, without gutter cells or trailing spaces; "" (and none kept) for blanks."""
-        if self._selection is None:
-            return ""
-        first, last = sorted(self._selection)
-        texts = []
-        for row in range(first[0], last[0] + 1):
-            low, high = self._span_on(row) or (0, -1)
-            line = self._shown[row] if row < len(self._shown) else ()
-            kept = (cell.text for cell in _cells(line) if cell.start <= high and cell.end >= low and not cell.gutter)
-            texts.append("".join(kept).rstrip())
-        while texts and not texts[-1]:
-            texts.pop()  # a drag past the content: no empty rows after it
-        while texts and not texts[0]:
-            texts.pop(0)
-        text = "\n".join(texts)
-        return text if text.strip() else self.clear_selection()
+        return self._selection.span_on(row)
 
     def _scroll(self, step: int, rows: int) -> None:
         self.top = min(max(self.top + step, 0), self._last_top(rows))
@@ -234,7 +180,7 @@ class Pager:
         body = self.body_rows(rows)
         for row in range(body):
             line, span = shown[row] if row < len(shown) else (), self._span_on(row)
-            self._paint(row, _reversed(line, *span) if span is not None else line, cols, parts)
+            self._paint(row, reversed_cells(line, *span) if span is not None else line, cols, parts)
         footer = self.footer(position, theme)
         if self.note and footer:
             footer = [*footer[:-1], self.note]
@@ -255,6 +201,133 @@ class Pager:
         painted = paint_line(line, cols, self._ground)
         self._painted[row] = (line, painted)
         parts.append(_move_to(row) + painted)
+
+
+@dataclass
+class Selection:
+    """What a drag, a double click or a triple click selects over rows of text, and the text a copy takes from it.
+
+    Rows are numbered by the caller and only compared and counted: the pager
+    numbers its page's screen rows, the main screen the rows its live region
+    printed (`screen.LiveRegion.doc_row`), so a selection there stays on its
+    text while the screen scrolls. `line_of(row)` gives each row's line, ()
+    for a row with nothing on it. A press starts a drag; its motion moves the
+    selection's other end, and its release hands back the text. A press on
+    the cell a plain click (released where it was pressed, with no motion)
+    ended on less than `CLICK_SECONDS` before is a double click, the word on
+    it, or a triple, the row, handed back at once. The text leaves out the
+    cells of `gutter` spans (a block's rail, a reply's margin), each row's
+    trailing spaces and the empty rows at either end; a wide glyph is in when
+    either of its cells is.
+    """
+
+    # The selection's first and last cell as the mouse made them (either can be the earlier one), whether a drag is
+    # still making it, the press the button is still down for (its cell and its click count) and whether the
+    # pointer left that cell since, and the last plain click (its cell, when it was released, its click count).
+    _span: tuple[Cell, Cell] | None = None
+    _dragging: bool = False
+    _down: tuple[Cell, int] | None = None
+    _moved: bool = False
+    _click: tuple[Cell, float, int] | None = None
+
+    @property
+    def dragging(self) -> bool:
+        """Whether a drag is still making the selection."""
+        return self._dragging
+
+    @property
+    def rows(self) -> tuple[int, int] | None:
+        """The selection's first and last row; None while nothing is selected."""
+        return None if self._span is None else (min(self._span)[0], max(self._span)[0])
+
+    def press(self, cell: Cell | None, now: float, line_of: Callable[[int], Line]) -> str:
+        """A left press on `cell` (None: off the rows, which selects nothing and holds no press): the start of a drag,
+        or with the one or two before it on the same cell, a word or a row, whose text it hands back."""
+        last, self._click = self._click, None
+        count = last[2] % 3 + 1 if last is not None and last[0] == cell and now - last[1] <= CLICK_SECONDS else 1
+        self.clear()
+        if cell is None:
+            self._down = None
+            return ""
+        self._down, self._moved = (cell, count), False
+        if count == 1:
+            self._span, self._dragging = (cell, cell), True
+            return ""
+        row, column = cell
+        bounds = _word_at(line_of(row), column) if count == 2 else (0, ROW_END)
+        if bounds is None:
+            return ""
+        self._span = ((row, bounds[0]), (row, bounds[1]))
+        return self.text(line_of)
+
+    def move(self, cell: Cell) -> None:
+        """The held button's motion to `cell`: a drag's other end."""
+        down = self._down
+        if down is None:
+            return
+        self._moved = self._moved or cell != down[0]
+        if self._dragging and self._span is not None:
+            self._span = (self._span[0], cell)
+
+    def release(self, now: float, line_of: Callable[[int], Line]) -> str:
+        """The button let go: a drag's text (none for a drag that never left its cell), "" otherwise."""
+        down, self._down = self._down, None
+        if down is None:
+            return ""
+        self._click = (down[0], now, down[1]) if not self._moved else None  # a plain click, timed from its release
+        if not self._dragging or self._span is None:
+            return ""
+        self._dragging = False
+        return self.text(line_of) if self._span[0] != self._span[1] else self.clear()
+
+    def clear(self) -> str:
+        """Let the selection go (a press held stays held, selecting nothing more)."""
+        self._span, self._dragging = None, False
+        return ""
+
+    def forget(self) -> None:
+        """Let everything go, the press held and the last click too: the rows they were on are gone."""
+        self.clear()
+        self._down, self._click = None, None
+
+    def shift(self, at: int, count: int) -> None:
+        """Rows `at` and under moved down by `count`: the selection, the press and the last click go with them."""
+
+        def moved(cell: Cell) -> Cell:
+            return (cell[0] + count, cell[1]) if cell[0] >= at else cell
+
+        if self._span is not None:
+            self._span = (moved(self._span[0]), moved(self._span[1]))
+        if self._down is not None:
+            self._down = (moved(self._down[0]), self._down[1])
+        if self._click is not None:
+            self._click = (moved(self._click[0]), *self._click[1:])
+
+    def span_on(self, row: int) -> tuple[int, int] | None:
+        """The first and last column the selection holds on row `row`; None off it."""
+        if self._span is None:
+            return None
+        first, last = sorted(self._span)
+        if not first[0] <= row <= last[0]:
+            return None
+        return first[1] if row == first[0] else 0, last[1] if row == last[0] else ROW_END
+
+    def text(self, line_of: Callable[[int], Line]) -> str:
+        """The selection's text, row by row, without gutter cells or trailing spaces; "" (and none kept) for blanks."""
+        if self._span is None:
+            return ""
+        first, last = sorted(self._span)
+        texts = []
+        for row in range(first[0], last[0] + 1):
+            low, high = self.span_on(row) or (0, -1)
+            kept = (cell.text for cell in _cells(line_of(row)) if cell.start <= high and cell.end >= low and not cell.gutter)
+            texts.append("".join(kept).rstrip())
+        while texts and not texts[-1]:
+            texts.pop()  # a drag past the content: no empty rows after it
+        while texts and not texts[0]:
+            texts.pop(0)
+        text = "\n".join(texts)
+        return text if text.strip() else self.clear()
 
 
 def _source_clusters(text: str) -> list[tuple[str, str]]:
@@ -338,7 +411,7 @@ def _word_at(line: Line, column: int) -> tuple[int, int] | None:
     return cells[low].start, cells[high].end
 
 
-def _reversed(line: Line, low: int, high: int) -> Line:
+def reversed_cells(line: Line, low: int, high: int) -> Line:
     """`line` with the clusters on columns `low` to `high` (a wide one when either of its cells is) drawn reversed, a
     selection's highlight; gutter cells keep their look, as the copy leaves them out. The text is the one painted
     (`screen.without_controls`), and a style changes only between two clusters of one span: spans are never merged,

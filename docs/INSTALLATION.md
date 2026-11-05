@@ -764,15 +764,46 @@ run and approval decision stays Hermes'; the screen is OMH's.
   <text>`), and it and what `x` reports
   wait under the running call and are written at the next block boundary,
   so neither cuts that call off nor splits a reply.
-- The OMH TUI asks the terminal for click reports only while the agent list
+- The OMH TUI takes the mouse on the main screen once it can tell which row
+  a report lands on (once the session's output has reached the bottom of the
+  screen, or after Ctrl+L). A drag over the transcript or the rows under it
+  selects the text (shown reversed) and copies it when you let go, without
+  the rail a block hangs on or a reply's margin, and the row above the
+  composer says `✓ copied 694 chars to clipboard` for 2 s (the copy goes out
+  as the pager's does, below); a double click copies a word and a triple
+  click a row, and a key, the wheel or the next click drops the selection.
+  The selection stays on its text while new output scrolls the screen, and
+  its highlight never goes into the scrollback. The wheel up opens the
+  transcript view Ctrl+O opens, one notch up from its end, where the screen
+  was; it scrolls there, and q goes back. The wheel down does nothing on the
+  main screen. A row the OMH TUI did not print in this screen (the shell's
+  output above the session, the rows from before a Ctrl+Z) selects nothing:
+  dragging from there opens the transcript view instead. While the window is
+  being resized the mouse is the terminal's, and a selection is dropped. The
+  agent list still takes a click on its rows, as below. Your terminal's own
+  selection is still there with its bypass modifier: Shift while dragging in
+  xterm, kitty, WezTerm, Ghostty, Alacritty, foot, GNOME Terminal, Konsole,
+  Windows Terminal and Otty (its default; Settings → Controls → Mouse →
+  Bypass Mouse Reporting chooses another), Option in iTerm2, Fn in
+  Terminal.app (or turn off View → Allow Mouse Reporting, ⌘R); VS Code's
+  terminal on macOS has none unless
+  `terminal.integrated.macOptionClickForcesSelection` is on. That selection
+  copies the rail, as it always has. Inside tmux the reports reach the OMH
+  TUI with `set -g mouse` on or off, and with it on tmux hands the OMH TUI
+  the wheel and the drag instead of starting copy mode. `OMH_TUI_MOUSE=0`
+  leaves the main screen's mouse to the terminal as before: the wheel
+  scrolls its scrollback and a drag selects natively, rail included, and
+  click reports are on only while the agent list or the `/theme` picker is
+  open, as the next item says.
+- With `OMH_TUI_MOUSE=0` the OMH TUI asks the terminal for click reports only while the agent list
   is open, so during a turn the wheel scrolls and a drag selects as in any
   shell, and the agent view is reached with Down; nothing in it, and
   nothing on the info line, is clickable while the list is closed. While the list is open a plain drag no longer selects text in
-  most terminals and the wheel does not scroll. To select anyway, hold Fn
-  while dragging in Terminal.app (or turn off View → Allow Mouse Reporting),
-  Option in iTerm2, Shift in most other terminals. Selection and the wheel
+  most terminals and the wheel does not scroll. To select anyway, hold the
+  bypass modifier above. Selection and the wheel
   come back as soon as the list closes, while a question is open, and while
-  the window is being resized. While click reports are on, and for 0.5 s after they go off, an Esc pressed on
+  the window is being resized. While click reports are on (on the main screen
+  that is all the time without `OMH_TUI_MOUSE=0`), and for 0.5 s after they go off, an Esc pressed on
   its own acts after 0.3 s, the time a click report split by a slow
   connection has to arrive whole. Another key typed within that time ends
   the wait, and both keys act, except `[`, which is read as the rest of a
@@ -790,7 +821,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   A click is read only where the OMH TUI can tell which row it landed on:
   once the session's output has reached the bottom of the screen, or after
   Ctrl+L. Until then it leaves the mouse to the terminal, and the keys still
-  open the list and the logs.
+  open the list and the logs. A terminal that speaks the kitty keyboard
+  protocol sends Esc as a sequence of its own, so there it never waits.
 - A view on the alternate screen (Ctrl+O, `/history`, `/logs`, `/dag`, an
   agent's log, the bot board, `/keys`) takes the mouse for itself, since that
   screen has no scrollback for the terminal to scroll: the wheel scrolls the
@@ -808,10 +840,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   SSH. Elsewhere it
   goes out as OSC 52 with nothing to confirm it, and the footer says `⚠ copy
   sent (terminal may not support OSC 52)` (under tmux, that tmux passes it on
-  only with `set-clipboard on`). On the main screen the terminal's own
-  selection is the only one: the transcript is in its scrollback, and taking
-  the mouse there would take the wheel and that scrollback away, so what it
-  copies there keeps each row's rail (`┃ ` in front of each row, and a
+  only with `set-clipboard on`). The terminal's own selection (its bypass
+  modifier, or everywhere with `OMH_TUI_MOUSE=0`) copies what the screen
+  shows, so it keeps each row's rail (`┃ ` in front of each row, and a
   reply's margin after it), and the terminal shows no copy notice of its
   own.
 - The composer takes a paste whole when the terminal brackets it, as most

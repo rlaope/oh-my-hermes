@@ -169,6 +169,8 @@ from .keys import (
     RIGHT,
     SSH_BURST_SECONDS,
     UP,
+    WHEEL_DOWN,
+    WHEEL_UP,
     Key,
     KeyDecoder,
     Mouse,
@@ -192,7 +194,7 @@ from .modes import (
     info_line,
     model_forms,
 )
-from .pager import ALT_SCREEN_OFF, ALT_SCREEN_ON, HistoryPager, Pager, forget_cells
+from .pager import ALT_SCREEN_OFF, ALT_SCREEN_ON, HistoryPager, Pager, Selection, forget_cells, reversed_cells
 from .model_picker import KEYS as MODEL_PICKER_KEYS
 from .model_picker import PICK as MODEL_PICK
 from .model_picker import ModelPicker, model_rows, typed_switch_value
@@ -835,6 +837,11 @@ BELL_OFF = "0"
 # the OMH home) or OMH_TUI_WALLPAPER=0 turns it off, and the terminal's own background comes back at once.
 WALLPAPER_ENV = "OMH_TUI_WALLPAPER"
 WALLPAPER_OFF = "0"
+# The main screen takes the mouse (`_screen_mouse`): a drag selects and copies without the rail, the wheel opens the
+# transcript view. OMH_TUI_MOUSE=0 leaves the wheel and selection to the terminal there, as before 2026-11-05: reports
+# are asked for only while the agent list or the /theme picker takes clicks.
+MOUSE_ENV = "OMH_TUI_MOUSE"
+MOUSE_NATIVE = "0"
 # A turn that ran this long ends with the terminal's attention signal (`attention_sequence`).
 TURN_ALERT_SECONDS = 10.0
 TURN_ALERT_TEXT = "Hermes finished a turn ({elapsed})"
@@ -862,8 +869,9 @@ INTERRUPT_HINT = "esc to interrupt"
 # With vim mode on, Esc in NORMAL only arms the interrupt and a second sends it; in INSERT, Esc is NORMAL first.
 VIM_INTERRUPT_HINT = "esc esc to interrupt"
 OSC52_COPY = "\x1b]52;c;{}\x07"
-# What a drag in the pager copied, on the footer's last row for COPY_NOTE_SECONDS. A copy that went out as OSC 52 to a
-# terminal not known to honour it says it was sent, never that it was copied: no terminal answers one.
+# What a drag copied, on the pager footer's last row, or on the main screen the notice row above the composer, for
+# COPY_NOTE_SECONDS. A copy that went out as OSC 52 to a terminal not known to honour it says it was sent, never that
+# it was copied: no terminal answers one.
 COPY_NOTE_SECONDS = 2.0
 COPIED_NOTE = "copied {count} chars to clipboard"
 COPY_SENT_NOTE = "copy sent ({why})"
@@ -1973,7 +1981,12 @@ class App(ModesMixin, AgentViewMixin):
         self.tail_spacer = False  # `_tail` put a blank row above the working row, the first row to give way
         self.badge_cache: tuple[object, tuple[Line, ...]] = (None, ())  # `_badge_forms`' last forms and their key
         self.pager: Pager | None = None
-        self.copy_noted_at: float | None = None  # when the pager's footer started saying what a copy did
+        self.copy_noted_at: float | None = None  # when the pager's footer or `copy_note` started saying what a copy did
+        self.copy_note: Notification | None = None  # what a copy on the main screen did, on the notice row meanwhile
+        # The main screen's selection, by the rows the live region printed (`LiveRegion.doc_row`), and whether the
+        # button is down after a press on a row no selection can start on (one the region did not print).
+        self.selection = Selection()
+        self.unmapped_press = False
         self.platform = sys.platform  # where `copy_route` looks for `pbcopy`
         self.pbcopy: Callable[[str], bool] = partial(pbcopy, environ=environ)
         self.tmux_over_ssh: Callable[[Mapping[str, str]], bool] = tmux_client_over_ssh  # `copy_route`'s tmux question
@@ -2662,6 +2675,7 @@ class App(ModesMixin, AgentViewMixin):
             self.dirty = True
         if self.copy_noted_at is not None and self.clock() - self.copy_noted_at >= COPY_NOTE_SECONDS:
             self.copy_noted_at = None
+            self.copy_note = None
             if self.pager is not None:
                 self.pager.note = ()
             self.dirty = True
@@ -2694,7 +2708,7 @@ class App(ModesMixin, AgentViewMixin):
             try:
                 stable = self.transcript.take_stable_lines(cols, self.theme, final=True)
                 if stable:
-                    self.region.flush_above(stable, cols)
+                    self.region.flush_above(stable, cols, self.size[1])
             finally:
                 self.region.clear(self.size[1])  # the rows on the screen on the terminal's own background
             if self.title_pushed:
@@ -3688,6 +3702,7 @@ class App(ModesMixin, AgentViewMixin):
             else:
                 self._on_mouse(event)  # never a key: whatever it is, it types nothing
             return
+        self._drop_selection()  # it is of the screen as it is, which a key may move
         if self.pager is not None:
             self.pager.clear_selection()  # it is of the page on the screen, which a key may move
             if self.log_agent and isinstance(event, Key) and event.name in (LEFT, RIGHT):
@@ -3997,6 +4012,7 @@ class App(ModesMixin, AgentViewMixin):
         if getattr(signal, "SIGTSTP", None) is None:
             return
         self._set_mouse(False)
+        self.selection.forget()  # its rows are painted as they were flushed (`LiveRegion.clear`); the next region has none
         # The session's rows on the screen go back on the terminal's own background (and on a standard terminal follow
         # OSC 11 again): the region made at the resume has none of them to paint on a new ground.
         self.region.set_ground(None)
@@ -6513,12 +6529,108 @@ class App(ModesMixin, AgentViewMixin):
         text = pager.handle_mouse(event, self.size[1], self.clock())
         self.dirty = True
         if text:
-            pager.note = self._copy_selection(text)
+            pager.note = self._copy_selection(text).line(self.size[0], self.theme)
             self.copy_noted_at = self.clock()
 
-    def _copy_selection(self, text: str) -> Line:
-        """Put `text` on the clipboard by `copy_route`, and the row that says so: copied when OSC 52 went to a terminal
-        that honours it or `pbcopy` succeeded, sent otherwise (OSC 52 is never answered, so nothing confirms it)."""
+    def _screen_mouse(self, event: Mouse) -> None:
+        """A report on the main screen while it takes the mouse (`_takes_mouse`), not a click the agent list or the
+        /theme picker took: the pager's selection over the rows the live region printed.
+
+        The wheel up opens the transcript view, Ctrl+O's (the open question's,
+        while one is asked), already scrolled one notch up from its end, which
+        is where the screen was; the wheel down does nothing, nor does the wheel
+        while a drag is under way. A press starts a drag, or picks a word or a
+        row (`Selection`); the text a release or a double or triple click picks
+        goes to the clipboard without the rail or any other gutter cell, and
+        the notice row says what the copy did. Rows are read only where
+        `LiveRegion.doc_row` is certain of them, never guessed: a press on a
+        row it is not (the shell's output above the session, an earlier
+        region's after Ctrl+Z) selects nothing, and moving the held button
+        from there opens the transcript view instead; a drag carried over such
+        a row stops at the nearest row it is certain of, and one under the
+        region's last row is on that row. Nothing happens while the screen is
+        being redrawn for a new size, a pager is open or the TUI does not
+        take the mouse.
+        """
+        rows = self.size[1]
+        if not self._takes_mouse() or self.pager is not None or self.redraw_at is not None:
+            return
+        last = self.region.last_row(rows)
+        if last is None:
+            return
+        now = self.clock()
+        selection = self.selection
+        if event.button in (WHEEL_UP, WHEEL_DOWN):
+            if event.pressed and event.button == WHEEL_UP and not selection.dragging and self.transcript.blocks:
+                self._drop_selection()
+                if self.slot is None:
+                    self._details_view()
+                else:
+                    self._question_view()
+                if self.pager is not None:
+                    self.pager.handle_mouse(event, rows, now)  # one notch up from the end, as the wheel scrolls it
+            return
+        row = min(event.y - 1, last)  # a report counts from 1; one under the region is on its last row
+        if event.button == BUTTON_LEFT and event.pressed and not event.motion:
+            doc = self.region.doc_row(row, rows)
+            self.unmapped_press = doc is None
+            self._copied(selection.press(None if doc is None else (doc, event.x - 1), now, self._printed_line))
+        elif event.motion and event.pressed:
+            if self.unmapped_press:
+                self.unmapped_press = False
+                self._details_view()  # nothing certain to select there: the transcript view, where all of it is
+                return
+            doc = next((found for at in range(row, last + 1) if (found := self.region.doc_row(at, rows)) is not None),
+                       None)
+            if doc is not None:
+                selection.move((doc, event.x - 1))
+        elif not event.pressed:
+            self.unmapped_press = False
+            self._copied(selection.release(now, self._printed_line))
+        self.dirty = True
+
+    def _printed_line(self, doc: int) -> Line:
+        """Printed row `doc`'s line, for the main screen's selection; () for one the live region no longer holds."""
+        return self.region.doc_line(doc) or ()
+
+    def _copied(self, text: str) -> None:
+        """`text`, picked on the main screen, to the clipboard, the notice row saying what that did; nothing for ""."""
+        if text:
+            self.copy_note = self._copy_selection(text)
+            self.copy_noted_at = self.clock()
+
+    def _drop_selection(self) -> None:
+        """Let the main screen's selection go; the next frame paints its rows as they were."""
+        if self.selection.rows is not None:
+            self.selection.clear()
+            self.dirty = True
+
+    def _selection_marks(self) -> dict[int, tuple[int, int]]:
+        """The main screen's selection as the live region shows it: its first and last column on each printed row."""
+        held = self.selection.rows
+        if held is None:
+            return {}
+        return {doc: span for doc in range(held[0], held[1] + 1) if (span := self.selection.span_on(doc)) is not None}
+
+    def _takes_mouse(self) -> bool:
+        """Whether the main screen takes the mouse (a drag selects, the wheel opens the transcript view): unless
+        OMH_TUI_MOUSE=0 leaves it to the terminal."""
+        return self.environ.get(MOUSE_ENV) != MOUSE_NATIVE
+
+    def _take_main_mouse(self, clicks: bool) -> None:
+        """Mouse reports on the main screen after a frame: with a held button's motion wherever the TUI takes the mouse
+        (`_takes_mouse`), else only while something takes `clicks` (the agent list, the /theme picker), and either way
+        only while the row a report lands on is certain."""
+        certain = self.region.last_row(self.size[1]) is not None
+        if self._takes_mouse():
+            self._set_mouse(certain, drag=True)
+        else:
+            self._set_mouse(clicks and certain)
+
+    def _copy_selection(self, text: str) -> Notification:
+        """Put `text` on the clipboard by `copy_route`, and the notice that says so: copied when OSC 52 went to a
+        terminal that honours it or `pbcopy` succeeded, sent otherwise (OSC 52 is never answered, so nothing confirms
+        it)."""
         route = copy_route(self.environ, self.platform, self.tmux_over_ssh)
         if route == COPY_PBCOPY and self.pbcopy(text):
             confirmed = True
@@ -6527,11 +6639,9 @@ class App(ModesMixin, AgentViewMixin):
             self.terminal.write(OSC52_COPY.format(base64.b64encode(text.encode("utf-8", "replace")).decode("ascii")))
             confirmed = route == COPY_OSC52
         if confirmed:
-            note = Notification(COPIED_NOTE.format(count=len(text)), "success", "")
-        else:
-            why = OSC52_IN_TMUX if self.environ.get("TMUX") else OSC52_UNCONFIRMED
-            note = Notification(COPY_SENT_NOTE.format(why=why), "warn", "")
-        return note.line(self.size[0], self.theme)
+            return Notification(COPIED_NOTE.format(count=len(text)), "success", "")
+        why = OSC52_IN_TMUX if self.environ.get("TMUX") else OSC52_UNCONFIRMED
+        return Notification(COPY_SENT_NOTE.format(why=why), "warn", "")
 
     def _theme(self, arg: str) -> None:
         """`/theme <name>` picks a palette, `/theme auto|light|dark` the background it is measured against; alone, both.
@@ -6723,7 +6833,7 @@ class App(ModesMixin, AgentViewMixin):
             last - (first + index - top): (Hit(0, cols, f"launch:{index}"),)
             for index in range(top, len(LAUNCH_PRESETS)) if first + index - top < budget.slot_top + budget.slot
         }
-        self._set_mouse(bool(self.clickable) and self.region.last_row(rows) is not None)
+        self._take_main_mouse(bool(self.clickable))
 
     def _launch_picker_click(self, event: Mouse) -> None:
         """A plain left press on one of the picker's look rows highlights that look and previews it."""
@@ -6832,6 +6942,7 @@ class App(ModesMixin, AgentViewMixin):
         """
         if self.pager is None:
             self.terminal.write(ALT_SCREEN_ON)
+        self._drop_selection()  # the main screen comes back with it, and the next frame there paints it off
         self._stop_board_reader()  # a board this replaces reads no more
         self.pager = pager
         self.log_agent = ""
@@ -6860,6 +6971,10 @@ class App(ModesMixin, AgentViewMixin):
         on if it still has an agent to click.
         """
         self._set_mouse(False)
+        # The terminal reflowed the rows a selection was painted on; the full redraw erases them.
+        self.selection.forget()
+        self.unmapped_press = False
+        self.region.forget_marks()
         self._take_size()
         self.dirty = True
         if self.pager is not None:
@@ -6896,6 +7011,8 @@ class App(ModesMixin, AgentViewMixin):
         # The clear homes the cursor, so the next first frame starts on the screen's top row; it goes out in that
         # frame's synchronized update, so the blank screen never shows.
         self.region = self._new_region(at_top=True, lead=CLEAR_SCREEN_AND_SCROLLBACK)
+        self.selection.forget()  # its rows were the old region's, which the clear erases with the highlight on them
+        self.unmapped_press = False
         self.rows_ground = self._ground()
         self.transcript.retake_tail(self.size[0], self.theme, REDRAW_TAIL_ROWS)
         if self.banner_record is not None:
@@ -7254,7 +7371,7 @@ class App(ModesMixin, AgentViewMixin):
 
     def _new_region(self, **place: Any) -> LiveRegion:
         """A live region for the screen as it is now."""
-        return LiveRegion(self.terminal.write, **place)
+        return LiveRegion(self.terminal.write, highlight=reversed_cells, **place)
 
     def _aura_moves(self) -> bool:
         """Whether the dag-ulw aura moves on this terminal now: the truecolor depth, motion on, and a background its
@@ -7442,7 +7559,9 @@ class App(ModesMixin, AgentViewMixin):
         # The wallpaper paints the blank tails of the rows above the region too, the transcript's included, so it stays
         # in view over a full session (owner's choice of 2026-10-29; `screen` names what that costs a selection).
         self.region.render(frame.lines, frame.cursor, cols, flush=stable, screen_rows=rows, ambient=self._ambient(),
-                           ambient_above=True)
+                           ambient_above=True, marks=self._selection_marks())
+        if self.region.inserted_rows is not None:  # rows inserted inside the region moved the selection's rows down
+            self.selection.shift(*self.region.inserted_rows)
         self.ambient_at = self.clock()
         self.frame_budget = frame.budget
         self.bg_row_shown = self.bg_on_info and frame.budget.info > 0  # the row is on the info line (`_info_line`)
@@ -7818,7 +7937,8 @@ class App(ModesMixin, AgentViewMixin):
         queue = queue_lines([line.shown or line.text for line in self.queued], cols, cap - len(waiting), self.theme,
                             hint, below)
         taken = len(waiting) + len(queue)
-        notice = [self.notification.line(cols, self.theme)] if self.notification and cap > taken else []
+        said = self.copy_note or self.notification  # what a copy just did, over Hermes' notice for COPY_NOTE_SECONDS
+        notice = [said.line(cols, self.theme)] if said and cap > taken else []
         shown = goal_line(self.goal, cols, self.theme)
         goal = [shown] if shown is not None and cap > taken + len(notice) else []
         menu = self._drawn("the menu or HUD panel",

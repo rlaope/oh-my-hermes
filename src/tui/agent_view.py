@@ -19,14 +19,18 @@ on the highlighted node's child as the list's keys do. The log is
 read-only: `subagent.tail` is asked for the open agent while it runs, at most
 every `TAIL_POLL_SECONDS`, and no more once `TAIL_MISSES_BEFORE_STOP` answers
 in a row had no tail, until that agent sends a frame; nothing is ever sent to
-a subagent. On the main screen, mouse reports are on only while the agent list (or the dag
-tree) has the keys and the row a click would land on is certain (the owner's decision of 2026-10-14:
-during a turn the wheel scrolls and a drag selects, and Down opens the list
-from the keyboard); a pager, an agent's log among them, takes them for its
-own wheel and drag (`pager`). A plain left click on a list row opens that agent's log,
-or on the list's main row leaves the list; on a tree row it takes the
-highlight, and on a node's row opens its child's log; every other report
-does nothing. Reports the terminal sent before it acted on an off
+a subagent. On the main screen the OMH TUI takes the mouse wherever the row a
+report lands on is certain (the owner's decision of 2026-11-05, which replaced
+the one of 2026-10-14 that took it only while the list was open): a drag
+selects and copies without the rail, and the wheel opens the transcript view
+(`App._screen_mouse`). With `OMH_TUI_MOUSE=0` it is the earlier behaviour:
+reports are on only while the agent list (or the dag tree) has the keys, and
+the wheel and a drag are the terminal's. A pager, an agent's log among them,
+takes them for its own wheel and drag (`pager`). A plain left click on a list
+row opens that agent's log, or on the list's main row leaves the list; on a
+tree row it takes the highlight, and on a node's row opens its child's log;
+any other report goes to the main screen's selection where it takes the
+mouse, and does nothing where it does not. Reports the terminal sent before it acted on an off
 arrive after it, so `_set_mouse` notes when reporting went off and the
 decoder is told: a report that starts arriving while reporting is on, or
 within `keys.MOUSE_REPORT_SECONDS` after the off, types nothing if it
@@ -464,7 +468,8 @@ class AgentViewMixin:
 
     def _take_clickable(self, budget: Budget, listed: Sequence[str]) -> None:
         """Note the agent list's rows a click opens in the frame just drawn (or the dag tree's rows, while the tree has
-        the keys), and ask for mouse reports only while one of them is open.
+        the keys), and ask for mouse reports while one of them is open, or wherever the main screen takes the mouse
+        (`_take_main_mouse`).
 
         The list is the agent view's rows, from its first, under the info
         line: the region's last rows. A list row is clickable from edge to
@@ -478,7 +483,7 @@ class AgentViewMixin:
         # Counted up from the region's last row, the view's last.
         self.clickable = {budget.agents - 1 - index: (Hit(0, cols, row_id),)
                           for index, row_id in enumerate(shown)}
-        self._set_mouse(bool(self.clickable) and self.region.last_row(rows) is not None)
+        self._take_main_mouse(bool(self.clickable))
 
     def _list_available(self) -> bool:
         """Whether the agent list can be shown: agents to list, a terminal with room for the agent view (the info
@@ -619,7 +624,8 @@ class AgentViewMixin:
 
     def _on_mouse(self, event: Mouse) -> None:
         """A plain left press on an agent's row of the list opens that agent's log, and on a dag tree row moves the
-        highlight there and opens the node's child's log if it has one; nothing else does anything.
+        highlight there and opens the node's child's log if it has one; any other report is the main screen's
+        (`_screen_mouse`).
 
         The one other thing a click does is leave the list, from its main
         row, which has no log. `clickable` holds the cells of the last frame
@@ -632,10 +638,12 @@ class AgentViewMixin:
         plain = event.button == BUTTON_LEFT and event.pressed and not (event.motion or event.shift or event.alt or event.ctrl)
         last = self.region.last_row(self.size[1])
         if not plain or last is None or self.pager is not None or self.slot is not None or self.redraw_at is not None:
+            self._screen_mouse(event)
             return
         above, column = last - (event.y - 1), event.x - 1  # a report counts from 1
         target = next((hit.subagent_id for hit in self.clickable.get(above, ()) if hit.start <= column < hit.end), None)
         if target is None:
+            self._screen_mouse(event)
             return
         if self.tree_selected is not None:  # a dag tree row: it takes the highlight, and a node's child its log opens
             if not target:
