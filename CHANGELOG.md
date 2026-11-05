@@ -8,6 +8,7 @@ All notable changes will be documented here.
   name in another file no longer continues the turn when every mention there
   is proven to need no change: another object's method of the same name, or
   an import whose calls bind the same way before and after the edit.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and
