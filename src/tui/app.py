@@ -3702,6 +3702,19 @@ class App(ModesMixin, AgentViewMixin):
             return
         if self.slot is None and self._front_picker() is not None:
             self.composer._drop_pending()  # the picker owns input, including display keys that return below
+        if self.slot is None and self.composer.normal and self.composer._prefix in ("f", "F", "t", "T") and (
+            self._front_picker() is None
+        ):
+            # A search target owns even global shortcuts; keep picker acquisition and Paste's usual route.
+            if self.picker is not None and self._picker_arms(event):
+                self.composer._drop_pending()
+                self._picker_key(event)
+                return
+            if isinstance(event, Paste):
+                self.composer._drop_pending()
+            else:
+                self._on_composer(self._edit(self.composer, event), event)
+                return  # Composer keeps shared Ctrl undo/redo; every other non-target is consumed.
         if not (self.slot is None and self.composer.leader and self._front_picker() is None) and self._display_key(event):
             return
         if self.slot is not None and self._slot_arming(event):

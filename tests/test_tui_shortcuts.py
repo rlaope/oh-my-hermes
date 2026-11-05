@@ -21,7 +21,7 @@ from test_tui_app import FakePoller, ScriptedTerminal
 from test_tui_modes import RecordingClient, drawn, make_app, type_text
 from omh.tui.app import App
 from omh.tui.gateway import ServerRequest
-from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, LEFT, UP, Key, Paste, list_nav_step
+from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key, Paste, list_nav_step
 from omh.tui.pager import ALT_SCREEN_OFF, ALT_SCREEN_ON
 from omh.tui.shortcuts import SHORTCUTS, TITLE, shortcut_lines
 from omh.tui.theme import DEFAULT_THEME
@@ -872,6 +872,100 @@ class CtrlNPNavigationTests(unittest.TestCase):
                         1,
                         f"{prefix} char={key_char} mod={mod} must not change picker index",
                     )
+
+
+class PendingCharSearchShortcutTests(unittest.TestCase):
+    def pending_app(self, command: str) -> tuple[App, RecordingClient]:
+        app, client = make_app()
+        app.composer.set_vim(True)
+        type_text(app, "aXbXcXdXeXfXgX")
+        app._on_input(Key(ESCAPE))
+        app.composer.caret = 0
+        type_text(app, command)
+        self.assertTrue(app.composer.pending)
+        self.assertEqual(client.calls, [])
+        return app, client
+
+    def test_pending_search_consumes_global_shortcuts_without_stale_edits(self) -> None:
+        for search in ("f", "F", "t", "T"):
+            for prefix in ("", "2", "2d", "2d3", "2c3", "2y3"):
+                for event in (Key(CHAR, "t", ctrl=True), Key(TAB, shift=True),
+                              Key(CHAR, "o", ctrl=True), Key(CHAR, "x", ctrl=True), Key(ENTER)):
+                    with self.subTest(search=search, prefix=prefix, event=event):
+                        app, client = self.pending_app(prefix + search)
+                        before = (app.composer.text, app.composer.caret, app.composer.normal,
+                                  app.composer._register, app.composer._last_search)
+                        app._on_input(event)
+                        self.assertEqual(client.calls, [])
+                        self.assertEqual((app.composer._count, app.composer._operator, app.composer._op_count,
+                                          app.composer._prefix, app.composer.leader), ("", "", "", "", False))
+                        self.assertFalse(app.composer.pending)
+                        self.assertEqual((app.composer.text, app.composer.caret, app.composer.normal,
+                                          app.composer._register, app.composer._last_search), before)
+                        self.assertIsNone(app.pager)
+                        self.assertIsNone(app.picker)
+                        app._on_input(Key(CHAR, "X"))  # Fresh backward delete at column zero is a no-op.
+                        self.assertEqual((app.composer.text, app.composer.caret, app.composer.normal), before[:3])
+                        self.assertFalse(app.composer.pending)
+                        self.assertEqual(client.calls, [])
+
+    def test_pending_search_preserves_paste_and_shared_undo_redo(self) -> None:
+        for event in (Paste("!"), Key(CHAR, "_", ctrl=True), Key(CHAR, "-", ctrl=True),
+                      Key(CHAR, "y", ctrl=True), Key(CHAR, "r", ctrl=True)):
+            with self.subTest(event=event):
+                app, client = self.pending_app("2d3f")
+                if isinstance(event, Key) and event.char in ("y", "r"):
+                    app.composer._drop_pending()
+                    app._on_input(Key(CHAR, "_", ctrl=True))
+                    type_text(app, "2d3f")
+                app._on_input(event)
+                self.assertFalse(app.composer.pending)
+                expected = "!aXbXcXdXeXfXgX" if isinstance(event, Paste) else (
+                    "" if event.char in ("_", "-") else "aXbXcXdXeXfXgX"
+                )
+                self.assertEqual(app.composer.text, expected)
+                self.assertTrue(app.composer.normal)
+                self.assertEqual(client.calls, [])
+
+    def test_pending_search_drops_before_path_paste_dispatch(self) -> None:
+        app, client = self.pending_app("2df")
+        app._on_input(Paste("/tmp/search-target.png"))
+        self.assertFalse(app.composer.pending)
+        self.assertEqual(client.calls, [("input.detect_drop", {
+            "session_id": app.sid, "text": "/tmp/search-target.png",
+        })])
+        app._on_input(Key(CHAR, "X"))
+        self.assertEqual((app.composer.text, app.composer.caret), ("aXbXcXdXeXfXgX", 0))
+
+    def test_front_and_waiting_pickers_keep_search_input_precedence(self) -> None:
+        from omh.tui.session_picker import SessionPicker, SessionRow
+
+        for waiting in (False, True):
+            with self.subTest(waiting=waiting):
+                app, client = self.pending_app("2df")
+                app.picker = SessionPicker([SessionRow("s1", "Session 1", "", 100.0, 1)], current=app.stored_id)
+                app.picker.waiting = waiting
+                original = app._picker_key
+
+                def receive(event: Key | Paste) -> None:
+                    self.assertFalse(app.composer.pending)
+                    original(event)
+
+                with patch.object(app, "_picker_key", side_effect=receive) as owned:
+                    app._on_input(Key(DOWN))
+                    owned.assert_called_once_with(Key(DOWN))
+                self.assertFalse(app.composer.pending)
+                self.assertFalse(app.picker.waiting)
+                self.assertEqual(client.calls, [])
+
+    def test_other_pending_commands_keep_global_shortcuts(self) -> None:
+        for command in ("d", "2d", "g", "r", "di"):
+            for event in (Key(CHAR, "t", ctrl=True), Key(TAB, shift=True)):
+                with self.subTest(command=command, event=event):
+                    app, client = self.pending_app(command)
+                    app._on_input(event)
+                    self.assertEqual([method for method, _params in client.calls], ["config.set"])
+                    self.assertTrue(app.composer.pending)
 
 
 class LeaderShortcutTests(unittest.TestCase):

@@ -1,0 +1,8 @@
+schema: agent-harness
+description: Ordered OpenSpec change packages for OMH TUI Vim word text objects and inline character search.
+source_root: /Users/danrio/.hermes/cache/scratch/pr2545-shardfix
+source_commit: fcd2abcb11e323ccba4c26a3b340e7d377c0daa8
+planning_only: true
+slices:
+  - tui-vim-word-objects
+  - tui-vim-char-search
