@@ -46,6 +46,12 @@ deterministically and from the disk alone, whether such a thing exists:
      that file is proven to need no change (``_settled``): another object's member (``param.name``),
      or an import of it from the edited module used only in calls that bind the same way before and
      after the edit. Anything unproven keeps the hit.
+3. ``shell_changed_files`` (``transform_tool_result`` of a ``terminal`` / ``execute_code`` call): Hermes
+   calls ``pre_verify`` only after a ``patch`` / ``write_file`` landed, so for a turn that made neither it
+   re-indexes the workspace after each command and, when the command changed a Python file, returns every
+   Python file the turn changed. ``verify_hooks.shell_round_end_note`` gives those files the structural
+   round-end notes, each check once per turn. Of a model message's calls only the last one that is not a read is
+   looked at (``note_tool_batch``), and a turn whose state ``pre_verify`` already consumed gets none.
 
 No signal means the check is skipped. Every other outcome fires it as it fired before this module:
 
@@ -143,6 +149,8 @@ _COMMON_NAMES: Final = frozenset({"main", "log", "LOG", "logger", "LOGGER", "app
 _CONSTRUCTOR_METHODS: Final = frozenset({"__init__", "__new__", "__call__"})
 # Platforms `pre_verify` never gives the check (`verify_hooks._NO_CHECKLIST_PLATFORMS`, kept equal by a test).
 NO_CHECK_PLATFORMS: Final = frozenset({"subagent"})
+# The shell round end's checks (`verify_hooks.shell_round_end_note`), each said at most once per turn.
+SHELL_NOTE_KINDS: Final = frozenset({"export", "test", "caller"})
 # Statement bodies read as if their definitions sat at the enclosing level.
 _BLOCK_FIELDS: Final = ("body", "orelse", "finalbody")
 
@@ -155,6 +163,13 @@ _posture: "OrderedDict[str, bool]" = OrderedDict()
 # session -> {"turn", "root", "indexed": bool, "index": {realpath: (mtime_ns, size[, digest])} | None,
 #             "before": {realpath: str}, "opaque": set[str], "bytes": int}
 _sessions: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+# session -> the turn whose round end already ran (`discard_snapshots`): state Hermes' `pre_verify` dropped
+# mid-turn is rebuilt for the same turn without a shell round end, whose baseline would be mid-turn text.
+_ended: "OrderedDict[str, str]" = OrderedDict()
+# session -> (every id of the latest model message's tool calls, the ids of its last call that is not a
+# read): the shell round end waits for that call, so a note never names a line a later call of the same
+# message changed (`note_tool_batch`, from `post_api_request`).
+_batches: "OrderedDict[str, tuple[frozenset[str], frozenset[str]]]" = OrderedDict()
 
 
 class Verdict(NamedTuple):
@@ -180,6 +195,9 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
             return
         state = _turn_state(session_id, kwargs)
         tool_name = kwargs.get("tool_name")
+        if tool_name in _EDIT_TOOLS:
+            with _lock:
+                state["edit_tool"] = True  # Hermes ends this turn through `pre_verify`: no shell round end
         if tool_name not in _READ_TOOLS:
             _take_index(session_id, state)
         _prune_named(state)
@@ -256,6 +274,8 @@ def round_end_trigger(session_id: str, code_paths: tuple[str, ...]) -> Verdict:
     files (``code_paths``). Consumes the session's state."""
     with _lock:
         state = _sessions.pop(session_id, None) if session_id else None
+        if state is not None:
+            _end_turn(session_id, state["turn"])
     started = time.monotonic()
     try:
         verdict = _decide(state, code_paths, started + SCAN_SECONDS)
@@ -285,11 +305,93 @@ def turn_snapshots(session_id: object) -> dict[str, str]:
         return {**state["named"], **state["before"]} if state is not None else {}
 
 
+def note_tool_batch(session_id: object, tool_calls: object) -> None:
+    """``post_api_request``: keep the ids of the model message's tool calls, and of its last call that is
+    not a read, for ``shell_changed_files``. Hermes runs a message's commands one after another and gives
+    each result to ``transform_tool_result`` as it lands, but the model reads them all at once."""
+    if not isinstance(session_id, str) or not session_id:
+        return
+    every: set[str] = set()
+    last: frozenset[str] = frozenset()
+    for call in tool_calls if isinstance(tool_calls, list) else ():
+        if not isinstance(call, dict):
+            continue
+        ids = frozenset(value for key in ("id", "call_id") if isinstance(value := call.get(key), str) and value)
+        function = call.get("function")
+        name = function.get("name") if isinstance(function, dict) else call.get("name")
+        every |= ids
+        if ids and name not in _READ_TOOLS:
+            last = ids
+    with _lock:
+        _batches[session_id] = (frozenset(every), last)
+        _batches.move_to_end(session_id)
+        while len(_batches) > _MAX_SESSIONS:
+            _batches.popitem(last=False)
+
+
+def shell_changed_files(session_id: object, turn_id: object, tool_call_id: object = "") -> tuple[str, ...]:
+    """After a ``terminal`` / ``execute_code`` call (``transform_tool_result``): every Python file this turn
+    changed, when the call just changed one. Empty otherwise, and always empty for a turn that made a
+    ``patch`` / ``write_file`` call (Hermes ends that turn through ``pre_verify``), a turn without an index,
+    one whose shell round end is spent, or a re-index over budget.
+
+    Hermes calls ``pre_verify`` only when a ``patch`` / ``write_file`` landed this turn, so a turn that
+    edits only through the shell gets no round-end check. The evidence here is the files themselves: the
+    workspace is re-indexed and compared with the index this function saw last (the turn-start one at
+    first), so a call that changed no Python file costs one walk and says nothing. A call that a later call
+    of the same model message may undo is not looked at: the last such call is (``note_tool_batch``). A call
+    id the latest message does not hold is looked at, as every call was before batches were kept."""
+    try:
+        if not isinstance(session_id, str) or not session_id:
+            return ()
+        with _lock:
+            every, last_writer = _batches.get(session_id, (frozenset(), frozenset()))
+            if tool_call_id in every and tool_call_id not in last_writer:
+                return ()
+            state = _sessions.get(session_id)
+            if state is None or state["turn"] != str(turn_id or "") or state["index"] is None \
+                    or state["edit_tool"] or state["shell_closed"] or state["shell_spent"] >= SHELL_NOTE_KINDS:
+                return ()
+            start, last, root = state["index"], state["shell_index"] or state["index"], state["root"]
+        current = _index(root, time.monotonic() + INDEX_SECONDS)
+        with _lock:
+            state["shell_index"] = current
+        if not any(_differs(last.get(path), current.get(path), path) for path in set(last) | set(current)):
+            return ()
+        return tuple(sorted(path for path in set(start) | set(current)
+                            if _differs(start.get(path), current.get(path), path)))
+    except Exception as exc:  # noqa: BLE001 - an undecidable call says nothing, as on a turn without this check
+        _LOG.warning("consistency_trigger shell_changed failed=%s: %s", type(exc).__name__, exc)
+        return ()
+
+
+def spend_shell_round_end(session_id: object, kinds: object) -> None:
+    """These checks of the shell round end (``SHELL_NOTE_KINDS``) have spoken for this turn: each is said
+    once, like ``pre_verify``'s attempt 0. One that spoke does not silence the others: a caller note early in
+    the turn leaves the test check free to name an expectation the turn rewrites later."""
+    if isinstance(session_id, str) and session_id and isinstance(kinds, (set, frozenset, tuple, list)):
+        with _lock:
+            state = _sessions.get(session_id)
+            if state is not None:
+                state["shell_spent"] |= {kind for kind in kinds if kind in SHELL_NOTE_KINDS}
+
+
+def shell_spent_kinds(session_id: object) -> frozenset[str]:
+    """The checks of the shell round end that already spoke this turn."""
+    if not isinstance(session_id, str) or not session_id:
+        return frozenset()
+    with _lock:
+        state = _sessions.get(session_id)
+        return frozenset(state["shell_spent"]) if state is not None else frozenset()
+
+
 def discard_snapshots(session_id: object) -> None:
     """Drop the session's state without reading it (the turn's first stop did not need a verdict)."""
     if isinstance(session_id, str) and session_id:
         with _lock:
-            _sessions.pop(session_id, None)
+            state = _sessions.pop(session_id, None)
+            if state is not None:
+                _end_turn(session_id, state["turn"])
 
 
 def note_turn_posture(session_id: object, platform: object) -> None:
@@ -312,6 +414,18 @@ def reset() -> None:
         _sessions.clear()
         _over_budget.clear()
         _posture.clear()
+        _ended.clear()
+        _batches.clear()
+
+
+def _end_turn(session_id: str, turn: str) -> None:
+    """Under ``_lock``: the turn's round end ran (``pre_verify`` consumed its state)."""
+    if not turn:
+        return
+    _ended[session_id] = turn
+    _ended.move_to_end(session_id)
+    while len(_ended) > _MAX_SESSIONS:
+        _ended.popitem(last=False)
 
 
 def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -328,7 +442,9 @@ def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         if state is not None and state["turn"] == turn:  # a parallel first call got here first
             return state
         state = {"turn": turn, "root": root, "indexed": False, "index": None, "unindexed": ("", ""), "before": {},
-                 "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": []}
+                 "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": [],
+                 "edit_tool": False, "shell_index": None, "shell_spent": set(),
+                 "shell_closed": bool(turn) and _ended.get(session_id) == turn}
         _sessions.pop(session_id, None)
         _sessions[session_id] = state
         while len(_sessions) > _MAX_SESSIONS:
@@ -980,5 +1096,6 @@ def _parse(text: str) -> ast.AST | None:
         return None
 
 
-__all__ = ["Verdict", "discard_snapshots", "note_turn_posture", "reset", "round_end_trigger", "snapshot_before_edit",
-           "turn_root", "turn_snapshots"]
+__all__ = ["Verdict", "discard_snapshots", "note_tool_batch", "note_turn_posture", "reset", "round_end_trigger",
+           "shell_changed_files", "shell_spent_kinds", "snapshot_before_edit", "spend_shell_round_end", "turn_root",
+           "turn_snapshots"]

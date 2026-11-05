@@ -889,6 +889,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "did before the trigger, so a failure can only cost a round, never skip one.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/consistency_trigger.py",
+        "shell_changed_files",
+        INTENTIONAL,
+        "Runs in transform_tool_result after a terminal / execute_code call and must never fail or alter that "
+        "result. A failure is logged as a warning naming the exception class (`consistency_trigger "
+        "shell_changed failed=`) and reports no changed file, so the call's result goes out as it did before "
+        "the shell round end existed.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/lsp_nav.py",
         "_write_atomic",
         INTENTIONAL,
@@ -1052,8 +1061,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 106 -> 107 / 96 -> 97: `dag_tool.worktree_isolation_on`, Hermes' own worktree-isolation
 # getters (a failure reads the profile's config.yaml the way Hermes reads it, never a
 # guessed "off").
-EXPECTED_HANDLER_COUNT = 107
-EXPECTED_ANCHOR_COUNT = 97
+# 107 -> 108 / 97 -> 98: `consistency_trigger.shell_changed_files`, the re-index after a
+# command for the shell round end (a failure logs a named warning and adds no note).
+EXPECTED_HANDLER_COUNT = 108
+EXPECTED_ANCHOR_COUNT = 98
 
 
 class DerivedSite(NamedTuple):
