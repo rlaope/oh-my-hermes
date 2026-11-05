@@ -6,6 +6,20 @@ All notable changes will be documented here.
 
 ## 4.0.6 - 2026-11-04
 
+- **Research citations are checked against what was actually fetched.** Every
+  successful `web_extract`, `browser_navigate` and `web_search` call now
+  leaves a metadata-only fetch receipt under the session that made it,
+  subagent sessions included: a hash of the normalized URL, its scheme, host
+  and path, and the content's hash and length. Page text, titles, query
+  strings and arguments are never stored. A new agent-facing command,
+  `omh research receipts verify --citations <ledger> --draft <draft>`, checks
+  every `[n]` citation in a draft against the receipts of the session, its
+  earlier compaction segments and its subagent sessions. It exits 0 only when every
+  cited source was fetched; a never-fetched citation exits 1 and is named.
+  `ulw-research`, `web-research` and `research-brief` tell the agent to run it
+  after `sources.py verify`. A receipt proves the page was opened, never that
+  it supports the claim. Receipts are written only inside Hermes, so a Codex
+  or Claude Code session outside Hermes reads `missing`.
 - **`dag-ulw` is offered where a plan's follow-on is chosen.** On Hermes'
   own `/plan` turn, whose reply offers to carry the plan out, the model is
   asked to also name `dag-ulw` as one option when the plan's tasks form a
