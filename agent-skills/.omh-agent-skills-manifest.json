@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "5d60aa18bc6fbef59cd19799cf80c899aaba7070450e221a9bebf63723603c17",
+  "catalog_revision": "d4f07a621d399c9e1c03965e12c1d427932d5a4adbad9d3134c2b2996cfad67a",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -290,6 +290,7 @@
     "omh-sprite-forge/toolkit/scripts/forge.py": "615b9bdcc0d42a450d492bb48f1b44748d552ae844f560ef9e3fb535e2902e47",
     "omh-sprite-forge/toolkit/upstream-manifest.json": "969d918a8e044f9b6fb95335d98fb9ba46342f269973ce5e2f89948c97617fb1",
     "omh-support-operations/SKILL.md": "85b136308cdadbcfdb623068dede79cc2937739a696db06e286e4e378306b206",
+    "omh-systematic-review/SKILL.md": "5dc969e97bbcc2ee521a93e5ae59a1a9b54b37195b6e3e5ab482bc3a9096d1a5",
     "omh-tech-debt-audit/SKILL.md": "5da530d9e8b1ddbec01e6ed6633def6621dbba18dd503701a805d3fd58f85b45",
     "omh-tech-debt-audit/references/architecture-deepening.md": "b892d3ec2f9e0abc0e642c52d077647692d5e0ba2d9b9ae19db0d6892a8ddde6",
     "omh-tech-debt-audit/references/debt-dimensions.md": "b65f13eb82f8e53049b021cfabb43de1456621e67f7f228adb42f4a2282591cd",
