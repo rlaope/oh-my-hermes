@@ -79,7 +79,9 @@ owner's ask of 2026-11-05, after Claude Code's `● Teammate @x finished`):
 first lines of its reply, or its error, in at most two muted rows under the
 name, ending in `…` where it said more. The app writes it as an aside
 (`add_aside`), so it waits under a streaming reply or a running call and is
-written at the next block boundary, in the order the agents finished.
+written at the next block boundary, in the order the agents finished. Past
+`AGENT_HELD_SHOWN` held at once, the live region folds the older ones into one
+row (`_held_rows`); `/history` (`shown_blocks`) holds every one whole meanwhile.
 
 Two events do not mean what their names suggest, measured against Hermes
 6c61c3e27d (the recorded fixtures and the gateway source):
@@ -323,6 +325,12 @@ AGENT_SAID_LINES = 3  # its reply's first lines read for them: enough to fill th
 AGENT_SAID_INDENT = "  "  # under the name, past the mark and its space
 AGENT_FACT_SEPARATOR = " · "
 AGENT_SAID_CUT = "…"
+# Briefings held under a live block (a running `delegate_task`) are drawn in the live region until its boundary: the
+# newest `AGENT_HELD_SHOWN` whole, in a third of the rows at most, and the older ones as one muted row above them,
+# `● 9 more finished · 1 failed`, so the running call stays on screen. All of them are written whole at the boundary.
+AGENT_HELD_SHOWN = 3
+AGENT_HELD_SHARE = 3  # the newest briefings drawn whole take at most 1/3 of the live region's rows
+AGENT_HELD_MORE = "{count} more {outcome}"
 
 
 @dataclass
@@ -1165,6 +1173,16 @@ def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Li
     if more and said:
         said[-1] = (*truncate_line(said[-1], room - 1, ellipsis=""), Span(AGENT_SAID_CUT, theme.muted))
     return rows + [(Span(AGENT_SAID_INDENT), *row) for row in said]
+
+
+def _held_more_row(folded: list[AgentDoneBlock], width: int, theme: Theme) -> Line:
+    """The one muted row older held briefings fold into: `● 9 more finished · 1 failed`, counted by outcome."""
+    counts = {outcome: sum(1 for block in folded if block.outcome == outcome) for outcome in AGENT_DONE_MARKS}
+    parts = [(count, outcome) for outcome, count in counts.items() if count]
+    said = [AGENT_HELD_MORE.format(count=count, outcome=outcome) if index == 0 else f"{count} {outcome}"
+            for index, (count, outcome) in enumerate(parts)]
+    return truncate_line((Span(f"{AGENT_DONE_MARKS[AGENT_FINISHED]} {AGENT_FACT_SEPARATOR.join(said)}", theme.muted),),
+                         width)
 
 
 def _seconds(value: float) -> str:
@@ -2228,8 +2246,8 @@ class Transcript:
     ) -> list[Line]:
         """`live_lines` rendered, from the last block up until `max_rows` rows are covered (all of them for None)."""
         rendered: list[tuple[bool, list[Line]]] = []  # (opens a block, its rows), the last block first
-        held = [(True, block_rows(block, width, theme)) for block in reversed(self._held)]  # under the live blocks
-        rendered.extend(held)
+        held = self._held_rows(width, theme, max_rows)  # under the live blocks
+        rendered.extend(reversed(held))
         count = sum(len(rows) for _opens, rows in held)
         whole = True
         for index in range(len(self.blocks) - 1, self._cursor - 1, -1):
@@ -2259,6 +2277,36 @@ class Transcript:
             rows.extend(block_lines)
             seen = True
         return rows
+
+    def _held_rows(self, width: int, theme: Theme, max_rows: int | None) -> list[tuple[bool, list[Line]]]:
+        """The held blocks as the live region draws them, in order: every one whole but the briefings
+        (`AgentDoneBlock`) past the newest `AGENT_HELD_SHOWN`, or past what fits in a third of `max_rows`, which
+        fold into one row where the first of them stands (`_held_more_row`). Only what is drawn is rendered."""
+        briefings = [block for block in self._held if isinstance(block, AgentDoneBlock)]
+        whole: dict[int, list[Line]] = {}
+        room = max_rows // AGENT_HELD_SHARE if max_rows is not None else None
+        used = 0
+        for block in reversed(briefings[-AGENT_HELD_SHOWN:]):
+            rows = block_rows(block, width, theme)
+            if room is not None and used + len(rows) + 1 > room and (whole or len(briefings) > 1):
+                break  # the newest one alone is drawn whole whatever its height
+            whole[id(block)] = rows
+            used += len(rows) + 1
+        folded = [block for block in briefings if id(block) not in whole]
+        drawn: list[tuple[bool, list[Line]]] = []
+        for block in self._held:
+            if not isinstance(block, AgentDoneBlock):
+                drawn.append((True, block_rows(block, width, theme)))
+            elif id(block) in whole:
+                drawn.append((True, whole[id(block)]))
+            elif block is folded[0]:
+                drawn.append((True, [_held_more_row(folded, width, theme)]))
+        return drawn
+
+    def shown_blocks(self) -> list[Block]:
+        """Every block the transcript holds, in order: its blocks, then those held under the live block until its
+        boundary (a steer, a command's echo, a briefing), as `/history` and the details view show them."""
+        return [*self.blocks, *self._held]
 
     def _growing_rows(self, sources: list[str], width: int, theme: Theme) -> list[Line]:
         """The rows of a reply's untaken `sources`, the last of them the line still streaming: drawn through
@@ -2307,9 +2355,10 @@ class Transcript:
         return [truncate_line((Span(DROPPED_NOTICE.format(earlier=_earlier(count)), theme.muted),), width), ()]
 
     def history_lines(self, width: int, theme: Theme, details: bool = True) -> list[Line]:
-        """Every block held at `width`; `details` adds full thinking text, tool result summaries, whole diffs."""
+        """Every block held at `width` (`shown_blocks`); `details` adds full thinking text, tool result summaries, whole
+        diffs."""
         rows: list[Line] = []
-        for block in self.blocks:
+        for block in self.shown_blocks():
             block_lines = block_rows(block, width, theme, expanded=details)
             if block_lines:
                 if rows:

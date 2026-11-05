@@ -17,8 +17,12 @@ All notable changes will be documented here.
   child `▪ <name> interrupted`, a cancelled one `○ <name> cancelled`. A
   briefing that arrives while a reply streams or a call (`delegate_task`)
   runs waits under it and is written at the next block boundary, so it never
-  splits a paragraph or a table; parallel children are briefed in the order
-  they finished, and main never is. The rows erase on a scene look's ground
+  splits a paragraph or a table (`/history` and Ctrl+O show it meanwhile);
+  past three waiting under one running call, the older ones fold into one
+  `● 9 more finished · 1 failed` row until the boundary writes them all.
+  Parallel children are briefed in the order they finished, and main never
+  is. Briefings are not part of the session Hermes stores, so a resumed or
+  rewound session is drawn without them. The rows erase on a scene look's ground
   and keep every mark and word under `NO_COLOR`. The messenger is unchanged.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on

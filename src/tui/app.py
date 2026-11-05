@@ -6403,7 +6403,7 @@ class App(ModesMixin, AgentViewMixin):
     def _history(self, arg: str) -> None:
         """The blocks held now in a pager that renders each one, details shown, only when a page reaches it."""
         transcript = self.transcript
-        blocks, dropped = list(transcript.blocks), transcript.dropped  # what the pager holds, as it opens
+        blocks, dropped = transcript.shown_blocks(), transcript.dropped  # what the pager holds, as it opens
 
         def rows(index: int, width: int, theme: Theme) -> list[Line]:
             shown = block_rows(blocks[index], width, theme, expanded=True)

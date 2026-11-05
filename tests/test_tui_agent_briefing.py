@@ -261,6 +261,29 @@ class AppBriefingTests(unittest.TestCase):
         for at in (row, row + 1):
             self.assertEqual(app.terminal.screen.attrs_at(at, 149), (48, 2, red, green, blue))
 
+    def test_a_completion_under_a_second_is_given_no_time(self) -> None:
+        app, _client = agent_app(busy=False)  # the clock stands at 0: the agent ran no time at all
+        agent_event(app, "complete", FIRST, status="completed", output_tokens=12)
+        [block] = blocks_of(app, AgentDoneBlock)
+        self.assertEqual(block.facts, ("↓12",))
+        self.assertEqual(texts(block, 120)[0], "● find usages of old_api in src/ and list every call site finished  ↓12")
+
+    def test_held_briefings_show_in_history_and_the_details_view(self) -> None:
+        app, _client = agent_app(busy=True, cols=120)
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "delegate_task", "context": "2 tasks"}))
+        agent_event(app, "complete", FIRST, status="completed", summary="Found 3 call sites.")
+        self.assertEqual(blocks_of(app, AgentDoneBlock), [], "still held under the running call")
+        shown = app.transcript.shown_blocks()
+        self.assertEqual(shown[: len(app.transcript.blocks)], app.transcript.blocks)
+        self.assertIsInstance(shown[-1], AgentDoneBlock)
+        history = [line_text(row) for row in app.transcript.history_lines(120, DEFAULT_THEME)]
+        self.assertTrue(any(row.startswith("● find usages") for row in history), history)
+        app._details_view()
+        pager = [row.rstrip() for row in drawn(app)]
+        self.assertTrue(any(row.startswith("● find usages") for row in pager), pager)
+        self.assertIn("  Found 3 call sites.", pager)
+
     def test_frames_that_finish_nothing_write_nothing(self) -> None:
         roster_app, _client = agent_app(busy=False)
         feed(roster_app.roster, "tool", 0.0, FIRST, tool_name="read_file")
@@ -271,3 +294,52 @@ class AppBriefingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HeldBriefingFoldTests(unittest.TestCase):
+    """Briefings held under a running `delegate_task` fold in the live region, so the call stays on screen; all of
+    them are written whole, in the order they finished, at the boundary."""
+
+    def run_delegation(self, rows: int, finished: int):
+        app, _client = make_app(busy=True, rows=rows, cols=150, clock=lambda: 0.0)
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "delegate_task", "context": f"{finished} tasks"}))
+        for number in range(finished):
+            goal = f"lane {number:02d}: check part {number}"
+            agent_event(app, "start", f"sa-{number}", goal=goal)
+            status = "failed" if number % 7 == 3 else "completed"
+            agent_event(app, "complete", f"sa-{number}", goal=goal, status=status, duration_seconds=30.0 + number,
+                        summary=f"Part {number} checked; the long reply runs on " + "and on " * 30)
+        return app
+
+    def test_twenty_finished_under_a_running_call_keep_it_on_screen_and_the_live_region_bounded(self) -> None:
+        for rows in (42, 30):
+            with self.subTest(rows=rows):
+                app = self.run_delegation(rows, 20)
+                screen = [row.rstrip() for row in drawn(app)]
+                self.assertTrue(any("delegate_task(20 tasks)" in row for row in screen), screen)
+                more = [row for row in screen if row.startswith("● ") and " more " in row]
+                self.assertEqual(len(more), 1, screen)
+                live = app.transcript.live_lines(150, DEFAULT_THEME, max_rows=rows)
+                self.assertLessEqual(len(live), 2 + rows // 3 + 2, [line_text(row) for row in live])
+                whole = [row for row in screen if row.startswith("● lane")]
+                self.assertTrue(whole and whole[-1].startswith("● lane 19"), "the newest is drawn whole")
+                self.assertEqual(len(held_of(app, AgentDoneBlock)), 20, "every one is still held")
+
+    def test_the_fold_row_counts_by_outcome_and_the_boundary_writes_every_one_whole_in_order(self) -> None:
+        app = self.run_delegation(42, 8)
+        screen = [row.rstrip() for row in drawn(app)]
+        folded = held_of(app, AgentDoneBlock)[:-3]
+        failed = sum(1 for block in folded if block.outcome == AGENT_FAILED)
+        expected = f"● {len(folded) - failed} more finished · {failed} failed"
+        self.assertIn(expected, screen)
+        app._on_event(Event("tool.complete", SID, {"tool_id": "t1", "name": "delegate_task", "result": "{}"}))
+        app._on_event(Event("message.complete", SID, {"text": "", "status": "complete"}))
+        self.assertEqual([block.name for block in blocks_of(app, AgentDoneBlock)],
+                         [f"lane {number:02d}: check part {number}" for number in range(8)])
+
+    def test_three_or_fewer_are_all_drawn_whole(self) -> None:
+        app = self.run_delegation(42, 3)
+        screen = [row.rstrip() for row in drawn(app)]
+        self.assertFalse([row for row in screen if " more " in row and row.startswith("● ")], screen)
+        self.assertEqual(len([row for row in screen if row.startswith("● lane")]), 3)

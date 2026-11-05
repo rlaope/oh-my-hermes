@@ -775,7 +775,8 @@ class AgentViewMixin:
         if isinstance(payload, Mapping) and not payload.get("error") and graph_is_dag(payload):
             name = node_label(payload["delegation_graph"], self.roster, agent)
         tokens = f"{TOKENS_MARK}{compact_count(agent.output_tokens)}" if agent.output_tokens else ""
-        facts = tuple(fact for fact in (elapsed_text(agent.elapsed(self.clock())), tokens) if fact)
+        elapsed = agent.elapsed(self.clock())
+        facts = tuple(fact for fact in (elapsed_text(elapsed) if elapsed >= 1 else "", tokens) if fact)  # no `0s`
         outcome = AGENT_OUTCOMES.get(agent.status, AGENT_FAILED)
         self.transcript.add_aside(AgentDoneBlock(name or short_title(agent.goal) or agent.name, outcome, facts,
                                                  agent.reply))

@@ -780,18 +780,20 @@ class RoomTests(unittest.TestCase):
             {"text": "Ship", "state": "pending"}]
 
     def small_app(self, running: int, done: int, *, plan: bool = True, graph: dict | None = None,
-                  cols: int = 80, rows: int = 12) -> App:
+                  cols: int = 80, rows: int = 12, briefed: bool = True) -> App:
         """`rows` rows (12) and a turn running: `running` agents running and `done` done, the plan in the slot (four
-        rows) unless `plan` is False, and `graph` as the conversation's delegation graph."""
+        rows) unless `plan` is False, and `graph` as the conversation's delegation graph. Each done agent is briefed
+        in the transcript as the app does, unless `briefed` is False."""
         app, _client = make_app(busy=True, rows=rows, cols=cols, clock=lambda: 0.0)
         with_graph(app, graph, self.PLAN if plan else None)
         for number in range(running + done):
             agent_event(app, "start", f"sa-{number}", goal=f"task {number}")
             if number >= running:
-                # Folded into the roster alone: the app would also brief each in the transcript (`AgentDoneBlock`),
-                # whose rows would move the region these cases place on the screen.
-                app.roster.apply("subagent.complete", payload(f"sa-{number}", goal=f"task {number}",
-                                                              status="completed"), 0.0)
+                if briefed:
+                    agent_event(app, "complete", f"sa-{number}", goal=f"task {number}", status="completed")
+                else:  # the roster alone: the app would also brief it in the transcript (`AgentDoneBlock`)
+                    app.roster.apply("subagent.complete", payload(f"sa-{number}", goal=f"task {number}",
+                                                                  status="completed"), 0.0)
         return app
 
     def test_on_the_bottom_rows_the_view_keeps_its_rows_when_the_turn_ends_so_the_composer_stays(self) -> None:
@@ -812,6 +814,20 @@ class RoomTests(unittest.TestCase):
         again = drawn(app)
         self.assertEqual((box_top(again), app.frame_budget.agents), (top, 2))
         self.assertTrue(again[top - 5].startswith("✻ Working"), again)
+
+    def test_briefings_written_on_the_bottom_rows_move_neither_the_composer_nor_the_view(self) -> None:
+        # A finished agent's briefing (`AgentDoneBlock`) is transcript output like any other: on the bottom rows it
+        # scrolls above the region, and the composer's box and the view's rows stay where they were.
+        app = self.small_app(running=3, done=2)
+        top = box_top(pinned(app))
+        rows = app.frame_budget.agents
+        self.assertGreater(rows, 0)
+        agent_event(app, "complete", "sa-0", goal="task 0", status="completed", summary="Done.\nAll green.")
+        screen = drawn(app)
+        self.assertEqual((box_top(screen), app.frame_budget.agents), (top, rows))
+        self.assertTrue(any(line.startswith("● task 0 finished") for line in app.terminal.screen.history()), screen)
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual((box_top(drawn(app)), app.frame_budget.agents), (top, rows))
 
     def test_a_dag_trees_rows_stay_through_the_turns_end_and_the_next_prompt(self) -> None:
         from _delegation_graphs import export_run
@@ -908,8 +924,9 @@ class RoomTests(unittest.TestCase):
 
     def test_a_turn_drawn_above_the_bottom_rows_holds_nothing_when_its_answer_brings_them_down(self) -> None:
         # Above the bottom rows the composer follows the content, so a turn drawn there keeps no rows: the answer
-        # that brings the region down to the bottom rows must not shrink the view one frame later.
-        app = self.small_app(running=3, done=4)
+        # that brings the region down to the bottom rows must not shrink the view one frame later. Its agents finish
+        # unbriefed: four briefings would fill the 12 rows the case needs the region to stand above the bottom of.
+        app = self.small_app(running=3, done=4, briefed=False)
         app._on_input(Key(CHAR, "l", ctrl=True))
         drawn(app)
         self.assertNotEqual(app.region.last_row(12), 11)
