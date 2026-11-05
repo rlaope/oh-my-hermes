@@ -404,6 +404,44 @@ class TableStreamingTests(unittest.TestCase):
                 history = self.assert_streams_as_history([released, after], live_rows=8)
                 self.assertFalse([row for row in history if "|-" in row or "| -" in row], history)
 
+    def test_a_next_table_whose_divider_has_other_spaces_gets_its_own_box(self) -> None:
+        # A divider with a "\r" (a CRLF reply), a no-break or ideographic space, or an escape `clean_text` drops was
+        # missed in the released run, so the next table's header went out as a body row of the one before.
+        first = ["| ah1 | ah2 |", "|---|---|"] + [f"| a{i}c1 | a{i}c2 |" for i in range(10)]
+        second = ["| bh1 | bh2 |", "|---|---|"] + [f"| b{i}c1 | b{i}c2 |" for i in range(2)]
+        for label, change in {
+            "crlf": lambda line: line + "\r",
+            "no-break space": lambda line: line.replace("|-", "| -"),
+            "ideographic space": lambda line: "　" + line,
+            "escape": lambda line: line.replace("---|", "\x1b[2m---\x1b[0m|", 1),
+        }.items():
+            with self.subTest(label):
+                blocks = [[change(line) for line in block] for block in (first, second)]
+                history = self.assert_streams_as_history(blocks, live_rows=8)
+                self.assertEqual([row[4] for row in history if row[4:5] in ("┌", "└")], ["┌", "└", "┌", "└"])
+
+    def test_a_reply_that_opens_with_a_code_fence_keeps_its_header_in_scrollback(self) -> None:
+        # The fence's opening line draws no row: taken alone, it used the reply's first take, and no header was drawn.
+        text = "```\n| p | q |\n|---|---|\n| r | s |\n```\n\n" + "".join(f"Paragraph {i}\n" for i in range(12))
+        for label, pieces in {
+            "a character a delta": list(text),
+            "three characters a delta": [text[at : at + 3] for at in range(0, len(text), 3)],
+            "a line a delta": text.splitlines(keepends=True),
+        }.items():
+            for live_rows in (6, 8, 16):
+                with self.subTest(label, live_rows=live_rows):
+                    transcript = Transcript(clock=lambda: 100.0)
+                    transcript.apply(ev("message.start"))
+                    taken: list[str] = []
+                    for piece in pieces:
+                        transcript.apply(ev("message.delta", text=piece))
+                        taken += lines_text(transcript.take_stable_lines(WIDTH, THEME, live_rows=live_rows))
+                    self.assertTrue(taken and "Hermes" in taken[0], taken[:2])
+                    transcript.apply(ev("message.complete", text="", status="complete"))
+                    taken += lines_text(transcript.take_stable_lines(WIDTH, THEME, live_rows=live_rows))
+                    shown = taken + lines_text(transcript.live_lines(WIDTH, THEME, max_rows=live_rows))
+                    self.assertEqual(shown, lines_text(transcript.history_lines(WIDTH, THEME, details=False)))
+
     def test_a_long_released_table_is_not_searched_line_by_line_on_every_take(self) -> None:
         # #2592 review: looking for a next table in the released run cost every row of the run on every take.
         transcript = Transcript(clock=lambda: 100.0)

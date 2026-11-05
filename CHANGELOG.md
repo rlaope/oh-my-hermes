@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A reply that opens with a code block keeps its `⚚ Hermes` header in
+  the OMH TUI's scrollback, and a table after a released one keeps its own
+  box whatever spaces its divider holds.** When a reply's first line was a
+  code fence and it streamed in small pieces, the fence line alone used the
+  reply's first take and drew no row, so the header never reached
+  scrollback; `/history` had it. The header now waits for the reply's first
+  drawn row. Separately, a divider with a carriage return (a CRLF reply), a
+  no-break or ideographic space, or a terminal escape was missed after a
+  tall table, so the next table's header went out as a body row of the one
+  before.
+
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
   choice sent the question at once: with nothing ticked it answered with
