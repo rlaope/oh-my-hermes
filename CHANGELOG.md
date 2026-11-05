@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A reply that opens with a code block keeps its `⚚ Hermes` header in
+  the OMH TUI's scrollback, and a table after a released one keeps its own
+  box whatever spaces its divider holds.** When a reply's first line was a
+  code fence and it streamed in small pieces, the fence line alone used the
+  reply's first take and drew no row, so the header never reached
+  scrollback; `/history` had it. The header now waits for the reply's first
+  drawn row. Separately, a divider with a carriage return (a CRLF reply), a
+  no-break or ideographic space, or a terminal escape was missed after a
+  tall table, so the next table's header went out as a body row of the one
+  before.
 - **The OMH TUI waits out a Hermes gateway restart run elsewhere instead of
   exiting.** `hermes gateway restart` from another terminal, `omh update`,
   launchd or another screen's `/gateway restart` closed this screen's

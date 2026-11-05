@@ -119,6 +119,7 @@ from typing import Any
 from ..plugin_bundle.omh.hud_text import compact_count, elapsed_text
 from .dag_block import DagBlock, rows as dag_rows
 from .diff_view import DIFF_FILE, FILE_ARROW, DiffLine, diff_rows, parse_inline_diff
+from .escapes import strip_escapes
 from .gateway import Event
 from . import gateway_contract as contract
 from .gateway_contract import TOOL_CALL_BRIDGE
@@ -483,7 +484,16 @@ def _display_lines(text: str) -> list[str]:
 
 
 _DIVIDER_MARKS = frozenset("|:- ")  # what a table's divider line is made of
-_DIVIDER_LINE = re.compile(r"^[ \t]*\|[|:\- \t]*-[|:\- \t]*$", re.MULTILINE)  # a line that may be one
+# A line that may be a divider: its spaces any but a line break (a "\r" a CRLF reply leaves, a no-break or an
+# ideographic space), with any control or bidi control `clean_text` drops (`is_unpainted`) taken as one. A prefilter
+# only, `opens_table` decides. The `-` is required by a lookahead, not between two starred runs, so a long line of
+# dashes that fails at its end is searched once, not once per dash. Escapes are stripped before the search.
+# `_UNPAINTED` and `[^\S\n]` must stay disjoint (no \x1c-\x1f, no \x85: Python counts them as spaces): a character
+# both alternatives take is matched two ways, and a line of them backtracks exponentially.
+_UNPAINTED = "\x00-\x08\x0e-\x1b\x7f-\x84\x86-\x9f\u202a-\u202e\u2066-\u2069"
+_DIVIDER_LINE = re.compile(
+    rf"^(?=[^\n]*-)(?:[^\S\n]|[{_UNPAINTED}])*\|(?:[|:\-{_UNPAINTED}]|[^\S\n])*$", re.MULTILINE
+)
 
 
 def _table_row(line: str) -> bool:
@@ -521,6 +531,8 @@ def _stable_lines(
         # of a next table; with one row, the table waits whole, so its columns are laid out over that row too.
         last = held
         run = "\n".join(lines[held:])
+        if strip_escapes(run) != run:  # a divider may carry escapes: search the lines as `clean_text` leaves them
+            run = "\n".join(map(clean_text, lines[held:]))
         line_at, searched = held, 0
         for match in _DIVIDER_LINE.finditer(run):  # at C speed: a long run is searched on every take
             line_at += run.count("\n", searched, match.start())
@@ -533,7 +545,7 @@ def _stable_lines(
                 last = at
         if last > held and not tall(last):
             return lines[:last]
-        after = clean_text(partial).strip()  # the line being written, "" before its first character
+        after = "".join(clean_text(partial).split())  # the line being written without its spaces, "" before any mark
         divider_yet = set(after) <= _DIVIDER_MARKS and after[:1] in ("", "|")
         if len(lines) - last > 2 and len(lines) == len(complete) and divider_yet:
             return lines[:-1] if len(lines) - last > 3 else lines[:last]
@@ -2203,10 +2215,13 @@ class Transcript:
         ending = block.done or final  # nothing more of the reply will come: a table left open is closed
         if not fresh and not (ending and self._cursor_state.table):
             return []
-        rows, self._cursor_state = render_lines(fresh, self._cursor_state, _reply_width(width), theme, closed=ending)
+        opens_block = self._cursor_lines == 0
+        rows, state = render_lines(fresh, self._cursor_state, _reply_width(width), theme, closed=ending)
+        if opens_block and not rows:
+            return []  # lines that draw no row (a code fence's opening line): the header waits for the first row
+        self._cursor_state = state
         if not fresh:
             self._version += 1  # only the open table's bottom was taken: the live rows drawn with it are stale
-        opens_block = self._cursor_lines == 0
         self._cursor_lines = len(sources)
         return self._spaced(_marked(rows, opens_block, theme, width, block.model), opens_block)
 
