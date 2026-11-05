@@ -586,7 +586,12 @@ def cmd_update(args: argparse.Namespace) -> int:
         payload["hermes_skill_refresh"] = refresh_skill_dir_caches(_paths(args).hermes_home, managed_current_workflow_pack_dir())
     # Only bot profiles failing gets its own nonzero code: this home refreshed,
     # so a staged update keeps the generation instead of rolling it back.
-    code = (1 if any(row["phase"] != "profile_sync" for row in failures) else PROFILE_REPAIR_EXIT_CODE) if failures else 0
+    # A dry run records the primary plugin's refusal as `would_refuse`, not as
+    # a failure row, and that home is then blocked too.
+    primary_blocked = any(row["phase"] != "profile_sync" for row in failures) or (
+        isinstance(payload.get("plugin_bundle"), dict) and payload["plugin_bundle"].get("status") == "would_refuse"
+    )
+    code = (1 if primary_blocked else PROFILE_REPAIR_EXIT_CODE) if failures else 0
     payload.update({"status": "partial" if failures else "ok", "failures": failures, "exit_code": code})
     unrefreshed = frozenset(
         row["config"] for row in payload.get("hermes_skill_refresh") or [] if row.get("status") == "failed"
