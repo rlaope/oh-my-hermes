@@ -205,6 +205,16 @@ and evidence obvious to a reviewer reading the PR without the chat history.
 - Code, docs, commit messages, PR text, and user-facing CLI output are
   English by default. Localized output (ko/ja/zh) is explicit opt-in through
   `--language` or `OMH_LANG`; never auto-detect the OS locale.
+- OMH is an open-source product for every user on every terminal. Design a
+  fix or a look for all of them. Never tune it to the maintainer's own
+  machine, terminal, theme or language: the maintainer's setup is where a
+  problem shows up and gets measured, not the target. A capability-detected
+  enhancement may sit on top of a fix that works everywhere, but never
+  replaces it.
+- Product chrome is English for everyone. That covers TUI labels, key hints,
+  picker rows, notices and CLI output. Never switch it by the language of the
+  conversation or of text a model or a person wrote. That text keeps its own
+  language; the frame around it does not follow.
 - Reply to Korean user messages in polite Korean; no banmal or casual endings
   unless the user asks for that tone. Name what exists, what is missing, and
   the complete target behavior, rather than process labels or "small first
