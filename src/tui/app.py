@@ -4113,7 +4113,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         if self.slot is None and self._front_picker() is not None:
             self.composer._drop_pending()  # the picker owns input, including display keys that return below
-        if not (self.slot is None and self.composer.leader and self._front_picker() is None) and self._display_key(event):
+        if self._display_key(event):
             return
         if self.slot is not None and self._slot_arming(event):
             return  # in the first moment of a question every key is ignored: nothing typed, cleared or sent
@@ -4286,6 +4286,9 @@ class App(ModesMixin, AgentViewMixin):
             return True
         if isinstance(event, Key) and event.name == ESCAPE:
             return self._escape(event)
+        if isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c":
+            self.composer._drop_pending()
+            return False  # Ctrl+C interrupts, clears or leaves as it does without the leader
         if not isinstance(event, Key) or event.name != CHAR or event.ctrl or event.alt or event.shift or event.reported_shift:
             self._on_composer(self._edit(self.composer, event), event)
             return True
@@ -4442,8 +4445,10 @@ class App(ModesMixin, AgentViewMixin):
         Ctrl+O while Hermes asks something pages that question whole instead
         and answers nothing (`_question_view`).
         """
-        if not isinstance(event, Key) or event.name != CHAR or not event.ctrl or event.alt:
+        if not isinstance(event, Key) or event.name != CHAR or not event.ctrl or event.alt or event.char not in ("o", "l", "z"):
             return False
+        if self.composer.leader:
+            self.composer._drop_pending()  # it works over an armed Vim leader, which it cancels
         if event.char == "o":
             if self.slot is None:
                 self._details_view()
@@ -4451,10 +4456,8 @@ class App(ModesMixin, AgentViewMixin):
                 self._question_view()
         elif event.char == "l":
             self._redraw("")
-        elif event.char == "z":
-            self._suspend()
         else:
-            return False
+            self._suspend()
         return True
 
     def _suspend(self) -> None:

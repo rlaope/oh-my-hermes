@@ -141,6 +141,14 @@ All notable changes will be documented here.
   name in another file no longer continues the turn when every mention there
   is proven to need no change: another object's method of the same name, or
   an import whose calls bind the same way before and after the edit.
+- **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
+  `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
+  or Enter opens sessions or bots, folds the plan, searches history, cycles
+  the input mode, steps reasoning effort, interrupts or clears, and submits
+  or steers. The info line says `NORMAL · SPC` while the leader waits. Esc or
+  an unmapped key cancels it; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and
+  do what they always do. Without vim mode nothing changes. Contributed by
+  @DanRioDev in #2545.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check

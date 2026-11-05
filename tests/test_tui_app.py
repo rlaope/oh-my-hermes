@@ -2913,6 +2913,8 @@ class LeaderWorkflowTests(unittest.TestCase):
     def test_modified_workflow_followers_are_swallowed_without_actions(self) -> None:
         for modifier in ("ctrl", "alt", "shift", "reported_shift"):
             for name, char in ((ENTER, ""), (CHAR, "c")):
+                if (modifier, char) == ("ctrl", "c"):
+                    continue  # Ctrl+C keeps its own meaning (test_display_keys_and_ctrl_c_work_over_an_armed_leader)
                 with self.subTest(modifier=modifier, name=name):
                     app, client = self.armed("keep", busy=True)
                     app._on_input(Key(name, char, **{modifier: True}))

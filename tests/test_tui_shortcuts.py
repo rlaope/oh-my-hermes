@@ -1262,6 +1262,7 @@ class LeaderShortcutTests(unittest.TestCase):
         app, client = self.normal_app()
         self.arm(app)
         app._on_server_request(ServerRequest("srq-leader", "vault.code", {}))
+        self.assertFalse(app.composer.leader)
         with patch.object(app, "_leader_key") as leader:
             app._on_input(Key(CHAR, "s"))
             leader.assert_not_called()
@@ -1271,7 +1272,10 @@ class LeaderShortcutTests(unittest.TestCase):
         from omh.tui.keys import TAB
 
         events = [Key(CHAR, c) for c in "?ixud q"] + [Key(ESCAPE), Key(DOWN), Key(TAB, shift=True)]
-        events += [Key(CHAR, c, **{mod: True}) for c in "sbpr/mtxovl" for mod in ("ctrl", "alt", "shift", "reported_shift")]
+        events += [
+            Key(CHAR, c, **{mod: True}) for c in "sbpr/mtxovl" for mod in ("ctrl", "alt", "shift", "reported_shift")
+            if not (mod == "ctrl" and c in "ol")  # display keys keep working (test_display_keys_and_ctrl_c_...)
+        ]
         for event in events:
             with self.subTest(event=event):
                 app, client = self.normal_app()
@@ -1284,6 +1288,24 @@ class LeaderShortcutTests(unittest.TestCase):
                 self.assertIsNone(app.pager)
                 self.assertIsNone(app.search)
                 self.assertIsNone(app.exit_code)
+
+    def test_display_keys_and_ctrl_c_work_over_an_armed_leader(self) -> None:
+        for char, method in (("o", "_details_view"), ("l", "_redraw"), ("z", "_suspend")):
+            with self.subTest(key=f"ctrl+{char}"):
+                app, _ = self.normal_app()
+                self.arm(app)
+                with patch.object(app, method) as called:
+                    app._on_input(Key(CHAR, char, ctrl=True))
+                called.assert_called_once()
+                self.assertFalse(app.composer.leader)
+        armed, _ = self.normal_app()
+        plain, _ = self.normal_app()
+        self.arm(armed)
+        for app in (armed, plain):
+            app._on_input(Key(CHAR, "c", ctrl=True))
+        self.assertFalse(armed.composer.leader)
+        self.assertEqual((armed.composer.text, armed.exit_code), (plain.composer.text, plain.exit_code))
+        self.assertNotEqual(armed.composer.text, "draft")
 
     def test_insert_and_non_vim_spaces_still_type(self) -> None:
         for vim in (False, True):
