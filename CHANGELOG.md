@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A Markdown table wider than the terminal wraps inside its columns in the
+  OMH TUI.** Before, such a table showed its raw source (`| a | b |` rows
+  and the `|---|---|` divider). Now its short columns keep their whole width,
+  and the long columns share the rest of the row. Each cell wraps inside its
+  column, a word too long for the column breaks across rows, and a blank row
+  separates body rows that take more than one row. Cells show their inline
+  markup (`code`, **bold**, links), and a code span keeps its style when it
+  wraps. When a terminal is too narrow even for columns that hold each
+  column's longest word (up to 16 cells), each body row is drawn as
+  `header: value` lines. A table taller than the live region is now also
+  released by the rows it draws, not only by its source lines. A row that
+  arrives after the release keeps the columns already drawn: it widens a
+  column for itself only while it still fits the row, and otherwise wraps
+  inside the given columns. `/history` lays the whole table out again.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`

@@ -18,10 +18,13 @@ is syntax-coloured, any other stays one code colour), ```diff fences whose added
 and removed lines are full-row bands, inline `code`, **bold**, *italic* / _italic_, links
 `[t](u)` -> `t (u)`, horizontal rules and tables (a `|` header row, the
 `|---|` separator row, body rows; the header goes bold in the accent colour,
-the separator is a `─` band). A table is decided between two lines, so
-`render_lines` steps past it in one move; a `|` line without that starting
-row stays a paragraph. Constructs that need a later line to decide an
-earlier one (setext headings, indented code) are left out on purpose.
+the separator is a `─` band, cells take the inline markup; a table wider than
+the row wraps each cell inside a narrower column, or draws each body row as
+`header: value` lines when even the narrowest columns do not fit). A table is
+decided between two lines, so `render_lines` steps past it in one move; a `|`
+line without that starting row stays a paragraph. Constructs that need a
+later line to decide an earlier one (setext headings, indented code) are left
+out on purpose.
 
 Every row is plain `Line`s for `screen.py` to paint. `clean_text` runs first:
 whole escape sequences (CSI, OSC, the other control strings, two-byte escapes)
@@ -51,10 +54,16 @@ QUOTE_BAR = "│ "
 DIFF_LANGUAGES = frozenset({"diff", "patch"})
 
 # Table cells' column widths: the widest cell of the column decides, with a
-# minimum so a one-cell column still holds the `─` band.
+# minimum so a one-cell column still holds the `─` band. A table wider than the
+# row wraps its cells inside narrower columns: a column then keeps at least its
+# longest word up to `TABLE_WORD_CAP` cells, and never less than
+# `TABLE_WRAP_MIN` (or its whole width when that is less).
 TABLE_DIVIDER_RE = re.compile(r"^:?-{3,}:?$")
 TABLE_MIN_COL_WIDTH = 3
 TABLE_GAP = 2
+TABLE_WRAP_MIN = 8
+TABLE_WORD_CAP = 16
+TABLE_RECORD_HANG = 2  # a record's wrapped value hangs this far under its label
 
 
 _FENCE_CHARS = ("`", "~")
@@ -73,6 +82,15 @@ _ESCAPABLE = frozenset("\\`*_[]()#+-.!|>~")
 
 
 @dataclass(frozen=True)
+class TableColumns:
+    """What the rows of a table taken before its end was seen hang on."""
+
+    header: tuple[str, ...]  # the header's cells: a row drawn as a record labels its values with them
+    widths: tuple[int, ...] = ()  # the column widths; none when the table is drawn as records
+    spaced: bool = False  # a blank row before each body row: some row took more than one row
+
+
+@dataclass(frozen=True)
 class MarkdownState:
     """What one source line hands the next: the open fence, and the list it is in."""
 
@@ -81,7 +99,7 @@ class MarkdownState:
     fence_indent: int = 0
     list_indent: int = 0  # content column of the most recent list item; 0 outside a list
     code_carry: str = ""  # the string or comment opener a highlighted fence line ended inside
-    table: tuple[int, ...] = ()  # the column widths of a table whose rows were taken before its end was seen
+    table: TableColumns | None = None  # a table whose rows were taken before its end was seen
 
     @property
     def in_fence(self) -> bool:
@@ -144,21 +162,20 @@ def render_lines(
         if state.table:
             if not state.in_fence and source.strip().startswith("|") and len(split_table_row(clean_text(source))) >= 2:
                 # a table cut short by the cap on holding it back: the rest hangs on the columns it was given
-                table_rows, consumed = table_rows_on(sources, index, state.table, width, theme)
+                table_rows, consumed, columns = table_rows_on(sources, index, state.table, width, theme)
                 rows.extend(table_rows)
                 index += consumed
-                if index < limit:
-                    state = replace(state, table=())
+                state = replace(state, table=columns if index >= limit else None)
                 continue
-            state = replace(state, table=())
+            state = replace(state, table=None)
         if not state.in_fence and source.strip().startswith("|"):
             if index + 1 < limit and opens_table(source, sources[index + 1]):
                 # the header's next line is its divider: the block runs as one table
-                table_rows, consumed, widths = _table_block(sources, index, width, theme)
+                table_rows, consumed, columns = _table_block(sources, index, width, theme)
                 rows.extend(table_rows)
                 index += consumed
                 # a table that runs to the last line may go on in lines not yet taken
-                state = replace(state, list_indent=0, table=widths if index >= limit else ())
+                state = replace(state, list_indent=0, table=columns if index >= limit else None)
                 continue
         lines, state = render_line(source, state, width, theme)
         rows.extend(lines)
@@ -419,29 +436,173 @@ def is_table_divider_cells(cells: list[str]) -> bool:
     """`|---|---|`: every cell is dashes alone (colons at the edges allowed)."""
     return len(cells) > 0 and all(TABLE_DIVIDER_RE.match(cell) for cell in cells)
 
-def _table_row_text(cells: list[str], widths: Sequence[int]) -> str:
-    """One row's text on the columns `widths`: short rows padded, cells past the last column kept at their own width."""
-    cells = cells + [""] * (len(widths) - len(cells))
-    return (" " * TABLE_GAP).join(
-        cell + " " * max(0, (widths[ci] if ci < len(widths) else 0) - cell_width(cell)) for ci, cell in enumerate(cells)
-    )
+def _longest_word(cell: Sequence[Span]) -> int:
+    """Cells of the widest run between spaces that `cell` shows: a column narrower than it breaks the word."""
+    return max(cell_width(word) for word in "".join(span.text for span in cell).split(" "))
+
+
+def _column_floor(own: int, word: int) -> int:
+    """The narrowest a column of width `own` whose longest word is `word` cells wraps to: the word up to
+    `TABLE_WORD_CAP`, at least `TABLE_WRAP_MIN`, never more than `own`."""
+    return min(own, max(TABLE_WRAP_MIN, min(word, TABLE_WORD_CAP)))
+
+
+def fit_columns(natural: Sequence[int], words: Sequence[int], room: int) -> tuple[int, ...] | None:
+    """Column widths that sum to at most `room`, from each column's own width (`natural`) and its longest word.
+
+    When every column fits whole, each keeps its own width. Otherwise the
+    columns narrow enough to take their share keep their own width, and the
+    wider ones share what is left in proportion to how much each wants past
+    its minimum (`_column_floor`). None when even the minimums do not fit: a
+    column narrower than its words would break most of them.
+    """
+    if sum(natural) <= room:
+        return tuple(natural)
+    floors = [_column_floor(own, word) for own, word in zip(natural, words)]
+    return _share_columns(natural, floors, room) if sum(floors) <= room else None
+
+
+def _share_columns(natural: Sequence[int], floors: Sequence[int], room: int) -> tuple[int, ...]:
+    """`fit_columns` once the minimums fit and the whole widths do not.
+
+    A column within an even share of what is left keeps its whole width
+    (again over the rest, until none is); the others share what is left.
+    When that leaves a wrapped column narrower than one kept whole, or less
+    than the wrapped columns' minimums, every column shares from its minimum
+    instead: the long column a table is about is never the narrowest.
+    """
+    widths = list(floors)
+    wide = list(range(len(natural)))
+    budget = room
+    while True:
+        narrow = [ci for ci in wide if natural[ci] * len(wide) <= budget]  # within an even share of what is left
+        if not narrow:
+            break
+        for ci in narrow:
+            widths[ci] = natural[ci]
+            budget -= natural[ci]
+        wide = [ci for ci in wide if ci not in narrow]
+    kept = [widths[ci] for ci in range(len(natural)) if ci not in wide]
+    if sum(floors[ci] for ci in wide) <= budget:
+        _spread(widths, wide, natural, floors, budget)
+        if not kept or min(widths[ci] for ci in wide) >= max(kept):
+            return tuple(widths)
+    widths = list(floors)
+    _spread(widths, list(range(len(natural))), natural, floors, room)
+    return tuple(widths)
+
+
+def _spread(widths: list[int], wide: Sequence[int], natural: Sequence[int], floors: Sequence[int], budget: int) -> None:
+    """Set the `wide` columns of `widths` to their minimums plus `budget`'s cells past them, shared in proportion to
+    how much each wants past its minimum (their whole widths sum to more than `budget`)."""
+    spare = budget - sum(floors[ci] for ci in wide)
+    wants = {ci: natural[ci] - floors[ci] for ci in wide}
+    total = sum(wants.values())
+    for ci in wide:
+        widths[ci] = floors[ci] + spare * wants[ci] // total
+    left = budget - sum(widths[ci] for ci in wide)
+    for ci in sorted(wide, key=lambda ci: -wants[ci]):  # the cells the rounding left go to the widest wants
+        if left <= 0:
+            break
+        if widths[ci] < natural[ci]:
+            widths[ci] += 1
+            left -= 1
+
+
+def _grid_lines(cells: Sequence[Sequence[Span]], widths: Sequence[int], indent: int, style: Style) -> list[Line]:
+    """One row on the columns `widths`: each cell wrapped inside its column and padded to it, the cells' rows side
+    by side, as many as the tallest cell takes. No cell is cut: a word wider than its column breaks across rows."""
+    stacks = [wrap_line(tuple(cell), widths[ci]) for ci, cell in enumerate(cells)]
+    last = len(stacks) - 1
+    lines: list[Line] = []
+    for at in range(max(len(stack) for stack in stacks)):
+        line: list[Span] = [Span(" " * indent)] if indent else []
+        for ci, stack in enumerate(stacks):
+            piece = stack[at] if at < len(stack) else ()
+            line.extend(piece)
+            pad = max(0, widths[ci] - line_width(piece)) + (TABLE_GAP if ci < last else 0)
+            if pad:
+                line.append(Span(" " * pad, style))
+        lines.append(tuple(line))
+    return lines
+
+
+def _record_lines(cells: Sequence[Sequence[Span]], labels: Sequence[Sequence[Span]], indent: int, width: int,
+                  label_style: Style) -> list[Line]:
+    """One row as a record, for a row too narrow for columns: a line per cell, `label: value`, wrapped rows hanging
+    under the label. A cell past the header's columns has no label."""
+    pad: Line = (Span(" " * indent),) if indent else ()
+    hang: Line = (Span(" " * (indent + TABLE_RECORD_HANG)),)
+    lines: list[Line] = []
+    for ci, cell in enumerate(cells):
+        label = [*labels[ci], Span(": ", label_style)] if ci < len(labels) and labels[ci] else []
+        lines.extend(wrap_prefixed([*label, *cell], pad, hang, width))
+    return lines
+
+
+def _table_cells(cells: Sequence[str], style: Style, theme: Theme, count: int = 0) -> list[list[Span]]:
+    """Each cell's inline markup as spans over `style` (code, emphasis and links as in a paragraph), padded with
+    empty cells to `count`."""
+    spans = [_inline_spans(cell, style, theme) for cell in cells]
+    return spans + [[] for _ in range(count - len(spans))]
+
+
+def _header_style(theme: Theme) -> Style:
+    return replace(theme.text, bold=True, fg=theme.brand.fg or theme.accent.fg)
+
+
+def _body_lines(
+    rows: Sequence[Sequence[str]], columns: TableColumns, indent: int, width: int, theme: Theme
+) -> tuple[list[Line], TableColumns]:
+    """Body rows on `columns`, each after one that is already out, and the columns the next row hangs on.
+
+    A blank row goes before each row once some row has taken more than one
+    row. A cell wider than its column widens it for its own row only: whole
+    when the row still fits, else as far as the cell's minimum
+    (`_column_floor`); a row that fits neither way wraps inside the given
+    columns, and one with cells past them that do not fit is drawn as a
+    record. No cell is cut or lost.
+    """
+    labels = _table_cells(columns.header, _header_style(theme), theme)
+    lines: list[Line] = []
+    for cells in rows:
+        spans = _table_cells(cells, theme.text, theme, len(columns.widths))
+        room = width - indent - TABLE_GAP * (len(spans) - 1)
+        natural = [max(TABLE_MIN_COL_WIDTH, line_width(tuple(cell))) for cell in spans]
+        floors = [_column_floor(natural[ci], _longest_word(cell)) for ci, cell in enumerate(spans)]
+        widths: Sequence[int] | None = None
+        if columns.widths:
+            given = columns.widths
+            for wanted in (natural, floors):
+                own = [max(given[ci], wanted[ci]) if ci < len(given) else wanted[ci] for ci in range(len(spans))]
+                if sum(own) <= room:
+                    widths = own
+                    break
+            if widths is None and len(spans) == len(given):
+                widths = given
+        if widths is None:
+            drawn = _record_lines(spans, labels, indent, width, _header_style(theme))
+            columns = replace(columns, spaced=True)
+        else:
+            drawn = _grid_lines(spans, widths, indent, theme.text)
+            columns = replace(columns, spaced=columns.spaced or len(drawn) > 1)
+        lines.extend([(), *drawn] if columns.spaced else drawn)
+    return lines, columns
 
 
 def table_block(sources: Sequence[str], first: int, width: int, theme: Theme) -> tuple[list[Line], int]:
-    """`_table_block` without the column widths."""
-    rows, consumed, _widths = _table_block(sources, first, width, theme)
+    """`_table_block` without the columns."""
+    rows, consumed, _columns = _table_block(sources, first, width, theme)
     return rows, consumed
 
 
 def table_rows_on(
-    sources: Sequence[str], first: int, widths: tuple[int, ...], width: int, theme: Theme
-) -> tuple[list[Line], int]:
-    """Body rows from `sources[first]` on columns already given: (rows, count of lines consumed).
-
-    A cell wider than its column, or a cell past the last column, pushes its own row wider; no cell is cut or lost.
-    """
+    sources: Sequence[str], first: int, columns: TableColumns, width: int, theme: Theme
+) -> tuple[list[Line], int, TableColumns]:
+    """Body rows from `sources[first]` on columns already given: (rows, count of lines consumed, the columns the
+    next row hangs on). See `_body_lines`."""
     indent = _leading_spaces(sources[first])
-    rows: list[Line] = []
+    body: list[list[str]] = []
     index = first
     while index < len(sources) and sources[index].strip().startswith("|"):
         cells = split_table_row(clean_text(sources[index]))
@@ -450,23 +611,27 @@ def table_rows_on(
             continue
         if len(cells) < 2:
             break
-        rows.extend(wrap_prefixed(
-            (Span(_table_row_text(cells, widths), theme.text),), (Span(" " * indent),), (Span(" " * indent),), width
-        ))
+        body.append(cells)
         index += 1
-    return rows, index - first
+    rows, columns = _body_lines(body, columns, indent, width, theme)
+    return rows, index - first, columns
 
 
 def _table_block(
     sources: Sequence[str], first: int, width: int, theme: Theme
-) -> tuple[list[Line], int, tuple[int, ...]]:
+) -> tuple[list[Line], int, TableColumns]:
     """`sources[first]` opens a Markdown table: `|` header, `|---|` divider, body rows.
 
-    Header cells go bold in the accent colour, the divider row between the header
-    and the body rows renders as a band of `─`, body rows hang on the header's
-    columns (padded to them, sliced to them). Returns (rows, count of lines the
-    table consumed) so `render_lines` steps past the whole block in one pass. The
-    caller has checked `opens_table`.
+    Header cells go bold in the accent colour, the divider row between the
+    header and the body rows renders as a band of `─`, body rows hang on the
+    header's columns, a row's cells past them on columns of their own. A
+    table wider than the row narrows its columns (`fit_columns`) and wraps
+    each cell inside its column, a blank row between body rows that then take
+    more than one row; a table too wide for even the narrowest columns draws
+    each body row as a record, `header: value` a line. Returns (rows, count
+    of lines the table consumed, the columns a row after them hangs on) so
+    `render_lines` steps past the whole block in one pass. The caller has
+    checked `opens_table`.
     """
     header = split_table_row(clean_text(sources[first]))
     index = first + 1
@@ -489,46 +654,33 @@ def _table_block(
             break  # a `|` line that is not a table row closes the table here
         body.append(cells)
         index += 1
-    # the header row and the body rows, every row on the header's columns; the
-    # `|---|` row between them is the divider, not a cell of the table
-    table_rows = [header, *body]
-    # the columns' width: the widest cell of the header's columns, at least the minimum
-    column_width = [
-        max(TABLE_MIN_COL_WIDTH, max((cell_width(cells[ci]) for cells in table_rows if ci < len(cells)), default=0))
-        for ci in range(len(header))
-    ]
     indent = _leading_spaces(sources[first])
-    gap = " " * TABLE_GAP
-    if indent + sum(column_width) + TABLE_GAP * (len(column_width) - 1) > width:
-        # no width fitting: a table wider than the row stays the plain text it was, as `render_line` draws it
-        plain = [row for source in sources[first:index] for row in render_line(source, MarkdownState(), width, theme)[0]]
-        return plain, index - first, ()
-    header_style = replace(theme.text, bold=True, fg=theme.brand.fg or theme.accent.fg)
-
-    def row_lines(cells: list[str], style: Style) -> list[Line]:
-        """One table row (a list of cells) wrapped to `width`, behind the row's indent."""
-        text = _table_row_text(cells, column_width)
-        return wrap_prefixed((Span(text, style),), (Span(" " * indent),), (Span(" " * indent),), width)
-
-    def sep_lines() -> list[Line]:
-        """The `─` band of the divider row, hard-wrapped so every row fills the width.
-
-        The band hangs on the header's columns like the rows of a diff fence: the
-        columns' runs stay in place and the gap stays between them, so a wrapped
-        row never loses the columns' gap and each row is padded to the width.
-        """
-        sep_text = gap.join("─" * column_width[ci] for ci in range(len(header)))
-        # the band runs in the cells that remain after the row's indent
-        prefix_cells = indent if indent < width else 0
-        prefix = (Span(" " * prefix_cells),) if prefix_cells else ()
-        rows = band_rows(sep_text, max(width - prefix_cells, 1), theme.dim)
-        if prefix:
-            return [prefix + row for row in rows]
-        return rows
-
-    header_lines = row_lines(header, header_style)
-    body_lines = [row for cells in body for row in row_lines(cells, theme.text)]
-    return [*header_lines, *sep_lines(), *body_lines], index - first, tuple(column_width)
+    header_style = _header_style(theme)
+    count = max(len(cells) for cells in [header, *body])
+    head = _table_cells(header, header_style, theme, count)
+    spans = [head, *(_table_cells(cells, theme.text, theme, count) for cells in body)]
+    # each column's own width: its widest cell, at least the minimum
+    natural = [max(TABLE_MIN_COL_WIDTH, *(line_width(tuple(cells[ci])) for cells in spans)) for ci in range(count)]
+    words = [max(_longest_word(cells[ci]) for cells in spans) for ci in range(count)]
+    widths = fit_columns(natural, words, width - indent - TABLE_GAP * (count - 1))
+    if widths is None:
+        # too narrow for columns: each body row a record, its values behind the header's labels
+        columns = TableColumns(tuple(header), spaced=True)
+        records = [_record_lines(cells, head, indent, width, header_style) for cells in spans[1:]]
+        if not records:  # a header with no body yet: its labels, a line each
+            records = [_record_lines(head, [], indent, width, header_style)]
+        lines = [row for at, record in enumerate(records) for row in ([(), *record] if at else record)]
+        return lines, index - first, columns
+    body_rows = [_grid_lines(cells, widths, indent, theme.text) for cells in spans[1:]]
+    spaced = any(len(rows) > 1 for rows in body_rows)
+    prefix_cells = indent if indent < width else 0
+    band = band_rows((" " * TABLE_GAP).join("─" * cells for cells in widths), max(width - prefix_cells, 1), theme.dim)
+    lines = [
+        *_grid_lines(head, widths, indent, header_style),
+        *(((Span(" " * prefix_cells),) + row if prefix_cells else row) for row in band),
+        *(row for at, rows in enumerate(body_rows) for row in ([(), *rows] if spaced and at else rows)),
+    ]
+    return lines, index - first, TableColumns(tuple(header), widths, spaced)
 
 
 # ── fenced code ───────────────────────────────────────────────────────────

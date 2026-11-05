@@ -135,7 +135,7 @@ class TableStreamingTests(unittest.TestCase):
         )
         self.assertFalse(any("─" in row for row in self.taken), "plain text gained a separator band")
 
-    # (d) Cell content: wide characters, escaped pipes, a table wider than the row.
+    # (d) Cell content: wide characters, escaped pipes, a table wider than the row (more in test_tui_table_wrap).
 
     def render(self, source: str, width: int = WIDTH) -> list[str]:
         rows, _state = render_lines(source.split("\n"), MarkdownState(), width, THEME)
@@ -151,17 +151,19 @@ class TableStreamingTests(unittest.TestCase):
         self.assertIn("x | y", rows[2])
         self.assertIn("z", rows[2])
 
-    def test_table_wider_than_the_row_stays_plain_text(self) -> None:
+    def test_table_wider_than_the_row_wraps_its_cells_instead_of_staying_plain_text(self) -> None:
         wide = "a" * 30
         rows = self.render(f"| {wide} | {wide} |\n|---|---|\n| 1 | 2 |", width=40)
-        self.assertEqual("".join(rows).replace(" ", "").count("|---|---|"), 1)
-        self.assertFalse(any(set(row.strip()) == {"─", " "} for row in rows))
+        self.assertFalse(any("|" in row for row in rows), rows)
+        self.assertEqual(sum(1 for row in rows if set(row.strip()) == {"─", " "}), 1, rows)
+        self.assertEqual("".join(rows).count("a"), 60)
+        self.assertTrue(all(len(row) <= 40 for row in rows), rows)
 
     def test_pipe_lines_inside_a_code_fence_stay_code(self) -> None:
         rows = self.render("```\n| a | b |\n|---|---|\n```")
         self.assertEqual(rows[:2], ["| a | b |", "|---|---|"])
 
-    # (e) Review follow-ups: exit, control characters, partial dividers, plain fallback.
+    # (e) Review follow-ups: exit, control characters, partial dividers.
 
     def test_exit_take_releases_held_table_rows(self) -> None:
         self.step(ev("message.start"))
@@ -205,22 +207,6 @@ class TableStreamingTests(unittest.TestCase):
             self.step(ev("message.delta", text=f"| X | Y |\n{tail}"))
             shown.append(any("─" in row for row in self.live()))
         self.assertEqual(shown, sorted(shown))
-
-    def test_indented_overwide_table_stays_plain_text(self) -> None:
-        cell = "a" * 17
-        source = f"  | {cell} | {cell} |\n  |---|---|\n  | 1 | 2 |"
-        rows = self.render(source, width=37)  # the columns fit (36) but not behind the indent
-        self.assertFalse(any("─" in row for row in rows))
-
-    def test_overwide_table_rows_equal_the_plain_text_render(self) -> None:
-        wide = "a" * 30
-        lines = [f"| {wide} | **b** |", "|---|---|", "| 1 | 2 |"]
-        plain = []
-        for line in lines:
-            rows, _state = render_lines([line], MarkdownState(), 30, THEME)
-            plain.extend(rows)
-        rows, _state = render_lines(lines, MarkdownState(), 30, THEME)
-        self.assertEqual(rows, plain)
 
 
     # (f) A table taller than the live region is released as it grows.
