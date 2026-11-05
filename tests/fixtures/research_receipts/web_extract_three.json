@@ -1,0 +1,22 @@
+{
+  "results": [
+    {
+      "content": "BODY-SAMPLE-SENTINEL first page text.",
+      "error": null,
+      "title": "TITLE-SENTINEL one",
+      "url": "https://example.org/paper/one?utm=SECRET-QUERY-VALUE#intro"
+    },
+    {
+      "content": "BODY-SAMPLE-SENTINEL second page text.",
+      "error": null,
+      "title": "TITLE-SENTINEL two",
+      "url": "https://example.org/paper/two/"
+    },
+    {
+      "content": "BODY-SAMPLE-SENTINEL third page text.",
+      "error": null,
+      "title": "TITLE-SENTINEL three",
+      "url": "https://docs.example.com/three"
+    }
+  ]
+}

@@ -15,9 +15,8 @@ All notable changes will be documented here.
   turn, so an early caller note does not silence a later test note. When
   one message holds several commands, only the last one is looked at, so a
   note never names a line a later command of the same message already
-  fixed. A command that
-  changed no Python file, and every turn that used `patch` or `write_file`,
-  is left as before.
+  fixed. A command that changed no Python file, and every turn that used
+  `patch` or `write_file`, is left as before.
 
 - **`dag-ulw` is offered where a plan's follow-on is chosen.** On Hermes'
   own `/plan` turn, whose reply offers to carry the plan out, the model is
