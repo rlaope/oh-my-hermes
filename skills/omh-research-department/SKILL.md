@@ -52,8 +52,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If sources cannot be accessed, state the retrieval gap and use only observed local context.
-- If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
+- If one watch source cannot be read, retain covered sources' findings and the failed source's previous cutoff, mark its coverage unresolved, and hand back that source and uncovered window rather than reporting a quiet period.
+- If the synthesis tool cannot process collected findings, retain raw findings in source_inbox/v1, mark synthesis not_observed, and hand back research_department_plan/v1 with the synthesis-tool readiness gap.
+- If schedule creation has no cronjob_manage result or cron listing, retain the cadence and Scout, Analyst, and Briefer plan, mark job creation not_observed, and hand back the prepared job description for separately approved scheduling.
 
 ## Workflow Lane
 

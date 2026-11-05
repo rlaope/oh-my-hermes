@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import time
 import unittest
 from pathlib import Path
@@ -1197,6 +1198,99 @@ class ReviewLintTests(unittest.TestCase):
                 self.assertNotIn("no_review_node", record["lint"])
 
 
+class ReviewCategoryLintTests(unittest.TestCase):
+    """`review_not_review_category:<id>`: a `role=review` node routed off the `review` category. Advice only.
+
+    Mutation: name it for a build or verify node on `unspecified-high`, for a review node on `review`, or let it
+    refuse the define or move the run's goal verdict.
+    """
+
+    def test_a_review_node_off_the_review_category_is_linted_and_the_run_still_verifies(self) -> None:
+        with homes():
+            result = call(action="define", run="feat", nodes=[
+                node("api", category="unspecified-high", scope=("src/api.py",)),
+                node("diff", category="unspecified-high", label="Code review", depends_on=("api",), role="review"),
+                node("check", depends_on=("api", "diff"), role="verify"),
+            ])
+        self.assertEqual(result["status"], "ok", result)
+        self.assertEqual(result["lint"], ["review_not_review_category:diff"])
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("src/api.py",)),
+            node("diff", category="unspecified-high", depends_on=("api",), role="review"),
+            node("check", depends_on=("api", "diff"), role="verify"),
+        ], time.time())
+        for node_id in ("api", "diff", "check"):
+            settled(record, node_id, "accepted")
+        self.assertEqual(finished(record), ("done", "verified", []))
+
+    def test_no_finding_for_build_or_verify_nodes_on_a_high_category_or_a_review_node_on_review(self) -> None:
+        cases = {
+            "build on unspecified-high": [node("api", category="unspecified-high", scope=("src/api.py",)),
+                                          node("diff", category="review", depends_on=("api",), role="review"),
+                                          node("check", depends_on=("api", "diff"), role="verify")],
+            "judging verify on unspecified-high": [
+                node("api", scope=("src/api.py",)),
+                node("diff", category="review", depends_on=("api",), role="review"),
+                node("check", category="unspecified-high", label="Independent verification",
+                     depends_on=("api", "diff"), role="verify")],
+            "review on review": [node("api", scope=("src/api.py",)),
+                                 node("diff", category="review", label="Code review", depends_on=("api",),
+                                      role="review"),
+                                 node("check", depends_on=("api", "diff"), role="verify")],
+        }
+        for name, definitions in cases.items():
+            with self.subTest(case=name):
+                record = dag_run.new_record(PARENT, "feat", "", "", definitions, time.time())
+                self.assertEqual(record["lint"], [])
+
+    def test_a_review_only_guessed_from_a_label_or_a_stored_node_is_not_linted(self) -> None:
+        """Only a declared `role=review` is asked to move: a role-less node whose label reads like a review runs as a
+        build node, and a node stored before nodes carried a role (read through `guessed_role` on repair and extend)
+        was never declared one."""
+        with homes():
+            result = call(action="define", run="feat", nodes=[
+                node("fix", category="unspecified-high", label="Address review findings", scope=("src/api.py",)),
+                node("check", depends_on=("fix",), role="verify"),
+            ])
+        self.assertEqual(result["status"], "ok", result)
+        self.assertNotIn("review_not_review_category:fix", result["lint"])
+        legacy = stored(node("diff", category="unspecified-high", label="Code review"))
+        self.assertEqual(dag_run.node_role(legacy), "review")
+        self.assertFalse(any(finding.startswith("review_not_review_category:") for finding in dag_run.lint([legacy])))
+
+    def test_a_model_map_backend_with_no_review_option_drops_the_finding_from_the_reply(self) -> None:
+        """Mutation: keep the finding when `review` has no option, or drop it when `review` has one."""
+        def options(*rows: tuple[str, str, str]) -> str:
+            lines = ["delegation:", "  backend: model_map", "  backends:", "    model_map:",
+                     f"      default: {rows[-1][0]}", "      options:"]
+            for name, model, effort in rows:
+                lines += [f"        - name: {name}", f"          model: {model}", f"          reasoning_effort: {effort}"]
+            return "\n".join(lines) + "\n"
+
+        unserved = options(("sol", "openai/gpt-6.1-sol", "medium"), ("opus", "claude-opus-5-5", "medium"),
+                           ("flash", "glm-5.3-flash", "low"))
+        served = options(("sol", "openai/gpt-6.1-sol", "medium"), ("sol-x", "openai/gpt-6.1-sol", "xhigh"),
+                         ("flash", "glm-5.3-flash", "low"))
+        definitions = [node("api", scope=("src/api.py",)),
+                       node("diff", category="unspecified-high", depends_on=("api",), role="review"),
+                       node("check", depends_on=("api", "diff"), role="verify")]
+        for name, config, shown in (("review unserved", unserved, False), ("review served", served, True)):
+            with self.subTest(case=name), homes() as home:
+                slots_table(home)
+                (home.hermes / "config.yaml").write_text(config, encoding="utf-8")
+                result = call(action="define", run="feat", nodes=definitions)
+                self.assertEqual(result["status"], "ok", result)
+                self.assertEqual("review_not_review_category:diff" in result["lint"], shown, result["lint"])
+                self.assertIn("review_not_review_category:diff", record_of(home)["lint"])
+
+    def test_a_run_with_no_review_node_keeps_only_no_review_node(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", category="unspecified-high", scope=("src/api.py",)),
+            node("check", category="unspecified-high", depends_on=("api",), role="verify"),
+        ], time.time())
+        self.assertEqual(record["lint"], ["no_review_node"])
+
+
 class GoalVerdictTests(unittest.TestCase):
     def test_a_run_with_no_verify_node_is_done_and_unverified(self) -> None:
         record = dag_run.new_record(PARENT, "feat", "", "", [
@@ -1485,6 +1579,179 @@ class GoalVerdictTests(unittest.TestCase):
         self.assertFalse(open_graph["dag_open"])
         self.assertNotIn("dag_verdict", open_graph)
         self.assertEqual(done_graph["dag_verdict"], "verified")
+
+
+ATTRIBUTION = "In the handoff, name for each failing check the producer whose declared write_scope holds its failing path"
+LEFTOVERS = "The failed attempt's edits may still be on disk: if this is a git checkout, inspect `git status --short --"
+EARLIER = "Files in your SCOPE may already carry earlier nodes' edits: if this is a git checkout, inspect `git status"
+CLOSE = "` and `git diff HEAD` on the same paths"
+
+
+def line_with(context: str, start: str) -> str:
+    return next(line for line in context.splitlines() if line.startswith(start))
+
+
+def verify_context(home, nodes: list[dict]) -> str:
+    record = dag_run.new_record(PARENT, "feat", "Feature", "", nodes, time.time())
+    return dag_run.task_for(record, record["nodes"][-1], home.omh, dag_run.derive(record, [], time.time()))["context"]
+
+
+class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
+    """Worker guidance only: these pin the generated instruction, not live compliance."""
+
+    def test_verify_task_maps_each_upstream_producer_to_its_declared_scope(self) -> None:
+        with homes() as home:
+            context = verify_context(home, [
+                node("api", scope=("src/api.py",)), node("ui", scope=("src/ui/", "src/ui.py")),
+                node("docs-probe", role="baseline"), node("elsewhere", scope=("other.py",)),
+                node("verify", role="verify", depends_on=("api", "ui", "docs-probe")),
+            ])
+        line = line_with(context, ATTRIBUTION)
+        self.assertIn("or `unattributed`: by declared scope, not proven cause.", line)
+        self.assertTrue(line.endswith("Scopes: api: src/api.py; ui: src/ui.py, src/ui/"), line)
+        self.assertNotIn("elsewhere", line)
+        self.assertLess(context.index(ATTRIBUTION), context.index("Stay inside your SCOPE"))
+
+    def test_a_producer_behind_another_verify_node_is_still_upstream(self) -> None:
+        with homes() as home:
+            context = verify_context(home, [
+                node("api", scope=("src/api.py",)), node("mid", role="verify", depends_on=("api",)),
+                node("verify", role="verify", depends_on=("mid",)),
+            ])
+        self.assertTrue(line_with(context, ATTRIBUTION).endswith("Scopes: api: src/api.py"))
+
+    def test_the_scope_map_is_cut_on_whole_paths_and_producers(self) -> None:
+        with homes() as home:
+            long_scope = tuple(f"src/{'x' * 150}-{entry}.py" for entry in range(16))
+            context = verify_context(home, [
+                *[node(f"p{index}", scope=long_scope if index == 0 else (f"src/p{index}.py",)) for index in range(8)],
+                node("verify", role="verify", depends_on=tuple(f"p{index}" for index in range(8))),
+            ])
+        scopes = line_with(context, ATTRIBUTION).split("Scopes: ", 1)[1]
+        first, *rest = scopes.split("; ")
+        paths = first.removeprefix("p0: ").split(" (+", 1)[0].split(", ")
+        self.assertTrue(all(path in long_scope for path in paths), paths)
+        self.assertTrue(first.endswith(f" (+{16 - len(paths)} more paths)"), first)
+        self.assertLessEqual(len(first.split(" (+", 1)[0]), dag_run.SCOPE_MAP_CHARS)
+        self.assertRegex(rest[-1], r"^\(\+\d+ more producers\)$")
+        self.assertLessEqual(len("; ".join([first, *rest[:-1]])), dag_run.SCOPE_MAP_CHARS)
+
+    def test_a_verify_node_with_no_producer_upstream_gets_no_map(self) -> None:
+        with homes() as home:
+            context = verify_context(home, [node("probe", role="baseline"),
+                                            node("verify", role="verify", depends_on=("probe",))])
+        self.assertNotIn(ATTRIBUTION, context)
+        self.assertNotIn("Scopes:", context)
+
+    def test_an_upstream_producers_repair_is_in_the_downstream_verify_map(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node("api", scope=("a.py",)),
+                                                     node("verify", role="verify", depends_on=("api",))])
+            call(action="settle", run="feat", node="api", outcome="failed", reason="red")
+            call(action="repair", run="feat", node="api", nodes=[node("api-fix", scope=("b.py",))])
+            handoff(home, "feat", "api-fix")
+            ready = call(action="settle", run="feat", node="api-fix", outcome="accepted")
+        line = line_with(calls_by_node(ready)["verify"]["context"], ATTRIBUTION)
+        self.assertTrue(line.endswith("Scopes: api: a.py; api-fix: b.py"), line)
+
+    def test_a_rerun_verify_maps_its_own_repair_which_is_told_its_scope_may_carry_earlier_edits(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node("api", scope=("a.py",)),
+                                                     node("verify", role="verify", depends_on=("api",))])
+            handoff(home, "feat", "api")
+            call(action="settle", run="feat", node="api", outcome="accepted")
+            call(action="settle", run="feat", node="verify", outcome="failed", reason="2 tests red")
+            repaired = call(action="repair", run="feat", node="verify", nodes=[node("fix", scope=("b c.py",))])
+            fix_context = calls_by_node(repaired)["fix"]["context"]
+            handoff(home, "feat", "fix")
+            rerun = calls_by_node(call(action="settle", run="feat", node="fix", outcome="accepted"))["verify"]
+        # The failed verify node declared no scope: the repair is pointed at its own, worded for earlier nodes' edits.
+        self.assertIn(EARLIER + " --short -- 'b c.py'" + CLOSE + " before editing; keep what is right, undo what is "
+                      "wrong in your SCOPE.", fix_context)
+        self.assertNotIn("The failed attempt's edits", fix_context)
+        self.assertTrue(line_with(rerun["context"], ATTRIBUTION).endswith("Scopes: api: a.py; fix: b c.py"))
+        self.assertNotIn("may still be on disk", rerun["context"])
+        self.assertNotIn("may already carry", rerun["context"])
+
+    def test_cycle_one_and_the_replan_cycle_both_carry_the_leftovers_line(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            original = call(action="define", run="feat", nodes=[node("api", scope=("src/api.py",))])
+            call(action="settle", run="feat", node="api", outcome="failed", reason="tests red")
+            first = call(action="repair", run="feat", node="api", nodes=[node("fix", scope=("src/fix.py",))])
+            call(action="settle", run="feat", node="fix", outcome="failed", reason="still red")
+            last = call(action="repair", run="feat", node="fix", nodes=[node("again", scope=("src/api.py",))])
+        self.assertNotIn("git status", calls_by_node(original)["api"]["context"])
+        first_context = calls_by_node(first)["fix"]["context"]
+        self.assertIn(LEFTOVERS + " src/api.py" + CLOSE + " (or the files its handoff reported) before editing; "
+                      "keep what is right, undo what is wrong in your SCOPE.", first_context)
+        last_context = calls_by_node(last)["again"]["context"]
+        self.assertIn(LEFTOVERS + " src/api.py src/fix.py" + CLOSE, last_context)
+        # After the re-plan block, which keeps its own bound up to the handoff line.
+        self.assertLess(last_context.index("Handoff:"), last_context.index(LEFTOVERS))
+        self.assertLess(last_context.index(LEFTOVERS), last_context.index("Stay inside your SCOPE"))
+
+    def test_a_scopeless_node_in_a_repair_group_gets_no_leftovers_line(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node("api", scope=("src/api.py",))])
+            call(action="settle", run="feat", node="api", outcome="failed", reason="tests red")
+            call(action="repair", run="feat", node="api", nodes=[
+                node("fix", scope=("src/api.py",)), node("recheck", role="verify", depends_on=("fix",))])
+            handoff(home, "feat", "fix")
+            ready = call(action="settle", run="feat", node="fix", outcome="accepted")
+        recheck = calls_by_node(ready)["recheck"]["context"]
+        self.assertIn(ATTRIBUTION, recheck)
+        self.assertNotIn("git status", recheck)
+        self.assertNotIn("git diff", recheck)
+
+    def test_the_leftover_paths_are_bounded_and_never_empty(self) -> None:
+        with homes() as home:
+            for width, shown in ((120, 2), (190, 1)):
+                with self.subTest(width=width):
+                    record = dag_run.new_record(PARENT, "feat", "Feature", "", [
+                        node("api", scope=tuple(f"src/{'y' * width}-{entry:02}.py" for entry in range(16)))],
+                        time.time())
+                    record["nodes"].append({**record["nodes"][0], "id": "fix", "repairs": "api", "cycle": 1,
+                                            "origin": "repair:api", "attempts": []})
+                    record["repairs"] = {"api": [["fix"]]}
+                    context = dag_run.task_for(record, record["nodes"][-1], home.omh,
+                                               dag_run.derive(record, [], time.time()))["context"]
+                    line = line_with(context, LEFTOVERS)
+                    paths = line.split("`", 2)[1].removeprefix("git status --short -- ").split(" ")
+                    self.assertEqual(len(paths), shown)
+                    self.assertLessEqual(len(" ".join(paths)), dag_run.LEFTOVER_PATHS_CHARS)
+                    self.assertIn(f"` (+{16 - shown} more paths) and `git diff HEAD` on the same paths", line)
+            # A path whose quoting alone passes the bound is still named: the command never runs on the whole tree.
+            record = dag_run.new_record(PARENT, "feat", "Feature", "", [node("api", scope=("'" * 100,))], time.time())
+            record["nodes"].append({**record["nodes"][0], "id": "fix", "repairs": "api", "cycle": 1,
+                                    "origin": "repair:api", "attempts": []})
+            record["repairs"] = {"api": [["fix"]]}
+            context = dag_run.task_for(record, record["nodes"][-1], home.omh,
+                                       dag_run.derive(record, [], time.time()))["context"]
+        command = line_with(context, LEFTOVERS).split("`", 2)[1]
+        self.assertEqual(command, "git status --short -- " + shlex.quote("'" * 100))
+
+    def test_a_node_that_neither_verifies_nor_repairs_reads_exactly_as_before(self) -> None:
+        with homes() as home:
+            record = dag_run.new_record(PARENT, "feat", "Feature", "", [
+                node("api", scope=("src/api.py",)), node("ui", depends_on=("api",), scope=("src/ui.py",)),
+                node("verify", role="verify", depends_on=("ui",)),
+            ], time.time())
+            derived = dag_run.derive(record, [], time.time())
+            context = dag_run.task_for(record, record["nodes"][1], home.omh, derived)["context"]
+            handoff_path = dag_run.node_handoff(record, home.omh, "ui")
+            read_path = dag_run.node_handoff(record, home.omh, "api")
+        self.assertEqual(context, "\n".join([
+            PROMPT, "",
+            f"Handoff: before you stop, write your report to {handoff_path}: what you did, the files you changed, "
+            "what VERIFY showed, and anything still open. The parent reads that file and your final message.",
+            f"Read first: {read_path}. A missing file means that part did not finish: stop and say so.",
+            "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
+            "say plainly that you are blocked and why; do not report blocked work as done.",
+        ]))
 
 
 if __name__ == "__main__":

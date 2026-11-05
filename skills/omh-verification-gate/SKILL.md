@@ -49,8 +49,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If the expected behavior is unclear, route back to plan before running adversarial checks.
-- If verification fails, return to fix or research with the failed signal instead of advancing.
+- If a required check fails with an unknown origin, keep the other fresh results, mark the claim unresolved on HOLD, and hand back the same check rerun at the merge base as the missing evidence.
+- If a fix test has only a fresh green result, retain that result within its scope, mark the claim unresolved on HOLD with regression_witness_missing, and hand back the required pre-fix red witness and its source.
+- If a declared generated path has no known regeneration command, retain verification_matrix/v1, mark generated-output verification unresolved, and hand back generated_artifact_provenance/v1 with the command gap.
 
 ## Workflow Lane
 

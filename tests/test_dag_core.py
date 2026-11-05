@@ -86,6 +86,48 @@ class SharedScopeTests(unittest.TestCase):
             [("a", "b", ["y.py"], True), ("a", "c", ["y.py"], False), ("b", "c", ["y.py"], True)],
         )
 
+    def test_as_written_a_directory_and_a_file_under_it_do_not_meet(self) -> None:
+        """The fanout contract still compares as written: its frozen boundary notes stay the bytes they were."""
+        self.assertEqual(dag_core.shared_scope_pairs([("a", ["src/"]), ("b", ["src/x.py"])], {}), [])
+
+    def test_as_paths_entries_written_differently_meet(self) -> None:
+        """Mutation: compare as written, as a raw string prefix, without the leading `/`, the glob match or the
+        `[` escape; a row then reads the other way."""
+        meeting = (
+            ("src/", "src/x.py"), ("src", "src/x.py"), ("src/x.py", "./src/x.py"), ("src//x.py", "src/x.py"),
+            ("src/x.py/", "src/x.py"), ("src/*.py", "src/x.py"), ("src/*.py", "src/lib/y.py"),
+            ("tests/test_*.py", "tests/test_b.py"), ("*.md", "docs/a.md"), (".", "a.py"), ("SRC/X.py", "src/x.py"),
+            ("src/a?.py", "src/a1.py"), ("src\\x.py", "src/x.py"), ("src/../lib/x.py", "lib/x.py"),
+            ("/src/x.py", "/src/x.py"), ("app/[slug]/*.tsx", "app/[slug]/page.tsx"),
+            # A glob beside a directory or another glob meets by its directory: a name with no suffix may be one.
+            ("src/*.py", "src/lib"), ("src/*.py", "src/"), ("src/*.py", "src/*.md"), ("*.md", "src/"),
+            ("*.md", "docs/v1.2/"),
+            # `**/` matches zero directories too.
+            ("src/**/*.py", "src/x.py"), ("**/*.md", "README.md"), ("tests/**/test_*.py", "tests/test_x.py"),
+            ("docs/**/*.md", "docs/a.md"), ("**/*.py", "x.py"), ("src/**/*.py", "src/a/b/x.py"),
+        )
+        apart = (
+            ("src/a", "src/ab"), ("docs/x.md", "docs/xy.md"), ("src/*.py", "lib/x.py"), ("src/a/", "src/ab/c.py"),
+            ("app/[slug]/page.tsx", "app/about/page.tsx"), ("/src/x.py", "lib/x.py"), ("/src/x.py", "src/x.py"),
+            ("*.md", "src/x.py"), ("src/*.py", "src/x.md"), ("tests/test_a*.py", "tests/test_b.py"),
+        )
+        for first, second in meeting:
+            with self.subTest(first=first, second=second):
+                self.assertEqual(dag_core.shared_scope_pairs([("a", [first]), ("b", [second])], {}, as_paths=True),
+                                 [("a", "b", sorted({first, second}), False)])
+        for first, second in apart:
+            with self.subTest(first=first, second=second):
+                self.assertEqual(dag_core.shared_scope_pairs([("a", [first]), ("b", [second])], {}, as_paths=True), [])
+
+    def test_as_paths_names_each_meeting_entry_as_written_and_keeps_the_direct_edge_rule(self) -> None:
+        scopes = [("a", ["src/", "README.md"]), ("b", ["./src/x.py", "src/y.py", "docs/b.md"]), ("c", ["src/x.py"])]
+        parents = {"b": ["a"], "c": ["b"]}
+        self.assertEqual(
+            dag_core.shared_scope_pairs(scopes, parents, as_paths=True),
+            [("a", "b", ["./src/x.py", "src/", "src/y.py"], True), ("a", "c", ["src/", "src/x.py"], False),
+             ("b", "c", ["./src/x.py", "src/x.py"], True)],
+        )
+
 
 class CallerTests(unittest.TestCase):
     """Each caller decides through the core and keeps its own refusal."""
@@ -109,6 +151,9 @@ class CallerTests(unittest.TestCase):
             [{"units": ["a", "b"], "shared_files": ["x.py"],
               "resolution": "ordered by depends_on edge; merge strictly in merge_order"}],
         )
+        # The fanout contract compares file scopes as written: a directory beside a file under it is no overlap.
+        self.assertEqual(detect_boundary_overlaps([{"unit_id": "a", "file_scope": ["src/"]},
+                                                   {"unit_id": "b", "file_scope": ["src/x.py"]}]), [])
         with self.assertRaisesRegex(FanoutContractError, r"^depends_on contains a cycle among units: a, b$"):
             merge_order([{"unit_id": "a", "depends_on": ["b"]}, {"unit_id": "b", "depends_on": ["a"]}])
         with self.assertRaisesRegex(FanoutContractError, r"^units a and b share files \['x.py'\] without a depends_on"):

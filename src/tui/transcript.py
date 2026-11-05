@@ -162,6 +162,8 @@ INTERRUPTED_NOTICE = "Interrupted."
 # An interrupted turn the person did not stop (`Transcript.hermes_interrupted`): Hermes ended it itself, as when the
 # session's lease was lost (Hermes #142161), and the person may want it to go on.
 HERMES_INTERRUPTED_NOTICE = "Hermes interrupted this turn; send `continue` to go on."
+# The same end when the TUI sends that `continue` itself after a short wait (`App._arm_auto_continue`).
+HERMES_RESUMING_NOTICE = "Hermes interrupted this turn; sending `continue` in {seconds} s · Esc cancels"
 FAILED_NOTICE = "The turn ended with an error."
 # The first row a full redraw prints when `retake_tail` left the session's earlier blocks out; once the cap
 # below has dropped blocks, /history no longer holds them all, and the row says how many it does.
@@ -659,7 +661,26 @@ def _args_summary(payload: dict[str, Any]) -> str:
     return _GOAL_MARKERS.sub("", summary).strip() if as_text(payload.get("name")) == "delegate_task" else summary
 
 
+def _clarify_summary(payload: dict[str, Any]) -> str:
+    """A clarify call's row: how many choices it offers (`3 choices`), or how many questions when it asks several,
+    since the picker under it shows the question itself; "" when its arguments say neither, and the row then
+    reads as any tool's (`_call_summary`)."""
+    args = payload.get("args")
+    questions = args.get("questions") if isinstance(args, dict) else None
+    if not isinstance(questions, list) or not questions or not all(isinstance(q, dict) for q in questions):
+        return ""
+    if len(questions) > 1:
+        return f"{len(questions)} questions"
+    choices = questions[0].get("choices")
+    count = sum(1 for choice in choices if isinstance(choice, str)) if isinstance(choices, list) else 0
+    return f"{count} choice{'' if count == 1 else 's'}" if count else ""
+
+
 def _call_summary(payload: dict[str, Any]) -> str:
+    if as_text(payload.get("name")) == CLARIFY_TOOL:
+        asked = _clarify_summary(payload)
+        if asked:
+            return asked
     context = _first_line(as_text(payload.get("context")))
     if context and as_text(payload.get("name")) in BRIDGE_TOOLS:
         return context.replace(LABEL_SEPARATOR, ": ", 1)  # the transcript's own field separator: `· 1 tool` is a count
@@ -1383,6 +1404,8 @@ class Transcript:
         # The app says, before each `message.complete`, whether it did not ask for the stop an `interrupted` status
         # reports (`App.interrupting`): then Hermes stopped the turn, and the notice says so.
         self.hermes_interrupted = False
+        # Whether the app sends `continue` for such an end itself, and after how many seconds (0: it does not).
+        self.hermes_resuming = 0.0
         self.details_expanded = False
         self._clock = clock
         self._waits: list[tuple[float, float]] = []  # questions' waits on the person that ended: (began, ended)
@@ -1851,8 +1874,13 @@ class Transcript:
             self._append(AssistantBlock(text))
         self._close_live()
         if status == "interrupted":
-            self._append(NoticeBlock(HERMES_INTERRUPTED_NOTICE if self.hermes_interrupted else INTERRUPTED_NOTICE,
-                                     NOTICE_WARN))
+            if not self.hermes_interrupted:
+                said = INTERRUPTED_NOTICE
+            elif self.hermes_resuming:
+                said = HERMES_RESUMING_NOTICE.format(seconds=f"{self.hermes_resuming:g}")
+            else:
+                said = HERMES_INTERRUPTED_NOTICE
+            self._append(NoticeBlock(said, NOTICE_WARN))
         if status == "error":
             self._append(NoticeBlock(error.strip() or FAILED_NOTICE, NOTICE_ERROR))
         warning = as_text(payload.get("warning")).strip()

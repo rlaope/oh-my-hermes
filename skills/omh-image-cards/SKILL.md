@@ -49,8 +49,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.
-- If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.
+- If image_generation_capability/v1 is unknown or prompt_only, retain visual_prompt_card/v1, mark generation not_observed, and hand back image_generation_setup/v1 with the question of which image tool to use.
+- If an edit lacks the supplied image reference or preserve/remove constraints, retain only the supplied edit intent, mark transformation unresolved, and hand back the missing inputs for the image transformation brief.
+- If visual_generation_receipt/v1 reports a failed or partial attempt, retain visual_prompt_card/v1 and the receipt's failure stage, mark generation not_observed, and hand back the failed attempt without claiming an image.
 
 ## Workflow Lane
 

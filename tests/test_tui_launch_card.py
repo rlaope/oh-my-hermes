@@ -106,7 +106,9 @@ class Launched:
         self.client = StartClient()
         self.client.profile = profile
         self.client.skills = skills
-        self.app = App(ScriptedTerminal(rows, cols), self.client, {"OMH_HOME": str(self.home), **(env or {})},
+        # OMH_TUI_MOUSE=0: reports only while the /theme picker takes clicks (`tests/test_tui_main_mouse.py` has the rest).
+        self.app = App(ScriptedTerminal(rows, cols), self.client,
+                       {"OMH_HOME": str(self.home), "OMH_TUI_MOUSE": "0", **(env or {})},
                        poller=FakePoller())  # type: ignore[arg-type]
         self.app.startup()  # as `_run` starts it: the session, then the background, then the cleared screen
         self.app.adopt_background("#0E151E", {})
