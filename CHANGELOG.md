@@ -4,43 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **A bot profile that fails its refresh no longer rolls `omh update` back,
-  and a pending restore no longer blocks every later update.** On 2026-11-04
-  four bench profiles whose `plugins/omh` links pointed at deleted worktrees
-  made the re-entered update exit 1. The staged update rolled back, the
-  restore failed on the same profiles, and from then on every `omh update`
-  only retried that restore and staged nothing, while the report read "the
-  known-good generation remains active". Now an update whose only failures
-  are bot profiles exits `3`: the staged update keeps the activated
-  generation and names the profiles to repair. A run that finishes a pending
-  restore goes on to stage the update it was asked for. A failed restore
-  leads its report with "could not restore the previous generation: recovery
-  is required" and says no update installs until it succeeds. A rollback
-  names the generation it restored, with its commit. `omh doctor` reports an
-  open marker as `staged_update_recovery`. A `plugins/omh` link whose
-  target is gone is now replaced with the released bundle without `--force`,
-  and the update prints a `Repaired …` line naming where it pointed; a link
-  to an existing tree OMH did not write still needs `--force`.
-
-- **`omh update` names the commit it moved between, and `omh --version` names
-  the commit it runs.** A generation built from one of this repository's
-  GitHub archives (the installer's `main.zip`, and tag or commit archives)
-  now knows its commit: `src/omh/_archive_commit.txt` is marked
-  `export-subst`, so `git archive` writes the commit into it, and the ref
-  comes from pip's PEP 610 record. `omh --version` prints
-  `omh 4.0.6 (main@1a2b3c4d)`. An installer-managed update ends with
-  `oh-my-hermes 4.0.6 main@1a2b3c4d → main@5e6f7a8b`, or `already at
-  main@5e6f7a8b` when `main` has not moved, even when the release version did
-  not change; release wheels still name versions only. `omh update --json`
-  carries the same facts as `identity_change`. EN, KO, JA and ZH rows. No new
-  network call: the commit is read from the archive pip already downloads.
-- **`--channel main` names the channel that tracks `main`.** It is another
-  spelling of `--channel preview`, which a plain installer-managed
-  `omh update` already uses. The re-entry into a restored, older generation
-  spells it `preview`. npm, Bun and Homebrew installs now refuse
-  `--channel preview` instead of updating to a release and recording it as a
-  `main` build.
-
 - **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
   on.** With that setting each delegated child works in a git worktree of its
   own, made from the parent's last commit, so a dependent node and the verify
@@ -169,6 +132,41 @@ All notable changes will be documented here.
   Procedure steps name what survives each failure, Recovery Notes cover each
   skill's own blockers, and catalog checks keep both in place. The idea comes
   from PortSwigger Burp AT research skills.
+- **A bot profile that fails its refresh no longer rolls `omh update` back,
+  and a pending restore no longer blocks every later update.** On 2026-11-04
+  four bench profiles whose `plugins/omh` links pointed at deleted worktrees
+  made the re-entered update exit 1. The staged update rolled back, the
+  restore failed on the same profiles, and from then on every `omh update`
+  only retried that restore and staged nothing, while the report read "the
+  known-good generation remains active". Now an update whose only failures
+  are bot profiles exits `3`: the staged update keeps the activated
+  generation and names the profiles to repair. A run that finishes a pending
+  restore goes on to stage the update it was asked for. A failed restore
+  leads its report with "could not restore the previous generation: recovery
+  is required" and says no update installs until it succeeds. A rollback
+  names the generation it restored, with its commit. `omh doctor` reports an
+  open marker as `staged_update_recovery`. A `plugins/omh` link whose
+  target is gone is now replaced with the released bundle without `--force`,
+  and the update prints a `Repaired …` line naming where it pointed; a link
+  to an existing tree OMH did not write still needs `--force`.
+- **`omh update` names the commit it moved between, and `omh --version` names
+  the commit it runs.** A generation built from one of this repository's
+  GitHub archives (the installer's `main.zip`, and tag or commit archives)
+  now knows its commit: `src/omh/_archive_commit.txt` is marked
+  `export-subst`, so `git archive` writes the commit into it, and the ref
+  comes from pip's PEP 610 record. `omh --version` prints
+  `omh 4.0.6 (main@1a2b3c4d)`. An installer-managed update ends with
+  `oh-my-hermes 4.0.6 main@1a2b3c4d → main@5e6f7a8b`, or `already at
+  main@5e6f7a8b` when `main` has not moved, even when the release version did
+  not change; release wheels still name versions only. `omh update --json`
+  carries the same facts as `identity_change`. EN, KO, JA and ZH rows. No new
+  network call: the commit is read from the archive pip already downloads.
+- **`--channel main` names the channel that tracks `main`.** It is another
+  spelling of `--channel preview`, which a plain installer-managed
+  `omh update` already uses. The re-entry into a restored, older generation
+  spells it `preview`. npm, Bun and Homebrew installs now refuse
+  `--channel preview` instead of updating to a release and recording it as a
+  `main` build.
 - **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
   the machine sleeps past the session's turn lease, Hermes stops the running
   turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
