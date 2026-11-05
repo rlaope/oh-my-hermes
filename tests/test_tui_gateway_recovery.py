@@ -152,9 +152,9 @@ class DroppedConnectionTests(unittest.TestCase):
         new = RespawnClient(resume={**SHARED_RESUMED, "running": True})
         app, old, _spawner, _now = crashing(spawner=Spawner(new))
         app.sid, app.shared_gateway = SID, True
-        crash(app, old, 69)
+        crash(app, old, 2)  # 69, a going-away close, is a restart: the reattach waits for it (ExternalRestartTests)
         self.assertIn(RESPAWN_NOTICE.format(
-            reason="The Hermes gateway exited (code 69)", session=STORED, attempt=1, limit=RESPAWN_LIMIT,
+            reason="The Hermes gateway exited (code 2)", session=STORED, attempt=1, limit=RESPAWN_LIMIT,
             window=RESPAWN_WINDOW_SECONDS), notices(app))
 
     def test_a_different_authority_epoch_is_a_gateway_that_started_again(self) -> None:

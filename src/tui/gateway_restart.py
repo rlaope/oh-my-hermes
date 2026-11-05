@@ -197,12 +197,8 @@ def read_impact(environ: Mapping[str, str], profile: str) -> RestartImpact:
     which the shared gateway keeps (only when it is the default profile or the root's record names this one)."""
     from .bot_board import read_gateway
 
-    hermes_home = environ.get("HERMES_HOME", "").strip()
-    if hermes_home:
-        current = Path(hermes_home)
-    elif environ.get("HOME"):
-        current = Path(environ["HOME"]) / ".hermes"
-    else:
+    current = _profile_home(environ)
+    if current is None:
         return RestartImpact(None, None)
     named = current.parent.name == "profiles"
     root = current.parent.parent if named else current
@@ -216,6 +212,38 @@ def read_impact(environ: Mapping[str, str], profile: str) -> RestartImpact:
     if named and current.name not in host.served:
         return RestartImpact(None, None)
     return RestartImpact(root, host, current.name if named else "", after_turn_seconds(root))
+
+
+def _profile_home(environ: Mapping[str, str]) -> Path | None:
+    """The Hermes home of the TUI's profile, as the launcher named it; None when nothing names one."""
+    hermes_home = environ.get("HERMES_HOME", "").strip()
+    if hermes_home:
+        return Path(hermes_home)
+    return Path(environ["HOME"]) / ".hermes" if environ.get("HOME") else None
+
+
+def read_record(environ: Mapping[str, str], profile: str) -> Gateway | None:
+    """The record of the gateway that serves this profile, live or not, as `read_impact` picks it: a live one
+    first; with none live, the newer of the profile's own record and the root's that names it (a stopped, restarting
+    or failed gateway leaves its last word there). None when there is no such record."""
+    from .bot_board import read_gateway
+
+    current = _profile_home(environ)
+    if current is None:
+        return None
+    named = current.parent.name == "profiles"
+    root = current.parent.parent if named else current
+    own = read_gateway(current) if named else None
+    if own is not None and own.live and not own.elsewhere:
+        return own
+    host = read_gateway(root)
+    if named and current.name not in host.served:
+        host = None
+    if host is not None and host.live and not host.elsewhere:
+        return host
+    kept = [record for record in (own, host)
+            if record is not None and not record.problem and not record.elsewhere and record.updated is not None]
+    return max(kept, key=lambda record: record.updated or 0.0, default=None)
 
 
 def after_turn_seconds(home: Path) -> float:
