@@ -80,6 +80,17 @@ from ..use_cases import (
 REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_ASSET_ROOT = "https://github.com/rlaope/oh-my-hermes/releases/download"
 RELEASE_CHANNELS = ("stable", "preview", "local")
+# `preview` is the channel that tracks branch `main`, so `--channel main` names
+# it in the words people use for it. Only the CLI flag reads the alias; every
+# record and URL keeps the canonical `preview`.
+RELEASE_CHANNEL_ALIASES = {"main": "preview"}
+
+
+def normalize_release_channel(value: str) -> str:
+    """The canonical channel for a `--channel` value (`main` -> `preview`)."""
+    return RELEASE_CHANNEL_ALIASES.get(value, value)
+
+
 # `.github/workflows/release.yml` refuses any tag that is not `vX.Y.Z` and
 # names the wheel it uploads after that version, so a stable version of this
 # shape has a predictable release-asset URL. Anything else does not, and falls

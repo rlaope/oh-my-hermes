@@ -106,6 +106,9 @@ packages = [
 "omh.wrapper" = "src/wrapper"
 
 [tool.setuptools.package-data]
+# `git archive` (and so every GitHub archive) writes the commit into this
+# file through `.gitattributes` export-subst; `omh --version` reads it.
+"omh" = ["_archive_commit.txt"]
 "omh.workflows.repro_audit" = ["data/contract.json"]
 # Closed optional companion data, not packages/imported production modules.
 "omh.skills" = [

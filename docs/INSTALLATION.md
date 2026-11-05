@@ -3570,6 +3570,7 @@ checkouts apart:
 ```text
 omh 2.0.1 (source 6da2a3ca, clean)
 omh 2.0.1 (editable 6da2a3ca, dirty)
+omh 4.0.6 (main@6da2a3ca)
 omh 2.0.1 (build identity unavailable: installed package, no stamped identity)
 ```
 
@@ -3587,14 +3588,24 @@ Read the fields with these boundaries in mind:
   environment inside somebody else's checkout therefore reports `unavailable`
   instead of borrowing that project's revision.
 - Only identity is serialized. No branch name, remote URL, diff, changed-file
-  list, or environment data appears in either output.
+  list, or environment data appears in either output. The one ref shown is the
+  published one an archive install was asked for (`main` or a release tag),
+  never a local branch.
 - Dirty state is `unknown`, never guessed, when the revision came from reading
   `.git` directly because no `git` binary was available.
-- Published OMH artifacts carry no stamped identity today, so a wheel, npm, or
-  Homebrew install reports `unavailable` with `no_stamped_identity`. That is
-  the explicit compatibility result: a packager that ships a
-  `build_identity_stamp/v1` `_build_identity.json` inside the package is read,
-  and an artifact without one is never given an invented revision.
+- A package built from one of this repository's GitHub archives (the
+  installer's `preview` channel fetches `main.zip`, and tag and commit
+  archives work the same) knows its commit: `src/omh/_archive_commit.txt` is
+  marked `export-subst` in `.gitattributes`, so `git archive`, which GitHub
+  uses to build archives, writes the archived commit into it. The ref comes
+  from the URL pip recorded in the package's PEP 610 `direct_url.json`:
+  `main` for the branch archive, the tag for a tag archive, none for a commit
+  archive. That gives `omh 4.0.6 (main@6da2a3ca)`.
+- Release wheels, npm, and Homebrew packages are built from a checkout, where
+  that file keeps its `$Format:%H$` placeholder, so they report `unavailable`
+  with `no_stamped_identity`. A packager that ships a
+  `build_identity_stamp/v1` `_build_identity.json` inside the package is read
+  first, and an artifact without either is never given an invented revision.
 - The block is diagnostic provenance only. It is not evidence that the named
   revision was tested, reviewed, passed CI, was published, or behaved
   correctly at runtime, and it never changes the doctor status or exit code.
@@ -4996,10 +5007,15 @@ installation; that creates a second independently managed `omh` command.
 
 Advanced operators using installer-managed commands can still pin or test a
 different command package with
-`omh update --channel stable --version <version>`. Package-manager installs
-reject `--version`, `--package-url`, and `--source-ref` rather than silently
-installing a different release; use that manager directly for an intentional
-CLI rollback. `omh update --channel local --from-skills-dir ./skills` refreshes
+`omh update --channel stable --version <version>`. A plain `omh update` on an
+installer-managed command tracks branch `main` (the `preview` channel), and
+`--channel main` is accepted as another name for `--channel preview`.
+Package-manager installs reject `--version`, `--package-url`, and
+`--source-ref` rather than silently installing a different release; use that
+manager directly for an intentional CLI rollback. They also refuse
+`--channel preview` (or `main`): the package carries one release wheel, so the
+manager can only install a release, and to track `main` you reinstall with the
+installer and `OMH_CHANNEL=preview`. `omh update --channel local --from-skills-dir ./skills` refreshes
 workflow content only and does not replace the command package, plugin bundle,
 or Hermes registration. These flags are for release validation, fixtures, or
 intentional rollback testing. Local modifications block updates unless
@@ -5060,6 +5076,27 @@ place. It runs as a transaction:
    the TUI itself runs on. On failure, attempt to
    move the pointer back and re-enter the previous generation; shared-resource
    restoration must succeed before recovery is considered complete.
+
+A successful update ends by naming what it moved between, read from the two
+generations' own files. A generation built from one of this repository's
+GitHub archives knows its commit (see [Build identity](#build-identity)), so an
+update between two `main` commits says so even when the release version did
+not move, and an update with nothing new on `main` says it is already there:
+
+```text
+OMH update complete: command and workflow pack activated together.
+  oh-my-hermes 4.0.6 main@1a2b3c4d → main@5e6f7a8b
+  oh-my-hermes 4.0.6: already at main@5e6f7a8b
+```
+
+The first update onto such a generation names only the old version, and a
+release wheel, built from a checkout, names versions only
+(`oh-my-hermes 4.0.5 → 4.0.6`). `omh update --json` carries the same facts as
+`identity_change` (`update_identity_change/v1`): `status` (`changed`,
+`unchanged`, `previous_unrecorded`, `version_changed`, `unrecorded`),
+`previous` and `current` (`version`, `ref`, `commit_sha`, empty when not
+recorded), and `version_changed`. No commit count is shown: counting needs a
+GitHub API call, which `omh update` does not make.
 
 The pointer makes the command/workflow-pack selection atomic, not all shared
 resource changes. Both things that consume the

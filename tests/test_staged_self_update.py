@@ -27,6 +27,9 @@ from omh.system.local_store import atomic_write_json, file_lock
 from omh.system.paths import OmhPaths
 
 
+MAIN_ARCHIVE_URL = "https://github.com/rlaope/oh-my-hermes/archive/refs/heads/main.zip"
+COMMIT_A = "a" * 40
+COMMIT_B = "b" * 40
 StrPath: TypeAlias = str | os.PathLike[str]
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 
@@ -1630,6 +1633,85 @@ class StagedSelfUpdateTests(unittest.TestCase):
         self.assertEqual(bare_status, 1)
         self.assertIn("stopped during staging", bare.getvalue())
         self.assertNotIn("reason:", bare.getvalue())
+
+    @staticmethod
+    def _install_package(venv: Path, *, version: str, commit: str, url: str = MAIN_ARCHIVE_URL) -> None:
+        """Lay down what pip leaves in a venv: the package, its dist-info and PEP 610 record."""
+        site = venv / "lib" / "python3.11" / "site-packages"
+        (site / "omh").mkdir(parents=True, exist_ok=True)
+        _ = (site / "omh" / "_archive_commit.txt").write_text(f"{commit}\n")
+        dist_info = site / f"oh_my_hermes-{version}.dist-info"
+        dist_info.mkdir(exist_ok=True)
+        _ = (dist_info / "direct_url.json").write_text(json.dumps({"url": url, "archive_info": {}}))
+
+    def _archive_runner(self, *, version: str, commit: str) -> Runner:
+        """The ordinary fake runner, whose pip step installs a GitHub `main` archive build."""
+        base = self._runner()
+
+        def run(
+            command: list[str],
+            *,
+            text: bool,
+            stdout: int | None,
+            stderr: int | None,
+            env: dict[str, str] | None,
+            timeout: float | None,
+        ) -> subprocess.CompletedProcess[str]:
+            if command[1:4] == ["-m", "pip", "install"]:
+                self._install_package(Path(command[0]).parents[1], version=version, commit=commit)
+            return base(command, text=True, stdout=stdout, stderr=stderr, env=env, timeout=timeout)
+
+        return run
+
+    def test_an_update_between_two_main_commits_names_both_commits(self):
+        cases = (
+            ("same version, new commit", "4.0.6", COMMIT_A, "4.0.6", COMMIT_B, "changed", False),
+            ("new version, new commit", "4.0.5", COMMIT_A, "4.0.6", COMMIT_B, "changed", True),
+            ("same commit", "4.0.6", COMMIT_B, "4.0.6", COMMIT_B, "unchanged", False),
+            ("previous built from a checkout", "4.0.5", "$Format:%H$", "4.0.6", COMMIT_B, "previous_unrecorded", True),
+            ("release wheels on both sides", "4.0.5", "$Format:%H$", "4.0.6", "$Format:%H$", "version_changed", True),
+            ("same release wheel", "4.0.6", "$Format:%H$", "4.0.6", "$Format:%H$", "unrecorded", False),
+        )
+        for label, old_version, old_commit, new_version, new_commit, status, version_changed in cases:
+            with self.subTest(label), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                legacy, args, plan = self._fixture(root, pointer=True)
+                self._install_package(legacy, version=old_version, commit=old_commit)
+
+                result = self._run(root, args, plan, self._archive_runner(version=new_version, commit=new_commit))
+
+                self.assertTrue(result["ok"])
+                change = result["identity_change"]
+                self.assertEqual(change["schema_version"], "update_identity_change/v1")
+                self.assertEqual(change["status"], status)
+                self.assertEqual(change["version_changed"], version_changed)
+                recorded = new_commit if new_commit != "$Format:%H$" else ""
+                self.assertEqual(change["current"], {"version": new_version, "ref": "main" if recorded else "", "commit_sha": recorded})
+                self.assertEqual(change["previous"]["version"], old_version)
+                self.assertEqual(change["previous"]["commit_sha"], old_commit if old_commit != "$Format:%H$" else "")
+                # The JSON result carries it, so `omh update --json` reports it too.
+                self.assertEqual(json.loads(json.dumps(result))["identity_change"], change)
+
+    def test_a_failed_update_claims_no_identity_change(self):
+        for failure in ("pip", "pack", "post"):
+            with self.subTest(failure), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                legacy, args, plan = self._fixture(root, pointer=True)
+                self._install_package(legacy, version="4.0.6", commit=COMMIT_A)
+                result = self._run(root, args, plan, self._runner(failure=failure))
+                self.assertFalse(result["ok"])
+                self.assertNotIn("identity_change", result)
+
+    def test_reentry_spells_the_main_alias_as_preview_for_an_older_generation(self):
+        for argv, expected in (
+            (["omh", "update", "--channel", "main"], ["update", "--channel", "preview", "--command-package-updated"]),
+            (["omh", "update", "--channel=main", "--json"], ["update", "--channel=preview", "--json", "--command-package-updated"]),
+            # Only the channel value is rewritten, never another argument that says main.
+            (["omh", "update", "--source-ref", "main"], ["update", "--source-ref", "main", "--command-package-updated"]),
+            (["omh", "update", "--recover-known-good"], ["update", "--command-package-updated"]),
+        ):
+            with self.subTest(argv=argv), patch.object(sys, "argv", argv):
+                self.assertEqual(self_update._reentry_argv(), expected)
 
     def test_reentry_judges_the_candidate_pack_by_its_own_manifest(self):
         # The home manifest describes the active generation's pack. Rendering

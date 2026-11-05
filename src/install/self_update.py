@@ -15,6 +15,7 @@ from typing import Any, Literal, NotRequired, Protocol, TypedDict
 
 try:
     from ..core.errors import OmhError
+    from ..maintenance.build_identity import read_archive_commit
     from ..maintenance.hermes_gateway import recorded_gateway_starts, refresh_skill_dir_caches
     from ..system.local_store import FileLockTimeout, file_lock
     from ..system.paths import managed_command_venv_dir, resolve_paths
@@ -23,6 +24,7 @@ try:
     from .self_update_state_validation import require_generation_path, same_existing_path
 except ImportError:  # pragma: no cover - direct-source installer smoke.
     from core.errors import OmhError
+    from maintenance.build_identity import read_archive_commit
     from maintenance.hermes_gateway import recorded_gateway_starts, refresh_skill_dir_caches
     from system.local_store import FileLockTimeout, file_lock
     from system.paths import managed_command_venv_dir, resolve_paths
@@ -31,6 +33,7 @@ except ImportError:  # pragma: no cover - direct-source installer smoke.
     from install.self_update_state_validation import require_generation_path, same_existing_path
 
 RESULT_SCHEMA_VERSION = "command_package_self_update/v1"
+IDENTITY_CHANGE_SCHEMA_VERSION = "update_identity_change/v1"
 REENTRY_TIMEOUT_SECONDS = 600.0
 class Runner(Protocol):
     """The complete subprocess contract used by a staged self-update."""
@@ -90,6 +93,21 @@ class SelfUpdateResult(TypedDict):
     recovery: RecoveryResult
     cleanup: CleanupResult
     hermes_skill_refresh: NotRequired[list[dict[str, str]]]
+    identity_change: NotRequired["IdentityChange"]
+
+
+class GenerationIdentity(TypedDict):
+    version: str
+    ref: str
+    commit_sha: str
+
+
+class IdentityChange(TypedDict):
+    schema_version: str
+    status: str
+    previous: GenerationIdentity
+    current: GenerationIdentity
+    version_changed: bool
 
 
 def _result(candidate: Path) -> SelfUpdateResult:
@@ -167,8 +185,58 @@ def _smoke(candidate: Path, expected_version: str, *, runner: Runner, platform: 
 
 
 def _reentry_argv() -> list[str]:
-    argv = [item for item in sys.argv[1:] if item != "--recover-known-good"]
+    argv: list[str] = []
+    for item in sys.argv[1:]:
+        if item == "--recover-known-good":
+            continue
+        # `--channel main` is an alias a restored, older generation may not know.
+        if item == "--channel=main" or (item == "main" and argv[-1:] == ["--channel"]):
+            item = "--channel=preview" if item.startswith("--") else "preview"
+        argv.append(item)
     return argv if "--command-package-updated" in argv else [*argv, "--command-package-updated"]
+
+
+def generation_identity(generation: Path) -> GenerationIdentity:
+    """The omh version, archive ref and archive commit a generation holds.
+
+    Read from files, not by running the generation: the dist-info directory
+    names the version, and the archive commit file plus pip's PEP 610 record
+    name the commit and ref (`maintenance.build_identity.read_archive_commit`).
+    Empty strings where a generation does not record one, such as a package
+    built from a checkout or the pre-generation legacy venv.
+    """
+    venv = generation / "venv"
+    for site in (*sorted(venv.glob("lib/python*/site-packages")), venv / "Lib" / "site-packages"):
+        package = site / "omh"
+        if not package.is_dir():
+            continue
+        dist_info = sorted(site.glob("oh_my_hermes-*.dist-info"))
+        version = dist_info[-1].name.removeprefix("oh_my_hermes-").removesuffix(".dist-info") if dist_info else ""
+        archive = read_archive_commit(package, version=version)
+        return {"version": version, "ref": archive["ref"] or "", "commit_sha": archive["commit_sha"] or ""}
+    return {"version": "", "ref": "", "commit_sha": ""}
+
+
+def identity_change(previous: GenerationIdentity, current: GenerationIdentity) -> IdentityChange:
+    """Classify what an activated update moved between.
+
+    `changed` / `unchanged` need both commits. `previous_unrecorded` is the
+    first update onto a generation that records its commit. Without a current
+    commit only the version can be compared: `version_changed` or `unrecorded`.
+    """
+    if current["commit_sha"] and previous["commit_sha"]:
+        status = "unchanged" if current["commit_sha"] == previous["commit_sha"] else "changed"
+    elif current["commit_sha"]:
+        status = "previous_unrecorded"
+    else:
+        status = "version_changed" if current["version"] != previous["version"] else "unrecorded"
+    return {
+        "schema_version": IDENTITY_CHANGE_SCHEMA_VERSION,
+        "status": status,
+        "previous": previous,
+        "current": current,
+        "version_changed": current["version"] != previous["version"],
+    }
 
 
 def _reenter(root: Path, generation: Path, args: Any, runner: Runner, platform: SelfUpdatePlatform, *, restoring: bool = False) -> tuple[bool, str]:
@@ -304,6 +372,8 @@ def _activate(root: Path, state: dict[str, Any], candidate: Path, args: Any, run
         _rollback_activation(root, state, candidate, previous, args, runner, platform, result, hermes_home=hermes_home)
         return result
     commit_activation(root, state, candidate)
+    # Read before garbage collection, which may delete the previous generation.
+    result["identity_change"] = identity_change(generation_identity(previous), generation_identity(candidate))
     collect_garbage(root, state, result, running_generation=_running_generation(root), gateway_starts=recorded_gateway_starts(hermes_home) if hermes_home is not None else ())
     save_state(root, state)
     result.update(ok=True, phase="cleanup")

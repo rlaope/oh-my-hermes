@@ -4,6 +4,25 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh update` names the commit it moved between, and `omh --version` names
+  the commit it runs.** A generation built from one of this repository's
+  GitHub archives (the installer's `main.zip`, and tag or commit archives)
+  now knows its commit: `src/omh/_archive_commit.txt` is marked
+  `export-subst`, so `git archive` writes the commit into it, and the ref
+  comes from pip's PEP 610 record. `omh --version` prints
+  `omh 4.0.6 (main@1a2b3c4d)`. An installer-managed update ends with
+  `oh-my-hermes 4.0.6 main@1a2b3c4d → main@5e6f7a8b`, or `already at
+  main@5e6f7a8b` when `main` has not moved, even when the release version did
+  not change; release wheels still name versions only. `omh update --json`
+  carries the same facts as `identity_change`. EN, KO, JA and ZH rows. No new
+  network call: the commit is read from the archive pip already downloads.
+- **`--channel main` names the channel that tracks `main`.** It is another
+  spelling of `--channel preview`, which a plain installer-managed
+  `omh update` already uses. The re-entry into a restored, older generation
+  spells it `preview`. npm, Bun and Homebrew installs now refuse
+  `--channel preview` instead of updating to a release and recording it as a
+  `main` build.
+
 - **In a console session a choice goes through Hermes' `clarify` picker, and
   the OMH TUI draws that picker the way Claude Code draws its question
   dialog.** On the first turn of an attended `cli`, `tui` or `desktop`

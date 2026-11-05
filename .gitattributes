@@ -56,3 +56,7 @@ docs/WORKFLOWS.md text eol=lf
 docs/ROLES.md text eol=lf
 src/plugin_bundle/omh/tools/capability_families.json text eol=lf
 examples/**/*.json text eol=lf
+
+# GitHub archives (the preview `main.zip`, tag and commit archives) substitute
+# the archived commit here, so a generation built from one knows its commit.
+src/omh/_archive_commit.txt export-subst

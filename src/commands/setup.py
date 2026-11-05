@@ -134,6 +134,7 @@ from ..release import (
     RELEASE_CHANNELS,
     RELEASE_WHEEL_VERSION_RE,
     ReleaseSelection,
+    normalize_release_channel,
     package_url_for,
     release_artifact_note,
     release_from_direct_url,
@@ -1478,6 +1479,14 @@ def _command_package_self_update_plan(args: argparse.Namespace) -> dict[str, obj
                 "package-manager installs accept the default published update only; "
                 "use the owning manager directly for an explicit version or package URL"
             )
+        if args.channel == "preview":
+            # The package ships one release wheel, so the manager can only
+            # reinstall a release; recording `preview` afterwards would claim
+            # a main build that was never installed.
+            raise OmhError(
+                f"{package_manager} installs follow published releases and cannot track main; "
+                "to track main, reinstall with the installer and OMH_CHANNEL=preview"
+            )
         if launcher is not None:
             manager_command = COMMAND_PACKAGE_EXECUTABLES[package_manager]
             manager_executable = shutil.which(manager_command)
@@ -1561,6 +1570,9 @@ def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, o
         _print_json(result)
     elif result.get("ok"):
         print("OMH update complete: command and workflow pack activated together.")
+        change = result.get("identity_change")
+        if isinstance(change, dict):
+            print(f"  {_identity_change_line(change, language=_resolve_language(args))}")
         kept = str((result.get("cleanup") or {}).get("reason") or "")
         if kept:
             print(f"  note: {kept}")
@@ -1572,6 +1584,36 @@ def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, o
             if line.startswith("warning: "):
                 print(f"  {line}")
     return 0 if result.get("ok") else 1
+
+
+def _identity_change_line(change: dict[str, Any], *, language: str) -> str:
+    """One line naming what the update moved between, e.g. `4.0.6 main@a -> main@b`.
+
+    The commit is the news when the release version did not move: a preview
+    update between two `main` commits used to read as nothing happening.
+    """
+    previous = change.get("previous") if isinstance(change.get("previous"), dict) else {}
+    current = change.get("current") if isinstance(change.get("current"), dict) else {}
+
+    def commit(identity: dict[str, Any]) -> str:
+        short = str(identity.get("commit_sha") or "")[:8]
+        ref = str(identity.get("ref") or "")
+        return f"{ref}@{short}" if ref and short else short
+
+    previous_version = str(previous.get("version") or "") or tr(language, "update_identity_not_recorded")
+    current_version = str(current.get("version") or "") or tr(language, "update_identity_not_recorded")
+    status = str(change.get("status") or "")
+    if status == "unchanged":
+        return tr(language, "update_identity_current", version=current_version, identity=commit(current))
+    if status == "changed" and previous_version == current_version:
+        return f"oh-my-hermes {current_version} {commit(previous)} → {commit(current)}"
+    if status == "changed":
+        return f"oh-my-hermes {previous_version} {commit(previous)} → {current_version} {commit(current)}"
+    if status == "previous_unrecorded":
+        return f"oh-my-hermes {previous_version} → {current_version} {commit(current)}"
+    if status == "version_changed":
+        return f"oh-my-hermes {previous_version} → {current_version}"
+    return tr(language, "update_identity_unrecorded", version=current_version)
 
 
 def _self_update_stop_lines(result: dict[str, Any]) -> list[str]:
@@ -6557,8 +6599,12 @@ def _add_common_install_options(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--channel",
         choices=RELEASE_CHANNELS,
+        type=normalize_release_channel,
         default=None,
-        help="Release channel metadata for this install/update; defaults to what the installed package records, else preview.",
+        help=(
+            "Release channel metadata for this install/update; defaults to what the installed package records, "
+            "else preview. `main` is an alias of preview, the channel that tracks branch main."
+        ),
     )
     p.add_argument("--version", default="", help=f"Stable release version such as {__version__} or v{__version__}.")
     p.add_argument("--package-url", default="", help="Explicit release archive URL for support and audit metadata.")
