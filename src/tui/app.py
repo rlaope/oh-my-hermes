@@ -198,6 +198,7 @@ from .model_picker import PICK as MODEL_PICK
 from .model_picker import ModelPicker, model_rows, typed_switch_value
 from . import dag_block
 from .dag_tree import TreeState
+from .turn_ends import TURN_DONE, TURN_INTERRUPTED, TURN_OPEN, TURN_STOPPED, read_turn_end, record_turn_end
 from .panels import (
     CATCH_MARK,
     HudPoller,
@@ -706,6 +707,17 @@ AUTO_CONTINUE_ASKED = "a question or picker is open"
 AUTO_CONTINUE_SENT = "you sent a line"
 AUTO_CONTINUE_LEFT = "the session changed"
 AUTO_CONTINUE_UNSENT = "it did not go out"
+# A session resumed (`omh --resume <id>`, `/resume`, the session picker) with work left goes on the same way: the row
+# says why, and after AUTO_CONTINUE_SECONDS, in which Esc cancels, the same `continue` goes (`_offer_resume_continue`).
+RESUME_CONTINUE_NOTICE = "Resuming: {why}; sending `continue` in {seconds} s · Esc cancels"
+RESUME_WHY_INTERRUPTED = "Hermes interrupted its last turn"
+RESUME_WHY_RUN = {  # `dag_open_run_nudge.RESUMABLE_REASONS`; {count} nodes of run {run}
+    "returned": "dag-ulw run {run} has {count} {nodes} back to settle",
+    "lost": "dag-ulw run {run} has {count} {nodes} a restart ended",
+    "parked_due": "dag-ulw run {run} has {count} parked {nodes} due",
+    "out_no_child": "dag-ulw run {run} has {count} {nodes} out with no child",
+    "ready_idle": "dag-ulw run {run} has {count} ready {nodes}",
+}
 RESPAWNED_WHY = "The Hermes gateway was restarted"
 # Gateway crash recovery, bounded as Hermes' own TUI bounds it (ui-tui `app/gatewayRecovery.ts`): at most
 # RESPAWN_LIMIT respawns in a sliding RESPAWN_WINDOW_SECONDS, each resuming the session that was open. Past that,
@@ -1662,6 +1674,22 @@ def attach_message(environ: Mapping[str, str]) -> str:
     )
 
 
+def waiting_dag_run(omh_home: str | None, hermes_home: str | None, session: str) -> tuple[str, str, list[str]] | None:
+    """The session's open dag-ulw run a turn would move with no node running (`dag_open_run_nudge.waiting_run`)."""
+    from ..plugin_bundle.omh.dag_open_run_nudge import waiting_run
+
+    if not omh_home or not hermes_home:
+        return None
+    return waiting_run(session_id=session, omh_home=omh_home, hermes_home=hermes_home)
+
+
+def resume_run_why(reason: str, run: str, nodes: Sequence[str]) -> str:
+    """What the resuming row says of a waiting run; "" for a reason a resume does not go on with."""
+    template = RESUME_WHY_RUN.get(reason)
+    count = len(nodes)
+    return template.format(run=run, count=count, nodes="node" if count == 1 else "nodes") if template else ""
+
+
 def write_active_session(path: str, stored_id: str, extra: Mapping[str, Any] | None = None) -> None:
     """Write `{"session_id": <stored id>}` (mode 0600) for the launcher's exit epilogue. Best effort.
 
@@ -1849,6 +1877,7 @@ class App(ModesMixin, AgentViewMixin):
         self.dag_ends: set[tuple[str, int]] = set()  # the dag-ulw run ends already printed (`dag_block.moment`)
         self.dag_end_due: dict[str, str] = {}  # run -> its end's title, printed when the turn ends (`_dag_moment`)
         self.read_dag_graph = dag_block.read_graph
+        self.read_waiting_run = waiting_dag_run
         self.composer = Composer()
         # Hermes' own input history: read once here, and every line the person sends appended (`history.py`).
         self.history_file = history_path(environ)
@@ -2179,6 +2208,8 @@ class App(ModesMixin, AgentViewMixin):
             self._draw_history(result.get("messages"))
         self._say_gateway_health()  # under a resumed session's history, where the launch's screen ends
         self._redeliver(result.get("open_requests"))
+        if resume:
+            self._offer_resume_continue(result)
         if pick:
             self._sessions("")
 
@@ -3306,6 +3337,7 @@ class App(ModesMixin, AgentViewMixin):
                 self._settle_steers_at_turn_end()
                 # A stop the person asked for in no way (Esc, `/stop`, a prompt in busy mode `interrupt`) is Hermes' own.
                 self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)  # `_turn_ended` spends it
+                self._note_turn(self._turn_end(payload))
                 self.transcript.hermes_resuming = self._arm_auto_continue(payload)
             self.transcript.apply(event)
             self._track_sent_now(event.type)
@@ -3321,6 +3353,7 @@ class App(ModesMixin, AgentViewMixin):
                 # A turn started (this TUI's prompt, another client's): a `continue` that waited is not sent into it.
                 self.auto_continue, self.auto_continue_out = None, False
                 self.turn_ours = self.turn_pending
+                self._note_turn(TURN_OPEN)  # its end, once seen, says how it ended (`turn_ends`)
                 if not self.turn_pending:  # a turn this TUI did not start (a resumed one, a server queue)
                     self.busy_since = self.clock()
                     self.turn_waited = 0.0
@@ -4686,6 +4719,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         if self.sid:
             self.interrupting = True
+            self._note_turn(TURN_STOPPED)
             self._request("session.interrupt", {"session_id": self.sid}, lambda result: None, self._on_interrupt_refused)
 
     def _on_interrupt_refused(self, error: dict[str, Any]) -> bool:
@@ -4918,7 +4952,9 @@ class App(ModesMixin, AgentViewMixin):
             self.queued.append(QueuedLine(text, shown, typed, chips=chips, notice=notice, images=images))
             return
         if self._busy():  # the busy mode sends it into the running turn: no turn starts
-            self.stop_asked = self.stop_asked or self.busy_mode == BUSY_INTERRUPT
+            if self.busy_mode == BUSY_INTERRUPT:
+                self.stop_asked = True
+                self._note_turn(TURN_STOPPED)
             self._submit_prompt(text, shown, notice=notice, images=images)
         else:
             self._start_turn(typed or text, lambda: self._submit_prompt(text, shown, notice=notice, images=images),
@@ -5337,6 +5373,61 @@ class App(ModesMixin, AgentViewMixin):
             return
         self._give_back(text, images)
 
+    def _turn_end(self, payload: Any) -> str:
+        """How the turn a `message.complete` ends ended, as `turn_ends` keeps it (before `_arm_auto_continue` spends
+        `turn_ours`): the person's stop, Hermes' own interrupt of a turn this TUI sent, or anything else."""
+        status = as_text(payload.get("status")) if isinstance(payload, Mapping) else ""
+        if status != "interrupted":
+            return TURN_DONE
+        if not self.transcript.hermes_interrupted:
+            return TURN_STOPPED
+        if self.turn_ours and not as_text(payload.get("error")).strip():
+            return TURN_INTERRUPTED
+        return TURN_DONE
+
+    def _note_turn(self, end: str) -> None:
+        """Keep how the live session's last turn ended under the OMH home (`turn_ends`), for a later resume."""
+        home = self._omh_home()
+        if home is not None and self.stored_id:
+            record_turn_end(home, self.stored_id, end, self.wall_clock())
+
+    def _resume_evidence(self, result: Mapping[str, Any]) -> str:
+        """Why the session a resume just opened has work to go on with, as the resuming row says it; "" for none.
+
+        Never one Hermes goes on with itself (`auto_continue`: a turn a process death cut, which Hermes submits
+        again); a session with a turn running is busy, which `_offer_resume_continue` checks. Then, by how this home's
+        TUIs saw its last turn end (`turn_ends`): the person's stop never; Hermes' own interrupt of a turn a TUI sent
+        does. Otherwise an open dag-ulw run that a turn would move with no node running does, whatever the last turn
+        did: a run's parent turn ends while the run waits on its children, and a restart can end those children.
+        """
+        if result.get("auto_continue") is not None or not self.stored_id:
+            return ""
+        home = self._omh_home()
+        end = read_turn_end(home, self.stored_id) if home is not None else None
+        if end == TURN_STOPPED:
+            return ""
+        if end == TURN_INTERRUPTED:
+            return RESUME_WHY_INTERRUPTED
+        found = self.read_waiting_run(self.environ.get("OMH_HOME") or None, self.environ.get("HERMES_HOME") or None,
+                                      self.stored_id)
+        return resume_run_why(*found) if found is not None else ""
+
+    def _offer_resume_continue(self, result: Mapping[str, Any]) -> None:
+        """A session just resumed with work left (`_resume_evidence`) goes on by itself, as a turn Hermes interrupted
+        does (`_auto_continue_when_due`): the row says why, and Esc in the wait cancels it. Held, with no row, by what
+        holds that one (a draft, a queued line, an open question, the AUTO_CONTINUE_LIMIT) and by a turn running
+        (the resume's `running`: its own turn still going, or another client's)."""
+        if self._busy() or self._switching() or not self.sid or self.auto_continues >= AUTO_CONTINUE_LIMIT \
+                or self._auto_continue_held():
+            return
+        why = self._resume_evidence(result)
+        if not why:
+            return
+        self.auto_continue = (self.stored_id, self.clock() + AUTO_CONTINUE_SECONDS)
+        self.transcript.add_notice(
+            RESUME_CONTINUE_NOTICE.format(why=why, seconds=f"{AUTO_CONTINUE_SECONDS:g}"), NOTICE_WARN)
+        self.dirty = True
+
     def _drain_queue(self) -> None:
         """Send the next queued line: a prompt starts the next turn; a `!` line runs, and the one after waits for it.
 
@@ -5749,6 +5840,7 @@ class App(ModesMixin, AgentViewMixin):
             echo = self.transcript.command
             if invocation.name.lower() == "stop" and self._busy():
                 self.stop_asked = True  # the turn it interrupts ends `interrupted`: the person's stop
+                self._note_turn(TURN_STOPPED)
             sid = self.sid
             self._request(
                 "slash.exec",
@@ -6324,6 +6416,7 @@ class App(ModesMixin, AgentViewMixin):
         self._redeliver(result.get("open_requests"))
         self._refresh_catalog()  # its workspace may hold project-local skills the last one did not
         self._carry_switch_held()
+        self._offer_resume_continue(result)
 
     def _on_resume_refused(
         self, target: str, error: dict[str, Any], notice: str = "", by_title: bool = False, seq: int | None = None,

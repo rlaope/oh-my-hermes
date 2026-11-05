@@ -71,7 +71,7 @@ says nothing.
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 import sqlite3
 import threading
@@ -89,6 +89,9 @@ MAX_NODES_NAMED: Final = 3
 REASONS: Final = (
     "returned", "lost", "parked_due", "out_no_child", "ready_idle", "ready_held", "needs_repair", "stuck",
 )
+# The reasons a resumed session goes on with by itself (`waiting_run`): work a turn moves with no node running.
+# Not ``needs_repair`` (repair or cancel is the person's call) nor ``stuck`` (a node may still be running).
+RESUMABLE_REASONS: Final = ("returned", "lost", "parked_due", "out_no_child", "ready_idle")
 
 _lock = threading.Lock()
 _named: "OrderedDict[tuple[str, str], tuple[Any, ...]]" = OrderedDict()
@@ -234,16 +237,19 @@ def _unsettled_runs(omh_home: Path, segment: str) -> list[tuple[dict[str, Any], 
     return runs
 
 
-def _open_run_line(session: str, omh_home: Path, hermes_home: Path, now: float) -> str:
+def _waking_runs(session: str, omh_home: Path, hermes_home: Path, now: float) -> Iterator[
+        tuple[dict[str, Any], dict[str, dict[str, Any]], str, list[str], dag_run.Limits]]:
+    """This conversation's open runs that one call would move (`wake_needed`), newest first: each with its derived
+    state, the reason, its nodes and the profile's marks. A finished run is noted so it is not read again."""
     if not (omh_home / "runtime" / dag_run.DAG_DIRNAME).is_dir():
-        return ""
+        return
     durable = reading_session_id(hermes_home, session)
     if not durable:
-        return ""
+        return
     segments = sorted({durable, *conversation_session_ids(hermes_home, durable)})
     runs = [item for segment in segments for item in _unsettled_runs(omh_home, segment)]
     if not runs:
-        return ""
+        return
     runs.sort(key=lambda item: float(item[0].get("updated_at") or 0.0), reverse=True)
     children = dag_tool._children(omh_home, segments, hermes_home)
     limits, _ignored = dag_tool.dag_limits(hermes_home)
@@ -252,11 +258,14 @@ def _open_run_line(session: str, omh_home: Path, hermes_home: Path, now: float) 
         if dag_run.run_state(record, derived) in dag_run.FINISHED_STATES:
             _note_finished(key)
             continue
-        run = (str(record.get("session_id")), str(record["run"]))
         found = wake_needed(record, derived, now, limits=limits)
-        if found is None:
-            continue
-        reason, nodes = found
+        if found is not None:
+            yield record, derived, found[0], found[1], limits
+
+
+def _open_run_line(session: str, omh_home: Path, hermes_home: Path, now: float) -> str:
+    for record, derived, reason, nodes, limits in _waking_runs(session, omh_home, hermes_home, now):
+        run = (str(record.get("session_id")), str(record["run"]))
         if reason == "ready_idle" and dag_tool.free_slots(hermes_home)["free"] <= 0:
             reason = "ready_held"
         if not _claim(run, _situation(record, derived, reason, nodes), quiet_first=reason == "returned"):
@@ -278,6 +287,29 @@ def open_run_line(
         return ""
 
 
+def waiting_run(
+    *, session_id: object, omh_home: str, hermes_home: str, now: float | None = None,
+) -> tuple[str, str, list[str]] | None:
+    """``(reason, run, node ids)`` for this conversation's newest open run that a turn would move and that waits on
+    nothing running (the reasons in `RESUMABLE_REASONS`), else None. Never raises.
+
+    What a resumed session's OMH TUI reads to go on by itself: the turn it starts brings this module's line at its
+    `pre_llm_call`. Unlike `open_run_line` it names a run every time it is asked (it claims nothing), and it does not
+    hold ready nodes back for slots: those are the gateway process's, not the caller's.
+    """
+    session = str(session_id or "").strip()
+    if not session or not omh_home or not hermes_home:
+        return None
+    try:
+        for record, _derived, reason, nodes, _limits in _waking_runs(
+                session, Path(omh_home), Path(hermes_home), time.time() if now is None else now):
+            if reason in RESUMABLE_REASONS:
+                return reason, str(record["run"]), nodes
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError, sqlite3.Error):
+        return None
+    return None
+
+
 def reset_open_run_nudge() -> None:
     """Test seam: forget every situation already named and every finished verdict."""
     with _lock:
@@ -287,8 +319,10 @@ def reset_open_run_nudge() -> None:
 
 __all__ = [
     "REASONS",
+    "RESUMABLE_REASONS",
     "open_run_line",
     "open_run_text",
     "reset_open_run_nudge",
+    "waiting_run",
     "wake_needed",
 ]
