@@ -4,6 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A bot profile that fails its refresh no longer rolls `omh update` back,
+  and a pending restore no longer blocks every later update.** On 2026-11-04
+  four bench profiles whose `plugins/omh` links pointed at deleted worktrees
+  made the re-entered update exit 1. The staged update rolled back, the
+  restore failed on the same profiles, and from then on every `omh update`
+  only retried that restore and staged nothing, while the report read "the
+  known-good generation remains active". Now an update whose only failures
+  are bot profiles exits `3`: the staged update keeps the activated
+  generation and names the profiles to repair. A run that finishes a pending
+  restore goes on to stage the update it was asked for. A failed restore
+  leads its report with "could not restore the previous generation: recovery
+  is required" and says no update installs until it succeeds. A rollback
+  names the generation it restored, with its commit. `omh doctor` reports an
+  open marker as `staged_update_recovery`. A `plugins/omh` link whose
+  target is gone is now replaced with the released bundle without `--force`,
+  and the update prints a `Repaired …` line naming where it pointed; a link
+  to an existing tree OMH did not write still needs `--force`.
+
 - **`omh update` names the commit it moved between, and `omh --version` names
   the commit it runs.** A generation built from one of this repository's
   GitHub archives (the installer's `main.zip`, and tag or commit archives)

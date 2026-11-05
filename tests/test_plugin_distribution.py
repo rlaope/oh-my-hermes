@@ -2547,11 +2547,12 @@ class SymlinkedPluginDirectoryTests(unittest.TestCase):
             self.assertEqual(os.readlink(stale), str(root / ".hermes" / "gone"))
             self.assertTrue((bundle / "memory_provider.py").is_file())
 
-    def test_a_dangling_plugin_link_is_kept_without_force(self) -> None:
-        # `Path.exists` follows the link, so a dangling one reads as absent.
-        # Without the link-aware ownership guard the replacement path runs on
-        # a link OMH cannot prove it wrote, and the operator's pointer is gone
-        # with a clean exit code. It has to be kept and named instead.
+    def test_a_dangling_plugin_link_is_repaired_without_force_and_named(self) -> None:
+        # `Path.exists` follows the link, so a dangling one reads as absent;
+        # the guard still sees it. A link whose target is gone holds nothing
+        # anyone owns, so update replaces it without --force (2026-11-04: four
+        # such links refused every update and rolled it back). The pointer is
+        # not dropped silently: the result names where it pointed.
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
@@ -2563,15 +2564,27 @@ class SymlinkedPluginDirectoryTests(unittest.TestCase):
             self.assertFalse(bundle.exists())
 
             status, stdout, stderr = run_cli(base + ["update"])
-            self.assertEqual(status, 1, stderr)
+            self.assertEqual(status, 0, stderr)
             payload = json.loads(stdout)
-            self.assertEqual(payload["status"], "partial")
-            self.assertEqual(payload["failures"][0]["phase"], "registration")
-            self.assertIn("registration failed", payload["failures"][0]["error"])
+            self.assertEqual(payload["status"], "ok")
+            self.assertFalse(bundle.is_symlink())
+            self.assertTrue((bundle / PLUGIN_MANAGED_MANIFEST).is_file())
+            self.assertNotIn("use --force to replace it", stdout + stderr)
+
+    def test_a_link_to_a_live_unmanaged_tree_is_still_kept_without_force(self) -> None:
+        # Only a dangling link is repaired; a link to files OMH did not write
+        # may hold someone's plugin and still needs --force.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home, hermes_home = root / ".omh", root / ".hermes"
+            status, _, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "setup"])
+            self.assertEqual(status, 0, stderr)
+            bundle, shared = self._link_bundle_to_shared(root)
+            (shared / PLUGIN_MANAGED_MANIFEST).unlink()
+            with self.assertRaisesRegex(PluginPackError, "use --force to replace it"):
+                install_plugin_bundle(resolve_paths(omh_home, hermes_home))
             self.assertTrue(bundle.is_symlink())
-            self.assertFalse(shared.exists())
-            self.assertEqual(os.readlink(bundle), str(shared))
-            self.assertIn("use --force to replace it", stdout + stderr)
+            self.assertTrue(shared.is_dir())
 
     def test_a_dangling_plugin_link_is_replaced_with_force(self) -> None:
         # The other half of that guard, and the reason the replacement asks
@@ -3646,6 +3659,61 @@ class HermesProfileSyncTests(unittest.TestCase):
             # The verdict judged whether bare `hermes` would show the OMH
             # surface; it does not any more, so there is nothing to judge.
             self.assertNotIn("OMH TUI:", stdout)
+
+    def test_bench_profiles_linked_to_deleted_worktrees_are_repaired_by_update(self) -> None:
+        # The 2026-11-04 shape: bench profiles whose `plugins/omh` was a link
+        # into a worktree that was later deleted. Each refused the update, the
+        # profile failures rolled the staged update back, and the restore
+        # failed on the same links on every later run.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worktrees = root / "oh-my-hermes-worktrees"
+            gone = {
+                "dapbench": worktrees / "dap-nav" / "src" / "plugin_bundle" / "omh",
+                "dapbenchp": worktrees / "dap-nav" / "src" / "plugin_bundle" / "omh",
+                "lspbench": worktrees / "lsp-nav" / "src" / "plugin_bundle" / "omh",
+                "lspbenchp": worktrees / "lsp-nav" / "src" / "plugin_bundle" / "omh",
+            }
+            for name in (*gone, "kami"):
+                self._profile(root, name)
+            status, _, stderr = run_cli(self._base(root) + ["setup"])
+            self.assertEqual(status, 0, stderr)
+            for name, target in gone.items():
+                plugin = root / ".hermes" / "profiles" / name / "plugins" / "omh"
+                shutil.rmtree(plugin)
+                plugin.symlink_to(target, target_is_directory=True)
+                self.assertFalse(plugin.exists())
+
+            status, stdout, stderr = run_cli(self._base(root) + ["update"], output_json=False)
+
+            self.assertEqual(status, 0, stdout + stderr)
+            self.assertNotIn("exists without an OMH plugin manifest", stdout + stderr)
+            self.assertNotIn("(failed)", stdout)
+            for name, target in gone.items():
+                with self.subTest(profile=name):
+                    plugin = root / ".hermes" / "profiles" / name / "plugins" / "omh"
+                    self.assertFalse(plugin.is_symlink())
+                    self.assertTrue((plugin / PLUGIN_MANAGED_MANIFEST).is_file())
+                    self.assertIn(
+                        f"Repaired bot profile {name}: its plugins/omh linked to {target}, which no longer exists; "
+                        "it now holds the released OMH plugin bundle.",
+                        stdout,
+                    )
+
+    def test_a_profile_dangling_link_repair_is_recorded_in_json(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._profile(root, "dapbench")
+            run_cli(self._base(root) + ["setup"])
+            plugin = root / ".hermes" / "profiles" / "dapbench" / "plugins" / "omh"
+            shutil.rmtree(plugin)
+            target = root / "deleted-worktree" / "src" / "plugin_bundle" / "omh"
+            plugin.symlink_to(target, target_is_directory=True)
+            status, stdout, stderr = run_cli(self._base(root) + ["update", "--json"], output_json=False)
+            self.assertEqual(status, 0, stderr)
+            rows = {row["profile"]: row for row in json.loads(stdout)["hermes_profiles"]}
+            self.assertEqual(rows["dapbench"]["replaced_dangling_link"], str(target))
+            self.assertNotEqual(rows["dapbench"]["status"], "failed")
 
     def test_a_home_without_profiles_reports_no_profile_rows(self) -> None:
         with TemporaryDirectory() as tmp:

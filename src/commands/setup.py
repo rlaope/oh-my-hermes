@@ -127,6 +127,7 @@ from ..plugin_bundle.omh.provider_detection import (
 from ..plugin_bundle.omh.runtime_paths import default_hermes_home
 from ..plugin_pack import PLUGIN_NAME, PluginPackError, install_plugin_bundle
 from ..install.plugin_pack import HERMES_PLUGIN_UPDATE_COMMAND, PluginContentProtectedError
+from ..install.self_update import PROFILE_REPAIR_EXIT_CODE
 from ..probe import probe_capabilities
 from ..release import (
     COMMIT_SHA_RE,
@@ -583,7 +584,9 @@ def cmd_update(args: argparse.Namespace) -> int:
         # A running Hermes caches where `current/skills` resolved until config.yaml's
         # signature moves; this runs in the re-entered process, after the pointer switch.
         payload["hermes_skill_refresh"] = refresh_skill_dir_caches(_paths(args).hermes_home, managed_current_workflow_pack_dir())
-    code = 1 if failures else 0
+    # Only bot profiles failing gets its own nonzero code: this home refreshed,
+    # so a staged update keeps the generation instead of rolling it back.
+    code = (1 if any(row["phase"] != "profile_sync" for row in failures) else PROFILE_REPAIR_EXIT_CODE) if failures else 0
     payload.update({"status": "partial" if failures else "ok", "failures": failures, "exit_code": code})
     unrefreshed = frozenset(
         row["config"] for row in payload.get("hermes_skill_refresh") or [] if row.get("status") == "failed"
@@ -606,6 +609,7 @@ def cmd_update(args: argparse.Namespace) -> int:
                   else "Agent Skills (Codex/.agents): already up to date")
         _print_display_release_lines(primary_registration, profile_results)
         _print_registration_migrations(primary_registration, profile_results)
+        _print_dangling_link_repairs(payload.get("plugin_bundle"), profile_results)
         _print_omh_home_reclaims(profile_results)
         _print_hermes_profiles_line(profile_results, language=_resolve_language(args))
         for failure in failures:
@@ -795,6 +799,9 @@ def _sync_hermes_profiles(args: argparse.Namespace) -> list[dict[str, object]]:
                 # it, so "refreshed" would claim an update that did not happen.
                 entry["status"] = "host_managed"
                 entry["plugin_update_command"] = HERMES_PLUGIN_UPDATE_COMMAND
+            dangling_link = plugin.get("replaced_dangling_link")
+            if isinstance(dangling_link, str) and dangling_link:
+                entry["replaced_dangling_link"] = dangling_link
             applied = _apply_result(
                 clone,
                 bind_omh_home=not _profile_env_names_omh_home(profile_dir),
@@ -918,6 +925,18 @@ def _print_hermes_profiles_line(results: list[dict[str, object]], *, language: s
         for entry in results
     )
     print(f"  {tr(language, 'hermes_profiles_synced', summary=summary)}")
+
+
+def _print_dangling_link_repairs(primary: object, profile_results: list[dict[str, object]]) -> None:
+    """One line per home whose `plugins/omh` was a link to a path that is gone."""
+    homes = [("the Hermes home", primary), *((f"bot profile {row.get('profile')}", row) for row in profile_results)]
+    for label, entry in homes:
+        pointed = entry.get("replaced_dangling_link") if isinstance(entry, dict) else None
+        if pointed:
+            print(
+                f"  Repaired {label}: its plugins/omh linked to {pointed}, which no longer exists; "
+                "it now holds the released OMH plugin bundle."
+            )
 
 
 def _print_registration_migrations(
@@ -1566,6 +1585,8 @@ def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, o
     from ..install.self_update import run_installer_self_update
 
     result = run_installer_self_update(args, plan, runner=subprocess.run)
+    profiles_need_repair = bool((result.get("post_activation") or {}).get("profiles_need_repair"))
+    recovery = result.get("recovery") or {}
     if _wants_json(args):
         _print_json(result)
     elif result.get("ok"):
@@ -1573,17 +1594,41 @@ def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, o
         change = result.get("identity_change")
         if isinstance(change, dict):
             print(f"  {_identity_change_line(change, language=_resolve_language(args))}")
+        if recovery.get("action") == "completed_pending_restore":
+            print(f"  note: first finished restoring generation {recovery.get('selected')}, which an earlier update left pending")
+        if profiles_need_repair:
+            print("  warning: some bot profiles were not refreshed (see the warnings above); this update stays active. Repair them, then rerun `omh update`.")
         kept = str((result.get("cleanup") or {}).get("reason") or "")
         if kept:
             print(f"  note: {kept}")
     else:
-        for line in _self_update_stop_lines(result):
+        for line in _self_update_stop_lines(result, root=_managed_root_from_plan(plan)):
             print(line)
     if not _wants_json(args):
         for line in _skill_refresh_lines(result.get("hermes_skill_refresh") or []):
             if line.startswith("warning: "):
                 print(f"  {line}")
-    return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        return 1
+    return PROFILE_REPAIR_EXIT_CODE if profiles_need_repair else 0
+
+
+def _managed_root_from_plan(plan: dict[str, object]) -> Path | None:
+    venv_dir = str(plan.get("venv_dir") or "")
+    return Path(venv_dir).parent if venv_dir else None
+
+
+def _generation_label(root: Path | None, name: str) -> str:
+    """`name (4.0.5 main@1a2b3c4d)`, or the bare name when the generation records nothing."""
+    from ..install.self_update import generation_identity
+
+    if root is None or not name:
+        return name
+    identity = generation_identity(root / "generations" / name)
+    short = identity["commit_sha"][:8]
+    commit = f"{identity['ref']}@{short}" if identity["ref"] and short else short
+    described = " ".join(part for part in (identity["version"], commit) if part)
+    return f"{name} ({described})" if described else name
 
 
 def _identity_change_line(change: dict[str, Any], *, language: str) -> str:
@@ -1616,7 +1661,7 @@ def _identity_change_line(change: dict[str, Any], *, language: str) -> str:
     return tr(language, "update_identity_unrecorded", version=current_version)
 
 
-def _self_update_stop_lines(result: dict[str, Any]) -> list[str]:
+def _self_update_stop_lines(result: dict[str, Any], *, root: Path | None = None) -> list[str]:
     """Say why the transaction stopped, not only where.
 
     The phase alone was the whole report, and "stopped during post_activation"
@@ -1624,16 +1669,29 @@ def _self_update_stop_lines(result: dict[str, Any]) -> list[str]:
     error, but nothing tied that error to the rollback. The failing phase's
     recorded reason closes that gap; its last line is the one that names the
     cause, and the full text stays in the JSON result.
+
+    A rollback and a failed restore each lead the report. A failed restore
+    used to read "the known-good generation remains active" on every run while
+    each later update only retried that restore, so nothing new ever installed.
     """
     phase = str(result.get("phase") or "unknown")
-    lines = [f"OMH update stopped during {phase}; the known-good generation remains active."]
+    rollback = result.get("rollback") or {}
+    recovery = result.get("recovery") or {}
+    restored = str(rollback.get("restored") or "")
+    if recovery.get("status") == "required":
+        lines = [
+            f"OMH update stopped during {phase} and could not restore the previous generation: recovery is required.",
+            "  Until the restore succeeds, every `omh update` only retries it and installs nothing new.",
+        ]
+    elif restored:
+        lines = [f"OMH update stopped during {phase} and rolled back to generation {_generation_label(root, restored)}."]
+    else:
+        lines = [f"OMH update stopped during {phase}; the known-good generation remains active."]
     detail = result.get(phase)
     reason = str(detail.get("reason") or "").strip() if isinstance(detail, dict) else ""
+    reason = reason or str(recovery.get("reason") or rollback.get("reason") or "").strip()
     if reason:
         lines.append(f"  reason: {reason.splitlines()[-1].strip()}")
-    restored = str((result.get("rollback") or {}).get("restored") or "")
-    if restored:
-        lines.append(f"  rolled back to generation {restored}")
     lines.append("  Resolve the reason above, then rerun `omh update`.")
     return lines
 

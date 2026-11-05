@@ -156,6 +156,105 @@ class UpdateOutputTests(unittest.TestCase):
         self.assertEqual(printed.strip(), "OMH update complete: command and workflow pack activated together.")
 
 
+class ProfileOnlyFailureExitCodeTests(unittest.TestCase):
+    """A bot profile failing gets its own nonzero code, so a staged update keeps the generation."""
+
+    def _update(self, failed_rows: list[dict[str, object]], *, agent_skills_error: bool = False) -> tuple[int, dict]:
+        from _cli_harness import run_cli
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            argv = ["--omh-home", str(root / "omh"), "--hermes-home", str(root / "hermes"), "update", "--json"]
+            agent_skills = patch(
+                "omh.install.agent_skills_projection.refresh_installed_agent_skills",
+                side_effect=OSError("agent skills unwritable") if agent_skills_error else None,
+                return_value={"refreshed_files": 0},
+            )
+            with (
+                patch.dict(os.environ, {setup_commands.SELF_UPDATE_SKIP_ENV: "1"}),
+                patch("omh.install.agent_skills_projection.agent_skills_user_home", return_value=root / "user"),
+                agent_skills,
+                patch.object(setup_commands, "_sync_hermes_profiles", return_value=failed_rows),
+                patch.object(setup_commands, "_refresh_installed_menubar_app", return_value=None),
+            ):
+                status, stdout, _stderr = run_cli(argv)
+        return status, json.loads(stdout)
+
+    def test_only_bot_profiles_failing_exits_with_the_profile_repair_code(self) -> None:
+        rows = [{"profile": "dapbench", "status": "failed", "error": "PluginPackError: plugins/omh exists without an OMH plugin manifest"}]
+        status, payload = self._update(rows)
+        self.assertEqual(status, setup_commands.PROFILE_REPAIR_EXIT_CODE)
+        self.assertEqual(payload["exit_code"], setup_commands.PROFILE_REPAIR_EXIT_CODE)
+        self.assertEqual(payload["status"], "partial")
+        self.assertEqual([row["phase"] for row in payload["failures"]], ["profile_sync"])
+
+    def test_a_failure_in_this_home_still_exits_1(self) -> None:
+        rows = [{"profile": "dapbench", "status": "failed", "error": "boom"}]
+        status, payload = self._update(rows, agent_skills_error=True)
+        self.assertEqual(status, 1)
+        self.assertEqual(sorted(row["phase"] for row in payload["failures"]), ["agent_skills", "profile_sync"])
+
+    def test_a_clean_update_exits_0(self) -> None:
+        status, payload = self._update([])
+        self.assertEqual((status, payload["exit_code"], payload["status"]), (0, 0, "ok"))
+
+
+class StagedUpdateRecoveryDoctorTests(unittest.TestCase):
+    def _check(self, state: object | None):
+        from omh.maintenance import doctor
+
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "self-update.json"
+            if state is not None:
+                path.write_text(state if isinstance(state, str) else json.dumps(state), encoding="utf-8")
+            with (
+                patch.object(doctor, "managed_command_self_update_state_path", return_value=path),
+                patch.object(doctor.sys, "prefix", str(Path(temporary) / "generations" / "g1" / "venv")),
+            ):
+                return doctor._staged_update_recovery_check()
+
+    def test_a_doctor_running_outside_the_managed_root_reads_no_marker(self) -> None:
+        from omh.maintenance import doctor
+
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "managed" / "self-update.json"
+            path.parent.mkdir()
+            path.write_text(json.dumps({"activation_in_progress": {"previous": "/g1", "candidate": "/g2", "restore_required": True}}), encoding="utf-8")
+            with (
+                patch.object(doctor, "managed_command_self_update_state_path", return_value=path),
+                patch.object(doctor.sys, "prefix", str(Path(temporary) / "checkout" / ".venv")),
+            ):
+                check = doctor._staged_update_recovery_check()
+        self.assertTrue(check.ok)
+        self.assertFalse(check.observed)
+
+    def test_an_open_restore_marker_names_the_blocked_updates_and_the_step(self) -> None:
+        check = self._check({
+            "activation_in_progress": {
+                "candidate": "/root/generations/20261104090113899212-edfca25300",
+                "previous": "/root/generations/20261104024458671554-edfca25300",
+                "phase": "post_switch",
+                "restore_required": True,
+            }
+        })
+        self.assertFalse(check.ok)
+        self.assertEqual(check.severity, "warning")
+        self.assertIn("could not restore generation 20261104024458671554-edfca25300", check.message)
+        self.assertIn("installs nothing new until it succeeds", check.message)
+        self.assertIn("finishes the restore before staging", check.next_action)
+        self.assertIn("plugins/omh points at a deleted path", check.remediation)
+
+    def test_other_states(self) -> None:
+        interrupted = self._check({"activation_in_progress": {"candidate": "/r/generations/g2", "previous": "/r/generations/g1", "phase": "post_switch"}})
+        self.assertFalse(interrupted.ok)
+        self.assertIn("interrupted while activating generation g2", interrupted.message)
+        self.assertTrue(self._check({"activation_in_progress": None}).ok)
+        absent = self._check(None)
+        self.assertTrue(absent.ok)
+        self.assertFalse(absent.observed)
+        self.assertFalse(self._check("not json").ok)
+
+
 class ChannelAliasTests(unittest.TestCase):
     def test_main_is_parsed_as_the_preview_channel(self) -> None:
         for argv in (["update", "--channel", "main"], ["update", "--channel=main"], ["setup", "--channel", "main"]):

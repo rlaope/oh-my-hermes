@@ -5130,6 +5130,7 @@ What you see when something goes wrong:
 | Staging or download fails | Candidate deleted before anything is activated | The install you already had, untouched |
 | Candidate fails its smoke checks | Candidate deleted before activation | The install you already had, untouched |
 | Activated version fails the post-activation run | Attempt pointer rollback and restoring reentry | Previous command/pack selected if rollback succeeds; shared resources restored only if reentry succeeds |
+| Only a bot profile fails its refresh | The activated version stays; the update exits `3` and names each profile | The new install, plus the profiles to repair |
 | Restoring reentry also fails | Retain recovery marker and candidate anchor; report failed restoration | Recovery still required, not a healthy restored install |
 | Machine dies mid-activation | Next `omh update` reconciles the marker and retries the required activation/restoration step | Command/pack remain paired; restoration can still fail |
 | Two updates at once | The second refuses to start | No partial work |
@@ -5143,8 +5144,24 @@ with the failure reason. Do not delete the retained candidate or clear the
 marker by hand. Preserve the reported paths and failure evidence, resolve the
 reported restoration error, then retry `omh update`: pending restore intent
 allows only restoration until it succeeds, not a fresh candidate activation.
-A healthy restoring reentry clears the marker and permits candidate cleanup;
-the original attempted update still reports failure rather than success.
+A healthy restoring reentry clears the marker and permits candidate cleanup,
+and that same run then goes on to stage the update it was asked for; the
+original attempted update still reports failure rather than success. While the
+marker is open, `omh doctor` reports it as `staged_update_recovery`, and the
+update's own report leads with "could not restore the previous generation:
+recovery is required".
+
+A bot profile that fails its refresh no longer rolls the update back. The
+previous generation fails on the same profile, so a rollback cannot repair it,
+and its restore would fail the same way on every later run. On 2026-11-04 four
+bench profiles whose `plugins/omh` links pointed at deleted worktrees did
+exactly that. The update now keeps the activated version, prints each
+profile's failure, and exits `3`; any failure in the update's own home still
+exits `1` and rolls back. A `plugins/omh` that is a link to a path that no
+longer exists holds no plugin anyone owns, so update replaces it with the
+released bundle without `--force` and prints a `Repaired …` line naming
+where the link pointed. A link to an existing tree OMH did not write still
+needs `--force`.
 Pointer rollback alone does not prove shared-resource restoration or reverse
 all user/plugin state. Run `omh doctor` after recovery and inspect any remaining
 profile failures before treating the install as healthy.

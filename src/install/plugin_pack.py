@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import marshal
+import os
 import sys
 import tempfile
 from types import CodeType
@@ -203,6 +204,17 @@ def host_managed_plugin(
     }
 
 
+def _dangling_link_target(target: Path) -> str | None:
+    """Where a link at `target` points, when that place no longer exists; else None."""
+    if not is_directory_link(target) or target.exists():
+        return None
+    try:
+        return os.readlink(target)
+    except OSError:
+        # A junction Windows will not read back still dangles; name the link.
+        return str(target)
+
+
 def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool = False) -> dict[str, Any]:
     target = paths.hermes_plugin_dir
     source_records = bundled_plugin_records()
@@ -230,7 +242,12 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
     # past the ownership guard into the replacement path without --force. The
     # guard asks whether anything occupies the path OMH cannot prove it wrote.
     unmanaged = (target.exists() or is_directory_link(target)) and existing_manifest is None
-    if unmanaged and not force:
+    # A link whose target is gone holds no plugin anyone owns: nothing behind
+    # it can be lost, so it is repaired without --force and the result names
+    # where it pointed. On 2026-11-04 four bench profiles' `plugins/omh`
+    # links to deleted worktrees refused every update, which rolled back.
+    dangling_link = _dangling_link_target(target) if unmanaged else None
+    if unmanaged and not force and dangling_link is None:
         raise PluginPackError(f"{target} exists without an OMH plugin manifest; use --force to replace it")
     if dirty and not force:
         raise PluginContentProtectedError(f"managed plugin files changed: {', '.join(dirty)}; use --force to replace them")
@@ -268,6 +285,8 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
         dirty_files=dirty,
     )
     result["bundle_files_changed"] = files_changed
+    if dangling_link is not None:
+        result["replaced_dangling_link"] = dangling_link
     if dry_run:
         result["observed_scope"] = "dry run only; no plugin files were written"
         return result
