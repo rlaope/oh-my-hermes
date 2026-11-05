@@ -126,8 +126,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # `dag-ulw` nodes beside `ultrawork` board rows (+12, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin
             # before it was 93de88ac...c1c0.
-            (skill_capabilities, 530439, FULL_ROW_DELTA_CAP,
-             'b8552607995eaa911bc93d87dee0894405e7b5b85d401c3cbb4fbe78431a5e6b',
+            # 530439 -> 530686 and the digest re-derived: dag-ulw's category-ladder line sends a
+            # `role=review` node to `review`, keeps `role=baseline` low and has `role=verify` climb
+            # the ladder (+247, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and
+            # the pin before it was b8552607...5e6b.
+            (skill_capabilities, 530686, FULL_ROW_DELTA_CAP,
+             '2cb9a1ffbf86b048998fe3ae86687f60893a408a4b33af1dab1b4e6a728cca80',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -340,7 +344,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Research citation receipts: ulw-research, web-research and research-brief gain one receipts-verify
         # clause; only those three bodies move, and the pin before it was ab8d58ad...6258e7.
         # Bail points replace default Recovery Notes on the attributed skills; procedure bails and the shared rail move references only.
-        self.assertEqual(_digest(legacy_hashes), 'fb4303cbc0177f5cedbe670b085591da1827cfc2fe637ea6a9151dda47fb1fcf')
+        # dag-ulw's category-ladder line sends a `role=review` node to `review`, keeps `role=baseline`
+        # low and has `role=verify` climb the ladder; only dag-ulw moves. Re-derived on the tree merged
+        # with main after the bail points; main's pin before it was fb4303cb...1fcf.
+        self.assertEqual(_digest(legacy_hashes), '2b0982e6ec972a7bc5c91190a5fed140bd8790a8c9408b0e1bdddb1ce7c38db3')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

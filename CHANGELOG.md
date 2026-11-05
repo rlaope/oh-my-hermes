@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **dag-ulw review nodes route to the `review` category, and baselines stay
+  low.** The skill's difficulty-ladder rule now says a `role=review` node
+  takes the `review` category where the user's routes serve it, a `baseline`
+  node stays `quick` or `unspecified-low`, and a `verify` node, which judges
+  the run goal and baseline exemptions, climbs the ladder like any judgement.
+  Before, the planner put code reviews on `unspecified-high` in some runs and
+  on `review` or `unspecified-low` in others. A review node now costs more:
+  the shipped `review` chain runs the same models as `unspecified-high` at
+  `xhigh` instead of `medium`. `omh_dag` define, repair and extend also
+  return the advisory lint `review_not_review_category:<id>` for a declared
+  review node on another category. Like every lint finding, it never refuses
+  a run. It is not shown when Hermes' `model_map` backend offers no option
+  for `review` but does for `unspecified-high`. Verify nodes are not linted,
+  and neither are nodes whose label only reads like a review.
 - **A drag in the OMH TUI copies the transcript without the rail.** The main
   screen now takes the mouse: a drag over the transcript or the live rows
   selects the text (shown reversed) and copies it without the thin `┃` rail
@@ -18,6 +32,10 @@ All notable changes will be documented here.
   terminal's own selection is still there with its bypass modifier (Shift,
   Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
   terminal's own wheel and selection on the main screen, as before.
+- **The round-end check continues a turn less often.** A changed function's
+  name in another file no longer continues the turn when every mention there
+  is proven to need no change: another object's method of the same name, or
+  an import whose calls bind the same way before and after the edit.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check
@@ -34,6 +52,44 @@ All notable changes will be documented here.
   when the failed node was a verify node) before editing. There is still no
   rollback: the worktree is shared. Every other node's task reads byte for
   byte as before.
+- **A dag-ulw run that waits shows whole and moves, and says what it waits
+  on.** A run of up to 12 lanes (the transcript's own small-run measure)
+  shows every layer and node. A done layer of one node is one dim row
+  (`✓ layer 2 · <title>  model · accepted · ↓tokens`), consecutive ones stack,
+  and one blank row stands between layer groups. An open layer row no longer
+  repeats the counts its node rows say (`▾ layer 1 · 2 nodes`, `▾ layer 4`).
+  A bigger run folds consecutive done layers into one
+  `✓ layers 1–3 · 11 done` row, which opens to its layers, and opens only the
+  layers with a live node and the next layer still to come, which fitting
+  never shuts. The tree is at most 16 rows and still at most a third of the
+  screen; the owner's 6-node run is 14 rows at 150x42. Rows that do not fit
+  become one `+N more · /dag` row. A parked node was drawn `?` and counted
+  `unknown`, because the graph reader had no entry for the `parked` outcome.
+  It is now a waiting node with the status `parked` and the time since it
+  parked, and the header and its layer row count it as `parked`. One row
+  under it names what its park recorded it waits on, and nothing else: the
+  handle, named by its call (`terminal(uv run …)`) when it is one of the
+  session's background processes, then `until HH:MM` from its `wake_at`, then
+  its reason, and the process's own running time when the handle is one. The
+  parked and running times count on every second. The spinner turns on a
+  running or parked node's row. A waiting row, and a shut layer of waiting
+  nodes, carries a slow, faint dot cycle (`·` `··` `···`, one step a second).
+  Done rows, the done layers' row and a run that is not alive stay still,
+  and a done node's title is muted. This motion runs between turns too while
+  the run waits. While the terminal window is unfocused, the spinner and the
+  dots hold, as the wallpaper does (#2542), while the times keep counting,
+  redrawn once a second. An `unspecified-*` or unknown category no longer
+  draws a cell. Between turns, while something the session waits on still
+  runs, the working row's place above the composer says so, as it says a
+  turn runs: `✻ Waiting… (33m 47s · 1 agent · terminal)`. That is a delegated
+  child or dag-ulw node that wakes the parent as it ends (the running lanes
+  of the delegation graph the HUD reads), or a background
+  process Hermes will wake the session for (`notify_on_complete`, or
+  `watch_patterns` on a match). Each count shows only when it is not zero,
+  and the time is the longest wait. It has the working row's own spinner and
+  clock. A turn's working row takes over when a turn starts, and the row
+  goes when nothing is left to wait on. It is read from structure, never
+  from what the model said, and the info line is unchanged.
 - **dag-ulw refuses two nodes that write one file under different spellings.**
   `omh_dag` define, repair and extend refused a shared write scope with no
   direct edge only when both nodes wrote the same entry character for
@@ -77,10 +133,22 @@ All notable changes will be documented here.
   cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
   or an open question holds it, and a notice says to send `continue`. At most 2
   go between two prompts of the person's own; past that the old notice asks.
-- **The round-end check continues a turn less often.** A changed function's
-  name in another file no longer continues the turn when every mention there
-  is proven to need no change: another object's method of the same name, or
-  an import whose calls bind the same way before and after the edit.
+- **A resumed session with work left goes on by itself in the OMH TUI.**
+  `omh --resume <id>`, `/resume` and the session picker opened the session
+  and waited for the person to write, so an interrupted turn or an open
+  dag-ulw run sat still. Now the TUI says "Resuming: {why}; sending
+  `continue` in 3 s · Esc cancels" and sends `continue` as a typed one goes,
+  when Hermes interrupted the session's last turn itself (a sleep past its
+  turn lease), or when the session holds a dag-ulw run that a turn would
+  move with no node running: nodes ready, back to settle, parked past their
+  wake time, or out with no child after a restart. The `continue`'s turn
+  then brings the run's own turn-start line. Hermes keeps no cause for an
+  interrupt, so each OMH TUI writes how a session's last turn ended to
+  `<omh_home>/tui/turn-ends.json` (the newest 128 sessions), the person's
+  Esc or `/stop` as they ask for it. It never goes on for the person's stop,
+  a session with a turn running (its own or another client's), a turn
+  Hermes resubmits itself after a crash, a run that needs repair, a draft,
+  a queued line or an open question.
 
 ## 4.0.6 - 2026-11-04
 
