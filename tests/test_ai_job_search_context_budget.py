@@ -126,8 +126,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # `dag-ulw` nodes beside `ultrawork` board rows (+12, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin
             # before it was 93de88ac...c1c0.
-            (skill_capabilities, 530439, FULL_ROW_DELTA_CAP,
-             'b8552607995eaa911bc93d87dee0894405e7b5b85d401c3cbb4fbe78431a5e6b',
+            # 530439 -> 530636 and the digest re-derived: dag-ulw's category-ladder line names the
+            # `review` category for review nodes and a low one for mechanical baseline/verify nodes
+            # (+197, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and
+            # the pin before it was b8552607...5e6b.
+            (skill_capabilities, 530636, FULL_ROW_DELTA_CAP,
+             '9c1c6fe869269c3e398cce1924d866fbcd0b587bcd1cbc8a11d5d6e57a4c55d2',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -339,7 +343,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # rollback in STOP WHEN); only refactor-plan moves, and the pin before it was 354f7cf2...5e6b.
         # Research citation receipts: ulw-research, web-research and research-brief gain one receipts-verify
         # clause; only those three bodies move, and the pin before it was ab8d58ad...6258e7.
-        self.assertEqual(_digest(legacy_hashes), '94013490888e496e6380bef9a16aea7c59446023a1a299253cf2eaf65c52f849')
+        # dag-ulw's category-ladder line names the `review` category for review nodes and a low
+        # one for mechanical baseline/verify nodes; only dag-ulw moves, and the pin before it was 94013490...f849.
+        self.assertEqual(_digest(legacy_hashes), '33efad15588c38ce8b63db5e555b585bd46422008f0fbf334582b246d88670ac')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

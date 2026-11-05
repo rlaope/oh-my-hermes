@@ -937,7 +937,11 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72455
 # Planning skills offer dag-ulw after acceptance: the `ralplan` row's node-prompt
 # line names `dag-ulw` nodes beside `ultrawork` board rows (+12). No other row
 # moved. 533499 + 12 = 533511, measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533511
+# 533511 -> 533708: the `dag-ulw` row only. Its category-ladder quality-bar line
+# says a `review` node takes the `review` category and a `baseline` or
+# mechanical `verify` node stays `quick` or `unspecified-low` (+197). Measured
+# from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533708
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

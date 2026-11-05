@@ -1197,6 +1197,59 @@ class ReviewLintTests(unittest.TestCase):
                 self.assertNotIn("no_review_node", record["lint"])
 
 
+class ReviewCategoryLintTests(unittest.TestCase):
+    """`review_not_review_category:<id>`: a `role=review` node routed off the `review` category. Advice only.
+
+    Mutation: name it for a build or verify node on `unspecified-high`, for a review node on `review`, or let it
+    refuse the define or move the run's goal verdict.
+    """
+
+    def test_a_review_node_off_the_review_category_is_linted_and_the_run_still_verifies(self) -> None:
+        with homes():
+            result = call(action="define", run="feat", nodes=[
+                node("api", category="unspecified-high", scope=("src/api.py",)),
+                node("diff", category="unspecified-high", label="Code review", depends_on=("api",), role="review"),
+                node("check", depends_on=("api", "diff"), role="verify"),
+            ])
+        self.assertEqual(result["status"], "ok", result)
+        self.assertEqual(result["lint"], ["review_not_review_category:diff"])
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("src/api.py",)),
+            node("diff", category="unspecified-high", depends_on=("api",), role="review"),
+            node("check", depends_on=("api", "diff"), role="verify"),
+        ], time.time())
+        for node_id in ("api", "diff", "check"):
+            settled(record, node_id, "accepted")
+        self.assertEqual(finished(record), ("done", "verified", []))
+
+    def test_no_finding_for_build_or_verify_nodes_on_a_high_category_or_a_review_node_on_review(self) -> None:
+        cases = {
+            "build on unspecified-high": [node("api", category="unspecified-high", scope=("src/api.py",)),
+                                          node("diff", category="review", depends_on=("api",), role="review"),
+                                          node("check", depends_on=("api", "diff"), role="verify")],
+            "judging verify on unspecified-high": [
+                node("api", scope=("src/api.py",)),
+                node("diff", category="review", depends_on=("api",), role="review"),
+                node("check", category="unspecified-high", label="Independent verification",
+                     depends_on=("api", "diff"), role="verify")],
+            "review on review": [node("api", scope=("src/api.py",)),
+                                 node("diff", category="review", label="Code review", depends_on=("api",),
+                                      role="review"),
+                                 node("check", depends_on=("api", "diff"), role="verify")],
+        }
+        for name, definitions in cases.items():
+            with self.subTest(case=name):
+                record = dag_run.new_record(PARENT, "feat", "", "", definitions, time.time())
+                self.assertEqual(record["lint"], [])
+
+    def test_a_run_with_no_review_node_keeps_only_no_review_node(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", category="unspecified-high", scope=("src/api.py",)),
+            node("check", category="unspecified-high", depends_on=("api",), role="verify"),
+        ], time.time())
+        self.assertEqual(record["lint"], ["no_review_node"])
+
+
 class GoalVerdictTests(unittest.TestCase):
     def test_a_run_with_no_verify_node_is_done_and_unverified(self) -> None:
         record = dag_run.new_record(PARENT, "feat", "", "", [

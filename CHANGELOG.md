@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **dag-ulw review nodes route to the `review` category, and checks that only
+  run commands stay low.** The skill's difficulty-ladder rule now says a
+  `role=review` node takes the `review` category, and a `baseline` or
+  mechanical `verify` node (run gates or tests, compare output) stays `quick`
+  or `unspecified-low` unless judging its result needs reasoning. Before, the
+  planner put code reviews and gate runs on `unspecified-high` in some runs
+  and on `review` or `unspecified-low` in others. `omh_dag` define, repair
+  and extend now also return the advisory lint
+  `review_not_review_category:<id>` for a review node on any other category.
+  Like every lint finding it never refuses a run; verify nodes are not
+  linted, since judging a result can need a high category.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and
