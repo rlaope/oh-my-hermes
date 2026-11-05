@@ -166,6 +166,7 @@ from .gateway_restart import (
     impact_lines,
     manual_command,
     read_impact,
+    read_record,
     restart_spawn,
 )
 from .herdr import HerdrReporter
@@ -363,7 +364,7 @@ from .width import cell_width, clusters, line_width, truncate, truncate_left, tr
 from ..version import __version__
 
 if TYPE_CHECKING:  # the bot board loads when it is opened (`_bots`), not with the TUI
-    from .bot_board import BoardReader
+    from .bot_board import BoardReader, Gateway
 
 # While the key decoder holds bytes (a lone ESC, half a sequence, an open paste), the loop reads with this
 # timeout, and an empty read settles what is held only once input has been quiet for `FLUSH_SILENCE_SECONDS`:
@@ -826,13 +827,17 @@ GATEWAY_RESTART_HELD_NOTICE = (
 )
 GATEWAY_RESTARTING_SAY = ("restarting Hermes' gateway… {seconds}s", "restarting gateway… {seconds}s")
 # A restart this screen did not ask for: `hermes gateway restart` in another terminal, `omh update`, a service manager,
-# another screen's `/gateway restart` (`App._external_restart`). Told by the gateway's record (`gateway_state.json`:
-# a live process draining, asked to restart, or starting) or by the attach child's exit 69 (Hermes says the gateway is
-# starting or draining, or its socket is not answering yet). The screen waits instead of spending the crash respawn's
-# three tries in a second: while the record says the gateway drains it spawns nothing (Hermes' service brings the new
-# one up once running work finished, up to `restart_after_turn_timeout`) and waits however long that takes; otherwise
-# it tries again, pausing 1, 2, 4, then GATEWAY_REATTACH_MAX_PAUSE_SECONDS, for GATEWAY_EXTERNAL_REATTACH_SECONDS. Any
-# other failure of a try spends one of the crash respawn's RESPAWN_LIMIT, so a refusal still ends the wait fast.
+# another screen's `/gateway restart` (`App._external_restart`). Told by the gateway's record (`gateway_state.json`,
+# `record_verdict`: a restart asked, or a live process starting) or by the attach child's exit 69 (Hermes says the
+# gateway is starting or draining, or its socket is not answering yet). The screen waits instead of spending the crash
+# respawn's three tries in a second: while the record says a live process drains for a restart, a try goes every
+# GATEWAY_REATTACH_MAX_PAUSE_SECONDS (Hermes' after-turn wait admits a client to answer a parked question; otherwise
+# the child gets 69, and Hermes never starts a gateway beside a draining one) and the wait lasts as long as the drain,
+# at most Hermes' `restart_after_turn_timeout` past the drop plus GATEWAY_EXTERNAL_REATTACH_SECONDS; otherwise tries
+# pause 1, 2, 4, then GATEWAY_REATTACH_MAX_PAUSE_SECONDS, for GATEWAY_EXTERNAL_REATTACH_SECONDS. A try that fails any
+# other way, or a resume the gateway refuses, spends one of the crash respawn's RESPAWN_LIMIT, so a refusal still ends
+# the wait fast. A record saying the gateway was stopped (`hermes gateway stop`: no restart asked), or that the new one
+# failed to start, ends it at once: a try would start the service the person stopped.
 GATEWAY_EXTERNAL_REATTACH_SECONDS = 150.0
 GATEWAY_REATTACH_MAX_PAUSE_SECONDS = 5.0
 GATEWAY_EXTERNAL_REATTACHING_NOTICE = (
@@ -840,9 +845,32 @@ GATEWAY_EXTERNAL_REATTACHING_NOTICE = (
     "then, and ctrl+c leaves."
 )
 GATEWAY_EXTERNAL_GAVE_UP = "Hermes' gateway did not come back within {seconds:g} s ({error})"
+GATEWAY_STOPPED_REASON = "Hermes' gateway was stopped (`hermes gateway start` starts it again)"
+GATEWAY_START_FAILED_REASON = "the new Hermes gateway did not start ({why})"
 GATEWAY_REATTACH_SAY = ("Hermes' gateway is restarting… {elapsed} · ctrl+c leaves", "gateway restarting… {elapsed}")
-DRAINING = "draining"  # `gateway_state.json` `gateway_state` of a gateway letting running work finish
-RESTARTING_STATES = frozenset({DRAINING, "starting"})
+# `gateway_state.json` `gateway_state`: letting running work finish, ended, a start that failed, a start under way.
+DRAINING, STOPPED, STARTUP_FAILED, STARTING = "draining", "stopped", "startup_failed", "starting"
+# What a gateway's record says of a drop (`record_verdict`).
+RECORD_RESTARTING, RECORD_STOPPED, RECORD_FAILED = "restarting", "stopped", "failed"
+
+
+def record_verdict(gateway: Gateway | None, seen: float | None = None) -> str:
+    """What the record of the gateway serving the session says of a drop: `restarting` (a restart asked, Hermes'
+    `restart_requested`, while it runs, drains or once it stopped; or a live process starting), `stopped` (stopped or
+    draining to stop with no restart asked: Hermes' "shutdown"), `failed` (a start that failed, recorded after `seen`,
+    the record's `updated` at the drop), or "" when it says nothing either way."""
+    if gateway is None:
+        return ""
+    if gateway.restart_requested and (gateway.live or gateway.state in (DRAINING, STOPPED)):
+        return RECORD_RESTARTING
+    if gateway.live and gateway.state == STARTING:
+        return RECORD_RESTARTING
+    if gateway.state == STOPPED or (gateway.live and gateway.state == DRAINING):
+        return RECORD_STOPPED
+    if (not gateway.live and gateway.state == STARTUP_FAILED and gateway.updated is not None
+            and (seen is None or gateway.updated > seen)):
+        return RECORD_FAILED
+    return ""
 # What may still go while Hermes' gateway restarts: the stop of the running turn (the attach child answers it), and
 # the TUI's own commands except the ones that call the gateway.
 GATEWAY_RESTART_PASSES = frozenset({"stop"})
@@ -1250,6 +1278,8 @@ class GatewayRestart:
     output: tuple[str, ...] = ()  # the command's last lines, once it finished: said when the reattach cannot confirm
     slow_said: bool = False  # the one notice past GATEWAY_RESTART_SECONDS went
     external: bool = False  # a restart run elsewhere (`App._external_restart`): no command, `run` is None
+    cap: float | None = None  # the latest a drain may stretch `until` to; None: no cap
+    seen: float | None = None  # the record's `updated` at the drop: a failed start recorded later ends the wait
 
 
 @dataclass(frozen=True)
@@ -1285,6 +1315,11 @@ def notification_from(payload: Mapping[str, Any], now: float) -> Notification | 
         expires_at = now + ttl / 1000
     level = level if level in contract.NOTIFICATION_LEVELS else "info"
     return Notification(text, level, as_text(payload.get(contract.NOTIFICATION_KEY)), expires_at)
+
+
+def reattach_pause_seconds(tries: int) -> float:
+    """The pause after a reattach's `tries`-th try: 1 s, 2 s, 4 s, then `GATEWAY_REATTACH_MAX_PAUSE_SECONDS`."""
+    return min(LAUNCH_RETRY_SECONDS * 2 ** max(min(tries, 8) - 1, 0), GATEWAY_REATTACH_MAX_PAUSE_SECONDS)
 
 
 def respawn_ready_seconds(environ: Mapping[str, str]) -> float:
@@ -2005,6 +2040,7 @@ class App(ModesMixin, AgentViewMixin):
         self.respawn_reason = ""  # the gateway is gone, for this reason, and a respawn is due after this step
         self.respawn_not_ready = False  # and its child said the gateway is not answering yet (`GATEWAY_NOT_READY_EXIT`)
         # While a reattach waits (`_respawn_gateway`): since when, for the status row, and the second it last drew.
+        # After `/gateway restart` the row counts from the command's start; after a restart run elsewhere, from the drop.
         self.reattach_since: float | None = None
         self.reattach_shown = -1
         # A confirmed `/gateway restart` (`GatewayRestart`): while Hermes' command runs, a respawn waits for it; once
@@ -2012,6 +2048,7 @@ class App(ModesMixin, AgentViewMixin):
         self.gateway_restart: GatewayRestart | None = None
         self.start_restart: Callable[..., Any] = RestartRun
         self.read_restart_impact: Callable[[Mapping[str, str], str], RestartImpact] = read_impact
+        self.read_gateway_record: Callable[[Mapping[str, str], str], Gateway | None] = read_record
         self.sleep: Callable[[float], None] = time.sleep  # the pause between a reattach's tries
         self.environ = environ
         self.motion = not reduced_motion(environ)
@@ -3166,9 +3203,12 @@ class App(ModesMixin, AgentViewMixin):
         pausing longer each time (`_reattach_pause`), until `until`. A restart
         run elsewhere is the same reattach (`_external_restart`), entered at
         the drop or at a try's not-ready exit; there a try that fails another
-        way spends one of the crash respawn's tries. While the gateway's record
-        says it drains, neither waits on a try: nothing is spawned, and the wait
-        lasts as long as the drain does. One status row counts the wait
+        way, or a refused resume, spends one of the crash respawn's tries, and a
+        record saying the gateway was stopped or failed to start ends it at once
+        (as it ends a crash respawn: a try would start a stopped service). While
+        the record says a live process drains for a restart, a try goes every
+        `GATEWAY_REATTACH_MAX_PAUSE_SECONDS` and the wait lasts as long as the
+        drain, up to `cap`. One status row counts the wait
         (`GATEWAY_REATTACH_SAY`).
         """
         reason, self.respawn_reason = self.respawn_reason, ""
@@ -3202,6 +3242,13 @@ class App(ModesMixin, AgentViewMixin):
             self.respawned_at.append(now)
             return True
 
+        def wait() -> bool:
+            """The pause before the next try: longer after each, the longest while the gateway drains."""
+            nonlocal tries
+            tries += 1
+            pause = GATEWAY_REATTACH_MAX_PAUSE_SECONDS if draining else reattach_pause_seconds(tries)
+            return self._reattach_pause(restart.until, pause)  # type: ignore[union-attr, arg-type]
+
         def gave_up(restart: GatewayRestart, error: str) -> str:
             if restart.external:
                 return GATEWAY_EXTERNAL_GAVE_UP.format(seconds=GATEWAY_EXTERNAL_REATTACH_SECONDS, error=error)
@@ -3226,16 +3273,28 @@ class App(ModesMixin, AgentViewMixin):
         old: GatewayClient | None = self.client
         said = False
         tries = 0  # the reattach's tries so far: each pause after one is longer (`_reattach_pause`)
+        draining = False
         while True:
             now = self.clock()
             draining = False
+            if restart is None or restart.external:
+                # A gateway stopped on purpose is not started again by a try; a new one that failed to start says why.
+                record = self.read_gateway_record(self.environ, self.launch_profile) if self.shared_gateway else None
+                verdict = record_verdict(record, restart.seen if restart is not None else None)
+                if verdict == RECORD_STOPPED:
+                    lose(GATEWAY_STOPPED_REASON)
+                    return
+                if verdict == RECORD_FAILED and restart is not None:
+                    lose(GATEWAY_START_FAILED_REASON.format(why=record.exit_reason or STARTUP_FAILED))  # type: ignore[union-attr]
+                    return
             if restart is not None:
-                # A gateway the record says drains is not tried: Hermes refuses new work meanwhile, and its service
-                # starts the new one. The wait lasts as long as the drain, then the reattach's own time.
+                # A live gateway draining for a restart refuses new work, but its after-turn wait admits a client to
+                # answer a parked question: tried at the longest pause, the wait lasting as long as the drain.
                 draining = self._gateway_draining()
                 if draining:
-                    restart.until = max(restart.until, now + (  # type: ignore[type-var]
-                        GATEWAY_EXTERNAL_REATTACH_SECONDS if restart.external else GATEWAY_REATTACH_SECONDS))
+                    longer = now + (GATEWAY_EXTERNAL_REATTACH_SECONDS if restart.external else GATEWAY_REATTACH_SECONDS)
+                    longer = longer if restart.cap is None else min(longer, restart.cap)
+                    restart.until = max(restart.until, longer)  # type: ignore[type-var]
                 if not stored or now >= restart.until:  # type: ignore[operator]
                     lose(gave_up(restart, reason))
                     return
@@ -3260,12 +3319,6 @@ class App(ModesMixin, AgentViewMixin):
             if old is not None:  # reaped before a new one is spawned, once the screen says why the TUI waits
                 old.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
                 old = None
-            if draining:
-                tries += 1
-                if not self._reattach_pause(restart.until, tries):  # type: ignore[union-attr, arg-type]
-                    lose(RESPAWN_LEFT_REASON)
-                    return
-                continue
             ready = respawn_ready_seconds(self.environ)
             if restart is not None:
                 ready = max(min(ready, restart.until - self.clock()), CANCEL_POLL_SECONDS)  # type: ignore[operator]
@@ -3283,8 +3336,7 @@ class App(ModesMixin, AgentViewMixin):
                 elif restart is not None and restart.external and not waits and not spend():
                     lose(reason)
                     return
-                tries += 1
-                if restart is not None and not self._reattach_pause(restart.until, tries):  # type: ignore[arg-type]
+                if restart is not None and not wait():
                     lose(RESPAWN_LEFT_REASON)
                     return
                 continue
@@ -3305,8 +3357,7 @@ class App(ModesMixin, AgentViewMixin):
                 elif restart is not None and restart.external and not error.not_ready and not spend():
                     lose(reason)
                     return
-                tries += 1
-                if restart is not None and not self._reattach_pause(restart.until, tries):  # type: ignore[arg-type]
+                if restart is not None and not wait():
                     lose(RESPAWN_LEFT_REASON)
                     return
                 continue
@@ -3317,8 +3368,12 @@ class App(ModesMixin, AgentViewMixin):
                     return
                 # A gateway just back may refuse or not answer yet: tried again until the reattach's deadline.
                 reason = f"the new Hermes gateway did not resume session {stored} ({error})"
-                tries += 1
-                if not self._reattach_pause(restart.until, tries):  # type: ignore[arg-type]
+                # A refusal is an answer, not a gateway that is not up yet: after a restart run elsewhere it spends a
+                # crash try; a resume left unanswered keeps waiting.
+                if restart.external and isinstance(error, GatewayCallError) and not spend():
+                    lose(reason)
+                    return
+                if not wait():
                     lose(RESPAWN_LEFT_REASON)
                     return
                 continue
@@ -3502,25 +3557,25 @@ class App(ModesMixin, AgentViewMixin):
         version the gateway had not loaded is read now, from its record's home, for the note once it is back."""
         if not self.shared_gateway or not self.stored_id:
             return None
-        impact = self.read_restart_impact(self.environ, self.launch_profile)
-        gateway = impact.gateway
-        restarting = gateway is not None and gateway.live and (
-            gateway.state in RESTARTING_STATES or gateway.restart_requested)
-        if not (not_ready or restarting):
+        record = self.read_gateway_record(self.environ, self.launch_profile)
+        verdict = record_verdict(record)
+        if verdict in (RECORD_STOPPED, RECORD_FAILED) or not (not_ready or verdict == RECORD_RESTARTING):
             return None
         from ..maintenance.hermes_gateway import stale_bundle_version
 
+        impact = self.read_restart_impact(self.environ, self.launch_profile)
         stale = stale_bundle_version(impact.home) if impact.home is not None else None
         now = self.clock()
         return GatewayRestart(None, now, manual_command(self.launch_profile), impact.home, stale,
-                              until=now + GATEWAY_EXTERNAL_REATTACH_SECONDS, external=True)
+                              until=now + GATEWAY_EXTERNAL_REATTACH_SECONDS, external=True,
+                              cap=now + impact.wait_seconds + GATEWAY_EXTERNAL_REATTACH_SECONDS,
+                              seen=record.updated if record is not None else None)
 
     def _gateway_draining(self) -> bool:
-        """Whether the record of the gateway serving this session says its process still runs, letting running work
-        finish before a restart (`draining`, or a restart asked): a try now would be refused, and starting one is
-        Hermes' service's to do."""
-        gateway = self.read_restart_impact(self.environ, self.launch_profile).gateway
-        return gateway is not None and gateway.live and (gateway.state == DRAINING or gateway.restart_requested)
+        """Whether the record of the gateway serving this session says its process still runs with a restart asked
+        (Hermes' `restart_requested`: letting running work finish first). A dead pid's record drains nothing."""
+        gateway = self.read_gateway_record(self.environ, self.launch_profile)
+        return gateway is not None and gateway.live and gateway.restart_requested
 
     def _restart_running(self) -> bool:
         """Whether Hermes' restart command still runs: a respawn waits meanwhile, however long it takes."""
@@ -3602,10 +3657,9 @@ class App(ModesMixin, AgentViewMixin):
             return line.arg.strip().lower() == GATEWAY_RESTART_ARG
         return line.command.name not in GATEWAY_RESTART_HELD_LOCAL
 
-    def _reattach_pause(self, until: float, tries: int) -> bool:
-        """The wait before a reattach tries again after `tries` tries: 1 s, 2 s, 4 s, then
-        `GATEWAY_REATTACH_MAX_PAUSE_SECONDS`, never past `until`; False once the person leaves (Ctrl+C, Ctrl+D)."""
-        pause = min(LAUNCH_RETRY_SECONDS * 2 ** max(min(tries, 8) - 1, 0), GATEWAY_REATTACH_MAX_PAUSE_SECONDS)
+    def _reattach_pause(self, until: float, pause: float) -> bool:
+        """The wait before a reattach tries again, `pause` long and never past `until`; False once the person leaves
+        (Ctrl+C, Ctrl+D)."""
         end = min(self.clock() + pause, until)
         while (left := end - self.clock()) > 0:
             if self._respawn_cancel():

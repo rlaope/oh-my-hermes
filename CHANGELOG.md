@@ -11,18 +11,23 @@ All notable changes will be documented here.
   second: a draining gateway answers "not ready" (the attach child's exit
   69) until its running work is done, so the TUI exited with a resume
   hint. Now a drop where the gateway's record (`gateway_state.json`) says
-  it drains, was asked to restart or is starting, or where the attach
+  a restart was asked or a new process is starting, or where the attach
   child exits 69, keeps the screen open with one status row (`Hermes'
   gateway is restarting… 0:42 · ctrl+c leaves`) and reattaches the same
-  session, keeping the draft and holding prompts as before. While the
-  record says the old process drains, nothing is spawned and the wait
-  lasts as long as the drain; otherwise tries pause 1, 2, 4, then 5 s for
-  up to 150 s. Once back it says `Hermes' gateway is back` and, when the
-  restart loaded a newer OMH, which version runs now. A try that fails
-  any other way still spends one of the crash respawn's three, so a
-  refused attach ends fast; a gateway that never comes back ends after
-  the budget with the same resume hint. `/gateway restart`'s own reattach
-  shares the pauses, the drain wait and the status row.
+  session, keeping the draft and holding prompts as before. While the old
+  process drains for the restart, a try goes every 5 s (Hermes' after-turn
+  wait lets a client answer a parked question) and the wait lasts as long
+  as the drain, at most Hermes' `restart_after_turn_timeout` plus 150 s;
+  otherwise tries pause 1, 2, 4, then 5 s for up to 150 s. Once back it
+  says `Hermes' gateway is back` and, when the restart loaded a newer OMH,
+  which version runs now. A gateway stopped elsewhere (`hermes gateway
+  stop`: no restart asked) or a new one that failed to start ends the
+  screen at once with the resume hint, so no try starts a stopped service
+  again. A try that fails any other way, or a resume the gateway refuses,
+  still spends one of the crash respawn's three; a gateway that never
+  comes back ends after the budget with the same resume hint.
+  `/gateway restart`'s own reattach shares the pauses, the drain wait and
+  the status row.
 
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a

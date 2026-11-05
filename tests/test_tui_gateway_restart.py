@@ -34,6 +34,7 @@ from omh.tui.app import (
     GATEWAY_CANCEL_CHOICE,
     GATEWAY_EXTERNAL_REATTACH_SECONDS,
     GATEWAY_EXTERNAL_REATTACHING_NOTICE,
+    GATEWAY_STOPPED_REASON,
     GATEWAY_NOW_RUNS_NOTICE,
     GATEWAY_REATTACH_SECONDS,
     GATEWAY_REATTACHED_NOTICE,
@@ -56,8 +57,12 @@ from omh.tui.app import (
     RECONNECTED_NOTICE,
     RESPAWN_LEFT_REASON,
     RESPAWNED_NOTICE,
+    RECORD_FAILED,
+    RECORD_RESTARTING,
+    RECORD_STOPPED,
     SLOT_ARM_SECONDS,
     App,
+    record_verdict,
 )
 from omh.tui.bot_board import Gateway, Platform
 from omh.tui.gateway import GatewayCallError, GatewayExited, GatewayTimeout, GatewayUnavailable
@@ -500,50 +505,60 @@ class GenerationNoteTests(unittest.TestCase):
 
 
 class ExternalRestartTests(unittest.TestCase):
-    BACK_RESUME = {**RESUMED, "authority_epoch": EPOCH_AFTER}
-
     """A restart this screen did not ask for (`hermes gateway restart` elsewhere, `omh update`, launchd): the screen
-    waits with one status row and reattaches the same session, never spawning while the record says it drains."""
+    waits with one status row and reattaches the same session; a stop elsewhere ends it at once."""
 
-    def external(self, *clients: RespawnClient, record=None):
+    BACK_RESUME = {**RESUMED, "authority_epoch": EPOCH_AFTER}
+    DRAINING = Gateway("draining", True, 4242, active_agents=1, updated=50.0, restart_requested=True)
+    NEW = Gateway("running", True, 4343, updated=90.0)  # the service's new pid
+
+    def external(self, *clients: RespawnClient, record=None, impact: RestartImpact | None = None,
+                 make=None):
+        """An attached app whose gateway record is `record(now)`; `make(now)` scripts the next client by time."""
         spawner = Spawner(*clients)
-        app, old, spawner, _started, now = restart_app(spawner=spawner)
+        app, old, spawner, _started, now = restart_app(spawner=spawner, impact=impact or RestartImpact(None, None))
         spawned: list[float] = []
 
         def make_client(spawn: object, first_id: int = 1) -> RespawnClient:
             spawned.append(now[0])
+            if make is not None:
+                spawner.queued.insert(0, make(now[0]))
             return spawner(spawn, first_id)
 
         app.make_client = make_client  # type: ignore[assignment]
-        app.read_restart_impact = (  # type: ignore[assignment]
-            lambda environ, profile: record(now[0]) if record is not None else RestartImpact(None, None))
+        app.read_gateway_record = (  # type: ignore[assignment]
+            lambda environ, profile: record(now[0]) if record is not None else None)
         return app, old, spawner, now, spawned
 
-    def test_a_service_restart_draining_for_minutes_is_waited_out_without_a_spawn_then_reattached(self) -> None:
-        draining = Gateway("draining", True, 4242, active_agents=1, restart_requested=True)
+    @staticmethod
+    def not_up() -> RespawnClient:
+        return RespawnClient(start_error=GatewayUnavailable("draining", returncode=69))
+
+    def test_a_service_restart_draining_for_minutes_is_tried_every_5_s_then_reattached(self) -> None:
         rows: list[list[str]] = []
 
-        def record(at: float) -> RestartImpact:
+        def record(at: float) -> Gateway:
             if at < 700.0:  # the old pid drains its running turn for ten minutes, past any fixed budget
                 if 130.0 <= at < 140.0 and not rows:
                     rows.append(drawn(app))
-                return RestartImpact(None, draining)
-            return RestartImpact(None, Gateway("running", True, 4343))  # launchd's new pid
+                return self.DRAINING
+            return self.NEW
 
-        app, old, spawner, now, spawned = self.external(RespawnClient(resume=self.BACK_RESUME), record=record)
+        app, old, spawner, now, spawned = self.external(record=record, make=lambda at: (
+            self.not_up() if at < 700.0 else RespawnClient(resume=self.BACK_RESUME)))
         type_text(app, "half a thought")
         old.inbox.append(GatewayExited(1))  # the drain closed this screen's connection
         app._step()
         self.assertIsNone(app.exit_code)
-        self.assertEqual(len(spawner.made), 1)
-        self.assertGreaterEqual(spawned[0], 700.0)  # nothing spawned while the record said it drains
-        self.assertIs(app.client, spawner.made[0])
-        self.assertEqual(spawner.made[0].blocking, [("session.resume", {"session_id": STORED, "cols": 80})])
+        gaps = {round(later - earlier) for earlier, later in zip(spawned, spawned[1:])}
+        self.assertEqual(gaps, {5})  # one try each 5 s while it drains, never a burst
+        self.assertGreaterEqual(spawned[-1], 700.0)
+        self.assertIs(app.client, spawner.made[-1])
+        self.assertEqual(spawner.made[-1].blocking, [("session.resume", {"session_id": STORED, "cols": 80})])
         self.assertEqual(app.stored_id, STORED)
         self.assertEqual(app.composer.text, "half a thought")
-        said = notices(app)
         self.assertEqual(notices(app, NOTICE_WARN), [GATEWAY_EXTERNAL_REATTACHING_NOTICE.format(session=STORED)])
-        self.assertIn(GATEWAY_REATTACHED_NOTICE.format(session=STORED), said)  # a new owner epoch
+        self.assertIn(GATEWAY_REATTACHED_NOTICE.format(session=STORED), notices(app))  # a new owner epoch
         self.assertEqual(app.respawned_at, [])  # none of the crash respawn's three
         self.assertIsNone(app.reattach_since)
         (screen,) = rows
@@ -551,10 +566,56 @@ class ExternalRestartTests(unittest.TestCase):
                             for line in screen), screen)
         self.assertFalse(any("restarting…" in line for line in drawn(app)))
 
+    def test_the_after_turn_wait_admits_a_try_so_a_parked_question_can_be_answered(self) -> None:
+        app, old, spawner, _now, _spawned = self.external(
+            RespawnClient(resume=dict(RESUMED, authority_epoch=EPOCH_BEFORE)), record=lambda at: self.DRAINING)
+        old.inbox.append(GatewayExited(1))
+        app._step()
+        self.assertIsNone(app.exit_code)
+        self.assertEqual(len(spawner.made), 1)  # tried at once, while it drains
+        self.assertIn(RECONNECTED_NOTICE.format(session=STORED), notices(app))  # the same owner, still draining
+
+    def test_a_stop_elsewhere_leaves_at_once_without_starting_the_service_again(self) -> None:
+        records = {
+            "draining to stop": Gateway("draining", True, 4242, updated=50.0),
+            "stopped": Gateway("stopped", False, 4242, updated=50.0),
+        }
+        for name, stopped in records.items():
+            for code in (1, 69):
+                with self.subTest(record=name, code=code):
+                    app, old, spawner, _now, _spawned = self.external(record=lambda at, stopped=stopped: stopped)
+                    old.inbox.append(GatewayExited(code))
+                    app._step()
+                    self.assertEqual(app.exit_code, 1)
+                    self.assertEqual(spawner.made, [])
+                    self.assertIn(GATEWAY_STOPPED_REASON, app.farewell)
+                    self.assertIn("Resume the session in Hermes' own terminal", app.farewell)
+
+    def test_a_stop_during_the_wait_ends_it(self) -> None:
+        def record(at: float) -> Gateway:
+            return self.DRAINING if at < 120.0 else Gateway("stopped", False, 4242, updated=119.0)
+
+        app, old, spawner, now, _spawned = self.external(record=record, make=lambda at: self.not_up())
+        old.inbox.append(GatewayExited(1))
+        app._step()
+        self.assertEqual(app.exit_code, 1)
+        self.assertLess(now[0], 130.0)
+        self.assertIn(GATEWAY_STOPPED_REASON, app.farewell)
+
+    def test_a_start_that_failed_after_the_drop_ends_the_wait_with_hermes_reason(self) -> None:
+        failed = Gateway("startup_failed", False, 4343, updated=60.0, exit_reason="config.yaml: bad model")
+
+        app, old, spawner, now, _spawned = self.external(
+            record=lambda at: self.DRAINING if at < 110.0 else failed, make=lambda at: self.not_up())
+        old.inbox.append(GatewayExited(1))
+        app._step()
+        self.assertEqual(app.exit_code, 1)
+        self.assertLess(now[0], 120.0)
+        self.assertIn("the new Hermes gateway did not start (config.yaml: bad model)", app.farewell)
+
     def test_a_restart_without_a_service_is_tried_again_with_growing_pauses(self) -> None:
-        not_up = [RespawnClient(start_error=GatewayUnavailable("starting", returncode=69)) for _ in range(5)]
         app, old, spawner, now, spawned = self.external(
-            *not_up, RespawnClient(resume=self.BACK_RESUME))
+            *[self.not_up() for _ in range(5)], RespawnClient(resume=self.BACK_RESUME))
         old.inbox.append(GatewayExited(1))
         app._step()
         self.assertIsNone(app.exit_code)
@@ -568,9 +629,19 @@ class ExternalRestartTests(unittest.TestCase):
         self.assertEqual(len(app.respawned_at), 1)
         self.assertEqual(app.stored_id, STORED)
 
+    def test_a_dead_pids_draining_record_is_not_a_drain(self) -> None:
+        dead = Gateway("draining", False, 4242, updated=50.0, restart_requested=True)
+        app, old, spawner, _now, spawned = self.external(
+            *[self.not_up() for _ in range(3)], RespawnClient(resume=self.BACK_RESUME), record=lambda at: dead)
+        old.inbox.append(GatewayExited(1))
+        app._step()
+        self.assertIsNone(app.exit_code)
+        self.assertEqual([round(later - earlier) for earlier, later in zip(spawned, spawned[1:])], [1, 2, 4])
+        self.assertEqual(app.respawned_at, [])  # the record's restart asked: the wait began at the drop
+
     def test_a_going_away_exit_69_waits_from_the_drop(self) -> None:
-        not_up = [RespawnClient(start_error=GatewayUnavailable("draining", returncode=69)) for _ in range(2)]
-        app, old, spawner, _now, _spawned = self.external(*not_up, RespawnClient(resume=dict(RESUMED)))
+        app, old, spawner, _now, _spawned = self.external(*[self.not_up() for _ in range(2)],
+                                                          RespawnClient(resume=dict(RESUMED)))
         old.inbox.append(GatewayExited(69))
         app._step()
         self.assertIsNone(app.exit_code)
@@ -579,9 +650,15 @@ class ExternalRestartTests(unittest.TestCase):
         # No owner epoch named: the same gateway over a new connection, not a restart the screen can confirm.
         self.assertIn(RECONNECTED_NOTICE.format(session=STORED), notices(app))
 
+    def test_exit_69_waits_only_on_a_shared_gateway_with_a_session_to_resume(self) -> None:
+        for shared, stored in ((False, STORED), (True, "")):
+            with self.subTest(shared=shared, stored=stored):
+                app, _old, _spawner, _now, _spawned = self.external()
+                app.shared_gateway, app.stored_id = shared, stored
+                self.assertIsNone(app._external_restart(True))
+
     def test_a_gateway_that_never_comes_back_ends_after_the_budget_with_the_way_back(self) -> None:
-        not_up = [RespawnClient(start_error=GatewayUnavailable("starting", returncode=69)) for _ in range(200)]
-        app, old, spawner, now, _spawned = self.external(*not_up)
+        app, old, spawner, now, _spawned = self.external(make=lambda at: self.not_up())
         old.inbox.append(GatewayExited(69))
         app._step()
         self.assertEqual(app.exit_code, 1)
@@ -592,9 +669,19 @@ class ExternalRestartTests(unittest.TestCase):
         self.assertIn("Resume the session", app.farewell)
         self.assertIn(STORED, app.farewell)
 
+    def test_a_wedged_draining_record_waits_no_longer_than_hermes_after_turn_timeout_and_the_budget(self) -> None:
+        impact = RestartImpact(None, None, wait_seconds=60.0)
+        app, old, spawner, now, _spawned = self.external(
+            record=lambda at: self.DRAINING, impact=impact, make=lambda at: self.not_up())
+        old.inbox.append(GatewayExited(1))
+        app._step()
+        self.assertEqual(app.exit_code, 1)
+        self.assertLessEqual(now[0] - 100.0, 60.0 + GATEWAY_EXTERNAL_REATTACH_SECONDS)
+        self.assertGreaterEqual(now[0] - 100.0, GATEWAY_EXTERNAL_REATTACH_SECONDS)
+
     def test_a_try_that_fails_another_way_spends_the_crash_respawns_tries(self) -> None:
-        broken = [RespawnClient(start_error=GatewayUnavailable("refused", returncode=1)) for _ in range(10)]
-        app, old, spawner, now, _spawned = self.external(*broken)
+        app, old, spawner, now, _spawned = self.external(
+            make=lambda at: RespawnClient(start_error=GatewayUnavailable("refused", returncode=1)))
         old.inbox.append(GatewayExited(69))
         app._step()
         self.assertEqual(app.exit_code, 1)
@@ -602,24 +689,36 @@ class ExternalRestartTests(unittest.TestCase):
         self.assertLess(now[0] - 100.0, 60.0)
         self.assertIn("did not start", notices(app, NOTICE_ERROR)[-1])
 
-    def test_ctrl_c_while_it_drains_leaves_without_a_spawn(self) -> None:
-        draining = Gateway("draining", True, 4242, restart_requested=True)
-        app, old, spawner, _now, _spawned = self.external(record=lambda at: RestartImpact(None, draining))
+    def test_a_refused_resume_spends_a_crash_try_and_an_unanswered_one_keeps_waiting(self) -> None:
+        refused = GatewayCallError("session.resume", 4003, "session_not_found")
+        app, old, spawner, now, _spawned = self.external(make=lambda at: RespawnClient(resume=refused))
+        old.inbox.append(GatewayExited(69))
+        app._step()
+        self.assertEqual(app.exit_code, 1)
+        self.assertEqual(len(spawner.made), 4)
+        self.assertLess(now[0] - 100.0, 60.0)
+        silent = [RespawnClient(resume=GatewayTimeout("session.resume", 30)) for _ in range(3)]
+        app, old, spawner, _now, _spawned = self.external(*silent, RespawnClient(resume=self.BACK_RESUME))
+        old.inbox.append(GatewayExited(69))
+        app._step()
+        self.assertIsNone(app.exit_code)
+        self.assertEqual(app.respawned_at, [])
+
+    def test_ctrl_c_while_it_drains_leaves(self) -> None:
+        app, old, spawner, _now, _spawned = self.external(record=lambda at: self.DRAINING,
+                                                          make=lambda at: self.not_up())
         app.terminal.read = lambda timeout, wake=None: b"\x03" if timeout == 0.0 else b""  # type: ignore[method-assign]
         old.inbox.append(GatewayExited(1))
         app._step()
         self.assertEqual(app.exit_code, 1)
-        self.assertEqual(spawner.made, [])
+        self.assertEqual(len(spawner.made), 1)  # it left in the pause after the first try
         self.assertIn(RESPAWN_LEFT_REASON, app.farewell)
 
     def test_the_new_omh_version_is_named_once_the_restarted_gateway_loaded_it(self) -> None:
         home = Path("/nonexistent/.hermes")
-        draining = Gateway("draining", True, 4242, restart_requested=True)
-
-        def record(at: float) -> RestartImpact:
-            return RestartImpact(home, draining if at < 110.0 else Gateway("running", True, 4343))
-
-        app, old, _spawner, _now, _spawned = self.external(RespawnClient(resume=self.BACK_RESUME), record=record)
+        app, old, _spawner, _now, _spawned = self.external(
+            record=lambda at: self.DRAINING if at < 110.0 else self.NEW, impact=RestartImpact(home, None),
+            make=lambda at: self.not_up() if at < 110.0 else RespawnClient(resume=self.BACK_RESUME))
         old.inbox.append(GatewayExited(1))
         with patch("omh.maintenance.hermes_gateway.stale_bundle_version", side_effect=["4.0.7", None]) as stale:
             app._step()
@@ -630,12 +729,56 @@ class ExternalRestartTests(unittest.TestCase):
 
     def test_a_plain_drop_on_a_running_gateway_stays_the_crash_respawn(self) -> None:
         app, old, spawner, _now, _spawned = self.external(
-            RespawnClient(resume=dict(RESUMED)), record=lambda at: RestartImpact(None, HOST))
+            RespawnClient(resume=dict(RESUMED)), record=lambda at: Gateway("running", True, 4242, updated=50.0))
         old.inbox.append(GatewayExited(1))
         app._step()
         self.assertIsNone(app.exit_code)
         self.assertEqual(len(app.respawned_at), 1)
         self.assertNotIn(GATEWAY_EXTERNAL_REATTACHING_NOTICE.format(session=STORED), notices(app))
+
+
+class RecordTests(unittest.TestCase):
+    """`read_record`: the serving gateway's record, live or not, for a drop to be read by."""
+
+    def setUp(self) -> None:
+        top = tempfile.mkdtemp(prefix="omh-gateway-record-")
+        self.addCleanup(shutil.rmtree, top, ignore_errors=True)
+        self.root = Path(top) / ".hermes"
+
+    def write(self, home: Path, **record: object) -> None:
+        home.mkdir(parents=True, exist_ok=True)
+        (home / "gateway_state.json").write_text(json.dumps(record), encoding="utf-8")
+
+    def test_a_stopped_gateways_record_is_read_though_its_pid_is_gone(self) -> None:
+        self.write(self.root, pid=999999, gateway_state="stopped", restart_requested=False,
+                   updated_at="2026-11-06T00:00:00+00:00")
+        record = gateway_restart.read_record({"HERMES_HOME": str(self.root)}, "default")
+        self.assertIsNotNone(record)
+        self.assertEqual((record.state, record.live), ("stopped", False))  # type: ignore[union-attr]
+        self.assertIsNone(gateway_restart.read_impact({"HERMES_HOME": str(self.root)}, "default").gateway)
+
+    def test_no_home_or_no_record_is_none(self) -> None:
+        self.assertIsNone(gateway_restart.read_record({}, "default"))
+        self.assertIsNone(gateway_restart.read_record({"HERMES_HOME": str(self.root)}, "default"))
+
+    def test_the_verdicts(self) -> None:
+        cases = (
+            (Gateway("draining", True, 1, restart_requested=True), RECORD_RESTARTING),
+            (Gateway("stopped", False, 1, restart_requested=True), RECORD_RESTARTING),
+            (Gateway("starting", True, 1), RECORD_RESTARTING),
+            (Gateway("draining", True, 1), RECORD_STOPPED),
+            (Gateway("stopped", False, 1), RECORD_STOPPED),
+            (Gateway("startup_failed", False, 1, updated=60.0), RECORD_FAILED),
+            (Gateway("running", True, 1), ""),
+            (Gateway("running", False, 1), ""),  # an unexpected signal: Hermes keeps "running" for a restart
+            (Gateway("draining", False, 1), ""),
+            (None, ""),
+        )
+        for gateway, verdict in cases:
+            with self.subTest(gateway=gateway):
+                self.assertEqual(record_verdict(gateway), verdict)
+        old_failure = Gateway("startup_failed", False, 1, updated=40.0)
+        self.assertEqual(record_verdict(old_failure, seen=50.0), "")
 
 
 class SpawnTests(unittest.TestCase):
