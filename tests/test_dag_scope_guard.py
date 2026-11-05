@@ -105,12 +105,76 @@ class ScopeIsEnforcedTest(_Run):
         self.assertBlocked(self.write("grandchild", "src/ui.py"), "api")
 
 
+class ReviewFindingsTest(_Run):
+    """The four ways the first cut was wrong (independent review B1-B3, N1, N2), each driven through the hook."""
+
+    def _set_scope(self, node_id: str, scope: list[str]) -> None:
+        path = dag_run.record_path(self.home.omh, PARENT, RUN)
+        record = dag_run.read_run(path)
+        assert record is not None
+        for node in record["nodes"]:
+            if node["id"] == node_id:
+                node["write_scope"] = scope
+        dag_run.write_run(path, record)
+
+    def test_define_pins_the_workspace_root(self) -> None:
+        record = dag_run.read_run(dag_run.record_path(self.home.omh, PARENT, RUN))
+        assert record is not None
+        self.assertEqual(record["workspace_root"], os.path.realpath(self.workspace))
+
+    def test_a_child_that_cd_s_is_judged_against_the_pinned_root(self) -> None:
+        with mock.patch.dict(os.environ, {"TERMINAL_CWD": str(self.workspace / "src")}):
+            self.assertIsNone(self.write("child-api", str(self.workspace / "src" / "api.py")))
+            self.assertIsNone(self.write("child-api", "api.py"))
+            self.assertBlocked(self.write("child-api", "ui.py"), "api")
+        with mock.patch.dict(os.environ, {"TERMINAL_CWD": "/tmp"}):
+            self.assertBlocked(self.write("child-api", str(self.workspace / "src" / "ui.py")), "api")
+
+    def test_a_remote_runs_handoff_under_its_handoff_root_passes(self) -> None:
+        path = dag_run.record_path(self.home.omh, PARENT, RUN)
+        record = dag_run.read_run(path)
+        assert record is not None
+        record["backend"], record["handoff_root"] = "docker", str(self.workspace / ".omh" / "dag")
+        dag_run.write_run(path, record)
+        self.assertIsNone(self.write("child-api", dag_run.node_handoff(record, self.home.omh, "api")))
+        self.assertBlocked(self.write("child-api", dag_run.node_handoff(record, self.home.omh, "ui")), "api")
+
+    def test_a_bracketed_literal_path_covers_itself_and_not_its_sibling(self) -> None:
+        self._set_scope("ui", ["app/[slug]/page.tsx", "src/routes/[id]/", "web/[lang]/*.md"])
+        self.assertIsNone(self.write("child-ui", "app/[slug]/page.tsx"))
+        self.assertIsNone(self.write("child-ui", "src/routes/[id]/view.ts"))
+        self.assertBlocked(self.write("child-ui", "app/s/page.tsx"), "ui")
+        self.assertBlocked(self.write("child-ui", "app/x/page.tsx"), "ui")
+        self.assertIsNone(self.write("child-ui", "web/[lang]/intro.md"))
+        self.assertBlocked(self.write("child-ui", "web/l/intro.md"), "ui")
+
+    def test_a_child_renamed_by_compaction_is_still_held(self) -> None:
+        self.home.session(PARENT, "m")
+        self.home.session("child-api", "m", parent=PARENT)
+        self.home.rotate("child-api", "child-api-seg2")
+        self.assertBlocked(self.write("child-api-seg2", "src/ui.py"), "api")
+        self.assertIsNone(self.write("child-api-seg2", "src/api.py"))
+
+    def test_a_descendants_own_marker_cannot_move_it_to_another_node(self) -> None:
+        start(self.home, "gc-ui", "sa-gc1", "help [dag:feat/ui]", parent="child-api", parent_subagent="sa-api",
+              now=time.time())
+        start(self.home, "gc-none", "sa-gc2", "help [dag:nope/x]", parent="child-api", parent_subagent="sa-api",
+              now=time.time())
+        self.assertBlocked(self.write("gc-ui", "src/ui.py"), "api")
+        self.assertBlocked(self.write("gc-none", "src/other.py"), "api")
+
+
 class OtherCallsPassTest(_Run):
     def test_the_parent_writes_anywhere(self) -> None:
         self.assertIsNone(self.write(PARENT, "src/ui.py"))
 
     def test_the_nodes_own_handoff_report_passes_even_inside_the_workspace(self) -> None:
         handoff = dag_run.handoff_path(self.home.omh, PARENT, RUN, "api")
+        path = dag_run.record_path(self.home.omh, PARENT, RUN)
+        record = dag_run.read_run(path)
+        assert record is not None
+        record["workspace_root"] = str(self.home.omh.parent.resolve())
+        dag_run.write_run(path, record)
         with mock.patch.dict(os.environ, {"TERMINAL_CWD": str(self.home.omh.parent)}):
             self.assertIsNone(self.write("child-api", str(handoff)))
             self.assertBlocked(self.write("child-api", str(handoff.with_name("ui.md"))), "api")

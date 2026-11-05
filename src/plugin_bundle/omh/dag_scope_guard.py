@@ -9,11 +9,20 @@ after both had finished.
 `pre_tool_call` therefore blocks a `write_file` or `patch` (every V4A header
 and move target) from a session the delegation ledger binds to a dag-ulw node
 (`children[].dag`, from the `[dag:run/node]` marker the child's goal carries),
-when the target is inside the session's workspace and no entry of that node's
-`write_scope` covers it. A child the node's child spawned in turn follows the
-same node. An entry covers a target when it names that file or a directory the
-target is under (whether or not the directory exists yet), or is a glob the
-workspace-relative path matches. The node's own handoff report always passes.
+when the target is inside the run's workspace and no entry of that node's
+`write_scope` covers it. The workspace is the one `omh_dag define` pinned in
+the run record (`workspace_root`), so a child that `cd`s elsewhere is still
+judged against the same root; a run defined before the pin falls back to the
+session's current workspace. A child the node's child spawned in turn follows
+the outermost node binding on its chain, so a descendant's own marker cannot
+move it to another node, and a child Hermes' compaction renamed is found
+through its earlier segments. An entry covers a target when it names that file
+or a directory the target is under (whether or not the directory exists yet),
+compared literally first; an entry holding `*` or `?` is also tried as an
+`fnmatch` glob over the workspace-relative path, where `*` may cross `/`.
+Brackets are always literal, so `app/[slug]/page.tsx` covers itself and not
+`app/s/page.tsx`. The node's own handoff
+report, on this host or under a Docker/SSH run's `handoff_root`, always passes.
 
 What passes, on purpose: a session no ledger binds to a node (every parent and
 every ordinary child); a node with an empty write scope, which declared
@@ -39,7 +48,7 @@ from .engagement_nudges import FILE_MUTATING_TOOLS
 from .kanban_board_reader import conversation_session_ids
 from .tools.lsp_nav_tool import _workspace_root
 
-_GLOB_CHARACTERS: Final = frozenset("*?[")
+_GLOB_CHARACTERS: Final = frozenset("*?")
 _LOG = logging.getLogger("omh.dag_scope_guard")
 _warned = False
 
@@ -59,12 +68,17 @@ def dag_scope_directive(
         scope = [str(entry) for entry in node.get("write_scope") or []]
         if not scope:
             return None
-        base = _comparable(_workspace_root(task_id) or os.getcwd())
-        handoff = _comparable(str(dag_run.handoff_path(Path(omh_home).expanduser(), owner, str(record["run"]),
-                                                       str(node["id"]))))
+        pinned = record.get("workspace_root")
+        base = _comparable(pinned if isinstance(pinned, str) and pinned else _workspace_root(task_id) or os.getcwd())
+        cwd = _workspace_root(task_id) or os.getcwd()
+        home = Path(omh_home).expanduser()
+        handoffs = {
+            _comparable(str(dag_run.handoff_path(home, owner, str(record["run"]), str(node["id"])))),
+            _comparable(dag_run.node_handoff(record, home, str(node["id"]))),
+        }
         for requested in _edit_targets(str(tool_name), tool_input):
-            target = _comparable(os.path.join(base, os.path.expanduser(requested)))
-            if target == handoff or not _inside(target, base) or _covered(target, scope, base):
+            target = _comparable(os.path.join(cwd, os.path.expanduser(requested)))
+            if target in handoffs or not _inside(target, base) or _covered(target, scope, base):
                 continue
             return {"action": "block", "message": dag_scope_message(requested, str(record["run"]), node, scope)}
     except (OSError, ValueError, TypeError, KeyError) as exc:
@@ -92,15 +106,18 @@ def _bound_node(session: str, omh_home: Path, hermes_home: Path) -> tuple[dict[s
     if not ledger:
         return None
     by_child = {str(child["child_session_id"]): child for child in ledger["children"]}
-    binding: Mapping[str, Any] | None = None
     current = session
+    if current not in by_child:
+        # A child Hermes' rotating compaction renamed is in the ledger under an earlier segment's id.
+        current = next((segment for segment in sorted(conversation_session_ids(hermes_home, session))
+                        if segment in by_child), "")
+    binding: Mapping[str, Any] | None = None
     for _ in range(ROOT_WALK_LIMIT):
         entry = by_child.get(current)
         if entry is None:
-            return None
-        if isinstance(entry.get("dag"), Mapping):
-            binding = entry["dag"]
             break
+        if isinstance(entry.get("dag"), Mapping):
+            binding = entry["dag"]  # keep walking: the outermost binding on the chain is the node
         current = str(entry.get("parent_session_id") or "")
     if binding is None:
         return None
@@ -124,14 +141,12 @@ def _bound_node(session: str, omh_home: Path, hermes_home: Path) -> tuple[dict[s
 def _covered(target: str, scope: Iterable[str], base: str) -> bool:
     relative = os.path.relpath(target, base).replace(os.sep, "/")
     for entry in scope:
+        if _inside(target, _comparable(os.path.join(base, os.path.expanduser(entry)))):
+            return True
         if _GLOB_CHARACTERS & set(entry):
-            pattern = (entry[2:] if entry.startswith("./") else entry).replace(os.sep, "/").casefold()
+            pattern = (entry[2:] if entry.startswith("./") else entry).replace(os.sep, "/").casefold().replace("[", "[[]")
             if fnmatch.fnmatchcase(relative, pattern):
                 return True
-            continue
-        resolved = _comparable(os.path.join(base, os.path.expanduser(entry)))
-        if _inside(target, resolved):
-            return True
     return False
 
 

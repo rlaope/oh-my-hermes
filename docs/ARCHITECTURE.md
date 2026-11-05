@@ -282,7 +282,7 @@ a tool call writes there cannot be told apart from one OMH observed
 (`plugin_bundle/omh/evidence_store_guard.py`). A dag-ulw node's handoff report
 is the one file there a model writes, and it passes. The same hook holds a
 dag-ulw node's child, and any child it spawns, to that node's `write_scope`
-for `write_file` and `patch` inside the workspace
+for `write_file` and `patch` inside the workspace `omh_dag define` pinned
 (`plugin_bundle/omh/dag_scope_guard.py`); a parent, an ordinary child, a node
 with no scope, and a settled node or cancelled run are not held. A shell
 command appending to the same file is not judged. An unknown `[omh-role:...]` marker in a delegate goal is warned in

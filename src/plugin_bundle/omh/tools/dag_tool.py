@@ -59,6 +59,7 @@ from ..host_observation import host_session_id
 from ..host_process import process_alive
 from ..sqlite_readonly import connect_readonly
 from ..iso_datetime import strict_fromisoformat
+from .lsp_nav_tool import _workspace_root
 
 DEFAULT_MAX_CONCURRENT_CHILDREN = 10  # Hermes' `_DEFAULT_MAX_CONCURRENT_CHILDREN` (tools/delegate_tool_config.py)
 # Hermes' default for `delegation.oneshot_max_children`: a finite one-shot session gets this many children at most.
@@ -414,6 +415,11 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
         backend = terminal_backend()
         if backend:
             record["backend"] = backend  # where the children's handoff files land; `settle` reads them there
+        workspace = _workspace_root(task)
+        if workspace:
+            # The root a node's write_scope is read against (`dag_scope_guard`), fixed here so a child's `cd` cannot
+            # move it.
+            record["workspace_root"] = os.path.realpath(workspace)
         dag_run.write_run(path, record)
         derived = dag_run.derive(record, [], now)
         return _ready("define", record, path, derived, [], omh_home, hermes_home, now, shown, task=task, budget=budget,

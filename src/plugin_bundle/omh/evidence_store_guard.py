@@ -60,10 +60,14 @@ def evidence_write_directive(
     if str(tool_name or "") not in FILE_MUTATING_TOOLS or not isinstance(tool_input, dict) or not omh_home:
         return None
     try:
-        runtime_root = _comparable(os.path.join(os.path.expanduser(omh_home), "runtime"))
+        runtime = os.path.join(os.path.expanduser(omh_home), "runtime")
+        roots = {_comparable(runtime), _lexical(runtime)}
         base = _workspace_root(task_id) or os.getcwd()
         for requested in _edit_targets(str(tool_name), tool_input):
-            store = _store_for(_comparable(os.path.join(base, os.path.expanduser(requested))), runtime_root)
+            joined = os.path.join(base, os.path.expanduser(requested))
+            # Both forms: realpath follows a symlinked store out of the home, the lexical form still names it.
+            store = next((found for target in (_comparable(joined), _lexical(joined)) for root in roots
+                          if (found := _store_for(target, root))), "")
             if store:
                 return {"action": "block", "message": evidence_write_message(requested, store)}
     except (OSError, ValueError, TypeError) as exc:
@@ -97,6 +101,10 @@ def _comparable(path: str) -> str:
     # realpath settles `..`, `~` already expanded, and every symlink on the way; casefold because the
     # default macOS and Windows filesystems treat `Runtime/Journal` and `runtime/journal` as one file.
     return os.path.normcase(os.path.realpath(path)).casefold()
+
+
+def _lexical(path: str) -> str:
+    return os.path.normcase(os.path.abspath(os.path.normpath(path))).casefold()
 
 
 def _warn_once(exc: BaseException) -> None:

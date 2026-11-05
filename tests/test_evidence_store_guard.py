@@ -121,6 +121,12 @@ class EvidenceStoreWritesAreBlockedTest(_Home):
         with mock.patch.dict(os.environ, {"TERMINAL_CWD": str(self.home / "runtime")}):
             self.assertBlocked(self.write("journal/events.jsonl"), "journal/")
 
+    def test_a_store_directory_that_is_a_symlink_is_still_blocked(self) -> None:
+        elsewhere = self.home.parent / "bigdisk" / "journal"
+        elsewhere.mkdir(parents=True)
+        (self.home / "runtime" / "journal").symlink_to(elsewhere, target_is_directory=True)
+        self.assertBlocked(self.write(str(self.home / "runtime" / "journal" / "events.jsonl")), "journal/")
+
     def test_a_case_changed_path_is_blocked(self) -> None:
         self.assertBlocked(self.write(str(self.home / "Runtime" / "Journal" / "events.jsonl")), "journal/")
 
