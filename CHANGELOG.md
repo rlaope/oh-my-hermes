@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A tick-box question in the OMH TUI no longer sends on the first press.**
+  When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
+  choice sent the question at once: with nothing ticked it answered with
+  the highlighted choice alone and moved on, so a person who pressed Enter
+  to tick lost the rest of their picks. Now Enter, Space, a digit and an
+  empty submit only tick or untick a choice, as in Claude Code's question.
+  The list ends with a `Submit` row (`Next` while more questions follow),
+  and Enter there sends the ticked choices; with none ticked the question
+  reads as skipped. A question with several parts shows each one before
+  the last is sent. The key row says `Enter to tick · Enter on Submit to
+  send`, and `Enter to send` on the Submit row. A single-choice question is
+  unchanged: a digit or Enter still picks and sends.
+
 - **The OMH TUI draws Markdown tables as boxes, and a table wider than the
   terminal wraps inside its columns.** Every table is now a box like Claude
   Code's: `┌─┬─┐` borders in the rule colour, the header bold in the look's

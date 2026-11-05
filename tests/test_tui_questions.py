@@ -139,9 +139,41 @@ class MultiSelectAppTests(unittest.TestCase):
         armed(app)
         press(app, Key(CHAR, " "), Key(DOWN), Key(CHAR, " "))
         self.assertIn("▌ ❯ [x] 2. ham", drawn(app))
-        press(app, Key(ENTER))
+        press(app, Key(DOWN), Key(DOWN), Key(ENTER))  # past Type something. to Submit
         self.assertEqual(client.answers, [("srq-6", {"result": {"answers": {"q0": '["cheese","ham"]'}}})])
         self.assertEqual(app.composer.text, "my draft")
+
+    def test_no_single_press_sends_a_multi_select_question(self) -> None:
+        # The owner's report of 2026-11-06: one press on a tick-box question moved on. Each key a person picks a row
+        # with leaves the question open; only Enter on Submit sends (a click: `test_tui_main_mouse`).
+        toppings = {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True}
+        for keys in ([Key(ENTER)], [Key(CHAR, "1")], [Key(CHAR, " ")], [Key(DOWN), Key(ENTER)], [Key(CHAR, "2")]):
+            with self.subTest(keys=keys):
+                app, client = make_app(busy=True)
+                app._on_server_request(ServerRequest("srq-6", "clarify", {"questions": [toppings]}))
+                armed(app)
+                press(app, *keys)
+                self.assertEqual(client.answers, [])
+                self.assertIsNotNone(app.slot)
+                self.assertTrue([row for row in drawn(app) if "[x]" in row], drawn(app))
+                self.assertIn("▌       Submit", drawn(app))
+
+    def test_a_second_question_is_shown_before_the_first_answer_goes(self) -> None:
+        first = {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True}
+        second = {"qid": "q1", "question": "Which sauces?", "choices": ["red", "white"], "multi_select": True}
+        app, client = make_app(busy=True)
+        app._on_server_request(ServerRequest("srq-6", "clarify", {"questions": [first, second]}))
+        armed(app)
+        press(app, Key(CHAR, "1"), Key(ENTER))  # cheese ticked, then unticked by Enter: question 1 stays
+        self.assertIn("▌ ❯ [ ] 1. cheese", drawn(app))
+        press(app, Key(ENTER), Key(DOWN), Key(DOWN), Key(DOWN))
+        self.assertIn("▌ ❯     Next", drawn(app))
+        press(app, Key(ENTER))
+        self.assertEqual(client.answers, [])
+        armed(app)
+        self.assertTrue([row for row in drawn(app) if "Which sauces? (2/2)" in row], drawn(app))
+        press(app, Key(CHAR, "2"), Key(DOWN), Key(DOWN), Key(DOWN), Key(ENTER))
+        self.assertEqual(client.answers, [("srq-6", {"result": {"answers": {"q0": '["cheese"]', "q1": '["white"]'}}})])
 
 
 COLOUR = ServerRequest("srq-7", "clarify", {"questions": [
@@ -180,14 +212,14 @@ class QuestionOutcomeTests(unittest.TestCase):
         app, _client = opened(ServerRequest("srq-6", "clarify", {"questions": [
             {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True},
         ]}))
-        press(app, Key(CHAR, "2"), Key(CHAR, "1"), Key(ENTER))
+        press(app, Key(CHAR, "2"), Key(CHAR, "1"), Key(DOWN), Key(DOWN), Key(DOWN), Key(ENTER))
         self.assertEqual(outcome_rows(app), [("ham, cheese · Which toppings?", NOTICE_OK)])
 
     def test_a_ticked_choice_is_recorded_without_hermes_display_tag(self) -> None:
         app, client = opened(ServerRequest("srq-6", "clarify", {"questions": [
             {"qid": "q0", "question": "Which toppings?", "choices": ["cheese (recommended)", "ham"], "multi_select": True},
         ]}))
-        press(app, Key(CHAR, "2"), Key(CHAR, "1"), Key(ENTER))
+        press(app, Key(CHAR, "2"), Key(CHAR, "1"), Key(DOWN), Key(DOWN), Key(DOWN), Key(ENTER))
         self.assertEqual(client.answers, [("srq-6", {"result": {"answers": {"q0": '["ham","cheese (recommended)"]'}}})])
         self.assertEqual(outcome_rows(app), [("ham, cheese · Which toppings?", NOTICE_OK)])
 

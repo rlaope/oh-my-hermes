@@ -763,6 +763,22 @@ class FramedPickerTests(unittest.TestCase):
                     drag(mouse, (1, row_of(mouse, "Which one")), (cols, last))
                     self.assertNotIn(copied_not, osc52(mouse)[0])
 
+    def test_a_click_on_a_multi_select_row_sends_nothing(self) -> None:
+        # The owner's report of 2026-11-06 (one press on a tick-box question moved on): a click on a choice's row is
+        # the main screen's selection, never a pick, so the question stays open and nothing goes to Hermes.
+        app = main_app(rows=24)
+        app._on_server_request(ServerRequest("srq-1", "clarify", {"session_id": "s", "questions": [
+            {**self.QUESTION["questions"][0], "multi_select": True}]}))
+        drawn(app)
+        app.slot_opened_at = -1e9  # armed: a key now would count
+        for label in ("2. blue", "Submit"):
+            row = row_of(app, label)
+            press(app, 8, row)
+            release(app, 8, row)
+        self.assertIsNotNone(app.slot)
+        self.assertFalse(app.slot.ticked)  # type: ignore[union-attr]
+        self.assertFalse(app.client.answers)  # type: ignore[attr-defined]
+
     def test_the_wheel_while_it_is_open_opens_the_question_view_without_its_key_row_or_rules(self) -> None:
         app = self.picker()
         app._on_input(Mouse(WHEEL_UP, 5, 3))
