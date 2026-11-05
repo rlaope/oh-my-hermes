@@ -574,6 +574,338 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-11-03 round-end continue cost: settled signature references and evidence notes, base vs on
+
+Pre-registered before its first live run. Runs before the commit that adds this section are none;
+smokes after it are uncounted and say so in their folder name.
+
+In the H2H2 and H2H3 head-to-heads (research folder `H2H3/REPORT.md`, `OPT/opt-l/DIAGNOSIS.md`),
+OMH continued 68 of 198 sessions at the round end. 38 of those changed nothing and the run passed
+anyway, at 1.02M tokens, about 2 extra model calls each. Every one came from `consistency_trigger`
+firing alone:
+
+- `C-DECOY`, 18: `copy` of the look-alike `_to_cents`;
+- `I-KWARG`, 12: `signature fetch`, where the file named `fetch` only as `client.fetch()`, or an
+  unedited test called `fetch("u")`;
+- `I-SIGNATURE`, 8: `signature compute_fee`, named only by `from .pricing import compute_fee as fee`
+  in `__init__.py`, whose one user `cli.py` was already edited.
+
+The true positives this item must keep: `C-DUPLICATE` (12 of 12 continues fixed the copy; omp passes
+0 of 6) and `L-RENAME-ALIAS` (6 of 6, export note).
+
+The change, in `consistency_trigger.py` and `verify_hooks.py` (commit `47c73adb5`):
+
+1. **Settled references.** A `signature` hit on a module-level function is dropped in a file only when
+   every `\bname\b` match there is proven to need no change, by `ast`:
+   - `p.name`, where `p` is bound only as a parameter in that file; or
+   - `from <the edited module> import name [as alias]`, where the alias is bound once and called only
+     in calls that bind the same way under the old and new parameter lists; and an alias other than
+     the name appears in no other unedited Python or config file.
+
+   A comment, a string, a value use, a module attribute or an import from elsewhere keeps the hit.
+   Only a module-level function defined once, undecorated, with the same return annotation, is
+   eligible.
+2. **Evidence in the note.** When the check fires alone, the note shows the lines the trigger matched:
+   for a copy, the other definition with its module docstring and the comment above it. It does not
+   ask for a search. A fire with nothing to show keeps the generic checklist.
+
+`C-DECOY`'s fire count cannot drop structurally: its `_to_cents` is byte-identical to
+`C-DUPLICATE`'s real copy, and only the docstring prose differs. The alternative "fire only when the
+edited line appears verbatim in the other file" was measured and rejected, because both fixtures
+spell `Decimal` differently from the edited file, so it cuts `C-DUPLICATE` too. So `C-DECOY` is gated
+on the cost of a fire, not on the number of fires.
+
+**Offline replay, before this registration** (`OPT/opt-l/replay.py`). Every recorded H2H2 and H2H3
+omn session is re-driven through each tree's real hooks: the fixture is rebuilt from its seed, the
+`patch` / `write_file` calls up to the first stop are replayed (`snapshot_before_edit` before each),
+and then `pre_verify(attempt=0)` runs.
+
+| Tree | Sessions | Continue decision equal to live | Continues |
+| --- | --- | --- | --- |
+| base `3ad772371` | 198 | 198 / 198 | 68 |
+| on `47c73adb5` | 198 | n/a | 48 |
+
+Per template, base to on:
+- `I-KWARG` 15 to 3: the 3 left are Haiku, test note;
+- `I-SIGNATURE` 17 to 9: the 9 left are Luna and Haiku, with `cli.py` still broken at the stop;
+- `C-DECOY` 18 to 18; `C-DUPLICATE` 12 to 12; `L-RENAME-ALIAS` 6 to 6;
+- every other template 0 to 0.
+
+No true positive is lost, and no new fire appears.
+
+The setup, fixed before the first live run:
+
+- **Arms.** Each links its OMH bundle from a `git archive` snapshot (`OPT/opt-l/omh-head/<sha>`):
+  `base` = origin/main `3ad772371`; `on` = this branch at `47c73adb5`. The bundles differ only in
+  the two files above.
+- **Profiles.** `optl-<lane>-<arm>` (`OPT/opt-l/make_profiles.sh`), H2H3's OMH-arm configuration
+  in both arms:
+  - Hermes's default `tools.tool_search`;
+  - plugin settings `omh_home` and `lsp_tools: true`; `impact_check` not set (off, as shipped);
+  - `pyright` pinned by an absolute command;
+  - `agent.max_turns: 120`, `agent.run_budget_seconds: 600`;
+  - the observer-only meter plugin.
+
+  Edit surface `lsp`, the `baseline` prompt with no edit directive, `--git-init-workspace`,
+  `--test-env`, effort `medium`.
+- **Panel.** Subscription routes only; expected money $0:
+
+  | Lane | Model | Route |
+  | --- | --- | --- |
+  | h45 | `claude-haiku-4-5-20251001` | `claude-proxy` (CPA) |
+  | s55 | `claude-sonnet-5-5` | `claude-proxy` (CPA) |
+  | luna | `gpt-6-luna` | `openai-codex` |
+  | sol | `gpt-6.1-sol` | `openai-codex` |
+
+- **Templates.** The 11 head-to-head templates: `I-SIGNATURE`, `I-RETURN-SHAPE`, `I-KWARG`,
+  `I-CONTROL`, `C-DUPLICATE`, `C-SCOPE-TRAP`, `C-DECOY`, `E-RENAME`, `E-BUGFIX`, `L-RENAME-ALIAS`,
+  `L-RENAME-SHADOW`.
+  - Positives (fewer or cheaper fires): `I-KWARG`, `I-SIGNATURE`, `C-DECOY`.
+  - Controls that must keep their fire and their pass: `C-DUPLICATE`, `L-RENAME-ALIAS`, and the
+    `I-SIGNATURE` runs that stop with a caller still broken.
+  - Controls with no fire on either arm in the replay: the other six.
+- **Seeds.** 613981, 778469 and 860143. None appears under `.omc/research` or in the bench. That is 33
+  instances per lane per arm, 132 per arm, 264 runs.
+- **Order and load.** Per instance the two arms run back to back on identical fresh workspaces, in
+  alternating order; the four lanes run in parallel. The driver is `OPT/opt-l/run_optl.py` (sha256
+  `18e0994c...`), derived from H2H3's, and it holds the same gates before every instance:
+  - wait while the 1-minute load is above 20;
+  - wait while free disk is below 8 GB; stop if it falls below 5 GB.
+
+  Live batches run under the shared live-run lock.
+- **Retries and crashes.** As H2H3:
+  - Retried on the same route: `rate_limited`, `provider_error`, `model_unavailable`, and a client
+    the gateway refused within 15 s.
+  - `authentication_failed` aborts every lane.
+  - A timeout is final and scored as a fail.
+  - A `process_crash` is scored as a fail in the **strict reading**. Once the lanes finish, each
+    instance whose last record in either arm is a crash is run once more in both arms, and those
+    re-runs make the **re-run reading**. Every clause is reported under both readings.
+
+Definitions:
+- A **continue** is a session with at least one assistant row whose `finish_reason` is
+  `verify_hook_continue` (session DB).
+- **Tokens** are the record's `observation.tokens`.
+- **Calls** are `sessions.api_call_count`.
+- A **pass** is the controller validator's `grade.pass`.
+
+The gate, `on` against `base`. Must hold:
+
+1. Total passes (n = 132): on at least base.
+2. Per template, pooled over the four models (n = 12): on at least base - 1.
+3. `C-DUPLICATE`, `L-RENAME-ALIAS` and `I-SIGNATURE` passes (n = 12 each): on at least base.
+4. `mutation_outside_scope` runs: on at most base.
+
+Must improve:
+
+5. Pooled median tokens (n = 132): on at most 0.95x base.
+6. Sol median tokens (n = 33): on at most 0.95x base.
+7. `I-KWARG` + `I-SIGNATURE` continues (n = 24): on strictly below base.
+8. `C-DECOY` (n = 12):
+   - continues: on at most base;
+   - median tokens: on at most 0.90x base;
+   - median calls: on at most base - 1.
+
+Reported, not gated:
+- the per-lane, per-template table of passes, continues, median calls and median tokens;
+- the trigger's verdict reasons per arm, including `settled`;
+- the median calls of the extra round after a continue;
+- median wall time and final answer kept;
+- the load path (`omh_pkg`);
+- tokens and money by route.
+
+Everything is recomputed from the raw run records, the session-DB snapshots and the profile logs by
+`OPT/opt-l/gate.py`, not from the driver log.
+
+**Fallback, fixed now.** If any clause fails, the failure is recorded here and the branch does not
+ask to merge. What is dropped depends on where the regression sits:
+- **A quality clause (1 to 4) fails on runs where the on arm sent an evidence note.** The note is
+  the behavioural part, so `verify_hooks` returns to the generic checklist, and the settled
+  references stay.
+- **It fails on a run whose on-arm verdict was `settled`.** That is a cut that dropped a needed fire,
+  so `_settled` is dropped.
+- **Only the cost clauses (5 to 8) fail.** The change does not merge on this run.
+
+A re-measure after any drop is a new pre-registration with new seeds.
+
+#### Amendment 1 (2026-11-03, before any live run of either arm)
+
+- **The `on` arm moves from `47c73adb5` to `8442cb3c4`.** That commit moves the argument-binding
+  rule into the shared leaf module `call_shape.py`, as the lead assigned, for the parallel caller
+  check. It adds four pinned negatives: a removed default, a `**kwargs` pass-through, a star import,
+  and an alias re-exported from a plain module and used elsewhere. The offline replay of `8442cb3c4`
+  gives the same continue decision and the same note text as `47c73adb5` on all 198 sessions
+  (`replay-on-8442cb3c4.json`).
+- **Why the briefed clause "`C-DECOY` continues strictly fewer" was replaced by clause 8**
+  (approved by the lead). The fixtures in `lib/corpus.py` give both look-alikes the same body:
+  `return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)`
+  in `C-DUPLICATE`'s second module and in `C-DECOY`'s. The edited file's line is
+  `return Decimal(amount).quantize(CENT, rounding=ROUND_HALF_EVEN)`. A verbatim-old-text rule
+  therefore cuts both copies, and any code-only rule treats them alike. Only the module docstring
+  separates them ("kept in step with" vs "intentionally different from"), and a prose signal is the
+  suppressor #2494 dropped.
+- **The evidence note shows context only.** That means the definition, the module docstring and
+  the comment above it. Its wording is the same for every copy, and it never says a copy may be
+  skipped. Clause 3 (`C-DUPLICATE` on at least base) stays a hard clause.
+
+#### Result (2026-11-05): the gate failed in both readings
+
+264 counted runs and 8 crash re-runs (4 instances, both arms; one, `sol` base
+`I-RETURN-SHAPE-778469`, crashed again and stays a fail). Recomputed by `OPT/opt-l/gate.py` and
+again by an independent script (`recompute.py`); the two agree on every clause.
+
+| Clause | Strict (on vs base) | | Re-run (on vs base) | |
+| --- | --- | --- | --- | --- |
+| 1. Total passes, on >= base | 123 vs 126 | **fail** | 126 vs 126 | pass |
+| 2. Per template, on >= base - 1 | worst `I-SIGNATURE` 7 vs 9 | **fail** | worst `I-SIGNATURE` 7 vs 9 | **fail** |
+| 3. `C-DUPLICATE` passes | 12 vs 11 | pass | 12 vs 11 | pass |
+| 3. `L-RENAME-ALIAS` passes | 12 vs 11 | pass | 12 vs 11 | pass |
+| 3. `I-SIGNATURE` passes | 7 vs 9 | **fail** | 7 vs 9 | **fail** |
+| 4. `mutation_outside_scope`, on <= base | 2 vs 1 | **fail** | 0 vs 1 | pass |
+| 5. Pooled median tokens, on <= 0.95x | 78,716 vs 83,704 (0.940x) | pass | 79,847 vs 83,704 (0.954x) | **fail** |
+| 6. Sol median tokens, on <= 0.95x | 82,255 vs 90,984 (0.904x) | pass | 83,432 vs 90,984 (0.917x) | pass |
+| 7. `I-KWARG` + `I-SIGNATURE` continues, on < base | 8 vs 19 | pass | 8 vs 19 | pass |
+| 8a. `C-DECOY` continues, on <= base | 11 vs 11 | pass | 12 vs 11 | **fail** |
+| 8b. `C-DECOY` median tokens, on <= 0.90x | 84,078 vs 100,656 (0.835x) | pass | 85,710 vs 100,656 (0.852x) | pass |
+| 8c. `C-DECOY` median calls, on <= base - 1 | 10 vs 11 | pass | 10 vs 11 | pass |
+
+Tokens by route, re-run reading (base / on): `claude-proxy` h45 4,660,327 / 3,906,467 and s55
+1,722,343 / 1,628,489; `openai-codex` luna 2,952,549 / 2,804,460 and sol 3,024,138 / 2,790,203. Total
+12,359,357 / 11,129,619 (0.901x). Continues 40 / 31. Money $0 (subscription routes only). Median
+wall 43.1 s / 40.2 s.
+
+**Where it failed.** Both `I-SIGNATURE` losses are Haiku runs (h45 base 3 of 3, on 1 of 3). In each,
+the trigger fired alone on `signature compute_fee in src/benchapp/__init__.py`, and the on arm sent
+the evidence note. That note shows only `from .pricing import compute_fee as fee`. The model judged
+that an import needs no change and stopped, leaving `cli.py`'s `fee(...)` call broken. On base, the
+generic checklist sent it to search; it fixed `cli.py` and passed. None of the 12 on-arm `settled`
+verdicts failed.
+
+**Fallback, as pre-registered.** A quality clause failed on runs where the on arm sent an evidence
+note. So the evidence note is dropped and the settled references stay. Re-measuring that is a new
+pre-registration with new seeds. The branch does not ask to merge on this run.
+
+#### Registration 2 (2026-11-05): the fallback, base vs on
+
+Pre-registered before its first live run. This is a new registration, not an amendment of the one
+above, and no data of this arm exists yet. Smokes are uncounted and say so in their folder name.
+
+**Arms.** Each links its OMH bundle from a `git archive` snapshot (`OPT/opt-l/omh-head/<sha>`):
+- `base` = `225f62ff2`, the origin/main parent of this branch's merge. It includes the caller check
+  (#2546).
+- `on` = `12fb9c0c6`, this branch with the fallback applied: the evidence note is gone (`verify_hooks`
+  is byte-identical to `base`), the settled references stay, and the argument binder is the shared
+  `call_shape.py`.
+
+**Offline replay, before this registration** (`OPT/opt-l/replay.py`, the 198 H2H2 and H2H3 omn
+sessions):
+
+| Tree | Continue decision equal to live | Continues |
+| --- | --- | --- |
+| base `225f62ff2` | 198 / 198 | 68 |
+| on `12fb9c0c6` | n/a | 48 |
+
+- The 20 continues cut are `I-KWARG` 12 and `I-SIGNATURE` 8. Every one is a harmless false positive
+  that passed live.
+- No new fire appears. The other 178 sessions are identical to `base`, note text included.
+- On the first registration's own on-arm `I-SIGNATURE` sessions with a broken caller (h45 x3, luna
+  x3), the caller note fires on this tree and names `src/benchapp/cli.py:5`. That includes both
+  sessions the gate lost. No evidence note is sent.
+
+**Why clauses 5 and 8 change.** The fallback removes the only lever this item had on `C-DECOY`: the
+evidence note. `C-DECOY` replays identically on both trees. A projection, computed before this
+registration, replays this tree over the first registration's base-arm sessions. Wherever this tree
+would not continue, it removes the extra round's share of tokens and its calls:
+- `I-KWARG` 8 and `I-SIGNATURE` 4 continues are cut;
+- pooled median tokens 83,704 to 82,362 (0.984x);
+- sol median 90,984 to 82,721 (0.909x);
+- `C-DECOY` median tokens 100,656 to 100,656 (1.000x), median calls 11 to 11;
+- total tokens 0.961x.
+
+The script is `OPT/opt-l/project_fallback.py` (sha256 `a95e60a3...`), and its output is
+`project_fallback.txt` (sha256 `a5a87ca3...`). Under the first registration's clauses, 5 and 8 would
+fail by construction. They become no-regression clauses. Clauses 6 and 7 stay as the improvement
+clauses.
+
+**Setup.** As the first registration, except:
+- profiles `optl2-<lane>-<arm>` (`OPT/opt-l/make_profiles2.sh`);
+- driver `OPT/opt-l/run_optl2.py` (sha256 `4847b98e...`), which is `run_optl.py` with only the
+  profile prefix and the seeds changed;
+- seeds 284927, 648391 and 731957. None appears under `.omc/research`, in `~/.omh` or on main.
+
+The arms, configuration, panel and routes are unchanged:
+- `claude-proxy` (CPA) for h45 `claude-haiku-4-5-20251001` and s55 `claude-sonnet-5-5`;
+- `openai-codex` for luna `gpt-6-luna` and sol `gpt-6.1-sol`.
+
+Also unchanged: subscription routes only, the 11 templates, 264 runs, the alternating arm order, the
+load and disk gates, the shared live-run lock, retries and crash re-runs, both readings, and the
+definitions. The bench harness is this branch's at registration.
+
+The gate, `on` against `base`. Must hold:
+
+1. Total passes (n = 132): on at least base.
+2. Per template, pooled over the four models (n = 12): on at least base - 1.
+3. `C-DUPLICATE`, `L-RENAME-ALIAS` and `I-SIGNATURE` passes (n = 12 each): on at least base.
+4. `mutation_outside_scope` runs: on at most base.
+
+No regression:
+
+5. Pooled median tokens (n = 132): on at most 1.00x base.
+8. `C-DECOY` (n = 12): continues on at most base, and median tokens on at most 1.05x base.
+
+Must improve:
+
+6. Sol median tokens (n = 33): on at most 0.95x base.
+7. `I-KWARG` + `I-SIGNATURE` continues (n = 24): on strictly below base.
+
+Recomputed from the raw records by `OPT/opt-l/gate2.py`, and again independently by
+`OPT/opt-l/recompute2.py`.
+
+**Fallback.** The same chain as the first registration:
+- a quality clause (1 to 4) fails on a run whose on-arm verdict was `settled`: `_settled` is dropped;
+- only cost clauses (5 to 8) fail: the change does not merge on this run.
+
+A re-measure after any drop is a new registration with new seeds.
+
+#### Registration 2 result (2026-11-05): the gate failed on clause 6 only
+
+264 counted runs (05:38 to 07:06 KST) and 6 crash re-runs. The re-runs cover three `sol`
+`I-RETURN-SHAPE` instances in both arms; 5 of the 6 crashed again at the 600 s budget. `gate2.py` and
+the independent `recompute2.py` agree on every clause in both readings.
+
+| Clause | Strict (on vs base) | | Re-run (on vs base) | |
+| --- | --- | --- | --- | --- |
+| 1. Total passes, on >= base | 130 vs 127 | pass | 129 vs 128 | pass |
+| 2. Per template, on >= base - 1 | worst `C-DECOY` 12 vs 12 | pass | worst `I-RETURN-SHAPE` 9 vs 10 | pass |
+| 3. `C-DUPLICATE` passes | 12 vs 12 | pass | 12 vs 12 | pass |
+| 3. `L-RENAME-ALIAS` passes | 12 vs 12 | pass | 12 vs 12 | pass |
+| 3. `I-SIGNATURE` passes | 12 vs 12 | pass | 12 vs 12 | pass |
+| 4. `mutation_outside_scope`, on <= base | 2 vs 4 | pass | 3 vs 3 | pass |
+| 5. Pooled median tokens, on <= 1.00x | 78,832 vs 83,336 (0.946x) | pass | 78,291 vs 83,942 (0.933x) | pass |
+| 6. Sol median tokens, on <= 0.95x | 84,853 vs 85,006 (0.998x) | **fail** | 83,801 vs 85,456 (0.981x) | **fail** |
+| 7. `I-KWARG` + `I-SIGNATURE` continues, on < base | 7 vs 19 | pass | 7 vs 19 | pass |
+| 8. `C-DECOY` continues, on <= base | 11 vs 11 | pass | 11 vs 11 | pass |
+| 8. `C-DECOY` median tokens, on <= 1.05x | 100,190 vs 103,002 (0.973x) | pass | 100,190 vs 103,002 (0.973x) | pass |
+
+Tokens by route, re-run reading (base / on):
+- `claude-proxy`: h45 4,466,020 / 4,242,207; s55 1,763,025 / 1,570,521.
+- `openai-codex`: luna 3,297,476 / 3,109,503; sol 2,968,523 / 2,734,694.
+- Total 12,495,044 / 11,656,925 (0.933x). Continues 42 / 28. Money $0. Median wall 34.0 s / 34.0 s.
+
+Quality held in both readings:
+- `I-SIGNATURE` passed 12 of 12 in both arms: with the caller check in both, this registration loses
+  no broken caller;
+- all 12 on-arm `settled` verdicts passed;
+- the only on-arm failures are the three crashed `sol` `I-RETURN-SHAPE` runs; base crashed on two of the
+  same instances.
+
+**Why clause 6 failed.** Sol's continues fell from 14 to 7, and its total tokens to 0.921x. But sol's
+median sits on templates this change does not touch: `E-BUGFIX` at about 85k and `C-SCOPE-TRAP` at
+about 77k. The pre-registration projection of 0.909x came from the first registration's base sessions,
+whose sol median sat among the `I-KWARG` and `I-SIGNATURE` runs.
+
+**Decision, as registered.** Only a cost clause failed, so the change does not merge on this run.
+
 ### 2026-11-03 caller check: calls a signature change broke, base vs on (`pre_verify`)
 
 Pre-registered before its first live run.

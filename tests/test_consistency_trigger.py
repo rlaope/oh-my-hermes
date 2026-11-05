@@ -902,5 +902,146 @@ class PreVerifyGateTest(_Workspace):
         self.assertEqual(list(ct._sessions[SESSION]["before"].values()), [UNITS])
 
 
+HTTP_CLIENT = (
+    '"""A fake HTTP client."""\n\n\n'
+    "def fetch(url: str, *, timeout: float = 5.0, retries: int = 1) -> dict[str, object]:\n"
+    '    return {"url": url, "timeout": timeout, "retries": retries}\n'
+)
+FALLBACKS = (
+    "def fetch_primary(client):\n    try:\n        return client.fetch()\n    except RuntimeError:\n"
+    "        return {'source': 'fallback'}\n"
+)
+PRICING = '"""Fee arithmetic."""\n\n\ndef compute_fee(amount_cents: int, rate_bp: int) -> int:\n    return amount_cents * rate_bp // 10000\n'
+REEXPORT = 'from .pricing import compute_fee as fee\n\n__all__ = ["fee"]\n'
+
+
+class SettledReferenceTest(_Workspace):
+    """A `signature` hit is dropped only when every mention of the name in that file is proven not to
+    need the change; anything else fires as before."""
+
+    def rename_timeout(self) -> str:
+        return self.edit("src/app/http_client.py", "timeout: float = 5.0", "timeout_s: float = 5.0")
+
+    def test_another_objects_method_of_the_same_name_is_settled(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/fallbacks.py", FALLBACKS)
+        self.assertEqual(self.verdict(self.rename_timeout()),
+                         ct.Verdict(False, "no_copy_or_reference", "settled fetch"))
+
+    def test_an_attribute_of_an_assigned_name_fires(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/fallbacks.py", "from app import http_client\n\nclient = http_client\n\n\n"
+                                           "def ping():\n    return client.fetch('u')\n")
+        self.assertEqual(self.verdict(self.rename_timeout())[:2], (True, "signature"))
+
+    def test_an_attribute_of_the_imported_module_fires(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/health.py", "from app import http_client as hc\n\n\n"
+                                        "def ping(url):\n    return hc.fetch(url, timeout=1.0)\n")
+        self.assertEqual(self.verdict(self.rename_timeout())[:2], (True, "signature"))
+
+    def test_a_call_that_binds_the_same_way_is_settled(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("tests/test_http_client.py", "from app.http_client import fetch\n\n\n"
+                                                "def test_fetch_defaults():\n    assert fetch(\"u\")[\"url\"] == \"u\"\n")
+        self.assertEqual(self.verdict(self.rename_timeout()),
+                         ct.Verdict(False, "no_copy_or_reference", "settled fetch"))
+
+    def test_calls_that_do_not_bind_the_same_way_fire(self):
+        cases = {
+            "renamed_keyword": ("fetch('u', timeout=2.0)", "timeout: float = 5.0", "timeout_s: float = 5.0"),
+            "star_args": ("fetch(*ARGS)", "timeout: float = 5.0", "timeout_s: float = 5.0"),
+            "double_star": ("fetch('u', **OPTIONS)", "timeout: float = 5.0", "timeout_s: float = 5.0"),
+            "changed_default": ("fetch('u')", "timeout: float = 5.0", "timeout: float = 9.0"),
+            "removed_default": ("fetch('u')", "timeout: float = 5.0", "timeout: float"),
+            "new_required": ("fetch('u')", "retries: int = 1)", "retries: int = 1, verify: bool)"),
+            "shifted_positional": ("fetch('u', 'GET')", "(url: str, *,", "(url: str, method: str = 'GET', *,"),
+            "changed_return": ("fetch('u')", "-> dict[str, object]", "-> dict[str, str]"),
+        }
+        for label, (call, old, new) in cases.items():
+            with self.subTest(label):
+                ct.reset()
+                self.write("src/app/http_client.py", HTTP_CLIENT if label != "shifted_positional"
+                           else HTTP_CLIENT.replace("(url: str, *,", "(url: str, mode: str = 'x', *,"))
+                if label == "shifted_positional":
+                    old, new = "(url: str, mode: str = 'x', *,", "(url: str, method: str = 'GET', mode: str = 'x', *,"
+                self.write("src/app/sync.py", f"from app.http_client import fetch\n\nARGS = ()\nOPTIONS = {{}}\n\n\n"
+                                              f"def sync():\n    return {call}\n")
+                self.assertEqual(self.verdict(self.edit("src/app/http_client.py", old, new))[:2], (True, "signature"))
+
+    def test_a_keyword_pass_through_fires(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/wrap.py", "from app.http_client import fetch\n\n\n"
+                                      "def fetch_with(url, **options):\n    return fetch(url, **options)\n")
+        self.assertEqual(self.verdict(self.rename_timeout()), ct.Verdict(True, "signature", "fetch in src/app/wrap.py"))
+
+    def test_a_star_import_fires(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/sync.py", "from app.http_client import *\n\n\ndef sync():\n    return fetch('u')\n")
+        self.assertEqual(self.verdict(self.rename_timeout()), ct.Verdict(True, "signature", "fetch in src/app/sync.py"))
+
+    def test_an_alias_re_exported_from_a_plain_module_and_used_elsewhere_fires(self):
+        self.write("src/app/pricing.py", PRICING)
+        self.write("src/app/invoices.py", "from app.pricing import compute_fee as calc_fee\n")
+        self.write("src/app/cli.py", "from app.invoices import calc_fee\n\n\ndef cli(argv):\n    return calc_fee(1, 2)\n")
+        changed = self.edit("src/app/pricing.py", "rate_bp: int)", "rate_bp: int, minimum_cents: int)")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "signature", "compute_fee in src/app/invoices.py"))
+
+    def test_a_mention_outside_code_fires(self):
+        for label, extra in {"comment": "# fetch is called above\n", "string": "NOTE = 'see fetch'\n",
+                             "value": "HANDLER = fetch\n"}.items():
+            with self.subTest(label):
+                ct.reset()
+                self.write("src/app/http_client.py", HTTP_CLIENT)
+                self.write("tests/test_http_client.py", "from app.http_client import fetch\n\n" + extra +
+                           "\n\ndef test_fetch():\n    assert fetch('u')\n")
+                self.assertEqual(self.verdict(self.rename_timeout())[:2], (True, "signature"))
+
+    def test_a_re_export_no_unedited_file_uses_is_settled(self):
+        self.write("src/app/pricing.py", PRICING)
+        self.write("src/app/__init__.py", REEXPORT)
+        changed = self.edit("src/app/pricing.py", "rate_bp: int)", "rate_bp: int, minimum_cents: int)")
+        self.assertEqual(self.verdict(changed), ct.Verdict(False, "no_copy_or_reference", "settled compute_fee"))
+
+    def test_a_re_export_an_unedited_file_uses_fires(self):
+        self.write("src/app/pricing.py", PRICING)
+        self.write("src/app/__init__.py", REEXPORT)
+        self.write("src/app/cli.py", "from app import fee\n\n\ndef cli_fee(argv):\n    return fee(int(argv[0]), 50)\n")
+        changed = self.edit("src/app/pricing.py", "rate_bp: int)", "rate_bp: int, minimum_cents: int)")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "signature", "compute_fee in src/app/__init__.py"))
+
+    def test_a_re_export_named_in_config_fires(self):
+        self.write("src/app/pricing.py", PRICING)
+        self.write("src/app/__init__.py", REEXPORT)
+        self.write("pyproject.toml", "[project.scripts]\nfee = 'app:fee'\n")
+        changed = self.edit("src/app/pricing.py", "rate_bp: int)", "rate_bp: int, minimum_cents: int)")
+        self.assertEqual(self.verdict(changed)[:2], (True, "signature"))
+
+    def test_an_import_from_another_module_fires(self):
+        self.write("src/app/pricing.py", PRICING)
+        self.write("src/app/use.py", "from vendor.fees import compute_fee\n\n\ndef f():\n    return compute_fee(1, 2)\n")
+        changed = self.edit("src/app/pricing.py", "rate_bp: int)", "rate_bp: int = 0)")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "signature", "compute_fee in src/app/use.py"))
+
+    def test_a_method_needle_is_never_settled_by_attribute(self):
+        self.write("src/app/client.py", "class Client:\n    def fetch(self, url: str) -> str:\n        return url\n")
+        self.write("src/app/use.py", "def ping(client):\n    return client.fetch('u')\n")
+        changed = self.edit("src/app/client.py", "(self, url: str)", "(self, url: str, *, timeout: float)")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "signature", "fetch in src/app/use.py"))
+
+    def test_a_decorated_function_is_never_settled(self):
+        self.write("src/app/http_client.py", "import functools\n\n\n@functools.cache\n" + HTTP_CLIENT.split("\n\n\n", 1)[1])
+        self.write("src/app/fallbacks.py", FALLBACKS)
+        self.assertEqual(self.verdict(self.rename_timeout())[:2], (True, "signature"))
+
+    def test_a_name_whose_signature_changed_in_two_edited_files_is_never_settled(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/mirror.py", HTTP_CLIENT)
+        self.write("src/app/fallbacks.py", FALLBACKS)
+        first = self.rename_timeout()
+        second = self.edit("src/app/mirror.py", "timeout: float = 5.0", "timeout_s: float = 5.0")
+        self.assertEqual(self.verdict(first, second)[:2], (True, "signature"))
+
+
 if __name__ == "__main__":
     unittest.main()
