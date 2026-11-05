@@ -764,17 +764,82 @@ run and approval decision stays Hermes'; the screen is OMH's.
   <text>`), and it and what `x` reports
   wait under the running call and are written at the next block boundary,
   so neither cuts that call off nor splits a reply.
-- The OMH TUI asks the terminal for click reports only while the agent list
+- The OMH TUI takes the mouse on the main screen once it can tell which row
+  a report lands on (once the session's output has reached the bottom of the
+  screen, or after Ctrl+L). A drag over the transcript or the rows under it
+  selects the text (shown reversed) and copies it when you let go, without
+  the rail a block hangs on or a reply's margin, and the row above the
+  composer says `✓ copied 694 chars to clipboard` for 2 s (the copy goes out
+  as the pager's does, below); a double click copies a word and a triple
+  click a row, and a key, the wheel, the next click or, once it is copied,
+  the next output drops the selection. The composer's rules, its `❯` and its placeholder are never
+  copied, only what you typed. The info line and the agent view under it
+  are never selected, and while a turn runs neither are the working row,
+  its tip and the rows under them: a drag carried onto them runs to the end
+  of the last row above them, so dragging to the bottom of the screen
+  copies the transcript. During a turn that puts your draft out of a drag's
+  reach too, and an approval or a value prompt, which sit under the row
+  counting how long Hermes has waited; the wheel up opens the question's own
+  view (Ctrl+O's), where a drag copies it. A question with choices, framed
+  between two rules, has no such row and can be dragged over during a turn
+  as well; its rules, its bar, the `❯` on the highlighted choice and its
+  key row are never copied, only the question and the choices. A drag over the transcript's rows stays on them
+  while output scrolls the screen; one over the live rows that change (a
+  reply still streaming, the panels, the composer) is dropped, highlight
+  and all, and copies nothing as soon as the rows under it change, and the
+  row above the composer says `selection dropped: text moved`, so it never
+  copies text other than what it showed. Its highlight never goes into the
+  scrollback. Ctrl+C within 2 s of a drag that copied only drops the
+  selection, since Windows Terminal and VS Code copy with it; the next
+  Ctrl+C acts as always. The wheel up opens the
+  transcript view Ctrl+O opens, one notch up from its end, where the screen
+  was; it scrolls there, and q goes back. The wheel down does nothing on the
+  main screen. A row the OMH TUI did not print in this screen (the shell's
+  output above the session, the rows from before a Ctrl+Z) selects nothing:
+  dragging from there opens the transcript view instead (the open question,
+  while one is asked), and with nothing to show it opens nothing. While the
+  window is being resized the mouse is the terminal's, and a selection is
+  dropped; on a terminal that ignores the erase of its scrollback (`CSI 3 J`)
+  rows reflowed into the scrollback with a selection on them can keep it
+  reversed there. The agent list still takes a click on its rows, and the
+  wheel over the list does nothing, as below. If you scroll the terminal's
+  own scrollback (its scrollbar, Shift+PageUp) and then drag, the row a
+  report names is the terminal's to say: some terminals jump back to the
+  bottom first or report nothing over scrollback rows, and one that reports
+  the row it shows could select another row than the one under the pointer;
+  the OMH TUI cannot tell, so drag after coming back to the bottom. On Linux
+  a middle click is the X primary selection's paste, and a drag there no
+  longer sets that selection: the click reaches the OMH TUI, which does
+  nothing with it. Hold the bypass modifier (Shift) with the middle click to
+  paste the primary selection as before, or select with it to set one. Your terminal's own
+  selection is still there with its bypass modifier: Shift while dragging in
+  xterm, kitty, WezTerm, Ghostty, Alacritty, foot, GNOME Terminal, Konsole,
+  Windows Terminal and Otty (its default; Settings → Controls → Mouse →
+  Bypass Mouse Reporting chooses another), Option in iTerm2, Fn in
+  Terminal.app (or turn off View → Allow Mouse Reporting, ⌘R); VS Code's
+  terminal on macOS has none unless
+  `terminal.integrated.macOptionClickForcesSelection` is on. That selection
+  copies the rail, as it always has. Inside tmux the reports reach the OMH
+  TUI with `set -g mouse` on or off, and with it on tmux hands the OMH TUI
+  the wheel and the drag instead of starting copy mode. `OMH_TUI_MOUSE=0`
+  leaves the main screen's mouse to the terminal as before: the wheel
+  scrolls its scrollback and a drag selects natively, rail included, and
+  click reports are on only while the agent list or the `/theme` picker is
+  open, as the next item says.
+- With `OMH_TUI_MOUSE=0` the OMH TUI asks the terminal for click reports only while the agent list
   is open, so during a turn the wheel scrolls and a drag selects as in any
   shell, and the agent view is reached with Down; nothing in it, and
   nothing on the info line, is clickable while the list is closed. While the list is open a plain drag no longer selects text in
-  most terminals and the wheel does not scroll. To select anyway, hold Fn
-  while dragging in Terminal.app (or turn off View → Allow Mouse Reporting),
-  Option in iTerm2, Shift in most other terminals. Selection and the wheel
+  most terminals and the wheel does not scroll. To select anyway, hold the
+  bypass modifier above. Selection and the wheel
   come back as soon as the list closes, while a question is open, and while
-  the window is being resized. While click reports are on, and for 0.5 s after they go off, an Esc pressed on
+  the window is being resized. While click reports are on there, and for 0.5 s after they go off, an Esc pressed on
   its own acts after 0.3 s, the time a click report split by a slow
-  connection has to arrive whole. Another key typed within that time ends
+  connection has to arrive whole. Where the main screen takes the mouse
+  (without `OMH_TUI_MOUSE=0`) the Esc waits only where a report can still
+  come split: over SSH or WSL, while a mouse button is held, and for 0.5 s
+  after the last report (a wheel turn, a click); otherwise it acts at the
+  first silence, as with reports off. Another key typed within that time ends
   the wait, and both keys act, except `[`, which is read as the rest of a
   sequence, as is `O` arriving together with the letter that ends F1 to F4,
   an arrow, Home or End. A key the terminal sends in the same burst as the
@@ -808,10 +873,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   SSH. Elsewhere it
   goes out as OSC 52 with nothing to confirm it, and the footer says `⚠ copy
   sent (terminal may not support OSC 52)` (under tmux, that tmux passes it on
-  only with `set-clipboard on`). On the main screen the terminal's own
-  selection is the only one: the transcript is in its scrollback, and taking
-  the mouse there would take the wheel and that scrollback away, so what it
-  copies there keeps each row's rail (`┃ ` in front of each row, and a
+  only with `set-clipboard on`). The terminal's own selection (its bypass
+  modifier, or everywhere with `OMH_TUI_MOUSE=0`) copies what the screen
+  shows, so it keeps each row's rail (`┃ ` in front of each row, and a
   reply's margin after it), and the terminal shows no copy notice of its
   own.
 - The composer takes a paste whole when the terminal brackets it, as most
@@ -872,11 +936,17 @@ run and approval decision stays Hermes'; the screen is OMH's.
   and the info line says `d or esc denies`.
   When the approval came from a subagent, that stops the session's whole
   running turn, not only the subagent. The tell row is the one deny that
-  does not stop the turn; it redirects it. A clarify question numbers its choices: a digit, or Up and Down then
-  Enter, picks one. One that takes several says `(choose one or more)` and
+  does not stop the turn; it redirects it. A clarify question with choices
+  stands between two rules, as Claude Code's own question dialog does: the
+  context Hermes wrote dim (its first rows), the question itself bold, a
+  choice written `label — description` as its label with the description
+  under it, and its keys on a row of their own under the bottom rule, with
+  how long it has waited once that is a minute (Hermes gives up after an
+  hour). It numbers its choices: a digit, or Up and Down
+  then Enter, picks one. One that takes several says `(choose one or more)` and
   puts a box before each choice: Space or its digit ticks the choice (`[x]`)
   or unticks it, Enter sends the ticked ones (the highlighted one alone when
-  none is ticked), and an answer of your own joins the ticked ones. Its last row, `Other (type your answer)`, opens the
+  none is ticked), and an answer of your own joins the ticked ones. Its last row, `Type something.`, opens the
   composer as the field for an answer of your own, and so does typing any
   character that picks nothing, which becomes the answer's first character;
   Up or Down goes back to the list and keeps what you typed for that

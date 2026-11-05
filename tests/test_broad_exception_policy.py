@@ -723,6 +723,16 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/tools/dag_tool.py",
+        "worktree_isolation_on",
+        INTENTIONAL,
+        "Hermes' `_get_worktree_isolation` or `local_backend_active` failing to import or raising is "
+        "never answered off: the profile's config.yaml is read the way Hermes reads the key (`bool()` "
+        "over PyYAML's value; a section the reader cannot place counts as on when the key is named), "
+        "and only a Docker or SSH terminal or a config that cannot be read at all answers off, which "
+        "is how define behaved before the guard.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/tools/dag_tool.py",
         "_backend_lines",
         INTENTIONAL,
         "Two handlers. Hermes' environment registry failing to import or raising is `no_read_path`, "
@@ -1048,10 +1058,13 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 105 -> 106 / 96: a second handler inside the classified `plugin_api.hud_payload`, the
 # Desktop pane's delegation drawing (a failure is a record with `error` beside a HUD that
 # still reads, and the pane draws its lane rows instead).
-# 106 -> 107 / 96 -> 97: `consistency_trigger.shell_changed_files`, the re-index after a
+# 106 -> 107 / 96 -> 97: `dag_tool.worktree_isolation_on`, Hermes' own worktree-isolation
+# getters (a failure reads the profile's config.yaml the way Hermes reads it, never a
+# guessed "off").
+# 107 -> 108 / 97 -> 98: `consistency_trigger.shell_changed_files`, the re-index after a
 # command for the shell round end (a failure logs a named warning and adds no note).
-EXPECTED_HANDLER_COUNT = 107
-EXPECTED_ANCHOR_COUNT = 97
+EXPECTED_HANDLER_COUNT = 108
+EXPECTED_ANCHOR_COUNT = 98
 
 
 class DerivedSite(NamedTuple):

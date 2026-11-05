@@ -48,8 +48,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
-- If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+- If the named Hermes session has no row or recorded tokens, retain supplied timings and context data in run_efficiency_report/v1, mark host_usage not_observed, and hand back the session ID for a recorded-usage check.
+- If session_activity_receipt/v1 omits tool durations or context-budget metrics, retain its available observations, mark the missing metrics not_observed rather than zero, and hand back the exact missing measurements.
 
 
 

@@ -301,6 +301,30 @@ class DefineTests(unittest.TestCase):
                           nodes=[node("a", scope=("x.py",)), node("b", scope=("x.py",), depends_on=("a",))])
         self.assertEqual(result["status"], "ok", result)
 
+    def test_scopes_written_differently_still_overlap(self) -> None:
+        """Mutation: compare entries as written; a directory, `./` or a glob then lets two nodes write one file."""
+        for first, second in (("src/", "src/x.py"), ("src/x.py", "./src/x.py"), ("src/*.py", "src/x.py"),
+                              ("src/**/*.py", "src/x.py")):
+            with self.subTest(first=first, second=second), homes():
+                refused = call(action="define", run="feat", nodes=[node("a", scope=(first,)), node("b", scope=(second,))])
+                # Through a third node is still no edge: only a direct one orders the two writers.
+                chained = call(action="define", run="chain", nodes=[
+                    node("a", scope=(first,)), node("m", depends_on=("a",)), node("b", depends_on=("m",), scope=(second,))])
+                joined = call(action="define", run="joined", nodes=[
+                    node("a", scope=(first,)), node("b", depends_on=("a",), scope=(second,))])
+            self.assertEqual((refused["status"], refused["reason"]), ("refused", "write_scope_overlap"), refused)
+            self.assertEqual(refused["say"],
+                             f"These nodes write overlapping paths with no edge between them: a writes {first} and "
+                             f"b writes {second}. Make one of each pair depend on the other, or split the scope.")
+            self.assertEqual(chained["reason"], "write_scope_overlap", chained)
+            self.assertEqual(joined["status"], "ok", joined)
+
+    def test_neighbouring_names_do_not_overlap(self) -> None:
+        for first, second in (("src/a", "src/ab"), ("docs/x.md", "docs/xy.md")):
+            with self.subTest(first=first, second=second), homes():
+                result = call(action="define", run="feat", nodes=[node("a", scope=(first,)), node("b", scope=(second,))])
+            self.assertEqual(result["status"], "ok", result)
+
     def test_lint_is_advice_and_never_rejects(self) -> None:
         # A partial marker set is lint; a prompt with no marker at all is refused (see DefineTests.preflight).
         nodes = [node("a", category="deep", prompt="TASK: do the thing."), node("b", category="deep-work", scope=("b.py",)),
@@ -431,6 +455,196 @@ class SettleTests(unittest.TestCase):
             self._run(home)
             result = call(action="settle", run="feat", node="docs", outcome="accepted")
         self.assertEqual(result["reason"], "node_not_out")
+
+
+def hermes_isolation(isolation: object, local: object = True) -> patch_modules:
+    """Hermes' `tools.delegate_tool._get_worktree_isolation` and `tools.subagent_worktree.local_backend_active`.
+
+    Each answers its value, or raises it when it is an exception.
+    """
+    def answer(value: object):
+        def read() -> object:
+            if isinstance(value, Exception):
+                raise value
+            return value
+        return read
+
+    delegate = SimpleNamespace(_get_worktree_isolation=answer(isolation))
+    worktree = SimpleNamespace(local_backend_active=answer(local))
+    return patch_modules({"tools": SimpleNamespace(delegate_tool=delegate, subagent_worktree=worktree),
+                          "tools.delegate_tool": delegate, "tools.subagent_worktree": worktree})
+
+
+def no_hermes_isolation() -> patch_modules:
+    """Hermes' isolation getters cannot be imported: the config file is read."""
+    return patch_modules({"tools.delegate_tool": None, "tools.subagent_worktree": None})
+
+
+class WorktreeIsolationTests(unittest.TestCase):
+    """Hermes' `delegation.worktree_isolation` gives each child a worktree of its own from the parent's HEAD.
+
+    A dependent or the verify node would then start without the earlier nodes' edits, so a run is never defined
+    with it on, and a run defined before it was turned on hands out no call while it is on.
+    """
+
+    def _config(self, home, text: bytes | str) -> None:
+        path = home.hermes / "config.yaml"
+        if isinstance(text, bytes):
+            path.write_bytes(text)
+        else:
+            path.write_text(text, encoding="utf-8")
+
+    def test_the_config_is_read_as_hermes_reads_it_with_bool(self) -> None:
+        """Hermes does `bool(cfg.get("worktree_isolation", False))` over PyYAML: every value but a false one is on."""
+        on = {
+            "true": "  worktree_isolation: true\n", "True": "  worktree_isolation: True\n",
+            "yes": "  worktree_isolation: yes\n", "ON": "  worktree_isolation: ON\n",
+            "one": "  worktree_isolation: 1\n", "commented": "  worktree_isolation: true  # one tree each\n",
+            "quoted false": "  worktree_isolation: 'false'\n", "quoted no": '  worktree_isolation: "no"\n',
+            "quoted zero": "  worktree_isolation: '0'\n", "y": "  worktree_isolation: y\n",
+            "enabled": "  worktree_isolation: enabled\n", "float one": "  worktree_isolation: 1.0\n",
+            "quoted hash": "  worktree_isolation: 'tr#ue'\n", "env": "  worktree_isolation: ${DAG_ISOLATION}\n",
+            "list": "  worktree_isolation: [true]\n", "anchor": "  worktree_isolation: &on true\n",
+            "block scalar": "  worktree_isolation: |\n    false\n",
+            "quoted key": '  "worktree_isolation": true\n',
+        }
+        off = {
+            "false": "  worktree_isolation: false\n", "False": "  worktree_isolation: False\n",
+            "NO": "  worktree_isolation: NO\n", "Off": "  worktree_isolation: Off\n",
+            "zero": "  worktree_isolation: 0\n", "float zero": "  worktree_isolation: 0.0\n",
+            "minus zero": "  worktree_isolation: -0\n", "hex zero": "  worktree_isolation: 0x0\n",
+            "null": "  worktree_isolation: null\n", "tilde": "  worktree_isolation: ~\n",
+            "empty": "  worktree_isolation:\n", "quoted empty": "  worktree_isolation: ''\n",
+            "empty list": "  worktree_isolation: []\n", "absent": "  max_concurrent_children: 3\n",
+        }
+        with no_hermes_isolation():
+            for expected, cases in ((True, on), (False, off)):
+                for name, line in cases.items():
+                    with self.subTest(value=name), homes() as home:
+                        self._config(home, "delegation:\n" + line)
+                        self.assertIs(dag_tool.worktree_isolation_on(home.hermes), expected)
+            for name, text in (("inline mapping", "delegation: {worktree_isolation: true}\n"),
+                               ("other section", "terminal:\n  worktree_isolation: true\n"),
+                               ("no config", None)):
+                with self.subTest(value=name), homes() as home:
+                    if text is not None:
+                        self._config(home, text)
+                    self.assertIs(dag_tool.worktree_isolation_on(home.hermes), name == "inline mapping")
+
+    def test_define_is_refused_while_isolation_is_on_and_keeps_no_record(self) -> None:
+        with homes() as home, no_hermes_isolation():
+            slots_table(home)
+            self._config(home, "delegation:\n  max_concurrent_children: 3\n  worktree_isolation: 'false'\n")
+            result = call(action="define", run="feat", nodes=FEATURE)
+            self.assertIsNone(dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat")))
+        self.assertEqual((result["status"], result["reason"]), ("refused", "worktree_isolation_on"), result)
+        self.assertEqual(result["say"], dag_tool.WORKTREE_ISOLATION_REFUSED)
+        self.assertIn("`hermes config set delegation.worktree_isolation false`", result["say"])
+
+    def test_hermes_own_answer_is_preferred_over_the_config_file(self) -> None:
+        cases = (
+            ("hermes on, file off", True, True, "false", "refused"),
+            ("hermes off, file on", False, True, "true", "ok"),
+            ("hermes on, terminal not local", True, False, "true", "ok"),
+            ("hermes getter raised, file on", RuntimeError("moved"), True, "true", "refused"),
+            ("hermes getter raised, file off", RuntimeError("moved"), True, "false", "ok"),
+        )
+        for name, isolation, local, value, status in cases:
+            with self.subTest(case=name), homes() as home, hermes_isolation(isolation, local):
+                slots_table(home)
+                self._config(home, f"delegation:\n  worktree_isolation: {value}\n")
+                result = call(action="define", run="feat", nodes=FEATURE)
+                self.assertEqual(result["status"], status, result)
+
+    def test_isolation_off_or_absent_defines_as_before(self) -> None:
+        configs: dict[str, str | None] = {
+            "absent": None,
+            "false": "delegation:\n  worktree_isolation: false\n",
+            "off": "delegation:\n  worktree_isolation: off\n",
+            "zero": "delegation:\n  worktree_isolation: 0\n",
+            "other_section": "terminal:\n  worktree_isolation: true\n",
+        }
+        expected = None
+        for name, text in configs.items():
+            with self.subTest(config=name), homes() as home, no_hermes_isolation():
+                slots_table(home)
+                if text is not None:
+                    self._config(home, text)
+                result = call(action="define", run="feat", nodes=FEATURE)
+                self.assertEqual(result["status"], "ok", result)
+                self.assertNotIn("worktree_isolation", result.get("say", ""))
+                shape = ([c["nodes"] for c in result["calls"]], result.get("say", ""), result["state"])
+                expected = expected or shape
+                self.assertEqual(shape, expected)
+
+    def test_an_unreadable_config_counts_as_off_and_define_answers_as_before(self) -> None:
+        """Fail-open only on a read failure: the guard says off, and define answers as it did without the guard."""
+        for name in ("not_utf8", "directory"):
+            answers = []
+            for guarded in (True, False):
+                with self.subTest(config=name, guarded=guarded), homes() as home, no_hermes_isolation():
+                    slots_table(home)
+                    if name == "directory":
+                        (home.hermes / "config.yaml").mkdir()
+                    else:
+                        self._config(home, b"delegation:\n  worktree_isolation: true\n  note: \xff\xfe\n")
+                    self.assertFalse(dag_tool.worktree_isolation_on(home.hermes))
+                    with nullcontext() if guarded else patch.object(dag_tool, "worktree_isolation_on",
+                                                                    return_value=False):
+                        answers.append(call(action="define", run="feat", nodes=FEATURE))
+            self.assertEqual(answers[0], answers[1])
+            self.assertNotEqual(answers[0].get("reason"), "worktree_isolation_on")
+
+    @unittest.skipUnless(SANDBOX_SHELL, SANDBOX_SKIP)
+    def test_a_docker_or_ssh_terminal_skips_the_guard_and_says_only_the_terminal_step(self) -> None:
+        """Hermes skips isolation on a terminal that is not local, so the run is defined and only TERMINAL_FIRST shows."""
+        with homes() as home, Terminal("docker", None).modules():
+            slots_table(home)
+            self._config(home, "delegation:\n  worktree_isolation: true\n")
+            result = call(action="define", run="feat", nodes=FEATURE)
+        self.assertEqual(result["status"], "ok", result)
+        self.assertEqual(result["calls"], [])
+        self.assertIn(dag_tool.TERMINAL_FIRST.format(backend="docker"), result["say"])
+        self.assertNotIn("worktree_isolation", result["say"])
+
+    def test_a_run_defined_before_isolation_hands_out_nothing_while_it_is_on(self) -> None:
+        with homes() as home, no_hermes_isolation():
+            slots_table(home)
+            self._config(home, "delegation:\n  max_concurrent_children: 10\n")
+            call(action="define", run="feat", nodes=FEATURE)
+            child_started(home, "feat", "api")
+            handoff(home, "feat", "api")
+            stop(home, "child-api", now=time.time())
+            quiet = call(action="status", run="feat")
+            self._config(home, "delegation:\n  max_concurrent_children: 10\n  worktree_isolation: true\n")
+            settled = call(action="settle", run="feat", node="api", outcome="accepted")
+            ready = call(action="ready", run="feat")
+            status = call(action="status", run="feat")
+            self._config(home, "delegation:\n  max_concurrent_children: 10\n  worktree_isolation: false\n")
+            after = call(action="ready", run="feat")
+        # The outcome is still recorded; only the next node does not go out, and status names why.
+        self.assertEqual(settled["settled"], {"node": "api", "outcome": "accepted"})
+        self.assertEqual(settled["counts"]["done"], 1)
+        self.assertEqual(settled["calls"], [])
+        self.assertTrue(settled["say"].endswith(dag_tool.WORKTREE_ISOLATION_HELD), settled["say"])
+        self.assertNotIn("held_for_slots", settled)
+        self.assertEqual(ready["calls"], [])
+        self.assertIn(dag_tool.WORKTREE_ISOLATION_HELD, ready["say"])
+        self.assertEqual(status["say"], dag_tool.WORKTREE_ISOLATION_HELD)
+        self.assertNotIn("worktree_isolation", quiet.get("say", ""))
+        self.assertEqual([c["nodes"] for c in after["calls"]], [["docs"]])
+        self.assertNotIn("worktree_isolation", after.get("say", ""))
+
+    def test_the_setting_is_read_without_writing_the_config(self) -> None:
+        text = "delegation:\n  worktree_isolation: yes\n"
+        with homes() as home, no_hermes_isolation():
+            self._config(home, text)
+            before = (home.hermes / "config.yaml").stat()
+            self.assertTrue(dag_tool.worktree_isolation_on(home.hermes))
+            call(action="define", run="feat", nodes=FEATURE)
+            after = (home.hermes / "config.yaml").stat()
+            self.assertEqual((home.hermes / "config.yaml").read_text(encoding="utf-8"), text)
+        self.assertEqual((before.st_ino, before.st_mtime_ns), (after.st_ino, after.st_mtime_ns))
 
 
 FILE_ANSWER = {"output": "OMH_HANDOFF_FILE\n", "returncode": 0}
@@ -841,6 +1055,46 @@ class RepairTests(unittest.TestCase):
         superseded = {row["id"]: row["state"] for row in second["nodes"]}
         self.assertEqual(superseded["v2"], "superseded")
 
+    def test_a_repair_writing_a_runnable_nodes_file_under_another_spelling_is_refused(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[
+                node("api", scope=("a.py",)), node("ui", scope=("src/ui.py",)),
+                node("verify", role="verify", depends_on=("api", "ui"), label="Verify")])
+            call(action="settle", run="feat", node="api", outcome="failed")
+            refused = call(action="repair", run="feat", node="api", nodes=[node("fix", scope=("a.py", "src/"))])
+            repaired = call(action="repair", run="feat", node="api", nodes=[node("fix", scope=("a.py", "lib/"))])
+        self.assertEqual((refused["status"], refused["reason"]), ("refused", "write_scope_overlap"), refused)
+        self.assertEqual(repaired["status"], "ok", repaired)
+
+    def test_a_repair_is_not_refused_over_two_earlier_nodes(self) -> None:
+        """Mutation: check every runnable pair at repair; the model cannot change a and b, and loops until cancel."""
+        with homes() as home:
+            slots_table(home)
+            # A run recorded before scopes were compared as paths: a and b overlap with no edge.
+            path = dag_run.record_path(home.omh, PARENT, "feat")
+            call(action="define", run="feat", nodes=[node("a", scope=("a.py",)), node("b", scope=("src/x.py",)),
+                                                     node("c", scope=("c.py",))])
+            record = dag_run.read_run(path)
+            record["nodes"][0]["write_scope"] = ["src/"]
+            path.write_text(json.dumps(record), encoding="utf-8")
+            call(action="settle", run="feat", node="c", outcome="failed")
+            repaired = call(action="repair", run="feat", node="c", nodes=[node("fix", scope=("z.py",))])
+        self.assertEqual(repaired["status"], "ok", repaired)
+
+    def test_a_second_repair_is_not_refused_over_the_first_repairs_overlap(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[
+                node("r1", scope=("a.py",)), node("d1", depends_on=("r1",), scope=("src/",)), node("r2", scope=("b.py",)),
+                node("verify", role="verify", depends_on=("d1", "r2"), label="Verify")])
+            call(action="settle", run="feat", node="r1", outcome="failed")
+            first = call(action="repair", run="feat", node="r1", nodes=[node("fix1", scope=("src/x.py",))])
+            call(action="settle", run="feat", node="r2", outcome="failed")
+            second = call(action="repair", run="feat", node="r2", nodes=[node("fix2", scope=("z.py",))])
+        self.assertEqual(first["status"], "ok", first)
+        self.assertEqual(second["status"], "ok", second)
+
     def test_a_repair_node_may_not_wait_on_an_open_node(self) -> None:
         with homes() as home:
             slots_table(home)
@@ -1231,6 +1485,39 @@ class ExtendTests(unittest.TestCase):
         for reason, result in results.items():
             self.assertEqual(result.get("reason"), reason, result)
         self.assertEqual((unchanged["state"], len(unchanged["nodes"])), ("done", 2))
+
+    def test_an_earlier_nodes_file_under_another_spelling_is_refused(self) -> None:
+        with homes() as home:
+            self._done(home)
+            refused = {entry: call(action="extend", run="feat", nodes=[node("x", scope=(entry,))])
+                       for entry in ("./a.py", "*.py")}
+            extended = call(action="extend", run="feat", nodes=[node("x", scope=("ab.py",))])
+        for entry, result in refused.items():
+            self.assertEqual((entry, result.get("reason")), (entry, "write_scope_overlap"), result)
+        self.assertEqual(extended["status"], "ok", extended)
+
+    def test_one_refusal_names_every_overlapping_pair(self) -> None:
+        """Mutation: raise on the first pair; a directory entry then costs one refused round per node it covers."""
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node(name, scope=(f"src/{name}.py",)) for name in "abc"])
+            for name in "abc":
+                handoff(home, "feat", name)
+                call(action="settle", run="feat", node=name, outcome="accepted")
+            refused = call(action="extend", run="feat", nodes=[node("x", scope=("src/",))])
+        self.assertEqual(refused.get("reason"), "write_scope_overlap", refused)
+        self.assertEqual(refused["say"], "These nodes write overlapping paths with no edge between them: "
+                                         "a writes src/a.py and x writes src/; b writes src/b.py and x writes src/; "
+                                         "c writes src/c.py and x writes src/. "
+                                         "Make one of each pair depend on the other, or split the scope.")
+
+    def test_the_refusal_names_a_bounded_number_of_pairs(self) -> None:
+        nodes = [node(f"n{index}", scope=(f"src/n{index}.py",)) for index in range(dag_run.OVERLAPS_NAMED + 3)]
+        with homes():
+            refused = call(action="define", run="feat", nodes=[*nodes, node("x", scope=("src/",))])
+        self.assertEqual(refused.get("reason"), "write_scope_overlap", refused)
+        self.assertEqual(refused["say"].count(" and x writes src/"), dag_run.OVERLAPS_NAMED)
+        self.assertIn("src/ and 3 more pairs. Make one of each pair", refused["say"])
 
     def test_the_new_nodes_are_linted(self) -> None:
         with homes() as home:

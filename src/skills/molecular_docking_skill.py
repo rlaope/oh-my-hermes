@@ -5,7 +5,7 @@ import hashlib
 from importlib.resources import files
 import json
 
-from .catalog_types import ExpertQuestion, ProcedureCheck, ProcedureStep, SkillDefinition, SkillExample
+from .catalog_types import ExpertQuestion, ProcedureCheck, ProcedureBail, ProcedureStep, SkillDefinition, SkillExample
 
 _INPUTS = ("prepared receptor and ligand PDBQT paths", "binding box and preparation provenance", "approved local resource budget")
 _OUTPUTS = ("molecular_docking_preflight/v1", "molecular_docking_run/v1 and real pose/score files")
@@ -37,8 +37,20 @@ DEFINITION = SkillDefinition(
     ),
     procedure_steps=(
         ProcedureStep("docking_scope", "analysis", _INPUTS, (_OUTPUTS[0],), ("docking_input_check", "docking_budget_check"), "Bind rights-cleared prepared files, protonation/tautomer/charges, receptor assumptions, site and resource budget. Run optional --validate-only to read back input digests, never as completed docking."),
-        ProcedureStep("docking_execute", "production", _INPUTS, (_OUTPUTS[1],), ("docking_input_check", "docking_budget_check"), "Explicitly run toolkit/scripts/dock.py in the chosen isolated Vina environment with a new output directory, captured logs and a real finite host timeout. Never auto-install or silently substitute a provider."),
-        ProcedureStep("docking_verify", "validation", _INPUTS, (_OUTPUTS[1],), ("docking_execution_check",), "Read poses.pdbqt, scores.json and manifest.json; reconcile saved pose energies and atom records with actual inputs and all hashes. Replay with a new output directory when needed; qualify reproducibility by version/platform."),
+        ProcedureStep("docking_execute", "production", _INPUTS, (_OUTPUTS[1],), ("docking_input_check", "docking_budget_check"), "Explicitly run toolkit/scripts/dock.py in the chosen isolated Vina environment with a new output directory, captured logs and a real finite host timeout. Never auto-install or silently substitute a provider.",
+            on_fail=ProcedureBail(
+                still_stands=('molecular_docking_preflight/v1',),
+                downgrade_to='not_observed',
+                handback='Return molecular_docking_preflight/v1 with captured stdout, stderr, exit or deadline evidence and any partial pose/score files for backend review before a retry in a new output directory.',
+            ),
+        ),
+        ProcedureStep("docking_verify", "validation", _INPUTS, (_OUTPUTS[1],), ("docking_execution_check",), "Read poses.pdbqt, scores.json and manifest.json; reconcile saved pose energies and atom records with actual inputs and all hashes. Replay with a new output directory when needed; qualify reproducibility by version/platform.",
+            on_fail=ProcedureBail(
+                still_stands=('molecular_docking_preflight/v1',),
+                downgrade_to='tentative',
+                handback='Return poses.pdbqt, scores.json and manifest.json with failed pose, energy, atom-record, hash or replay checks and engine version/platform limits; keep the docking run unverified.',
+            ),
+        ),
     ),
     artifact_expectations=("Keep raw inputs, stdout/stderr and pose/score files in the approved evidence directory, outside metadata-only OMH state. Preflight/run/score JSON schemas are standalone file contracts, not new registered operations artifacts.",),
     safety_rules=(

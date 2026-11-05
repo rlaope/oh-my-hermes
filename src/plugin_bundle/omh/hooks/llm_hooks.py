@@ -20,6 +20,7 @@ from ..awareness import (
     route_hint_without_engine_workflows,
     search_helper_hint,
 )
+from ..console_choices import console_choices_line
 from ..context_brief import build_context_brief
 from ..degradation import (
     COMPONENT_LOCALIZED_ROUTING_TEXT,
@@ -959,6 +960,19 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
             )
             if follow_on:
                 context_parts.append(follow_on)
+        # In a console session, a choice the reply stops on goes through
+        # Hermes' `clarify` picker rather than a prose list: on the session's
+        # first turn, and on the person's next turn after a clarify timed out
+        # (`console_choices`). A messaging platform and a child get nothing.
+        if not delegated:
+            console_choices = console_choices_line(
+                kwargs.get("platform"),
+                kwargs.get("conversation_history"),
+                is_first_turn=is_first_turn,
+                person_turn=bool(request_message),
+            )
+            if console_choices:
+                context_parts.append(console_choices)
         budget_context = context_budget_continuation(
             omh_home, session_id, str(kwargs.get("model", "") or "")
         )

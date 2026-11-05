@@ -49,8 +49,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
-- If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+- If the metric window is missing, keep supplied payloads, mark quality unresolved; hand back the next measure.
+- If a budget threshold is missing, keep the observed cost, mark advice tentative; hand back the gaps.
 
 ## Workflow Lane
 

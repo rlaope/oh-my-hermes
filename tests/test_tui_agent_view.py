@@ -279,7 +279,7 @@ class ViewTests(unittest.TestCase):
         app, _client = agent_app(busy=False, frames=FRAMES, cols=80)
         self.assertEqual(info_left(app), CHIP)
         rows = view_text(app)
-        self.assertEqual([row[:4] for row in rows], ["  ● ", "  ○ ", "  ✗ "])
+        self.assertEqual([row[:4] for row in rows], ["  ● ", "  ✓ ", "  ✗ "])
 
     def test_a_narrow_row_drops_the_right_side_and_keeps_the_count_whole(self) -> None:
         patched = mock.patch("omh.tui.app.__version__", "9.9.9")  # the badge's version, fixed: the gap is a width
@@ -510,7 +510,7 @@ class OneAgentSurfaceTests(unittest.TestCase):
         self.assertEqual(info_left(app), CHIP)
         self.assertEqual(view_text(app), VIEW)
         relay(app, FRAMES)
-        self.assertEqual([row[:4] for row in view_text(app)], ["  ● ", "  ○ ", "  ✗ "])
+        self.assertEqual([row[:4] for row in view_text(app)], ["  ● ", "  ✓ ", "  ✗ "])
         for state in ("idle", "running", "agents running"):
             self.assertNotIn(state, mode_row(app))
 
@@ -559,7 +559,7 @@ def box_top(screen: list[str]) -> int | None:
 
 
 class DagViewTests(unittest.TestCase):
-    """A DAG run's folding tree under the info line (`dag_tree`): a third of the screen from the start, one line once
+    """A DAG run's folding tree under the info line (`dag_tree`): `TREE_ROWS` rows from the start, one line once
     the run is over, and the keys Down gives it in its own rows. tests/test_tui_dag_tree.py pins the tree itself."""
 
     def tree_app(self, rows: int, graph: dict, **options: object) -> App:
@@ -567,35 +567,39 @@ class DagViewTests(unittest.TestCase):
         with_graph(app, graph)
         return app
 
-    def test_the_staged_export_tree_is_whole_at_40_rows_and_folded_at_24_keeping_its_running_lane(self) -> None:
+    def test_the_staged_export_tree_is_whole_at_40_rows_and_keeps_its_running_lane_at_24(self) -> None:
         from _delegation_graphs import export_run
 
         # The folding tree (the owner's pick of 2026-10-22) in place of the box-drawing tree: no `◆ main` row, a
-        # label row per stage, a blank row between two stages.
-        whole = view_text(self.tree_app(40, export_run(staged=True)))
-        self.assertEqual(len(whole), 11, whole)  # header, three stages, five lanes, two blanks: under 40 // 3
+        # label row per stage, a blank row between two; a done one-node stage on one row (the owner, 2026-11-04).
+        whole = [row.rstrip() for row in view_text(self.tree_app(40, export_run(staged=True)))]
+        self.assertEqual(len(whole), 10, whole)  # header, the done stage, two stages, their four lanes, two blanks
         self.assertFalse([row for row in whole if "more" in row])
-        self.assertEqual([row.strip()[:12] for row in whole[:2]], ["DAG · export", "▾ stage 1 · "])
+        self.assertEqual([row.strip()[:12] for row in whole[:2]], ["DAG · export", "✓ stage 1 · "])
+        self.assertEqual(whole[2], "")
         folded = [row.rstrip() for row in view_text(self.tree_app(24, export_run(staged=True)))]
         self.assertLessEqual(len(folded), 24 // 3)
-        self.assertIn("  ▸ stage 1 · 1 node · 1 done", folded, "the done stage shuts first")
         self.assertIn("    ▸ 2 more · 2 waiting", folded, "the busy stage's quiet lanes fold into one row")
         self.assertTrue([row for row in folded if "⠋ Export button" in row and "running" in row], folded)
 
-    def test_the_cap_is_a_third_of_the_screen_whatever_runs(self) -> None:
+    def test_the_cap_is_tree_rows_whatever_runs(self) -> None:
         from _delegation_graphs import parallel
+        from omh.tui.agent_view import TREE_ROWS
 
         # Nothing running: the non-DAG cap would be min(7, rows // 4), 6 at 24 rows and 7 at 40; the tree, twenty
-        # waiting lanes that fold no further, still gets a third of the screen, its last row the count of the rest.
+        # waiting lanes that fold no further, gets a third of the screen up to `TREE_ROWS` (no more on a taller
+        # screen), its last row the count of the rest.
         idle = parallel(20)
         for node in idle["nodes"][1:]:
             node.update(state="waiting", status="waiting")
         idle["edges"].append({"from": "l0", "to": "l1", "kind": "depends_on"})
-        for rows in (24, 40):
+        for rows in (24, 40, 72):
             with self.subTest(rows=rows):
+                cap = min(TREE_ROWS, rows // 3)
                 shown = view_text(self.tree_app(rows, idle))
-                self.assertEqual(len(shown), rows // 3)
-                self.assertEqual(shown[-1].rstrip(), f"  … {20 - (rows // 3 - 2)} more nodes · ↓ to browse")
+                self.assertEqual(len(shown), cap)
+                self.assertEqual(shown[-1].rstrip(), f"  +{20 - (cap - 2)} more · /dag")
+        self.assertEqual(TREE_ROWS, 16)
         # The same run's six-row tree without stages (one unnamed group draws no label row) fits whole at 24 rows.
         from _delegation_graphs import export_run
 
@@ -973,7 +977,9 @@ class RoomTests(unittest.TestCase):
         app._on_input(Key(ENTER))
         answer(app, app.client, {"session_id": "live-2", "stored_session_id": "stored-2", "info": {}})
         # `/new` redraws nothing, so the region is still on the bottom rows. The new session's tree (a third of 12
-        # rows is four) gets the three rows the plan leaves it, not what the last session's turn left the view.
-        with_graph(app, export_run(), self.PLAN)
+        # rows is four) gets the three rows the plan leaves it, not what the last session's turn left the view. Its
+        # lane is handed out, not running: a running one would put the waiting row (`App._pending_wait`) over the
+        # composer, a row of its own.
+        with_graph(app, export_run({"ui": "dispatched"}), self.PLAN)
         self.assertEqual(view_rows(app), 3)
         self.assertEqual(app.region.last_row(12), 11)

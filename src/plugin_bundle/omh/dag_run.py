@@ -84,7 +84,11 @@ MAX_NAME_CHARS: Final = 48
 MAX_GOAL_CHARS: Final = 240
 MAX_SCOPE_ENTRIES: Final = 16
 MAX_SCOPE_CHARS: Final = 200
+OVERLAPS_NAMED: Final = 20  # pairs one write_scope_overlap refusal names; the rest are counted
 MAX_REASON_CHARS: Final = 200
+# The verify node's producer scope map and a repair node's `git diff` paths are cut at these lengths (per node turn).
+SCOPE_MAP_CHARS: Final = 600
+LEFTOVER_PATHS_CHARS: Final = 300
 MAX_REPAIR_CYCLES: Final = 2
 REPLAN_CYCLE: Final = MAX_REPAIR_CYCLES
 MAX_EXTEND_ROUNDS: Final = 2
@@ -419,11 +423,17 @@ def _require_graph(
 ) -> None:
     """The hard rejects over a whole graph: references, cycles, and write scopes shared without an edge.
 
+    Scopes are compared as paths (`dag_core.shared_scope_pairs` ``as_paths``):
+    ``./src/x.py`` is ``src/x.py``, ``src/`` holds it, and ``src/*.py`` matches
+    it. One refusal names every overlapping pair in the check, and which node
+    wrote which entry, so a directory entry is not refused one pair per round.
+
     ``editable`` limits the scope check to pairs of those nodes: a repair is
     checked against the nodes that can still run, not against finished ones.
     ``involving`` limits it further to pairs with one of those nodes in them:
-    an extend round is checked against the run's earlier nodes, not the run
-    against itself again. ``before`` adds orderings the scope check counts as
+    a repair or an extend round is checked against the run's earlier nodes,
+    not the run against itself again (two earlier nodes are not the new
+    nodes' to change). ``before`` adds orderings the scope check counts as
     edges, {node: nodes ordered before it}: a repair group runs before every
     node that waits on the node it repairs.
     """
@@ -443,15 +453,21 @@ def _require_graph(
         raise DagRefusal("dependency_cycle", f"These nodes depend on each other in a circle: {', '.join(stuck)}.")
     checked = set(editable) if editable is not None else known
     new = set(involving)
-    scopes = [(str(node["id"]), node["write_scope"]) for node in nodes]
+    scopes = {str(node["id"]): node["write_scope"] for node in nodes}
     ordered = {node: [*listed, *(before or {}).get(node, ())] for node, listed in parents.items()}
-    for first, second, shared, joined in dag_core.shared_scope_pairs(scopes, ordered):
-        if not joined and first in checked and second in checked and (not new or first in new or second in new):
-            raise DagRefusal(
-                "write_scope_overlap",
-                f"Nodes {first} and {second} both write {', '.join(shared)} with no edge between them; "
-                "make one depend on the other or split the scope.",
-            )
+    overlaps = [
+        f"{first} writes {', '.join(entry for entry in shared if entry in scopes[first])} and "
+        f"{second} writes {', '.join(entry for entry in shared if entry in scopes[second])}"
+        for first, second, shared, joined in dag_core.shared_scope_pairs(list(scopes.items()), ordered, as_paths=True)
+        if not joined and first in checked and second in checked and (not new or first in new or second in new)
+    ]
+    if overlaps:
+        raise DagRefusal(
+            "write_scope_overlap",
+            f"These nodes write overlapping paths with no edge between them: {'; '.join(overlaps[:OVERLAPS_NAMED])}"
+            f"{f' and {len(overlaps) - OVERLAPS_NAMED} more pairs' if len(overlaps) > OVERLAPS_NAMED else ''}. "
+            "Make one of each pair depend on the other, or split the scope.",
+        )
 
 
 def markerless_nodes(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
@@ -538,6 +554,10 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
         findings.append("all_nodes_deep")
     if sum(1 for node in nodes if node["category"] == "ultrabrain") > 1:
         findings.append("ultrabrain_more_than_once")
+    # Only a declared review: a guessed one (a role-less or stored node) is not asked to move. Verify nodes are left
+    # alone: they judge the run goal, which can need a high category.
+    findings += [f"review_not_review_category:{node['id']}" for node in nodes
+                 if node.get("role") == "review" and node["category"] != "review"]
     return findings
 
 
@@ -1115,6 +1135,48 @@ def reads_for(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
     return reads
 
 
+def _fit(items: Sequence[str], limit: int, sep: str) -> tuple[list[str], int]:
+    """The leading ``items`` whose ``sep`` join fits ``limit`` (the first always), and how many were left out."""
+    shown = list(items[:1])
+    for item in items[1:]:
+        if len(sep.join([*shown, item])) > limit:
+            break
+        shown.append(item)
+    return shown, len(items) - len(shown)
+
+
+def _producer_scopes(record: Mapping[str, Any], node: Mapping[str, Any], preceding: set[str]) -> str:
+    """``id: path, path; ...`` for the producers a verify node follows (and their repairs, and its own), cut at
+    `SCOPE_MAP_CHARS` on whole paths and producers. Attribution by declared scope only: no write is observed."""
+    holders = preceding | {str(node["id"])}
+    rows = []
+    for item in record["nodes"]:
+        if is_producer(item) and (str(item["id"]) in preceding or item.get("repairs") in holders):
+            paths, left = _fit(item["write_scope"], SCOPE_MAP_CHARS, ", ")
+            rows.append(f"{item['id']}: {', '.join(paths)}" + (f" (+{left} more paths)" if left else ""))
+    shown, left = _fit(rows, SCOPE_MAP_CHARS, "; ")
+    return "; ".join(shown) + (f"; (+{left} more producers)" if left else "")
+
+
+def _leftovers_line(record: Mapping[str, Any], node: Mapping[str, Any]) -> str:
+    """A repair that writes starts from what earlier attempts left on disk (no rollback: the worktree is shared)."""
+    root = _root(node)
+    earlier = {root}
+    for group in (record.get("repairs") or {}).get(root, [])[:max(0, int(node.get("cycle") or 1) - 1)]:
+        earlier.update(group)
+    paths = sorted({path for item in record["nodes"] if str(item["id"]) in earlier for path in item["write_scope"]})
+    # `shlex.quote` is POSIX shell quoting; a Windows shell reads those quotes differently.
+    shown, left = _fit([shlex.quote(path) for path in paths or node["write_scope"]], LEFTOVER_PATHS_CHARS, " ")
+    more = f" (+{left} more paths)" if left else ""
+    check = (f"if this is a git checkout, inspect `git status --short -- {' '.join(shown)}`{more} and "
+             "`git diff HEAD` on the same paths")
+    if not paths:  # the failed root declared no scope (a verify node): earlier nodes' edits sit in this one's
+        return (f"Files in your SCOPE may already carry earlier nodes' edits: {check} before editing; keep what is "
+                "right, undo what is wrong in your SCOPE.")
+    return (f"The failed attempt's edits may still be on disk: {check} (or the files its handoff reported) before "
+            "editing; keep what is right, undo what is wrong in your SCOPE.")
+
+
 def task_for(
     record: Mapping[str, Any], node: Mapping[str, Any], omh_home: Path, derived: Mapping[str, Mapping[str, Any]]
 ) -> dict[str, str]:
@@ -1185,6 +1247,12 @@ def task_for(
                              "goal done.")
         lines.append("Check the complete run goal, not only this node's local VERIFY. "
                      "Name each unmet or unobserved goal criterion; producer claims are not verification evidence.")
+        scopes = _producer_scopes(record, node, preceding)
+        if scopes:
+            lines.append("In the handoff, name for each failing check the producer whose declared write_scope holds "
+                         f"its failing path, or `unattributed`: by declared scope, not proven cause. Scopes: {scopes}")
+    if node.get("repairs") and node["write_scope"]:
+        lines.append(_leftovers_line(record, node))
     lines.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
                  "say plainly that you are blocked and why; do not report blocked work as done.")
     # The marker ends the goal: Hermes previews each goal by its first 40 characters, and a person reads the label
@@ -1426,7 +1494,7 @@ def repair(
     # dependent writing what the group writes is ordered, not an overlap.
     every = {str(node["id"]): node["depends_on"] for node in record["nodes"]}
     below = {key: sorted(group) for key in every if root in ancestors(key, every)}
-    _require_graph(list(record["nodes"]) + added, editable=group | runnable, before=below)
+    _require_graph(list(record["nodes"]) + added, editable=group | runnable, involving=group, before=below)
     _require_oneshot_room(added, oneshot_remaining, "repair")
     record["nodes"].extend(added)
     groups.append([str(node["id"]) for node in added])
