@@ -460,6 +460,13 @@ class CapTests(unittest.TestCase):
         self.assertEqual(shown[-1], "  ▸ layer 8 · 1 node · 1 waiting", "at the end the last row is the tree's last")
         self.assertEqual(app.tree_selected, "layer:layer 8")
 
+    def test_a_busy_layers_many_quiet_nodes_fold_even_with_room_to_spare(self) -> None:
+        app, _client = tree_app(rows=240, nodes=self.big())
+        shown = [left(row) for row in view_text(app)]
+        self.assertIn("    ▸ 11 more · 9 waiting · 2 done", shown, "a tall screen lists the running nodes, not the rest")
+        self.assertIn("    ▾ ⠋ PR group 1: #138300 #107931", shown)
+        self.assertNotIn("      · Rebase batch 9", shown)
+
     def test_opening_the_more_row_shows_its_nodes_and_highlights_the_first(self) -> None:
         app, _client = tree_app(rows=72, nodes=self.big())
         app._on_input(Key(DOWN))
