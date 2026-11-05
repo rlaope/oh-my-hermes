@@ -48,8 +48,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If the reviewed target is missing, inspect the requested artifact or ask one target question.
-- If independent verification is unavailable, report the gap and avoid an approval-style claim.
+- If the source version cannot be established, retain supplied strings and the locale/audience brief, mark terminology and cultural-fit choices tentative, and hand back the source-version question before treating the glossary as approved.
+- If rendered UI evidence is missing, retain glossary choices and the string issue matrix, mark rendered validation not_observed, and hand back locale QA criteria and review owners for an accepted `omh-visual-qa` handoff.
 
 
 

@@ -55,8 +55,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
-- If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
+- If this run lacks an explicit coding-owner choice, no handoff stands yet; mark prompt composition unresolved and hand back the choose_executor question without selecting a CLI.
+- If the scratch-edit permission probe fails, retain the composed prompt and discovered skill names, mark execution not_observed, and hand back the denied permission and required grant change before retrying.
+- If dispatch returns no session or thread id, retain the dispatch receipt, mark steering unresolved, and hand back the explicit unsteerable note and any observed unit result without claiming a resumable session.
 
 ## Workflow Lane
 

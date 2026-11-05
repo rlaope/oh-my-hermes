@@ -46,6 +46,7 @@ Record the opaque source reference, as-of time, horizon and cohort, included mot
 - Input refs: `pipeline snapshot`, `as-of time and review horizon`, `currency, amount, stage, and forecast definitions`, `decision owner`
 - Output refs: `sales_pipeline_scope/v1`
 - Check IDs: `sales_pipeline_scope_check`
+- If this step fails: unresolved; still stands: nothing yet; hand back: Return sales_pipeline_scope/v1 as unresolved with the exact missing or stale timestamp, undefined semantics, currency basis, duplicate, or ownership gap; perform no calculation or ranking.
 
 ### `sales_pipeline_assess_health` (analysis)
 
@@ -70,6 +71,7 @@ When supplied evidence supports it, prepare the won/lost/unqualified learning an
 - Input refs: `pipeline snapshot`, `as-of time and review horizon`, `prior forecast and actuals`
 - Output refs: `sales_outcome_learning_annex/v1`, `sales_renewal_risk_annex/v1`
 - Check IDs: `sales_outcome_learning_check`, `sales_renewal_risk_check`
+- If this step fails: tentative; still stands: `sales_pipeline_scope/v1`, `sales_pipeline_health/v1`, `sales_forecast_assessment/v1`; hand back: Return tentative sales_outcome_learning_annex/v1 and sales_renewal_risk_annex/v1 drafts with their cohort, source, contradiction, and owner gaps; mark unsupported annexes unsupported.
 
 ### `sales_pipeline_validate_handoff` (validation)
 
@@ -78,3 +80,4 @@ Select account follow-ups with owner, due date, exit criterion, and evidence ref
 - Input refs: `pipeline snapshot`, `as-of time and review horizon`, `currency, amount, stage, and forecast definitions`, `prior forecast and actuals`, `decision owner`
 - Output refs: `sales_pipeline_handoff/v1`
 - Check IDs: `sales_pipeline_scope_check`, `sales_pipeline_health_check`, `sales_forecast_state_check`, `sales_pipeline_handoff_check`
+- If this step fails: unresolved; still stands: `sales_pipeline_scope/v1`, `sales_pipeline_health/v1`, `sales_forecast_assessment/v1`, `sales_outcome_learning_annex/v1`, `sales_renewal_risk_annex/v1`; hand back: Return the unresolved sales_pipeline_handoff/v1 with missing follow-up owners, due dates, exit criteria, evidence, or CRM approvals named; keep CRM changes proposed and mutation not_observed.

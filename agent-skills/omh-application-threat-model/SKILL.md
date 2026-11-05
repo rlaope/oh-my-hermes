@@ -54,7 +54,7 @@ Bad example:
 - If the architecture is not described, ask for the component map and the data flows before modeling; never substitute a generic checklist for the real system.
 - If a scenario has no boundary and no asset, drop it with the reason rather than carrying an unreachable threat.
 - If the user asks for exploit code, give the precondition and the detection signal instead, then hand remediation to an executor.
-- If the request turns out to be about the agent's own prompts, tools, or credentials, stop and hand it to `security-safety-review`.
+- If the request turns out to be about the agent's own prompts, tools, or credentials, stop and hand it to `omh-security-safety-review`.
 
 
 

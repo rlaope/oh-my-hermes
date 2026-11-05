@@ -7,7 +7,13 @@ from typing import Protocol
 import unicodedata
 
 from .catalog import primary_harness_for_skill
-from .catalog_types import HarnessDefinition, SkillDefinition
+from .catalog_types import (
+    HarnessDefinition,
+    SkillDefinition,
+    _CATEGORY_RECOVERY_NOTES,
+    _GENERAL_RECOVERY_NOTES,
+    _HANDOFF_RECOVERY_NOTES,
+)
 
 SKILL_STRUCTURE_LINT_SCHEMA_VERSION = "omh_skill_structure_lint/v1"
 STRUCTURE_LINT_RULE_IDS = (
@@ -20,9 +26,13 @@ STRUCTURE_LINT_RULE_IDS = (
     "SKILL_GENERATED_PARITY",
     "SKILL_HARNESS_RESOLVES",
     "SKILL_INDEX_OPENING_DISTINCT",
+    "SKILL_RECOVERY_SPECIFIC",
     "SKILL_RENDERED_IDENTITY_UNIQUE",
     "SKILL_TRIGGER_FORMAT",
 )
+# Migration ratchet: a skill leaves this tuple when it gains specific recovery notes.
+RECOVERY_DEFAULT_ONLY_ALLOWED: tuple[str, ...] = ()
+
 # Per-skill SKILL.md body ceiling (paid on each load, not every request). Ratchet, not a target: raise it only
 # with the reason written here. 24_000 held until 2026-09-11, when the
 # ultrawork body measured 25_078 bytes after the seven executing-engine bars
@@ -233,11 +243,28 @@ def _definition_violations(
         ("SKILL_FRONTMATTER_FIELDS", _lint_frontmatter_fields(definition)),
         ("SKILL_GENERATED_PARITY", _lint_generated_parity(definition)),
         ("SKILL_HARNESS_RESOLVES", _lint_harness_resolves(definition, harness_names)),
+        ("SKILL_RECOVERY_SPECIFIC", _lint_recovery_specific(definition)),
         ("SKILL_TRIGGER_FORMAT", _lint_trigger_format(definition)),
     ):
         if detail:
             found.append({"rule": rule, "skill": definition.name, "detail": detail})
     return found
+
+
+def _lint_recovery_specific(definition: SkillDefinition) -> str:
+    from .catalog import installable_skill_names
+
+    if definition.name not in installable_skill_names():
+        return ""
+    defaults = set(_GENERAL_RECOVERY_NOTES) | set(_HANDOFF_RECOVERY_NOTES)
+    defaults.update(line for notes in _CATEGORY_RECOVERY_NOTES.values() for line in notes)
+    default_only = all(line in defaults for line in definition.recovery_notes)
+    if definition.name in RECOVERY_DEFAULT_ONLY_ALLOWED:
+        if not default_only:
+            return "skill has specific recovery notes; remove it from RECOVERY_DEFAULT_ONLY_ALLOWED"
+    elif default_only:
+        return "installable skill needs skill-specific recovery notes, not only library defaults"
+    return ""
 
 
 def _lint_catalog_contract(

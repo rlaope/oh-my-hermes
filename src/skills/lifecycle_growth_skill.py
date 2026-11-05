@@ -32,6 +32,7 @@ from __future__ import annotations
 from .catalog_types import (
     ExpertQuestion,
     ProcedureCheck,
+    ProcedureBail,
     ProcedureStep,
     SkillDefinition,
     SkillExample,
@@ -206,22 +207,42 @@ DEFINITION = SkillDefinition(
             "lifecycle_check_safety_eligibility", "validation", (_INPUT_SEGMENT, _INPUT_SURFACES, _INPUT_CONSENT),
             (_SAFETY,), (_CHECK_SAFETY,),
             "Order suppression precedence above legal and tenant constraints, user preferences, channel eligibility, quiet hours, and locale, then set global and per-campaign frequency budgets; record the throttle grouping key, resolved value, scope, and fallback so distinct recipients or tenants never share one window; treat production workflow content as read-only and route edits to a draft with an explicit promotion decision; fail closed when any eligibility input is missing.",
+            on_fail=ProcedureBail(
+                still_stands=('lifecycle_growth_brief/v1', 'audience_trigger_policy/v1'),
+                downgrade_to='unresolved',
+                handback='Return the unresolved lifecycle_safety_policy/v1 with missing consent, suppression, channel eligibility, frequency budgets, or throttle scope named; keep launch on HOLD.',
+            ),
         ),
         ProcedureStep(
             "lifecycle_design_experiment", "production", (_INPUT_OBJECTIVE, _INPUT_EVENTS, _INPUT_SURFACES, _INPUT_BUDGET, _INPUT_OWNER),
             (_EXPERIMENT,), (_CHECK_TARGET, _CHECK_EXPERIMENT),
             "Specify treatment and control, sticky assignment and exposure units, the actual-exposure definition, one primary metric, guardrails, holdout rationale, minimum runtime, data-health checks, pause and rollback conditions, and an approval state that a named human must set before any launch handoff.",
+            on_fail=ProcedureBail(
+                still_stands=('lifecycle_growth_brief/v1', 'audience_trigger_policy/v1', 'lifecycle_safety_policy/v1'),
+                downgrade_to='tentative',
+                handback='Return the tentative growth_experiment_plan/v1 with missing assignment, actual-exposure definition, metric, guardrail, runtime, or rollback checks flagged; keep approval unapproved.',
+            ),
         ),
         ProcedureStep(
             "lifecycle_prepare_measurement_readout", "validation", (_INPUT_EVENTS, _INPUT_BUDGET, _INPUT_OWNER),
             (_READOUT,), (_CHECK_READOUT,),
             "Lay out eligible, assigned, attempted, delivered, displayed, acted, and outcome stages with denominator and freshness checks. Supply the separate exposure-evidence companion to evaluate or prepare; unknown audience, assignment, contact pressure, overlap, or channel accounting holds expansion. First-launch preparation needs observed audience/reachability/contact checks, not invented treatment counts. Keep causal-claim status separate, list each conditional step as matched or skipped with a redacted reason, and record the analysis run's state and observation time alongside any delay. Record `ship`, `rollback`, `review`, or `insufficient_data` without forcing a decision on thin data.",
+            on_fail=ProcedureBail(
+                still_stands=('lifecycle_growth_brief/v1', 'audience_trigger_policy/v1', 'lifecycle_safety_policy/v1', 'growth_experiment_plan/v1'),
+                downgrade_to='unresolved',
+                handback='Return the unresolved growth_measurement_readout/v1 with missing exposure evidence, denominator, freshness, overlap, channel, or analysis-run checks named; keep counts unknown, not zero.',
+            ),
         ),
         ProcedureStep(
             "lifecycle_validate_handoff", "validation", _ALL_INPUTS,
             (_HANDOFF,),
             (_CHECK_TARGET, _CHECK_AUDIENCE, _CHECK_SAFETY, _CHECK_EXPERIMENT, _CHECK_READOUT, _CHECK_HANDOFF),
             "Propose connector, content, analytics, product, or implementation actions with owner, approver, evidence refs, timing, and stop conditions; prepare any cancellation or status-reconciliation request against the exact named run and leave it `prepared_not_observed` until a provider result is observed; return HOLD readiness while any check holds, approval is missing, or the latest analysis run is still in flight, route validated product changes to `product-brief`, and never report a send, display, action, outcome, cancellation, or causal effect that was not observed.",
+            on_fail=ProcedureBail(
+                still_stands=('lifecycle_growth_brief/v1', 'audience_trigger_policy/v1', 'lifecycle_safety_policy/v1', 'growth_experiment_plan/v1', 'growth_measurement_readout/v1'),
+                downgrade_to='unresolved',
+                handback='Return the unresolved growth_handoff_disposition/v1 with blocked actions, missing owners or approvals, and the exact analysis run needing status reconciliation; leave requests prepared_not_observed.',
+            ),
         ),
     ),
     artifact_expectations=(

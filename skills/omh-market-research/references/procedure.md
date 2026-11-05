@@ -62,6 +62,7 @@ When in scope, use references/market-sizing.md to construct sourced TAM/SAM/SOM 
 - Input refs: `buyer segment and geography`, `period currency units and source cutoff`, `available evidence and source boundary`
 - Output refs: `TAM SAM SOM model and sensitivity`
 - Check IDs: `market_size_check`
+- If this step fails: unresolved; still stands: `market scope and source ledger`; hand back: Return the market scope and source ledger with an unresolved TAM SAM SOM model and sensitivity, preserving unknown operands, unit gaps, calculation receipts, and unreconciled ranges.
 
 ### `analyze_customer_evidence` (analysis)
 
@@ -86,3 +87,4 @@ Use references/findings-template.md to deliver findings, calculations, assumptio
 - Input refs: `decision and audience`, `buyer segment and geography`, `period currency units and source cutoff`, `available evidence and source boundary`, `research budget and stop condition`
 - Output refs: `decision-ready market findings`
 - Check IDs: `market_source_check`, `market_findings_check`
+- If this step fails: tentative; still stands: `market scope and source ledger`, `TAM SAM SOM model and sensitivity`, `customer evidence and JTBD matrix`, `comparable competitor and pricing profiles`; hand back: Return tentative decision-ready market findings with the source ledger, calculation receipts, assumptions, contrary evidence, and unresolved retrieval gaps; name each next verification owner.
