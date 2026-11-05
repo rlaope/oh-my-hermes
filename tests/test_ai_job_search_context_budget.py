@@ -137,7 +137,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # producer (+3211 full, +947 standalone); dropping only that row reproduces
             # 2cb9a1ff...ca80 and 7971eca9...7617.
             (skill_capabilities, 533897, FULL_ROW_DELTA_CAP,
-             'PLACEHOLDER_FULL',
+             'e6484100710e1a95d558b55fd105129a7cdaa418aabd8e9ee71a174143c19d8b',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -360,7 +360,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # with main after the bail points; main's pin before it was fb4303cb...1fcf.
         # systematic-review joins the research lane (+27 -> +28 more) with its narrowed Korean pack;
         # restoring +28 -> +27 and dropping it reproduces 2b0982e6...8db3.
-        self.assertEqual(_digest(legacy_hashes), 'PLACEHOLDER_LEGACY')
+        self.assertEqual(_digest(legacy_hashes), '5404bf98149708d4ee110e9bc62a86ba531a339b04817063d927fd559ca32229')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
