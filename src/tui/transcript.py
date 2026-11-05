@@ -72,6 +72,21 @@ an `inline_diff` shows that diff under its row's `⎿` (`diff_view.py`): the fir
 view (and `history_lines` with details) shows in full. Lines rendered at one width stay as they were taken; a
 resize changes only what has not been taken yet.
 
+A subagent that finishes is briefed as a block of its own (`AgentDoneBlock`, the
+owner's ask of 2026-11-05, after Claude Code's `● Teammate @x finished`):
+`● <name> finished  1m 35s · ↓1.8k`, the mark green only for a completed agent
+(`● … failed` in red, `▪ … interrupted` and `○ … cancelled` muted); a dag
+node's child is named by its role and its id as a handle, `● build @notify
+finished` (the role plain, `@<id>` in a hue its node's place in its run
+picks, `theme.agent_style`, the same on every row), with the node's label on
+one muted row under it; then the first lines of its reply, or its error, in
+at most two muted rows under the name, ending in `…` where it said more. The
+app writes it as an aside (`add_aside`), so it waits under a streaming reply
+or a running call and is written at the next block boundary, in the order the
+agents finished. Past `AGENT_HELD_SHOWN` held at once, the live region folds
+the older ones into one row (`_held_rows`); `/history` (`shown_blocks`) holds
+every one whole meanwhile.
+
 Two events do not mean what their names suggest, measured against Hermes
 6c61c3e27d (the recorded fixtures and the gateway source):
 
@@ -111,7 +126,9 @@ from .markdown import (
     GrowingLine,
     MarkdownState,
     clean_text,
+    is_table_divider_cells,
     opens_table,
+    split_table_row,
     table_block,
     render_growing,
     render_lines,
@@ -119,7 +136,7 @@ from .markdown import (
 )
 from .style import NO_COLOR, Line, Span, Style, fill
 from .slash import slash_spans, slash_token_ranges
-from .theme import TOOL_FAMILIES, Theme, kind_style, on_band
+from .theme import TOOL_FAMILIES, Theme, agent_style, kind_style, on_band
 from .width import cell_width, cluster_width, clusters, line_width, truncate, truncate_left, truncate_line
 
 TOOL_GENERATING = "generating"
@@ -162,6 +179,8 @@ INTERRUPTED_NOTICE = "Interrupted."
 # An interrupted turn the person did not stop (`Transcript.hermes_interrupted`): Hermes ended it itself, as when the
 # session's lease was lost (Hermes #142161), and the person may want it to go on.
 HERMES_INTERRUPTED_NOTICE = "Hermes interrupted this turn; send `continue` to go on."
+# The same end when the TUI sends that `continue` itself after a short wait (`App._arm_auto_continue`).
+HERMES_RESUMING_NOTICE = "Hermes interrupted this turn; sending `continue` in {seconds} s · Esc cancels"
 FAILED_NOTICE = "The turn ended with an error."
 # The first row a full redraw prints when `retake_tail` left the session's earlier blocks out; once the cap
 # below has dropped blocks, /history no longer holds them all, and the row says how many it does.
@@ -302,6 +321,45 @@ class TurnSummaryBlock:
     waited: float = 0.0  # the part of `seconds` a question Hermes asked waited on the person
 
 
+# How an agent's briefing (`AgentDoneBlock`) says it ended: its mark, and the word after its name. Only a completed
+# agent's mark is green, as in the agent list (`subagents.DONE_MARK`): a failure's is red, the rest muted.
+AGENT_FINISHED = "finished"
+AGENT_FAILED = "failed"
+AGENT_INTERRUPTED = "interrupted"
+AGENT_CANCELLED = "cancelled"
+AGENT_DONE_MARKS = {AGENT_FINISHED: "●", AGENT_FAILED: "●", AGENT_INTERRUPTED: "▪", AGENT_CANCELLED: "○"}
+AGENT_SAID_ROWS = 2  # the most rows a briefing gives what the agent said
+AGENT_SAID_LINES = 3  # its reply's first lines read for them: enough to fill them, and to know there was more
+AGENT_SAID_INDENT = "  "  # under the name, past the mark and its space
+AGENT_FACT_SEPARATOR = " · "
+AGENT_SAID_CUT = "…"
+# Briefings held under a live block (a running `delegate_task`) are drawn in the live region until its boundary: the
+# newest `AGENT_HELD_SHOWN` whole, in what the live region's room leaves once the live block, the fold row and their
+# spacers have theirs (and a quarter of the screen at most), and the rest as one muted row,
+# `● 9 more finished · 1 failed`, so the running call stays on screen. All are written whole at the boundary.
+AGENT_HELD_SHOWN = 3
+AGENT_HELD_SHARE = 4  # the newest briefings drawn whole take at most 1/4 of the screen's rows
+AGENT_HELD_RESERVE = 3  # the spacer above the held rows, the fold row and the spacer under it
+AGENT_HELD_MORE = "{count} more {outcome}"
+
+
+@dataclass
+class AgentDoneBlock:
+    """A subagent that finished, briefed in the transcript as its `subagent.complete` arrives: `● <name> finished`
+    and its time and output tokens (`facts`), a dag node's label (`title`), then the first lines of its reply, or its
+    error (`said`)."""
+
+    name: str
+    outcome: str = AGENT_FINISHED  # AGENT_FINISHED, AGENT_FAILED, AGENT_INTERRUPTED or AGENT_CANCELLED
+    facts: tuple[str, ...] = ()  # `2m 14s`, `↓1.2k`: the row drops them from the last where it has no room
+    said: tuple[str, ...] = ()  # its reply's or its error's lines, cleaned
+    done: bool = True
+    title: str = ""  # a dag node's label, on one dim row under a `name` that is the node's id; "" for none
+    handle: bool = False  # `name` is a dag node's id, drawn `@<name>` in its own hue (`theme.agent_style`)
+    role: str = ""  # a dag node's role (`build`, `verify`, …), plain, before the handle; "" for none
+    node_index: int | None = None  # the node's place in its run's definition order, which picks the handle's hue
+
+
 @dataclass
 class ThinkingBlock:
     text: str = ""
@@ -371,7 +429,7 @@ class ToolGroup:
 
 Block = (
     UserBlock | AssistantBlock | ThinkingBlock | ToolGroup | NoticeBlock | CommandBlock | TurnSummaryBlock | SteerBlock
-    | DagBlock
+    | DagBlock | AgentDoneBlock
 )
 
 
@@ -424,20 +482,62 @@ def _display_lines(text: str) -> list[str]:
     return _without_trailing_blanks(_source_lines(text))
 
 
-def _stable_lines(text: str, final: bool = False, cap: int | None = None) -> list[str]:
+_DIVIDER_MARKS = frozenset("|:- ")  # what a table's divider line is made of
+_DIVIDER_LINE = re.compile(r"^[ \t]*\|[|:\- \t]*-[|:\- \t]*$", re.MULTILINE)  # a line that may be one
+
+
+def _table_row(line: str) -> bool:
+    """`line` goes on a table: a row of two cells or more, or a divider."""
+    cells = split_table_row(clean_text(line))
+    return len(cells) >= 2 or is_table_divider_cells(cells)
+
+
+def _stable_lines(
+    text: str, final: bool = False, cap: int | None = None, height: Callable[[list[str]], int] | None = None
+) -> list[str]:
     """The source lines that can no longer change: complete ones, minus trailing blanks.
 
     A trailing run of `|` lines is held back too: a header is decided only
-    once its divider has arrived, and taken rows are never repainted.
+    once its divider has arrived, and taken rows are never repainted. A held
+    table of more than `cap` lines, or with a body row and more than `cap`
+    rows by `height` (the rows the held lines draw: wrapped cells take
+    several), is released as it grows.
     """
-    lines = _without_trailing_blanks(_source_lines(text)[:-1])
+    *complete, partial = _source_lines(text)
+    lines = _without_trailing_blanks(complete)
     if final:  # the last take, at exit: nothing is left to wait for, so a complete `|` row goes out
         return lines
     held = len(lines)
     while held and lines[held - 1].strip().startswith("|"):
         held -= 1
-    if cap is not None and len(lines) - held > cap and opens_table(lines[held], lines[held + 1]):
-        return lines  # a table taller than the live region is released as it grows, on the columns it has
+
+    def tall(at: int) -> bool:
+        return cap is not None and (len(lines) - at > cap or height is not None and height(lines[at:]) > cap)
+
+    if len(lines) - held > 2 and opens_table(lines[held], lines[held + 1]) and tall(held):
+        # a table taller than the live region is released as it grows, on the columns it has. A next table in the
+        # run (a header and its divider, the next table's held with them) is held on its own until it is tall too.
+        # A released table's last row waits while the line after it may yet be a divider, as it is then the header
+        # of a next table; with one row, the table waits whole, so its columns are laid out over that row too.
+        last = held
+        run = "\n".join(lines[held:])
+        line_at, searched = held, 0
+        for match in _DIVIDER_LINE.finditer(run):  # at C speed: a long run is searched on every take
+            line_at += run.count("\n", searched, match.start())
+            searched = match.start()
+            at = line_at - 1  # the header the divider-shaped line may open a table on
+            if at < held + 2 or not opens_table(lines[at], lines[at + 1]):
+                continue
+            # a divider-shaped header opens a table only where no table goes on (after a `|` line that is no row)
+            if not is_table_divider_cells(split_table_row(clean_text(lines[at]))) or not _table_row(lines[at - 1]):
+                last = at
+        if last > held and not tall(last):
+            return lines[:last]
+        after = clean_text(partial).strip()  # the line being written, "" before its first character
+        divider_yet = set(after) <= _DIVIDER_MARKS and after[:1] in ("", "|")
+        if len(lines) - last > 2 and len(lines) == len(complete) and divider_yet:
+            return lines[:-1] if len(lines) - last > 3 else lines[:last]
+        return lines
     return _without_trailing_blanks(lines[:held])
 
 
@@ -659,7 +759,26 @@ def _args_summary(payload: dict[str, Any]) -> str:
     return _GOAL_MARKERS.sub("", summary).strip() if as_text(payload.get("name")) == "delegate_task" else summary
 
 
+def _clarify_summary(payload: dict[str, Any]) -> str:
+    """A clarify call's row: how many choices it offers (`3 choices`), or how many questions when it asks several,
+    since the picker under it shows the question itself; "" when its arguments say neither, and the row then
+    reads as any tool's (`_call_summary`)."""
+    args = payload.get("args")
+    questions = args.get("questions") if isinstance(args, dict) else None
+    if not isinstance(questions, list) or not questions or not all(isinstance(q, dict) for q in questions):
+        return ""
+    if len(questions) > 1:
+        return f"{len(questions)} questions"
+    choices = questions[0].get("choices")
+    count = sum(1 for choice in choices if isinstance(choice, str)) if isinstance(choices, list) else 0
+    return f"{count} choice{'' if count == 1 else 's'}" if count else ""
+
+
 def _call_summary(payload: dict[str, Any]) -> str:
+    if as_text(payload.get("name")) == CLARIFY_TOOL:
+        asked = _clarify_summary(payload)
+        if asked:
+            return asked
     context = _first_line(as_text(payload.get("context")))
     if context and as_text(payload.get("name")) in BRIDGE_TOOLS:
         return context.replace(LABEL_SEPARATOR, ": ", 1)  # the transcript's own field separator: `· 1 tool` is a count
@@ -1076,6 +1195,71 @@ def _tail_rows(block: Block, width: int, theme: Theme) -> list[Line]:
     return rows
 
 
+def _agent_done_rows(block: AgentDoneBlock, width: int, theme: Theme) -> list[Line]:
+    """`● <name> finished  2m 14s · ↓1.2k`, then its `title` on one muted row when it has one (a dag node's label
+    under the node's id, cut with `…`), then what it said in up to `AGENT_SAID_ROWS` muted rows under the name.
+
+    The mark is green only for a completed agent (red for a failure, muted
+    `▪` interrupted and `○` cancelled), and the word after the bold name says
+    which, so colour is never the only signal. A `handle` is `@<name>` in the
+    hue its node's place in its run picks (`node_index`; its name's hash
+    without one, `agent_style`), whatever the outcome: the colour names the
+    agent, not how it ended. A `role` goes before it, plain, as Claude Code's
+    `Teammate`. A row too narrow drops the facts from the last, then cuts
+    the name (a handle before the role); the word stays. What it said is
+    drawn as the reply would be (`render_lines`: no `**`, `#` or backticks
+    left), all in one muted tone, and the last row shown ends in `…` where
+    more was said.
+    """
+    mark_style = {AGENT_FINISHED: theme.ok, AGENT_FAILED: theme.error}.get(block.outcome, theme.muted)
+    word_style = {AGENT_FINISHED: theme.text, AGENT_FAILED: theme.error}.get(block.outcome, theme.muted)
+    plain = theme.text if block.outcome in (AGENT_FINISHED, AGENT_FAILED) else theme.muted
+    if block.handle:
+        name_style = agent_style(block.name, theme, block.node_index)
+    else:
+        name_style = replace(plain, bold=True)
+    shown = f"@{block.name}" if block.handle else block.name
+    mark = f"{AGENT_DONE_MARKS.get(block.outcome, AGENT_DONE_MARKS[AGENT_CANCELLED])} "
+    lead: Line = (Span(f"{block.role} ", plain),) if block.role else ()
+    word = f" {block.outcome}"
+    fixed = cell_width(mark) + line_width(lead) + cell_width(word)
+    facts = ""
+    for count in range(len(block.facts), -1, -1):
+        facts = AGENT_FACT_SEPARATOR.join(block.facts[:count])
+        if fixed + cell_width(shown) + (cell_width(COLUMN_GAP + facts) if facts else 0) <= width:
+            break
+    tail: Line = (Span(COLUMN_GAP + facts, theme.faint),) if facts else ()
+    name = truncate(shown, max(width - fixed - line_width(tail), 1))
+    rows = [truncate_line((Span(mark, mark_style), *lead, Span(name, name_style), Span(word, word_style), *tail),
+                          width)]
+    room = width - len(AGENT_SAID_INDENT)
+    if room < 1:
+        return rows
+    if block.title:
+        rows.append((Span(AGENT_SAID_INDENT), Span(truncate(block.title, room), theme.muted)))
+    if not block.said:
+        return rows
+    said = render_lines(block.said[:AGENT_SAID_LINES], MarkdownState(), room, theme)[0]
+    said = [row for row in said if row]
+    more = len(said) > AGENT_SAID_ROWS or len(block.said) > AGENT_SAID_LINES
+    # Cut to the room too: a wide character wrapped into fewer cells than it takes (a 1-cell room) still fits.
+    said = [truncate_line(tuple(Span(span.text, theme.muted) for span in row), room) for row in said[:AGENT_SAID_ROWS]]
+    if more and said:
+        said[-1] = (*truncate_line(said[-1], room - 1, ellipsis=""), Span(AGENT_SAID_CUT, theme.muted))
+    return rows + [(Span(AGENT_SAID_INDENT), *row) for row in said]
+
+
+def _held_more_row(folded: list[AgentDoneBlock], width: int, theme: Theme, more: bool = True) -> Line:
+    """The one muted row held briefings fold into, counted by outcome: `● 9 more finished · 1 failed` above the ones
+    drawn whole, `● 2 finished · 1 failed` when none is (`more` False)."""
+    counts = {outcome: sum(1 for block in folded if block.outcome == outcome) for outcome in AGENT_DONE_MARKS}
+    parts = [(count, outcome) for outcome, count in counts.items() if count]
+    said = [AGENT_HELD_MORE.format(count=count, outcome=outcome) if index == 0 and more else f"{count} {outcome}"
+            for index, (count, outcome) in enumerate(parts)]
+    return truncate_line((Span(f"{AGENT_DONE_MARKS[AGENT_FINISHED]} {AGENT_FACT_SEPARATOR.join(said)}", theme.muted),),
+                         width)
+
+
 def _seconds(value: float) -> str:
     return f"{value:.1f}s"
 
@@ -1361,6 +1545,8 @@ def block_rows(
         return _thinking_rows(block, width, theme, expanded, max_rows)
     if isinstance(block, DagBlock):
         return dag_rows(block, width, theme)
+    if isinstance(block, AgentDoneBlock):
+        return _agent_done_rows(block, width, theme)
     return _tool_rows(block, width, theme, expanded, now, glint)
 
 
@@ -1383,6 +1569,8 @@ class Transcript:
         # The app says, before each `message.complete`, whether it did not ask for the stop an `interrupted` status
         # reports (`App.interrupting`): then Hermes stopped the turn, and the notice says so.
         self.hermes_interrupted = False
+        # Whether the app sends `continue` for such an end itself, and after how many seconds (0: it does not).
+        self.hermes_resuming = 0.0
         self.details_expanded = False
         self._clock = clock
         self._waits: list[tuple[float, float]] = []  # questions' waits on the person that ended: (began, ended)
@@ -1851,8 +2039,13 @@ class Transcript:
             self._append(AssistantBlock(text))
         self._close_live()
         if status == "interrupted":
-            self._append(NoticeBlock(HERMES_INTERRUPTED_NOTICE if self.hermes_interrupted else INTERRUPTED_NOTICE,
-                                     NOTICE_WARN))
+            if not self.hermes_interrupted:
+                said = INTERRUPTED_NOTICE
+            elif self.hermes_resuming:
+                said = HERMES_RESUMING_NOTICE.format(seconds=f"{self.hermes_resuming:g}")
+            else:
+                said = HERMES_INTERRUPTED_NOTICE
+            self._append(NoticeBlock(said, NOTICE_WARN))
         if status == "error":
             self._append(NoticeBlock(error.strip() or FAILED_NOTICE, NOTICE_ERROR))
         warning = as_text(payload.get("warning")).strip()
@@ -2001,11 +2194,18 @@ class Transcript:
         self, block: AssistantBlock, width: int, theme: Theme, final: bool = False, live_rows: int | None = None
     ) -> list[Line]:
         cap = max(live_rows // 2, 4) if live_rows else None
-        sources = _display_lines(block.text) if block.done else _stable_lines(block.text, final, cap)
+
+        def height(run: list[str]) -> int:
+            return len(table_block(run, 0, _reply_width(width), theme)[0])
+
+        sources = _display_lines(block.text) if block.done else _stable_lines(block.text, final, cap, height)
         fresh = sources[self._cursor_lines :]
-        if not fresh:
+        ending = block.done or final  # nothing more of the reply will come: a table left open is closed
+        if not fresh and not (ending and self._cursor_state.table):
             return []
-        rows, self._cursor_state = render_lines(fresh, self._cursor_state, _reply_width(width), theme)
+        rows, self._cursor_state = render_lines(fresh, self._cursor_state, _reply_width(width), theme, closed=ending)
+        if not fresh:
+            self._version += 1  # only the open table's bottom was taken: the live rows drawn with it are stale
         opens_block = self._cursor_lines == 0
         self._cursor_lines = len(sources)
         return self._spaced(_marked(rows, opens_block, theme, width, block.model), opens_block)
@@ -2087,8 +2287,12 @@ class Transcript:
 
     def live_lines(
         self, width: int, theme: Theme, max_rows: int | None = None, now: float | None = None, glint: bool = False,
+        room: int | None = None,
     ) -> list[Line]:
         """Everything not yet taken, as it shows now: the streaming tail, live thinking, running tools.
+
+        `room` is how many rows the live region gets above the working rows, for the briefings held under a live
+        block (`_held_rows`); None leaves them a quarter of `max_rows`.
 
         With `max_rows`, only the blocks that reach into the last `max_rows`
         rows are rendered, and of live thinking text only its last rows: the
@@ -2099,10 +2303,12 @@ class Transcript:
         The answer is kept until the transcript changes, a mark turns or a band
         moves, so asking again with the same width, limit and theme renders nothing.
         """
-        key = (self._version, width, max_rows, self._pulses(now), self._glints(now if glint else None))
+        if not any(isinstance(block, AgentDoneBlock) for block in self._held):
+            room = None  # read only for held briefings: a room that moved with none held renders nothing again
+        key = (self._version, width, max_rows, room, self._pulses(now), self._glints(now if glint else None))
         held = self._live_held
         if held is None or held[0] != key or held[1] is not theme:
-            held = self._live_held = (key, theme, self._render_live(width, theme, max_rows, now, glint))
+            held = self._live_held = (key, theme, self._render_live(width, theme, max_rows, now, glint, room))
         return list(held[2])
 
     def _pulses(self, now: float | None) -> tuple[bool, ...]:
@@ -2132,29 +2338,30 @@ class Transcript:
 
     def _render_live(
         self, width: int, theme: Theme, max_rows: int | None, now: float | None = None, glint: bool = False,
+        room: int | None = None,
     ) -> list[Line]:
-        """`live_lines` rendered, from the last block up until `max_rows` rows are covered (all of them for None)."""
+        """`live_lines` rendered, from the last block up until `max_rows` rows are covered (all of them for None).
+
+        With briefings held and a `room`, the live block is rendered first, once, and its rows measured for
+        `_held_rows`: a long streaming reply is not rendered whole again on every delta to size them."""
         rendered: list[tuple[bool, list[Line]]] = []  # (opens a block, its rows), the last block first
-        held = [(True, block_rows(block, width, theme)) for block in reversed(self._held)]  # under the live blocks
-        rendered.extend(held)
+        ahead: tuple[bool, list[Line]] | None = None  # the live block's, rendered before the held rows
+        last = len(self.blocks) - 1
+        if (room is not None and last >= self._cursor and not self.blocks[last].done
+                and any(isinstance(block, AgentDoneBlock) for block in self._held)):
+            ahead = self._live_block_rows(last, width, theme, max_rows, now, glint)
+        held = self._held_rows(width, theme, max_rows, room, len(ahead[1]) if ahead is not None else 0)
+        rendered.extend(reversed(held))
         count = sum(len(rows) for _opens, rows in held)
         whole = True
-        for index in range(len(self.blocks) - 1, self._cursor - 1, -1):
+        for index in range(last, self._cursor - 1, -1):
             if max_rows is not None and count >= max_rows:
                 whole = False  # the blocks above are above the rows asked for
                 break
-            block = self.blocks[index]
-            opens_block = True
-            if index == self._cursor and isinstance(block, AssistantBlock):
-                rest = _display_lines(block.text)[self._cursor_lines :]
-                opens_block = self._cursor_lines == 0
-                reply_rows = self._growing_rows(rest, _reply_width(width), theme)
-                if max_rows is not None and len(reply_rows) > max_rows:  # its top rows are above the rows asked for
-                    reply_rows, opens_block = reply_rows[-max_rows:], False
-                block_lines = _marked(reply_rows, opens_block, theme, width, block.model)
-            else:  # only the last block can be live thinking, the one kind the limit shortens, so it gets all of it
-                block_lines = block_rows(block, width, theme, self.details_expanded and not block.done, max_rows, now,
-                                         glint)
+            if index == last and ahead is not None:
+                opens_block, block_lines = ahead
+            else:
+                opens_block, block_lines = self._live_block_rows(index, width, theme, max_rows, now, glint)
             if block_lines:
                 rendered.append((opens_block, block_lines))
                 count += len(block_lines)
@@ -2166,6 +2373,72 @@ class Transcript:
             rows.extend(block_lines)
             seen = True
         return rows
+
+    def _live_block_rows(
+        self, index: int, width: int, theme: Theme, max_rows: int | None, now: float | None, glint: bool,
+    ) -> tuple[bool, list[Line]]:
+        """Block `index`'s rows as the live region draws them, and whether it opens a block there (a reply the
+        cursor took the start of continues one)."""
+        block = self.blocks[index]
+        if index == self._cursor and isinstance(block, AssistantBlock):
+            rest = _display_lines(block.text)[self._cursor_lines :]
+            opens_block = self._cursor_lines == 0
+            reply_rows = self._growing_rows(rest, _reply_width(width), theme)
+            if max_rows is not None and len(reply_rows) > max_rows:  # its top rows are above the rows asked for
+                reply_rows, opens_block = reply_rows[-max_rows:], False
+            return opens_block, _marked(reply_rows, opens_block, theme, width, block.model)
+        # Only the last block can be live thinking, the one kind the limit shortens, so it gets all of it.
+        return True, block_rows(block, width, theme, self.details_expanded and not block.done, max_rows, now, glint)
+
+    def _held_rows(
+        self, width: int, theme: Theme, max_rows: int | None, room: int | None, live: int = 0,
+    ) -> list[tuple[bool, list[Line]]]:
+        """The held blocks as the live region draws them, in order: every one whole but the briefings
+        (`AgentDoneBlock`) past the newest `AGENT_HELD_SHOWN`, or past what fits, which fold into one row where the
+        first of them stands (`_held_more_row`). What fits: `room` (the rows the live region gets above the working
+        rows) less the live block's `live` rows and `AGENT_HELD_RESERVE`, and a quarter of `max_rows` at most; with no
+        `room`, that quarter. The running call keeps its rows before the newest briefing is drawn whole, and before
+        the fold row: where `room` holds the live block and the fold row but not the spacer above it, the fold row
+        goes without it, and where it holds the live block alone, no briefing is drawn (all are still written at the
+        boundary). A streaming reply is the exception: its top rows give way first (the region keeps the bottom
+        rows), so with `room` for one row of it beside the fold row, the fold row stays. Only what is drawn is
+        rendered."""
+        briefings = [block for block in self._held if isinstance(block, AgentDoneBlock)]
+        fits = max_rows // AGENT_HELD_SHARE if max_rows is not None else None
+        spaced = True  # the fold row keeps the spacer above it
+        if briefings and room is not None:
+            spare = room - max(live, 1)
+            reply = bool(self.blocks) and isinstance(self.blocks[-1], AssistantBlock) and not self.blocks[-1].done
+            if spare < 1 and reply and room >= 2:
+                spare = 1  # the fold row alone, without its spacer
+            if spare < 1:
+                briefings = []
+            spaced = spare >= 2
+            left = max(spare - AGENT_HELD_RESERVE, 0)
+            fits = left if fits is None else min(fits, left)
+        whole: dict[int, list[Line]] = {}
+        used = 0
+        for block in reversed(briefings[-AGENT_HELD_SHOWN:]):
+            rows = block_rows(block, width, theme)
+            if fits is not None and used + len(rows) + 1 > fits:
+                break
+            whole[id(block)] = rows
+            used += len(rows) + 1
+        folded = [block for block in briefings if id(block) not in whole]
+        drawn: list[tuple[bool, list[Line]]] = []
+        for block in self._held:
+            if not isinstance(block, AgentDoneBlock):
+                drawn.append((True, block_rows(block, width, theme)))
+            elif id(block) in whole:
+                drawn.append((True, whole[id(block)]))
+            elif folded and block is folded[0]:
+                drawn.append((spaced, [_held_more_row(folded, width, theme, more=bool(whole))]))
+        return drawn
+
+    def shown_blocks(self) -> list[Block]:
+        """Every block the transcript holds, in order: its blocks, then those held under the live block until its
+        boundary (a steer, a command's echo, a briefing), as `/history` and the details view show them."""
+        return [*self.blocks, *self._held]
 
     def _growing_rows(self, sources: list[str], width: int, theme: Theme) -> list[Line]:
         """The rows of a reply's untaken `sources`, the last of them the line still streaming: drawn through
@@ -2214,9 +2487,10 @@ class Transcript:
         return [truncate_line((Span(DROPPED_NOTICE.format(earlier=_earlier(count)), theme.muted),), width), ()]
 
     def history_lines(self, width: int, theme: Theme, details: bool = True) -> list[Line]:
-        """Every block held at `width`; `details` adds full thinking text, tool result summaries, whole diffs."""
+        """Every block held at `width` (`shown_blocks`); `details` adds full thinking text, tool result summaries, whole
+        diffs."""
         rows: list[Line] = []
-        for block in self.blocks:
+        for block in self.shown_blocks():
             block_lines = block_rows(block, width, theme, expanded=details)
             if block_lines:
                 if rows:

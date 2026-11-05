@@ -80,6 +80,17 @@ from ..use_cases import (
 REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_ASSET_ROOT = "https://github.com/rlaope/oh-my-hermes/releases/download"
 RELEASE_CHANNELS = ("stable", "preview", "local")
+# `preview` is the channel that tracks branch `main`, so `--channel main` names
+# it in the words people use for it. Only the CLI flag reads the alias; every
+# record and URL keeps the canonical `preview`.
+RELEASE_CHANNEL_ALIASES = {"main": "preview"}
+
+
+def normalize_release_channel(value: str) -> str:
+    """The canonical channel for a `--channel` value (`main` -> `preview`)."""
+    return RELEASE_CHANNEL_ALIASES.get(value, value)
+
+
 # `.github/workflows/release.yml` refuses any tag that is not `vX.Y.Z` and
 # names the wheel it uploads after that version, so a stable version of this
 # shape has a predictable release-asset URL. Anything else does not, and falls
@@ -937,7 +948,12 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72455
 # Planning skills offer dag-ulw after acceptance: the `ralplan` row's node-prompt
 # line names `dag-ulw` nodes beside `ultrawork` board rows (+12). No other row
 # moved. 533499 + 12 = 533511, measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533511
+# 533511 -> 533758: the `dag-ulw` row only. Its category-ladder quality-bar line
+# says a `role=review` node takes the `review` category where the routes serve
+# it, a `role=baseline` node stays `quick` or `unspecified-low`, and a
+# `role=verify` node, which judges the run goal, climbs the ladder (+247).
+# Measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533758
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

@@ -122,8 +122,10 @@ class RecordingClient:
 def make_app(*, busy: bool = False, rows: int = 24, cols: int = 80, **options: object) -> tuple[App, RecordingClient]:
     client = RecordingClient()
     # The living wallpaper paints the blank cells and the update notice asks npm; their own tests turn them on (the
-    # update notice's with its fetch injected).
-    environ = {"OMH_TUI_WALLPAPER": "0", "OMH_TUI_UPDATE_CHECK": "0",
+    # update notice's with its fetch injected). The main screen's mouse (a drag selects, the wheel opens the
+    # transcript view) is left to the terminal as `OMH_TUI_MOUSE=0` leaves it, which is the behaviour these tests pin
+    # byte for byte; `tests/test_tui_main_mouse.py` turns it on.
+    environ = {"OMH_TUI_WALLPAPER": "0", "OMH_TUI_UPDATE_CHECK": "0", "OMH_TUI_MOUSE": "0",
                **options.pop("environ", {})}  # type: ignore[dict-item]
     app = App(ScriptedTerminal(rows, cols), client, environ, poller=FakePoller(), **options)  # type: ignore[arg-type]
     app.sid = SID
@@ -1137,7 +1139,8 @@ class ModeCycleTests(unittest.TestCase):
             with self.subTest(scenario=scenario.__name__):
                 now = [100.0]
                 client = Unchecked()
-                app = App(ScriptedTerminal(24, 80), client, {}, poller=FakePoller(), clock=lambda: now[0])  # type: ignore[arg-type]
+                app = App(ScriptedTerminal(24, 80), client, {"OMH_TUI_MOUSE": "0"}, poller=FakePoller(),  # type: ignore[arg-type]
+                          clock=lambda: now[0])
                 app.sid = SID
                 scenario(app, client, now)
                 for method, params in client.calls:

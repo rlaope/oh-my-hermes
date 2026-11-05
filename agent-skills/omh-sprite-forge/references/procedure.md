@@ -39,6 +39,7 @@ Run the helper with a finite host timeout: chroma key, cell split, component cle
 - Input refs: `grid sheet from the host image tool on flat #FF00FF`, `declared rows x cols, cell size and feet baseline`, `new output directory and execution budget`
 - Output refs: `aligned equal-size frames and sheet`, `sprite_forge_qc/v1 receipt`, `character art-direction record`
 - Check IDs: `sprite_input_check`, `sprite_backend_check`
+- If this step fails: not_observed; still stands: `character art-direction record`; hand back: Return the character art-direction record and observed helper command, refusal or timeout, with the required grid correction or optional Pillow setup before retrying in a new output directory.
 
 ### `sprite_verify` (validation)
 
@@ -47,3 +48,4 @@ Read back every frame, the aligned sheet and qc.json; recompute hashes and repor
 - Input refs: `grid sheet from the host image tool on flat #FF00FF`, `declared rows x cols, cell size and feet baseline`, `new output directory and execution budget`
 - Output refs: `aligned equal-size frames and sheet`, `sprite_forge_qc/v1 receipt`, `character art-direction record`
 - Check IDs: `sprite_qc_check`, `sprite_backend_check`
+- If this step fails: tentative; still stands: `character art-direction record`; hand back: Return the sprite_forge_qc/v1 receipt with observed metrics or read-back gaps and, for REGENERATE, the tighter pose and scale instructions for a new source sheet, never patched frames.

@@ -49,8 +49,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If evidence is mostly assumption, label it and recommend a research or feedback-triage pass.
-- If the decision owner is missing, keep the output as options rather than accepted strategy.
+- If demand and capacity cannot be compared in one unit or hiring ramp lag is unknown, retain the stated constraints and options, mark the recommendation tentative, and hand back the missing capacity and timing inputs.
+- If a drafted decision record lacks write approval, retain the options, tradeoffs, and proposed decision note, mark persistence not_observed, and hand back the draft for approval without writing docs/adr/.
 
 ## Workflow Lane
 

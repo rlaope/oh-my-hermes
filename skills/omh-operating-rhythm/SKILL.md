@@ -49,8 +49,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If source notes are missing, retain the cadence, audience, and time-window scaffold, mark minutes and decisions not_observed, and hand back operation_artifact/v1 with the explicit missing-notes boundary.
+- If notes leave an action item's owner or due date unstated, retain its source-linked outcome and dependencies, mark follow-up readiness unresolved, and hand back the action item history with unknown fields for confirmation.
+- If a retro proposal has no decision or owner acknowledgement, retain the source notes, mark acceptance unresolved, and hand back the proposal outside the decision log for explicit confirmation before an implementation handoff.
 
 ## Workflow Lane
 

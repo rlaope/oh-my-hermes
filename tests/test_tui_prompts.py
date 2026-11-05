@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 import sys
 import unittest
@@ -45,6 +46,11 @@ def unbarred(text: str) -> str:
     """A slot row's text without the `▌ ` bar every slot row hangs off."""
     assert text.startswith(prompts.SLOT_BAR), text
     return text[len(prompts.SLOT_BAR) :]
+
+
+def body(text: list[str]) -> list[str]:
+    """A slot's rows behind its bar, without it: a framed clarify question's rules, key row and blank row left out."""
+    return [unbarred(row) for row in text if row.startswith(prompts.SLOT_BAR) and unbarred(row).strip()]
 
 
 def without_marker(text: str) -> str:
@@ -331,7 +337,7 @@ class CutMarkerTests(unittest.TestCase):
                 # the rule over its choices) is the first to give way, and dropping it cuts nothing. (Ctrl+O's view
                 # draws an approval's command whole instead of by command, so it is not the measure here.)
                 whole = [row for row in question.lines(width, DEFAULT_THEME, sys.maxsize)
-                         if unbarred(line_text(row)).strip(" ─")]
+                         if line_text(row).removeprefix(prompts.SLOT_BAR).strip(" ─")]
                 for max_rows in range(1, len(whole) + 2):
                     with self.subTest(method=method, width=width, max_rows=max_rows):
                         rows = question.lines(width, DEFAULT_THEME, max_rows)
@@ -391,16 +397,16 @@ class WaitingCountTests(unittest.TestCase):
     def test_each_question_counts_what_waits_behind_it_after_its_first_words(self) -> None:
         cases = (
             ("approval", APPROVAL, "⚠ Hermes asks to run recursive delete"),
-            ("clarify", CLARIFY, "? Which color do you prefer?"),
+            ("clarify", CLARIFY, "Which color do you prefer?"),
             ("sudo", {"command": "apt install x"}, "🔑 Hermes needs your sudo password"),
         )
         for method, params, head in cases:
             with self.subTest(method=method):
                 question = slot(method, params)
-                self.assertEqual(unbarred(lines_text(question.lines(120, DEFAULT_THEME, 8))[0]), head)
-                self.assertEqual(unbarred(lines_text(question.lines(120, DEFAULT_THEME, 8, waiting=1))[0]),
+                self.assertEqual(body(lines_text(question.lines(120, DEFAULT_THEME, 8)))[0], head)
+                self.assertEqual(body(lines_text(question.lines(120, DEFAULT_THEME, 8, waiting=1)))[0],
                                  f"{head} · 1 more question waiting")
-                self.assertEqual(unbarred(lines_text(question.lines(120, DEFAULT_THEME, 8, waiting=3))[0]),
+                self.assertEqual(body(lines_text(question.lines(120, DEFAULT_THEME, 8, waiting=3)))[0],
                                  f"{head} · 3 more questions waiting")
 
 
@@ -482,8 +488,12 @@ class SlotBarTests(unittest.TestCase):
         for method, params in (("clarify", CLARIFY), ("sudo", {"session_id": "s"}), ("secret", {"env_var": "API_KEY"})):
             with self.subTest(method=method):
                 rows = slot(method, params).lines(60, DEFAULT_THEME, max_rows=6)
+                # A framed clarify question's rules and key row hang off nothing; its question and choices do.
+                rows = [row for row in rows if line_text(row).startswith(prompts.SLOT_BAR)]
                 self.assertTrue(rows)
-                self.assertEqual(bar_styles(rows), {DEFAULT_THEME.muted})  # a question is no state: grey
+                # A question is no state: grey. A framed clarify's bar is a gutter, which a drag never copies.
+                framed = method == "clarify"
+                self.assertEqual(bar_styles(rows), {replace(DEFAULT_THEME.muted, gutter=framed, joins=framed)})
                 self.assertTrue(all(line_width(row) <= 60 for row in rows))
 
 
@@ -497,10 +507,10 @@ class ClarifyTests(unittest.TestCase):
         self.assertFalse(slot("clarify", {"questions": [{"qid": "q", "question": "Why?"}]}).picking)
 
     def test_the_choices_stand_one_per_row_numbered_with_the_text_field_last(self) -> None:
-        text = lines_text(slot("clarify", CLARIFY).lines(80, DEFAULT_THEME, 6))
+        text = lines_text(slot("clarify", CLARIFY).lines(80, DEFAULT_THEME, 10))
         self.assertEqual(
-            [unbarred(row) for row in text],
-            ["? Which color do you prefer?", "❯ 1. red (Recommended)", "  2. blue", "  3. Other (type your answer)"],
+            body(text),
+            ["Which color do you prefer?", "❯ 1. red (Recommended)", "  2. blue", "  3. Type something."],
         )
 
     def test_arrows_move_and_stop_at_either_end_and_enter_picks_the_highlighted(self) -> None:
@@ -588,7 +598,7 @@ class ClarifyTests(unittest.TestCase):
         clarify.handle_key(Key(CHAR, "g"))
         self.assertIsNone(clarify.submit_text("green"))
         self.assertEqual((clarify.picking, clarify.selected), (True, 0))
-        self.assertIn("(2/2)", lines_text(clarify.lines(80, DEFAULT_THEME, 6))[0])
+        self.assertEqual(body(lines_text(clarify.lines(80, DEFAULT_THEME, 10)))[0], "B? (2/2)")
 
     def test_escape_cancels_with_no_answers_from_the_list_and_from_the_field(self) -> None:
         self.assertEqual(slot("clarify", CLARIFY).handle_key(Key(ESCAPE)).frame, {"result": {}})
@@ -624,9 +634,9 @@ class ClarifyTests(unittest.TestCase):
         clarify = slot("clarify", params)
         for _ in range(6):
             clarify.handle_key(Key(DOWN))
-        text = [unbarred(row) for row in lines_text(clarify.lines(60, DEFAULT_THEME, 4))]
+        text = body(lines_text(clarify.lines(60, DEFAULT_THEME, 5)))  # four rows and the key row
         # The question is whole, so the cut is marked beside the choices, counting what it left out.
-        self.assertEqual(text, ["? Pick one", "  6. choice 6", "❯ 7. choice 7", "  … +7 more choices · ctrl+o shows all"])
+        self.assertEqual(text, ["Pick one", "  6. choice 6", "❯ 7. choice 7", "  … +7 more choices · ctrl+o shows all"])
         self.assertEqual(lines_text(clarify.lines(60, DEFAULT_THEME, 1)), ["▌ ❯ 7. choice 7 … ctrl+o shows all"])
 
     def test_a_question_without_choices_keeps_its_typed_answer_hint(self) -> None:
@@ -649,34 +659,36 @@ LONG_CHOICES = {
 
 class WrappedChoiceTests(unittest.TestCase):
     def test_a_long_choice_wraps_under_its_number_and_keeps_its_recommended_tag(self) -> None:
-        text = [unbarred(row) for row in lines_text(slot("clarify", LONG_CHOICES).lines(80, DEFAULT_THEME, 12))]
+        text = body(lines_text(slot("clarify", LONG_CHOICES).lines(80, DEFAULT_THEME, 12)))
         self.assertEqual(text, [
-            "? Which rollout?",
+            "Which rollout?",
             "❯ 1. Blue/green with a full traffic switch after smoke tests pass on the green",
             "     fleet (Recommended)",
             "  2. Canary at 5% then 25% then 100% with automatic rollback on error budget",
             "     burn",
             "  3. Rolling update, one node at a time",
-            "  4. Other (type your answer)",
+            "  4. Type something.",
         ])
 
     def test_rows_are_counted_not_choices(self) -> None:
-        # Seven rows hold every choice whole; six cut one and say so, keeping the highlighted one whole.
+        # Seven rows and the key row hold every choice whole; one fewer cuts one and says so, keeping the
+        # highlighted one whole.
         clarify = slot("clarify", LONG_CHOICES)
-        self.assertFalse([row for row in lines_text(clarify.lines(80, DEFAULT_THEME, 7)) if "ctrl+o" in row])
+        self.assertFalse([row for row in lines_text(clarify.lines(80, DEFAULT_THEME, 8)) if "ctrl+o" in row])
         for selected, label in ((0, "fleet (Recommended)"), (1, "burn")):
             with self.subTest(selected=selected):
                 clarify.selected = selected
-                text = [unbarred(row) for row in lines_text(clarify.lines(80, DEFAULT_THEME, 6))]
-                self.assertLessEqual(len(text), 6)
+                rows = lines_text(clarify.lines(80, DEFAULT_THEME, 7))
+                self.assertLessEqual(len(rows), 7)
+                text = body(rows)
                 self.assertTrue([row for row in text if "ctrl+o" in row], text)
                 marked = text.index(next(row for row in text if row.startswith("❯")))
                 self.assertEqual(text[marked + 1].strip(), label)  # its second row too
 
     def test_a_highlighted_choice_taller_than_the_room_shows_its_first_rows_with_the_marker(self) -> None:
         clarify = slot("clarify", LONG_CHOICES)
-        text = [unbarred(row) for row in lines_text(clarify.lines(30, DEFAULT_THEME, 3))]
-        self.assertEqual(text[:2], ["? Which rollout?", "❯ 1. Blue/green with a full"])  # the question is whole
+        text = body(lines_text(clarify.lines(30, DEFAULT_THEME, 4)))  # three rows and the key row
+        self.assertEqual(text[:2], ["Which rollout?", "❯ 1. Blue/green with a full"])  # the question is whole
         self.assertTrue(text[2].startswith("     traffic") and text[2].endswith(" … ctrl+o"), text)
 
     def test_an_approval_choice_wraps_at_a_narrow_width_instead_of_being_cut(self) -> None:
@@ -695,6 +707,13 @@ MULTI = {
 SPACE = Key(CHAR, " ")
 
 
+def submitted(clarify: prompts.PromptSlot) -> prompts.Answer | None:
+    """Down to the multi-select question's Submit row (the list stops there), then Enter."""
+    for _ in range(len(clarify._current_choices()) + 2):
+        clarify.handle_key(Key(DOWN))
+    return clarify.handle_key(Key(ENTER))  # type: ignore[return-value]
+
+
 def hermes_reads(value: str) -> list[str]:
     """What Hermes' `clarify_tool._clean_answer` makes of a multi-select answer string: a JSON list, else one answer."""
     parsed = json.loads(value)
@@ -704,13 +723,14 @@ def hermes_reads(value: str) -> list[str]:
 
 class MultiSelectTests(unittest.TestCase):
     def test_a_multi_select_question_says_so_and_boxes_each_choice(self) -> None:
-        text = [unbarred(row) for row in lines_text(slot("clarify", MULTI).lines(80, DEFAULT_THEME, 8))]
+        text = body(lines_text(slot("clarify", MULTI).lines(80, DEFAULT_THEME, 12)))
         self.assertEqual(text, [
-            "? Which toppings? (choose one or more)",
+            "Which toppings? (choose one or more)",
             "❯ [ ] 1. cheese (Recommended)",
             "  [ ] 2. ham",
             "  [ ] 3. olives",
-            "      4. Other (type your answer)",
+            "      4. Type something.",
+            "         Submit",
         ])
         self.assertIn("space", slot("clarify", MULTI).keys[0])
 
@@ -720,13 +740,13 @@ class MultiSelectTests(unittest.TestCase):
         self.assertIsNone(clarify.handle_key(SPACE))
         clarify.handle_key(Key(UP))
         self.assertIsNone(clarify.handle_key(SPACE))
-        self.assertEqual([unbarred(row) for row in lines_text(clarify.lines(80, DEFAULT_THEME, 8))][1:3],
+        self.assertEqual(body(lines_text(clarify.lines(80, DEFAULT_THEME, 12)))[1:3],
                          ["❯ [x] 1. cheese (Recommended)", "  [x] 2. ham"])
         clarify.handle_key(Key(DOWN))
         clarify.handle_key(Key(DOWN))
         clarify.handle_key(SPACE)
         clarify.handle_key(SPACE)  # olives on, then off again
-        answer = clarify.handle_key(Key(ENTER))
+        answer = submitted(clarify)
         value = answer.frame["result"]["answers"]["q0"]
         self.assertEqual(value, '["ham","cheese (Recommended)"]')  # in the order ticked, no spaces, as JSON.stringify
         self.assertEqual(hermes_reads(value), ["ham", "cheese (Recommended)"])
@@ -735,14 +755,38 @@ class MultiSelectTests(unittest.TestCase):
         clarify = slot("clarify", MULTI)
         self.assertIsNone(clarify.handle_key(Key(CHAR, "3")))
         self.assertIsNone(clarify.handle_key(Key(CHAR, "1")))
-        self.assertEqual(clarify.handle_key(Key(ENTER)).frame, {"result": {"answers": {"q0": '["olives","cheese (Recommended)"]'}}})
+        self.assertEqual(clarify.handle_key(Key(CHAR, "5")), prompts.TypeIt(Key(CHAR, "5")))  # Submit has no digit
+        self.assertEqual(submitted(clarify).frame, {"result": {"answers": {"q0": '["olives","cheese (Recommended)"]'}}})
 
-    def test_enter_with_nothing_ticked_sends_the_highlighted_choice_alone(self) -> None:
+    def test_enter_on_a_choice_ticks_it_and_never_sends(self) -> None:
+        # The owner's report of 2026-11-06: one press on a tick-box question sent it. Enter, Space, a digit and an
+        # empty submit each tick or untick; only the Submit row sends.
         clarify = slot("clarify", MULTI)
         clarify.handle_key(Key(DOWN))
-        self.assertEqual(clarify.handle_key(Key(ENTER)).frame, {"result": {"answers": {"q0": '["ham"]'}}})
+        self.assertIsNone(clarify.handle_key(Key(ENTER)))
+        self.assertIsNone(clarify.submit_text(""))  # the empty composer submit is Enter on the highlighted row
+        self.assertIsNone(clarify.handle_key(Key(ENTER)))
+        self.assertEqual(clarify.ticked, ["ham"])
+        self.assertEqual(clarify.question_index, 0)
+        self.assertIn("❯ [x] 2. ham", body(lines_text(clarify.lines(80, DEFAULT_THEME, 12))))
+        self.assertEqual(submitted(clarify).frame, {"result": {"answers": {"q0": '["ham"]'}}})
+
+    def test_the_submit_row_sends_and_with_nothing_ticked_reads_skipped(self) -> None:
         clarify = slot("clarify", MULTI)
-        self.assertEqual(clarify.submit_text("").frame, {"result": {"answers": {"q0": '["cheese (Recommended)"]'}}})
+        for _ in range(4):
+            clarify.handle_key(Key(DOWN))
+        self.assertIsNone(clarify.handle_key(SPACE))  # Space never sends
+        self.assertEqual(clarify.selected, 4)
+        self.assertEqual(lines_text(clarify.lines(80, DEFAULT_THEME, 12))[-1],
+                         "  Enter to skip · ↑↓ to navigate · Esc to cancel")  # nothing ticked or typed: "" is skipped
+        clarify.draft_sent = "pineapple"
+        self.assertEqual(lines_text(clarify.lines(80, DEFAULT_THEME, 12))[-1],
+                         "  Enter to send · ↑↓ to navigate · Esc to cancel")
+        clarify.draft = clarify.draft_sent = " "
+        clarify.handle_key(Key(DOWN))  # the list stops at Submit
+        frame = clarify.handle_key(Key(ENTER)).frame
+        self.assertEqual(frame, {"result": {"answers": {"q0": ""}}})
+        self.assertEqual(clarify.outcomes(frame), [(False, "skipped · Which toppings?")])
 
     def test_the_typed_answer_joins_the_ticked_choices(self) -> None:
         clarify = slot("clarify", MULTI)
@@ -764,29 +808,66 @@ class MultiSelectTests(unittest.TestCase):
     def test_labels_past_ascii_go_as_they_are_like_json_stringify(self) -> None:
         clarify = slot("clarify", {"questions": [{**MULTI["questions"][0], "choices": ["치즈", "ham"]}]})
         clarify.handle_key(SPACE)
-        self.assertEqual(clarify.handle_key(Key(ENTER)).frame, {"result": {"answers": {"q0": '["치즈"]'}}})
+        self.assertEqual(submitted(clarify).frame, {"result": {"answers": {"q0": '["치즈"]'}}})
 
     def test_the_ticks_belong_to_their_question(self) -> None:
         second = {"qid": "q1", "question": "Which sauces?", "choices": ["red", "white"], "multi_select": True}
         clarify = slot("clarify", {"questions": [MULTI["questions"][0], second]})
         clarify.handle_key(SPACE)
-        self.assertIsNone(clarify.handle_key(Key(ENTER)))
+        self.assertIsNone(clarify.handle_key(Key(ENTER)))  # Enter unticks: question 1 stays open
+        self.assertEqual((clarify.question_index, clarify.ticked), (0, []))
+        clarify.handle_key(Key(ENTER))
+        self.assertEqual(body(lines_text(clarify.lines(80, DEFAULT_THEME, 12)))[-1], "         Next")  # more follow
+        self.assertIsNone(submitted(clarify))  # Next moves on to question 2
         self.assertEqual(clarify.ticked, [])
-        self.assertIn("❯ [ ] 1. red", [unbarred(row) for row in lines_text(clarify.lines(80, DEFAULT_THEME, 8))])
+        drawn = body(lines_text(clarify.lines(80, DEFAULT_THEME, 12)))
+        self.assertIn("❯ [ ] 1. red", drawn)
+        self.assertEqual(drawn[-1], "         Submit")
         answer = clarify.handle_key(Key(CHAR, "2"))
         self.assertIsNone(answer)
-        self.assertEqual(clarify.handle_key(Key(ENTER)).frame,
+        self.assertEqual(submitted(clarify).frame,
                          {"result": {"answers": {"q0": '["cheese (Recommended)"]', "q1": '["white"]'}}})
 
     def test_a_single_select_question_is_unchanged(self) -> None:
         for params in (CLARIFY, {"questions": [{**MULTI["questions"][0], "multi_select": False}]}):
             with self.subTest(params=params):
                 question = slot("clarify", params)
-                text = [unbarred(row) for row in lines_text(question.lines(80, DEFAULT_THEME, 8))]
+                text = body(lines_text(question.lines(80, DEFAULT_THEME, 12)))
                 self.assertFalse([row for row in text if "[ ]" in row or "one or more" in row], text)
                 self.assertEqual(question.handle_key(SPACE), prompts.TypeIt(SPACE))  # Space types, as any character
                 self.assertNotIn("space", slot("clarify", params).keys[0])
         self.assertEqual(slot("clarify", CLARIFY).handle_key(Key(CHAR, "2")).frame, {"result": {"answers": {"q0": "blue"}}})
+        self.assertEqual(slot("clarify", CLARIFY).handle_key(Key(ENTER)).frame,
+                         {"result": {"answers": {"q0": "red (Recommended)"}}})
+        self.assertFalse([row for row in body(lines_text(slot("clarify", CLARIFY).lines(80, DEFAULT_THEME, 12)))
+                          if "Submit" in row])
+
+
+class SubmitRowTests(unittest.TestCase):
+    def test_the_field_text_shows_on_its_row_and_goes_with_submit(self) -> None:
+        clarify = slot("clarify", MULTI)
+        clarify.handle_key(Key(CHAR, "2"))
+        clarify.draft = clarify.draft_sent = "pine\napple"  # what the field holds after the arrows left it
+        self.assertIn("      4. pine apple", body(lines_text(clarify.lines(80, DEFAULT_THEME, 12))))
+        self.assertEqual(submitted(clarify).frame, {"result": {"answers": {"q0": '["ham","pine\\napple"]'}}})
+
+    def test_the_submit_label_sits_under_the_choice_labels_and_is_never_copied(self) -> None:
+        many = {"questions": [{**MULTI["questions"][0], "choices": [f"choice {n}" for n in range(1, 11)]}]}
+        rows = slot("clarify", many).lines(80, DEFAULT_THEME, 30)
+        text = body(lines_text(rows))
+        self.assertEqual(text[-1].index("Submit"), text[-2].index("Type something."))  # past "11. " too
+        submit = next(span for row in rows for span in row if "Submit" in span.text)
+        self.assertTrue(submit.style.gutter)
+
+    def test_a_short_slot_still_reaches_the_submit_row(self) -> None:
+        clarify = slot("clarify", ShortSlotTests.FRUIT)
+        clarify.handle_key(SPACE)
+        for _ in range(5):
+            clarify.handle_key(Key(DOWN))
+        text = body(lines_text(clarify.lines(40, DEFAULT_THEME, 9)))
+        self.assertIn("❯        Submit", text)
+        self.assertEqual(clarify.handle_key(Key(ENTER)).frame["result"]["answers"]["q0"],  # type: ignore[union-attr]
+                         json.dumps([ShortSlotTests.FRUIT["questions"][0]["choices"][0]], separators=(",", ":")))
 
 
 class ShortSlotTests(unittest.TestCase):
@@ -811,7 +892,7 @@ class ShortSlotTests(unittest.TestCase):
 
     def test_a_multi_select_question_keeps_its_cut_marker_off_the_question_text(self) -> None:
         clarify = slot("clarify", self.FRUIT)
-        text = [unbarred(row) for row in lines_text(clarify.lines(40, DEFAULT_THEME, 8))]
+        text = body(lines_text(clarify.lines(40, DEFAULT_THEME, 9)))  # eight rows and the key row
         question = text[: next(index for index, row in enumerate(text) if row.startswith("❯"))]
         self.assertEqual(question[-1], "or more)")  # the question whole, its note's end on its own last row
         self.assertFalse([row for row in question if "ctrl+o" in row], text)
@@ -821,16 +902,15 @@ class ShortSlotTests(unittest.TestCase):
         clarify = slot("clarify", self.FRUIT)
         clarify.handle_key(SPACE)  # ticks apple
         clarify.handle_key(Key(DOWN))
-        text = [unbarred(row) for row in lines_text(clarify.lines(40, DEFAULT_THEME, 8))]
+        text = body(lines_text(clarify.lines(40, DEFAULT_THEME, 9)))  # eight rows and the key row
         self.assertFalse([row for row in text if "apple" in row], text)
         marker = next(row for row in text if "ctrl+o" in row)
-        self.assertIn("1 ticked", marker)
-        self.assertLess(text.index(marker), text.index(next(row for row in text if row.startswith("❯"))))  # above
+        self.assertIn("1 ticked", marker)  # under the list: the Type something and Submit rows are cut there too
 
     def test_nothing_cut_means_no_marker_and_no_count(self) -> None:
         clarify = slot("clarify", self.FRUIT)
         clarify.handle_key(SPACE)
-        self.assertFalse([row for row in lines_text(clarify.lines(80, DEFAULT_THEME, 12)) if "ctrl+o" in row])
+        self.assertFalse([row for row in lines_text(clarify.lines(80, DEFAULT_THEME, 14)) if "ctrl+o" in row])
 
 
 class OutcomeTests(unittest.TestCase):

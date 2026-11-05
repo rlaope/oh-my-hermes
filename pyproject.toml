@@ -106,6 +106,9 @@ packages = [
 "omh.wrapper" = "src/wrapper"
 
 [tool.setuptools.package-data]
+# `git archive` (and so every GitHub archive) writes the commit into this
+# file through `.gitattributes` export-subst; `omh --version` reads it.
+"omh" = ["_archive_commit.txt"]
 "omh.workflows.repro_audit" = ["data/contract.json"]
 # Closed optional companion data, not packages/imported production modules.
 "omh.skills" = [
@@ -147,10 +150,10 @@ packages = [
 
 [dependency-groups]
 dev = [
-    "pytest==9.1.1",
+    "pytest==9.2.0",
 ]
 lint = [
-    "ruff==0.17.2",
+    "ruff==0.17.3",
 ]
 
 # Initial static-analysis baseline (issue #638). Scoped to Pyflakes (F) —

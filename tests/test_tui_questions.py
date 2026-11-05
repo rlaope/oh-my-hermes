@@ -21,7 +21,7 @@ from test_tui_modes import RecordingClient, make_app, type_text
 from omh.tui import app as app_module
 from omh.tui import prompts
 from omh.tui.gateway import Event, Response, ServerRequest
-from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key
+from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key, Paste
 from omh.tui.layout import MIN_COLS, allocate
 from omh.tui.app import BELL, App
 from omh.tui.pager import ALT_SCREEN_OFF, HistoryPager
@@ -139,9 +139,91 @@ class MultiSelectAppTests(unittest.TestCase):
         armed(app)
         press(app, Key(CHAR, " "), Key(DOWN), Key(CHAR, " "))
         self.assertIn("▌ ❯ [x] 2. ham", drawn(app))
-        press(app, Key(ENTER))
+        press(app, Key(DOWN), Key(DOWN), Key(ENTER))  # past Type something. to Submit
         self.assertEqual(client.answers, [("srq-6", {"result": {"answers": {"q0": '["cheese","ham"]'}}})])
         self.assertEqual(app.composer.text, "my draft")
+
+    def test_no_single_press_sends_a_multi_select_question(self) -> None:
+        # The owner's report of 2026-11-06: one press on a tick-box question moved on. Each key a person picks a row
+        # with leaves the question open; only Enter on Submit sends (a click: `test_tui_main_mouse`).
+        toppings = {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True}
+        for keys in ([Key(ENTER)], [Key(CHAR, "1")], [Key(CHAR, " ")], [Key(DOWN), Key(ENTER)], [Key(CHAR, "2")]):
+            with self.subTest(keys=keys):
+                app, client = make_app(busy=True)
+                app._on_server_request(ServerRequest("srq-6", "clarify", {"questions": [toppings]}))
+                armed(app)
+                press(app, *keys)
+                self.assertEqual(client.answers, [])
+                self.assertIsNotNone(app.slot)
+                self.assertTrue([row for row in drawn(app) if "[x]" in row], drawn(app))
+                self.assertIn("▌          Submit", drawn(app))
+
+    def test_text_typed_in_the_field_goes_with_the_submit_row(self) -> None:
+        # Review of #2594: tick, type (the field opens), Down (back to the list, on Submit), Enter sent the ticks alone
+        # and the typed words were lost, unseen. They stay, show on the field's row, and go with the ticked choices.
+        toppings = {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True}
+        app, client = make_app(busy=True)
+        app._on_server_request(ServerRequest("srq-6", "clarify", {"questions": [toppings]}))
+        armed(app)
+        press(app, Key(CHAR, "1"), Key(CHAR, "x"), Key(CHAR, "y"), Key(DOWN))
+        screen = drawn(app)
+        self.assertIn("▌       3. xy", screen)
+        self.assertIn("▌ ❯        Submit", screen)
+        self.assertTrue([row for row in screen if "Enter to send" in row], screen)
+        press(app, Key(ENTER))
+        self.assertEqual(client.answers, [("srq-6", {"result": {"answers": {"q0": '["cheese","xy"]'}}})])
+
+    def test_submit_sends_a_pasted_or_image_answer_as_enter_in_the_field_does(self) -> None:
+        # Delta review of #2594: Submit sent the composer's raw text, so a paste chip went as its label. It sends
+        # what Enter in the open field sends (`Composer.expanded`): the paste whole, an image token as its label.
+        toppings = {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True}
+        pasted = "\n".join(f"line {n} of the pasted text" for n in range(1, 31))
+
+        def paste(app) -> None:
+            press(app, Paste(pasted))
+
+        def image(app) -> None:
+            press(app, Key(CHAR, "x"))
+            self.assertTrue(app.composer.insert_image("[Image #1]", object()))
+
+        for name, fill in (("paste", paste), ("image", image)):
+            sent = {}
+            for ending in ("field", "submit"):
+                app, client = make_app(busy=True)
+                app._on_server_request(ServerRequest("srq-6", "clarify", {"questions": [toppings]}))
+                armed(app)
+                press(app, Key(CHAR, "1"))
+                fill(app)
+                if ending == "submit":
+                    press(app, Key(DOWN))
+                    screen = drawn(app)
+                    self.assertTrue([row for row in screen if "[Pasted text #1" in row or "[Image #1]" in row], screen)
+                press(app, Key(ENTER))
+                sent[ending] = client.answers[0][1]["result"]["answers"]["q0"]
+            with self.subTest(name=name):
+                self.assertEqual(sent["submit"], sent["field"])
+                self.assertEqual(json.loads(sent["submit"])[0], "cheese")
+                if name == "paste":
+                    self.assertEqual(json.loads(sent["submit"])[1], pasted)
+                else:
+                    self.assertIn("[Image #1]", json.loads(sent["submit"])[1])
+
+    def test_a_second_question_is_shown_before_the_first_answer_goes(self) -> None:
+        first = {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True}
+        second = {"qid": "q1", "question": "Which sauces?", "choices": ["red", "white"], "multi_select": True}
+        app, client = make_app(busy=True)
+        app._on_server_request(ServerRequest("srq-6", "clarify", {"questions": [first, second]}))
+        armed(app)
+        press(app, Key(CHAR, "1"), Key(ENTER))  # cheese ticked, then unticked by Enter: question 1 stays
+        self.assertIn("▌ ❯ [ ] 1. cheese", drawn(app))
+        press(app, Key(ENTER), Key(DOWN), Key(DOWN), Key(DOWN))
+        self.assertIn("▌ ❯        Next", drawn(app))
+        press(app, Key(ENTER))
+        self.assertEqual(client.answers, [])
+        armed(app)
+        self.assertTrue([row for row in drawn(app) if "Which sauces? (2/2)" in row], drawn(app))
+        press(app, Key(CHAR, "2"), Key(DOWN), Key(DOWN), Key(DOWN), Key(ENTER))
+        self.assertEqual(client.answers, [("srq-6", {"result": {"answers": {"q0": '["cheese"]', "q1": '["white"]'}}})])
 
 
 COLOUR = ServerRequest("srq-7", "clarify", {"questions": [
@@ -180,14 +262,14 @@ class QuestionOutcomeTests(unittest.TestCase):
         app, _client = opened(ServerRequest("srq-6", "clarify", {"questions": [
             {"qid": "q0", "question": "Which toppings?", "choices": ["cheese", "ham"], "multi_select": True},
         ]}))
-        press(app, Key(CHAR, "2"), Key(CHAR, "1"), Key(ENTER))
+        press(app, Key(CHAR, "2"), Key(CHAR, "1"), Key(DOWN), Key(DOWN), Key(DOWN), Key(ENTER))
         self.assertEqual(outcome_rows(app), [("ham, cheese · Which toppings?", NOTICE_OK)])
 
     def test_a_ticked_choice_is_recorded_without_hermes_display_tag(self) -> None:
         app, client = opened(ServerRequest("srq-6", "clarify", {"questions": [
             {"qid": "q0", "question": "Which toppings?", "choices": ["cheese (recommended)", "ham"], "multi_select": True},
         ]}))
-        press(app, Key(CHAR, "2"), Key(CHAR, "1"), Key(ENTER))
+        press(app, Key(CHAR, "2"), Key(CHAR, "1"), Key(DOWN), Key(DOWN), Key(DOWN), Key(ENTER))
         self.assertEqual(client.answers, [("srq-6", {"result": {"answers": {"q0": '["ham","cheese (recommended)"]'}}})])
         self.assertEqual(outcome_rows(app), [("ham, cheese · Which toppings?", NOTICE_OK)])
 

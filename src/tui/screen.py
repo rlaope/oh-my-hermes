@@ -1,8 +1,9 @@
 """The inline live region: the only rows of the terminal the OMH TUI repaints.
 
 Everything finished goes to the terminal's own scrollback as plain lines
-(`flush_above`), so scrolling, selecting and copying stay the terminal's
-native behaviour. Right below the last of them sits one live region: sticky
+(`flush_above`), so the terminal's own scrolling, selecting and copying work on
+it wherever the app leaves the mouse to the terminal (and with its bypass
+modifier where the app takes it: `marks`). Right below the last of them sits one live region: sticky
 prompt, streaming tail, panels, composer, info line. The region starts
 where the output ends and is as tall as its frame, so it follows the content:
 it grows downward until its last row is the screen's last row, and from then
@@ -92,6 +93,25 @@ written into the scrollback. `clear` erases with no ground: it hands the screen
 back to the shell, whose own background is back by then, and given the screen's
 height it first paints the region's rows still on the screen on no ground.
 
+A selection (`marks`): the app numbers the rows this region printed in
+order, the rows it flushed and then its own (`doc_row`), so a flushed row
+keeps its number while the screen scrolls. The region's own rows are only the
+frame's: a frame can put other lines at their numbers (lines flushed that the
+region never drew, rows inserted), which the caller checks before it asks
+for marks there (`App._keep_selection_true`). `render(..., marks=...)` shows the cells the main
+screen's selection holds on each of those rows as `highlight` draws them
+(reversed): the region's own rows in the frame, the rows above it painted
+again in place with absolute moves. A highlight is never carried into the
+scrollback: before a write that can scroll the screen (a flush, a frame that
+grows) every row above the region painted with one is painted again as it was
+flushed, and the ones still on the screen get it back after the write, inside
+the same synchronized update. Painting a row again takes the wallpaper cells
+on it, which the wallpaper paints again. A row is mapped only where the
+region's place is certain and the row is one this region flushed at the
+width it has now; `forget_marks` drops what is painted without a write, for a
+screen the terminal has reflowed (a resize, which the full redraw that follows
+erases), and `clear` paints the rows again as they were flushed first.
+
 Precondition: the region is never taller than the terminal. Cursor-up stops
 at the top of the screen, so a taller region would lose its relative
 bookkeeping; the layout's height budget guarantees this.
@@ -117,7 +137,8 @@ allows.
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from functools import lru_cache
 import unicodedata
 
@@ -251,13 +272,23 @@ def paint_line(line: Line, width: int, ground: str | None = None) -> str:
     last span is empty and has a background (`style.fill`) erases with that
     background, which a terminal paints to the right edge (background colour
     erase), so a band reaches the edge without trailing spaces to copy.
+    A gutter that `joins` is painted as one run with a neighbour of the same
+    look (a framed question's bar and its context), so marking it a gutter
+    changes what a drag copies and not the bytes.
     """
     fill = line[-1].style if line and is_fill(line[-1]) else None
     clipped = truncate_line(without_controls(line), width, ellipsis="")
-    parts: list[str] = []
+    runs: list[tuple[Style, str]] = []
     for span in clipped:
-        sgr = span.style.sgr()
-        parts.append(f"{sgr}{span.text}{SGR_RESET}" if sgr else span.text)
+        look = replace(span.style, gutter=False, joins=False) if span.style.joins else span.style
+        if runs and runs[-1][0] == look:
+            runs[-1] = (look, runs[-1][1] + span.text)
+        else:
+            runs.append((look, span.text))
+    parts: list[str] = []
+    for look, text in runs:
+        sgr = look.sgr()
+        parts.append(f"{sgr}{text}{SGR_RESET}" if sgr else text)
     if line_width(clipped) < width:
         parts.append(f"{fill.sgr()}{ERASE_TO_LINE_END}{SGR_RESET}" if fill is not None
                      else on_ground(ERASE_TO_LINE_END, ground))
@@ -273,9 +304,14 @@ def _flushed_row(line: Line, width: int, ground: str | None = None) -> tuple[str
 class LiveRegion:
     def __init__(
         self, write: Callable[[str], None], at_top: bool = False, start_row: int | None = None, lead: str = "",
-        ground: str | None = None,
+        ground: str | None = None, highlight: Callable[[Line, int, int], Line] | None = None,
     ) -> None:
         self._write = write
+        # How a selection's cells look (`marks`): a row's line with columns low to high drawn selected.
+        self._highlight = highlight
+        self._flushed_total = 0  # the lines this region flushed: the number of its own first row (`doc_row`)
+        self._marks: dict[int, tuple[int, int]] = {}  # the selection's columns by printed row, as the caller asked
+        self._marked_above: dict[int, tuple[int, int]] = {}  # the rows above the region painted with them now
         self._ground = ground  # the look's ground every erase paints (see the module docstring); None for none
         self._regrounded = False  # the ground changed since the last frame: the next one paints every row again
         # The rows flushed above the region: each one's first blank column (None for a band, filled to the edge), for the wallpaper's `ambient_above`.
@@ -297,6 +333,7 @@ class LiveRegion:
         self._parked: tuple[int, int] | None = (0, 0)
         self._width: int | None = None
         self._lines: tuple[Line, ...] = ()
+        self._shown: tuple[Line, ...] = ()  # the same rows as painted: a selection's cells highlighted
         self._cursor: tuple[int, int] | None = (0, 0)
         self._hidden = False  # the last frame left the hardware cursor hidden (it had no caret)
         # Where the top row is, from the row the region started on (`_start`: 0 when `at_top`, `start_row` when the
@@ -348,6 +385,36 @@ class LiveRegion:
         """The screen row the region's last row is on, on a screen `rows` tall."""
         top = self._top(rows)
         return None if top is None or not self._rows else top + len(self._rows) - 1
+
+    @property
+    def flushed_rows(self) -> int:
+        """How many lines this region flushed: the number its own first row has (`doc_row`)."""
+        return self._flushed_total
+
+    def doc_row(self, screen_row: int, screen_rows: int) -> int | None:
+        """The number of the printed row on 0-based screen row `screen_row` (the rows this region flushed count from 0,
+        its own rows follow them), or None where that is not certain: the region's place unknown, a row it did not
+        flush (the shell's, an earlier region's, one older than it keeps) or flushed at another width, a row under it."""
+        top = self._top(screen_rows)
+        if top is None:
+            return None
+        doc = self._flushed_total + screen_row - top
+        return doc if self.doc_line(doc) is not None and screen_row < top + len(self._rows) else None
+
+    def doc_line(self, doc: int) -> Line | None:
+        """Printed row `doc`'s line as written, no highlight; None for one this region does not hold."""
+        index = doc - self._flushed_total
+        if index >= 0:
+            return self._lines[index] if index < len(self._lines) else None
+        if -index > len(self._above_lines):
+            return None
+        line, width = self._above_lines[index]
+        return line if width == self._width else None
+
+    def forget_marks(self) -> None:
+        """Forget the selection's rows painted above the region, writing nothing: the terminal reflowed the screen
+        (a resize), so they are no longer where they were, and the full redraw that follows erases them."""
+        self._marks, self._marked_above = {}, {}
 
     def rows_above(self, screen_rows: int, flushed: int = 0, height: int = 0) -> int:
         """The fewest screen rows that can lie above the region once `flushed` lines and a `height`-row frame are drawn.
@@ -403,6 +470,7 @@ class LiveRegion:
         self._inserted = (at, count)
         self._rows = self._rows[:at] + [""] * count + self._rows[at:]
         self._lines = self._lines[:at] + ((),) * count + self._lines[at:]
+        self._shown = self._shown[:at] + ((),) * count + self._shown[at:]
 
     def _compose(
         self, lines: Sequence[Line], cursor: tuple[int, int] | None, width: int, ops: list[str],
@@ -420,11 +488,12 @@ class LiveRegion:
         repaint_all = width != self._width or self._regrounded
         if not repaint_all:
             self._insert_rows(lines, screen_rows, ops)
-        last_rows, last_lines = self._rows, self._lines
-        kept = 0 if repaint_all else min(len(last_rows), len(last_lines))
+        last_rows, last_shown = self._rows, self._shown
+        kept = 0 if repaint_all else min(len(last_rows), len(last_shown))
+        shown = [self._marked(line, self._flushed_total + index) for index, line in enumerate(lines)]
         rows = [
-            last_rows[index] if index < kept and line == last_lines[index] else self._paint(line, width)
-            for index, line in enumerate(lines)
+            last_rows[index] if index < kept and line == last_shown[index] else self._paint(line, width)
+            for index, line in enumerate(shown)
         ]
         held = max(len(self._rows), 1)  # the row the cursor is on is the region's first row
         painted_rows: list[int] = []
@@ -458,6 +527,7 @@ class LiveRegion:
         self._rows = rows
         self._width = width
         self._lines = tuple(lines)
+        self._shown = tuple(shown)
         self._cursor = cursor
         self._hidden = hidden
         if not painted and target == self._parked and not toggled:
@@ -480,8 +550,14 @@ class LiveRegion:
     def render(
         self, lines: Sequence[Line], cursor: tuple[int, int] | None, width: int, flush: Sequence[Line] = (),
         screen_rows: int | None = None, ambient: Sequence[Cell] | None = None, ambient_above: bool = False,
+        marks: Mapping[int, tuple[int, int]] | None = None,
+        lower: int = 0,
     ) -> None:
         """Show `lines` as the region and park the cursor at `cursor` = (row, col) within it; None hides it.
+
+        `lower` rows first move the region's top down (`can_lower`, `_lower`): the rows above it are painted again
+        that many rows lower, from the lines it flushed there, so a region on the screen's last row that shrinks
+        keeps its last row there with no blank row left above or under it.
 
         `flush` is flushed above the region first, in the same write: its lines
         cover the top rows of the region on screen, and `lines` are drawn from
@@ -491,21 +567,27 @@ class LiveRegion:
         is the living wallpaper's cells, painted on the screen's blank cells
         (`_papering`), on the rows this region flushed above it too where
         `ambient_above` says (the app asks whenever the wallpaper shows); None
-        takes painted ones off.
+        takes painted ones off. `marks` is the selection's first and last column
+        on each printed row it holds (`doc_row`), drawn by `highlight`; None
+        takes it off.
         """
         rows = screen_rows
         self._ambient_above = ambient_above
+        self._marks = dict(marks or {}) if self._highlight is not None else {}
         grows = len(lines) > len(self._rows)
-        ops: list[str] = []
+        # A highlight above the region never scrolls into the scrollback: those rows are painted as flushed first.
+        ops: list[str] = self._unmark(rows) if (flush or grows) and rows is not None else []
         moving: tuple[int, int, int] | None = None
         if ambient is None or rows is None or (max(width, 1), rows) != self._papered_at:
-            ops = self._unpaper() + ops
+            ops += self._unpaper()
         elif flush or grows:
             moving, lifting = self._before_moving(rows, len(flush), len(lines))
-            ops = lifting + ops
+            ops += lifting
         regrounding = self._regrounded and rows is not None
         if regrounding:
             ops += self._reground(rows)
+        if lower and rows is not None and self.can_lower(rows, lower):
+            ops = self._unpaper() + ops + self._lower(rows, lower)
         self._inserted = None
         if flush:
             ops += self._flush(flush, width)
@@ -515,6 +597,10 @@ class LiveRegion:
         if moving is not None and rows is not None:
             self._carry(moving, rows)
         self._forget_painted_over(rows)
+        if rows is not None:
+            marking = self._marking(rows)
+            if marking:
+                written, painted = written + marking, True
         if ambient is not None and rows is not None:
             papering = self._papering(ambient, rows)
             if papering:
@@ -528,15 +614,17 @@ class LiveRegion:
         lead = self._unpaper() if (self._width, rows) != self._papered_at else []
         self._send(self._papering(ambient, rows, lead), True)
 
-    def flush_above(self, lines: Sequence[Line], width: int) -> None:
+    def flush_above(self, lines: Sequence[Line], width: int, screen_rows: int | None = None) -> None:
         """Print `lines` permanently above the region, then draw the region again beneath them.
 
         The lines are written over the region's top rows; the region moves
         down by as many rows, scrolling the screen where it reaches the end,
         and once they scroll off the screen they are ordinary scrollback.
+        Given `screen_rows`, the terminal's height, the rows above the region
+        shown with a highlight are painted as flushed first (`render`).
         """
         frame = self._lines
-        ops = self._unpaper() + self._flush(lines, width)
+        ops = self._unmark(screen_rows) + self._unpaper() + self._flush(lines, width)
         self._send(*self._compose(frame, self._cursor, width, ops))
 
     def _paint(self, line: Line, width: int) -> str:
@@ -602,11 +690,57 @@ class LiveRegion:
         top = self._top(rows)
         if not ops or top is None:
             return ""
+        return self._absolute(ops, top)
+
+    def _absolute(self, ops: Sequence[str], top: int) -> str:
+        """`ops`, which move the cursor by absolute rows, then the cursor parked again where the region left it."""
         parked = self._parked or self._cursor_target()
         self._row, self._parked = parked[0], parked
         back = cursor_at(top + parked[0], parked[1])
         shown = "" if self._hidden else SHOW_CURSOR
         return "".join([HIDE_CURSOR, AUTOWRAP_OFF, *ops, AUTOWRAP_ON, back, shown])
+
+    def _marked(self, line: Line, doc: int) -> Line:
+        """`line`, printed row `doc`'s, with the selection's cells on it drawn by `highlight`."""
+        span = self._marks.get(doc)
+        return line if span is None or self._highlight is None else self._highlight(line, *span)
+
+    def _repaint_above(self, doc: int, top: int, span: tuple[int, int] | None) -> str:
+        """The bytes that paint printed row `doc`, above the region, again in place: highlighted with `span`, or as it
+        was flushed for None. Its wallpaper cells go with it (the wallpaper paints them again)."""
+        line, width = self._above_lines[doc - self._flushed_total]
+        row = top - (self._flushed_total - doc)
+        self._paper = {at: cell for at, cell in self._paper.items() if at[0] != row}
+        shown = line if span is None or self._highlight is None else self._highlight(line, *span)
+        return cursor_at(row, 0) + (_flushed_row(line, width, self._ground)[0] if span is None
+                                    else paint_line(shown, width, self._ground))
+
+    def _unmark(self, rows: int | None) -> list[str]:
+        """The bytes that paint every row above the region shown with a highlight as it was flushed, queued before a
+        write that can scroll them into the scrollback (or a `clear`); the cursor then back on the region's row."""
+        marked, self._marked_above = self._marked_above, {}
+        top = None if rows is None else self._top(rows)
+        if not marked or top is None:
+            return []
+        self._parked = None
+        ops = [self._repaint_above(doc, top, None) for doc in sorted(marked)]
+        return [AUTOWRAP_OFF, *ops, cursor_at(top + self._row, 0), AUTOWRAP_ON]
+
+    def _marking(self, rows: int) -> str:
+        """The bytes that show the selection on the rows above the region still on the screen and take it off the ones
+        it left, only those that changed, then park the cursor where the region left it; "" where nothing changed."""
+        top = self._top(rows)
+        if top is None:
+            self._marked_above = {}
+            return ""
+        wanted = {doc: span for doc, span in self._marks.items()
+                  if doc < self._flushed_total and 0 <= top - (self._flushed_total - doc)
+                  and self.doc_line(doc) is not None}
+        ops = [self._repaint_above(doc, top, None) for doc in sorted(self._marked_above) if doc not in wanted]
+        ops += [self._repaint_above(doc, top, span) for doc, span in sorted(wanted.items())
+                if self._marked_above.get(doc) != span]
+        self._marked_above = wanted
+        return self._absolute(ops, top) if ops else ""
 
     def _before_moving(self, rows: int, flushed: int, height: int) -> tuple[tuple[int, int, int] | None, list[str]]:
         """Before a write that flushes `flushed` lines and draws a `height`-row frame: (where the region's top is, how
@@ -680,8 +814,39 @@ class LiveRegion:
             self._above_blank[row - top] = blank
             ops.append(cursor_at(row, 0) + painted)
         self._paper = {at: cell for at, cell in self._paper.items() if at[0] < first}
+        self._marked_above = {}  # painted as flushed; the frame paints the selection again (`_marking`)
         self._parked = None  # the frame these go out in has autowrap off around them
         return [*ops, cursor_at(top + self._row, 0)]
+
+    def can_lower(self, screen_rows: int, count: int) -> bool:
+        """Whether the region's top can move `count` rows down (`_lower`): its place is certain, its last row is the
+        screen's last row, it holds more rows than that, and it flushed every row that would then be above it, so each
+        one can be painted again (none is lost from the screen that this region did not write)."""
+        top = self._top(screen_rows)
+        return (count > 0 and top is not None and self._last(screen_rows) == screen_rows - 1
+                and len(self._rows) > count and len(self._above_lines) >= top + count)
+
+    def _lower(self, rows: int, count: int) -> list[str]:
+        """The bytes that move the region's top `count` rows down: every screen row above the new top painted again
+        with the line flushed that many rows nearer the region (the last flushed line right over it), and the region's
+        first `count` rows given up, so its rows keep their places under the new top. The terminal's scrollback still
+        holds the lines that come back on the screen's first rows; they are on it twice once they scroll off again."""
+        top = self._top(rows)
+        assert top is not None
+        lowered = top + count
+        ops = [AUTOWRAP_OFF]
+        for row in range(lowered):
+            line, width = self._above_lines[row - lowered]
+            painted, blank = _flushed_row(line, width, self._ground)
+            self._above_blank[row - lowered] = blank
+            ops.append(cursor_at(row, 0) + on_ground(ERASE_LINE, self._ground) + painted)
+        self._shift += count
+        self._floor = max((self._floor or 1) - count, 1)
+        self._rows, self._lines, self._shown = self._rows[count:], self._lines[count:], self._shown[count:]
+        self._row, self._parked = 0, None
+        self._painted_over = ([], None)
+        self._marked_above = {}  # painted as flushed; the frame paints the selection again (`_marking`)
+        return [*ops, AUTOWRAP_ON, cursor_at(lowered, 0)]
 
     def _cursor_target(self) -> tuple[int, int]:
         """Where the last frame parked the cursor, within the region."""
@@ -710,8 +875,10 @@ class LiveRegion:
         self._row = 0
         self._parked = None
         self._shift, self._floor = self._flushed(self._shift, self._floor, len(lines))
+        self._flushed_total += len(lines)
         self._rows = self._rows[len(lines) :]
         self._lines = self._lines[len(lines) :]
+        self._shown = self._shown[len(lines) :]
         return ops
 
     def clear(self, screen_rows: int | None = None) -> None:
@@ -727,7 +894,9 @@ class LiveRegion:
             self._write(lead)
         if not self._rows and self._parked == (0, 0):
             return
-        ops: list[str] = self._unpaper()  # cells above the region's top survive the erase below
+        # The rows above the region painted with a highlight as they were flushed, and the cells above its top, which
+        # survive the erase below.
+        ops: list[str] = self._unmark(screen_rows) + self._unpaper()
         regrounding = self._regrounded and screen_rows is not None
         if regrounding:
             ops += [AUTOWRAP_OFF, *self._reground(screen_rows)]
@@ -740,6 +909,8 @@ class LiveRegion:
         self._parked = (0, 0)
         self._width = None
         self._lines = ()
+        self._shown = ()
+        self._marks = {}
         self._cursor = (0, 0)
         self._start = None  # the next first frame starts wherever this region's top row was
         self._shift = 0

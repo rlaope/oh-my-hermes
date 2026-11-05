@@ -320,7 +320,7 @@ class AgentsAcrossARespawnTests(unittest.TestCase):
                          {FIRST: COMPLETED, SECOND: INTERRUPTED})  # the gateway that ran it is gone
         self.assertIsNone(app.agent_steer)
         view = [line_text(line) for line in app._agent_view(120, 30)]
-        self.assertTrue(view[1].startswith("  ○ Run the shell command one"), view)
+        self.assertTrue(view[1].startswith("  ✓ Run the shell command one"), view)
         self.assertTrue(view[2].startswith("  ▪ Run the shell command two"), view)
         self.assertFalse([row for row in view if "│" in row], "no HUD agents block header beside them")
 

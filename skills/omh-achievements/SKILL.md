@@ -48,8 +48,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
-- If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+- If neither active-profile nor legacy hermes-achievements files are available, no badge result stands; mark the summary not_observed and hand back the missing local-file evidence needed for hermes_achievements_observation/v1.
+- If the snapshot is older than the plugin's rescan window, retain its badge list as of generated_at, mark current progress tentative, and hand back the timestamp and stale-snapshot warning.
+- If supplied session_activity_receipt/v1 lacks a metric, retain the available badge and activity metadata, mark that metric not_observed, and hand back the gap without replacing it with zero.
 
 ## Workflow Lane
 

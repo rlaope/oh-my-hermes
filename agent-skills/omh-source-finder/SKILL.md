@@ -57,7 +57,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If the user asks for facts or citations, route to `research`.
+- If the user asks for facts or citations, route to `ulw-research`.
 - If a candidate lacks a link or file reference, keep it candidate_prepared and ask for the next observable source step.
 - If the user wants to process a selected source, route to the downstream workflow instead of continuing source acquisition.
 

@@ -1,0 +1,19 @@
+{
+  "data": {
+    "web": [
+      {
+        "description": "BODY-SAMPLE-SENTINEL snippet a",
+        "position": 1,
+        "title": "TITLE-SENTINEL result one",
+        "url": "https://example.net/a?q=SECRET-QUERY-VALUE"
+      },
+      {
+        "description": "BODY-SAMPLE-SENTINEL snippet b",
+        "position": 2,
+        "title": "TITLE-SENTINEL result two",
+        "url": "https://example.net/b"
+      }
+    ]
+  },
+  "success": true
+}

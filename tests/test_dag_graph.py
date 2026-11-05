@@ -186,6 +186,35 @@ class GraphTests(unittest.TestCase):
         self.assertEqual({node["id"]: node["cycle"] for node in second["nodes"] if "cycle" in node},
                          {"d:export:fix2": 2})
 
+    def test_each_node_carries_its_role(self) -> None:
+        # The TUI names a finished child's briefing by it (`● verify @verify finished`): the declared role, `build`
+        # where none was declared, as `dag_run.node_role` reads it.
+        with homes() as home:
+            defined(home)
+            graph = build_delegation_graph(home.omh, home.hermes, PARENT)
+        roles = {node["id"]: node.get("role") for node in graph["nodes"] if node.get("dag_node")}
+        self.assertEqual(roles, {"d:export:api": "build", "d:export:ui": "build", "d:export:verify": "verify"})
+
+    def test_each_node_carries_its_place_in_the_runs_definition_order(self) -> None:
+        # The TUI picks a node's handle hue by it: a repair's node is added after, and the node it supersedes keeps its
+        # place, so no drawn node's index moves.
+        with homes() as home:
+            defined(home)
+            first = build_delegation_graph(home.omh, home.hermes, PARENT)
+            call(action="settle", run="export", node="ui", outcome="failed")
+            call(action="repair", run="export", node="ui", nodes=[
+                {"id": "fix-ui", "label": "Fix the button", "category": "quick", "prompt": PROMPT,
+                 "write_scope": ["src/ui.py"]}])
+            second = build_delegation_graph(home.omh, home.hermes, PARENT)
+
+        def places(graph: dict) -> dict:
+            return {node["id"]: node["node_index"] for node in graph["nodes"] if node.get("dag_node")}
+
+        self.assertEqual(places(first), {"d:export:api": 0, "d:export:ui": 1, "d:export:verify": 2})
+        self.assertEqual(places(second)["d:export:fix-ui"], 3)
+        self.assertEqual({key: value for key, value in places(second).items() if key in places(first)},
+                         {key: value for key, value in places(first).items() if key in places(second)})
+
     def test_added_nodes_hang_below_where_they_came_from(self) -> None:
         with homes() as home:
             defined(home)

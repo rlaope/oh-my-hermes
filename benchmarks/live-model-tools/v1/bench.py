@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
             nargs="?",
             const=True,
             default=False,
-            choices=("rename",),
+            choices=("rename", "shell"),
             help="Prepend the same edit-tool rule to both surfaces (names the surface's read/edit tools). "
             "'--edit-directive rename' prepends the rename rule pair (patch vs lsp) instead.",
         )

@@ -56,7 +56,7 @@ Bad example:
 
 - If nobody is named commander, ask for one before anything else; an incident without a commander produces opinions instead of decisions.
 - If the recovery signal is not stated, ask which signal and which value counts as healthy before calling anything recovered.
-- If the incident turns out to be closed, hand the postmortem to `reliability-review` and leave this record as the timeline it reads.
+- If the incident turns out to be closed, hand the postmortem to `omh-reliability-review` and leave this record as the timeline it reads.
 - If a connector call fails or returns nothing, keep the send prepared and name the channel that is unconfirmed instead of assuming delivery.
 
 ## Workflow Lane

@@ -148,3 +148,4 @@ When wrapper metadata includes `memory_review_card/v1` or `handoff_context_pack/
 3. Keep progress evidence-backed.
 4. Verify with the smallest relevant test or inspection before claiming completion.
 5. If Hermes cannot provide a required runtime capability, say so and use the fallback above.
+6. When a step fails partway, report what earlier steps already proved, lower the result to tentative, unresolved, or not_observed, and hand back what the person needs to continue; never present the partial result as the finished one.

@@ -181,7 +181,11 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   (`src/tui/herdr.py`, in INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`): a local
   socket, no network call. The gateway child does not get the pane's
   `HERDR_PANE_ID`; herdr's CLI and skill still work there, without a
-  current-pane default.
+  current-pane default. On `/gateway restart`, typed by the person and
+  confirmed in the slot, it runs Hermes' own `hermes gateway restart --yes
+  --detach` on Hermes' interpreter (`src/tui/gateway_restart.py`, in
+  INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`) and reattaches to the same
+  session; it signals no process itself.
   Read [`docs/OMH-TUI-BOUNDARY.md`](docs/OMH-TUI-BOUNDARY.md) before touching
   `src/tui/`.
 - No Hermes core patching.
@@ -205,6 +209,19 @@ and evidence obvious to a reviewer reading the PR without the chat history.
 - Code, docs, commit messages, PR text, and user-facing CLI output are
   English by default. Localized output (ko/ja/zh) is explicit opt-in through
   `--language` or `OMH_LANG`; never auto-detect the OS locale.
+- OMH is an open-source product for every user on every terminal. Design a
+  fix or a look for all of them. Never tune it to the maintainer's own
+  machine, terminal, theme or language: the maintainer's setup is where a
+  problem shows up and gets measured, not the target. A capability-detected
+  enhancement may sit on top of a fix that works everywhere, but never
+  replaces it.
+- The OMH TUI and CLI frame is English for everyone: TUI labels, key hints,
+  picker rows, TUI notices and CLI output. Never switch it by the language of
+  the conversation or of text a model or a person wrote. That text keeps its
+  own language; the frame around it does not follow. The only exception is
+  the explicit `--language` / `OMH_LANG` opt-in above. Chat and messenger
+  reply copy (`src/wrapper/localized_copy.py`) is a separate surface. It
+  follows the person's message and is not covered by this rule.
 - Reply to Korean user messages in polite Korean; no banmal or casual endings
   unless the user asks for that tone. Name what exists, what is missing, and
   the complete target behavior, rather than process labels or "small first

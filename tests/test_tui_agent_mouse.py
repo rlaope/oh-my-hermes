@@ -1,10 +1,14 @@
-"""Clicks on the agent list, and when the OMH TUI asks the terminal for mouse reports at all: only while the list is
-open, or a pager, which takes a drag too (`tests/test_tui_clean_copy.py`).
+"""Clicks on the agent list, and, with `OMH_TUI_MOUSE=0`, when the OMH TUI asks the terminal for mouse reports at all:
+only while the list is open, or a pager, which takes a drag too (`tests/test_tui_clean_copy.py`).
 
-Neither the agent view under the info line nor the count on it is clickable
-while the list is closed (the owner's decision of 2026-10-14): during a turn
-the wheel scrolls and a drag selects, and Down opens the list from the
-keyboard, on the view's own rows.
+These cases run with `OMH_TUI_MOUSE=0` (`make_app`'s default), the behaviour
+of the owner's decision of 2026-10-14, which the switch keeps byte for byte:
+neither the agent view under the info line nor the count on it is clickable
+while the list is closed, during a turn the wheel scrolls and a drag selects
+natively, and Down opens the list from the keyboard, on the view's own rows.
+Without the switch the main screen takes the mouse (the owner's decision of
+2026-11-05, `tests/test_tui_main_mouse.py`), and a click on a list row still
+opens that agent's log there.
 
 Where a click lands is never taken from the app. Each case reads the VT
 screen the scripted terminal painted (`drawn`), finds the row and the cells
@@ -68,6 +72,7 @@ from omh.tui.session_picker import SessionPicker, SessionRow
 MOUSE_ON = terminal_module.MOUSE_REPORTING_ON
 MOUSE_OFF = terminal_module.MOUSE_REPORTING_OFF
 CTRL_L = Key(CHAR, "l", ctrl=True)
+NATIVE_MOUSE = {"OMH_TUI_MOUSE": "0"}  # the main screen leaves the mouse to the terminal, as `make_app` does
 
 
 def settled(app: App) -> App:
@@ -349,7 +354,7 @@ class FailingShutdownTests(unittest.TestCase):
     def leaving(self) -> tuple[App, RecordingClient, HungUpTerminal]:
         terminal = HungUpTerminal()
         client = RecordingClient()
-        app = App(terminal, client, {}, poller=FakePoller(), clock=lambda: 0.0)  # type: ignore[arg-type]
+        app = App(terminal, client, NATIVE_MOUSE, poller=FakePoller(), clock=lambda: 0.0)  # type: ignore[arg-type]
         app.sid = SID
         app.turn_pending = True
         relay(app, STARTS)
@@ -981,7 +986,7 @@ class ExitDrainTests(unittest.TestCase):
 
     def leaving(self, terminal: DrainTerminal, *, with_reports: bool = True) -> tuple[App, RecordingClient]:
         client = RecordingClient()
-        app = App(terminal, client, {}, poller=FakePoller(), clock=lambda: terminal.now[0])  # type: ignore[arg-type]
+        app = App(terminal, client, NATIVE_MOUSE, poller=FakePoller(), clock=lambda: terminal.now[0])  # type: ignore[arg-type]
         app.sid = SID
         app.turn_pending = True
         if with_reports:
@@ -1192,21 +1197,24 @@ class DocumentedMouseTests(unittest.TestCase):
                 self.assertNotIn("escape-time", text)
 
     def test_the_way_to_select_anyway_is_named_for_each_terminal_no_more_surely_than_it_is_known(self) -> None:
+        # Measured 2026-11-05 from each terminal's docs or source: Terminal.app tests Fn (its Option-drag selects a
+        # rectangle), iTerm2 Option, VS Code on macOS nothing unless its setting is on, the rest Shift.
         text = self.prose("docs/INSTALLATION.md")
         self.assertIn(
-            "hold Fn while dragging in Terminal.app (or turn off View → Allow Mouse Reporting), Option in iTerm2, "
-            "Shift in most other terminals",
+            "Shift while dragging in xterm, kitty, WezTerm, Ghostty, Alacritty, foot, GNOME Terminal, Konsole, "
+            "Windows Terminal and Otty (its default; Settings → Controls → Mouse → Bypass Mouse Reporting chooses "
+            "another), Option in iTerm2, Fn in Terminal.app (or turn off View → Allow Mouse Reporting, ⌘R); VS Code's "
+            "terminal on macOS has none unless `terminal.integrated.macOptionClickForcesSelection` is on.",
             text,
         )
         self.assertNotIn("Option-drag in Terminal.app", text)
 
     def test_the_boundary_says_what_each_click_does_and_when_a_report_can_still_type(self) -> None:
         text = self.prose("docs/OMH-TUI-BOUNDARY.md")
-        self.assertIn("A plain left click on an agent opens its log, one on the list's `main` row leaves the list, and "
-                      "every other report there does nothing.", text)
-        self.assertIn("Mouse reporting is on in two states only, the agent list open and a pager on the alternate "
-                      "screen", text)
-        self.assertIn("mode 1002, never 1003", text)
+        self.assertIn("A plain left click on an agent opens its log, one on the list's `main` row leaves the list.", text)
+        self.assertIn("`OMH_TUI_MOUSE=0` turns this off: then reporting is on only while the agent list or the "
+                      "`/theme` picker takes clicks (clicks and the wheel, without 1002) and in a pager.", text)
+        self.assertIn("modes 1000, 1002 and 1006, never 1003", text)
         self.assertIn("One that starts later and is split right after its first or second byte is read as keys.", text)
         for name in ("docs/OMH-TUI-BOUNDARY.md", "AGENTS.md"):
             with self.subTest(name=name):

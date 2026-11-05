@@ -193,13 +193,19 @@ paste whose text starts with `!` goes to the model), never a refused steer or a
 queued prompt that happens to start with `!`. A rewind (Esc Esc on an empty
 composer, `/rewind`) cuts the session's history before the prompt the person
 picked, and only when they send the prompt that replaces it (`prompt.submit`
-with `truncate_before_row_id` and `confirm_truncate`). Mouse reporting is on in
-two states only, the agent list open and a pager on the alternate screen
-(which has no scrollback to take away; there it also reports a held button's
-motion, mode 1002, never 1003), and off in every other and on every exit. A
-plain left click on an agent opens its log, one on the list's `main` row
-leaves the list, and every other report there does nothing. In a pager the
-wheel scrolls, and a drag, a double click or a triple click copies what it
+with `truncate_before_row_id` and `confirm_truncate`). Mouse reporting (clicks,
+the wheel and a held button's motion, modes 1000, 1002 and 1006, never 1003)
+is on wherever the TUI can tell which screen row a report lands on, and off
+while the window is resized and on every exit. On the main screen a drag, a
+double click or a triple click selects rows the live region printed, by their
+place in what it printed (`LiveRegion.doc_row`), shows them reversed and
+copies them; a row it cannot map for certain is never guessed at, and the
+wheel up opens the transcript view. `OMH_TUI_MOUSE=0` turns this off: then
+reporting is on only while the agent list or the `/theme` picker takes clicks
+(clicks and the wheel, without 1002) and in a pager. A plain left click on an
+agent opens its log, one on the list's `main` row leaves the list. In a pager
+the wheel scrolls, and in a pager and on the main screen a drag, a double
+click or a triple click copies what it
 selected, rails and a reply's margin left out: as OSC 52 to a terminal that
 honours it as it ships (kitty, Ghostty, WezTerm, Alacritty, outside tmux),
 through `pbcopy` on a Mac with no SSH between it and the screen (inside tmux,
@@ -324,6 +330,48 @@ plugin (gated on `HERDR_ENV=1` and that id) would otherwise report a
 reports from then on (measured on herdr 0.9.5: the pane stayed at `working`,
 or left the list); a gateway daemon started from the child would also keep the
 pane's id after the pane closed.
+
+## Restarting Hermes' gateway
+
+`/gateway restart`, and only that typed by the person, restarts Hermes'
+gateway (`src/tui/gateway_restart.py`, in INVARIANT 1's
+`PROCESS_SPAWN_ALLOWLIST`); `/gateway` with anything else goes to Hermes as
+typed. It is offered only attached to a shared gateway, with a session to
+reattach to. It first asks in the slot, naming what the gateway's record
+(`gateway_state.json`, read as the bot board reads it) says the restart
+affects: the profiles it serves, the messenger platforms connected to it, the
+work it runs (turns and cron jobs), and this session's own turn. For a gateway
+a custom supervisor runs (`--external-supervisor` in its recorded argv) that
+running work finishes first, up to `agent.restart_after_turn_timeout` read
+from the gateway home's `config.yaml`; any other gateway drains the same way
+if Hermes' own systemd or launchd service runs it (Hermes sends it SIGUSR1,
+which its argv does not show), so the slot says the drain depends on a service
+running it, and otherwise the work is interrupted. Without a live record it
+says who else uses the gateway is unknown. In a named profile the shared
+gateway serves it offers two restarts: that profile alone (Hermes re-serves it
+inside the shared process at once, so the profile's running turns stop now;
+new OMH code is not loaded) and the whole gateway (`-p default`, as Hermes'
+Desktop addresses that process), which the drain line names.
+Nothing runs unless the person picks one. Then it runs Hermes' own command as
+Hermes' updater runs it, `<HERMES_PYTHON> -m hermes_cli.main -p <profile>
+gateway restart --yes --detach`, with the interpreter and import path the
+launcher handed the TUI and without Hermes' gateway markers, in a session of
+its own, stdin closed and its output in an unnamed temporary file (unlinked
+as it is created) of which only the last lines are read back, into memory.
+Hermes decides the rest (the service manager, the drain, a profile its shared
+gateway serves); the TUI signals no gateway and kills no process. While the
+command runs, however long, the TUI respawns no gateway child, and sends
+nothing that calls the gateway except `/stop` (what else the person sends
+goes back to the composer; Esc and Ctrl+C still interrupt); past 180 s it
+says once that it still waits. Once the command succeeds it reattaches to the
+same session as a respawn does, outside the respawn's limit, trying a gateway
+that is not answering, or not resuming, again each second for up to 60 s; the
+composer's draft stays and nothing is sent again. Exit 0 alone is not taken
+for a restart: only a changed owner epoch says the gateway is back, and
+otherwise Hermes' own last lines are shown. It says the gateway now runs the
+newer OMH only when the gateway's recorded start had preceded the plugin
+bundle's install before the restart and no longer does after it. A failure
+says Hermes' words and the command to run instead.
 
 ## Job control, and what OMH does not do
 

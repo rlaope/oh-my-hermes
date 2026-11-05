@@ -164,10 +164,22 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
         "reviewed_timeout_ms": 1000,
         "capability": (
             "user-authored toolcall-rule block directives, the refusal of a "
-            "skill_manage edit to an OMH-managed skill, the OMH "
+            "skill_manage edit to an OMH-managed skill, the refusal of a "
+            "write_file or patch into OMH's own evidence stores or outside a "
+            "dag-ulw node's write scope, the OMH "
             "repeat-call guard and its human-approval escalation, and the "
             "human approval of an omh_team start's exact check commands, before "
             "a Hermes tool call"
+        ),
+    },
+    "post_api_request": {
+        "source_path": "hooks/verify_hooks.py",
+        "event_scope": ("post_api_request",),
+        "reviewed_timeout_ms": 1000,
+        "capability": (
+            "keeping the tool-call ids of the model's latest message (ids and "
+            "tool names only), so the shell round end looks at a message's "
+            "commands only after its last one"
         ),
     },
     "post_tool_call": {
@@ -178,7 +190,10 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
             "closing the in-flight tool-call ledger entry that backs the OMH "
             "HUD's liveness signal (open-call count, stalled-todo warning, "
             "parallel-shot lifetime), mirroring Hermes' native todo_list "
-            "writes into the session's OMH plan todo, and, for a delegate_task "
+            "writes into the session's OMH plan todo, recording a metadata-only "
+            "fetch receipt per URL a successful web_extract, browser_navigate or "
+            "web_search returned (hashes, lengths and a query-free display URL; "
+            "no page text, title or arguments), and, for a delegate_task "
             "Hermes did not block, tying each child to its call, task index and "
             "delegation in the delegation ledger (ids only, from the dispatch "
             "handle; no goal text)"

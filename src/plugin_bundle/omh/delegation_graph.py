@@ -73,6 +73,7 @@ from .dag_run import (
     derive,
     goal_verdict,
     handoff_unchecked,
+    node_role,
     run_state,
     session_runs,
 )
@@ -778,7 +779,8 @@ def _build(
                 edges.append({"from": "root", "to": node_id, "kind": "dispatch"})
 
     if dag is not None:
-        order = _dag_nodes(dag, nodes, edges, order, facts_for, model_of_node, node_of_subagent, node_of_session)
+        order = _dag_nodes(dag, nodes, edges, order, facts_for, model_of_node, node_of_subagent, node_of_session,
+                           now)
 
     def parent_of(child: Mapping[str, Any]) -> str:
         parent_id = node_of_subagent.get(child["parent_subagent_id"], "") if child["parent_subagent_id"] else ""
@@ -879,6 +881,8 @@ _DAG_VIEW: Final = {
     "waiting": ("waiting", "waiting"),
     "held": ("waiting", "held"),
     "cancelled": ("interrupted", "cancelled"),
+    # Settled to wait on a background process or a CI run until its `wake_at` (`dag_run.settle`): not over.
+    "parked": ("waiting", "parked"),
 }
 
 
@@ -936,19 +940,27 @@ def _dag_run(
 def _dag_nodes(
     dag: Mapping[str, Any], nodes: list[dict[str, Any]], edges: list[dict[str, str]], order: int,
     facts_for: Callable[[Mapping[str, Any], str], dict[str, Any]], model_of_node: dict[str, str],
-    node_of_subagent: dict[str, str], node_of_session: dict[str, str],
+    node_of_subagent: dict[str, str], node_of_session: dict[str, str], now: float,
 ) -> int:
     """Add a dag run's nodes and its recorded edges; returns the next drawing order.
 
     A node a repair or an extend round added also gets an edge from where it
     came from (`dag_origin`) when nothing else of its own group leads to it,
-    so the drawing shows it below that node.
+    so the drawing shows it below that node. Each node carries its role
+    (`role`, `dag_run.node_role`: build, baseline, verify or review), which
+    the TUI names a finished child's briefing by, and its place in the run's
+    definition order (`node_index`: superseded and added nodes keep theirs),
+    which picks its handle's hue. A parked node is a waiting one
+    marked `parked`, with what its attempt recorded it waits on (`parked_at`,
+    `wake_at`, `wait_handle`, `wait_reason`); its elapsed time is the time
+    since it parked.
     """
     record, derived = dag["record"], dag["derived"]
     run = str(record["run"])
     # A held node of a run that is not moving (stopped, cancelled, or waiting on a repair) will not run on its own.
     stopped = dag["state"] not in DAG_OPEN_STATES
     drawn = {str(node["id"]) for node in record["nodes"] if derived[str(node["id"])]["state"] != "superseded"}
+    defined = {str(node["id"]): index for index, node in enumerate(record["nodes"])}
     for node_id, layer in _dag_layers(record, drawn).items():
         node = next(item for item in record["nodes"] if item["id"] == node_id)
         info = derived[node_id]
@@ -969,7 +981,7 @@ def _dag_nodes(
             "category": _text(node.get("category"), 40) or "?", "category_source": "dag_plan", "model": "?",
             "effort": "", "state": state, "status": status, "elapsed_seconds": None, "order": order,
             "group": group, "waits_on": len(info["waits_on"]) if info["state"] == "waiting" else 0,
-            "dag_node": node_id, "dag_origin": origin,
+            "dag_node": node_id, "dag_origin": origin, "role": node_role(node), "node_index": defined[node_id],
         }
         summary = _prompt_summary(node.get("prompt"))
         if summary:
@@ -1003,6 +1015,8 @@ def _dag_nodes(
             node_of_subagent[child["subagent_id"]] = graph_id
             node_of_session[child["child_session_id"]] = graph_id
             model_of_node[graph_id] = facts["model"] if facts["model"] != "?" else ""
+        if info["state"] == "parked":
+            entry.update(_parked_fields(node, now))
         nodes.append(entry)
         parents = [parent for parent in node["depends_on"] if parent in drawn]
         edges.extend({"from": dag_node_id(run, parent), "to": graph_id, "kind": "depends_on"} for parent in parents)
@@ -1012,6 +1026,25 @@ def _dag_nodes(
         elif not parents:
             edges.append({"from": "root", "to": graph_id, "kind": "dispatch"})
     return order
+
+
+def _parked_fields(node: Mapping[str, Any], now: float) -> dict[str, Any]:
+    """What a parked node's last attempt says it waits on, and how long it has: `settle` stamps `settled_at`,
+    `handle`, `wake_at` and `reason` on a park. A field the attempt does not carry is left out."""
+    attempts = node.get("attempts") if isinstance(node.get("attempts"), list) else []
+    attempt = attempts[-1] if attempts and isinstance(attempts[-1], Mapping) else {}
+    fields: dict[str, Any] = {"parked": True, "elapsed_seconds": None}  # never the child's run time
+    parked_at, wake_at = attempt.get("settled_at"), attempt.get("wake_at")
+    if isinstance(parked_at, int | float) and not isinstance(parked_at, bool) and 0 < parked_at <= now:
+        fields.update(parked_at=float(parked_at), elapsed_seconds=now - float(parked_at))
+    if isinstance(wake_at, int | float) and not isinstance(wake_at, bool) and wake_at > 0:
+        fields["wake_at"] = float(wake_at)
+    handle, reason = _text(attempt.get("handle"), 120), _text(attempt.get("reason"), 120)
+    if handle:
+        fields["wait_handle"] = handle
+    if reason:
+        fields["wait_reason"] = reason
+    return fields
 
 
 def _origin_parent(node: Mapping[str, Any], record: Mapping[str, Any], drawn: set[str]) -> str:

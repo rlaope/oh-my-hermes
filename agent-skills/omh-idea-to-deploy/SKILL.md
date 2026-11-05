@@ -46,8 +46,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If the success metric or release scope is missing, retain the supplied idea and user value, mark delivery planning unresolved, and hand back the stage rail with the missing decision before an executor handoff.
+- If plan acceptance or executor choice is absent, retain the prepared decision gates and stage rail, mark the coding handoff unresolved, and hand back the acceptance or runtime-choice question.
+- If deploy evidence is missing after verification, retain the observed verification results, mark deploy and monitoring not_observed, and hand back the stage rail with the deploy evidence gate still open.
 
 
 

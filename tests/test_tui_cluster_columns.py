@@ -2,7 +2,7 @@
 
 `width` paints a ZWJ family, an emoji with a skin tone, a VS16 emoji and a
 flag as one 2-cell glyph and a base with its combining marks as one unit. The
-pager's selection (`_cells`, `_word_at`, `_reversed`), the recall glint
+pager's selection (`_cells`, `_word_at`, `reversed_cells`), the recall glint
 (`transcript._glinted`) and the running box's aura in `/dag`
 (`panels._aura_box`) counted code points instead: a double click on a word
 after `👨‍👩‍👧` copied nothing, a drag copied half a family, and a style
@@ -25,7 +25,7 @@ from test_tui_modes import drawn, make_app
 from omh.plugin_bundle.omh.delegation_view import Segment
 from omh.tui import bot_board, subagents
 from omh.tui.keys import BUTTON_LEFT, Mouse
-from omh.tui.pager import Pager, _cells, _kept_cells, _reversed, _source_clusters, _word_at, forget_cells
+from omh.tui.pager import Pager, _cells, _kept_cells, _source_clusters, _word_at, forget_cells, reversed_cells
 from omh.tui.panels import _aura_box
 from omh.tui.screen import paint_line, without_controls
 from omh.tui.style import TRUECOLOR, Span, Style
@@ -128,7 +128,7 @@ class PagerSelectionTests(unittest.TestCase):
         for name, lead in LEADS.items():
             with self.subTest(lead=name):
                 line = (Span(f"{lead} x"),)
-                self.assertEqual(_reversed(line, 0, 0), (Span(lead, lit), Span(" x", plain)))
+                self.assertEqual(reversed_cells(line, 0, 0), (Span(lead, lit), Span(" x", plain)))
                 pager = Pager("log", [line])
                 pager.frame(40, 10, DEFAULT_THEME)
                 pager.handle_mouse(Mouse(BUTTON_LEFT, 1, 1), 10, 0.0)
@@ -152,7 +152,7 @@ class PagerSelectionTests(unittest.TestCase):
                 pager = Pager("log", [(Span(f"open {word} now"),)])
                 pager.frame(40, 10, DEFAULT_THEME)
                 self.assertEqual(drag(pager, 1, 40), f"open {word} now")
-                self.assertEqual(text_of(_reversed((Span(word),), 0, 99)), word)
+                self.assertEqual(text_of(reversed_cells((Span(word),), 0, 99)), word)
 
     def test_the_logs_pager_copies_a_decomposed_path_as_written(self) -> None:
         now = [100.0]
@@ -185,7 +185,7 @@ class PagerSelectionTests(unittest.TestCase):
                 line = (Span(text),)
                 self.assertEqual(sum(cell.width for cell in _cells(line)), line_width(without_controls(line)))
                 lit, plain = VTScreen(1, 40), VTScreen(1, 40)
-                lit.feed(paint_line(_reversed(line, 0, 1), 40))
+                lit.feed(paint_line(reversed_cells(line, 0, 1), 40))
                 plain.feed(paint_line(line, 40))
                 self.assertEqual(lit.line(0), plain.line(0), "the highlight paints the same glyphs")
 
@@ -193,7 +193,7 @@ class PagerSelectionTests(unittest.TestCase):
         line = (Span("ab👨\u200d"), Span("👩 tail"))  # measured span by span, as `width` measures every row
         for low, high in ((0, 0), (20, 20), (2, 3), (0, 20)):
             with self.subTest(low=low, high=high):
-                self.assertEqual(line_width(_reversed(line, low, high)), line_width(line))
+                self.assertEqual(line_width(reversed_cells(line, low, high)), line_width(line))
 
     def test_a_zero_width_cluster_that_leads_the_row_leaves_the_word_after_it_clickable(self) -> None:
         self.assertEqual(_word_at((Span("\ufeffhello world"),), 0), (0, 4))
@@ -208,7 +208,7 @@ class PagerSelectionTests(unittest.TestCase):
     def test_one_long_cluster_is_measured_in_linear_time(self) -> None:
         # One base with thousands of marks, not NFC. Pairing each cluster with its source by growing a run one code
         # point at a time took 472 ms for 8,000 marks (117 ms for 4,000: quadratic); pairing the units takes 10 ms.
-        # `_source_clusters` is timed itself: `_cells` keeps a row, so a second `_reversed` would time the cache.
+        # `_source_clusters` is timed itself: `_cells` keeps a row, so a second `reversed_cells` would time the cache.
         text = "a" + "\u0301" * 8000
         best = min(_timed(lambda: _source_clusters(text)) for _ in range(3))
         self.assertLess(best, 0.1)
@@ -240,9 +240,9 @@ class PagerSelectionTests(unittest.TestCase):
                      (Span("abc"), Span("", Style(bg="#202020")))):  # a real fill stays one
             with self.subTest(line=line):
                 for low, high in ((0, 0), (0, 9), (5, 9)):
-                    self.assertEqual(paint_line(_reversed(line, low, high), 10).count("\x1b[48;"),
+                    self.assertEqual(paint_line(reversed_cells(line, low, high), 10).count("\x1b[48;"),
                                      paint_line(line, 10).count("\x1b[48;"))
-                    self.assertEqual(sgr.sub("", paint_line(_reversed(line, low, high), 10)),
+                    self.assertEqual(sgr.sub("", paint_line(reversed_cells(line, low, high), 10)),
                                      sgr.sub("", paint_line(line, 10)))
 
     def test_kirat_rai_units_as_written_pair_with_the_painted_ones_and_the_span_copies_as_written(self) -> None:

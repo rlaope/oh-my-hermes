@@ -13,13 +13,16 @@ from ..approval_bypass import record_approval_bypass
 from ..catch_log import REPEAT_LOOP, record_catch
 from ..consistency_trigger import snapshot_before_edit
 from ..dag_define_gate import delegate_before_define_directive
+from ..dag_scope_guard import dag_scope_directive
 from ..delegation_route_restore import dispatch_route_directive
+from ..evidence_store_guard import evidence_write_directive
 from ..host_observation import host_session_id, observe_plugin_hook_call
 from ..impact_check import baseline_before_edit, forget_other_turn
 from ..jev_consent import arm_tool_call as arm_jev_tool_call
 from ..jev_consent import disarm_tool_call as disarm_jev_tool_call
 from ..native_todo import project_native_todo
 from ..plan_stage_gate import plan_stage_edit_directive
+from ..research_receipts import record_fetch_receipts
 from ..skill_ownership import managed_skill_edit_directive
 from ..team_gate import team_start_directive
 from ..tool_bursts import (
@@ -258,6 +261,30 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
     )
     if ownership_directive is not None:
         return _route_gated(ownership_directive, **route_gate)
+    # A `write_file`/`patch` into a store OMH's own code keeps (ledgers, dag
+    # runs, decision gates, fetch receipts, todos) is refused: a line written
+    # by a tool call reads exactly like one OMH observed (`evidence_store_guard`).
+    # Same place as the ownership refusal and for the same reason.
+    evidence_directive = evidence_write_directive(
+        tool_name=kwargs.get("tool_name"),
+        tool_input=tool_input,
+        task_id=kwargs.get("task_id"),
+        omh_home=omh_home,
+    )
+    if evidence_directive is not None:
+        return _route_gated(evidence_directive, **route_gate)
+    # A dag-ulw node's child writing outside its node's write scope is refused
+    # (`dag_scope_guard`): the scope was checked at define and never again.
+    scope_directive = dag_scope_directive(
+        tool_name=kwargs.get("tool_name"),
+        tool_input=tool_input,
+        session_id=session_id,
+        task_id=kwargs.get("task_id"),
+        omh_home=omh_home,
+        hermes_home=hermes_home,
+    )
+    if scope_directive is not None:
+        return _route_gated(scope_directive, **route_gate)
     # The repeat guard runs after the user's own rules and before anything
     # that observes a dispatch, for the same reason: it intervenes on a
     # call, so nothing downstream may record that call as having happened.
@@ -419,6 +446,10 @@ def post_tool_call(**kwargs: object) -> dict[str, object] | None:
     one checklist for the HUD and the plan guards whichever tool holds the
     steps. The projection writes only OMH's own record and never touches
     the tool result.
+
+    A successful ``web_extract``, ``browser_navigate`` or ``web_search``
+    leaves one fetch receipt per URL (`research_receipts`): hashes, lengths
+    and a query-free display URL, never page text, titles or arguments.
     """
     if str(kwargs.get("tool_name", "") or "") == "omh_jev_ask":
         # First, before any early return: the call is finished, so its arm
@@ -441,6 +472,18 @@ def post_tool_call(**kwargs: object) -> dict[str, object] | None:
         tool_name=kwargs.get("tool_name"), args=_tool_arguments(kwargs),
         result=kwargs.get("result"), status=kwargs.get("status"),
         session_ref=host_session_id(kwargs), omh_home=omh_home, hermes_home=hermes_home,
+    )
+    # Each URL a successful web tool opened or listed leaves a metadata-only
+    # receipt under the dispatching session (`research_receipts`), so a cited
+    # URL can later be matched against what this session tree really fetched.
+    # A `refused` label is not dropped: the writer counts it in
+    # `receipt_declines` and the session's `.refused` sidecar, which
+    # `omh research receipts verify` reports as `receipt_refusals`.
+    _ = record_fetch_receipts(
+        tool_name=kwargs.get("tool_name"), args=_tool_arguments(kwargs),
+        result=kwargs.get("result"), status=kwargs.get("status"),
+        session_id=host_session_id(kwargs), tool_call_id=kwargs.get("tool_call_id"),
+        turn_id=kwargs.get("turn_id"), omh_home=omh_home,
     )
     bridge = _agent_board_bridge()
     if bridge is not None:

@@ -57,7 +57,7 @@ Bad example:
 - If source and active reviewed terminology differ, report changed or missing freshness and ask whether to preview a new pending candidate; never synchronize automatically.
 - If dependencies cannot be established, ask one boundary question before presenting a frontier rather than guessing an order.
 - If frontier round or decision identity cannot be recovered, close with a named recovery blocker instead of restarting or emitting another round.
-- If the user moves from terminology to implementation, summarize confirmed understanding and hand off to `ralplan`, `ulw-plan`, or the selected coding owner only after a separate go-ahead.
+- If the user moves from terminology to implementation, summarize confirmed understanding and hand off to `ulw-plan` or the selected coding owner only after a separate go-ahead.
 
 
 

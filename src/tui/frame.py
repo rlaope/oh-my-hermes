@@ -161,8 +161,10 @@ def build_frame(
             glow, lambda offset, length: aura_style(base, glint, offset, length, aura),
         )
         if placeholder and not composer.text and input_lines:
-            input_lines[0] = truncate_line((*input_lines[0], Span(placeholder, theme.hint)), cols)
-        composer_lines = input_lines
+            input_lines[0] = truncate_line((*input_lines[0], Span(placeholder, replace(theme.hint, gutter=True))), cols)
+        # The mark (or the indent under it) frames what you typed: a drag on the main screen copies only the text.
+        composer_lines = [(replace(line[0], style=replace(line[0].style, gutter=True)), *line[1:]) if line else line
+                          for line in input_lines]
     def fit(tail: Sequence[Line]) -> Budget:
         return allocate(
             rows,
@@ -195,6 +197,8 @@ def build_frame(
     if glow and not composer_blank:
         rule = aura_rule(cols, base, glint, aura) if aura_moves(theme) else (
             Span(AURA_RULE * cols, replace(theme.rule, bold=True)),)
+    # The composer's rules frame it and are no text: never highlighted, never copied by a drag (`style.gutter`).
+    rule = tuple(Span(span.text, replace(span.style, gutter=True)) for span in rule)
     lines = compose(
         budget,
         sticky=sticky,
@@ -261,8 +265,8 @@ def _browsing_rows(count: int, cols: int, theme: Theme) -> list[Line]:
 
 
 def rule_line(width: int, theme: Theme = DEFAULT_THEME) -> Line:
-    """One of the composer's rules: `RULE` across `width`, in the rule colour."""
-    return (Span(RULE * max(width, 0), theme.rule),)
+    """One of the composer's rules: `RULE` across `width`, in the rule colour, a gutter (never copied)."""
+    return (Span(RULE * max(width, 0), replace(theme.rule, gutter=True)),)
 
 
 def sticky_line(prompt_text: str, width: int, theme: Theme = DEFAULT_THEME, known: frozenset[str] = frozenset()) -> Line:

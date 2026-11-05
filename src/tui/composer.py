@@ -543,6 +543,10 @@ class Composer:
                 self.caret = end if forward else start
                 return
 
+    def shown(self) -> str:
+        """The composer's text as its row shows it: a chip as its label, an image token as its label."""
+        return self._labelled(self.text)
+
     def expanded(self, text: str | None = None) -> str:
         """`text` (the composer's own by default) with every chip replaced by the text it holds, every image token by
         its label."""

@@ -19,14 +19,18 @@ on the highlighted node's child as the list's keys do. The log is
 read-only: `subagent.tail` is asked for the open agent while it runs, at most
 every `TAIL_POLL_SECONDS`, and no more once `TAIL_MISSES_BEFORE_STOP` answers
 in a row had no tail, until that agent sends a frame; nothing is ever sent to
-a subagent. On the main screen, mouse reports are on only while the agent list (or the dag
-tree) has the keys and the row a click would land on is certain (the owner's decision of 2026-10-14:
-during a turn the wheel scrolls and a drag selects, and Down opens the list
-from the keyboard); a pager, an agent's log among them, takes them for its
-own wheel and drag (`pager`). A plain left click on a list row opens that agent's log,
-or on the list's main row leaves the list; on a tree row it takes the
-highlight, and on a node's row opens its child's log; every other report
-does nothing. Reports the terminal sent before it acted on an off
+a subagent. On the main screen the OMH TUI takes the mouse wherever the row a
+report lands on is certain (the owner's decision of 2026-11-05, which replaced
+the one of 2026-10-14 that took it only while the list was open): a drag
+selects and copies without the rail, and the wheel opens the transcript view
+(`App._screen_mouse`). With `OMH_TUI_MOUSE=0` it is the earlier behaviour:
+reports are on only while the agent list (or the dag tree) has the keys, and
+the wheel and a drag are the terminal's. A pager, an agent's log among them,
+takes them for its own wheel and drag (`pager`). A plain left click on a list
+row opens that agent's log, or on the list's main row leaves the list; on a
+tree row it takes the highlight, and on a node's row opens its child's log;
+any other report goes to the main screen's selection where it takes the
+mouse, and does nothing where it does not. Reports the terminal sent before it acted on an off
 arrive after it, so `_set_mouse` notes when reporting went off and the
 decoder is told: a report that starts arriving while reporting is on, or
 within `keys.MOUSE_REPORT_SECONDS` after the off, types nothing if it
@@ -44,16 +48,23 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from . import gateway_contract as contract
+from .background import tool_call
 from .keys import BUTTON_LEFT, CHAR, DOWN, ENTER, ESCAPE, LEFT, RIGHT, UP, Key, Mouse, Paste, list_nav_step
 from .layout import Budget, agent_view_cap, is_tiny, max_height
-from .dag_tree import TreeState, run_key, tree_lines
+from ..plugin_bundle.omh.hud_text import compact_count, elapsed_text
+from .dag_tree import TreeState, bound_node, run_key, tree_lines
 from .panels import (
     RUNNING_NODE_STATES, agent_view_count, agent_view_keep, dag_run_summary, graph_is_dag, panel_lines,
 )
 from .style import Line, Span, Style
-from .subagents import FINISHED_STATUSES, MAIN_ID, OPEN_MARK, RUNNING, Hit
+from .subagents import (
+    COMPLETED, ENDED, FINISHED_STATUSES, INTERRUPTED, MAIN_ID, OPEN_MARK, RUNNING, TOKENS_MARK, Agent, Hit, short_title,
+)
 from .width import cell_width
-from .transcript import NOTICE_WARN, STEER_QUEUED, STEER_REFUSED, NoticeBlock, SteerBlock, as_text
+from .transcript import (
+    AGENT_CANCELLED, AGENT_FAILED, AGENT_FINISHED, AGENT_INTERRUPTED, NOTICE_WARN, STEER_QUEUED, STEER_REFUSED,
+    AgentDoneBlock, NoticeBlock, SteerBlock, as_text,
+)
 
 # The list Down opens (the agent view's rows, `layout.agent_view_cap` of them; a longer roster scrolls), and one
 # agent's log in the pager.
@@ -70,6 +81,11 @@ TREE_HINTS = (
 # The fewest rows a tree takes the keys in: its highlight between a count above and one below. Under it Down opens the
 # agent list in the view's rows, as it did before the tree.
 MIN_TREE_ROWS = 3
+# The most rows a dag run's tree takes under the composer, and never more than a third of the screen
+# (`layout.agent_view_cap`). The owner, 2026-11-04: 17 rows was too big and 8 too little and too cramped; 16 holds a
+# small run whole with its blank rows (the 6-node run in 14 at 150x42), and on a taller screen the tree stops growing
+# there, `/dag` drawing the whole graph.
+TREE_ROWS = 16
 # What the info line says once `x` asked, longest first.
 INTERRUPT_CONFIRM = "x again interrupts {name} · any other key cancels"
 INTERRUPT_CONFIRMS = (INTERRUPT_CONFIRM, "x again interrupts {name}", "x again interrupts")
@@ -82,6 +98,8 @@ STEER_SAY = (
     "↪ steer · esc cancels",
 )
 AGENT_FINISHED_NOTICE = "{name} has finished; there is nothing to {action}."
+# How a finished agent's briefing names its end, by its status; every failure status is a failure.
+AGENT_OUTCOMES = {COMPLETED: AGENT_FINISHED, INTERRUPTED: AGENT_INTERRUPTED, ENDED: AGENT_CANCELLED}
 # An agent steer that settled after its session was left, as the main steer's notices say it, naming the agent and
 # the session it was for.
 AGENT_STEER_LEFT_NOTICE = (
@@ -137,9 +155,10 @@ class AgentViewMixin:
         same rows, noting each row's agent id in `listed`.
 
         While the conversation's delegation graph is a DAG run its folding
-        tree (`_tree_view`) is the view, in up to a third of the screen from
-        the start and no more rows than the tree has (the owner wants the
-        graph in sight while it runs); Down gives the tree the keys. A run
+        tree (`_tree_view`) is the view, in up to `TREE_ROWS` rows (a third
+        of a short screen) from the start and no more rows than the tree has
+        (the owner wants the graph in sight while it runs, and the area under
+        the composer small); Down gives the tree the keys. A run
         that is over leaves the view as its turn ends (`_run_gone`): its end
         print in the transcript holds its final graph. Otherwise the roster's
         rows while it holds agents, else the HUD's agents block and the tree,
@@ -147,8 +166,6 @@ class AgentViewMixin:
         """
         self.listed = ()
         self.tree_state = None
-        if not self._busy():
-            self.tree_hold = 0  # whatever the view draws between turns, the next turn's tree starts from its own rows
         payload = self.hud.payload if self.hud is not None else None
         valid = isinstance(payload, Mapping) and not payload.get("error")  # else the slot says the reader failed
         frame, now = self._spinner_frame(), self.clock()
@@ -160,9 +177,8 @@ class AgentViewMixin:
                 # The view stands for the dag run while its graph is one; once it is over that is nothing at all.
                 self.tree_selected = self.list_selected = None
                 return []
-            cap = self._view_cap(rows, cols, rows // 3, room)
+            cap = self._view_cap(rows, cols, min(TREE_ROWS, rows // 3), room)
             lines = self._tree_view(payload, cols, cap)
-            lines += [()] * self._tree_held_rows(len(lines), cap, rows)
             if self.list_selected is None:
                 return lines
             listed, self.listed = self.roster.list_lines(cols, self.theme, self.list_selected, frame, len(lines), now)
@@ -179,27 +195,12 @@ class AgentViewMixin:
             return []
         return self._hud_view(payload, cols, self._view_cap(rows, cols, agent_view_keep(payload, cols), room))
 
-    def _tree_held_rows(self, drawn: int, cap: int, rows: int) -> int:
-        """Blank rows under a tree that shrank while the turn runs on the screen's bottom rows: the tree keeps the
-        most rows it took this turn (in `cap`), so a layer that shuts mid-run leaves its rows under the tree, not as
-        a blank band between the transcript and the working row (rows the content gives up stay, `layout`). The
-        hold ends with the turn (`_agent_view`, whatever the view then draws), at the next prompt and on a session
-        change (`_clear_roster`), and above the bottom rows, where the composer follows the content; it never passes
-        `cap`, which a taller composer or a slot can lower mid-turn."""
-        if not self._busy() or self.region.last_row(rows) != rows - 1:
-            self.tree_hold = 0
-            return 0
-        self.tree_hold = max(self.tree_hold, drawn)
-        return max(min(self.tree_hold, cap) - drawn, 0)
-
     def _run_gone(self, graph: Mapping[str, Any]) -> bool:
         """Whether the view no longer draws `graph`'s dag run (the owner, 2026-10-26: a finished run stayed under the
         composer until the next prompt). It is over (`panels.dag_run_summary`) and no turn runs, or it was retired
         (`_retire_finished_run`) and has not moved since: a payload older than the end print that retired it still
         shows a lane running, and a later turn reads the same run over. A run whose every lane settled mid-turn
-        keeps its tree (each layer shut) until the turn ends: on the screen's bottom rows a view that shrank there
-        left its rows blank between the transcript and the working row, as rows the content gives up stay
-        (`layout`), and at the turn's end the run's end print and the turn's summary line fill them. A run an
+        keeps its tree (each layer shut) until the turn ends, and its end print with it. A run an
         extend or a repair moved on after its end (a newer `changed_at`, still open) is drawn again."""
         if not self._busy() and dag_run_summary(graph):
             return True
@@ -212,11 +213,8 @@ class AgentViewMixin:
         """Stop drawing `graph`'s dag run, which is over: as the turn ends with it over (`_agent_view`), or as its
         end print reads it over afresh (`App._dag_ends_due`) while the panel's payload may be older. Its children
         leave the roster with it, so the roster's rows do not take its place once its graph lingers out of the HUD.
-        The rows its tree took in the last frame are noted in `tree_freed` (`App._render` keeps them, blank, under the
-        info line until output fills them)."""
+        The rows its tree took go with it: on the bottom rows the region's top moves down by them (`App._render`)."""
         key, changed = run_key(graph), _changed_at(graph)
-        if self.retired_run is None or self.retired_run[0] != key or changed > self.retired_run[1]:
-            self.tree_freed = self.frame_budget.agents if self.frame_budget is not None else 0
         self.retired_run = (key, changed)
         self._forget_agents(self.roster.drop_runs(frozenset(key.split())))
 
@@ -235,11 +233,17 @@ class AgentViewMixin:
         self.tree_size = (cols, cap)
         folds = self._tree_folds(graph)
 
+        processes = {process.proc_id: (tool_call(process), process.started_at) for process in self.bg_running}
+        # The spinner and the waiting dots are the tree's motion: held while the window is unfocused, as the
+        # ambience is (`_ambient_clock`, #2542). The times on its rows are content and count on at `wall`.
+        frame, beat, wall = self._held_frame(), int(self._ambient_clock()) if self.motion else None, self.wall_clock()
+
         def draw() -> tuple[list[Line], TreeState]:
             return tree_lines(graph, self.roster, cols, cap, self.theme, frame, folds, self.tree_selected,
-                              self.color_depth, now, self._aura_phase())
+                              self.color_depth, now, self._aura_phase(), processes, wall, self.hud.received_at, beat)
 
         lines, self.tree_state = draw()
+        self.tree_second = int(wall)
         if self.tree_selected is not None and self.tree_selected not in self.tree_state.order:
             # A fold hid the highlighted row, or its node left the graph: the nearest row above it still shown.
             self.tree_selected = _nearest_shown(self.tree_state, self.tree_selected)
@@ -464,7 +468,8 @@ class AgentViewMixin:
 
     def _take_clickable(self, budget: Budget, listed: Sequence[str]) -> None:
         """Note the agent list's rows a click opens in the frame just drawn (or the dag tree's rows, while the tree has
-        the keys), and ask for mouse reports only while one of them is open.
+        the keys), and ask for mouse reports while one of them is open, or wherever the main screen takes the mouse
+        (`_take_main_mouse`).
 
         The list is the agent view's rows, from its first, under the info
         line: the region's last rows. A list row is clickable from edge to
@@ -478,7 +483,7 @@ class AgentViewMixin:
         # Counted up from the region's last row, the view's last.
         self.clickable = {budget.agents - 1 - index: (Hit(0, cols, row_id),)
                           for index, row_id in enumerate(shown)}
-        self._set_mouse(bool(self.clickable) and self.region.last_row(rows) is not None)
+        self._take_main_mouse(bool(self.clickable))
 
     def _list_available(self) -> bool:
         """Whether the agent list can be shown: agents to list, a terminal with room for the agent view (the info
@@ -619,7 +624,8 @@ class AgentViewMixin:
 
     def _on_mouse(self, event: Mouse) -> None:
         """A plain left press on an agent's row of the list opens that agent's log, and on a dag tree row moves the
-        highlight there and opens the node's child's log if it has one; nothing else does anything.
+        highlight there and opens the node's child's log if it has one; any other report is the main screen's
+        (`_screen_mouse`).
 
         The one other thing a click does is leave the list, from its main
         row, which has no log. `clickable` holds the cells of the last frame
@@ -632,10 +638,12 @@ class AgentViewMixin:
         plain = event.button == BUTTON_LEFT and event.pressed and not (event.motion or event.shift or event.alt or event.ctrl)
         last = self.region.last_row(self.size[1])
         if not plain or last is None or self.pager is not None or self.slot is not None or self.redraw_at is not None:
+            self._screen_mouse(event)
             return
         above, column = last - (event.y - 1), event.x - 1  # a report counts from 1
         target = next((hit.subagent_id for hit in self.clickable.get(above, ()) if hit.start <= column < hit.end), None)
         if target is None:
+            self._screen_mouse(event)
             return
         if self.tree_selected is not None:  # a dag tree row: it takes the highlight, and a node's child its log opens
             if not target:
@@ -733,11 +741,10 @@ class AgentViewMixin:
 
     def _clear_roster(self) -> None:
         """Drop the agents and every piece of tail bookkeeping and pending action that names them, and the view's
-        holds (`_held_view_rows`, `_tree_held_rows`). The open dag run's lanes stay (`_open_dag_nodes`): their children outlive the turn
+        hold (`_held_view_rows`). The open dag run's lanes stay (`_open_dag_nodes`): their children outlive the turn
         that sent them, and the tree's rows under each node read them."""
         self.roster.clear(self._open_dag_nodes())
         self.view_hold = None
-        self.tree_hold = 0
         self._drop_agent_actions()
 
     def _prune_kept_lanes(self) -> None:
@@ -756,6 +763,34 @@ class AgentViewMixin:
         # By run, not by node: a kept lane whose node left the drawing (a superseded repair) belongs to the run too.
         runs = frozenset(node_id.rpartition(":")[0] for node_id in ids if node_id.startswith("d:"))
         self._forget_agents(self.roster.drop_kept(runs))
+
+    def _brief_finished(self, agent: Agent) -> None:
+        """Brief an agent its `subagent.complete` just finished in the transcript (`transcript.AgentDoneBlock`), with
+        its time, its output tokens and what it said. A dag node's child is named by the node's role and id, as Claude
+        Code names a teammate (`● build @notify finished`, the owner's pick of 2026-11-05): the role as the graph
+        records it (none for a graph that records none), the id `@<id>` in a hue of its own, and the node's label on a
+        row of its own under it (none when the label is empty or the id itself). Until the HUD's graph holds the node,
+        the id is the one its goal's `[dag:<run>/<node>]` marker names (`Agent.dag_node`), with no role and its short
+        title on the row under it. Any other agent is named by its short title, as the list names it, with no such
+        row, no role and no `@`: Hermes' subagent frames carry no name to make a handle of (`subagents`). Held
+        under what is live and written at the next block boundary (`Transcript.add_aside`), so it never splits a
+        streaming reply or cuts off a running call."""
+        payload = self.hud.payload if self.hud is not None else None
+        handle = title = role = ""
+        node_index: int | None = None
+        if isinstance(payload, Mapping) and not payload.get("error") and graph_is_dag(payload):
+            handle, title, role, node_index = bound_node(payload["delegation_graph"], self.roster, agent)
+        if not handle and agent.dag_node:
+            handle, title = agent.dag_node.rpartition(":")[2], short_title(agent.goal)
+        if title.casefold() == handle.casefold():
+            title = ""
+        tokens = f"{TOKENS_MARK}{compact_count(agent.output_tokens)}" if agent.output_tokens else ""
+        elapsed = agent.elapsed(self.clock())
+        facts = tuple(fact for fact in (elapsed_text(elapsed) if elapsed >= 1 else "", tokens) if fact)  # no `0s`
+        outcome = AGENT_OUTCOMES.get(agent.status, AGENT_FAILED)
+        self.transcript.add_aside(AgentDoneBlock(handle or short_title(agent.goal) or agent.name, outcome, facts,
+                                                 agent.reply, title=title, handle=bool(handle), role=role,
+                                                 node_index=node_index))
 
     def _forget_agents(self, dropped: frozenset[str]) -> None:
         """Forget a pending `x`, a picked steer and the tail misses of the agents the roster just `dropped`."""

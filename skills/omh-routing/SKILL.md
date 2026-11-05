@@ -56,8 +56,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If routing signals conflict, show the compact picker or ask one clarifying question.
-- If wrapper metadata is unavailable, keep the recommendation advisory and avoid runtime claims.
+- If a skill is not installed, keep the intent; hand back the install gap as unresolved.
+- If executor readiness is unknown, keep routing; hand back the check as not_observed.
 
 ## OMH Awareness Primer (Compact)
 

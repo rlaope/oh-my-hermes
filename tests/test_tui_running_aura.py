@@ -96,8 +96,11 @@ class TreeAuraTests(unittest.TestCase):
                 app.color_depth, app.motion, app.theme = depth, motion, theme
                 self.assertIsNone(app._aura_phase())
                 rows = app._tree_view(app.hud.payload, 120, 40)
+                # The waiting dots and the counting times are the tree's own (`test_tui_dag_wait_view`): the same here.
                 expected = tree_lines(self.graph, app.roster, 120, 40, theme, app._spinner_frame(), {}, None, depth,
-                                      app.clock())[0]
+                                      app.clock(), processes={}, wall=app.wall_clock(),
+                                      received_at=app.hud.received_at,
+                                      beat=int(app._ambient_clock()) if motion else None)[0]
                 self.assertEqual(rows, expected, "exactly the tree it always drew")
         app.theme = dark
 

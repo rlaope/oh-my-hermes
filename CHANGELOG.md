@@ -4,8 +4,416 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A tick-box question in the OMH TUI no longer sends on the first press.**
+  When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
+  choice sent the question at once: with nothing ticked it answered with
+  the highlighted choice alone and moved on, so a person who pressed Enter
+  to tick lost the rest of their picks. Now Enter, Space and a digit on a
+  choice only tick or untick it, as in Claude Code's question. The list
+  ends with a `Submit` row (`Next` while more questions follow), and Enter
+  there sends the ticked choices with any text typed in the `Type
+  something.` field, which stays on that row when the arrows leave the
+  field; with neither, the key row says `Enter to skip` and the question
+  reads as skipped. Enter in the open field still sends the typed answer
+  with the ticked choices. A question with several parts shows each one
+  before the last is sent. A single-choice question is unchanged: a digit
+  or Enter still picks and sends.
+
+- **A table that follows a released one with no blank line between gets its
+  own box in scrollback, as in `/history`.** The OMH TUI used to draw the
+  second table's header as a body row of the first and drop its divider.
+  While a tall table streams, its last row now waits until the next line
+  shows it is no divider.
+- **The OMH TUI draws Markdown tables as boxes, and a table wider than the
+  terminal wraps inside its columns.** Every table is now a box like Claude
+  Code's: `┌─┬─┐` borders in the rule colour, the header bold in the look's
+  brand colour, a `├─┼─┤` line under the header and under every body row,
+  and a cell of padding inside each side. This changes the look of tables
+  that fit too: they no longer use the `─` band under the header. A table
+  wider than the terminal used to show its raw source (`| a | b |` rows and
+  the `|---|---|` divider). Now its short columns keep their whole width,
+  and the long columns share the rest of the row. Each cell wraps inside
+  its column, and a word too long for the column breaks across rows (a path
+  or URL after a `/`). Cells show their inline markup (`code`, **bold**,
+  links), and a code span keeps its style when it wraps. The borders are
+  not copied by a drag; NO_COLOR keeps them. Only when a terminal is too
+  narrow for columns of 8 cells is each body row drawn as `header: value`
+  lines instead. A table taller than the live region is now also released
+  by the rows it draws, not only by its source lines. In scrollback, its
+  last released row has no bottom border until the table ends; the live
+  region shows the box closed in the meantime. A
+  row that arrives after the release keeps the columns already drawn at
+  least as wide as they are, and takes the rest of the row's width for the
+  cells that want it. Its border line meets both rows' columns. `/history`
+  lays the whole table out again. Alignment colons (`:---:`) are still not
+  drawn.
+- **`/gateway restart` says what each choice stops.** In a named profile the
+  shared gateway serves, "Restart this profile" now says that profile's
+  running turns stop now, since Hermes re-serves it without waiting. The
+  "finishes first, up to N min" line names the whole-gateway restart. A
+  gateway without `--external-supervisor` in its argv is no longer said to be
+  interrupted outright: Hermes' own systemd or launchd service drains it too
+  (SIGUSR1), which the record cannot show, so the slot says the work finishes
+  first if a service runs the gateway, and is otherwise interrupted. `/image`
+  and `/paste` now wait in the composer during the restart, as the other
+  commands that call the gateway do.
+- **A finished dag child's briefing names it by its role and a coloured
+  handle.** As Claude Code writes `● Teammate @x finished`, a dag node's child
+  now reads `● build @notify finished` (`verify`, `review`, `baseline`: the
+  role the node was defined with, which the delegation graph now carries), the
+  handle bold in a hue of its own. The hue is picked by the node's place in
+  its run's definition order, from seven hues kept clear of the running, done
+  and failed colours, so the first seven nodes of a run never share one and
+  neighbours never do; an agent keeps its colour on every row, every redraw,
+  in `/history` and when the run is read again. Each hue reads at 4.5:1 on
+  every launch look and scene ground, light and dark. The `●` mark still shows
+  the outcome, and under `NO_COLOR` the handle is plain bold. A child whose
+  node the HUD has not bound yet takes the id its goal's `[dag:<run>/<node>]`
+  marker names, with its short title on the row under it and no role until the
+  graph holds the node; a graph from an OMH that exported no role shows none,
+  never one guessed from the label. Any other agent keeps its bold short
+  title, without a role or `@`, since Hermes' subagent frames carry no name to
+  make a handle of. The agent list and the dag tree under the composer keep
+  their state colours. On a screen too short to hold the running call, the
+  fold row and the spacer between them, the fold row first drops its spacer
+  and is then not drawn at all, so the call stays on screen. Under a streaming
+  reply that fills those rows, the fold row stays without its spacer, and the
+  reply's top rows give way. Sizing the held briefings no longer renders a
+  long streaming reply whole on every delta.
+- **The round-end checks also run after edits made through the shell.**
+  Hermes calls OMH's round-end hook only after a `patch` or `write_file`, so
+  a turn that edited files only with `sed`, a heredoc script or `cat >` got
+  no export, test or caller check at all; about half of Sonnet's coding
+  turns edit that way. Now, after a `terminal` or `execute_code` call that
+  changed a Python file in a turn with no `patch` / `write_file`, OMH builds
+  the same three notes from the files on disk and adds any that name a
+  broken line to that call's result. Each check speaks at most once per
+  turn, so an early caller note does not silence a later test note. When
+  one message holds several commands, only the last one is looked at, so a
+  note never names a line a later command of the same message already
+  fixed. A command that changed no Python file, and every turn that used
+  `patch` or `write_file`, is left as before.
+
+- **The OMH TUI briefs each subagent as it finishes, in the transcript.** A
+  finished subagent only changed its mark in the agent list under the
+  composer, so during a long dag-ulw run nobody saw what each child concluded
+  without opening its log. Each `subagent.complete` now writes one block
+  above the composer, as Claude Code does for a teammate: `● <name> finished
+  1m 35s · ↓1.8k`, then the first lines of the child's reply in up to two dim
+  rows, cut with `…`, with the reply's Markdown drawn as the reply is (no
+  `**`, backticks or `#`). A dag node's child is named by the node's id, as
+  Claude Code names a teammate by its handle (`● notify finished`), with the
+  node's label on one dim row under it; any other agent by its short title.
+  Only a completed agent's mark is green: a
+  failure reads `● <name> failed` in red with its error, an interrupted
+  child `▪ <name> interrupted`, a cancelled one `○ <name> cancelled`. A
+  briefing that arrives while a reply streams or a call (`delegate_task`)
+  runs waits under it and is written at the next block boundary, so it never
+  splits a paragraph or a table (`/history` and Ctrl+O show it meanwhile);
+  past three waiting under one running call, or past what the rows above
+  the composer hold beside it, the rest fold into one `● 9 more finished · 1
+  failed` row until the boundary writes them all.
+  Parallel children are briefed in the order they finished, and main never
+  is. Briefings are not part of the session Hermes stores, so a resumed or
+  rewound session is drawn without them. The rows erase on a scene look's ground
+  and keep every mark and word under `NO_COLOR`. The messenger is unchanged.
+- **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
+  on.** With that setting each delegated child works in a git worktree of its
+  own, made from the parent's last commit, so a dependent node and the verify
+  node started without the earlier nodes' edits, and verify could pass a tree
+  without the work. `omh_dag action=define` is now refused as
+  `worktree_isolation_on` with a line the model relays, naming
+  `hermes config set delegation.worktree_isolation false`, or do the work
+  without dag-ulw. A run defined before the setting was turned on still
+  settles its nodes but hands out no `delegate_task` call while it is on, and
+  `status` says why. OMH asks Hermes' own getters first, so its managed
+  config and environment count; outside Hermes it reads the profile's
+  `config.yaml` the way Hermes reads the key (a quoted `'false'` is on). It
+  never writes the setting. On a Docker or SSH terminal, where Hermes skips
+  isolation, nothing changes; a config that cannot be read counts as off, as
+  before.
+- **dag-ulw review nodes route to the `review` category, and baselines stay
+  low.** The skill's difficulty-ladder rule now says a `role=review` node
+  takes the `review` category where the user's routes serve it, a `baseline`
+  node stays `quick` or `unspecified-low`, and a `verify` node, which judges
+  the run goal and baseline exemptions, climbs the ladder like any judgement.
+  Before, the planner put code reviews on `unspecified-high` in some runs and
+  on `review` or `unspecified-low` in others. A review node now costs more:
+  the shipped `review` chain runs the same models as `unspecified-high` at
+  `xhigh` instead of `medium`. `omh_dag` define, repair and extend also
+  return the advisory lint `review_not_review_category:<id>` for a declared
+  review node on another category. Like every lint finding, it never refuses
+  a run. It is not shown when Hermes' `model_map` backend offers no option
+  for `review` but does for `unspecified-high`. Verify nodes are not linted,
+  and neither are nodes whose label only reads like a review.
+- **A drag in the OMH TUI copies the transcript without the rail.** The main
+  screen now takes the mouse: a drag over the transcript or the live rows
+  selects the text (shown reversed) and copies it without the thin `┃` rail
+  or a reply's margin, which stay drawn as before; the row above the composer
+  says `copied N chars`, and a double click copies a word, a triple click a
+  row. The wheel up opens the transcript view (Ctrl+O's), one notch up from
+  where the screen was. It works on every terminal that reports the mouse,
+  inside tmux with `mouse` on or off; a row the TUI cannot map for certain
+  (the shell's output above the session) is never guessed at, a drag whose
+  live rows change under it is dropped and copies nothing, Ctrl+C right after
+  a drag only drops the selection, and the
+  terminal's own selection is still there with its bypass modifier (Shift,
+  Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
+  terminal's own wheel and selection on the main screen, as before.
+- **The round-end check continues a turn less often.** A changed function's
+  name in another file no longer continues the turn when every mention there
+  is proven to need no change: another object's method of the same name, or
+  an import whose calls bind the same way before and after the edit.
+- **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
+  `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
+  or Enter opens sessions or bots, folds the plan, searches history, cycles
+  the input mode, steps reasoning effort, interrupts or clears, and submits
+  or steers. The info line says `NORMAL · SPC` while the leader waits. Esc or
+  an unmapped key cancels it; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and
+  do what they always do. Without vim mode nothing changes. Contributed by
+  @DanRioDev in #2545.
+- **A dag-ulw verify node names which producer's scope holds each failure,
+  and a repair node is told the failed attempt's edits may still be on
+  disk.** A producer accepted earlier cannot be repaired, so a failing check
+  is repaired through the verify node, and nothing said which producer the
+  failing path belonged to. The verify node's task now carries a compact map
+  of its upstream producers' declared `write_scope` (their repairs and its
+  own included, cut at 600 characters on whole paths and producers) and asks
+  it to name in its handoff, for each failing check, the producer whose
+  scope holds the failing path, or `unattributed`: attribution by declared
+  scope, not proven cause. A repair node that writes files, in its first
+  cycle and in the re-plan cycle, now reads that the failed attempt's edits
+  may still be on disk and, in a git checkout, to inspect `git status
+  --short` and `git diff HEAD` on the failed nodes' scopes (its own scope
+  when the failed node was a verify node) before editing. There is still no
+  rollback: the worktree is shared. Every other node's task reads byte for
+  byte as before.
+- **A dag-ulw run that waits shows whole and moves, and says what it waits
+  on.** A run of up to 12 lanes (the transcript's own small-run measure)
+  shows every layer and node. A done layer of one node is one dim row
+  (`✓ layer 2 · <title>  model · accepted · ↓tokens`), consecutive ones stack,
+  and one blank row stands between layer groups. An open layer row no longer
+  repeats the counts its node rows say (`▾ layer 1 · 2 nodes`, `▾ layer 4`).
+  A bigger run folds consecutive done layers into one
+  `✓ layers 1–3 · 11 done` row, which opens to its layers, and opens only the
+  layers with a live node and the next layer still to come, which fitting
+  never shuts. The tree is at most 16 rows and still at most a third of the
+  screen; the owner's 6-node run is 14 rows at 150x42. Rows that do not fit
+  become one `+N more · /dag` row. A parked node was drawn `?` and counted
+  `unknown`, because the graph reader had no entry for the `parked` outcome.
+  It is now a waiting node with the status `parked` and the time since it
+  parked, and the header and its layer row count it as `parked`. One row
+  under it names what its park recorded it waits on, and nothing else: the
+  handle, named by its call (`terminal(uv run …)`) when it is one of the
+  session's background processes, then `until HH:MM` from its `wake_at`, then
+  its reason, and the process's own running time when the handle is one. The
+  parked and running times count on every second. The spinner turns on a
+  running or parked node's row. A waiting row, and a shut layer of waiting
+  nodes, carries a slow, faint dot cycle (`·` `··` `···`, one step a second).
+  Done rows, the done layers' row and a run that is not alive stay still,
+  and a done node's title is muted. This motion runs between turns too while
+  the run waits. While the terminal window is unfocused, the spinner and the
+  dots hold, as the wallpaper does (#2542), while the times keep counting,
+  redrawn once a second. An `unspecified-*` or unknown category no longer
+  draws a cell. Between turns, while something the session waits on still
+  runs, the working row's place above the composer says so, as it says a
+  turn runs: `✻ Waiting… (33m 47s · 1 agent · terminal)`. That is a delegated
+  child or dag-ulw node that wakes the parent as it ends (the running lanes
+  of the delegation graph the HUD reads), or a background
+  process Hermes will wake the session for (`notify_on_complete`, or
+  `watch_patterns` on a match). Each count shows only when it is not zero,
+  and the time is the longest wait. It has the working row's own spinner and
+  clock. A turn's working row takes over when a turn starts, and the row
+  goes when nothing is left to wait on. It is read from structure, never
+  from what the model said, and the info line is unchanged.
+- **dag-ulw refuses two nodes that write one file under different spellings.**
+  `omh_dag` define, repair and extend refused a shared write scope with no
+  direct edge only when both nodes wrote the same entry character for
+  character, so `src/` beside `src/x.py`, `./src/x.py` beside `src/x.py` and
+  `src/*.py` beside `src/x.py` ran in parallel and could overwrite each
+  other. Entries are now compared as paths: `\` reads as `/`, letter case,
+  `./`, repeated or trailing `/` and `x/..` change nothing, and an entry
+  covers every path under it by whole segments (`src/a` and `src/ab` stay
+  apart). A `*` or `?` glob beside a file name with a suffix must match it,
+  with `**/` matching no directory too (`*.md` meets `docs/a.md`, not
+  `src/x.py`; `src/**/*.py` meets `src/x.py`). Beside a directory, a name
+  with no suffix or another glob, it covers the directory before it. A `[`
+  stays a literal, so `app/[slug]/page.tsx` names one file. The refusal still
+  reads `write_scope_overlap`, now names every overlapping pair at once (up
+  to 20, then a count) and which node wrote which entry, and a repair, like
+  an extend, is checked only for pairs with one of its own new nodes, so two
+  earlier nodes it cannot change never refuse it. The coding fanout
+  contract's boundary check still compares as written.
+- **The area under the composer is exactly as tall as what it draws.** On the
+  screen's bottom rows, when the agent view gives rows up (a dag-ulw layer
+  settles or folds, or the run ends and its tree goes), the composer moves
+  down by them and the output above is painted again that many rows lower,
+  in the same synchronized update. No row stays blank under the tree or
+  above the composer. This replaces the tree's high-water hold during a turn
+  and the blank rows a finished run left under the info line. The lines
+  painted again on the screen's first rows are also still in the terminal's
+  scrollback, one per row given up, so they show twice there once they
+  scroll off again.
+- **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
+  of the hollow `○`.** Four finished agents in a row looked the same as four
+  that had not started. A completed agent now leads with `✓` in the done
+  green; the collapsed `N done` row is green only when every agent it
+  counts completed, else a muted `▪`.
+  Interrupted, failed, waiting and running agents keep their marks.
+
+- **A skill that fails partway now says what it already proved.** It lowers the
+  affected result to tentative, unresolved, or not_observed, and hands back what
+  the person needs to continue instead of presenting partial work as finished.
+  Procedure steps name what survives each failure, Recovery Notes cover each
+  skill's own blockers, and catalog checks keep both in place. The idea comes
+  from PortSwigger Burp AT research skills.
+- **A bot profile that fails its refresh no longer rolls `omh update` back,
+  and a pending restore no longer blocks every later update.** On 2026-11-04
+  four bench profiles whose `plugins/omh` links pointed at deleted worktrees
+  made the re-entered update exit 1. The staged update rolled back, the
+  restore failed on the same profiles, and from then on every `omh update`
+  only retried that restore and staged nothing, while the report read "the
+  known-good generation remains active". Now an update whose only failures
+  are bot profiles exits `3`: the staged update keeps the activated
+  generation and names the profiles to repair. A run that finishes a pending
+  restore goes on to stage the update it was asked for. A failed restore
+  leads its report with "could not restore the previous generation: recovery
+  is required" and says no update installs until it succeeds. A rollback
+  names the generation it restored, with its commit. `omh doctor` reports an
+  open marker as `staged_update_recovery`. A `plugins/omh` link whose
+  target is gone is now replaced with the released bundle without `--force`,
+  and the update prints a `Repaired …` line naming where it pointed; a link
+  to an existing tree OMH did not write still needs `--force`.
+- **`omh update` names the commit it moved between, and `omh --version` names
+  the commit it runs.** A generation built from one of this repository's
+  GitHub archives (the installer's `main.zip`, and tag or commit archives)
+  now knows its commit: `src/omh/_archive_commit.txt` is marked
+  `export-subst`, so `git archive` writes the commit into it, and the ref
+  comes from pip's PEP 610 record. `omh --version` prints
+  `omh 4.0.6 (main@1a2b3c4d)`. An installer-managed update ends with
+  `oh-my-hermes 4.0.6 main@1a2b3c4d → main@5e6f7a8b`, or `already at
+  main@5e6f7a8b` when `main` has not moved, even when the release version did
+  not change; release wheels still name versions only. `omh update --json`
+  carries the same facts as `identity_change`. EN, KO, JA and ZH rows. No new
+  network call: the commit is read from the archive pip already downloads.
+- **`--channel main` names the channel that tracks `main`.** It is another
+  spelling of `--channel preview`, which a plain installer-managed
+  `omh update` already uses. The re-entry into a restored, older generation
+  spells it `preview`. npm, Bun and Homebrew installs now refuse
+  `--channel preview` instead of updating to a release and recording it as a
+  `main` build.
+- **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
+  the machine sleeps past the session's turn lease, Hermes stops the running
+  turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
+  on." It now says it sends that `continue` in 3 s, with Esc to cancel, and then
+  sends it as a typed `continue` goes. It never does so for the person's own Esc,
+  `/stop` or interrupting prompt, for a turn that ended with an error, or for a
+  turn this TUI did not send (another client's on a shared gateway, whose stop
+  looks the same from here). Anything the person sends in the wait (a prompt,
+  `/stop`, `/help`, `/new`), a turn that starts, or another session opened
+  cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
+  or an open question holds it, and a notice says to send `continue`. At most 2
+  go between two prompts of the person's own; past that the old notice asks.
+- **`/gateway restart` restarts Hermes' gateway from inside the OMH TUI and
+  picks the session back up.** After `omh update` the running gateway kept
+  the old OMH code until someone ran `hermes gateway restart` in another
+  terminal and came back. Now the TUI first names what a restart affects
+  (the profiles the gateway serves, its connected messenger bots, its running
+  work, this session's own), runs Hermes' own restart only once you pick
+  Restart, and reattaches to the same session with your draft kept and
+  nothing sent again. A gateway a service runs lets running work finish
+  first, up to Hermes' `restart_after_turn_timeout`, and the TUI waits for
+  it. Once the gateway is back it says so, and that it now runs the newer OMH
+  when its files show it was behind. In a named profile the shared gateway
+  serves you pick that profile alone, which does not load new OMH code, or
+  the whole gateway, which does. A refused or failed restart says why and the
+  command to run instead. Bare `/gateway` is still Hermes' platform status.
+- **A resumed session with work left goes on by itself in the OMH TUI.**
+  `omh --resume <id>`, `/resume` and the session picker opened the session
+  and waited for the person to write, so an interrupted turn or an open
+  dag-ulw run sat still. Now the TUI says "Resuming: {why}; sending
+  `continue` in 3 s · Esc cancels" and sends `continue` as a typed one goes,
+  when Hermes interrupted the session's last turn itself (a sleep past its
+  turn lease), or when the session holds a dag-ulw run that a turn would
+  move with no node running: nodes ready, back to settle, parked past their
+  wake time, or out with no child after a restart. The `continue`'s turn
+  then brings the run's own turn-start line. Hermes keeps no cause for an
+  interrupt, so each OMH TUI writes how a session's last turn ended to
+  `<omh_home>/tui/turn-ends.json` (the newest 128 sessions), the person's
+  Esc or `/stop` as they ask for it. It never goes on for the person's stop,
+  a session with a turn running (its own or another client's), a turn
+  Hermes resubmits itself after a crash, a run that needs repair, a draft,
+  a queued line or an open question.
+
 ## 4.0.6 - 2026-11-04
 
+- **In a console session a choice goes through Hermes' `clarify` picker, and
+  the OMH TUI draws that picker the way Claude Code draws its question
+  dialog.** On the first turn of an attended `cli`, `tui` or `desktop`
+  session, the model is asked to use `clarify` where its reply would stop for
+  the person to pick between named options or approve an action it will not
+  take without their answer, instead of listing the options in prose and
+  asking for a word back. A closing offer of optional further work stays
+  prose. After a clarify timed out, the person's next message brings the same
+  ask once more. Messaging platforms, single-query runs, kanban task
+  processes and delegated children get nothing and render the same bytes as
+  before. In the OMH TUI a question with choices now stands between two
+  rules: the context dim, the question itself bold, a `label — description`
+  choice as its label with the description under it, `Type something.` for
+  an answer of your own, and the keys on a row of their own with how long the
+  question has waited. The tool row says how many choices it offers instead
+  of repeating the question. A pick still answers with Hermes' own choice
+  string.
+- **The Hermes Desktop pane reads the Windows Hermes home in its fallback
+  (#2569 by @k1lgor).** When the dashboard backend could not import Hermes'
+  `get_hermes_home()` and no `HERMES_HOME` was set, it read `~/.hermes`,
+  while Hermes itself defaults to `%LOCALAPPDATA%\hermes` on Windows, so the
+  pane's HUD could read an empty home. That fallback now uses Hermes'
+  platform default, with `HERMES_DATA_DIR_SUFFIX` honoured; a parity test
+  keeps it equal to the bundle's own `platform_default_hermes_home`. The
+  host's answer and an explicit `HERMES_HOME` still win, and POSIX stays
+  `~/.hermes`.
+- **A drag selects text in the OMH TUI again after another program left the
+  mouse on.** Hermes' own TUI turns on mouse modes 1000, 1002, 1003 and 1006,
+  and a crash or `kill -9` leaves them on in the tab. The OMH TUI never asked
+  for them, so it dropped every report, and the terminal kept the drag for
+  itself: no selection, nothing to copy, for the whole session. Entering now
+  switches every mouse mode off (9, 1000, 1001, 1002, 1003, 1005, 1006, 1015,
+  1016, the list Hermes resets), and every exit, a stop with Ctrl+Z included,
+  switches them all off again, where it used to switch off only 1000, 1002
+  and 1006 and let a leftover 1003 outlive the session.
+- **Research citations are checked against what was actually fetched.** Every
+  successful `web_extract`, `browser_navigate` and `web_search` call now
+  leaves a metadata-only fetch receipt under the session that made it,
+  subagent sessions included: a hash of the normalized URL, its scheme, host
+  and path, and the content's hash and length. Page text, titles, query
+  strings and arguments are never stored. A new agent-facing command,
+  `omh research receipts verify --citations <ledger> --draft <draft>`, checks
+  every `[n]` citation in a draft against the receipts of the session, its
+  earlier compaction segments and its subagent sessions. It exits 0 only when every
+  cited source was fetched; a never-fetched citation exits 1 and is named.
+  `ulw-research`, `web-research` and `research-brief` tell the agent to run it
+  after `sources.py verify`. A receipt proves the page was opened, never that
+  it supports the claim. Receipts are written only inside Hermes, so a Codex
+  or Claude Code session outside Hermes reads `missing`.
+- **`dag-ulw` is offered where a plan's follow-on is chosen.** On Hermes'
+  own `/plan` turn, whose reply offers to carry the plan out, the model is
+  asked to also name `dag-ulw` as one option when the plan's tasks form a
+  graph (some can run apart, with disjoint write scopes) ending in a
+  verification task, with the fit reason in one line. On the turn right after
+  a plan was made, a short go ("구현하기", "looks good, implement the plan",
+  "플랜 승인. 진행해") gets a conditional note: if the message accepts the
+  plan without choosing how to run it, the model may name the same option;
+  if it declined, held, edited, asked or changed topic, the note is ignored.
+  Neither line starts anything. "Just made" is read from structure, once per
+  plan: the turn before was `/plan`'s, invoked or loaded a planning skill, or
+  wrote a plan file under `.hermes/plans/` or `.omh/plans/`, or this is the
+  first turn to see a `plan`, `ralplan` or `refactor-plan` state active.
+  Reading or mentioning a plan file does not reopen it, so carrying a plan
+  out never brings the note back. Before, none of the six acceptance messages
+  measured saw `dag-ulw`: four got no OMH context at all after `/plan`. A
+  turn with no plan just made renders the same bytes as before, and routing
+  is unchanged.
 - **After a plan is accepted, the planning skills offer `dag-ulw` beside the
   usual follow-ons, and taking the offer works.** An accepted `plan` or
   `ralplan` whose tasks form a graph (ids, dependencies, write scopes and a
@@ -92,17 +500,13 @@ All notable changes will be documented here.
   `hermes --print-runtime-command` worked in a normal shell. The variable is
   forwarded only when the parent has it. Carries #2548 by @DefinitelyNotSpammy.
 
-- **The `omh_memory` consolidation status reads the session's own profile.**
-  Like tool recall, `demote` and recall origins, it now takes the Hermes
-  profile the memory provider was started with from the session lens, not
-  the tool process's `HERMES_HOME`, so a brief raised in one profile is not
-  reported from another. Tests also pin that those three read the provider's
-  profile.
-- **A changed function's broken callers are named at the turn's first stop.** When a turn changes a
+- **A changed Python function's broken callers are named at the turn's first stop.** When a turn changes a
   Python function's parameters, OMH reads the files that import it, following package re-exports and
   aliases. It names, by file and line, each call that matched the old parameters and no longer
   does, with the new signature. It needs no language server and is on by default. It says nothing about
   a call it cannot prove broken, such as one passing `*args` / `**kwargs` or one written to raise.
+  It runs only after an edit made with a file tool: Hermes does not run the turn-stop check after
+  a shell-only edit.
   In the live bench this took gpt-6-luna on a signature change from 0/6 to 6/6, and Haiku 4.5 from
   5/6 to 6/6.
 
@@ -121,11 +525,11 @@ All notable changes will be documented here.
   changes. This reaches snapshots already stored, without a migration. The
   memory itself is unchanged: it stays permanent and nothing is aged or
   hidden. Versions stated as rules ("requires Hermes v0.22.5 or newer", "pin
-  Node v20.11"), "Decided <date>:" lines, lessons and procedures get no such
-  note. The mark never costs a record: when it does not fit the pack's bound,
-  the pack renders unmarked, exactly as before. A marked pack is 287
-  characters longer for the line, plus 17 per marked record. The cue is
-  English only.
+  Node v20.11"), a "Decided <date>:" line with no version change in it,
+  lessons and procedures get neither the note nor the mark. The mark never
+  costs a record: when it does not fit the pack's bound, the pack renders
+  unmarked, exactly as before. A marked pack is 287 characters longer for the
+  line, plus 17 per marked record. The cue is English only.
 - **Vim mode changes the cursor shape.** With `display.vim_mode` on, the
   terminal's cursor is a steady beam in INSERT and a steady block in NORMAL
   (DECSCUSR). This is an OMH addition: Hermes keeps a steady block in both
@@ -152,18 +556,17 @@ All notable changes will be documented here.
   0.13-0.52 s per turn. The first render in a process still scans every
   record (measured on a machine under heavy load, two interleaved rounds).
 - **The OMH TUI's living wallpaper holds still while its window is in the
-  background.** The TUI now asks the terminal for focus reports, as
-  Hermes' own TUI does. While the window does not have focus, the living
-  wallpaper's scene stops where it was, and nothing wakes the TUI to paint
-  it. The spinner, streamed text and
-  everything else in a running turn keep updating. When focus comes back,
-  the next frame is the one the animation would have drawn at that moment,
-  and with focus the look is byte for byte what it was. On an idle screen
-  with a scene, an unfocused TUI went from 4 wake-ups and about 6 KiB written
-  a second to 1 wake-up and nothing written. A terminal that does not send focus
-  reports is treated as focused throughout, so nothing changes there. The
-  focus reports type nothing in any mode and are switched off on every exit
-  and while the TUI is suspended.
+  background.** The TUI now asks the terminal for focus reports, as Hermes'
+  own TUI does. While the window does not have focus, the living wallpaper's
+  scene stops where it was, and nothing wakes the TUI to paint it. The
+  spinner, streamed text and everything else in a running turn keep updating.
+  When focus comes back, the next frame is the one the animation would have
+  drawn at that moment, and with focus the look is byte for byte what it was.
+  On an idle screen with a scene, an unfocused TUI went from 4 wake-ups and
+  about 6 KiB written a second to 1 wake-up and nothing written. A terminal
+  that does not send focus reports is treated as focused throughout, so
+  nothing changes there. The focus reports type nothing in any mode and are
+  switched off on every exit and while the TUI is suspended.
 
 - **A full redraw keeps 4,000 rows of the session, up from 3,000.** A
   resize, a tab switch, Ctrl+L, `/redraw` and a resumed session erase the
@@ -180,19 +583,20 @@ All notable changes will be documented here.
   in `/history`. A terminal's own scrollback limit can keep fewer rows than
   this.
 
-- **The recall switches and records say what they do.** Under
-  `recall_mode: on_demand` or `off`, a save that resembles a held memory no
-  longer tells the model that either one "recalls": no turn is served
-  memories unasked there, and the hint now says so. Tool recall reads
-  `recall_mode` from the profile the memory provider was started with rather
-  than the process's `HERMES_HOME`, so the two cannot disagree about whether
-  recall is off. In the TUI, an `omh_remember` recall that found memories
-  lists them and gets the same sweep as an `omh_memory` one. A test now pins
-  that a consolidation brief raised in the same second by another trigger is
-  served. A pinned memory still suppresses the list of the rest's names on a
-  message that matches nothing: listing them would make the live recall
-  select differently from coding handoffs, which the recall suite and
-  incident replay hold equal.
+- **The recall switches and records say what they do.** Under `recall_mode:
+  on_demand` or `off`, a save that resembles a held memory no longer tells the
+  model that either one "recalls": no turn is served memories unasked there,
+  and the hint now says so. Tool recall's `recall_mode`, `demote`, recall
+  origins and the `omh_memory` consolidation status read the profile the
+  memory provider was started with, rather than the process's `HERMES_HOME`,
+  so the two cannot disagree about whether recall is off, and a brief raised
+  in one profile is not reported from another. In the TUI, an `omh_remember`
+  recall that found memories lists them and gets the same sweep as an
+  `omh_memory` one. A test now pins that a consolidation brief raised in the
+  same second by another trigger is served. A pinned memory still suppresses
+  the list of the rest's names on a message that matches nothing: listing them
+  would make the live recall select differently from coding handoffs, which
+  the recall suite and incident replay hold equal.
 
 - **Skill hints read the request, not the gateway's busy-path header.** A
   Discord or Slack message sent while the agent is busy reaches the turn with
