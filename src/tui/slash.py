@@ -14,7 +14,10 @@ TUI only has to own five kinds:
   to reach the gateway itself: `slash.exec` runs commands in a separate
   per-session worker, so a rescan there would leave the gateway's skill
   commands as they were. The TUI handles them, calling the gateway method
-  underneath where there is one.
+  underneath where there is one. `/gateway restart` runs Hermes' own
+  `hermes gateway restart` once the person confirms, then reattaches
+  (`gateway_restart.py`); `/gateway` with anything else goes to Hermes as
+  typed, where it is Hermes' alias of `/platforms`.
 - `hermes`: commands whose surface is Ink-only (voice, the pet, the billing
   flows, overlays) or that would make the TUI persist raw prompts (`/save`,
   `/prompt`). The TUI names the Hermes door instead of half-supporting them.
@@ -104,6 +107,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
     SlashCommand("dag", LOCAL, "Show the delegation graph whole, with full boxes, in a pager", echo_bare=False),
     SlashCommand("bots", LOCAL, "Watch this machine's Hermes profiles, gateways and sessions, read-only (also Ctrl+S)",
                  echo_bare=False),
+    SlashCommand("gateway", LOCAL, "Restart Hermes' gateway and reattach to this session (/gateway restart)"),
     SlashCommand("copy", LOCAL, "Copy the last reply to the clipboard"),
     SlashCommand("image", LOCAL, "Attach an image file to the next message (/image <path>)"),
     SlashCommand("paste", LOCAL, "Attach the clipboard image to the next message (also Ctrl+V)"),
