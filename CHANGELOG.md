@@ -8,16 +8,17 @@ All notable changes will be documented here.
   OMH TUI.** Before, such a table showed its raw source (`| a | b |` rows
   and the `|---|---|` divider). Now its short columns keep their whole width,
   and the long columns share the rest of the row. Each cell wraps inside its
-  column, a word too long for the column breaks across rows, and a blank row
-  separates body rows that take more than one row. Cells show their inline
-  markup (`code`, **bold**, links), and a code span keeps its style when it
-  wraps. When a terminal is too narrow even for columns that hold each
-  column's longest word (up to 16 cells), each body row is drawn as
-  `header: value` lines. A table taller than the live region is now also
-  released by the rows it draws, not only by its source lines. A row that
-  arrives after the release keeps the columns already drawn: it widens a
-  column for itself only while it still fits the row, and otherwise wraps
-  inside the given columns. `/history` lays the whole table out again.
+  column, a word too long for the column breaks across rows (a path or URL
+  after a `/`), and a blank row sets apart each body row that takes more
+  than one row. Cells show their inline markup (`code`, **bold**, links),
+  and a code span keeps its style when it wraps; the header stays bold
+  throughout. Only when a terminal is too narrow for columns of 8 cells is
+  each body row drawn as `header: value` lines. A table taller than the live
+  region is now also released by the rows it draws, not only by its source
+  lines. A row that arrives after the release keeps the columns already
+  drawn at least as wide as they are, takes the rest of the row's width for
+  the cells that want it, and wraps inside that. `/history` lays the whole
+  table out again. Column alignment (`:---:`) is still not drawn.
 - **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
   on.** With that setting each delegated child works in a git worktree of its
   own, made from the parent's last commit, so a dependent node and the verify

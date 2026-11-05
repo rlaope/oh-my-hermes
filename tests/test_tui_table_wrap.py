@@ -240,7 +240,35 @@ class WideTableLayoutTests(unittest.TestCase):
             self.assertLessEqual(sum(widths), room)
             kept = [width for width, own in zip(widths, natural) if width == own]
             self.assertGreaterEqual(widths[2], max(kept, default=0), room)
-        self.assertIsNone(fit_columns([40, 40, 40], [20, 20, 20], 30))
+        # Past the word minimums, every column narrows to `TABLE_WRAP_MIN` before the table becomes records.
+        self.assertEqual(fit_columns([40, 40, 40], [20, 20, 20], 30), (10, 10, 10))
+        self.assertIsNone(fit_columns([40, 40, 40], [20, 20, 20], 23))
+
+    def test_a_table_of_paths_stays_columns_where_each_column_holds_eight_cells(self) -> None:
+        paths = [f"src/omh/module{n}/package/file{n}.py" for n in range(5)]
+        source = "| " + " | ".join(f"h{n}" for n in range(5)) + " |\n|---|---|---|---|---|\n| " + " | ".join(paths) + " |"
+        for cols in (60, 70, 87):
+            texts = lines_text(self.render(source, cols - 4))
+            self.assertFalse(any(text.startswith("h0:") for text in texts), (cols, texts))
+            self.assertEqual(sum(1 for text in texts if set(text.strip()) == {"─", " "}), 1)
+            starts = [cell_width(texts[0][: texts[0].index(f"h{n}")]) for n in range(5)]
+            for n, path in enumerate(paths):
+                end = starts[n + 1] if n + 1 < 5 else None
+                self.assertEqual("".join(cells_slice(text, starts[n], end).strip() for text in texts[2:]), path)
+
+    def test_header_code_spans_and_links_stay_bold(self) -> None:
+        rows = self.render("| `key` | [docs](https://example.com) |\n|---|---|\n| a | b |", 60)
+        shown_spans = [span for span in rows[0] if span.text.strip()]
+        self.assertEqual(" ".join(span.text for span in shown_spans).split(), ["key", "docs", "(https://example.com)"])
+        self.assertTrue(all(span.style.bold for span in shown_spans), shown_spans)
+
+    def test_a_blank_row_sets_apart_only_the_rows_that_wrap(self) -> None:
+        long = " ".join(f"word{n}" for n in range(40))
+        texts = lines_text(self.render(f"| k | v |\n|---|---|\n| a | 1 |\n| b | 2 |\n| c | {long} |\n| d | 4 |", 60))
+        self.assertEqual([text.split()[0] for text in texts[2:4]], ["a", "b"])  # no blank between the short rows
+        self.assertEqual(texts[4], "")
+        self.assertEqual(texts[-2], "")
+        self.assertEqual(texts[-1].split(), ["d", "4"])
 
 
 class WideTableStreamingTests(unittest.TestCase):
@@ -314,6 +342,36 @@ class WideTableStreamingTests(unittest.TestCase):
         self.assertEqual(len(starts), 1, late_rows)
         self.assertEqual(sorted(word for word in words(taken) if word.startswith("tail")),
                          sorted(f"tail{n}" for n in range(40)))
+
+    def test_a_late_long_cell_on_narrow_frozen_columns_takes_the_rows_room(self) -> None:
+        head = "| key | value | note |\n|---|---|---|\n" + "".join(f"| k{n} | v{n} | ok |\n" for n in range(30))
+        sentence = "this value is a long sentence that explains what happened in plain words and keeps going for a while "
+        late = "| late | " + sentence * 2 + "| fine |\n"
+        transcript = Transcript(clock=lambda: 100.0)
+        transcript.apply(ev("message.start"))
+        transcript.apply(ev("message.delta", text=head))
+        taken = lines_text(transcript.take_stable_lines(150, THEME, live_rows=42))
+        self.assertIsInstance(transcript._cursor_state.table, TableColumns, "the table was not released")
+        heights = []
+        for at in range(0, len(late), 5):
+            transcript.apply(ev("message.delta", text=late[at : at + 5]))
+            taken += lines_text(transcript.take_stable_lines(150, THEME, live_rows=42))
+            heights.append(len(lines_text(transcript.live_lines(150, THEME))))
+        while heights[-1] == 0:  # the row's line break: the row has left for scrollback
+            heights.pop()
+        self.assertEqual(heights, sorted(heights), "the live height jumped back and forth")
+        self.assertLessEqual(max(heights), 4, heights)
+        transcript.apply(ev("message.complete", text="", status="complete"))
+        taken += lines_text(transcript.take_stable_lines(150, THEME, live_rows=42))
+        late_rows = taken[next(i for i, row in enumerate(taken) if "late" in row):]
+        late_rows = [row for row in late_rows if row.strip("┃ ")]
+        self.assertLessEqual(len(late_rows), 3, late_rows)
+        start = late_rows[0].index("this")
+        self.assertGreaterEqual(max(len(row[start:].rstrip().rsplit("  ", 1)[0]) for row in late_rows), 100, late_rows)
+        self.assertEqual(sorted(w for w in words(late_rows) if w != "┃"), sorted(["late", "fine", *(sentence * 2).split()]))
+        # The short rows above it are not set apart: only the row that wraps is.
+        self.assertFalse(any(row.strip("┃ ") == "" for row in taken[taken.index(next(r for r in taken if "k0" in r)):
+                                                                        taken.index(next(r for r in taken if "k29" in r))]))
 
     def test_history_recomputes_the_widths_over_the_whole_table(self) -> None:
         source = "| a | b |\n|---|---|\n" + "".join(f"| r{n} | short |\n" for n in range(8))
