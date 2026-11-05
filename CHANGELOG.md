@@ -41,14 +41,54 @@ All notable changes will be documented here.
   the run waits. While the terminal window is unfocused, the spinner and the
   dots hold, as the wallpaper does (#2542), while the times keep counting,
   redrawn once a second. An `unspecified-*` or unknown category no longer
-  draws a cell. Between turns, while a background process Hermes will wake
-  the session for still runs (`notify_on_complete`, or `watch_patterns` on a
-  match), the working row's place above the composer says the session waits
-  on it, as the working row says a turn runs: `✻ Waiting… (10m 6s ·
-  terminal(<command>))`. It has the working row's own spinner and clock. A
-  turn's working row takes over when a turn starts, and the row goes when
-  the process ends. The state is read from the process's flags, never from
-  what the model said, and the info line is unchanged.
+  draws a cell. Between turns, while something the session waits on still
+  runs, the working row's place above the composer says so, as it says a
+  turn runs: `✻ Waiting… (33m 47s · 1 agent · terminal)`. That is a delegated
+  child or dag-ulw node that wakes the parent as it ends (the running lanes
+  of the delegation graph the HUD reads), or a background
+  process Hermes will wake the session for (`notify_on_complete`, or
+  `watch_patterns` on a match). Each count shows only when it is not zero,
+  and the time is the longest wait. It has the working row's own spinner and
+  clock. A turn's working row takes over when a turn starts, and the row
+  goes when nothing is left to wait on. It is read from structure, never
+  from what the model said, and the info line is unchanged.
+- **`dag-ulw` is offered where a plan's follow-on is chosen.** On Hermes'
+  own `/plan` turn, whose reply offers to carry the plan out, the model is
+  asked to also name `dag-ulw` as one option when the plan's tasks form a
+  graph (some can run apart, with disjoint write scopes) ending in a
+  verification task, with the fit reason in one line. On the turn right after
+  a plan was made, a short go ("구현하기", "looks good, implement the plan",
+  "플랜 승인. 진행해") gets a conditional note: if the message accepts the
+  plan without choosing how to run it, the model may name the same option;
+  if it declined, held, edited, asked or changed topic, the note is ignored.
+  Neither line starts anything. "Just made" is read from structure, once per
+  plan: the turn before was `/plan`'s, invoked or loaded a planning skill, or
+  wrote a plan file under `.hermes/plans/` or `.omh/plans/`, or this is the
+  first turn to see a `plan`, `ralplan` or `refactor-plan` state active.
+  Reading or mentioning a plan file does not reopen it, so carrying a plan
+  out never brings the note back. Before, none of the six acceptance messages
+  measured saw `dag-ulw`: four got no OMH context at all after `/plan`. A
+  turn with no plan just made renders the same bytes as before, and routing
+  is unchanged.
+## 4.0.6 - 2026-11-04
+
+- **After a plan is accepted, the planning skills offer `dag-ulw` beside the
+  usual follow-ons, and taking the offer works.** An accepted `plan` or
+  `ralplan` whose tasks form a graph (ids, dependencies, write scopes and a
+  closing verification task) now names `dag-ulw` with a one-line fit reason,
+  next to carrying the plan out directly or an `ultrawork` cycle.
+  `refactor-plan` names it on a whole-plan go whose phases split into
+  groups with disjoint files: the phase order becomes the graph's order and
+  each phase's check its node's check, while the per-phase commits and
+  rollback points stay with the user.
+  It starts only on the user's go-ahead. Before, the workflow state refused
+  to start `dag-ulw` while `plan`, `ralplan` or `refactor-plan` was active,
+  so the offer could not be taken even when it was made. `dag-ulw` now builds
+  its graph from the plan the user accepted instead of planning a new one.
+  `ralplan`'s recovery note, the `/plan` reference, the router's lane map
+  and engine list, the intent-to-plan card, and the safe-feature and picker
+  hints name it too.
+  Routing is unchanged.
 - **The OMH TUI's working glow is removed.** The light that went round the
   screen's edge while a turn ran read as too big and uncomfortable, and its
   trail framed the screen so the terminal's padding outside it looked like a
@@ -117,19 +157,6 @@ All notable changes will be documented here.
   directory and doctor reported `hermes_runtime_command_failed` although
   `hermes --print-runtime-command` worked in a normal shell. The variable is
   forwarded only when the parent has it. Carries #2548 by @DefinitelyNotSpammy.
-- **A recalled dated snapshot is marked for later sessions.** The advice to
-  name an old snapshot in `replaces` used to reach only the session that saved
-  it, and the state usually changes weeks later in another session. Now recall
-  marks snapshot facts and decisions: `snapshot="as-of"` on the record in the
-  memory pack, `"snapshot": "as-of"` on a recall tool row, and one shared line
-  per pack. The line says the record still holds until that same thing
-  changes, and only then is it named in `replaces`; something newly added
-  stays its own record. Episodes are not marked, since an event never
-  changes. This reaches the 7 existing snapshots on the owner's store without
-  a migration. The mark never costs a record: when it does not fit the pack's
-  bound, the pack renders unmarked, exactly as before. A marked pack is 287
-  characters longer for the line, plus 17 per marked record. The cue is
-  English only.
 
 - **The `omh_memory` consolidation status reads the session's own profile.**
   Like tool recall, `demote` and recall origins, it now takes the Hermes
@@ -138,29 +165,41 @@ All notable changes will be documented here.
   reported from another. Tests also pin that those three read the provider's
   profile.
 - **A changed function's broken callers are named at the turn's first stop.** When a turn changes a
-  function's parameters, OMH reads the files that import it, following package re-exports and
+  Python function's parameters, OMH reads the files that import it, following package re-exports and
   aliases. It names, by file and line, each call that matched the old parameters and no longer
-  does, with the new signature. It needs no language server and is always on. It says nothing about
+  does, with the new signature. It needs no language server and is on by default. It says nothing about
   a call it cannot prove broken, such as one passing `*args` / `**kwargs` or one written to raise.
   In the live bench this took gpt-6-luna on a signature change from 0/6 to 6/6, and Haiku 4.5 from
   5/6 to 6/6.
 
-- **Saving a dated snapshot now says how to retire it later.** When the
-  model saves a fact like "As of 2026-10-30 (v0.1.7), nanran has ..." or
-  "nanran v0.1.13 added ...", the result tells it to name this memory in
-  `replaces` when it saves the new state. The old memory then leaves recall
-  instead of being served beside the new one. The owner's store held 8 such
-  snapshots side by side, none ever replaced. The memory itself is unchanged:
-  it stays permanent and nothing is aged or hidden. Versions stated as rules
-  ("requires Hermes v0.22.5 or newer", "pin Node v20.11"), "Decided <date>:" lines,
-  lessons and procedures get no such note.
+- **A dated snapshot in memory says how to retire it, in the session that
+  saves it and in later ones.** When the model saves a fact like "As of
+  2026-10-30 (v0.1.7), nanran has ..." or "nanran v0.1.13 added ...", the
+  result tells it to name this memory in `replaces` when it saves the new
+  state. The old memory then leaves recall instead of being served beside the
+  new one. The owner's store held 8 such snapshots side by side, none ever
+  replaced. Because the state usually changes weeks later in another session,
+  recall also marks snapshot facts and decisions: `snapshot="as-of"` on the
+  record in the memory pack, `"snapshot": "as-of"` on a recall tool row, and
+  one shared line per pack. The line says the record still holds until that
+  same thing changes, and only then is it named in `replaces`; something newly
+  added stays its own record. Episodes are not marked, since an event never
+  changes. This reaches snapshots already stored, without a migration. The
+  memory itself is unchanged: it stays permanent and nothing is aged or
+  hidden. Versions stated as rules ("requires Hermes v0.22.5 or newer", "pin
+  Node v20.11"), "Decided <date>:" lines, lessons and procedures get no such
+  note. The mark never costs a record: when it does not fit the pack's bound,
+  the pack renders unmarked, exactly as before. A marked pack is 287
+  characters longer for the line, plus 17 per marked record. The cue is
+  English only.
 - **Vim mode changes the cursor shape.** With `display.vim_mode` on, the
   terminal's cursor is a steady beam in INSERT and a steady block in NORMAL
   (DECSCUSR). This is an OMH addition: Hermes keeps a steady block in both
   modes. It is written only when the mode changes, and the terminal's own
   shape comes back when a question or picker takes the keys, when vim mode
   goes off, and on exit or Ctrl+Z. On exit it is the terminal's default
-  shape, not whatever the shell had set before.
+  shape, not whatever the shell had set before. Carries the cursor part of
+  #2510 by @DanRioDev.
 
 - **Memory recall costs a turn far less.** The memory pack is rendered in
   `on_turn_start`, before the turn's model call, so its cost is turn latency
@@ -178,17 +217,16 @@ All notable changes will be documented here.
   ms to 10-14 ms; on a synthetic 500-record store, from 3.0-3.3 s to
   0.13-0.52 s per turn. The first render in a process still scans every
   record (measured on a machine under heavy load, two interleaved rounds).
-- **The OMH TUI's wallpaper and working glow hold still while its window is
-  in the background.** The TUI now asks the terminal for focus reports, as
+- **The OMH TUI's living wallpaper holds still while its window is in the
+  background.** The TUI now asks the terminal for focus reports, as
   Hermes' own TUI does. While the window does not have focus, the living
-  wallpaper's scene and the working glow's light stop where they were, and
-  nothing wakes the TUI to paint them. The spinner, streamed text and
+  wallpaper's scene stops where it was, and nothing wakes the TUI to paint
+  it. The spinner, streamed text and
   everything else in a running turn keep updating. When focus comes back,
   the next frame is the one the animation would have drawn at that moment,
   and with focus the look is byte for byte what it was. On an idle screen
   with a scene, an unfocused TUI went from 4 wake-ups and about 6 KiB written
-  a second to 1 wake-up and nothing written; during a turn with the glow,
-  from about 51 to 20 KiB a second. A terminal that does not send focus
+  a second to 1 wake-up and nothing written. A terminal that does not send focus
   reports is treated as focused throughout, so nothing changes there. The
   focus reports type nothing in any mode and are switched off on every exit
   and while the TUI is suspended.

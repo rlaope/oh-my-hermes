@@ -111,8 +111,9 @@ class SkillContextCostTests(unittest.TestCase):
         # research and web-research add the shipped `ru` trigger pack's routing
         # signals (+446 and +316 bytes, after its review dropped the everyday
         # and nested phrases) to their pre-feature bodies; the search guidance
-        # increment itself (286 and 305) is unchanged.
-        baseline = {'research': 20_033, 'web-research': 11_811, 'source-finder': 9_221}
+        # increment itself (286 and 305) is unchanged. The citation receipts rule
+        # (`omh research receipts verify`, 262 bytes) joins both bodies.
+        baseline = {'research': 20_295, 'web-research': 12_073, 'source-finder': 9_221}
         for name, before in baseline.items():
             record = skill_record(name)
             body = record.body().content

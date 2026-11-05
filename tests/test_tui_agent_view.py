@@ -984,7 +984,9 @@ class RoomTests(unittest.TestCase):
         app._on_input(Key(ENTER))
         answer(app, app.client, {"session_id": "live-2", "stored_session_id": "stored-2", "info": {}})
         # `/new` redraws nothing, so the region is still on the bottom rows. The new session's tree (a third of 12
-        # rows is four) gets the three rows the plan leaves it, not what the last session's turn left the view.
-        with_graph(app, export_run(), self.PLAN)
+        # rows is four) gets the three rows the plan leaves it, not what the last session's turn left the view. Its
+        # lane is handed out, not running: a running one would put the waiting row (`App._pending_wait`) over the
+        # composer, a row of its own.
+        with_graph(app, export_run({"ui": "dispatched"}), self.PLAN)
         self.assertEqual(view_rows(app), 3)
         self.assertEqual(app.region.last_row(12), 11)
