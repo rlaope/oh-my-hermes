@@ -331,6 +331,35 @@ reports from then on (measured on herdr 0.9.5: the pane stayed at `working`,
 or left the list); a gateway daemon started from the child would also keep the
 pane's id after the pane closed.
 
+## Restarting Hermes' gateway
+
+`/gateway restart`, and only that typed by the person, restarts Hermes'
+gateway (`src/tui/gateway_restart.py`, in INVARIANT 1's
+`PROCESS_SPAWN_ALLOWLIST`); `/gateway` with anything else goes to Hermes as
+typed. It is offered only attached to a shared gateway, with a session to
+reattach to. It first asks in the slot, naming what the gateway's record
+(`gateway_state.json`, read as the bot board reads it) says the restart
+interrupts: the profiles it serves, the messenger platforms connected to it,
+the turns it runs, and this session's own; without a live record it says who
+else uses the gateway is unknown. Nothing runs unless the person picks
+Restart. Then it runs Hermes' own command as Hermes' updater runs it,
+`<HERMES_PYTHON> -m hermes_cli.main -p <profile> gateway restart --yes
+--detach`, with the interpreter and import path the launcher handed the TUI,
+in a session of its own, stdin closed and its output in an unnamed temporary
+file (unlinked as it is created) of which only the last lines are read back,
+into memory. Hermes decides the rest (the service manager, the drain, a
+profile its shared gateway serves); the TUI signals no gateway and kills no
+process. While the command runs the TUI respawns no gateway child and sends
+no prompt (what the person sends goes back to the composer), and it stops
+waiting after 180 s, leaving the command to finish. Once the command
+succeeds it reattaches to the same session as a respawn does, outside the
+respawn's limit, trying a gateway that is not answering yet again each
+second for up to 60 s; the composer's draft stays and nothing is sent again.
+It says the gateway now runs the newer OMH only when the gateway's recorded
+start had preceded the plugin bundle's install before the restart and no
+longer does after it. A failure says Hermes' words and the command to run
+instead.
+
 ## Job control, and what OMH does not do
 
 Ctrl+Z stops the process group, the gateway child with it, as Hermes' own CLI's

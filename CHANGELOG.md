@@ -65,6 +65,17 @@ All notable changes will be documented here.
   Procedure steps name what survives each failure, Recovery Notes cover each
   skill's own blockers, and catalog checks keep both in place. The idea comes
   from PortSwigger Burp AT research skills.
+- **`/gateway restart` restarts Hermes' gateway from inside the OMH TUI and
+  picks the session back up.** After `omh update` the running gateway kept
+  the old OMH code until someone ran `hermes gateway restart` in another
+  terminal and came back. Now the TUI first names what a restart interrupts
+  (the profiles the gateway serves, its connected messenger bots, its running
+  turns, this session's own), runs Hermes' own restart only once you pick
+  Restart, and reattaches to the same session with your draft kept and
+  nothing sent again; once the gateway is back it says so, and that it now
+  runs the newer OMH when its files show it was behind. A refused or failed
+  restart says why and the command to run instead. Bare `/gateway` is still
+  Hermes' platform status.
 
 ## 4.0.6 - 2026-11-04
 
