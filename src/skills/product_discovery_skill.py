@@ -31,6 +31,7 @@ from __future__ import annotations
 from .catalog_types import (
     ExpertQuestion,
     ProcedureCheck,
+    ProcedureBail,
     ProcedureStep,
     SkillDefinition,
     SkillExample,
@@ -267,6 +268,11 @@ DEFINITION = SkillDefinition(
             (_ARTIFACT_PLAN,),
             ("discovery_customer_reentry_check",),
             "Prepare participant criteria, a past-behavior interview guide, consent and privacy constraints, bias controls, the human task that recruits and interviews, and the contract for how bounded summaries re-enter the ledger; OMH contacts nobody.",
+            on_fail=ProcedureBail(
+                still_stands=('discovery_decision_frame/v1', 'discovery_evidence_ledger/v1'),
+                downgrade_to='tentative',
+                handback='Return the tentative customer_discovery_plan/v1 with missing participant criteria, past-behavior prompts, consent, bias controls, or evidence re-entry fields flagged for correction.',
+            ),
         ),
         ProcedureStep(
             "discovery_gate_problem",
@@ -275,6 +281,11 @@ DEFINITION = SkillDefinition(
             (_ARTIFACT_FRAME,),
             ("discovery_evidence_class_check", "discovery_problem_gate_check"),
             "Compare ledger entries against the precommitted criteria and record the problem gate as validated, refuted, or inconclusive, admitting only entries observed in the framed target segment; when it is not validated, or when the audience is unknown, synthetic-only, or non-recruitable, stop solution and MVP work and name the customer or audience evidence still missing.",
+            on_fail=ProcedureBail(
+                still_stands=('discovery_decision_frame/v1', 'discovery_evidence_ledger/v1', 'customer_discovery_plan/v1'),
+                downgrade_to='unresolved',
+                handback='Return the discovery_decision_frame/v1 as unresolved with missing target-segment human or behavioral evidence and the customer_discovery_plan/v1; keep solution work blocked.',
+            ),
         ),
         ProcedureStep(
             "discovery_rank_assumptions",
@@ -283,6 +294,11 @@ DEFINITION = SkillDefinition(
             (_ARTIFACT_PORTFOLIO,),
             ("discovery_assumption_precommit_check",),
             "List the assumptions by category, score decision impact and evidence gap, and select for each top-ranked assumption the cheapest disconfirming test that could change the decision, with its precommitted conditions and bounded budget; a prototype is one optional instrument routed to `decision-prototype`, never validation by itself.",
+            on_fail=ProcedureBail(
+                still_stands=('discovery_decision_frame/v1', 'discovery_evidence_ledger/v1', 'customer_discovery_plan/v1'),
+                downgrade_to='tentative',
+                handback='Return the tentative assumption_test_portfolio/v1 with unranked assumptions or missing success, failure, inconclusive, segment, budget, owner, and evidence re-entry conditions flagged.',
+            ),
         ),
         ProcedureStep(
             "discovery_draft_gtm_hypothesis",
@@ -291,6 +307,11 @@ DEFINITION = SkillDefinition(
             (_ARTIFACT_GTM,),
             ("discovery_gtm_hypothesis_check",),
             "Draft the beachhead segment, buyer versus user, current alternative, value proposition, pricing or willingness-to-pay hypothesis, one initial channel, first cohort, and learning metrics, each tied to its evidence basis or marked unknown.",
+            on_fail=ProcedureBail(
+                still_stands=('discovery_decision_frame/v1', 'discovery_evidence_ledger/v1', 'customer_discovery_plan/v1', 'assumption_test_portfolio/v1'),
+                downgrade_to='tentative',
+                handback='Return the tentative initial_gtm_hypothesis/v1 with unsupported pricing, willingness-to-pay, or market-size fields left unknown and each missing evidence basis named.',
+            ),
         ),
         ProcedureStep(
             "discovery_validate_decision_receipt",
@@ -307,6 +328,11 @@ DEFINITION = SkillDefinition(
                 "discovery_gtm_hypothesis_check",
             ),
             "Record the decision against the precommitted criteria and observed evidence, with confidence limits, rejected paths, residual risks, and the next route; a `persevere` receipt hands `product-brief` the validated problem, segment, MVP learning boundary, residual risks, and GTM hypotheses without transcript replay.",
+            on_fail=ProcedureBail(
+                still_stands=('discovery_decision_frame/v1', 'discovery_evidence_ledger/v1', 'customer_discovery_plan/v1', 'assumption_test_portfolio/v1', 'initial_gtm_hypothesis/v1'),
+                downgrade_to='unresolved',
+                handback='Return an unresolved discovery_decision_receipt/v1 naming unmet precommitted criteria, contradictions, rejected paths, and missing audience evidence; block persevere and product handoff.',
+            ),
         ),
     ),
     artifact_expectations=(

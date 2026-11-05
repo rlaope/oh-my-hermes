@@ -339,7 +339,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # rollback in STOP WHEN); only refactor-plan moves, and the pin before it was 354f7cf2...5e6b.
         # Research citation receipts: ulw-research, web-research and research-brief gain one receipts-verify
         # clause; only those three bodies move, and the pin before it was ab8d58ad...6258e7.
-        self.assertEqual(_digest(legacy_hashes), '94013490888e496e6380bef9a16aea7c59446023a1a299253cf2eaf65c52f849')
+        # Bail points replace default Recovery Notes on the attributed skills; procedure bails and the shared rail move references only.
+        self.assertEqual(_digest(legacy_hashes), 'fb4303cbc0177f5cedbe670b085591da1827cfc2fe637ea6a9151dda47fb1fcf')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -350,7 +351,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 128600 -> 128099: codebase-onboarding's own Completion Checklist and
         # Recovery Notes replace the planning-category defaults it repeated
         # (-501); swapping only that body back to main's restores 128600.
-        self.assertEqual(legacy['repeated']['bytes'], 128099)
+        # Skill-specific bail notes remove duplicate Recovery Notes; the measured count falls, with all ceilings unchanged.
+        self.assertEqual(legacy['repeated']['bytes'], 120488)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

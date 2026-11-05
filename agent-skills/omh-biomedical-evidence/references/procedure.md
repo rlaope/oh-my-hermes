@@ -42,6 +42,7 @@ Use the bounded host terminal to capture ClinVar and CTGov responses plus receip
 - Input refs: `public gene/variant and disease query`, `bounded BioMCP capture workspace`, `intended entity identifiers and source scope`
 - Output refs: `biomedical_reconciliation_manifest/v1`
 - Check IDs: `bio_scope`, `bio_capture`
+- If this step fails: not_observed; still stands: `biomedical_evidence_matrix/v1`; hand back: Return the scoped biomedical_evidence_matrix/v1 and any biomedical_reconciliation_manifest/v1 receipts, preserving actual streams and failures; leave missing ClinVar or CTGov captures not_observed.
 
 ### `bio_reconcile_captures` (analysis)
 
@@ -58,3 +59,4 @@ Read back outputs and hashes; report availability separately from completeness, 
 - Input refs: `public gene/variant and disease query`, `bounded BioMCP capture workspace`, `intended entity identifiers and source scope`
 - Output refs: `biomedical_evidence_matrix/v1`, `biomedical_reconciliation_manifest/v1`
 - Check IDs: `bio_reconcile`, `bio_verify`
+- If this step fails: tentative; still stands: `biomedical_reconciliation_manifest/v1`; hand back: Return biomedical_reconciliation_manifest/v1 as capture receipts and the tentative biomedical_evidence_matrix/v1 with hash, output, identity, and date failures; retain nonzero partial status.

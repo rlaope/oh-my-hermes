@@ -63,6 +63,7 @@ For an idea video with nothing of a product on screen, record `no_product_claims
 - Input refs: `objective audience and channel`, `source brand and asset permissions`
 - Output refs: `show_reel_source_asset_register/v1`
 - Check IDs: `reel_source_check`
+- If this step fails: unresolved; still stands: `show_reel_brief/v1`; hand back: Return show_reel_source_asset_register/v1 with unresolved source revisions, rights, consent and literal-fact citations, plus the decision-changing question needed to clear HOLD.
 
 ### `reel_select_concept` (analysis)
 
@@ -79,6 +80,7 @@ Author each timed segment with message, source/asset IDs, medium, palette, typog
 - Input refs: `objective audience and channel`, `duration format and budget`, `source brand and asset permissions`
 - Output refs: `show_reel_storyboard/v1`
 - Check IDs: `reel_story_check`
+- If this step fails: tentative; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_source_asset_register/v1`; hand back: Return show_reel_storyboard/v1 with the failing segments, source/asset bindings, composition and native-script legibility defects marked for revision.
 
 ### `reel_measure_timing` (production)
 
@@ -87,6 +89,7 @@ Select muted, music-only or narration mode only as needed; measure reading, appr
 - Input refs: `objective audience and channel`, `duration format and budget`, `available production tools`
 - Output refs: `show_reel_timing_map/v1`
 - Check IDs: `reel_timing_check`
+- If this step fails: unresolved; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`; hand back: Return show_reel_timing_map/v1 with available measured cues, missing reading or pronunciation evidence and unresolved voice rights, leaving scene times unlocked.
 
 ### `reel_author_motion` (production)
 
@@ -95,6 +98,7 @@ Read the installed `toolkit/README.md`, `references/motion-techniques.md`, `refe
 - Input refs: `objective audience and channel`, `duration format and budget`, `source brand and asset permissions`, `available production tools`
 - Output refs: `show_reel_renderer_handoff/v1`
 - Check IDs: `reel_adapter_check`
+- If this step fails: not_observed; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`, `show_reel_timing_map/v1`; hand back: Return show_reel_renderer_handoff/v1 with the bounded recipe, missing capability or font evidence, timeout/cancel limits and partial-resume boundaries, without claiming a render.
 
 ### `reel_review_revise` (validation)
 
@@ -103,6 +107,7 @@ Render style frames, then draft playback and transition strips at delivery-size;
 - Input refs: `objective audience and channel`, `duration format and budget`, `available production tools`
 - Output refs: `show_reel_preview_review/v1`
 - Check IDs: `reel_preview_check`
+- If this step fails: tentative; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_renderer_handoff/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`, `show_reel_timing_map/v1`; hand back: Return show_reel_preview_review/v1 with observed previews, missing motion checks, keep/fix/rebuild findings and remaining weakest-scene work at the revision budget.
 
 ### `reel_export` (production)
 
@@ -111,6 +116,7 @@ Export actual master/share variants as requested; measure codec, color, dimensio
 - Input refs: `duration format and budget`, `available production tools`
 - Output refs: `show_reel_export_manifest/v1`
 - Check IDs: `reel_export_check`
+- If this step fails: not_observed; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_preview_review/v1`, `show_reel_renderer_handoff/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`, `show_reel_timing_map/v1`; hand back: Return show_reel_export_manifest/v1 separating failed or partial files from final files and listing missing codec, color, size, hash and audio measurements needed before export can pass.
 
 ### `reel_validate` (validation)
 
@@ -119,6 +125,7 @@ Inspect actual delivery-size playback, content/brand, localized native line brea
 - Input refs: `objective audience and channel`, `duration format and budget`, `source brand and asset permissions`, `available production tools`
 - Output refs: `show_reel_qa_report/v1`
 - Check IDs: `reel_qa_check`, `reel_export_check`
+- If this step fails: tentative; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_export_manifest/v1`, `show_reel_preview_review/v1`, `show_reel_renderer_handoff/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`, `show_reel_timing_map/v1`; hand back: Return show_reel_qa_report/v1 with evidence-linked REVISE/HOLD findings, missing required checks and separate technical, artistic, playback and listening verdicts for the next correction.
 
 ### `reel_deliver` (validation)
 
@@ -127,3 +134,4 @@ Deliver requested files and source package with selected sources, pinned version
 - Input refs: `objective audience and channel`, `duration format and budget`, `source brand and asset permissions`, `available production tools`
 - Output refs: `show_reel_delivery_manifest/v1`
 - Check IDs: `reel_delivery_check`, `reel_qa_check`
+- If this step fails: not_observed; still stands: `show_reel_brief/v1`, `show_reel_concept_selection/v1`, `show_reel_export_manifest/v1`, `show_reel_preview_review/v1`, `show_reel_qa_report/v1`, `show_reel_renderer_handoff/v1`, `show_reel_source_asset_register/v1`, `show_reel_storyboard/v1`, `show_reel_timing_map/v1`; hand back: Return show_reel_delivery_manifest/v1 with generated files, available source-package files, QA receipts and missing attachment or recipient evidence, keeping transfer and publication unconfirmed.

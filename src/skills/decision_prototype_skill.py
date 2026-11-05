@@ -16,6 +16,7 @@ from .catalog_types import (
     ExpertQuestion,
     HermesSkillLine,
     ProcedureCheck,
+    ProcedureBail,
     ProcedureStep,
     SkillDefinition,
     SkillExample,
@@ -136,17 +137,32 @@ DEFINITION = SkillDefinition(
             "prototype_prepare_handoff", "production", (_EXPERIMENT_BUDGET, _SCRATCH_BOUNDARY, _MEASUREMENT_METHOD),
             (_PREPARED_HANDOFF,), ("prototype_budget_isolation_check", "prototype_smallest_artifact_check"),
             "Write the exact commands, expected observations, workspace identity, and stop conditions as an executor-neutral handoff; production files are read-only inputs and no result is filled in before it is observed.",
+            on_fail=ProcedureBail(
+                still_stands=('decision_prototype/v1',),
+                downgrade_to='unresolved',
+                handback='Return decision_prototype/v1 with draft commands, expected observations and the exact budget, runtime or write-boundary blocker; no command is authorized outside the declared scratch boundary.',
+            ),
         ),
         ProcedureStep(
             "prototype_record_observations", "validation", (_EXPERIMENT_BUDGET, _MEASUREMENT_METHOD),
             (_OBSERVATION_LEDGER,), ("prototype_execution_evidence_check",),
             "Ingest only observed outputs and bounded evidence references, then derive interpretation, confidence, and unresolved questions in separate fields; an unavailable executor, timeout, or inconclusive run is recorded as that state, never as a result.",
+            on_fail=ProcedureBail(
+                still_stands=('decision_prototype/v1', 'prepared prototype handoff with exact commands and expected observations'),
+                downgrade_to='not_observed',
+                handback='Return the prepared prototype handoff with executor-unavailable or timeout status and any captured failure evidence; leave experiment results unobserved rather than filling the observation ledger with guesses.',
+            ),
         ),
         ProcedureStep(
             "prototype_close_receipt", "validation", (_DECISION_QUESTION, _EXPERIMENT_BUDGET, _SCRATCH_BOUNDARY, _MEASUREMENT_METHOD),
             (_DECISION_RECEIPT, DECISION_PROTOTYPE_ARTIFACT),
             ("prototype_scope_check", "prototype_budget_isolation_check", "prototype_smallest_artifact_check", "prototype_execution_evidence_check", "prototype_cleanup_receipt_check"),
             "Decide keep or discard, observe cleanup before reporting `discarded`, and close with a compact decision receipt that `ralplan` can consume without transcript replay and without any implementation handoff.",
+            on_fail=ProcedureBail(
+                still_stands=('decision_prototype/v1', 'prepared prototype handoff with exact commands and expected observations', 'observation ledger separating observed outputs from interpretation and confidence'),
+                downgrade_to='unresolved',
+                handback='Return the observation ledger and a decision receipt naming unresolved options, residual risk, evidence limits, keep/discard and cleanup status; block promotion until a separate accepted plan and handoff exist.',
+            ),
         ),
     ),
     artifact_expectations=(
