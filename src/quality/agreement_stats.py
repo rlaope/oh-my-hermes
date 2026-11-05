@@ -7,7 +7,7 @@ no gold set here. An empty table reports null statistics, never 0.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from .reported_rate import reported_rate
 
@@ -18,8 +18,17 @@ CLAIM_BOUNDARY = (
 )
 
 
-def agreement_stats(pairs: Iterable[tuple[bool, bool]]) -> dict[str, object]:
-    """Summarize reviewer agreement over (a_include, b_include) pairs."""
+def agreement_stats(
+    pairs: Iterable[tuple[bool, bool]], *, excluded: Mapping[str, int] | None = None
+) -> dict[str, object]:
+    """Summarize reviewer agreement over (a_include, b_include) pairs.
+
+    ``excluded`` maps each observation class the caller dropped before building
+    ``pairs`` to how many records it dropped; every class with a nonzero count
+    is named in ``observed_agreement.excluded``, and all counts are echoed in
+    ``excluded_counts``.
+    """
+    excluded_counts = {str(name): int(count) for name, count in (excluded or {}).items()}
     both_include = both_exclude = a_only_include = b_only_include = 0
     for a_include, b_include in pairs:
         if a_include and b_include:
@@ -37,6 +46,7 @@ def agreement_stats(pairs: Iterable[tuple[bool, bool]]) -> dict[str, object]:
         denominator=n,
         numerator_of=["both_include", "both_exclude"],
         denominator_of="records both reviewers decided",
+        excluded=[name for name, count in excluded_counts.items() if count],
     )
 
     cohen_kappa: float | None = None
@@ -46,20 +56,20 @@ def agreement_stats(pairs: Iterable[tuple[bool, bool]]) -> dict[str, object]:
         kappa_undefined_reason = "no_observations"
     else:
         po = (both_include + both_exclude) / n
-        pabak = round(2 * po - 1, 3)
+        pabak = round(2 * po - 1, 3) + 0.0  # + 0.0 turns -0.0 into 0.0
         a_rate = (both_include + a_only_include) / n
         b_rate = (both_include + b_only_include) / n
         expected = a_rate * b_rate + (1 - a_rate) * (1 - b_rate)
         if expected == 1:
             kappa_undefined_reason = "expected_agreement_is_one"
         else:
-            cohen_kappa = round((po - expected) / (1 - expected), 3)
+            cohen_kappa = round((po - expected) / (1 - expected), 3) + 0.0
 
     prevalence_note = ""
     if (
         cohen_kappa is not None
         and pabak is not None
-        and abs(cohen_kappa - pabak) >= KAPPA_PABAK_DIVERGENCE
+        and round(abs(cohen_kappa - pabak), 3) >= KAPPA_PABAK_DIVERGENCE
     ):
         prevalence_note = "kappa_and_pabak_diverge"
 
@@ -73,6 +83,7 @@ def agreement_stats(pairs: Iterable[tuple[bool, bool]]) -> dict[str, object]:
             "n": n,
         },
         "observed_agreement": observed.to_payload(),
+        "excluded_counts": excluded_counts,
         "cohen_kappa": cohen_kappa,
         "kappa_undefined_reason": kappa_undefined_reason,
         "pabak": pabak,

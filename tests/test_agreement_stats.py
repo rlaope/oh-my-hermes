@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import math
 import unittest
 
 from _local_package import load_local_package
@@ -69,6 +71,25 @@ class AgreementStatsTests(unittest.TestCase):
         self.assertEqual(rate["numerator_of"], ["both_include", "both_exclude"])
         self.assertEqual(rate["denominator_of"], "records both reviewers decided")
         self.assertEqual((rate["numerator"], rate["denominator"]), (2, 3))
+
+    def test_excluded_observation_classes_are_named_with_their_counts(self) -> None:
+        stats = agreement_stats([(True, True)], excluded={"records_with_unsure": 8, "pending_records": 1, "other": 0})
+        rate = stats["observed_agreement"]
+        self.assertEqual(reported_rate_shape_errors(rate), ())
+        self.assertEqual(rate["excluded"], ["records_with_unsure", "pending_records"])
+        self.assertEqual(stats["excluded_counts"], {"records_with_unsure": 8, "pending_records": 1, "other": 0})
+        bare = agreement_stats([(True, True)])
+        self.assertEqual((bare["observed_agreement"]["excluded"], bare["excluded_counts"]), ([], {}))
+
+    def test_divergence_of_exactly_point_two_is_flagged(self) -> None:
+        stats = agreement_stats([(True, False)] + [(False, True)] * 2)
+        self.assertEqual((stats["cohen_kappa"], stats["pabak"]), (-0.8, -1.0))
+        self.assertEqual(stats["prevalence_note"], "kappa_and_pabak_diverge")
+
+    def test_kappa_is_never_negative_zero(self) -> None:
+        stats = agreement_stats([(False, False)] + [(False, True)] * 2)
+        self.assertEqual(json.dumps(stats["cohen_kappa"]), "0.0")
+        self.assertEqual(math.copysign(1.0, stats["cohen_kappa"]), 1.0)
 
     def test_claim_boundary_is_not_accuracy(self) -> None:
         self.assertIn("not correctness", agreement_stats([])["claim_boundary"])

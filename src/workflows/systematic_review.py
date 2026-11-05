@@ -62,6 +62,11 @@ INDEPENDENCE_NOT_OBSERVED = "not_observed"
 INDEPENDENCE_SAME_MODEL = "same_model"
 INDEPENDENCE_DIFFERENT_MODELS = "different_models"
 WARNING_BROKEN_INDEPENDENCE = "broken_independence"
+WARNING_SAME_ANSWERS_FILE = "same_answers_file"
+
+# Observation classes merge drops before agreement is computed.
+EXCLUDED_RECORDS_WITH_UNSURE = "records_with_unsure"
+EXCLUDED_PENDING_RECORDS = "pending_records"
 
 CLAIM_BOUNDARY = (
     "AI screening is decision support, not a review team's decision; the team verifies every "
@@ -194,7 +199,9 @@ def _read_records(records_path: Path) -> tuple[list[dict[str, str]], str]:
         raise ScreeningInputError(f"records file {records_path} is not UTF-8") from exc
     records: list[dict[str, str]] = []
     seen: set[str] = set()
-    for line_number, line in enumerate(text.splitlines(), start=1):
+    # Split on "\n" only: str.splitlines would also split on U+2028, U+0085 and
+    # other separators that are legal raw characters inside a JSON string.
+    for line_number, line in enumerate(text.replace("\r\n", "\n").split("\n"), start=1):
         if not line.strip():
             continue
         try:
@@ -347,14 +354,21 @@ def prepare_tasks(*, screening_dir: Path, records_path: Path, seed: int, batch_s
         "record_ids": record_ids,
         "batches": batches,
     }
+    manifest["manifest_sha256"] = _manifest_digest(manifest)
     _write_new(manifest_path, json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False) + "\n", "manifest")
     return manifest
+
+
+def _manifest_digest(manifest: dict[str, Any]) -> str:
+    return _sha256_bytes(_canonical_json({key: value for key, value in manifest.items() if key != "manifest_sha256"}))
 
 
 def _load_manifest(screening_dir: Path, protocol: dict[str, Any]) -> list[str]:
     manifest = _read_json(screening_dir / MANIFEST_FILE, "manifest")
     if not isinstance(manifest, dict) or manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
         raise ScreeningInputError(f"{screening_dir / MANIFEST_FILE} is not a {MANIFEST_SCHEMA_VERSION} file")
+    if manifest.get("manifest_sha256") != _manifest_digest(manifest):
+        raise ScreeningInputError("manifest.json does not match its manifest_sha256; it was edited after prepare")
     if manifest.get("protocol_sha256") != protocol["protocol_sha256"]:
         raise ScreeningInputError("manifest.json was prepared against a different protocol")
     record_ids = manifest.get("record_ids")
@@ -365,12 +379,29 @@ def _load_manifest(screening_dir: Path, protocol: dict[str, Any]) -> list[str]:
         or len(set(record_ids)) != len(record_ids)
     ):
         raise ScreeningInputError("manifest.json record_ids must be a non-empty list of unique strings")
+    batches = manifest.get("batches")
+    if not isinstance(batches, list) or not all(isinstance(batch, dict) for batch in batches):
+        raise ScreeningInputError("manifest.json batches must be a list of objects")
+    for reviewer in REVIEWERS:
+        batch_ids = [
+            record_id
+            for batch in batches
+            if batch.get("reviewer") == reviewer
+            for record_id in (batch.get("record_ids") if isinstance(batch.get("record_ids"), list) else [])
+        ]
+        if sorted(batch_ids) != sorted(record_ids) or manifest.get("record_count") != len(record_ids):
+            raise ScreeningInputError(
+                f"manifest.json record_ids no longer match the records prepare gave reviewer {reviewer}"
+            )
     return record_ids
 
 
 def _answer_files(path: Path, what: str) -> list[Path]:
     if path.is_dir():
-        return sorted(child for child in path.glob("*.md") if child.is_file())
+        files = sorted(child for child in path.glob("*.md") if child.is_file())
+        if not files:
+            raise ScreeningInputError(f"{what} {path} holds no *.md files; answer files in a directory must end in .md")
+        return files
     if path.is_file():
         return [path]
     raise ScreeningInputError(f"{what} {path} is neither a file nor a directory")
@@ -390,6 +421,23 @@ def _answer_lines(path: Path, what: str) -> list[tuple[str, str, str]]:
             else:
                 parsed.append((record_id, keyword.lower(), ""))
     return parsed
+
+
+def _same_answers(answers_a: Path, answers_b: Path) -> bool:
+    """True when A and B name the same path, or files with identical bytes."""
+    if answers_a.resolve() == answers_b.resolve():
+        return True
+
+    def contents(path: Path) -> list[bytes]:
+        out: list[bytes] = []
+        for answer_file in _answer_files(path, "answers"):
+            try:
+                out.append(answer_file.read_bytes())
+            except OSError as exc:
+                raise ScreeningInputError(f"cannot read answers {answer_file}: {exc.strerror or exc}") from exc
+        return out
+
+    return contents(answers_a) == contents(answers_b)
 
 
 def _reviewer_decisions(
@@ -474,6 +522,7 @@ def merge_answers(
     pending: list[dict[str, Any]] = []
     code_disagreements: list[str] = []
     pairs: list[tuple[bool, bool]] = []
+    with_unsure = 0
     for record_id in record_ids:
         if record_id in pending_a or record_id in pending_b:
             reasons = {reviewer: reason for reviewer, reason in (("A", pending_a.get(record_id)), ("B", pending_b.get(record_id))) if reason}
@@ -481,7 +530,9 @@ def merge_answers(
             final[record_id] = (PENDING, "")
             continue
         (a_decision, a_code), (b_decision, b_code) = decided_a[record_id], decided_b[record_id]
-        if UNSURE not in (a_decision, b_decision):
+        if UNSURE in (a_decision, b_decision):
+            with_unsure += 1
+        else:
             pairs.append((a_decision == INCLUDE, b_decision == INCLUDE))
         if a_decision == b_decision == INCLUDE:
             final[record_id] = (INCLUDE, "")
@@ -515,6 +566,8 @@ def merge_answers(
         warnings.append(WARNING_BROKEN_INDEPENDENCE)
     else:
         independence = INDEPENDENCE_DIFFERENT_MODELS
+    if _same_answers(answers_a, answers_b):
+        warnings.append(WARNING_SAME_ANSWERS_FILE)
 
     return {
         "schema_version": MERGE_SCHEMA_VERSION,
@@ -536,7 +589,9 @@ def merge_answers(
         "pending": pending,
         "code_disagreements": code_disagreements,
         "answer_lines": {"A": lines_a, "B": lines_b},
-        "agreement": agreement_stats(pairs),
+        "agreement": agreement_stats(
+            pairs, excluded={EXCLUDED_RECORDS_WITH_UNSURE: with_unsure, EXCLUDED_PENDING_RECORDS: len(pending)}
+        ),
         "reviewer_independence": independence,
         "reviewer_models": reviewer_models,
         "warnings": warnings,

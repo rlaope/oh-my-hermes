@@ -21,6 +21,7 @@ fixtures. These pin:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import tempfile
@@ -195,6 +196,19 @@ class PrepareTests(_ScreeningDir):
         self.assertEqual(status, 2)
         self.assertIn("edited after freeze", stderr)
 
+    def test_records_split_on_newline_only_so_unicode_separators_stay_in_the_abstract(self) -> None:
+        self.freeze()
+        records = self.write(
+            "separators.jsonl",
+            '{"id": "r1", "title": "t", "abstract": "line one\u2028line two"}\r\n'
+            '{"id": "r2", "title": "t", "abstract": "a\u0085b\u2029c"}\n',
+        )
+        status, payload, stderr = self.cli("prepare", "--dir", str(self.dir), "--records", str(records), "--seed", "1")
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(payload["record_count"], 2)
+        text = "".join((self.dir / path).read_text(encoding="utf-8") for path in payload["task_files"])
+        self.assertIn("line one\u2028line two", text)
+
 
 class MergeTests(_ScreeningDir):
     def setUp(self) -> None:
@@ -312,6 +326,65 @@ class MergeTests(_ScreeningDir):
         _status, payload, _stderr = self.fixture_merge("--reviewer-models", "A=claude-opus,B=gpt-5")
         self.assertEqual(payload["reviewer_independence"], "different_models")
         self.assertEqual(payload["warnings"], [])
+
+    def test_observed_agreement_names_unsure_and_pending_records_it_left_out(self) -> None:
+        answers_a = self.write("a.md", "".join(f"RECORD {rid}: INCLUDE\n" for rid in RECORD_IDS))
+        answers_b = self.write(
+            "b.md", "RECORD r01: INCLUDE\n" + "".join(f"RECORD {rid}: UNSURE\n" for rid in RECORD_IDS[1:7])
+        )
+        status, payload, _stderr = self.merge(answers_a, answers_b)
+        self.assertEqual(status, 1)
+        agreement = payload["agreement"]
+        self.assertEqual(agreement["table"]["n"], 1)
+        self.assertEqual(agreement["observed_agreement"]["excluded"], ["records_with_unsure", "pending_records"])
+        self.assertEqual(agreement["excluded_counts"], {"records_with_unsure": 6, "pending_records": 1})
+        self.assertFalse(reported_rate_shape_errors(agreement["observed_agreement"]))
+        status, text, _stderr = run_cli(
+            ["research", "screening", "merge", "--dir", str(self.dir), "--answers-a", str(answers_a),
+             "--answers-b", str(answers_b)],
+            output_json=False,
+        )
+        self.assertIn("excluded: records_with_unsure, pending_records", text)
+
+    def test_same_answers_file_for_both_reviewers_is_warned(self) -> None:
+        _status, payload, _stderr = self.merge(FIXTURES / "answers_a.md", FIXTURES / "answers_a.md")
+        self.assertIn("same_answers_file", payload["warnings"])
+        copy = self.write("copy.md", (FIXTURES / "answers_a.md").read_text(encoding="utf-8"))
+        _status, payload, _stderr = self.merge(FIXTURES / "answers_a.md", copy)
+        self.assertIn("same_answers_file", payload["warnings"])
+        _status, payload, _stderr = self.fixture_merge()
+        self.assertNotIn("same_answers_file", payload["warnings"])
+
+    def test_answers_directory_without_md_files_is_an_input_error(self) -> None:
+        directory = self.root / "answers_txt"
+        directory.mkdir()
+        (directory / "answers.txt").write_text("RECORD r01: INCLUDE\n", encoding="utf-8")
+        status, payload, stderr = self.merge(directory, FIXTURES / "answers_b")
+        self.assertEqual(status, 2)
+        self.assertEqual(payload, "")
+        self.assertIn("*.md", stderr)
+
+    def test_merge_refuses_a_manifest_changed_after_prepare(self) -> None:
+        manifest_path = self.dir / "manifest.json"
+        original = manifest_path.read_text(encoding="utf-8")
+        manifest = json.loads(original)
+        stale = dict(manifest, record_ids=manifest["record_ids"][:-1])
+        rehashed = {key: value for key, value in stale.items() if key != "manifest_sha256"}
+        rehashed["manifest_sha256"] = hashlib.sha256(
+            json.dumps(rehashed, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        for name, edited, message in (
+            ("record id dropped, hash stale", stale, "manifest_sha256"),
+            ("record id dropped, hash recomputed", rehashed, "record_ids"),
+        ):
+            with self.subTest(case=name):
+                manifest_path.write_text(json.dumps(edited), encoding="utf-8")
+                status, payload, stderr = self.fixture_merge()
+                self.assertEqual(status, 2, stderr)
+                self.assertEqual(payload, "")
+                self.assertIn(message, stderr)
+        manifest_path.write_text(original, encoding="utf-8")
+        self.assertEqual(self.fixture_merge()[0], 1)
 
     def test_payload_and_text_carry_no_abstract_or_title_text(self) -> None:
         status, stdout, _stderr = run_cli(
