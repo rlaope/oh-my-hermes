@@ -160,6 +160,10 @@ All notable changes will be documented here.
   terminal's own selection is still there with its bypass modifier (Shift,
   Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
   terminal's own wheel and selection on the main screen, as before.
+- **Scrolling the wheel back down in the OMH TUI returns to the chat.** The
+  transcript view the wheel opens closes once the wheel brings it back to its
+  end, so the composer is back without Esc or `q`. A view opened by Ctrl+O or
+  `/history` still stays open at its end.
 - **The round-end check continues a turn less often.** A changed function's
   name in another file no longer continues the turn when every mention there
   is proven to need no change: another object's method of the same name, or

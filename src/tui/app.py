@@ -2167,6 +2167,7 @@ class App(ModesMixin, AgentViewMixin):
         self.board_reader: BoardReader | None = None
         self.make_board_reader: Callable[..., BoardReader] | None = None  # `bot_board.BoardReader` when None
         self.redraw_after_pager = False  # a full redraw the main screen is owed once the pager is left
+        self.pager_by_wheel = False  # the open pager is the view the wheel opened, which the wheel down leaves
         self.hud: HudSnapshot | None = None
         self.goal: Mapping[str, Any] | None = None  # Hermes' standing /goal, as its last `session.control.update` said
         self.retired_plan = ""  # the text of a finished plan the panel no longer draws (`_retire_finished_plan`)
@@ -7153,6 +7154,9 @@ class App(ModesMixin, AgentViewMixin):
             return
         text = pager.handle_mouse(event, self.size[1], self.clock())
         self.dirty = True
+        if self.pager_by_wheel and event.button == WHEEL_DOWN and event.pressed and pager.at_end(self.size[1]):
+            self._leave_pager()  # the wheel brought the view back to where the screen was: the screen is back
+            return
         if text:
             pager.note = self._copy_selection(text).line(self.size[0], self.theme)
             self.copy_noted_at = self.clock()
@@ -7191,6 +7195,7 @@ class App(ModesMixin, AgentViewMixin):
                 self._drop_selection()
                 if self._transcript_view() and self.pager is not None:
                     self.pager.handle_mouse(event, rows, now)  # one notch up from the end, as the wheel scrolls it
+                    self.pager_by_wheel = True
             return
         row = min(event.y - 1, last)  # a report counts from 1; one under the region is on its last row
         stable = self._last_stable_doc()
@@ -7653,6 +7658,7 @@ class App(ModesMixin, AgentViewMixin):
         self._drop_selection()  # the main screen comes back with it, and the next frame there paints it off
         self._stop_board_reader()  # a board this replaces reads no more
         self.pager = pager
+        self.pager_by_wheel = False
         self.log_agent = ""
         self.composer._drop_pending()
 
