@@ -164,7 +164,8 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
         "reviewed_timeout_ms": 1000,
         "capability": (
             "user-authored toolcall-rule block directives, the refusal of a "
-            "skill_manage edit to an OMH-managed skill, the OMH "
+            "skill_manage edit to an OMH-managed skill, the refusal of a "
+            "write_file or patch into OMH's own evidence stores, the OMH "
             "repeat-call guard and its human-approval escalation, and the "
             "human approval of an omh_team start's exact check commands, before "
             "a Hermes tool call"

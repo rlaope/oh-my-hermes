@@ -275,7 +275,13 @@ retroactively changed, and third-party sections still share the host's budget.
 
 The `pre_tool_call` hook enforces
 user-authored toolcall rules (a matching rule returns the host's block
-directive). An unknown `[omh-role:...]` marker in a delegate goal is warned in
+directive), and blocks a `write_file` or `patch` into a store OMH's own code
+keeps under `<omh_home>/runtime/` (the journal, delegation ledger, dag-ulw run
+records, research fetch receipts, runtime runs and plan todos), because a line
+a tool call writes there cannot be told apart from one OMH observed
+(`plugin_bundle/omh/evidence_store_guard.py`). A dag-ulw node's handoff report
+is the one file there a model writes, and it passes. A shell command appending
+to the same file is not judged. An unknown `[omh-role:...]` marker in a delegate goal is warned in
 the child's own turn by `pre_llm_call`, since Hermes reads only `action` from a
 `pre_tool_call` result. A `[omh-identity:name]` marker in the person's request
 or a delegated child's goal adds that user-defined identity's prompt to the
