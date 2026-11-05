@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
+  of the hollow `○`.** Four finished agents in a row looked the same as four
+  that had not started. A completed agent now leads with `✓` in the done
+  green; the collapsed `N done` row is green only when every agent it
+  counts completed, else a muted `▪`.
+  Interrupted, failed, waiting and running agents keep their marks.
 - **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
   the machine sleeps past the session's turn lease, Hermes stops the running
   turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
@@ -16,12 +22,6 @@ All notable changes will be documented here.
   cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
   or an open question holds it, and a notice says to send `continue`. At most 2
   go between two prompts of the person's own; past that the old notice asks.
-- **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
-  of the hollow `○`.** Four finished agents in a row looked the same as four
-  that had not started. A completed agent now leads with `✓` in the done
-  green; the collapsed `N done` row is green only when every agent it
-  counts completed, else a muted `▪`.
-  Interrupted, failed, waiting and running agents keep their marks.
 
 ## 4.0.6 - 2026-11-04
 
