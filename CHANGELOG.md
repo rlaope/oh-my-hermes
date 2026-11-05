@@ -18,6 +18,23 @@ All notable changes will be documented here.
   terminal's own selection is still there with its bypass modifier (Shift,
   Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
   terminal's own wheel and selection on the main screen, as before.
+- **In a console session a choice goes through Hermes' `clarify` picker, and
+  the OMH TUI draws that picker the way Claude Code draws its question
+  dialog.** On the first turn of an attended `cli`, `tui` or `desktop`
+  session, the model is asked to use `clarify` where its reply would stop for
+  the person to pick between named options or approve an action it will not
+  take without their answer, instead of listing the options in prose and
+  asking for a word back. A closing offer of optional further work stays
+  prose. After a clarify timed out, the person's next message brings the same
+  ask once more. Messaging platforms, single-query runs, kanban task
+  processes and delegated children get nothing and render the same bytes as
+  before. In the OMH TUI a question with choices now stands between two
+  rules: the context dim, the question itself bold, a `label — description`
+  choice as its label with the description under it, `Type something.` for
+  an answer of your own, and the keys on a row of their own with how long the
+  question has waited. The tool row says how many choices it offers instead
+  of repeating the question. A pick still answers with Hermes' own choice
+  string.
 - **A drag selects text in the OMH TUI again after another program left the
   mouse on.** Hermes' own TUI turns on mouse modes 1000, 1002, 1003 and 1006,
   and a crash or `kill -9` leaves them on in the tab. The OMH TUI never asked
@@ -45,6 +62,17 @@ All notable changes will be documented here.
   measured saw `dag-ulw`: four got no OMH context at all after `/plan`. A
   turn with no plan just made renders the same bytes as before, and routing
   is unchanged.
+
+- **The Hermes Desktop pane reads the Windows Hermes home in its fallback
+  (#2569 by @k1lgor).** When the dashboard backend could not import Hermes'
+  `get_hermes_home()` and no `HERMES_HOME` was set, it read `~/.hermes`,
+  while Hermes itself defaults to `%LOCALAPPDATA%\hermes` on Windows, so the
+  pane's HUD could read an empty home. That fallback now uses Hermes'
+  platform default, with `HERMES_DATA_DIR_SUFFIX` honoured; a parity test
+  keeps it equal to the bundle's own `platform_default_hermes_home`. The
+  host's answer and an explicit `HERMES_HOME` still win, and POSIX stays
+  `~/.hermes`.
+
 ## 4.0.6 - 2026-11-04
 
 - **After a plan is accepted, the planning skills offer `dag-ulw` beside the
