@@ -1093,7 +1093,7 @@ class LogViewTests(unittest.TestCase):
         self.assertEqual(style_of(rows[4], "old_api in src"), THEME.muted)
 
     def test_the_status_word_takes_the_colour_of_its_glyph(self) -> None:
-        for status, style in (("failed", THEME.error), ("completed", THEME.ok), ("interrupted", THEME.muted)):
+        for status, style in (("failed", THEME.error), ("completed", THEME.muted), ("interrupted", THEME.muted)):
             with self.subTest(status=status):
                 roster = self._roster()
                 feed(roster, "complete", 30.0, status=status, summary="the reply")

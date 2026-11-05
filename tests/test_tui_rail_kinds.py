@@ -535,7 +535,7 @@ class RunningBlueTests(unittest.TestCase):
             if status:
                 feed(roster, "complete", 12.0, subagent_id, status=status)
         header = {sid: roster.log_lines(sid, 80, THEME, 20.0)[0][0].style for sid in ("sa-r", "sa-d", "sa-f")}
-        self.assertEqual(header, {"sa-r": THEME.running, "sa-d": THEME.ok, "sa-f": THEME.error})
+        self.assertEqual(header, {"sa-r": THEME.running, "sa-d": THEME.muted, "sa-f": THEME.error})
 
     def test_a_kanban_lane_row_is_its_rows_state(self) -> None:
         states = ("running", "done", "queued", "blocked")

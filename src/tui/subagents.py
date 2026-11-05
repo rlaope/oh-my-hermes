@@ -357,7 +357,8 @@ def _collapsed_row(cut: list[Agent], theme: Theme) -> Line:
     interrupted, never a green check for it), else `+4 more · 1 waiting · 3 done`
     (running, waiting, failed and done ones counted, in that order)."""
     if all(agent.status in (COMPLETED, INTERRUPTED) for agent in cut):
-        mark = Span(DONE_MARK, theme.ok) if all(agent.status == COMPLETED for agent in cut) else Span(INTERRUPTED_MARK, theme.muted)
+        mark = (Span(DONE_MARK, theme.ok) if all(agent.status == COMPLETED for agent in cut)
+                else Span(INTERRUPTED_MARK, theme.muted))
         return (Span(UNSELECTED_MARK), mark, Span(f" {len(cut)} done", theme.muted))
     counts = [
         (sum(1 for agent in cut if agent.status == RUNNING), "running"),
@@ -717,7 +718,8 @@ class Roster:
             elapsed_text(agent.elapsed(now)), _tools_text(agent.tool_count),
             _tokens_text(agent.output_tokens).replace(" ", NO_BREAK_SPACE), agent.model,
         ]
-        state = _mark(agent, theme, 0).style  # the agent's own state: running blue, failed red, else grey
+        mark_style = _mark(agent, theme, 0).style
+        state = theme.muted if mark_style == theme.ok else mark_style  # running blue, failed red, else grey
         status = Span(agent.status, state)
         rest = Span("".join(f"{FACT_SEPARATOR}{fact}" for fact in facts if fact), theme.muted)
         header: list[Line] = [

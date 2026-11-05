@@ -7,8 +7,8 @@ All notable changes will be documented here.
 - **A finished subagent shows a green `✓` in the OMH TUI's agent list instead
   of the hollow `○`.** Four finished agents in a row looked the same as four
   that had not started. A completed agent now leads with `✓` in the done
-  green, and so does its goal in the agent log header; the collapsed `N done`
-  row is green only when every agent it counts completed, else a muted `▪`.
+  green; the collapsed `N done` row is green only when every agent it
+  counts completed, else a muted `▪`.
   Interrupted, failed, waiting and running agents keep their marks.
 - **In a console session a choice goes through Hermes' `clarify` picker, and
   the OMH TUI draws that picker the way Claude Code draws its question
