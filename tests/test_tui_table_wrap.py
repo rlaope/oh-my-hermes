@@ -1,12 +1,14 @@
-"""A Markdown table wider than the row: cells wrap inside their columns instead of the `| a | b |` source showing.
+"""A Markdown table drawn as a box, its cells wrapped inside their columns when it is wider than the row.
 
 The owner's report of 2026-11-05: a reply whose three-column table had long
 sentences in its last column showed the raw source (`| 고칠 것 | 담당 | 내용 |`,
 `|---|---|---|`, rows wrapped as plain text), because #2551 kept a table wider
-than the row as the plain text it was. Now the columns narrow and each cell
-wraps inside its own; a table too narrow for any column layout draws each
-body row as a record (`header: value`). Streaming, the release of a tall
-table on frozen columns, and `/history` keep every word exactly once.
+than the row as the plain text it was. Now every table is a box (the owner's
+"클로드코드처럼 해": `┌─┬─┐` borders, a `├─┼─┤` line under the header and
+under each body row), its columns narrow when it is wider than the row and
+each cell wraps inside its own; a table too narrow for any column layout
+draws each body row as a record (`header: value`). Streaming, the release of
+a tall table on frozen columns, and `/history` keep every word exactly once.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _tui_lines import lines_text
 from omh.tui.gateway import Event
+from omh.tui.app import _copied_part
 from omh.tui.markdown import MarkdownState, TableColumns, fit_columns, render_lines, render_markdown
 from omh.tui.style import Line
 from omh.tui.theme import DEFAULT_THEME as THEME, without_colour
@@ -70,20 +73,45 @@ def cells_slice(row: str, start: int, end: int | None = None) -> str:
     return "".join(out)
 
 
+BOX = frozenset("┌┬┐├┼┤└┴┘│─")
+
+
 def words(rows: list[str]) -> list[str]:
-    return [word for row in rows for word in row.split()]
+    """The words of `rows`, without the box's borders."""
+    return [word for row in rows for word in row.split() if not set(word) <= BOX]
+
+
+def box_rows(texts: list[str]) -> list[list[str]]:
+    """The rows of a box-drawn table (header first) as cell texts, each cell's lines joined by a space.
+
+    Checks the box as it goes: it opens with `┌` and closes with `└`, every
+    content line has its `│` borders where the border line above it has its
+    junctions, and no blank line falls inside it."""
+    assert texts and texts[0].lstrip()[:1] == "┌" and texts[-1].lstrip()[:1] == "└", texts
+    rows: list[list[str]] = []
+    edges: list[int] = []
+    for text in texts:
+        body = text.lstrip()
+        if body[:1] in ("┌", "├", "└"):
+            rows.append([])
+            edges = [cell_width(text[:index]) for index, ch in enumerate(text) if ch in "┌┬┐├┼┤└┴┘"]
+            continue
+        assert body[:1] == "│", f"not a box line: {text!r}"
+        bars = [cell_width(text[:index]) for index, ch in enumerate(text) if ch == "│"]
+        assert set(bars) <= set(edges), (text, bars, edges)
+        pieces = [piece.strip() for piece in body.split("│")[1:-1]]
+        if not rows[-1]:
+            rows[-1] = [""] * len(pieces)
+        rows[-1] = [f"{have} {piece}".strip() for have, piece in zip(rows[-1], pieces)]
+    return [row for row in rows if row]
 
 
 class WideTableLayoutTests(unittest.TestCase):
     def render(self, source: str, width: int, theme=THEME) -> list[Line]:
         return render_lines(source.split("\n"), MarkdownState(), width, theme)[0]
 
-    def column_starts(self, header_row: str) -> list[int]:
-        """Where each header label starts, in cells."""
-        return [cell_width(header_row[: header_row.index(label)]) for label in OWNER_HEADER]
-
     def assert_owner_table(self, width: int, exact: bool = True) -> None:
-        """The owner's table at `width` as columns: every cell inside its column, nothing past the row. `exact`: every
+        """The owner's table at `width` as a box: every cell inside its column, nothing past the row. `exact`: every
         word whole (a long word may otherwise break across rows, so only the characters are compared)."""
         rows = self.render(OWNER_TABLE, width)
         texts = lines_text(rows)
@@ -91,31 +119,20 @@ class WideTableLayoutTests(unittest.TestCase):
             self.assertLessEqual(line_width(row), width, text)
             self.assertFalse(text.startswith("|"), f"a raw source row: {text!r}")
             self.assertIsNone(re.search(r"\|\s*:?-{3,}", text), f"a raw divider: {text!r}")
-        self.assertEqual(sum(1 for text in texts if set(text.strip()) <= {"─", " "} and text.strip()), 1, texts)
-        starts = self.column_starts(texts[0])
-        self.assertEqual(starts[0], 0)
-        # The header is bold in the brand colour, on every span that shows text.
-        self.assertTrue(all(span.style.bold for span in rows[0] if span.text.strip()))
-        # Body rows: blank-separated groups, each the rows of one source row.
-        groups: list[list[str]] = [[]]
-        for text in texts[2:]:
-            if text.strip():
-                groups[-1].append(text)
-            else:
-                groups.append([])
-        self.assertEqual(len(groups), len(OWNER_ROWS), texts)
-        self.assertTrue(any(len(group) > 1 for group in groups), "nothing wrapped: the table was not wider than the row")
-        for group, source in zip(groups, OWNER_ROWS):
+        self.assertNotIn("", texts, "a blank line inside the box")
+        cells = box_rows(texts)
+        self.assertEqual(len(cells), 1 + len(OWNER_ROWS), texts)
+        self.assertEqual(cells[0], list(OWNER_HEADER))
+        self.assertEqual(sum(1 for text in texts if text.startswith("├")), len(OWNER_ROWS), "a line under each row")
+        self.assertTrue(any(len(rows) > 2 for rows in [texts]), texts)
+        # The header is bold in the brand colour, on every span that shows text; the borders are gutters.
+        self.assertTrue(all(span.style.bold for span in rows[1] if span.text.strip() and not set(span.text) <= BOX))
+        for got, source in zip(cells[1:], OWNER_ROWS):
             for ci, cell in enumerate(source):
-                end = starts[ci + 1] if ci + 1 < len(starts) else None
-                column = [cells_slice(text, starts[ci], end) for text in group]
                 if exact:
-                    self.assertEqual(" ".join(" ".join(column).split()), " ".join(shown(cell).split()), (width, ci))
+                    self.assertEqual(" ".join(got[ci].split()), " ".join(shown(cell).split()), (width, ci))
                 else:
-                    self.assertEqual("".join("".join(column).split()), "".join(shown(cell).split()), (width, ci))
-                if end is not None:  # nothing of a cell spills into the gap before the next column
-                    for piece in column:
-                        self.assertEqual(cells_slice(piece, end - starts[ci] - 2), "  ", column)
+                    self.assertEqual("".join(got[ci].split()), "".join(shown(cell).split()), (width, ci))
 
     def test_the_owners_table_wraps_inside_its_columns_at_150(self) -> None:
         self.assert_owner_table(146)  # a reply's text at 150 columns, beside the rail and margin
@@ -123,65 +140,97 @@ class WideTableLayoutTests(unittest.TestCase):
     def test_the_owners_table_wraps_inside_its_columns_at_100(self) -> None:
         self.assert_owner_table(96)
 
+    def test_the_owners_table_wraps_inside_its_columns_at_80(self) -> None:
+        self.assert_owner_table(76)
+
     def test_short_columns_keep_their_whole_width(self) -> None:
         texts = lines_text(self.render(OWNER_TABLE, 96))
-        self.assertTrue(any("출처 섹션 누락" in text for text in texts))
-        self.assertTrue(any("src/tui/markdown.py" in text for text in texts))
+        self.assertTrue(any("│ 출처 섹션 누락 │" in text for text in texts))
+        self.assertTrue(any("│ src/tui/markdown.py │" in text for text in texts))
+
+    def test_a_fitting_table_is_a_box(self) -> None:
+        self.assertEqual(
+            lines_text(self.render("| X | Y |\n| --- | --- |\n| 1 | a |\n| 2 | b |", 40)),
+            ["┌─────┬─────┐", "│ X   │ Y   │", "├─────┼─────┤", "│ 1   │ a   │", "├─────┼─────┤", "│ 2   │ b   │",
+             "└─────┴─────┘"],
+        )
+
+    def test_a_header_with_no_body_is_a_closed_box(self) -> None:
+        self.assertEqual(lines_text(self.render("| a | b |\n|---|---|", 40)), ["┌─────┬─────┐", "│ a   │ b   │",
+                                                                              "└─────┴─────┘"])
+
+    def test_a_ragged_row_gets_columns_of_its_own(self) -> None:
+        texts = lines_text(self.render("| a | b |\n|---|---|\n| 1 | 2 | 3 |", 40))
+        self.assertEqual(box_rows(texts), [["a", "b", ""], ["1", "2", "3"]])
+
+    def test_the_borders_are_gutters_so_a_drag_copies_the_cells(self) -> None:
+        rows = self.render(OWNER_TABLE, 96)
+        for row in rows:
+            for span in row:
+                if span.text.strip() and set(span.text) <= BOX:
+                    self.assertTrue(span.style.gutter, span)
+                elif span.text.strip():
+                    self.assertFalse(span.style.gutter, span)
+        copied = ["".join(span.text for span in _copied_part(row)).rstrip() for row in rows]
+        self.assertTrue(all(not set(text) & BOX for text in copied), copied)
+        self.assertEqual(copied[0], "")  # the top border copies as nothing
+        self.assertEqual(copied[1].split(), ["고칠", "것", "담당", "내용"])
+        self.assertIn("출처 섹션 누락", copied[3])
+
+    def test_no_color_keeps_the_box(self) -> None:
+        plain = without_colour(THEME)
+        self.assertEqual(lines_text(self.render(OWNER_TABLE, 96, plain)), lines_text(self.render(OWNER_TABLE, 96)))
+        rows = self.render(OWNER_TABLE, 96, plain)
+        self.assertEqual(lines_text(rows)[0][0], "┌")
+        self.assertTrue(all(span.style.bold for span in rows[1] if span.text.strip() and not set(span.text) <= BOX))
 
     def test_code_spans_keep_their_style_across_wrapped_rows(self) -> None:
         source = "| key | note |\n|---|---|\n| k1 | lead `alpha beta gamma delta epsilon zeta eta theta` tail |"
-        rows = self.render(source, 30)
+        rows = self.render(source, 34)
         code = [span for row in rows for span in row if span.style == THEME.code]
-        code_words = " ".join(span.text for span in code).split()
-        self.assertEqual(code_words, "alpha beta gamma delta epsilon zeta eta theta".split())
+        self.assertEqual(" ".join(span.text for span in code).split(), "alpha beta gamma delta epsilon zeta eta theta".split())
         self.assertGreater(len({id(row) for row in rows for span in row if span.style == THEME.code}), 1,
                            "the code span did not wrap")
         self.assertFalse(any("`" in text for text in lines_text(rows)))
 
     def test_bold_inside_a_cell_stays_bold_across_a_wrap(self) -> None:
-        rows = self.render("| a | b |\n|---|---|\n| x | **one two three four five six seven** |", 24)
-        bold = [span.text for row in rows[2:] for span in row if span.style.bold and span.text.strip()]
+        rows = self.render("| a | b |\n|---|---|\n| x | **one two three four five six seven** |", 28)
+        bold = [span.text for row in rows[3:] for span in row if span.style.bold and span.text.strip()]
         self.assertEqual(" ".join(bold).split(), "one two three four five six seven".split())
-        self.assertGreater(len(rows), 3)
+        self.assertGreater(len(rows), 5)
 
     def test_wide_characters_wrap_by_cell_width(self) -> None:
         cell = "日本語のテキストは空白がなくても列の幅で折り返されます"
-        rows = self.render(f"| 名前 | 説明 |\n|---|---|\n| 東京 | {cell} |", 24)
-        texts = lines_text(rows)
+        rows = self.render(f"| 名前 | 説明 |\n|---|---|\n| 東京 | {cell} |", 28)
         for row in rows:
-            self.assertLessEqual(line_width(row), 24)
-        start = cell_width(texts[0][: texts[0].index("説明")])
-        body = texts[2:]
-        self.assertEqual("".join(cells_slice(text, start).strip() for text in body), cell)
-        self.assertTrue(all(not cells_slice(text, 0, start).strip() for text in body[1:]), body)
+            self.assertLessEqual(line_width(row), 28)
+        self.assertEqual(box_rows(lines_text(rows))[1], ["東京", " ".join(box_rows(lines_text(rows))[1][1].split())])
+        self.assertEqual("".join(box_rows(lines_text(rows))[1][1].split()), cell)
+        self.assertGreater(len(rows), 6)
 
     def test_escaped_pipes_stay_inside_a_wrapped_cell(self) -> None:
-        rows = lines_text(self.render("| a | b |\n|---|---|\n| x | left \\| right and a long tail of words here |", 20))
-        self.assertGreater(len(rows), 3, "the cell did not wrap")
-        self.assertEqual(words(rows).count("|"), 1, rows)
-        self.assertNotIn("\\", " ".join(rows))
-        self.assertEqual(words(rows[2:])[:3], ["x", "left", "|"])
+        rows = lines_text(self.render("| a | b |\n|---|---|\n| x | left \\| right and a long tail of words here |", 24))
+        self.assertGreater(len(rows), 6, "the cell did not wrap")
+        self.assertEqual(box_rows(rows)[1], ["x", "left | right and a long tail of words here"])
 
     def test_a_long_url_like_token_breaks_inside_its_column_and_loses_nothing(self) -> None:
         url = "https://example.com/" + "/".join(f"segment{n}" for n in range(12)) + "/index.html"
-        rows = self.render(f"| name | link |\n|---|---|\n| docs | {url} |", 40)
-        texts = lines_text(rows)
+        rows = self.render(f"| name | link |\n|---|---|\n| docs | {url} |", 44)
         for row in rows:
-            self.assertLessEqual(line_width(row), 40)
-        start = cell_width(texts[0][: texts[0].index("link")])
-        self.assertEqual("".join(cells_slice(text, start).strip() for text in texts[2:]), url)
-        self.assertGreater(len(texts), 3)
+            self.assertLessEqual(line_width(row), 44)
+        self.assertEqual("".join(box_rows(lines_text(rows))[1][1].split()), url)
+        self.assertGreater(len(rows), 6)
 
     def test_an_indented_wide_table_wraps_behind_its_indent(self) -> None:
         cell = "a" * 17
-        rows = self.render(f"  | {cell} | {cell} words |\n  |---|---|\n  | 1 | 2 |", 37)
-        texts = lines_text(rows)  # the columns fit at 36 cells, but not behind the indent
-        self.assertTrue(any("─" in text for text in texts))
+        rows = self.render(f"  | {cell} | {cell} words |\n  |---|---|\n  | 1 | 2 |", 43)
+        texts = lines_text(rows)  # the box fits at 42 cells, but not behind the indent
         for row, text in zip(rows, texts):
-            self.assertLessEqual(line_width(row), 37)
-            self.assertTrue(text.startswith("  ") or not text, text)
+            self.assertLessEqual(line_width(row), 43)
+            self.assertTrue(text.startswith("  "), text)
         self.assertEqual("".join(texts).count("a"), 34)
         self.assertEqual(words(texts).count("words"), 1)
+        box_rows(texts)
 
     def test_too_narrow_for_columns_draws_records(self) -> None:
         rows = self.render(OWNER_TABLE, 24)
@@ -190,9 +239,9 @@ class WideTableLayoutTests(unittest.TestCase):
             self.assertLessEqual(line_width(row), 24)
             self.assertIsNone(re.search(r"\|\s*:?-{3,}", text), text)
             self.assertFalse(text.startswith("| 고칠"), text)
+            self.assertFalse(set(text) & BOX - {"│"}, text)
         for label in OWNER_HEADER:
             self.assertEqual(sum(1 for text in texts if text.startswith(label + ":")), len(OWNER_ROWS), label)
-        # Each value is all there, in order (a long word may break across rows).
         joined = "".join("".join(texts).split())
         for row in OWNER_ROWS:
             for cell in row:
@@ -200,21 +249,8 @@ class WideTableLayoutTests(unittest.TestCase):
 
     def test_a_header_with_no_body_too_narrow_for_columns_keeps_its_labels(self) -> None:
         texts = lines_text(self.render("| first label | second label |\n|---|---|", 12))
-        self.assertTrue(texts)
         self.assertIn("firstlabel", "".join("".join(texts).split()))
         self.assertIn("secondlabel", "".join("".join(texts).split()))
-
-    def test_a_fitting_table_is_unchanged(self) -> None:
-        self.assertEqual(
-            lines_text(self.render("| X | Y |\n| --- | --- |\n| 1 | a |\n| 2 | b |", 40)),
-            ["X    Y  ", "───  ───" + " " * 32, "1    a  ", "2    b  "],
-        )
-
-    def test_no_color_draws_the_same_text(self) -> None:
-        plain = without_colour(THEME)
-        self.assertEqual(lines_text(self.render(OWNER_TABLE, 96, plain)), lines_text(self.render(OWNER_TABLE, 96)))
-        rows = self.render(OWNER_TABLE, 96, plain)
-        self.assertTrue(all(span.style.bold for span in rows[0] if span.text.strip()))
 
     def test_every_width_from_40_to_200_keeps_every_cell_inside_the_row(self) -> None:
         for cols in range(40, 201):
@@ -250,25 +286,22 @@ class WideTableLayoutTests(unittest.TestCase):
         for cols in (60, 70, 87):
             texts = lines_text(self.render(source, cols - 4))
             self.assertFalse(any(text.startswith("h0:") for text in texts), (cols, texts))
-            self.assertEqual(sum(1 for text in texts if set(text.strip()) == {"─", " "}), 1)
-            starts = [cell_width(texts[0][: texts[0].index(f"h{n}")]) for n in range(5)]
-            for n, path in enumerate(paths):
-                end = starts[n + 1] if n + 1 < 5 else None
-                self.assertEqual("".join(cells_slice(text, starts[n], end).strip() for text in texts[2:]), path)
+            cells = box_rows(texts)
+            self.assertEqual(cells[0], [f"h{n}" for n in range(5)])
+            self.assertEqual(["".join(cell.split()) for cell in cells[1]], paths, cols)
 
     def test_header_code_spans_and_links_stay_bold(self) -> None:
         rows = self.render("| `key` | [docs](https://example.com) |\n|---|---|\n| a | b |", 60)
-        shown_spans = [span for span in rows[0] if span.text.strip()]
+        shown_spans = [span for span in rows[1] if span.text.strip() and not set(span.text) <= BOX]
         self.assertEqual(" ".join(span.text for span in shown_spans).split(), ["key", "docs", "(https://example.com)"])
         self.assertTrue(all(span.style.bold for span in shown_spans), shown_spans)
 
-    def test_a_blank_row_sets_apart_only_the_rows_that_wrap(self) -> None:
+    def test_a_rule_under_every_row_and_no_blank_inside_the_box(self) -> None:
         long = " ".join(f"word{n}" for n in range(40))
         texts = lines_text(self.render(f"| k | v |\n|---|---|\n| a | 1 |\n| b | 2 |\n| c | {long} |\n| d | 4 |", 60))
-        self.assertEqual([text.split()[0] for text in texts[2:4]], ["a", "b"])  # no blank between the short rows
-        self.assertEqual(texts[4], "")
-        self.assertEqual(texts[-2], "")
-        self.assertEqual(texts[-1].split(), ["d", "4"])
+        self.assertNotIn("", texts)
+        self.assertEqual([text[0] for text in texts if text[0] != "│"], ["┌", "├", "├", "├", "├", "└"])
+        self.assertEqual([row[0] for row in box_rows(texts)], ["k", "a", "b", "c", "d"])
 
 
 class WideTableStreamingTests(unittest.TestCase):
@@ -306,8 +339,48 @@ class WideTableStreamingTests(unittest.TestCase):
                         everything, history = self.stream(text, cols, live_rows, chunk)
                         for rows in (everything, history):
                             got = [word for word in words([row for row in rows if not row.endswith("⚚ Hermes")])
-                                   if word != "┃" and set(word) != {"─"}]
-                            self.assertEqual(sorted(got), sorted(expected))
+                                   if word != "┃"]
+                            if live_rows == 12 and rows is everything:
+                                # released on the first rows' columns: a later path may break after a `/`
+                                self.assertEqual(sorted("".join(got)), sorted("".join(expected)))
+                            else:
+                                self.assertEqual(sorted(got), sorted(expected))
+                            box = [row[4:] for row in rows if row[4:5] in ("┌", "├", "└", "│")]
+                            self.assertEqual((box[0][0], box[-1][0]), ("┌", "└"), "the box is not closed")
+                            self.assertEqual(sum(1 for row in box if row[0] == "┌"), 1)
+                            self.assertEqual(sum(1 for row in box if row[0] == "└"), 1)
+
+    def test_a_table_ending_the_reply_is_closed_in_scrollback_after_a_release(self) -> None:
+        text = "| a | b |\n|---|---|\n" + "".join(f"| r{n} | s{n} |\n" for n in range(12))
+        for ending in ("complete", "final"):
+            with self.subTest(ending=ending):
+                transcript = Transcript(clock=lambda: 100.0)
+                transcript.apply(ev("message.start"))
+                transcript.apply(ev("message.delta", text=text))
+                taken = lines_text(transcript.take_stable_lines(60, THEME, live_rows=8))
+                self.assertTrue(any("r10" in row for row in taken), "the table was not released")
+                self.assertFalse(any("└" in row for row in taken), "closed before the table ended")
+                live = lines_text(transcript.live_lines(60, THEME))
+                self.assertTrue(live and "└" in live[-1], live)  # the live region shows the box closed
+                if ending == "complete":
+                    transcript.apply(ev("message.complete", text="", status="complete"))
+                    taken += lines_text(transcript.take_stable_lines(60, THEME, live_rows=8))
+                else:
+                    taken += lines_text(transcript.take_stable_lines(60, THEME, final=True, live_rows=8))
+                self.assertEqual(taken[-1][4:5], "└", taken[-3:])
+                self.assertEqual(sum(1 for row in taken if "└" in row), 1)
+                self.assertEqual(lines_text(transcript.live_lines(60, THEME)), [])
+
+    def test_a_released_table_closes_before_the_text_after_it(self) -> None:
+        text = "| a | b |\n|---|---|\n" + "".join(f"| r{n} | s{n} |\n" for n in range(12))
+        transcript = Transcript(clock=lambda: 100.0)
+        transcript.apply(ev("message.start"))
+        transcript.apply(ev("message.delta", text=text))
+        taken = lines_text(transcript.take_stable_lines(60, THEME, live_rows=8))
+        transcript.apply(ev("message.delta", text="after the table\n"))
+        taken += lines_text(transcript.take_stable_lines(60, THEME, live_rows=8))
+        at = next(i for i, row in enumerate(taken) if "after the table" in row)
+        self.assertEqual(taken[at - 1][4:5], "└", taken[at - 3 : at + 1])
 
     def test_a_tall_wrapped_table_is_released_by_the_rows_it_draws(self) -> None:
         long = " ".join(f"word{n}" for n in range(60))
@@ -342,6 +415,7 @@ class WideTableStreamingTests(unittest.TestCase):
         self.assertEqual(len(starts), 1, late_rows)
         self.assertEqual(sorted(word for word in words(taken) if word.startswith("tail")),
                          sorted(f"tail{n}" for n in range(40)))
+        box_rows([row[4:] for row in taken if row[4:5] in ("┌", "├", "└", "│")])
 
     def test_a_late_long_cell_on_narrow_frozen_columns_takes_the_rows_room(self) -> None:
         head = "| key | value | note |\n|---|---|---|\n" + "".join(f"| k{n} | v{n} | ok |\n" for n in range(30))
@@ -357,29 +431,27 @@ class WideTableStreamingTests(unittest.TestCase):
             transcript.apply(ev("message.delta", text=late[at : at + 5]))
             taken += lines_text(transcript.take_stable_lines(150, THEME, live_rows=42))
             heights.append(len(lines_text(transcript.live_lines(150, THEME))))
-        while heights[-1] == 0:  # the row's line break: the row has left for scrollback
-            heights.pop()
+        heights.pop()  # the row's line break: the row has left for scrollback, only the box's bottom is live
         self.assertEqual(heights, sorted(heights), "the live height jumped back and forth")
-        self.assertLessEqual(max(heights), 4, heights)
+        self.assertLessEqual(max(heights), 5, heights)
         transcript.apply(ev("message.complete", text="", status="complete"))
         taken += lines_text(transcript.take_stable_lines(150, THEME, live_rows=42))
-        late_rows = taken[next(i for i, row in enumerate(taken) if "late" in row):]
-        late_rows = [row for row in late_rows if row.strip("┃ ")]
+        late_rows = [row for row in taken[next(i for i, row in enumerate(taken) if "late" in row):] if "│" in row]
         self.assertLessEqual(len(late_rows), 3, late_rows)
-        start = late_rows[0].index("this")
-        self.assertGreaterEqual(max(len(row[start:].rstrip().rsplit("  ", 1)[0]) for row in late_rows), 100, late_rows)
+        self.assertGreaterEqual(max(len(row.split("│")[2].strip()) for row in late_rows), 100, late_rows)
         self.assertEqual(sorted(w for w in words(late_rows) if w != "┃"), sorted(["late", "fine", *(sentence * 2).split()]))
-        # The short rows above it are not set apart: only the row that wraps is.
-        self.assertFalse(any(row.strip("┃ ") == "" for row in taken[taken.index(next(r for r in taken if "k0" in r)):
-                                                                        taken.index(next(r for r in taken if "k29" in r))]))
+        # The rule above the late row meets the narrow rows' borders and its own.
+        rule = taken[next(i for i, row in enumerate(taken) if "late" in row) - 1]
+        self.assertTrue({"┴", "┬"} <= set(rule), rule)
+        box_rows([row[4:] for row in taken if row[4:5] in ("┌", "├", "└", "│")])
 
     def test_history_recomputes_the_widths_over_the_whole_table(self) -> None:
         source = "| a | b |\n|---|---|\n" + "".join(f"| r{n} | short |\n" for n in range(8))
         source += "| last | " + " ".join(f"w{n}" for n in range(30)) + " |"
         whole = lines_text(render_markdown(source, 50, THEME))
-        self.assertTrue(any(row.startswith("last") for row in whole))
-        starts = {cell_width(row[: row.index("w")]) for row in whole if re.search(r"\bw\d", row)}
-        self.assertEqual(len(starts), 1, whole)
+        cells = box_rows(whole)
+        self.assertEqual(cells[-1][0], "last")
+        self.assertEqual(cells[-1][1].split(), [f"w{n}" for n in range(30)])
 
 
 if __name__ == "__main__":

@@ -2042,9 +2042,12 @@ class Transcript:
 
         sources = _display_lines(block.text) if block.done else _stable_lines(block.text, final, cap, height)
         fresh = sources[self._cursor_lines :]
-        if not fresh:
+        ending = block.done or final  # nothing more of the reply will come: a table left open is closed
+        if not fresh and not (ending and self._cursor_state.table):
             return []
-        rows, self._cursor_state = render_lines(fresh, self._cursor_state, _reply_width(width), theme)
+        rows, self._cursor_state = render_lines(fresh, self._cursor_state, _reply_width(width), theme, closed=ending)
+        if not fresh:
+            self._version += 1  # only the open table's bottom was taken: the live rows drawn with it are stale
         opens_block = self._cursor_lines == 0
         self._cursor_lines = len(sources)
         return self._spaced(_marked(rows, opens_block, theme, width, block.model), opens_block)

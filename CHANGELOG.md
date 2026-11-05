@@ -4,21 +4,29 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **A Markdown table wider than the terminal wraps inside its columns in the
-  OMH TUI.** Before, such a table showed its raw source (`| a | b |` rows
-  and the `|---|---|` divider). Now its short columns keep their whole width,
-  and the long columns share the rest of the row. Each cell wraps inside its
-  column, a word too long for the column breaks across rows (a path or URL
-  after a `/`), and a blank row sets apart each body row that takes more
-  than one row. Cells show their inline markup (`code`, **bold**, links),
-  and a code span keeps its style when it wraps; the header stays bold
-  throughout. Only when a terminal is too narrow for columns of 8 cells is
-  each body row drawn as `header: value` lines. A table taller than the live
-  region is now also released by the rows it draws, not only by its source
-  lines. A row that arrives after the release keeps the columns already
-  drawn at least as wide as they are, takes the rest of the row's width for
-  the cells that want it, and wraps inside that. `/history` lays the whole
-  table out again. Column alignment (`:---:`) is still not drawn.
+- **The OMH TUI draws Markdown tables as boxes, and a table wider than the
+  terminal wraps inside its columns.** Every table is now a box like Claude
+  Code's: `┌─┬─┐` borders in the rule colour, the header bold in the look's
+  brand colour, a `├─┼─┤` line under the header and under every body row,
+  and a cell of padding inside each side. This changes the look of tables
+  that fit too: they no longer use the `─` band under the header. A table
+  wider than the terminal used to show its raw source (`| a | b |` rows and
+  the `|---|---|` divider). Now its short columns keep their whole width,
+  and the long columns share the rest of the row. Each cell wraps inside
+  its column, and a word too long for the column breaks across rows (a path
+  or URL after a `/`). Cells show their inline markup (`code`, **bold**,
+  links), and a code span keeps its style when it wraps. The borders are
+  not copied by a drag; NO_COLOR keeps them. Only when a terminal is too
+  narrow for columns of 8 cells is each body row drawn as `header: value`
+  lines instead. A table taller than the live region is now also released
+  by the rows it draws, not only by its source lines. In scrollback, its
+  last released row has no bottom border until the table ends; the live
+  region shows the box closed in the meantime. A
+  row that arrives after the release keeps the columns already drawn at
+  least as wide as they are, and takes the rest of the row's width for the
+  cells that want it. Its border line meets both rows' columns. `/history`
+  lays the whole table out again. Alignment colons (`:---:`) are still not
+  drawn.
 - **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
   on.** With that setting each delegated child works in a git worktree of its
   own, made from the parent's last commit, so a dependent node and the verify
