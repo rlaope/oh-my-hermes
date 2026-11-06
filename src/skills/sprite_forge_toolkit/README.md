@@ -77,11 +77,18 @@ Exact metric definitions:
 - **common scale**: a single scale factor applied to all frames so the median
   body height maps to `--target-height`; omitted `--target-height` keeps the
   median, i.e. scale = 1.0. Resizing is nearest-neighbor.
-- **baseline_y**: the shared bottom row every body's feet sit on after
-  alignment (the frame's last row); bodies are horizontally centered.
-- **anchor_y_std**: population standard deviation of the per-frame feet rows
-  measured on the output frames after alignment, divided by the frame height.
-  A value above 0 signals residual misalignment. Threshold: **0.05**.
+- **baseline_y**: with `--align feet` (default) the shared bottom row every
+  body's feet sit on (the frame's last row), bodies horizontally centered; with
+  `--align cell` the median source feet row after scaling.
+- **anchor_y_std**: population standard deviation of the per-cell feet rows
+  (lowest retained opaque row) measured on the INPUT sheet, divided by the cell
+  height. It is measured before alignment because alignment sets the output
+  feet by construction. Threshold: **0.05**, gating `--align feet` only; with
+  `--align cell` it is reported, not gated.
+- **key_spill_pixels / key_spill_share**: retained opaque pixels within twice
+  `--tolerance` of the key colour (magenta fringe, or a costume colour near the
+  key). Reported, not gated; a share that is not near 0 means regenerate on
+  another key (`--key 00FF00`) or a despill step outside this helper.
 - **verdict**: `PASS` when `body_scale_cv <= 0.08` and `anchor_y_std <= 0.05`,
   otherwise `REGENERATE`. A REGENERATE verdict still writes all outputs but
   exits with code 3; fix the source sheet, not the produced frames.

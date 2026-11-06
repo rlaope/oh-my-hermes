@@ -273,7 +273,7 @@ In the renderer (headless Chrome), WebGL2 shaders and three.js (r160 `build/thre
 
 - Create the context with `preserveDrawingBuffer: true`. This keeps frames from coming out black because the buffer is empty at capture time.
 - Fix the canvas size at `REEL.W × REEL.H` pixels and set the CSS size to match. The scene coordinates do not change even in a `--scale 0.5` draft.
-- Download libraries into `reel/lib/` as files and load them in `index.html`, before `engine.js`, with `<script src="lib/three.min.js"></script>`. Do not rely on a CDN during a render.
+- Put the licensed library files you were given (or that exist in the approved dependency root) into `reel/lib/` and load them in `index.html`, before `engine.js`, with `<script src="lib/three.min.js"></script>`. Do not rely on a CDN during a render.
 - For the three.js animation mixer, set the time with `mixer.setTime(lt)`. Do not use `clock.getDelta()`.
 - To render Hangul in 3D, draw the text on a 2D canvas and attach it as a `THREE.CanvasTexture`, or lift points sampled from the text pixels (T04) into 3D coordinates.
 

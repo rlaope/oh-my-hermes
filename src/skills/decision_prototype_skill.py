@@ -114,7 +114,7 @@ DEFINITION = SkillDefinition(
         ProcedureCheck(
             "prototype_execution_evidence_check",
             ("execution_status", "observed_outputs", "evidence_refs", "interpretation", "confidence", "unresolved_questions"),
-            "When no executor is available, emit the prepared handoff and report results as unobserved; when execution occurred, record only observed outputs and bounded evidence references, keep interpretation and confidence separate, and mark timeout or inconclusive runs as such; tool success is never product validation.",
+            "When no executor is available, emit the prepared handoff and report results as unobserved; when execution occurred, record only observed outputs and bounded evidence references, keep interpretation and confidence separate, and mark timeout or inconclusive runs as such; tool success is never product validation. A performance or concurrency probe fixes its pass threshold before the run, warms up once, repeats at least five times and records min, median, p95 and machine load; fewer runs are inconclusive.",
         ),
         ProcedureCheck(
             "prototype_cleanup_receipt_check",
@@ -157,7 +157,7 @@ DEFINITION = SkillDefinition(
             "prototype_close_receipt", "validation", (_DECISION_QUESTION, _EXPERIMENT_BUDGET, _SCRATCH_BOUNDARY, _MEASUREMENT_METHOD),
             (_DECISION_RECEIPT, DECISION_PROTOTYPE_ARTIFACT),
             ("prototype_scope_check", "prototype_budget_isolation_check", "prototype_smallest_artifact_check", "prototype_execution_evidence_check", "prototype_cleanup_receipt_check"),
-            "Decide keep or discard, observe cleanup before reporting `discarded`, and close with a compact decision receipt that `ralplan` can consume without transcript replay and without any implementation handoff.",
+            "Decide keep or discard, observe cleanup before reporting `discarded`, and close with a compact decision receipt, handed to `ralplan` for planning, that needs no transcript replay and without any implementation handoff.",
             on_fail=ProcedureBail(
                 still_stands=('decision_prototype/v1', 'prepared prototype handoff with exact commands and expected observations', 'observation ledger separating observed outputs from interpretation and confidence'),
                 downgrade_to='unresolved',
@@ -187,7 +187,7 @@ DEFINITION = SkillDefinition(
         "Select the smallest artifact that can answer the question and state why a larger one was not needed.",
         "Separate prepared handoff, observed outputs, interpretation, confidence, and cleanup state as distinct evidence states.",
         "Preserve the declared task, fixture, environment, and sample limits so the result is not generalized beyond them.",
-        "End with a decision receipt that `ralplan` can consume: supported option, rejected option, residual risk, evidence limits, and prototype-code reference permission.",
+        "End with a decision receipt, handed to `ralplan` for planning: supported option, rejected option, residual risk, evidence limits, and prototype-code reference permission.",
         "When the question is about logic or state, or about an interaction or layout, or the receipt may let later work reference the prototype code, load `references/artifact-shapes.md`: a pure module a plan can lift with the full state shown after each action, structurally different variants mounted in the real host page, and kept code on a named throwaway ref.",
     ),
     why_this_exists=(
@@ -209,13 +209,13 @@ DEFINITION = SkillDefinition(
         ),
     ),
     good_example=SkillExample(
-        prompt="Run a small spike to check whether the streaming API can hold 500 concurrent connections on one worker before we plan the migration.",
+        prompt="Run a small spike to check whether the streaming API can hold 500 concurrent connections on one worker, or whether we must shard across two, before we plan the migration.",
         expected="Frame one decision question with a stable id, bound the budget and scratch worktree, prepare a timing probe with exact commands and expected observations, record only observed results, and close with a decision receipt for planning.",
         why="One empirical uncertainty blocks planning and a cheap, reversible, isolated probe can answer it without building the migration.",
     ),
     bad_example=SkillExample(
         prompt="decision-prototype build the whole notifications feature as a prototype and merge it if it works.",
-        expected="Refuse the multi-feature scope, ask for the one decision the prototype should settle, and route accepted implementation to `ralplan` then `ultrawork`.",
+        expected="Refuse the multi-feature scope, ask for the one decision the prototype should settle, and route accepted implementation to `ralplan`, and send the accepted plan to `ultrawork`.",
         why="A general feature build is not a bounded experiment, and a successful prototype is never promoted without a separate accepted plan.",
     ),
     final_checklist=(

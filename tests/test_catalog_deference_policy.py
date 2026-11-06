@@ -323,9 +323,14 @@ NON_SKILL_BACKTICKS = frozenset(
 # `systematic-review` defers topic discovery to `source-finder`, one supplied
 # paper to `paper-learning` and a HellaSwag log check to `repro-audit`; no
 # sibling gains a statement pointing back. Three cases, three pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 410
-EXPECTED_DEFERENCE_PAIRS = 426
-EXPECTED_DEFERRING_OWNERS = 121
+# `voice-operator` and `media-input-operator` each name the other (a spoken
+# instruction versus spoken material), `connector-operator` sends a local
+# desktop application to `command-operator`, and `show-reel` sends trimming or
+# caption burn-in to `command-operator`: three cases, four pairs, two new
+# owners.
+EXPECTED_DEFERENCE_CASES = 413
+EXPECTED_DEFERENCE_PAIRS = 430
+EXPECTED_DEFERRING_OWNERS = 123
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

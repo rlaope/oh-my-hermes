@@ -376,7 +376,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then the render rail: every body names its siblings by the label `skill_view`
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
-        self.assertEqual(_digest(legacy_hashes), '7e537e8dbd4e8d9a0104d0bba4b7eb5d645e14f031baea6674df7c01e1884b2c')
+        # Design, media and operator skill review: bodies of accessibility-audit, apps, browser,
+        # files, image-cards, localization-review, media-input, show-reel, terminal, visual-qa and
+        # voice-input move (verdict vocabulary, exact-payload and bulk-change confirmations, page
+        # text as data, text read-back, per-string locale checks, renderer order); the pin before
+        # it was 7e537e8d...b2c.
+        self.assertEqual(_digest(legacy_hashes), 'cddde64236f866f9f1669d2d437629978f0aa8ebd81f4d48be12273104e63696')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -391,7 +396,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
         # 122431 -> 124814: the render rail writes each sibling under its loadable label
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
-        self.assertEqual(legacy['repeated']['bytes'], 124814)
+        # 124814 -> 123563 (-1251): img-summary states its own completion checklist, so the
+        # materials-category default lines it no longer repeats leave the repeated total.
+        self.assertEqual(legacy['repeated']['bytes'], 123563)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

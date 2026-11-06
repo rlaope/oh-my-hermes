@@ -87,7 +87,7 @@ Required inputs:
 Expert clarification questions:
 - `grid sheet from the host image tool on flat #FF00FF`
   - English: Which host image tool produces the sheet, which grid (2x2, 2x3, ...) holds which pose, and is the background flat #FF00FF?
-  - Korean: Which host image tool produces the sheet, which grid (2x2, 2x3, ...) holds which pose, and is the background flat #FF00FF?
+  - Korean: 어떤 이미지 도구로 시트를 만들고, 어떤 격자(2x2, 2x3 등)의 어느 칸에 어떤 포즈가 들어가며, 배경은 단색 #FF00FF인가요?
 
 Expected outputs:
 

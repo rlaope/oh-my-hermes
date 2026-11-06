@@ -28,10 +28,13 @@ DEFINITION = SkillDefinition(
     delegation_boundary="retained-catalog-intent", progressive_disclosure=True,
     reasoning_demand="heavy",
     required_inputs=_INPUTS, expected_outputs=_OUTPUTS,
-    expert_questions=tuple(ExpertQuestion(key, question, question) for key, question in (
-        (_INPUTS[0], "Which host image tool produces the sheet, which grid (2x2, 2x3, ...) holds which pose, and is the background flat #FF00FF?"),
-        (_INPUTS[1], "What cell size and feet baseline (for example 512px cell, y=430) and which frames map to which game-data timings?"),
-        (_INPUTS[2], "Which new directory receives frames, is optional Pillow installed in a separate environment, and what host timeout bounds the run?"),
+    expert_questions=tuple(ExpertQuestion(key, question, korean) for key, question, korean in (
+        (_INPUTS[0], "Which host image tool produces the sheet, which grid (2x2, 2x3, ...) holds which pose, and is the background flat #FF00FF?",
+         "어떤 이미지 도구로 시트를 만들고, 어떤 격자(2x2, 2x3 등)의 어느 칸에 어떤 포즈가 들어가며, 배경은 단색 #FF00FF인가요?"),
+        (_INPUTS[1], "What cell size and feet baseline (for example 512px cell, y=430) and which frames map to which game-data timings?",
+         "게임이 기대하는 셀 크기와 발 기준선(예: 512px 셀, y=430)은 무엇이고, 어떤 프레임이 게임 데이터의 어떤 타이밍에 대응하나요?"),
+        (_INPUTS[2], "Which new directory receives frames, is optional Pillow installed in a separate environment, and what host timeout bounds the run?",
+         "프레임을 담을 새 디렉터리는 어디이고, Pillow가 별도 환경에 설치돼 있으며, 실행 시간 제한은 얼마인가요?"),
     )),
     opening_steps=(
         "Read `toolkit/README.md` and `references/execution-and-qa.md` before executing `toolkit/scripts/forge.py`; installation and skill discovery never run it.",
@@ -142,9 +145,12 @@ python scripts/forge.py process --input sheet.png --rows 2 --cols 3 \\
 ```
 
 The helper keeps the largest component per cell plus components >= 5% of it,
-applies one common scale (nearest-neighbor) and aligns every body's feet on a
-shared baseline. An empty cell or a body touching the cell edge (bleed) is
-refused with the cell index.
+applies one common scale (nearest-neighbor) and, by default (`--align feet`),
+pins every body's lowest row to one baseline and centres it. For jump, fall,
+lunge or weapon-extended frames use `--align cell`: each body keeps the place
+its source cell gave it, so a lifted pose stays lifted and the cell is the
+pivot; the feet gate is then reported, not applied. An empty cell or a body
+touching the cell edge (bleed) is refused with the cell index.
 
 ## Read back and decide
 
@@ -152,7 +158,16 @@ Exit codes: 0 PASS, 2 refusal (no outputs), 3 REGENERATE (outputs written as
 evidence). On exit 0 or 3, read `qc.json` (`sprite_forge_qc/v1`), every
 `frame_NNN.png` and `sheet.png`, and recompute their sha256 against the receipt.
 
-- `body_scale_cv` <= 0.08 and `anchor_y_std` <= 0.05 give PASS.
+- `body_scale_cv` <= 0.08 and `anchor_y_std` <= 0.05 give PASS. `anchor_y_std`
+  is the spread of the feet rows in the SOURCE cells (alignment would hide it
+  in the output); it fails a sheet whose figures stand at different heights.
+- `body_scale_cv` compares body heights, so poses that differ in height
+  (crouch, jump, hit-react) raise it. Gate idle and walk cycles on it; cut other
+  moves from their own sheet, or from the same sheet only with the drift named
+  in the record.
+- `key_spill_share` in qc.json is reported, not gated. A share that is not near
+  0 means magenta fringe or a costume colour near the key: regenerate the sheet
+  on another flat key (`--key 00FF00`) instead of keying around it.
 - REGENERATE means the source drifted: ask the host image tool for a new sheet
   with tighter pose and scale instructions. Never hand-patch, redraw or shift
   produced frames to pass the gate.
@@ -181,8 +196,11 @@ waste; do not delete them before the record is written.
 
 Declare the cell size and the feet baseline the game expects, for example a
 512px cell with feet at y=430, and the target frame height passed to the helper.
-Every frame must share that baseline; the helper's `baseline_y` and
-`anchor_y_std` are the evidence.
+The helper has no cell-size or baseline argument: it sizes the frame to the
+scaled bodies (or to the scaled cell with `--align cell`) and reports
+`frame_size` and `baseline_y` in qc.json. Record those, then place the frames on
+the game's canvas and baseline in the engine or an import step. The source-row
+`anchor_y_std` is the alignment evidence.
 
 ## Attack-frame timing
 

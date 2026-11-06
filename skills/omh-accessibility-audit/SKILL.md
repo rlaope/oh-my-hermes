@@ -52,7 +52,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If no rendered or DOM/accessibility-tree evidence exists, prepare the audit plan and mark verdict BLOCKED_BY_MISSING_ACCESSIBILITY_EVIDENCE.
+- If no rendered or DOM/accessibility-tree evidence exists, prepare the audit plan and return verdict BLOCK with blocker `missing_accessibility_evidence`.
 - If automated scan output exists without keyboard or screen-reader evidence, keep the verdict HOLD and request the smallest focus/announcement trace.
 - If the request is mostly visual layout or CJK clipping, route to visual-qa while preserving accessibility follow-up checks.
 
@@ -120,7 +120,7 @@ Artifact expectations:
 - semantic_structure_review/v1 with labels, roles, names, headings, landmarks, form errors, live regions, and state semantics
 - focus_and_keyboard_trace/v1 only from observed keyboard navigation, tab order, focus appearance, skip/focus-trap checks, and critical interaction paths
 - screen_reader_announcement_map/v1 only when announcements, accessible names, roles, values, hints, and dynamic updates are observed or supplied
-- target_size_and_pointer_review/v1 with 24x24 CSS px / 44x44 mobile target expectations and pointer gesture alternatives
+- target_size_and_pointer_review/v1 with 24x24 CSS px as the WCAG 2.2 AA criterion (2.5.8), 44x44 as AAA (2.5.5) or platform guidance reported as advisory, and pointer gesture alternatives
 - contrast_and_reflow_review/v1 with measured contrast, zoom/reflow risk, clipping, overflow, and CJK/localized text concerns
 - accessibility_audit_verdict/v1 returns PASS, HOLD, or BLOCK with missing evidence and remediation route
 

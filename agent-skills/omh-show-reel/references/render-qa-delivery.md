@@ -76,7 +76,7 @@ With audio measure integrated loudness, true peak and A/V sync; STT only when
 speech exists. No observed listening means listening not_observed even if metrics
 pass. No audio means checks not_applicable with reason, not fabricated zeros.
 
-Use `qa_check.py FINAL --policy policy.json` with the chosen delivery limits.
+Use `qa_check.py FINAL --audio-mode muted|music-only|narration|narration+bed/SFX --policy policy.json` with the chosen delivery limits (`--audio-mode` is required).
 `max_h264_level` compares ffprobe's stream `level` (42 means Level 4.2, 52 means
 Level 5.2; select for the intended 1080p/4K target). It fails on non-H.264 rather
 than pretending that codec has a comparable H.264 level. Measurements include

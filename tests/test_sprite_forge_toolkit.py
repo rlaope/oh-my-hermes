@@ -140,6 +140,67 @@ class PillowCliTests(ForgeFixture):
         self.assertEqual(qc["rows"], 2)
         self.assertEqual(qc["cols"], 2)
 
+    def lifted_sheet(self, name, lifts, key=(255, 0, 255), body=(230, 235, 240)):
+        from PIL import Image, ImageDraw
+        sheet = Image.new("RGB", (512, 512), key)
+        draw = ImageDraw.Draw(sheet)
+        for index, lift in enumerate(lifts):
+            row, col = divmod(index, 2)
+            x0 = col * 256 + 108
+            bottom = row * 256 + 244 - lift
+            draw.rectangle([x0, bottom - 170, x0 + 40, bottom], fill=body)
+        path = self.root / name
+        sheet.save(path, "PNG")
+        return path
+
+    def test_misaligned_feet_in_source_fail_the_gate(self):
+        # One pose stands 40 px above the others in its cell: feet differ by
+        # more than 5% of the 256 px cell. The gate used to read back the row
+        # the code had just pinned, so this exited 0 with anchor_y_std == 0.
+        api = helper_api()
+        path = self.lifted_sheet("lifted.png", (0, 0, 40, 0))
+        code, err = self.run_main(api, ["process", "--input", str(path), "--rows", "2",
+                                        "--cols", "2", "--output", str(self.output)])
+        self.assertEqual(code, 3, err)
+        qc = json.loads((self.output / "qc.json").read_text())
+        self.assertEqual(qc["verdict"], "REGENERATE")
+        self.assertGreater(qc["anchor_y_std"], 0.05)
+
+    def test_aligned_feet_keep_zero_anchor_error(self):
+        api = helper_api()
+        path = self.lifted_sheet("flat.png", (0, 0, 0, 0))
+        code, err = self.run_main(api, ["process", "--input", str(path), "--rows", "2",
+                                        "--cols", "2", "--output", str(self.output)])
+        self.assertEqual(code, 0, err)
+        qc = json.loads((self.output / "qc.json").read_text())
+        self.assertEqual(qc["anchor_y_std"], 0.0)
+
+    def test_cell_alignment_keeps_an_airborne_frame_off_the_ground(self):
+        from PIL import Image
+        api = helper_api()
+        path = self.lifted_sheet("jump.png", (0, 0, 40, 0))
+        code, err = self.run_main(api, ["process", "--input", str(path), "--rows", "2",
+                                        "--cols", "2", "--align", "cell",
+                                        "--output", str(self.output)])
+        self.assertEqual(code, 0, err)
+        qc = json.loads((self.output / "qc.json").read_text())
+        self.assertFalse(qc["anchor_y_std_gated"])
+        feet = []
+        for i in (0, 2):
+            box = Image.open(self.output / f"frame_{i:03d}.png").convert("RGBA").getchannel("A").getbbox()
+            feet.append(box[3])
+        self.assertEqual(feet[0] - feet[1], 40)
+
+    def test_key_spill_is_reported(self):
+        api = helper_api()
+        # A body colour inside twice the tolerance of the key but outside it.
+        path = self.lifted_sheet("spill.png", (0, 0, 0, 0), body=(255, 0, 255 - 45))
+        code, err = self.run_main(api, ["process", "--input", str(path), "--rows", "2",
+                                        "--cols", "2", "--output", str(self.output)])
+        self.assertEqual(code, 0, err)
+        qc = json.loads((self.output / "qc.json").read_text())
+        self.assertGreater(qc["key_spill_pixels"], 0)
+
     def test_alpha_input_passthrough(self):
         api = helper_api()
         from PIL import Image, ImageDraw

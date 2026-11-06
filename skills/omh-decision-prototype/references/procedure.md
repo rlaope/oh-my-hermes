@@ -28,7 +28,7 @@ Declared checks:
   - Criterion: Choose the smallest artifact that can answer the question (wireframe, CLI spike, API probe, fixture, timing probe, test harness, or mocked interaction), use synthetic fixtures by default, and refuse expansion into general feature implementation.
 - `prototype_execution_evidence_check`
   - Required result fields: `execution_status`, `observed_outputs`, `evidence_refs`, `interpretation`, `confidence`, `unresolved_questions`
-  - Criterion: When no executor is available, emit the prepared handoff and report results as unobserved; when execution occurred, record only observed outputs and bounded evidence references, keep interpretation and confidence separate, and mark timeout or inconclusive runs as such; tool success is never product validation.
+  - Criterion: When no executor is available, emit the prepared handoff and report results as unobserved; when execution occurred, record only observed outputs and bounded evidence references, keep interpretation and confidence separate, and mark timeout or inconclusive runs as such; tool success is never product validation. A performance or concurrency probe fixes its pass threshold before the run, warms up once, repeats at least five times and records min, median, p95 and machine load; fewer runs are inconclusive.
 - `prototype_cleanup_receipt_check`
   - Required result fields: `keep_discard_decision`, `cleanup_status`, `supported_option`, `rejected_option`, `residual_risk`, `evidence_limits`, `prototype_code_reference_permission`, `promotion_status`
   - Criterion: Report `discarded` only after cleanup is observed and record cleanup failure distinctly; the receipt names the supported option, rejected option, residual risk, evidence limits, and whether prototype code may be referenced, and promotion stays blocked until a separate accepted plan and implementation handoff exist.
@@ -69,7 +69,7 @@ Ingest only observed outputs and bounded evidence references, then derive interp
 
 ### `prototype_close_receipt` (validation)
 
-Decide keep or discard, observe cleanup before reporting `discarded`, and close with a compact decision receipt that `ralplan` can consume without transcript replay and without any implementation handoff.
+Decide keep or discard, observe cleanup before reporting `discarded`, and close with a compact decision receipt, handed to `ulw-plan` for planning, that needs no transcript replay and without any implementation handoff.
 
 - Input refs: `decision question`, `experiment budget`, `scratch boundary`, `measurement method`
 - Output refs: `decision receipt for planning with supported option, rejected option, residual risk, and evidence limits`, `decision_prototype/v1`

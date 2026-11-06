@@ -310,6 +310,18 @@ All notable changes will be documented here.
   pushes out a hint already there, and a message over 1000 characters is not
   read. Hint text and routes are unchanged.
 
+- **Design, media and operator skills now gate and describe what they
+  actually do.** The sprite-forge helper measures alignment on the source
+  sheet, so a misaligned sheet fails the gate instead of reading back the row
+  it had just set, and `--align cell` keeps jump and lunge frames where the
+  cell placed them. It also reports key-colour spill. Visual QA and the
+  accessibility audit return only their own verdicts and gain rule IDs for
+  focus, reflow, target size, status messages and non-text contrast. Show
+  reel no longer points at flags and downloads its toolkit does not have.
+  The browser, terminal, files and connector operators confirm the exact
+  payload and the paths a bulk change touches, and image cards read
+  generated text back.
+
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`

@@ -50,7 +50,7 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | --- | --- | --- | --- | --- |
 | LNK-1 | Link with no accessible name | critical | 2.4.4, 4.1.2 | `manual` |
 | LNK-2 | Link text that does not describe its destination | minor | 2.4.4 | `manual` |
-| LNK-3 | Link opening a new context with no warning | minor | 3.2.5 | `manual` |
+| LNK-3 | Link opening a new context with no warning (advisory: 3.2.5 is AAA) | minor | 3.2.5 | `manual` |
 | BTN-1 | Button with no accessible name | critical | 4.1.2 | `manual` |
 
 ### Forms
@@ -66,7 +66,7 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | ID | Finding | Severity | WCAG | Fix class |
 | --- | --- | --- | --- | --- |
 | ARIA-1 | Role that is not a valid role name | major | 4.1.2 | `manual` |
-| ARIA-2 | Focusable element hidden from assistive technology | critical | 2.4.3, 4.1.2 | `auto` (unhide; the element is reachable by keyboard and must be announced) |
+| ARIA-2 | Focusable element hidden from assistive technology | critical | 2.4.3, 4.1.2 | split: whether it should be reachable at all (a closed menu or dialog should not) is `manual`; once decided, removing the hiding or removing it from the tab order (`tabindex=-1` or `inert`) is `auto` |
 | ARIA-3 | Decorative vector graphic exposed to assistive technology | major | 1.1.1 | `auto` when decorative by context, else `manual` |
 
 ### Keyboard and focus
@@ -75,12 +75,17 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | --- | --- | --- | --- | --- |
 | KEY-1 | Positive tab index overriding document order | major | 2.4.3 | `auto` (neutralize), and the resulting order is re-walked |
 | KEY-2 | Pointer handler on a non-interactive element with no keyboard path | major | 2.1.1 | split: role and focusability `auto`, the key handler `manual` |
+| KEY-3 | Focus indicator missing, or hidden behind sticky content | major | 2.4.7, 2.4.11 | `manual` |
+| KEY-4 | Keyboard trap: focus enters a region and cannot leave by keyboard | critical | 2.1.2 | `manual` |
+| RFL-1 | Content lost or scrolling in two directions at 320 CSS px width / 400% zoom | major | 1.4.10 | `manual` |
+| TGT-1 | Pointer target under 24x24 CSS px with no spacing exception | major | 2.5.8 | `manual` |
+| STAT-1 | Dynamic status or error not announced (no live region or focus move) | major | 4.1.3 | `manual` |
 
 ### Structure
 
 | ID | Finding | Severity | WCAG | Fix class |
 | --- | --- | --- | --- | --- |
-| SEM-1 | Page language not declared | critical | 3.1.1 | `auto` (the tag), with the language value verified |
+| SEM-1 | Page language not declared | critical | 3.1.1 | split: adding the attribute is `auto` only when the page language is already supplied; choosing the value is `manual` |
 | SEM-2 | Heading level skipped | major | 1.3.1 | `manual` |
 | SEM-3 | No main landmark | major | 1.3.1, 2.4.1 | `manual` |
 | SEM-4 | Embedded frame with no title | major | 2.4.1, 4.1.2 | `manual` |
@@ -91,7 +96,13 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | ID | Finding | Severity | WCAG | Fix class |
 | --- | --- | --- | --- | --- |
 | COL-1 | Color as the only carrier of meaning | minor | 1.4.1 | `manual` |
-| COL-2 | Color declared inline, contrast unverifiable from source | minor | 1.4.3 | `manual` (measure, then judge against 4.5:1 text / 3:1 large text and UI) |
+| COL-2 | Color declared inline, contrast unverifiable from source | minor | 1.4.3 | `manual` (measure, then judge against 4.5:1 text / 3:1 large text) |
+| COL-3 | UI component boundary, state or meaningful graphic under 3:1 | major | 1.4.11 | `manual` |
+
+A finding the table does not cover takes the next number of the nearest
+prefix and goes into the rerun list, so reruns stay comparable. A target size
+of 44x44 is AAA (2.5.5) or platform guidance: report it as advisory, never as an
+AA failure.
 
 Detection criteria are written against structure, not one framework's syntax:
 a rule holds for a template language when the same structural condition can be
@@ -113,3 +124,7 @@ A rule ID classifies a finding and a fix class describes a fix - neither is
 evidence the fix was applied. The audit verdict still requires observed
 keyboard and assistive-technology evidence after the change, and a scan that
 produced these findings is not a keyboard walk.
+
+This audit owns the keyboard walk (`focus_and_keyboard_trace/v1`). Visual QA
+cites that trace instead of recording its own `accessibility_keyboard_trace/v1`
+for the same surface, and keeps only what its captures show.

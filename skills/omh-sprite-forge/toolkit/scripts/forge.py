@@ -40,6 +40,10 @@ def parser():
     proc.add_argument("--key", default=DEFAULT_KEY)
     proc.add_argument("--tolerance", type=int, default=DEFAULT_TOLERANCE)
     proc.add_argument("--target-height", type=int, default=None)
+    proc.add_argument("--align", choices=("feet", "cell"), default="feet",
+                      help="feet: pin every body's lowest row to one baseline and centre it "
+                           "(idle/walk cycles). cell: keep each body where the source cell "
+                           "placed it (jump, lunge, airborne or weapon-extended frames)")
     test = sub.add_parser("selftest", help="run the built-in synthetic self test")
     test.add_argument("--output", required=True)
     return cli
@@ -195,7 +199,17 @@ def process_cell(cell_index, row, col, cell_bytes, cw, ch, alpha_input, key, tol
                 body[di + 1] = cell_bytes[si + 1]
                 body[di + 2] = cell_bytes[si + 2]
                 body[di + 3] = 255
-    return {"bbox": [x0, y0, x1, y1], "width": bw, "height": bh, "body": bytes(body)}
+    spill = 0
+    if not alpha_input:
+        kr, kg, kb = key
+        wide = 2 * tolerance
+        for i in range(0, len(body), 4):
+            if (body[i + 3] and abs(body[i] - kr) <= wide and abs(body[i + 1] - kg) <= wide
+                    and abs(body[i + 2] - kb) <= wide):
+                spill += 1
+    opaque = sum(1 for i in range(3, len(body), 4) if body[i])
+    return {"bbox": [x0, y0, x1, y1], "width": bw, "height": bh, "body": bytes(body),
+            "spill": spill, "opaque": opaque}
 
 
 def png_bytes(image):
@@ -264,26 +278,43 @@ def run_process(args, argv):
     scale = 1.0 if args.target_height is None else args.target_height / median
     scaled = [(c, max(1, int(round(c["width"] * scale))),
                max(1, int(round(c["height"] * scale)))) for c in cells]
-    frame_w = max(s[1] for s in scaled)
-    frame_h = max(s[2] for s in scaled)
-    baseline_y = frame_h - 1
+    # Alignment is judged on the INPUT: the lowest opaque row of each retained
+    # body inside its own cell, as a share of the cell height. Measuring the
+    # output would only read back the row the code just chose.
+    feet_in = [c["bbox"][3] for c in cells]
+    anchor_y_std = statistics.pstdev(feet_in) / ch
+    if args.align == "cell":
+        frame_w = max(1, int(round(cw * scale)))
+        frame_h = max(1, int(round(ch * scale)))
+        baseline_y = min(frame_h - 1, int(round(statistics.median(feet_in) * scale)))
+    else:
+        frame_w = max(s[1] for s in scaled)
+        frame_h = max(s[2] for s in scaled)
+        baseline_y = frame_h - 1
 
-    frames, feet_rows = [], []
+    frames = []
     for cell, nw, nh in scaled:
         body_img = Image.frombytes("RGBA", (cell["width"], cell["height"]),
                                    cell["body"]).resize((nw, nh), Image.NEAREST)
         frame = Image.new("RGBA", (frame_w, frame_h), (0, 0, 0, 0))
-        frame.paste(body_img, ((frame_w - nw) // 2, frame_h - nh))
-        abox = frame.getchannel("A").getbbox()
-        feet_rows.append(frame_h - 1 if abox is None else abox[3] - 1)
+        if args.align == "cell":
+            frame.paste(body_img, (int(round(cell["bbox"][0] * scale)),
+                                   int(round(cell["bbox"][1] * scale))))
+        else:
+            frame.paste(body_img, ((frame_w - nw) // 2, frame_h - nh))
         frames.append(frame)
-    anchor_y_std = statistics.pstdev(feet_rows) / frame_h
     mean_h = statistics.fmean(heights)
     if mean_h <= 0:
         raise ValueError("degenerate body heights")
     body_scale_cv = statistics.pstdev(heights) / mean_h
+    # In cell mode feet legitimately differ (a jump leaves the ground), so the
+    # feet gate applies to feet mode only; the metric is still reported.
+    anchor_gated = args.align == "feet"
     verdict = ("PASS" if body_scale_cv <= THRESHOLDS["body_scale_cv"]
-               and anchor_y_std <= THRESHOLDS["anchor_y_std"] else "REGENERATE")
+               and (not anchor_gated or anchor_y_std <= THRESHOLDS["anchor_y_std"])
+               else "REGENERATE")
+    spill = sum(c["spill"] for c in cells)
+    kept_px = sum(c["opaque"] for c in cells)
 
     sheet = Image.new("RGBA", (frame_w * args.cols, frame_h * args.rows), (0, 0, 0, 0))
     for i, frame in enumerate(frames):
@@ -324,15 +355,23 @@ def run_process(args, argv):
         "frames": frames_qc,
         "body_scale_cv": body_scale_cv,
         "anchor_y_std": anchor_y_std,
+        "align": args.align,
+        "anchor_y_std_gated": anchor_gated,
+        "key_spill_pixels": spill,
+        "key_spill_share": (spill / kept_px) if kept_px else 0.0,
         "thresholds": dict(THRESHOLDS),
         "metric_definitions": {
             "body_height": ("pixel rows spanned by the opaque bbox of the retained "
                             "components in a cell, measured before common scaling"),
             "body_scale_cv": ("population std / mean of the per-frame body heights, "
                               "measured before common scaling"),
-            "feet_row": "lowest opaque row of the frame after alignment",
-            "anchor_y_std": ("population std of per-frame feet rows after alignment, "
-                             "divided by the frame height"),
+            "feet_row": "lowest opaque row of each retained body inside its source cell",
+            "anchor_y_std": ("population std of the per-cell feet rows measured on the "
+                             "input sheet, divided by the cell height; gated in --align "
+                             "feet only"),
+            "key_spill_pixels": ("retained opaque pixels within twice the tolerance of the "
+                                 "key colour: fringe or key-coloured costume; reported, "
+                                 "not gated"),
             "verdict": ("PASS when body_scale_cv <= 0.08 and anchor_y_std <= 0.05, "
                         "otherwise REGENERATE the source sheet; never retouch frames"),
         },
@@ -351,7 +390,8 @@ def run_process(args, argv):
                       "output_dir": str(output), "verdict": verdict,
                       "frame_count": len(frames), "frame_size": [frame_w, frame_h],
                       "body_scale_cv": round(body_scale_cv, 6),
-                      "anchor_y_std": round(anchor_y_std, 6)}))
+                      "anchor_y_std": round(anchor_y_std, 6),
+                      "key_spill_pixels": spill}))
     return 0 if verdict == "PASS" else 3
 
 
