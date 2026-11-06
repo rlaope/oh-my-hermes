@@ -150,6 +150,20 @@ All notable changes will be documented here.
   `hermes gateway start` to start it again, and the restart wait reads
   `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, as Hermes does.
 
+- **A messenger reply made only of `[SILENT]` and `[SHUTUP]` lines now counts
+  as that marker.** Any `[SHUTUP]` among them mutes the thread with the 🫡
+  reaction, where "be quiet" was lost or a bare marker could get text added
+  to it. Tokens in a list, a quote, a table or a fence around several lines
+  stay an answer. A token leaves the end of an answer only after
+  sentence-ending punctuation, so `The marker - [SILENT]` stays as written.
+
+- **A queued line in the OMH TUI no longer starts ahead of a steer Hermes
+  passes on as its next prompt.** When a turn ends on its own with a steer
+  unread, the queue waits for the turn that runs it. If none starts, because
+  the turn's last model call read the steer, the queue goes on within a few
+  seconds, and a line sent during that wait stays behind the older ones. A
+  stopped or failed turn is unchanged.
+
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
   choice sent the question at once: with nothing ticked it answered with
