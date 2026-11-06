@@ -524,6 +524,23 @@ def stale_bundle_version(hermes_home: Path) -> str | None:
     return version.strip() if isinstance(version, str) else ""
 
 
+def stale_running_gateways(hermes_home: Path, *, now: float | None = None) -> list[tuple[str, Path]]:
+    """The gateways under `hermes_home` that run now on older OMH plugin code than the bundle installed for them:
+    `("default", hermes_home)` for the root's, then `(name, home)` for each bot profile running a gateway of its own.
+
+    Read from files alone: the hint's evidence (`_stale_bundle_times`: the
+    last recorded start precedes the bundle's install, which moves only when
+    the bundle's files change) and a record of a gateway running in that home
+    now (`_running_gateway_record`), so a gateway that stopped is not offered
+    a restart. A profile the shared gateway serves keeps no gateway of its
+    own and is the root's.
+    """
+    moment = time.time() if now is None else now
+    homes = [("default", hermes_home), *hermes_profile_dirs(hermes_home)]
+    return [(name, home) for name, home in homes
+            if _stale_bundle_times(home) is not None and _running_gateway_record(home, moment) is not None]
+
+
 def _stale_bundle_times(hermes_home: Path) -> tuple[str, str] | None:
     """The last recorded gateway start and the bundle's install, as UTC stamps, when the start is the earlier."""
     if not _pid_record_names_home(hermes_home):

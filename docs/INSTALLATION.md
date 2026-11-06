@@ -1841,6 +1841,27 @@ same flow through their isolated managed virtual environment. After the command
 package succeeds, the re-entered command refreshes managed skills, an already
 installed plugin bundle, and existing Hermes registration.
 
+An OMH TUI that is open through an update keeps running the generation it
+started on, and a running Hermes gateway keeps the OMH plugin code it loaded.
+Neither is restarted for you, because a restart cuts a running turn and the
+gateway is shared with your bots. Instead each one asks, and both questions
+default to no:
+
+- `omh update` asks at the end, on a terminal, for each running gateway that
+  still runs the old plugin code, and names what that gateway's record says a
+  restart interrupts first (see the gateway hint under
+  [Bot profiles](#bot-profiles)).
+- An open OMH TUI that was started by `omh` from the installer-managed
+  environment notices the update within a few seconds. It shows
+  `restart to update` on its info line and asks once, between turns:
+  `OMH updated to 4.0.6 main@1a2b3c4d. Restart the TUI now to use it?`. If
+  you pick Restart the TUI, it leaves after the running turn and once what you
+  typed is sent or cleared, then opens again on the new version and resumes
+  the same session, as `omh --resume <id>` would. If the gateway it attaches
+  to still runs the old plugin code, the reopened TUI then offers
+  `/gateway restart` once, with Cancel first. If you pick Not now, only the
+  info line hint stays.
+
 On a machine that never completed `omh setup`, `omh update` bootstraps OMH
 instead of skipping it: it installs the plugin bundle (which carries the
 Hermes Desktop half), registers and enables OMH in the Hermes config, and
@@ -3556,6 +3577,22 @@ comes from the generation the bundle now records if that holds the same
 version; another version is reported as `stale_until_restart` and needs the
 restart.
 `omh update --json` carries the same lines as `gateway_restart_hints`.
+
+When it finishes on a terminal, the `omh update` you started also asks about
+each of those gateways that runs now: it prints what the gateway's record says
+a restart interrupts (its profiles, connected bots and running work, as
+`/gateway restart` names them), then asks `Restart the Hermes gateway now so
+the new OMH plugin code loads? [y/N]`. Yes runs Hermes' own
+`hermes -p <profile> gateway restart --yes --detach` with the `hermes` on your
+PATH. A gateway a service runs lets running work finish first. Nothing is
+asked off a terminal, with `--json`, `--no-interactive` or `--yes`, in a dry
+run, or after an update that did not activate. `--restart-gateway` restarts
+those gateways without asking (under `--json`, Hermes' output goes to
+stderr), and `--no-restart-gateway` neither asks nor restarts. If a restart
+you asked for fails, `omh update` exits 4: the update stays active, and the
+line names the command to run. Ctrl+C stops the wait, not the restart. Open
+OMH TUIs are not touched; each one notices the update itself (see
+[Keep every installed layer current](#keep-every-installed-layer-current)).
 
 The OMH TUI says the same at launch, once, as a transcript warning (under a
 resumed session's history), and `omh doctor` reports it as the
