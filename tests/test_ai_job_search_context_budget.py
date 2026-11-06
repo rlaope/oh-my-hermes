@@ -143,11 +143,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            # 533907 -> 534252 and the digest re-derived: the business-operations skill audit
-            # adds required-input words and a redline rule to ten rows (+345, itemized at
+            # 533907 -> 534254 and the digest re-derived: the business-operations skill audit
+            # adds required-input words and a redline rule to ten rows (+347, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was d6dfefff...fc71.
-            (skill_capabilities, 534252, FULL_ROW_DELTA_CAP,
-             '1f90fd145a6755f9507a45bb6f95d081a56695b4f39eb1acd3003a5910db5a07',
+            (skill_capabilities, 534254, FULL_ROW_DELTA_CAP,
+             'da5f855b953a718d251e28d3dce4af68b47f5240e4c9103e2361979e2c54fe0d',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -381,7 +381,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # section; the pin before it was 4f552dc5...a07a.
         # The business-operations skill audit rewrites sixteen bodies (checklists, boundaries and
         # practitioner checks); the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '4b208f9f8676759c0f8290d63b81123b7a92f17ab5454d988475910beb333249')
+        self.assertEqual(_digest(legacy_hashes), 'd3b8bf905b149281f6bdf296a9f8785f1f9341cbe9ac0ce964551089e174bd0c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

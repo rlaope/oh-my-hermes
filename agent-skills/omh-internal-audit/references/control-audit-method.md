@@ -31,7 +31,7 @@ When the firm gives a confidence level and a tolerable deviation rate and expect
 
 ## 2b. Deviations
 
-In a sample sized to expect no deviations, any deviation, explained or not, means the control did not operate effectively for that population, unless the firm's methodology allows a stated extended sample; record which rule applied. For a sample designed with expected deviations, compare the upper deviation limit at the stated confidence, not the sample rate, with the tolerable rate (1 deviation in 59 gives 7.8% at 95%, which fails a 5% tolerance although the sample rate is 1.7%). Evaluate compensating controls only after the deviation is recorded as a deviation.
+In a sample sized to expect no deviations, any deviation, explained or not, means the control did not operate effectively for that population, unless the firm's methodology allows a stated extended sample; record which rule applied. For a sample designed with expected deviations, compare the upper deviation limit at the stated confidence (one-sided exact binomial), not the sample rate, with the tolerable rate: 1 deviation in 59 gives 7.8% at 95%, which fails a 5% tolerance although the sample rate is 1.7%, and about 93 items are needed to tolerate one deviation at 5%. Evaluate compensating controls only after the deviation is recorded as a deviation.
 
 ## 3. Evidence, strongest first
 

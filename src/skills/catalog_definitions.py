@@ -2966,7 +2966,7 @@ _DEFINITIONS = [
         safety_rules=(
             "Keep protected characteristics and missing interview evidence out of unsupported candidate recommendations.",
             "Do not claim HRIS, ATS, outreach, interview, or employment-status actions occurred.",
-            "Draft no questions on protected traits or their proxies (age, family status, health, origin), and check the local rule on what a form or question may ask (for example Korea's recruitment fairness act, Art. 4-3, bars requiring physical conditions, birthplace, marital status, property or family members' education, job or property on screening documents); say why and offer a job-related substitute.",
+            "Draft no questions on protected traits or their proxies (age, family status, health, origin), and check the local rule on what a form or question may ask on an official page (in Korea, the recruitment fairness act); route that question to `legal-compliance-review`, say why, and offer a job-related substitute.",
         ),
         quality_tier="evidence-gated",
         final_checklist=(
@@ -3081,7 +3081,7 @@ _DEFINITIONS = [
             ProcedureCheck(
                 "legal_counsel_hold_check",
                 ("trigger_ids", "impact", "likelihood_applicability", "urgency", "evidence_confidence", "reversibility", "hold_status", "counsel_owner"),
-                "Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, contractual notice or auto-renewal deadlines before the deadline in the review objective (with none supplied, any date not yet passed), and sensitive, high-risk or cross-border privacy or DPIA uncertainty.",
+                "Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, contractual notice or auto-renewal deadlines before the deadline in the review objective (with none supplied, list the dates found and ask for the deadline), and sensitive, high-risk or cross-border privacy or DPIA uncertainty.",
             ),
             ProcedureCheck(
                 "legal_negotiation_preparation_check",
@@ -9521,7 +9521,7 @@ _DEFINITIONS = [
         ),
         expected_outputs=(
             "read-only diagnosis of the current mail/calendar MCP connection state",
-            "diff-approved MCP config write scoped to read and draft-only access",
+            "diff-approved MCP config write limited to read and create-draft tools",
         ),
         artifact_expectations=("connection verification note when the wrapper captures it",),
         safety_rules=(
@@ -9535,9 +9535,9 @@ _DEFINITIONS = [
         quality_bar=_HERMES_SETUP_FIVE_STEP_BAR
         + (
             "Keep the read/draft-only access boundary — never enable Send permission — as a hard constraint on every apply step, not an optional recommendation; on Gmail that means hiding the send tool, because no drafting scope is free of send.",
-            f"When {native_tool_presence_clause('manage_connections', code=True)}, connect mail and calendar through it rather than a hand-written MCP config diff (`connect` for a hosted account, `install` or `authorize` for a catalog MCP server), and take each app's answer as given: `skipped` means continue with the surface that is connected or ask in chat, never calling it again on your own; when its result does not name the granted access, the send-boundary check stays `not_observed` until the include list is read.",
+            f"When {native_tool_presence_clause('manage_connections', code=True)}, connect mail and calendar through it rather than a hand-written MCP config diff (`connect` for a hosted account, `install` or `authorize` for a catalog MCP server), and take each app's answer as given: `skipped` means continue with the surface that is connected or ask in chat, never calling it again on your own; when its result does not name the granted access, the send-boundary check stays `not_observed` until the include list or the registered tools are read.",
         ),
-        why_this_exists="`morning-brief` exists to connect mail and calendar access for an on-demand brief while keeping the connection strictly read and draft-only and credential entry outside chat, with explicit storage authorization.",
+        why_this_exists="`morning-brief` exists to connect mail and calendar access for an on-demand brief while limiting the connection to read and create-draft tools and keeping credential entry outside chat, with explicit storage authorization.",
         do_not_use_when=(
             "The user wants Hermes to check their email or calendar right now rather than set up the connection.",
             "The connection is already configured and the user only wants today's brief, not a setup walkthrough; read mail and calendar with the connected tools and summarise them.",
@@ -9555,7 +9555,7 @@ _DEFINITIONS = [
         ),
         final_checklist=_HERMES_SETUP_SKIP_SEMANTICS
         + (
-            "The send boundary is confirmed before the brief is reported ready: the include list and registered tools hold no send operation (observed), and the report says whether the credential itself can send; else the check stays not_observed.",
+            "The send boundary is confirmed before the brief is reported ready: the server's include list (exact tool names, no globs) where it has an `mcp_servers` entry, otherwise the tools the session registers, hold no send operation (observed), and the report says whether the credential itself can send; else the check stays not_observed.",
             "With neither mail nor calendar connected the status is blocked, not complete.",
         ),
         recovery_notes=(
@@ -11839,7 +11839,7 @@ _DEFINITIONS.append(
         artifact_expectations=(
             "field_inventory/v1 lists every column, key, and free-text field with its class -- direct identifier, quasi-identifier, secret, free text, sensitive category, or not personal -- and the evidence for the class",
             "minimization_plan/v1 gives each field one action -- drop, aggregate, generalize, mask, or pseudonymize -- with the destination's need for the fields it keeps, and names the local path that holds any pseudonym mapping outside the shipped file",
-            "residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran or its digest differs from the share record's",
+            "residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, the free-text sample the reviewer read, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran, no free-text sample was read or its digest differs from the share record's",
             "share_record/v1 is metadata only -- destination, date, fields shipped, row count, the sha256 digest of the shipped file, and its data_state (pseudonymized, still personal data, when identifiers were pseudonymized) -- and holds no value from it",
         ),
         safety_rules=(

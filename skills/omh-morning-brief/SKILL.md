@@ -18,7 +18,7 @@ This is a Hermes-native `morning-brief` workflow skill.
 
 ## Why This Exists
 
-`morning-brief` exists to connect mail and calendar access for an on-demand brief while keeping the connection strictly read and draft-only and credential entry outside chat, with explicit storage authorization.
+`morning-brief` exists to connect mail and calendar access for an on-demand brief while limiting the connection to read and create-draft tools and keeping credential entry outside chat, with explicit storage authorization.
 
 ## Do Not Use When
 
@@ -44,7 +44,7 @@ Bad example:
 
 - If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
 - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
-- The send boundary is confirmed before the brief is reported ready: the include list and registered tools hold no send operation (observed), and the report says whether the credential itself can send; else the check stays not_observed.
+- The send boundary is confirmed before the brief is reported ready: the server's include list (exact tool names, no globs) where it has an `mcp_servers` entry, otherwise the tools the session registers, hold no send operation (observed), and the report says whether the credential itself can send; else the check stays not_observed.
 - With neither mail nor calendar connected the status is blocked, not complete.
 
 ## Recovery Notes
@@ -80,7 +80,7 @@ Quality bar:
 - Diff-approved apply: show the config or `.env` diff with redacted placeholders; apply only after the user explicitly approves.
 - Verify: confirm applicable items using non-secret metadata, never secret values.
 - Keep the read/draft-only access boundary — never enable Send permission — as a hard constraint on every apply step, not an optional recommendation; on Gmail that means hiding the send tool, because no drafting scope is free of send.
-- When `manage_connections` is in your tool list or tool_search finds it, connect mail and calendar through it rather than a hand-written MCP config diff (`connect` for a hosted account, `install` or `authorize` for a catalog MCP server), and take each app's answer as given: `skipped` means continue with the surface that is connected or ask in chat, never calling it again on your own; when its result does not name the granted access, the send-boundary check stays `not_observed` until the include list is read.
+- When `manage_connections` is in your tool list or tool_search finds it, connect mail and calendar through it rather than a hand-written MCP config diff (`connect` for a hosted account, `install` or `authorize` for a catalog MCP server), and take each app's answer as given: `skipped` means continue with the surface that is connected or ask in chat, never calling it again on your own; when its result does not name the granted access, the send-boundary check stays `not_observed` until the include list or the registered tools are read.
 
 Handoff policy:
 
@@ -94,7 +94,7 @@ Required inputs:
 Expected outputs:
 
 - read-only diagnosis of the current mail/calendar MCP connection state
-- diff-approved MCP config write scoped to read and draft-only access
+- diff-approved MCP config write limited to read and create-draft tools
 
 Artifact expectations:
 

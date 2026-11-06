@@ -81,9 +81,10 @@ class DataShareReviewCatalogTests(unittest.TestCase):
         self.assertEqual(
             scan,
             "residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class "
-            "with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, and its verdict: "
-            "redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran "
-            "or its digest differs from the share record's",
+            "with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, the free-text "
+            "sample the reviewer read, and its verdict: redacted, not redacted with the counts while a hit remains "
+            "unaccepted, or not_observed when no scan ran, no free-text sample was read or its digest differs from "
+            "the share record's",
         )
 
     def test_the_mapping_stays_local_and_the_record_holds_no_value(self) -> None:

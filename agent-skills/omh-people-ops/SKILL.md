@@ -98,7 +98,7 @@ Safety rules:
 
 - Keep protected characteristics and missing interview evidence out of unsupported candidate recommendations.
 - Do not claim HRIS, ATS, outreach, interview, or employment-status actions occurred.
-- Draft no questions on protected traits or their proxies (age, family status, health, origin), and check the local rule on what a form or question may ask (for example Korea's recruitment fairness act, Art. 4-3, bars requiring physical conditions, birthplace, marital status, property or family members' education, job or property on screening documents); say why and offer a job-related substitute.
+- Draft no questions on protected traits or their proxies (age, family status, health, origin), and check the local rule on what a form or question may ask on an official page (in Korea, the recruitment fairness act); route that question to `omh-legal-compliance-review`, say why, and offer a job-related substitute.
 
 ## Runtime Evidence
 

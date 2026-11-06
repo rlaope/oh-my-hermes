@@ -4586,7 +4586,7 @@ When the firm gives a confidence level and a tolerable deviation rate and expect
 
 ## 2b. Deviations
 
-In a sample sized to expect no deviations, any deviation, explained or not, means the control did not operate effectively for that population, unless the firm's methodology allows a stated extended sample; record which rule applied. For a sample designed with expected deviations, compare the upper deviation limit at the stated confidence, not the sample rate, with the tolerable rate (1 deviation in 59 gives 7.8% at 95%, which fails a 5% tolerance although the sample rate is 1.7%). Evaluate compensating controls only after the deviation is recorded as a deviation.
+In a sample sized to expect no deviations, any deviation, explained or not, means the control did not operate effectively for that population, unless the firm's methodology allows a stated extended sample; record which rule applied. For a sample designed with expected deviations, compare the upper deviation limit at the stated confidence (one-sided exact binomial), not the sample rate, with the tolerable rate: 1 deviation in 59 gives 7.8% at 95%, which fails a 5% tolerance although the sample rate is 1.7%, and about 93 items are needed to tolerate one deviation at 5%. Evaluate compensating controls only after the deviation is recorded as a deviation.
 
 ## 3. Evidence, strongest first
 
@@ -4641,20 +4641,32 @@ def spend_gate_reference_templates() -> list[SkillReferenceTemplate]:
     ]
 
 
-KR_RRN_PATTERN = r"(?<!\d)\d{6}[ \-\u2013]?[1-8]\d{6}(?!\d)"
-KR_RRN_MASKED_PATTERN = r"(?<!\d)\d{6}[ \-\u2013]?[1-8][*xX#]{6}(?!\d)"
-US_SSN_PATTERN = r"(?<!\d)(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?!\d)"
-KR_MOBILE_PATTERN = r"(?<!\d)(?:\+?82[ .\-]?0?|0)1[016789][ .\-]?\d{3,4}[ .\-]?\d{4}(?!\d)"
+_SEP = r"[\s\-\u2010-\u2015\u2212.]{0,3}"
+_MASK = r"[*xX#\u25cf\u25cb\u25a0\u25a1\u2022]"
+KR_RRN_PATTERN = rf"(?<!\d)\d{{6}}{_SEP}[1-8]\d{{6}}(?!\d)"
+KR_RRN_MASKED_PATTERN = rf"(?<!\d)\d{{6}}{_SEP}(?:[1-8]{_MASK}{{6}}|{_MASK}{{7}})"
+US_SSN_PATTERN = rf"(?<!\d)(?!000|666|9\d\d)\d{{3}}{_SEP}(?!00)\d{{2}}{_SEP}(?!0000)\d{{4}}(?!\d)"
+US_ITIN_PATTERN = rf"(?<!\d)9\d{{2}}{_SEP}\d{{2}}{_SEP}\d{{4}}(?!\d)"
+US_SSN_MASKED_PATTERN = rf"(?<![\dA-Za-z]){_MASK}{{3}}{_SEP}{_MASK}{{2}}{_SEP}\d{{4}}(?!\d)"
+KR_MOBILE_PATTERN = rf"(?<![\d.])\(?(?:(?:\+|00)?82{_SEP}(?:\(0\){_SEP})?0?|0)1[016789]\)?{_SEP}\d{{3,4}}{_SEP}\d{{4}}(?!\d)"
+KR_MOBILE_STRIPPED_PATTERN = rf"(?<![\d.])1[016789]{_SEP}\d{{3,4}}{_SEP}\d{{4}}(?!\d)"
+SHAPE13_PATTERN = r"(?<!\d)\d{13}(?!\d)"
+SHAPE9_PATTERN = r"(?<!\d)\d{9}(?!\d)"
 
 
 def _fill_scan_patterns(text: str) -> str:
-    """Write the tested scan patterns into the reference; `tests/test_data_share_review.py` runs them."""
+    """Write the tested scan patterns into the reference; `tests/test_business_ops_scan_and_wording.py` runs them."""
 
     for key, pattern in (
         ("KR_RRN_MASKED", KR_RRN_MASKED_PATTERN),
         ("KR_RRN", KR_RRN_PATTERN),
+        ("US_SSN_MASKED", US_SSN_MASKED_PATTERN),
         ("US_SSN", US_SSN_PATTERN),
+        ("US_ITIN", US_ITIN_PATTERN),
+        ("KR_MOBILE_STRIPPED", KR_MOBILE_STRIPPED_PATTERN),
         ("KR_MOBILE", KR_MOBILE_PATTERN),
+        ("SHAPE13", SHAPE13_PATTERN),
+        ("SHAPE9", SHAPE9_PATTERN),
     ):
         text = text.replace("{{" + key + "}}", pattern)
     return text
@@ -4699,7 +4711,7 @@ Run it on the exact file that leaves, after the last transform, and print counts
 
 | Class | What to count |
 | --- | --- |
-| direct identifier | email shapes; phone number shapes; card numbers that pass the Luhn check; IP addresses; national-id shapes for the countries in scope: Korean resident registration number `{{KR_RRN}}` with the first six digits a valid date, a masked tail `{{KR_RRN_MASKED}}` counted too, and never the check digit as a filter (numbers issued since October 2020 reportedly carry a random tail, so the check digit may raise confidence and must never drop a hit); US SSN `{{US_SSN}}`; passport shapes the user names; matches that fail the date or gender test but sit between digit boundaries (timestamps, barcodes) are reported as a separate shape-only count and accepted by name, never ignored; bank account shapes for the countries in scope; mobile numbers `{{KR_MOBILE}}` for Korea (national or `+82` form, space, hyphen or dot separators); and each original value of a dropped or pseudonymized identifier column, matched exactly in the output |
+| direct identifier | email shapes; phone number shapes; card numbers that pass the Luhn check; IP addresses; national-id, bank-account and mobile shapes for the countries in scope (patterns below); and each original value of a dropped or pseudonymized identifier column, matched exactly in the output |
 | secret | vendor key prefixes, bearer tokens, private key headers, password assignments, connection strings with credentials |
 | quasi-identifier | rows whose combination of kept quasi-identifiers is shared by fewer than k rows; k comes from the team, and 5 is a common starting point |
 | sensitive category | groups of rows smaller than k within the kept sensitive fields |
@@ -4709,11 +4721,20 @@ The original-value check is the one a pattern scan cannot replace: a pseudonymiz
 
 A name-recognition tool may add candidates; its hits are leads for the user to accept, and a clean name result reads `checked against N known names`, never `no names`. Confirm the countries in scope before the scan.
 
-Verdict: `redacted` when every class counts zero, or each remaining hit is named and accepted by the user; `not_observed` when no scan ran or the digest of the scanned bytes differs from the share record's; otherwise not redacted, with the counts. The verdict says what the scan counted, not that the data is anonymous. Record a separate `data_state` on the share record: `pseudonymized, still personal data` when identifiers were pseudonymized or quasi-identifiers kept, and say so even when the verdict is `redacted`; the lawful-basis question stays with `legal-compliance-review`.
+Scan patterns. Run them on text normalized with NFKC (fullwidth digits and dashes become ASCII), as PCRE patterns in a detector script or `rg -P`: `search_files` is ripgrep without look-around, so these patterns fail there, and a `total_count` of 0 beside an `error` is not a count. A valid-date test also needs a script. In every pattern the separator class covers spaces, the hyphen and dash family, the minus sign and dots, and the mask class is `*`, `x`, `X`, `#`, `●`, `○`, `■`, `□`, `•`.
+
+- Korean resident registration number: `{{KR_RRN}}`, then check that the first six digits form a valid date. A tail masked fully or after the gender digit: `{{KR_RRN_MASKED}}`. Never use the check digit as a filter: numbers issued since October 2020 reportedly carry a random tail, so the check digit may raise confidence and must never drop a hit.
+- US SSN: `{{US_SSN}}`; ITIN-shaped (area 9xx, reported separately, still a personal tax id): `{{US_ITIN}}`; masked leading digits: `{{US_SSN_MASKED}}`.
+- Korean mobile number: `{{KR_MOBILE}}` (national, `+82`, `0082` and `(0)` forms); with the leading zero dropped, shape-only: `{{KR_MOBILE_STRIPPED}}`.
+- Shape-only counts, reported beside the full hits and accepted by column, never ignored: bare 13 digits `{{SHAPE13}}` and bare 9 digits `{{SHAPE9}}`. Barcodes starting 880 and date-based order ids are full resident-number hits; accept them by column.
+
+A pattern scan is a floor. Zero hits never prove a file is `redacted`, for any string a pattern misses. Free-text fields also need a sample read by the reviewer, and `residual_scan/v1` records which fields and how many rows were read.
+
+Verdict: `redacted` when every class counts zero and the free-text sample read found nothing, or each remaining hit is named and accepted by the user; `not_observed` when no scan ran, no free-text sample was read or the digest of the scanned bytes differs from the share record's; otherwise not redacted, with the counts. The verdict says what the scan and the read found, not that the data is anonymous. Record a separate `data_state` on the share record: `personal data` by default, `pseudonymized, still personal data` when identifiers were replaced by tokens or hashes; the scan never earns `anonymous`. The lawful-basis question stays with `legal-compliance-review`.
 
 ## 5. Share record
 
-Destination, date, fields shipped, row count, the sha256 digest of the shipped file (the scan record carries the same digest), and the scan reference. No value from the file, no mapping, no key.
+Destination, date, fields shipped, row count, the sha256 digest of the shipped file (the scan record carries the same digest), the `data_state`, and the scan reference. No value from the file, no mapping, no key.
 
 ## 6. What Hermes redacts on its own
 
@@ -13603,7 +13624,7 @@ The budgets stay authoritative. When an innovation move breaks one:
 
 Awwwards publishes four criteria instead (awwwards.com/about-evaluation, read
 2026-11-07): Design 40%, Usability 30%, Creativity 20%, Content 10%, with
-honorable mentions at 6.5 or more from the jury and the Developer Award above 7. Site of the Day has no published number (only "the sites scored the highest by the jury"), so report the distance from 6.5 and make no Site of the Day claim. Score those four axes against
+honorable mentions at 6.5 or more from the jury. Site of the Day has no published number (the page says only that the highest-scoring sites win it), so report the distance from 6.5 and make no Site of the Day claim. Score those four axes against
 rendered evidence the same way, and never mix them with the CSSDA axes or
 thresholds above. For any other body, ask for its published rules URL and score
 only the axes it publishes.

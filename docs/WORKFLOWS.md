@@ -1674,7 +1674,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Safety rules:
   - Keep protected characteristics and missing interview evidence out of unsupported candidate recommendations.
   - Do not claim HRIS, ATS, outreach, interview, or employment-status actions occurred.
-  - Draft no questions on protected traits or their proxies (age, family status, health, origin), and check the local rule on what a form or question may ask (for example Korea's recruitment fairness act, Art. 4-3, bars requiring physical conditions, birthplace, marital status, property or family members' education, job or property on screening documents); say why and offer a job-related substitute.
+  - Draft no questions on protected traits or their proxies (age, family status, health, origin), and check the local rule on what a form or question may ask on an official page (in Korea, the recruitment fairness act); route that question to `legal-compliance-review`, say why, and offer a job-related substitute.
 
 ### legal-compliance-review
 
@@ -1764,7 +1764,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Criterion: Map facts to operative text, dependencies, exceptions and conflicts; inventory the families and mark each reviewed, not applicable with the reason, or not in the supplied documents: parties and authority to sign; term, renewal, termination and notice deadlines; payment; scope and deliverables; IP and licence; confidentiality (definition, exclusions, term, permitted recipients, compelled disclosure, return or destruction); warranty and disclaimer; indemnity and liability caps; data protection roles, basis, transfers, security, breach, retention, rights and DPIA; assignment and change of control; governing law and forum; boilerplate that changes risk such as entire agreement, amendment and order of precedence.
   - `legal_counsel_hold_check`
     - Required result fields: `trigger_ids`, `impact`, `likelihood_applicability`, `urgency`, `evidence_confidence`, `reversibility`, `hold_status`, `counsel_owner`
-    - Criterion: Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, contractual notice or auto-renewal deadlines before the deadline in the review objective (with none supplied, any date not yet passed), and sensitive, high-risk or cross-border privacy or DPIA uncertainty.
+    - Criterion: Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, contractual notice or auto-renewal deadlines before the deadline in the review objective (with none supplied, list the dates found and ask for the deadline), and sensitive, high-risk or cross-border privacy or DPIA uncertainty.
   - `legal_negotiation_preparation_check`
     - Required result fields: `playbook_position`, `gap`, `proposed_language`, `fallback_position`, `walk_away_trigger`, `concession_order`, `counsel_hold_state`
     - Criterion: Every proposed clause traces to a cited playbook position and carries its fallback and walk-away; a row whose position cannot be cited becomes a counsel question, an open hold blocks its row, and the concession order states which rows are linked.
@@ -6252,7 +6252,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run diagnosis and guidance directly in Hermes for the mail/calendar connection. Diagnosis reads non-secret metadata only; no writes. Show redacted placeholders in the config or `.env` diff; apply only after the user explicitly approves. Never ask the user to paste secrets into chat. Use Hermes-native secure entry or user-side OAuth/token setup; if unavailable, stop credential application and guide user-side setup. Use only a user-authorized credential store or local configuration; disclose destination and scope first. Keep secrets out of chat, previews, logs and evidence. Do not promise chat or platform non-retention. Delegate to a selected coding executor only if the user needs a change outside chat-driven MCP config edits.
-- Why this exists: `morning-brief` exists to connect mail and calendar access for an on-demand brief while keeping the connection strictly read and draft-only and credential entry outside chat, with explicit storage authorization.
+- Why this exists: `morning-brief` exists to connect mail and calendar access for an on-demand brief while limiting the connection to read and create-draft tools and keeping credential entry outside chat, with explicit storage authorization.
 - Use when: Use when the user wants Hermes to connect mail and calendar access for an on-demand morning brief, following the shared prerequisite-check, diagnose, guide, diff-approved apply, and verify contract.
 - Do not use when:
   - The user wants Hermes to check their email or calendar right now rather than set up the connection.
@@ -6274,11 +6274,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Diff-approved apply: show the config or `.env` diff with redacted placeholders; apply only after the user explicitly approves.
   - Verify: confirm applicable items using non-secret metadata, never secret values.
   - Keep the read/draft-only access boundary — never enable Send permission — as a hard constraint on every apply step, not an optional recommendation; on Gmail that means hiding the send tool, because no drafting scope is free of send.
-  - When `manage_connections` is in your tool list or tool_search finds it, connect mail and calendar through it rather than a hand-written MCP config diff (`connect` for a hosted account, `install` or `authorize` for a catalog MCP server), and take each app's answer as given: `skipped` means continue with the surface that is connected or ask in chat, never calling it again on your own; when its result does not name the granted access, the send-boundary check stays `not_observed` until the include list is read.
+  - When `manage_connections` is in your tool list or tool_search finds it, connect mail and calendar through it rather than a hand-written MCP config diff (`connect` for a hosted account, `install` or `authorize` for a catalog MCP server), and take each app's answer as given: `skipped` means continue with the surface that is connected or ask in chat, never calling it again on your own; when its result does not name the granted access, the send-boundary check stays `not_observed` until the include list or the registered tools are read.
 - Completion checklist:
   - If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
   - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
-  - The send boundary is confirmed before the brief is reported ready: the include list and registered tools hold no send operation (observed), and the report says whether the credential itself can send; else the check stays not_observed.
+  - The send boundary is confirmed before the brief is reported ready: the server's include list (exact tool names, no globs) where it has an `mcp_servers` entry, otherwise the tools the session registers, hold no send operation (observed), and the report says whether the credential itself can send; else the check stays not_observed.
   - With neither mail nor calendar connected the status is blocked, not complete.
 - Recovery notes:
   - If the mail or calendar prerequisite is unmet, mark that surface "not applicable" and offer the brief scoped to whichever surface is connected.
@@ -6288,7 +6288,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - OAuth/app-password availability; value through secure entry or user-side setup only
 - Expected outputs:
   - read-only diagnosis of the current mail/calendar MCP connection state
-  - diff-approved MCP config write scoped to read and draft-only access
+  - diff-approved MCP config write limited to read and create-draft tools
 - Artifact expectations:
   - connection verification note when the wrapper captures it
 - Safety rules:
@@ -7658,7 +7658,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Artifact expectations:
   - field_inventory/v1 lists every column, key, and free-text field with its class -- direct identifier, quasi-identifier, secret, free text, sensitive category, or not personal -- and the evidence for the class
   - minimization_plan/v1 gives each field one action -- drop, aggregate, generalize, mask, or pseudonymize -- with the destination's need for the fields it keeps, and names the local path that holds any pseudonym mapping outside the shipped file
-  - residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran or its digest differs from the share record's
+  - residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, the free-text sample the reviewer read, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran, no free-text sample was read or its digest differs from the share record's
   - share_record/v1 is metadata only -- destination, date, fields shipped, row count, the sha256 digest of the shipped file, and its data_state (pseudonymized, still personal data, when identifiers were pseudonymized) -- and holds no value from it
 - Safety rules:
   - Call the output redacted only after an observed residual scan of the exact file that leaves, counted per class; without one the state is not_observed, whatever the masking step reported.
