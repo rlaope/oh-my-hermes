@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **In Slack and Discord group chats, telling the bot to be quiet now mutes
+  it in that thread, and a message meant for someone else no longer opens a
+  turn.** OMH registers Hermes' `pre_gateway_dispatch` hook. A whole-message
+  quiet word aimed at the bot (`shut up`, `조용히 해`, `黙って`, `闭嘴`,
+  `cállate` and the rest of eleven languages' closed lists) mutes the thread
+  with a 🫡 reaction and no text; a mention of the bot, a reply to it, or a
+  call by its name unmutes it. A message that opens with a real mention of
+  someone else, or calls someone else by name at its start or end without
+  naming the bot or saying "you", is skipped. Every skip is logged in
+  `<omh_home>/runtime/messenger_gate.json`; `messenger_gate: off` or
+  `mute_only` turns it down per profile. DMs, slash commands and other
+  platforms are untouched.
+
 - **A reply that opens with a code block keeps its `⚚ Hermes` header in
   the OMH TUI's scrollback, and a table after a released one keeps its own
   box whatever spaces its divider holds.** When a reply's first line was a

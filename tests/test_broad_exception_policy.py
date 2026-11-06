@@ -455,6 +455,23 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "re-raise, so callers never read a crashed resume as a completed memory operation.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/hooks/gateway_hooks.py",
+        "pre_gateway_dispatch",
+        INTENTIONAL,
+        "Hook boundary for the messenger chat gate: it runs before Hermes dispatches every inbound "
+        "Slack and Discord message, so an error in reading the event, the profile config or the "
+        "mute sidecar must never drop or stall a message. The handler logs the exception type and "
+        "returns None, which Hermes reads as no gate opinion: the message dispatches as without OMH.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/hooks/gateway_hooks.py",
+        "_acknowledge",
+        INTENTIONAL,
+        "The 🫡 acknowledgement through the adapter's private `_add_reaction`: the thread is already "
+        "muted and the skip recorded, so a failed, timed-out or moved reaction call can only lose "
+        "the reaction. The handler logs the exception type and the hook still returns the skip.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/approval_bypass.py",
         "record_approval_bypass",
         INTENTIONAL,
@@ -1063,8 +1080,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # guessed "off").
 # 107 -> 108 / 97 -> 98: `consistency_trigger.shell_changed_files`, the re-index after a
 # command for the shell round end (a failure logs a named warning and adds no note).
-EXPECTED_HANDLER_COUNT = 108
-EXPECTED_ANCHOR_COUNT = 98
+# 108 -> 110 / 98 -> 100: the messenger chat gate's hook boundary (`gateway_hooks.pre_gateway_dispatch`,
+# fail open) and its reaction (`gateway_hooks._acknowledge`).
+EXPECTED_HANDLER_COUNT = 110
+EXPECTED_ANCHOR_COUNT = 100
 
 
 class DerivedSite(NamedTuple):

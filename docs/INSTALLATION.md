@@ -3682,6 +3682,46 @@ non-blocking command availability warning for this case, so source checkouts,
 wrapper runtimes, and absolute-path installs can still verify Hermes
 registration without pretending the shell alias is ready.
 
+### Quiet and addressee gate in Slack and Discord group chats
+
+In a Slack or Discord group, channel or thread chat, OMH's
+`pre_gateway_dispatch` hook decides whether a message opens a turn at all. It
+never writes a reply and never changes the bot's voice. DMs, slash commands,
+internal events and other platforms pass untouched, and any error lets the
+message through.
+
+- **Quiet.** A message whose whole text is a quiet word (`shut up`,
+  `조용히 해`, `黙って`, `闭嘴`, `cállate`, `tais-toi`, `sei still`,
+  `cala a boca`, `замолчи`, `im đi` and a few more), aimed at the bot (its
+  mention, a reply to it, a call by its name, or any message in a thread),
+  mutes that thread. The bot reacts with 🫡 and sends no text. A quiet word
+  inside a longer sentence, or quoted, does nothing.
+- **Unmute.** A real mention of the bot, a reply to one of its messages, or
+  a call by its name at the start or end of a message. Mutes do not expire.
+- **Not for the bot.** A message that opens with a real mention of someone
+  else, or calls someone else by name at its start or end (`민수야 …`,
+  `alex, …`, `田中さん、…`, `… @alex`), is skipped, unless it also names
+  the bot or says "you" (`니가`, `you`, `あなた`, `你`, `tú`, `du`, …). It
+  never mutes.
+
+The word lists cover English, Korean, Japanese, Simplified and Traditional
+Chinese, Spanish, French, German, Portuguese, Russian and Vietnamese, and are
+all checked whatever language the profile uses. They are closed data in
+`src/plugin_bundle/omh/messenger_gate_words.py`; adding a language is one row
+there.
+
+Settings, per profile under `plugins.entries.omh.settings`:
+
+| Setting | Values | Default |
+| --- | --- | --- |
+| `messenger_gate` | `on`, `mute_only` (quiet and mutes only), `off` | `on` |
+| `messenger_self_names` | comma-separated extra names the bot answers to | the bot's platform names |
+| `messenger_other_names` | comma-separated names of other people or bots in the chats | none (calls by name are not checked) |
+
+Mutes and the last 200 skips (reason, chat and thread ids, the first 120
+characters) are kept in `<omh_home>/runtime/messenger_gate.json`, so a wrong
+skip can be found. Deleting a key under `mutes` unmutes that thread.
+
 ### Build identity
 
 `omh --version` and `omh doctor` both name the code behind the command that
