@@ -1582,14 +1582,10 @@ class FanoutDispatchEngineTests(unittest.TestCase):
             self.assertIn(("codex", "exec"), heads)
             claude_argv = next(argv for argv in runner.spawned if argv[0] == "claude")
             self.assertEqual(claude_argv[1], "-p")
-            # No unit here routes a model, and neither profile ships a
-            # dispatch-model default (see _SHIPPED_DISPATCH_MODEL_DEFAULTS
-            # and test_codex_dispatch_model_ships_with_no_default /
-            # test_claude_code_unit_ships_with_no_default_dispatch_model), so
-            # the base template shows through byte-identical with no
-            # appended `--model`.
+            # No model is routed here; the only appended permission is this
+            # invocation's sidecar directory, outside Claude's cwd.
             self.assertEqual(
-                claude_argv[3:],
+                claude_argv[3:-2],
                 [
                     "--permission-mode",
                     "acceptEdits",
@@ -1597,6 +1593,7 @@ class FanoutDispatchEngineTests(unittest.TestCase):
                     "Bash(git add:*),Bash(git commit:*)",
                 ],
             )
+            self.assertEqual(claude_argv[-2:], ["--add-dir", str(_prompted_sidecar(claude_argv).parent)])
             self.assertIn("Work unit:", claude_argv[2])
 
     def test_missing_cli_maps_to_exit_127(self) -> None:

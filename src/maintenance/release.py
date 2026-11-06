@@ -383,7 +383,13 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # enum carries no description (the skill and the tool's results explain it).
 # Measured by per_turn_context.plugin_tool_schema_chars_by_tool() against base
 # c90d94551. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72455
+# 72455 -> 72525: the node `owner` field on omh_dag (+70, 3068 -> 3138): a bare
+# two-value enum (claude-code, codex) and the word in the description's field
+# list, so one run can send different coding nodes to different external
+# owners. No description (the skill's run-loop reference explains it).
+# Measured by per_turn_context.plugin_tool_schema_chars_by_tool() against base
+# df07e3573. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain
@@ -957,7 +963,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72455
 # Measured from the producer; no headroom.
 # 533758 -> 536969: one `systematic-review` capability row (3209) plus its
 # separator (+3211); no other row moved. Measured from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536969
+# 536969 -> 536979: the `dag-ulw` row only. Its handoff policy names the third
+# way an external coding owner is chosen (naming it in a dag-ulw request) and
+# the per-owner `exports` list (+10). Measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536979
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

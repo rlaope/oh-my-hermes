@@ -206,7 +206,7 @@ class CompressTests(unittest.TestCase):
         now[0] += 60.0
         type_text(app, "use the other file")
         app._on_input(Key(ENTER, ctrl=True))
-        self.assertEqual(client.calls[-1][0], "session.steer")
+        self.assertEqual(client.calls[-1][0], "session.redirect")
         [steer] = [call for call in app.pending.values() if call.steer is not None]
         waited = COMPRESS_ANSWER_SECONDS - 60.0 + 120.0  # the compression's time left, then its own 120 s
         self.assertEqual(steer.seconds, waited)

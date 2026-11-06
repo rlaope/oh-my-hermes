@@ -61,6 +61,7 @@ class ClientMethodTests(unittest.TestCase):
         # `confirm_expensive_model` goes only with a model the person said to switch to anyway.
         self.assertEqual(contract.CLIENT_METHODS["config.set"], {"key", "value", "session_id", "confirm_expensive_model"})
         self.assertEqual(contract.CLIENT_METHODS["session.steer"], {"session_id", "text"})
+        self.assertEqual(contract.CLIENT_METHODS["session.redirect"], {"session_id", "text"})  # same params model
         self.assertEqual(set(contract.CONFIG_SET_VALUES), {"yolo", "reasoning"})
         self.assertEqual(contract.CONFIG_SET_VALUES["yolo"], {"on", "off"})
         # hermes_constants.VALID_REASONING_EFFORTS in 6c61c3e27d, plus none (parse_reasoning_effort: thinking off).

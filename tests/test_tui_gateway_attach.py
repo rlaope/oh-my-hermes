@@ -298,13 +298,18 @@ class SessionTranslationTests(AdapterCase):
         self.assertEqual(submit["params"], {"session_id": SID, "text": "hi", "queued": True, "input_id": "id-2"})
 
     def test_a_steer_carries_the_running_generation_and_is_rejected_without_one(self) -> None:
-        adapter = self.adapter()
-        self.assertEqual(adapter.from_client(_call(8, "session.steer", {"session_id": SID, "text": "go"})),
-                         [(TO_CLIENT, _answer(8, {"status": "rejected"}))])
-        self.opened(adapter, generation=3)
-        adapter.from_owner(_event("message.delta", {"text": "x"}, execution_generation=4))
-        [(_, steer)] = adapter.from_client(_call(9, "session.steer", {"session_id": SID, "text": "go"}))
-        self.assertEqual(steer["params"], {"session_id": SID, "text": "go", "execution_generation": 4})
+        # The send-now key's `session.redirect` as much as the fallback `session.steer`: Hermes bf0203a794's owner
+        # takes both as `CanonicalCorrectionParams` (`contracts/canonical_sessions.py`), generation required.
+        for method in ("session.redirect", "session.steer"):
+            with self.subTest(method=method):
+                adapter = self.adapter()
+                self.assertEqual(adapter.from_client(_call(8, method, {"session_id": SID, "text": "go"})),
+                                 [(TO_CLIENT, _answer(8, {"status": "rejected"}))])
+                self.opened(adapter, generation=3)
+                adapter.from_owner(_event("message.delta", {"text": "x"}, execution_generation=4))
+                [(_, steer)] = adapter.from_client(_call(9, method, {"session_id": SID, "text": "go"}))
+                self.assertEqual(steer["method"], method)
+                self.assertEqual(steer["params"], {"session_id": SID, "text": "go", "execution_generation": 4})
 
     def test_an_interrupt_carries_the_generation_of_the_turn_it_stops(self) -> None:
         # Hermes bf0203a794 refuses `session.interrupt` without the running generation (`session_authority.py`

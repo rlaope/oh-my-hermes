@@ -3719,6 +3719,78 @@ non-blocking command availability warning for this case, so source checkouts,
 wrapper runtimes, and absolute-path installs can still verify Hermes
 registration without pretending the shell alias is ready.
 
+### Quiet and addressee gate in Slack and Discord group chats
+
+In a Slack or Discord group, channel or thread chat, OMH's
+`pre_gateway_dispatch` hook decides whether a message opens a turn at all. It
+never writes a reply and never changes the bot's voice. DMs, slash commands,
+internal events and other platforms pass untouched, and any error lets the
+message through.
+
+- **Quiet.** A message whose whole text is a quiet word (`shut up`,
+  `조용히 해`, `黙って`, `闭嘴`, `cállate`, `tais-toi`, `sei still`,
+  `cala a boca`, `замолчи`, `im đi` and a few more), aimed at the bot (its
+  mention, a reply to it, a call by its name, or a reply inside a thread),
+  mutes that thread. The bot reacts with 🫡 and sends no text. Words that are
+  also ordinary single words (`quiet`, `silence`, `うるさい`, `빠져`) need the
+  mention, reply or name. A quiet word inside a longer sentence, quoted,
+  formatted, or asked as a question does nothing. A Slack top-level message
+  is not inside a thread; a mute it sets covers only the thread it opens.
+- **Unmute.** A real mention of the bot, a reply to one of its messages, or
+  a call by its name at the start or end of a message. Mutes do not expire.
+- **Not for the bot.** A message that opens with a real mention of someone
+  else, or calls a configured other name at its start, or at its end after
+  punctuation (`민수야 …`, `alex, …`, `田中さん、…`, `…, alex`), is skipped,
+  unless it also names the bot or says "you" (`니가`, `you`, `あなた`, `你`,
+  `tú`, `du`, …). A mention at the end (`summarize this for @alex`) and a
+  sentence ending in a name (`범인은 민수야`) are not calls. It never mutes.
+
+Only senders Hermes authorizes are gated; everyone else is left to Hermes.
+
+How this relates to Hermes' own Slack options:
+
+- `ignore_other_user_mentions` already skips a message that opens with
+  someone else's @mention, which is the same as R1 above. If that is all you
+  want, turning it on is enough.
+- `thread_require_mention` and `strict_mention` make the bot wait for a
+  mention, so they also silence the bot on your own follow-ups that do not
+  mention it.
+- `thread_followup_silence` only lets a `[SILENT]` reply the model chose
+  stand.
+
+Hermes has no quiet-word mute and does not notice a message that calls
+someone else by name; those are what this gate adds. Name calls (R2) are
+checked only when `messenger_other_names` is set.
+
+The word lists cover English, Korean, Japanese, Simplified and Traditional
+Chinese, Spanish, French, German, Portuguese, Russian and Vietnamese, and are
+all checked whatever language the profile uses. They are closed data in
+`src/plugin_bundle/omh/messenger_gate_words.py`; adding a language is one row
+there.
+
+Settings, per profile under `plugins.entries.omh.settings`:
+
+| Setting | Values | Default |
+| --- | --- | --- |
+| `messenger_gate` | `on`, `mute_only` (quiet and mutes only), `off` | `on` |
+| `messenger_self_names` | extra names the bot answers to, comma-separated or a YAML flow list | the bot's platform names |
+| `messenger_other_names` | names of other people or bots in the chats, same format | none (calls by name are not checked) |
+
+The gate reads the settings of the profile that owns the message, also at a
+multiplexed gateway's ingress. Mutes (the newest 1,000) are kept in
+`runtime/messenger_gate.json` and the last 200 skips in
+`runtime/messenger_gate_skips.jsonl` under that profile's OMH home: its
+`omh_home` setting, else the home it is bound to, else `~/.omh`. Deleting a
+key under `mutes` unmutes that thread. The skip log holds the first 120
+characters of each skipped message, on this machine only, so a wrong skip can
+be found.
+
+Limits: the gate runs only where Hermes loads OMH's plugin in the gateway
+process. Discord messages Hermes batches into one event are judged as one
+message, so a quiet word batched with other text does not mute. The 🫡 goes
+through the adapter's private reaction method and follows its reactions
+setting.
+
 ### Build identity
 
 `omh --version` and `omh doctor` both name the code behind the command that

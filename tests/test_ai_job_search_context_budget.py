@@ -136,8 +136,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 530686 -> 533897 and 143589 -> 144536: systematic-review adds one row to each
             # producer (+3211 full, +947 standalone); dropping only that row reproduces
             # 2cb9a1ff...ca80 and 7971eca9...7617.
-            (skill_capabilities, 533897, FULL_ROW_DELTA_CAP,
-             'e6484100710e1a95d558b55fd105129a7cdaa418aabd8e9ee71a174143c19d8b',
+            # 533897 -> 533907 and the digest re-derived: the dag-ulw row's handoff policy
+            # names choosing an owner by naming it in a dag-ulw request and the per-owner
+            # `exports` list (+10); no other row moved, and the pin before it was e6484100...d8b.
+            (skill_capabilities, 533907, FULL_ROW_DELTA_CAP,
+             'ad1e9c0afd37432e32738b2eb0b6c5439f812df47f9c78f1e12e32c9c59c4aa5',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -362,7 +365,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # restoring +28 -> +27 and dropping it reproduces 2b0982e6...8db3.
         # ulw-research's entity-match clause (answer only from a source on the exact named entity);
         # only ulw-research moves, and the pin before it was 5404bf98...ca32229.
-        self.assertEqual(_digest(legacy_hashes), '8ea92d7d1dc66af3b26a67c90e17c66d9968992f878faf4351c377bde00758d7')
+        # dag-ulw's external-owner policy (per-owner choices named in a dag-ulw request, the node
+        # `owner` field, `exports`); only dag-ulw moves, and the pin before it was 8ea92d7d...58d7.
+        self.assertEqual(_digest(legacy_hashes), '4f552dc5d28ff70b26b21c1dc4d93c8a66d5b28d34e72483ea00004d9315a07a')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -396,7 +401,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 72455,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85).
+            'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
             'pre_llm_call_context_chars_max': 6041,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7593,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 3630,  # Human-voice reply sentence (+110).

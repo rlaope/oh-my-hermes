@@ -918,14 +918,16 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
         "registry.npmjs.org, on a background thread, at most once a day per OMH home (cached under "
         "`<omh_home>/tui/update-check.json`); HTTPS only, a 3 s socket timeout, redirects off that host refused, the "
         "reply bounded and only its version kept; sends nothing about the person; off with "
-        "OMH_TUI_UPDATE_CHECK=0, `omh theme update-check off`, or `omh update-check` stored as off; documented "
-        "as a scoped exception in CLAUDE.md and AGENTS.md."
+        "OMH_TUI_UPDATE_CHECK=0, `omh theme update-check off`, or `omh update-check` stored as off. Its one other "
+        "caller is the explicit `omh update` on an installer-managed stable install, which calls `fetch_latest` "
+        "once to pick the release wheel it is about to download (`commands/setup.py:_installer_self_update_release`); "
+        "documented as a scoped exception in CLAUDE.md and AGENTS.md."
     ),
 }
 NETWORK_CLIENT_BRIDGE_URLLIB_NAMES = frozenset({"Request", "build_opener", "HTTPSHandler", "HTTPRedirectHandler"})
 NETWORK_CLIENT_BRIDGE_IMPORTERS: dict[str, frozenset[str]] = {
     "src/plugin_bundle/omh/jev_ask_client.py": frozenset({"src/plugin_bundle/omh/tools/jev_ask_tool.py"}),
-    "src/tui/update_notice.py": frozenset({"src/tui/app.py"}),
+    "src/tui/update_notice.py": frozenset({"src/tui/app.py", "src/commands/setup.py"}),
 }
 
 

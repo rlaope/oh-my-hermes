@@ -585,7 +585,7 @@ class GateTests(ImageTestCase):
         (paste,) = [index for index, (method, _params) in enumerate(self.client.calls) if method == "clipboard.paste"]
         self.hermes.answered = len(self.client.calls)
         self.app._on_response(Response(paste + 1, {"attached": False, "message": "No image found in clipboard"}, None))
-        self.assertEqual(self.client.calls[-1], ("session.steer", {"session_id": SID, "text": "look at b"}))
+        self.assertEqual(self.client.calls[-1], ("session.redirect", {"session_id": SID, "text": "look at b"}))
 
     def test_a_prompt_waiting_on_a_paste_says_so_under_the_queue_with_the_time_once_it_is_long(self) -> None:
         now = [100.0]
@@ -807,7 +807,7 @@ class KeptTokenTests(ImageTestCase):
         self.paste_image()
         self.type("this one")
         self.press(Key(ENTER, ctrl=True))
-        self.assertEqual(self.methods("session.steer"), [])
+        self.assertEqual(self.methods("session.redirect"), [])
         self.assertEqual([image.label for image in self.app.queued[-1].images], ["[Image #1]"])
 
 
@@ -817,7 +817,7 @@ class KeptTokenTests(ImageTestCase):
         self.type("first")
         self.press(Key(ENTER))
         self.press(Key(ENTER, ctrl=True))  # the send-now key on an empty composer: a steer would drop the image
-        self.assertEqual(self.methods("session.steer"), [])
+        self.assertEqual(self.methods("session.redirect"), [])
         self.assertEqual(len(self.app.queued), 1)
         self.hermes.complete()
         self.hermes.admit()

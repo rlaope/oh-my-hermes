@@ -344,6 +344,40 @@ def _requested_release(args: argparse.Namespace) -> ReleaseSelection:
     return package_url_for("preview")
 
 
+def _installer_self_update_release(args: argparse.Namespace, requested: ReleaseSelection) -> ReleaseSelection | str:
+    """The release an installer-managed `omh update` moves the command package to, or why it should not move.
+
+    An explicit `--channel`, `--version`, or `--package-url` wins. Otherwise the
+    installed package's PEP 610 record keeps its channel, as `_requested_release`
+    does for setup: a stable install moves to the newest published release
+    instead of the `main` archive, and is left alone when it is already on it or
+    when the newest release cannot be read. A `main` install, or one that records
+    nothing, keeps tracking `main`.
+    """
+    if args.channel is not None or args.version or args.package_url:
+        return requested
+    installed = release_from_direct_url(_installed_direct_url() or {})
+    if installed is None or installed.channel != "stable":
+        return requested
+    from ..tui.update_notice import fetch_latest, is_newer
+
+    try:
+        latest = fetch_latest()
+    except Exception as exc:  # urllib can raise http.client errors this module may not import; any failure skips the move
+        detail = _bounded_command_error(str(exc)) or type(exc).__name__
+        return f"could not read the newest stable release ({detail}); pass --version or --channel"
+    if not RELEASE_WHEEL_VERSION_RE.fullmatch(latest):
+        return f"the newest published release {latest!r} is not a stable version; pass --version or --channel"
+    # Only ever forward: the release workflow creates the GitHub release before
+    # `npm publish`, so npm's `latest` can trail an install made from the new
+    # release's wheel, and installing it would downgrade the command package.
+    if not is_newer(latest, __version__):
+        if latest == __version__:
+            return f"already on the newest stable release v{latest}"
+        return f"installed v{__version__} is newer than the newest published release v{latest}; pass --version to move"
+    return package_url_for("stable", latest)
+
+
 def _homebrew_prefix_root() -> Path | None:
     prefix = Path(sys.prefix)
     folded_parts = tuple(part.casefold() for part in prefix.parts)
@@ -481,6 +515,7 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
         source=source,
         dry_run=bool(args.dry_run),
         command_package_updated=bool(getattr(args, "command_package_updated", False)),
+        would_update_to=str(getattr(args, "command_package_would_update", "") or ""),
     )
     result["workflow_content"] = _workflow_content_status(
         paths,
@@ -538,7 +573,9 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
 def cmd_update(args: argparse.Namespace) -> int:
     self_update = _command_package_self_update_plan(args)
     if self_update.get("should_update"):
-        return _run_command_package_self_update(args, self_update)
+        if not getattr(args, "dry_run", False):
+            return _run_command_package_self_update(args, self_update)
+        args.command_package_would_update = _self_update_target_label(self_update)
     # Explicit local skill sources retain the content-only install contract.
     if args.from_skills_dir or args.source:
         code = cmd_install(args)
@@ -1471,10 +1508,9 @@ def _configured_omh_home_link_refusal(args: argparse.Namespace, paths: OmhPaths)
 
 
 def _command_package_self_update_plan(args: argparse.Namespace) -> dict[str, object]:
+    # A dry run plans like a real run, so its card can say what the real run would do to the command package.
     if bool(getattr(args, "command_package_updated", False)):
         return {"should_update": False, "reason": "command package update already observed"}
-    if bool(getattr(args, "dry_run", False)):
-        return {"should_update": False, "reason": "dry run does not update the command package"}
     if os.environ.get(SELF_UPDATE_REENTRY_ENV):
         return {"should_update": False, "reason": "already re-entered after command package update"}
     if os.environ.get(SELF_UPDATE_SKIP_ENV):
@@ -1572,14 +1608,27 @@ def _command_package_self_update_plan(args: argparse.Namespace) -> dict[str, obj
     managed = _managed_command_runtime()
     if not managed["managed"]:
         return {"should_update": False, "reason": managed["reason"]}
+    target = _installer_self_update_release(args, release)
+    if isinstance(target, str):
+        return {"should_update": False, "reason": target}
     return {
         "should_update": True,
         "method": "installer",
-        "release": release,
+        "release": target,
         "python": managed["python"],
         "venv_dir": managed["venv_dir"],
         "reason": "running from installer-managed command package venv",
     }
+
+
+def _self_update_target_label(plan: dict[str, object]) -> str:
+    """What a planned command package update would install, for the dry-run card."""
+    release = plan.get("release")
+    if isinstance(release, ReleaseSelection):
+        if release.channel == "stable" and release.version:
+            return f"v{release.version.removeprefix('v')}"
+        return release.source_label or release.package_url
+    return f"the {plan.get('package_manager')} package" if plan.get("package_manager") else ""
 
 
 def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, object]) -> int:
@@ -1912,12 +1961,16 @@ def _command_package_status_for_install(
     source: str,
     dry_run: bool,
     command_package_updated: bool = False,
+    would_update_to: str = "",
 ) -> dict[str, object]:
     package_manager, update_instruction = _command_package_update_guidance()
     status = "unchanged"
     reason = "managed skills were refreshed from the currently installed command package"
     updated = False
-    if command_package_updated:
+    if dry_run and would_update_to:
+        status = "would_update"
+        reason = f"a real run would first update the OMH command package to {would_update_to}"
+    elif command_package_updated:
         status = "would_update" if dry_run else "updated"
         updated = not dry_run
         reason = (
@@ -1932,7 +1985,7 @@ def _command_package_status_for_install(
         reason = "managed skills were refreshed, but the omh command package was not updated in this run"
     elif source != "builtin":
         reason = "managed skills were refreshed from an explicit skill source; the command package was not changed"
-    return {
+    result: dict[str, object] = {
         "schema_version": COMMAND_PACKAGE_STATUS_SCHEMA_VERSION,
         "operation": operation,
         "status": status,
@@ -1942,6 +1995,9 @@ def _command_package_status_for_install(
         "package_manager": package_manager,
         "update_instruction": update_instruction,
     }
+    if status == "would_update" and would_update_to:
+        result["would_update_to"] = would_update_to
+    return result
 
 
 def _command_package_source(*, command_package_updated: bool, source: str) -> str:
@@ -5774,8 +5830,11 @@ def _print_update_release_card(
     dry_run = bool(payload.get("dry_run", False))
     command_package = payload.get("command_package", {})
     command_updated = isinstance(command_package, dict) and bool(command_package.get("updated"))
+    would_update = isinstance(command_package, dict) and command_package.get("status") == "would_update"
     command_key = (
-        "update_card_command_preview"
+        "update_card_command_would_update"
+        if dry_run and would_update
+        else "update_card_command_preview"
         if dry_run
         else "update_card_command_updated"
         if command_updated
@@ -5804,7 +5863,8 @@ def _print_update_release_card(
     print("")
     print(f"  {tr(language, notes_label)}")
     print(f"    - {tr(language, workflows_label, count=workflow_count)}")
-    print(f"    - {tr(language, command_key)}")
+    command_target = command_package.get("would_update_to", "") if isinstance(command_package, dict) else ""
+    print(f"    - {tr(language, command_key, target=command_target)}")
     workflow_content = payload.get("workflow_content", {})
     if isinstance(workflow_content, dict) and workflow_content.get("known"):
         content_key = (
