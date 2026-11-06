@@ -1459,6 +1459,168 @@ class Gpt61TerraContractTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("reasoning efforts: none, low, medium, high, xhigh, max (floor `none`)", stdout)
 
+_CYBER_FORMS = ("gpt-6-cyber", "openai/gpt-6-cyber", "openai-codex/gpt-6-cyber", "GPT-6-Cyber")
+# Ids that put access-gated OpenAI models in front of a user who names them;
+# none may appear in any shipped chain or in the Maestro tables.
+_GATED_OPENAI_IDS = ("gpt-6-cyber", "gpt-5.6-cyber", "gpt-6-rosalind")
+
+
+class Gpt6CyberContractTests(unittest.TestCase):
+    """GPT-6 Cyber (released 2026-11-05): an access-gated Astra variant on the Mythos
+    5.1 terms. Exact contract with Astra's inherited ladder, its own list
+    price, Astra's exact calibration, and no shipped chain slot."""
+
+    def test_every_served_form_resolves_the_exact_contract(self) -> None:
+        base = model_contract("gpt-6-cyber")
+        assert base is not None
+        for form in _CYBER_FORMS:
+            with self.subTest(form=form):
+                self.assertEqual(model_family(form), "gpt")
+                self.assertEqual(contract_model_id(form), "gpt-6-cyber")
+                self.assertIs(model_contract(form), base)
+                projection = model_contract_projection(form)
+                assert projection is not None
+                self.assertEqual(projection["provenance"], "exact")
+        projection = model_contract_projection("gpt-6-cyber-2026-11-05")
+        assert projection is not None
+        self.assertEqual((projection["contract_model_id"], projection["provenance"]), ("gpt-6-cyber", "dated_snapshot"))
+        # The pricing page lists no mode or tier variant, so none is declared,
+        # and the Astra contract is not reached through the Cyber id.
+        for model_id in ("gpt-6-cyber-pro", "gpt-6-cyber-fast", "gpt-6-cyber-flex", "cyber", "gpt-6.1-cyber"):
+            with self.subTest(model_id=model_id):
+                self.assertIsNone(model_contract_projection(model_id))
+        self.assertIsNot(model_contract("gpt-6-cyber"), model_contract("gpt-6-astra"))
+        # GPT-5.6 Cyber and GPT-6 Rosalind document no ladder: no contract.
+        self.assertIsNone(model_contract("gpt-5.6-cyber"))
+        self.assertIsNone(model_contract("gpt-6-rosalind"))
+
+    def test_contract_records_the_gate_the_inherited_ladder_and_the_price(self) -> None:
+        contract = model_contract("gpt-6-cyber")
+        astra = model_contract("gpt-6-astra")
+        assert contract is not None and astra is not None
+        for key in ("reasoning_efforts", "effort_floor", "effort_default"):
+            self.assertEqual(contract[key], astra[key], key)
+        self.assertEqual(set(contract["unsupported_efforts"]), set(astra["unsupported_efforts"]))
+        self.assertIn("inherited from GPT-6 Astra", contract["effort_ladder_source"])
+        self.assertIn("Daybreak Red", contract["access"])
+        self.assertIn("Critical in Cybersecurity", contract["access"])
+        self.assertIn("HTTP 400", contract["rollout"])
+        self.assertEqual((contract["generation"], contract["released"]), ("gpt-6", "2026-11-05"))
+        self.assertEqual(
+            (contract["context_window_tokens"], contract["max_input_tokens"], contract["max_output_tokens"]),
+            (1_050_000, 922_000, 128_000),
+        )
+        pricing = contract["pricing_usd_per_mtok"]
+        self.assertEqual(
+            (pricing["input"], pricing["cached_input"], pricing["cache_write"], pricing["output"]),
+            (20.0, 2.0, 25.0, 100.0),
+        )
+        self.assertEqual(pricing["long_context_over_272k_input"], "not published")
+        self.assertEqual(contract["sources_read"], "2026-11-06")
+        self.assertIn("https://deploymentsafety.openai.com/gpt-6-cyber", contract["sources"])
+        self.assertEqual(contract["claim_boundary"], MODEL_CONTRACT_CLAIM_BOUNDARY)
+        self.assertNotIn("entitled", json.dumps(dict(contract)).casefold())
+
+    def test_price_rows_mirror_the_published_list_prices(self) -> None:
+        from omh.plugin_bundle.omh.hermes_delegation import APPROX_CACHE_READ_RATIO, _approximate_cost_usd
+
+        contract = model_contract("gpt-6-cyber")
+        assert contract is not None
+        pricing = contract["pricing_usd_per_mtok"]
+        self.assertEqual(APPROX_PRICE_PER_MTOK["gpt-6-cyber"], (pricing["input"], pricing["output"]))
+        self.assertEqual(APPROX_PRICE_PER_MTOK["gpt-5.6-cyber"], (12.5, 75.0))
+        self.assertEqual(APPROX_PRICE_PER_MTOK["gpt-6-rosalind"], (15.0, 75.0))
+        # Every cached rate is a tenth of input, so none needs a ratio row.
+        for model, (input_rate, output_rate) in (
+            ("gpt-6-cyber", (20.0, 100.0)),
+            ("openai/gpt-6-cyber-2026-11-05", (20.0, 100.0)),
+            ("gpt-5.6-cyber", (12.5, 75.0)),
+            ("gpt-6-rosalind", (15.0, 75.0)),
+        ):
+            with self.subTest(model=model):
+                self.assertNotIn(model, APPROX_CACHE_READ_RATIO)
+                self.assertAlmostEqual(
+                    _approximate_cost_usd(model, 1e6, 1e6, 1e6), input_rate + output_rate + input_rate / 10
+                )
+        # Astra keeps its own lower card; the Cyber id never borrows it.
+        self.assertEqual(APPROX_PRICE_PER_MTOK["gpt-6-astra"], (10.0, 50.0))
+
+    def test_no_reasoning_is_raised_to_the_inherited_floor_on_record(self) -> None:
+        for profile in ("codex", "hermes", "generic"):
+            for effort in ("off", "none", "minimal"):
+                with self.subTest(profile=profile, effort=effort):
+                    route = resolve_model_route(profile, requested_model="openai/gpt-6-cyber", requested_effort=effort)
+                    self.assertEqual(route["selected_reasoning_effort"], "low")
+                    self.assertEqual(route["effort_change"]["kind"], EFFORT_FLOOR_KIND)
+                    self.assertEqual(route["selected_model"], "openai/gpt-6-cyber")
+        for effort in ("low", "medium", "high", "xhigh", "max"):
+            self.assertIsNone(contract_effort_floor("gpt-6-cyber", effort), effort)
+
+    def test_it_takes_astras_exact_calibration_byte_for_byte(self) -> None:
+        self.assertEqual(MODEL_HIGH_EFFORT_CALIBRATIONS["gpt-6-cyber"], MODEL_HIGH_EFFORT_CALIBRATIONS["gpt-6-astra"])
+        self.assertEqual(MODEL_COMPOSITION_CALIBRATIONS["gpt-6-cyber"], MODEL_COMPOSITION_CALIBRATIONS["gpt-6-astra"])
+        for model in _CYBER_FORMS:
+            route = {"selected_model": model, "model_family": "gpt", "selected_reasoning_effort": "xhigh"}
+            with self.subTest(model=model):
+                self.assertEqual(calibration_for_route(route), MODEL_HIGH_EFFORT_CALIBRATIONS["gpt-6-astra"])
+                self.assertEqual(calibration_for_route(route, family_only=True), HIGH_EFFORT_CALIBRATIONS["gpt"])
+        # The contract-less gated siblings keep the family block.
+        for model in ("gpt-5.6-cyber", "gpt-6-rosalind"):
+            route = {"selected_model": model, "model_family": "gpt", "selected_reasoning_effort": "xhigh"}
+            with self.subTest(model=model):
+                self.assertEqual(calibration_for_route(route), HIGH_EFFORT_CALIBRATIONS["gpt"])
+                self.assertEqual(composition_calibration_for_model(model), MAIN_AGENT_COMPOSITION_CALIBRATIONS["gpt"])
+
+    def test_no_shipped_chain_or_maestro_table_names_a_gated_model(self) -> None:
+        from omh.coding.model_recommendations import SHIPPED_MODEL_RECOMMENDATIONS
+        from omh.coding.model_routing import BUILTIN_CATEGORY_MODELS
+
+        for section in ("categories", "role_suggestions", "domain_affinities", "last_resort"):
+            for slot, chain in SHIPPED_MODEL_RECOMMENDATIONS[section].items():
+                aliases = [candidate["model_alias"] for candidate in chain]
+                for model_id in _GATED_OPENAI_IDS:
+                    with self.subTest(section=section, slot=slot, model=model_id):
+                        self.assertNotIn(model_id, aliases)
+        flattened = json.dumps(BUILTIN_CATEGORY_MODELS) + json.dumps(EXECUTOR_MODEL_OPTIONS)
+        for model_id in _GATED_OPENAI_IDS:
+            self.assertNotIn(f'"{model_id}"', flattened, model_id)
+
+    def test_the_cli_prints_the_inherited_ladder(self) -> None:
+        status, stdout, _stderr = run_cli(["coding", "model-contract", "--model", "gpt-6-cyber"], output_json=False)
+        self.assertEqual(status, 0)
+        self.assertIn("reasoning efforts: low, medium, high, xhigh, max (floor `low`)", stdout)
+
+
+class DeepSeekV41Flash1017Tests(unittest.TestCase):
+    """The 2026-10-17 upgrade the `deepseek-flash` pointer now serves, under
+    the relay spelling DeepSeek itself does not accept."""
+
+    def test_the_relay_spelling_inherits_the_flash_contract_price_and_calibration(self) -> None:
+        from omh.plugin_bundle.omh.hermes_delegation import _approximate_cost_usd
+
+        base = model_contract("deepseek-v4.1-flash")
+        for form in ("deepseek-v4.1-flash-1017", "deepseek/deepseek-v4.1-flash-1017"):
+            with self.subTest(form=form):
+                projection = model_contract_projection(form)
+                assert projection is not None
+                self.assertEqual(projection["contract_model_id"], "deepseek-v4.1-flash")
+                self.assertEqual(projection["provenance"], "declared_inheritance")
+                self.assertEqual(projection["reasoning_mode"], "thinking")
+                self.assertIs(model_contract(form), base)
+                self.assertAlmostEqual(
+                    _approximate_cost_usd(form, 1e6, 1e6, 0), _approximate_cost_usd("deepseek-v4.1-flash", 1e6, 1e6, 0)
+                )
+                route = {"selected_model": form, "model_family": "deepseek", "selected_reasoning_effort": "max"}
+                self.assertEqual(calibration_for_route(route), MODEL_HIGH_EFFORT_CALIBRATIONS["deepseek-v4.1-flash"])
+        self.assertNotIn("deepseek-v4.1-flash-1017", APPROX_PRICE_PER_MTOK)
+        self.assertIn("DeepSeek-V4.1-Flash-1017", base["rollout"])
+        # Only the declared spelling projects: another MMDD suffix stays
+        # uncontracted until it gets its own row.
+        for model_id in ("deepseek-v4.1-flash-1118", "deepseek-v4-pro-0813", "deepseek-flash-1017"):
+            with self.subTest(model_id=model_id):
+                self.assertIsNone(model_contract_projection(model_id))
+
+
 _OPUS_55_FORMS = ("claude-opus-5-5", "anthropic/claude-opus-5-5", "Claude-Opus-5-5")
 
 

@@ -398,7 +398,7 @@ baseline-vs-calibrated prompt pairs where the *only* difference is the
 calibration block, and `tests/test_omh_live_model_benchmark.py` pins that
 pairing so a benchmark claim can never mix in other prompt changes.
 
-### `gpt` (GPT-5.6 Sol / Terra / Luna, GPT-6 Sol, GPT-6 Luna, GPT-6.1 Terra)
+### `gpt` (GPT-5.6 Sol / Terra / Luna, GPT-6 Sol, GPT-6 Luna, GPT-6.1 Terra, GPT-5.6 Cyber, GPT-6 Rosalind)
 
 - **Model trait:** a strong long-horizon reasoner. Its characteristic waste
   is spending depth on things that are already decided: re-deriving facts it
@@ -723,6 +723,57 @@ pairing so a benchmark claim can never mix in other prompt changes.
   `high` (the `deep` rung), and `gpt-6-sol` vs `gpt-6.1-sol` at `medium`
   (the last-resort rung).
 
+
+### `gpt-6-cyber` (GPT-6 Cyber, access-gated, exact-model override on the `gpt` family)
+
+- **What it is (official, read 2026-11-06):** released 2026-11-05 (API
+  changelog). The system card says "GPT-6 Cyber is a cyber-specialized
+  variant of GPT-6 Astra designed for authorized security work", gives it
+  Astra's Preparedness designations (Critical in Cybersecurity), and makes
+  it "available only to approved Daybreak Red users and organizations". The
+  model page repeats the gate ("Your organization needs Daybreak Red access
+  and approval"), lists a 1,050,000-token context, 922,000 max input,
+  128,000 max output, one snapshot (`gpt-6-cyber`), Chat Completions and
+  Responses as the only endpoints (no Batch), and "Reasoning token support"
+  with no effort values.
+- **Contract:** `gpt-6-cyber` is an exact contract, not a projection onto
+  Astra, because its price, access, and endpoints are its own. The effort
+  ladder is Astra's (`low` through `max`, `off` and `minimal` raised to
+  `low` on record), inherited on the system card's statement and labeled
+  `effort_ladder_source` in the record; the model page documents none. A
+  dated `gpt-6-cyber-YYYY-MM-DD` id projects onto it; no `-pro` / `-fast` /
+  `-flex` row is declared, because the pricing page lists none.
+- **Price (official):** 20 / 100 per MTok, cached input 2 (the default
+  tenth), cache writes 25 (30 minutes) and 50 (12 hours). Only a
+  short-context card is published.
+- **What OMH injects:** Astra's two blocks, byte for byte
+  (`MODEL_HIGH_EFFORT_CALIBRATIONS["gpt-6-cyber"]` and
+  `MODEL_COMPOSITION_CALIBRATIONS["gpt-6-cyber"]` equal the `gpt-6-astra`
+  entries; a test pins the equality). OpenAI publishes no prompting guidance
+  for this model, and Astra's documented traits are the nearest record for a
+  variant of Astra. Editorial and unmeasured.
+- **Placement:** none, and none proposed, and no executor option row (as
+  for GPT-6.1 Terra; Mythos 5.1 keeps one). Like Mythos 5.1, most accounts
+  cannot call it, and its scope is authorized security work, so naming it
+  in a public chain would read as a recommendation nobody can follow. It is
+  recognized, priced, and provider-mapped for a user who names it.
+- **Served:** not on this maintainer host. One probe through the Codex
+  subscription route on 2026-11-06 returned HTTP 400 ("The 'gpt-6-cyber'
+  model is not supported when using Codex with a ChatGPT account"), the
+  same wording a made-up id gets, so it cannot tell gated from absent.
+  Measurement waits for an approved route, which this repo does not have.
+- **Siblings on the same terms, without a contract:** GPT-5.6 Cyber
+  (`gpt-5.6-cyber`, 2026-08-07, "an alias for purpose-trained cybersecurity
+  models", 400K context, Responses only, 12.5 / 75) and GPT-6 Rosalind
+  (`gpt-6-rosalind`, 2026-10-30, life-sciences research for approved
+  organizations, 15 / 75 short-context; its model page returns 404) carry a
+  price row, a provider row, and a display label, and get the `gpt` family
+  block. Neither model page documents an effort ladder or a base model to
+  inherit one from.
+- **Source:** official (developers.openai.com model pages, pricing page,
+  and changelog; deploymentsafety.openai.com system card, read
+  2026-11-06); observed (the Codex probe, and the Hermes source: no
+  `gpt-6-cyber` row in v0.22.5 or origin/main `44ec783afd`).
 
 ### `gpt-6.1-terra` (GPT-6.1 Terra, exact contract; `gpt` family calibration)
 
@@ -1358,7 +1409,14 @@ pairing so a benchmark claim can never mix in other prompt changes.
   the next Flash release moves it. `deepseek-v4-flash` and
   `deepseek-v4-flash-vision-exp` are routed to V4.1 Flash by the vendor, while
   `deepseek-v4-pro` stays a separately priced model (pricing page re-read
-  2026-10-28); none of those spellings inherits — a routed alias is the vendor's wire concern,
+  2026-10-28). Since 2026-10-17 the pointer serves DeepSeek-V4.1-Flash-1017,
+  an upgrade of this model at "The API calling method and pricing remain
+  unchanged" (change log, re-read 2026-11-06); the relay spelling
+  `deepseek-v4.1-flash-1017` is a second declared alias of the contract.
+  Its row equals the pointer's, so a child observed under it also labels
+  the pointer's category, but nothing projects onto it in reverse. The
+  2026-09-13 measurement below predates the upgrade. Apart from
+  `deepseek-flash` and `deepseek-v4.1-flash-1017`, no spelling inherits — a routed alias is the vendor's wire concern,
   not a catalog claim. The contract records a 1,000,000-token context,
   384,000 max output, thinking on by default at `high`, the documented
   effort ladder `low` / `high` / `max` with no floor to raise to (the
