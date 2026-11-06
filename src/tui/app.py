@@ -659,7 +659,7 @@ UPDATE_NOTICE_SHORT = "↑ v{latest}"  # what stays beside the version once the 
 # answer defaults to not now. Restart leaves with `RELAUNCH_EXIT` once no turn runs and nothing typed waits, and
 # `omh` opens the installed generation's TUI on the same session (`_relaunch_when_due`).
 RESTART_TO_UPDATE = "restart to update"
-UPDATE_RESTART_QUESTION = "OMH updated to {label}. Restart the TUI now to use it? This session reopens."
+UPDATE_RESTART_QUESTION = "OMH moved to {label}. Restart the TUI now to use it? This session reopens."
 UPDATE_LATER_CHOICE = "Not now"
 UPDATE_RESTART_CHOICE = "Restart the TUI"
 UPDATE_LATER_NOTICE = "This TUI keeps running the OMH it started with. To use {label}, {how}."
@@ -668,13 +668,15 @@ UPDATE_LATER_HOW_PLAIN = "quit and open the OMH TUI again"
 RELAUNCH_AFTER_TURN = "The TUI restarts on {label} once this turn ends."
 RELAUNCH_AFTER_GATEWAY = "The TUI restarts on {label} once Hermes' gateway is back."
 RELAUNCH_AFTER_DRAFT = "The TUI restarts on {label} once what you typed is sent or cleared."
+# A `/bg` or `/btw` answer still out does not hold a restart, since a task may never answer: it is said instead.
+RELAUNCH_LOSES_SIDE_ANSWERS = "The answer of {tasks} will not show after the restart: Hermes sends it only to this TUI's view."
 RELAUNCH_AFTER_WAIT = "The TUI restarts on {label} once the work this session waits on ends."
 RELAUNCH_CANCELLED = "OMH went back to the version this TUI runs, so it does not restart."
 RELAUNCH_FAILED = "The TUI could not ask omh to restart it. To use {label}, quit and run `{command}`."
 RELAUNCH_FAREWELL = "omh: restarting the OMH TUI on {label}…"
 # In a TUI `omh` relaunched for an update (`UPDATED_ENV`) whose shared gateway still runs the old OMH plugin code:
 # the line above `/gateway restart`'s own question, which is asked once, with nothing chosen by default.
-GATEWAY_UPDATE_LEAD = "OMH updated, but Hermes' gateway still runs the OMH plugin code it started with."
+GATEWAY_UPDATE_LEAD = "OMH moved to another version, but Hermes' gateway still runs the OMH plugin code it started with."
 WHATS_NEW_NONE_NOTICE = "There is no What's new written for v{version}."
 WALLPAPER_KEPT_NOTICE = "Living wallpaper {state}, kept in {path}."
 WALLPAPER_SESSION_NOTICE = "Living wallpaper {state} for this session; there is no OMH home to keep it in."
@@ -768,6 +770,7 @@ AUTO_CONTINUE_UNSENT = "it did not go out"
 # A session resumed (`omh --resume <id>`, `/resume`, the session picker) with work left goes on the same way: the row
 # says why, and after AUTO_CONTINUE_SECONDS, in which Esc cancels, the same `continue` goes (`_offer_resume_continue`).
 RESUME_CONTINUE_NOTICE = "Resuming: {why}; sending `continue` in {seconds} s · Esc cancels"
+RESUME_NOT_SENT_NOTICE = "Reopened for the update: {why}. Nothing was sent; send `continue` to go on."
 RESUME_WHY_INTERRUPTED = "Hermes interrupted its last turn"
 RESUME_WHY_RUN = {  # `dag_open_run_nudge.RESUMABLE_REASONS`; {count} nodes of run {run}
     "returned": "dag-ulw run {run} has {count} {nodes} back to settle",
@@ -2316,6 +2319,7 @@ class App(ModesMixin, AgentViewMixin):
         self.installed = ""
         self.installed_label = ""
         self.update_asked = ""
+        self.update_question = ""  # the open question's request id (`_ask_locally`), to close it if the pointer returns
         self.relaunch_label = ""
         self.relaunch_said = ""
         # Hermes' skills, regrouped for the card: the last launch's (last-known) from startup, the session's once
@@ -2452,9 +2456,12 @@ class App(ModesMixin, AgentViewMixin):
             self._draw_history(result.get("messages"))
         self._say_gateway_health()  # under a resumed session's history, where the launch's screen ends
         self._redeliver(result.get("open_requests"))
-        if self.environ.get(UPDATED_ENV) in (UPDATED_PLAIN, UPDATED_PLAN):
+        relaunched = self.environ.get(UPDATED_ENV) in (UPDATED_PLAIN, UPDATED_PLAN)
+        if relaunched:
             self._offer_gateway_after_update()
-        if resume:
+        if resume and relaunched:
+            self._say_work_left(result)
+        elif resume:
             self._offer_resume_continue(result)
         if pick:
             self._sessions("")
@@ -3576,9 +3583,13 @@ class App(ModesMixin, AgentViewMixin):
             return
         self.dirty = True
         if name == watch.running:
-            if self.relaunch_label:
+            open_question = self.slot is not None and self.slot.request_id == self.update_question
+            if self.relaunch_label or open_question:
                 self.transcript.add_notice(RELAUNCH_CANCELLED)
             self.installed = self.installed_label = self.relaunch_label = self.relaunch_said = ""
+            if open_question:  # nothing is left to ask about; moved on again, it is asked again
+                self.update_asked = ""
+                self._answer(self.slot.decline())
             return
         self.installed, self.installed_label = name, watch.label(name)
         if self.relaunch_label:  # the restart picked goes onto the generation installed now
@@ -3599,8 +3610,6 @@ class App(ModesMixin, AgentViewMixin):
 
         def decided(choice: str) -> None:
             if self.installed != asked:  # the pointer moved while this was open: a newer one is asked about in turn
-                if choice == UPDATE_RESTART_CHOICE and not self.installed:
-                    self.transcript.add_notice(RELAUNCH_CANCELLED)
                 return
             if choice == UPDATE_RESTART_CHOICE:
                 self.relaunch_label = self.installed_label
@@ -3609,8 +3618,13 @@ class App(ModesMixin, AgentViewMixin):
             how = UPDATE_LATER_HOW.format(command=command) if command else UPDATE_LATER_HOW_PLAIN
             self.transcript.add_notice(UPDATE_LATER_NOTICE.format(how=how, label=label))
 
-        self._ask_locally(UPDATE_RESTART_QUESTION.format(label=label), (UPDATE_LATER_CHOICE, UPDATE_RESTART_CHOICE),
-                          decided)
+        question = "\n".join(filter(None, (UPDATE_RESTART_QUESTION.format(label=label), self._side_answers_lost())))
+        self.update_question = self._ask_locally(question, (UPDATE_LATER_CHOICE, UPDATE_RESTART_CHOICE), decided)
+
+    def _side_answers_lost(self) -> str:
+        """What a restart now loses of this session's `/bg` and `/btw` answers, as a sentence; "" for none."""
+        left = sorted(task for task, sid in self.side_tasks.items() if self.sid and sid == self.sid)
+        return RELAUNCH_LOSES_SIDE_ANSWERS.format(tasks=", ".join(left)) if left else ""
 
     def _relaunch_hold(self) -> str | None:
         """Why a restart waits, as a notice to say once ("" to wait without one: another question is open, a session
@@ -3619,8 +3633,8 @@ class App(ModesMixin, AgentViewMixin):
 
         A turn counts from before it starts: the `continue` the TUI is about to send (`auto_continue`), Hermes' queued
         redirect (`hermes_next_due`), and a `/compress` that may rotate the session. What runs between turns counts
-        too: what the session waits on, which wakes it (`_pending_wait`), a `!` line or a slash command whose answer
-        is out, and a `/bg` or `/btw` task, whose answer the gateway sends only to the view that asked."""
+        too: what the session waits on, which wakes it (`_pending_wait`), and a `!` line or a slash command whose
+        answer is out. A `/bg` or `/btw` task does not: it may never answer (`_side_answers_lost`)."""
         if self._busy() or self.auto_continue is not None or self.hermes_next_due is not None \
                 or self._compressing_since() is not None:
             return RELAUNCH_AFTER_TURN
@@ -3629,8 +3643,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.slot is not None or self._switching() or self.pager is not None or self.chains_open or any(
                 (self.picker, self.model_picker, self.launch_picker, self.rewind_picker)):
             return ""
-        if self._pending_wait() is not None or any(call.command is not None for call in self.pending.values()) \
-                or self.sid in self.side_tasks.values():
+        if self._pending_wait() is not None or any(call.command is not None for call in self.pending.values()):
             return RELAUNCH_AFTER_WAIT
         if self._auto_continue_held():  # a draft, a steer or a rewind open, a queued line, a held submit
             return RELAUNCH_AFTER_DRAFT
@@ -3655,7 +3668,7 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_notice(RELAUNCH_FAILED.format(command=command, label=label), NOTICE_WARN)
             self.dirty = True
             return
-        self.farewell = RELAUNCH_FAREWELL.format(label=label)
+        self.farewell = " ".join(filter(None, (RELAUNCH_FAREWELL.format(label=label), self._side_answers_lost())))
         self.exit_code = RELAUNCH_EXIT
 
     def _offer_gateway_after_update(self) -> None:
@@ -5135,8 +5148,9 @@ class App(ModesMixin, AgentViewMixin):
         question = MODEL_CONFIRM_QUESTION.format(intro=intro, message=message, model=model)
         self._ask_locally(question, (keep_choice, switch_choice), decided)
 
-    def _ask_locally(self, question: str, choices: tuple[str, ...], decided: Callable[[str], None]) -> None:
-        """Ask the person a question of the TUI's own in the prompt slot, with only `choices` to answer it.
+    def _ask_locally(self, question: str, choices: tuple[str, ...], decided: Callable[[str], None]) -> str:
+        """Ask the person a question of the TUI's own in the prompt slot, with only `choices` to answer it; its
+        request id.
 
         It opens, waits behind an open question and arms like any question
         Hermes asks; `decided` gets the choice picked, or "" for Esc (and for
@@ -5155,6 +5169,7 @@ class App(ModesMixin, AgentViewMixin):
             {"qid": MODEL_CONFIRM_QID, "question": question, "choices": list(choices), CLOSED_CHOICES: True},
         ]}
         self._on_server_request(ServerRequest(request_id, "clarify", params))
+        return request_id
 
     # ── Hermes' configured default model ──
 
@@ -6225,6 +6240,15 @@ class App(ModesMixin, AgentViewMixin):
         found = self.read_waiting_run(self.environ.get("OMH_HOME") or None, self.environ.get("HERMES_HOME") or None,
                                       self.stored_id)
         return resume_run_why(*found) if found is not None else ""
+
+    def _say_work_left(self, result: Mapping[str, Any]) -> None:
+        """A session `omh` reopened for an update (`UPDATED_ENV`): the person asked for the update, not for a turn, so
+        what a resume would go on with is only said. A `continue` already armed held that restart back
+        (`_relaunch_hold`), so none is lost here."""
+        why = self._resume_evidence(result)
+        if why and not self._busy():
+            self.transcript.add_notice(RESUME_NOT_SENT_NOTICE.format(why=why), NOTICE_WARN)
+            self.dirty = True
 
     def _offer_resume_continue(self, result: Mapping[str, Any]) -> None:
         """A session just resumed with work left (`_resume_evidence`) goes on by itself, as a turn Hermes interrupted

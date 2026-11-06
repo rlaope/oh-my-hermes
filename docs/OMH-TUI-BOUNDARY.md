@@ -390,16 +390,19 @@ could go at once. The same check holds the question and a Restart already
 picked: a running turn, one about to start (the TUI's own `continue`, Hermes'
 queued redirect), a `/compress`, a session switch, what the session waits on
 between turns (background processes that wake it, delegated children), a `!`
-line or a slash command still out, a `/bg` or `/btw` answer still out, Hermes'
-gateway restarting, another open question, an open pager or picker, and what the
-person typed or queued. A pointer that moves back cancels a Restart still
-waiting.
+line or a slash command still out, Hermes' gateway restarting, another open
+question, an open pager or picker, and what the person typed or queued. A `/bg`
+or `/btw` answer still out does not hold it, since a task may never answer: the
+question and the farewell say that answer will not show. A pointer that moves
+back closes the question, or cancels a Restart still waiting, and says so.
 
 The TUI restarts nothing itself. It creates the marker `omh` named
 (`RELAUNCH_FILE_ENV`, in `omh`'s private launch directory, opened `O_NOFOLLOW`,
 mode 0600, holding `plan` in plan mode and otherwise empty) and exits
 `RELAUNCH_EXIT` through its normal shutdown, so the terminal is handed back as
-at any exit. Plan mode carries over; yolo the TUI set goes off, as at any exit. The `omh` waiting on it then starts
+at any exit. Plan mode carries over; yolo the TUI set goes off, as at any exit. A session
+reopened this way never sends the `continue` a resume can send: the person asked
+for an update, not a turn, so a notice names what is left instead. The `omh` waiting on it then starts
 `<installer root>/current/venv/.../python -P -m omh.cli` with its own homes,
 scope and profile and `--resume <id>` (`src/commands/bare_launch.py`, in
 INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`), and holds its own generation until

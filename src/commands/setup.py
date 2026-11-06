@@ -127,7 +127,7 @@ from ..plugin_bundle.omh.provider_detection import (
 from ..plugin_bundle.omh.runtime_paths import default_hermes_home
 from ..plugin_pack import PLUGIN_NAME, PluginPackError, install_plugin_bundle
 from ..install.plugin_pack import HERMES_PLUGIN_UPDATE_COMMAND, PluginContentProtectedError
-from ..install.self_update import PROFILE_REPAIR_EXIT_CODE
+from ..install.self_update import PROFILE_REPAIR_EXIT_CODE, names_flag
 from ..probe import probe_capabilities
 from ..release import (
     COMMIT_SHA_RE,
@@ -393,6 +393,9 @@ SETUP_OPERATOR_SUMMARY_SCHEMA_VERSION = "setup_operator_summary/v1"
 DOCTOR_SUMMARY_SCHEMA_VERSION = "doctor_summary/v1"
 MCP_SETUP_SCHEMA_VERSION = "omh_mcp_setup/v1"
 SELF_UPDATE_REENTRY_ENV = "OMH_UPDATE_COMMAND_PACKAGE_REENTERED"
+# The started process's alone (`update_gateway`). A constant here: the re-entry's argv is read after a package
+# manager replaced the code, where a new import could fail.
+RESTART_FLAGS = frozenset({"--restart-gateway", "--no-restart-gateway"})
 # Set by the self-update on the re-entry that restores the known-good
 # generation after a refused candidate; the human summary then says
 # "rollback", never "update complete".
@@ -1633,7 +1636,10 @@ def _self_update_target_label(plan: dict[str, object]) -> str:
 
 def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, object]) -> int:
     # Imported before the update changes the files under this process: the gateway question runs after it.
-    from . import update_gateway  # noqa: F401
+    try:
+        from . import update_gateway  # noqa: F401
+    except ImportError:  # `_offer_gateway_restart` then offers nothing; the update itself does not need it
+        pass
 
     if plan.get("method") == "package_manager":
         return _run_package_manager_self_update(args, plan)
@@ -1673,7 +1679,10 @@ def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, o
 def _offer_gateway_restart(args: argparse.Namespace, code: int) -> int:
     """After an update in the process the person started: ask about, or restart, each running Hermes gateway still on
     the old OMH plugin code (`update_gateway`); the exit code to return."""
-    from .update_gateway import NO_DESCRIPTION, SKIP, YES_DESCRIPTION, restart_after_update, restart_mode
+    try:
+        from .update_gateway import NO_DESCRIPTION, SKIP, YES_DESCRIPTION, restart_after_update, restart_mode
+    except ImportError:  # the update replaced these files under this process: not offered, and its code stands
+        return code
 
     if not hasattr(args, "omh_home"):
         return code
@@ -1925,9 +1934,6 @@ def _bounded_command_error(value: str, *, limit: int = 2_000) -> str:
 
 
 def _reentry_argv_with_command_package_updated() -> list[str]:
-    from ..install.self_update import names_flag
-    from .update_gateway import RESTART_FLAGS
-
     argv = [item for item in sys.argv[1:] if not names_flag(item, RESTART_FLAGS)]  # the started process's alone
     if "--command-package-updated" not in argv:
         argv.append("--command-package-updated")

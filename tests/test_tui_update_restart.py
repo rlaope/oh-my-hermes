@@ -46,6 +46,8 @@ from omh.tui.app import (
     RELAUNCH_CANCELLED,
     RELAUNCH_FAILED,
     RELAUNCH_FAREWELL,
+    RELAUNCH_LOSES_SIDE_ANSWERS,
+    RESUME_NOT_SENT_NOTICE,
     RESTART_TO_UPDATE,
     SLOT_ARM_SECONDS,
     UPDATE_LATER_CHOICE,
@@ -245,6 +247,7 @@ class OfferTests(unittest.TestCase):
             self.assertIn(RESTART_TO_UPDATE, line_text(app._info_line(120)))
             asked = question(app)
             self.assertEqual(asked["question"], UPDATE_RESTART_QUESTION.format(label="4.0.6 main@1a2b3c4d"))
+            self.assertTrue(asked["question"].startswith("OMH moved to 4.0.6"))  # true of a downgrade as well
             self.assertEqual(asked["choices"], [UPDATE_LATER_CHOICE, UPDATE_RESTART_CHOICE])  # Enter alone: not now
             self.assertIsNone(app.exit_code)
 
@@ -415,17 +418,30 @@ class OfferTests(unittest.TestCase):
             tick(app, now)
             self.assertEqual(app.exit_code, launch.RELAUNCH_EXIT)
 
-    def test_a_side_answer_still_out_for_this_session_holds_the_restart(self) -> None:
+    def test_a_side_answer_still_out_does_not_hold_the_restart_and_is_said(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             app, pointer, now = update_app(tmp)
             app.sid = "sid-1"
-            app.side_tasks["task"] = "sid-1"
+            app.side_tasks.update({"task-b": "sid-1", "task-a": "sid-1", "task-c": "another-session"})
             pointer.move(NEW)
             tick(app, now)
-            self.assertIsNone(app.slot)
-            app.side_tasks["task"] = "another-session"  # its view is gone already
-            tick(app, now, 0.0)
-            self.assertIsNotNone(app.slot)
+            line = RELAUNCH_LOSES_SIDE_ANSWERS.format(tasks="task-a, task-b")  # not another session's
+            self.assertEqual(question(app)["question"],
+                             UPDATE_RESTART_QUESTION.format(label="4.0.6 main@1a2b3c4d") + "\n" + line)
+            arm(now)
+            pick(app, UPDATE_RESTART_CHOICE)
+            tick(app, now)
+            self.assertEqual(app.exit_code, launch.RELAUNCH_EXIT)  # a task that never answers holds nothing
+            self.assertIn(line, app.farewell)
+
+    def test_with_no_side_answer_out_the_question_says_nothing_of_them(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, pointer, now = update_app(tmp)
+            app.sid = "sid-1"
+            app.side_tasks["task-c"] = "another-session"
+            pointer.move(NEW)
+            tick(app, now)
+            self.assertEqual(question(app)["question"], UPDATE_RESTART_QUESTION.format(label="4.0.6 main@1a2b3c4d"))
 
     def test_an_open_pager_or_picker_is_not_taken_from_the_person(self) -> None:
         for name in ("pager", "picker", "model_picker", "launch_picker", "rewind_picker", "chains_open"):
@@ -455,19 +471,33 @@ class OfferTests(unittest.TestCase):
         plain, _client = make_app(environ={launch.UPDATED_ENV: launch.UPDATED_PLAIN})
         self.assertFalse(plain.plan_mode)
 
-    def test_a_pointer_that_moved_back_while_the_question_was_open_says_so(self) -> None:
+    def test_a_pointer_that_moved_back_closes_the_open_question_and_says_so(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             app, pointer, now = update_app(tmp)
             pointer.move(NEW)
             tick(app, now)
+            self.assertIsNotNone(app.slot)
             pointer.move(OLD)
             tick(app, now)
-            arm(now)
-            pick(app, UPDATE_RESTART_CHOICE)
-            self.assertIn(RELAUNCH_CANCELLED, notices(app))
-            tick(app, now)
+            self.assertIsNone(app.slot)
+            self.assertEqual(notices(app).count(RELAUNCH_CANCELLED), 1)
+            self.assertNotIn(RESTART_TO_UPDATE, line_text(app._info_line(120)))
             self.assertIsNone(app.exit_code)
-            self.assertEqual(app.relaunch_label, "")
+            pointer.move(NEW)  # moved on again: nothing was answered, so it is asked again
+            tick(app, now)
+            self.assertIsNotNone(app.slot)
+
+    def test_the_pointer_moving_back_leaves_someone_elses_question_open(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, pointer, now = update_app(tmp)
+            pointer.move(NEW)
+            tick(app, now)
+            arm(now)
+            pick(app, UPDATE_LATER_CHOICE)
+            app._ask_locally("Another question?", ("One", "Two"), lambda choice: None)
+            pointer.move(OLD)
+            tick(app, now)
+            self.assertIsNotNone(app.slot)
 
     def test_the_question_does_not_open_over_what_is_being_typed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -594,6 +624,51 @@ class GatewayAfterUpdateTests(unittest.TestCase):
                 app, _old, _spawner, _now = crashing(environ={**ENVIRON, launch.UPDATED_ENV: flag})
                 app.startup()
                 self.assertEqual(offer.call_count, calls)
+
+
+class ReopenedSessionTests(unittest.TestCase):
+    """A restart for an update starts no turn the person did not ask for."""
+
+    def opened(self, flag: str | None, why: str) -> App:
+        from test_tui_respawn import ENVIRON, crashing
+
+        environ = {**ENVIRON, "HERMES_TUI_RESUME": "20261106_120000_abcdef"}
+        if flag is not None:
+            environ[launch.UPDATED_ENV] = flag
+        with patch.object(App, "_offer_gateway_after_update"), patch.object(App, "_resume_evidence", return_value=why):
+            app, _old, _spawner, _now = crashing(environ=environ)
+            app.startup()
+        return app
+
+    def test_a_reopened_session_arms_no_continue_and_says_what_is_left(self) -> None:
+        for flag in (launch.UPDATED_PLAIN, launch.UPDATED_PLAN):
+            with self.subTest(flag=flag):
+                app = self.opened(flag, "Hermes interrupted its last turn")
+                self.assertIsNone(app.auto_continue)
+                self.assertIn(RESUME_NOT_SENT_NOTICE.format(why="Hermes interrupted its last turn"), notices(app))
+
+    def test_nothing_left_says_nothing(self) -> None:
+        app = self.opened(launch.UPDATED_PLAIN, "")
+        self.assertFalse([line for line in notices(app) if "Reopened for the update" in line])
+
+    def test_an_ordinary_resume_still_goes_on_by_itself(self) -> None:
+        app = self.opened(None, "Hermes interrupted its last turn")
+        self.assertIsNotNone(app.auto_continue)
+
+    def test_an_opened_question_on_the_gateway_does_not_swallow_the_line(self) -> None:
+        from test_tui_respawn import ENVIRON, crashing
+
+        environ = {**ENVIRON, "HERMES_TUI_RESUME": "20261106_120000_abcdef", launch.UPDATED_ENV: launch.UPDATED_PLAIN}
+
+        def offer(app: App) -> None:
+            app._ask_locally("Restart the gateway?", ("Cancel", "Restart"), lambda choice: None)
+
+        with patch.object(App, "_offer_gateway_after_update", offer), \
+                patch.object(App, "_resume_evidence", return_value="Hermes interrupted its last turn"):
+            app, _old, _spawner, _now = crashing(environ=environ)
+            app.startup()
+        self.assertIsNotNone(app.slot)
+        self.assertIn(RESUME_NOT_SENT_NOTICE.format(why="Hermes interrupted its last turn"), notices(app))
 
 
 class LaunchMarkerTests(unittest.TestCase):
