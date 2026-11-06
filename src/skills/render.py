@@ -395,7 +395,7 @@ _ROUTER_CANONICAL_REFERENCES = frozenset(
 # shows it is a skill hand-off: one of these words just before it or just after.
 _HANDOFF_BEFORE = re.compile(
     r"(?:\b(?:use|load|loads|from)\s+(?:the\s+)?"
-    r"|\b(?:route|routes|routed|hand|hands|handed|send|sends)\b[^`]{0,40}\bto\s+(?:the\s+)?)$",
+    r"|\b(?:route|routes|routed|go|goes|hand|hands|handed|send|sends)\b[^`]{0,40}\bto\s+(?:the\s+)?)$",
     re.IGNORECASE,
 )
 _HANDOFF_WORDS_AFTER = frozenset({"workflow", "skill", "lane", "owns"})
@@ -3334,6 +3334,7 @@ Contract: `references/full-contract.md`.{_procedure_pointer(definition)}
 - Preserve workflow intent and stop conditions; load the full contract before claiming completion.
 - Reply in the user's own words and the host's own voice: its SOUL.md persona owns reply language, tone, speech level, and sentence endings, progress updates included (where it sets no language, use the one the user wrote in), and OMH shapes structure and content only; OMH's record terms (surface, lane, wrapper, handoff, evidence boundary, not_observed) stay in records and tool calls, never in the sentence the user reads unless they ask about one; and when a real unresolved user decision or a useful briefing discussion remains, offer one specific, content-linked question. Completed work needs no question; omit unrelated non-action footers and generic offers to continue.
 - Record observed delegation results; otherwise return `not_available` or `not_observed`.
+- Treat wrapper memory/context summaries as advisory local context, not proof of opaque Hermes memory reads or changes.
 - Use Hermes-native subagent/delegation features when available: native subagents -> Hermes delegation when available, otherwise sequential lanes.
 
 ## Recovery Notes

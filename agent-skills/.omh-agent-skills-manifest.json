@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "264bf0cd5a6c597933719aeb2e24d6152b7db88600b202845cfc57a548b210ac",
+  "catalog_revision": "f881804f54ff007255b66fa848c9fac438eeaffa991c7ffacaac5043fd2d678b",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -24,7 +24,7 @@
     "omh-ai-slop-cleaner/SKILL.md": "6cfbb863b0720b0e8b518aa4a077a6923147dee01f213a2bf78f8ca6b530bc04",
     "omh-ai-slop-cleaner/references/cleanup-passes.md": "ec8bca6c22f1884060156076b250492fd5f8cca648b15c365390ba8c859700e6",
     "omh-ai-slop-cleaner/references/prose-lexicon.md": "efd209984c3e5823995484dd5b6e38e3161a059db9e841b4599dbbd330417ee5",
-    "omh-ai-slop-cleaner/references/ui-review-checklist.md": "246fe609a8c5fc238bb7fc7a209d989b941d0734f8e9b5ce2f219833cde317e8",
+    "omh-ai-slop-cleaner/references/ui-review-checklist.md": "ff7f41c6703e115bf27c197144daf69b50d68b106c1f87312c04bdd88b13efb7",
     "omh-app-debugging/SKILL.md": "57767fb0590ef4318531bce82fcfe3cf6b439864d4018c81b47d6d2d54e8fd8f",
     "omh-app-debugging/references/hypothesis-and-race-method.md": "cdb2d5e5f707efa8e7914bb7d12bcf3e5acd5966dd5dac4c349a43758d1baa0e",
     "omh-apple-design/SKILL.md": "7e49e2b1dc4359548f56a7cf1dd7ce11bfc39e6530ad676efca79989291c9889",

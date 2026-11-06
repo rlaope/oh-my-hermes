@@ -74,7 +74,7 @@ class DecisionRecordsReferenceTests(unittest.TestCase):
         self.assertIn("`Proposed -> Accepted -> Deprecated | Superseded`", content)
         self.assertIn("An accepted record is never edited", content)
         self.assertIn("status moves to Superseded with a forward link", content)
-        self.assertIn("Rejected\n  records are the corpus `decision-recall` reads", content)
+        self.assertIn("Rejected\n  records are the corpus `omh-decision-recall` reads", content)
         self.assertIn("deleting one deletes the warning", content)
 
     def test_the_approval_and_evidence_boundary_survives(self) -> None:

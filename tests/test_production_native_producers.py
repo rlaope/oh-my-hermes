@@ -31,7 +31,7 @@ load_local_package()
 from omh.plugin_bundle.omh.native_tools import native_tool_presence_clause
 from omh.skills.catalog import builtin_definitions, omh_skill_display_name
 from omh.skills.packaging import builtin_skill_templates
-from omh.skills.render import agent_skill_templates
+from omh.skills.render import agent_skill_templates, translate_sibling_mentions
 from omh.workflows.materials import FORMAT_QA_LADDER
 
 PRODUCTION_SKILLS = (
@@ -248,16 +248,16 @@ class ProducerClauseTests(unittest.TestCase):
         for name, clauses in NATIVE_CLAUSES.items():
             for clause in clauses:
                 with self.subTest(skill=name, projection="hermes", clause=clause[:60]):
-                    self.assertIn(clause, hermes[name])
+                    self.assertIn(translate_sibling_mentions(clause, owner=name), hermes[name])
                 if name in HERMES_ONLY_CLAUSES or clause in HERMES_ONLY_CLAUSE_TEXTS:
                     continue
                 with self.subTest(skill=name, projection="portable", clause=clause[:60]):
-                    self.assertIn(clause, portable[omh_skill_display_name(name)])
+                    self.assertIn(translate_sibling_mentions(clause, owner=name), portable[omh_skill_display_name(name)])
         for name, clauses in PORTABLE_ONLY_CLAUSES.items():
             for clause in clauses:
                 with self.subTest(skill=name, projection="portable", clause=clause[:60]):
-                    self.assertIn(clause, portable[omh_skill_display_name(name)])
-                    self.assertNotIn(clause, hermes[name])
+                    self.assertIn(translate_sibling_mentions(clause, owner=name), portable[omh_skill_display_name(name)])
+                    self.assertNotIn(translate_sibling_mentions(clause, owner=name), hermes[name])
 
     def test_the_portable_browser_skills_name_no_hermes_tool(self) -> None:
         portable = _portable()

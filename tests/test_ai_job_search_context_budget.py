@@ -376,7 +376,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then the render rail: every body names its siblings by the label `skill_view`
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
-        self.assertEqual(_digest(legacy_hashes), 'd3f9bfdd181fc1ab0af5ad1b22920fdf892ccd406a5a2b6361a8e2699f911a46')
+        self.assertEqual(_digest(legacy_hashes), '7e537e8dbd4e8d9a0104d0bba4b7eb5d645e14f031baea6674df7c01e1884b2c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -389,9 +389,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # (-501); swapping only that body back to main's restores 128600.
         # Skill-specific bail notes remove duplicate Recovery Notes; the measured count falls, with all ceilings unchanged.
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
-        # 122431 -> 124094: the render rail writes each sibling under its loadable label
+        # 122431 -> 124814: the render rail writes each sibling under its loadable label
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
-        self.assertEqual(legacy['repeated']['bytes'], 124094)
+        self.assertEqual(legacy['repeated']['bytes'], 124814)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
