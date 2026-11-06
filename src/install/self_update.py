@@ -203,10 +203,15 @@ def _smoke(candidate: Path, expected_version: str, *, runner: Runner, platform: 
 OUTER_ONLY_FLAGS = frozenset({"--recover-known-good", "--restart-gateway", "--no-restart-gateway"})
 
 
+def names_flag(item: str, flags: frozenset[str]) -> bool:
+    """Whether a command-line word is one of `flags`, or the abbreviation of one that argparse accepted."""
+    return item.startswith("--") and len(item) > 2 and any(flag.startswith(item) for flag in flags)
+
+
 def _reentry_argv() -> list[str]:
     argv: list[str] = []
     for item in sys.argv[1:]:
-        if item in OUTER_ONLY_FLAGS:
+        if names_flag(item, OUTER_ONLY_FLAGS):
             continue
         # `--channel main` is an alias a restored, older generation may not know.
         if item == "--channel=main" or (item == "main" and argv[-1:] == ["--channel"]):

@@ -1852,7 +1852,8 @@ default to no:
   restart interrupts first (see the gateway hint under
   [Bot profiles](#bot-profiles)).
 - An open OMH TUI that was started by `omh` from the installer-managed
-  environment notices the update within a few seconds. It shows
+  environment notices the update within a few seconds of its finishing. It
+  shows
   `restart to update` on its info line and asks once, between turns:
   `OMH updated to 4.0.6 main@1a2b3c4d. Restart the TUI now to use it?`. If
   you pick Restart the TUI, it leaves after the running turn, once the work
@@ -3583,7 +3584,8 @@ When it finishes on a terminal, the `omh update` you started also asks about
 each of those gateways that runs now: it prints what the gateway's record says
 a restart interrupts (its profiles, connected bots and running work, as
 `/gateway restart` names them), then asks `Restart the Hermes gateway now so
-the new OMH plugin code loads? [y/N]`. Yes runs Hermes' own
+the new OMH plugin code loads?`, as a menu or as `[y/N]`, defaulting to no. Yes
+runs Hermes' own
 `hermes -p <profile> gateway restart --yes --detach` with the `hermes` on your
 PATH. A gateway a service runs lets running work finish first. Nothing is
 asked off a terminal, with `--json`, `--no-interactive` or `--yes`, in a dry

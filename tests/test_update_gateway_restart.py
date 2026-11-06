@@ -15,11 +15,12 @@ Hermes, no gateway, no process.
 from __future__ import annotations
 
 import argparse
-from contextlib import redirect_stdout
+from contextlib import nullcontext, redirect_stdout
 import io
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -37,6 +38,7 @@ from omh.commands.update_gateway import (
     GATEWAY_RESTART_EXIT_CODE,
     INTERRUPTED_EXIT_CODE,
     NOTHING_STALE_LINE,
+    NO_DESCRIPTION,
     PROFILE_QUESTION,
     QUESTION,
     RESTART,
@@ -44,10 +46,11 @@ from omh.commands.update_gateway import (
     STALE_LINE,
     STARTED_LINE,
     UNSTARTED_LINE,
+    YES_DESCRIPTION,
     restart_after_update,
     restart_mode,
 )
-from omh.install import self_update
+from omh.install import generation_hold, self_update
 from omh.maintenance.hermes_gateway import stale_running_gateways
 from omh.tui import launch
 from omh.tui.gateway_restart import AFTER_TURN_ENV, RestartImpact
@@ -177,6 +180,15 @@ class ModeTests(unittest.TestCase):
         self.assertIs(self.args("--restart-gateway").restart_gateway, True)
         self.assertIs(self.args("--no-restart-gateway").restart_gateway, False)
 
+    def test_no_re_entry_carries_an_abbreviation_of_those_flags_either(self) -> None:
+        with patch.object(sys, "argv", ["omh", "update", "--restart", "--no-restart", "--no-interactive", "--json"]):
+            self.assertEqual(self_update._reentry_argv(),
+                             ["update", "--no-interactive", "--json", "--command-package-updated"])
+            from omh.commands import setup
+
+            self.assertEqual(setup._reentry_argv_with_command_package_updated(),
+                             ["update", "--no-interactive", "--json", "--command-package-updated"])
+
     def test_no_re_entry_carries_the_flags_an_older_generation_does_not_know(self) -> None:
         argv = ["omh", "update", "--restart-gateway", "--no-restart-gateway", "--recover-known-good", "--channel", "main"]
         with patch.object(sys, "argv", argv):
@@ -305,8 +317,10 @@ class CommandWiringTests(unittest.TestCase):
                                               "update"])
             asked: list[tuple[str, bool]] = []
 
-            def ask(prompt: str, *, default: bool, use_color: bool, note: str = "", language: str = "en") -> bool:
+            def ask(prompt: str, *, default: bool, use_color: bool, note: str = "", language: str = "en",
+                    yes_description: str = "", no_description: str = "") -> bool:
                 asked.append((prompt, default))
+                self.assertEqual((yes_description, no_description), (YES_DESCRIPTION, NO_DESCRIPTION))
                 return False
 
             with patch.object(update_gateway, "stale_running_gateways",
@@ -317,6 +331,24 @@ class CommandWiringTests(unittest.TestCase):
                 self.assertEqual(setup._offer_gateway_restart(args, 0), 0)
             self.assertEqual(asked, [(QUESTION, False)])
             popen.assert_not_called()
+
+    def test_the_question_imports_nothing_new_after_the_update(self) -> None:
+        # A package manager has replaced these files by then, and an installer update has re-pointed them.
+        script = (
+            "import sys, tempfile\n"
+            "from pathlib import Path\n"
+            "from omh.commands.update_gateway import impact_lines, read_impact, stale_running_gateways\n"
+            "class Blocked:\n"
+            "    def find_spec(self, name, path=None, target=None):\n"
+            "        if name.startswith('omh.'):\n"
+            "            raise ImportError('imported after the update: ' + name)\n"
+            "sys.meta_path.insert(0, Blocked())\n"
+            "home = Path(tempfile.mkdtemp())\n"
+            "stale_running_gateways(home)\n"
+            "impact_lines(read_impact({'HERMES_HOME': str(home)}, ''), False)\n"
+        )
+        run = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+        self.assertEqual(run.returncode, 0, run.stderr)
 
     def test_ctrl_c_at_the_question_is_a_no_and_keeps_the_updates_code(self) -> None:
         from omh.commands import setup
@@ -372,9 +404,9 @@ class CommandWiringTests(unittest.TestCase):
 class RelaunchTests(unittest.TestCase):
     """bare `omh`: a TUI that exits `RELAUNCH_EXIT` with its marker is opened again on the installed generation."""
 
-    def fake_hermes(self, root: Path, *, code: int, marker: bool) -> Path:
+    def fake_hermes(self, root: Path, *, code: int, marker: bool, holds: str = "") -> Path:
         hermes = root / "hermes"
-        create = (f"open(os.environ[{launch.RELAUNCH_FILE_ENV!r}], 'w').close()\n" if marker else "")
+        create = (f"open(os.environ[{launch.RELAUNCH_FILE_ENV!r}], 'w').write({holds!r})\n" if marker else "")
         hermes.write_text(
             f"#!{sys.executable}\nimport json, os, sys\n"
             f"open({str(root / 'env.json')!r}, 'w').write(json.dumps(os.environ.get({launch.RELAUNCH_FILE_ENV!r})))\n"
@@ -387,11 +419,12 @@ class RelaunchTests(unittest.TestCase):
         hermes.chmod(0o755)
         return hermes
 
-    def run_terminal(self, root: Path, *, code: int, marker: bool, installer: Path | None) -> tuple[int, list[Path]]:
+    def run_terminal(self, root: Path, *, code: int, marker: bool, installer: Path | None,
+                     holds: str = "") -> tuple[int, list[tuple[Path, str]]]:
         from omh.paths import resolve_paths
 
-        hermes = self.fake_hermes(root, code=code, marker=marker)
-        relaunch: list[Path] = []
+        hermes = self.fake_hermes(root, code=code, marker=marker, holds=holds)
+        relaunch: list[tuple[Path, str]] = []
         closed: list = []
         with patch.object(bare_launch, "_omh_tui_blocker", return_value=""), \
                 patch.object(bare_launch, "_installer_generation", return_value=installer):
@@ -405,8 +438,16 @@ class RelaunchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             code, relaunch = self.run_terminal(root, code=launch.RELAUNCH_EXIT, marker=True, installer=root / "omh-root")
-            self.assertEqual((code, relaunch), (launch.RELAUNCH_EXIT, [root / "omh-root"]))
+            self.assertEqual((code, relaunch), (launch.RELAUNCH_EXIT, [(root / "omh-root", launch.UPDATED_PLAIN)]))
             self.assertTrue(json.loads((root / "env.json").read_text()).endswith("relaunch"))
+
+    @unittest.skipIf(os.name == "nt", "fixture executable uses a POSIX shebang")
+    def test_what_the_marker_holds_goes_on_to_the_relaunch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _code, relaunch = self.run_terminal(root, code=launch.RELAUNCH_EXIT, marker=True, installer=root,
+                                                holds=launch.UPDATED_PLAN)
+            self.assertEqual(relaunch, [(root, launch.UPDATED_PLAN)])
 
     @unittest.skipIf(os.name == "nt", "fixture executable uses a POSIX shebang")
     def test_a_78_without_the_marker_is_an_exit_code(self) -> None:
@@ -445,17 +486,18 @@ class RelaunchTests(unittest.TestCase):
                 patch("shutil.which", return_value="/bin/hermes"), \
                 patch.object(bare_launch, "_run_terminal",
                              side_effect=lambda hermes, a, paths, closed, relaunch: (
-                                 closed.append(("s-1", "/h", ())), relaunch.append(Path("/root/generations/old")),
+                                 closed.append(("s-1", "/h", ())), relaunch.append((Path("/root/generations/old"), launch.UPDATED_PLAN)),
                                  launch.RELAUNCH_EXIT)[-1]), \
                 patch.object(bare_launch, "_nothing_said", return_value=False), \
                 patch.object(bare_launch, "_print_exit_card") as card, \
-                patch.object(bare_launch.subprocess, "Popen") as popen, patch("sys.stderr", io.StringIO()):
+                patch.object(generation_hold, "hold_running_generation", lambda prefix: nullcontext()), \
+                patch.object(bare_launch.subprocess, "Popen") as popen:
             popen.return_value.wait.return_value = 0
             self.assertEqual(bare_launch._launch_hermes_tui(args), 0)
         card.assert_not_called()
         (call,) = popen.call_args_list
         self.assertEqual(call.args[0][-2:], ["--resume", "s-1"])
-        self.assertEqual(call.kwargs["env"][launch.UPDATED_ENV], "1")
+        self.assertEqual(call.kwargs["env"][launch.UPDATED_ENV], launch.UPDATED_PLAN)
 
     def test_an_installed_generation_that_cannot_start_says_how_to_resume(self) -> None:
         stderr = io.StringIO()
@@ -466,6 +508,19 @@ class RelaunchTests(unittest.TestCase):
             (generation / "venv").mkdir(parents=True)
             self.assertEqual(bare_launch._relaunch_installed(bare_launch_args([]), generation, ("s-1", "/h", ())), 1)
         self.assertIn("run `omh --resume s-1`", stderr.getvalue())
+
+    def test_a_new_omh_that_ended_in_failure_leaves_the_way_back(self) -> None:
+        for code, said in ((1, True), (0, False), (130, False)):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as tmp:
+                stderr = io.StringIO()
+                generation = Path(tmp) / "generations" / "old"
+                (generation / "venv").mkdir(parents=True)
+                with patch.object(bare_launch.subprocess, "Popen") as popen, \
+                        patch.object(bare_launch, "_nothing_said", return_value=False), patch("sys.stderr", stderr):
+                    popen.return_value.wait.return_value = code
+                    self.assertEqual(
+                        bare_launch._relaunch_installed(bare_launch_args([]), generation, ("s-1", "/h", ())), code)
+                self.assertEqual("run `omh --resume s-1`" in stderr.getvalue(), said)
 
     def test_the_relaunch_argv_is_a_bare_launch_the_new_omh_reads_back(self) -> None:
         args = bare_launch_args(["--omh-home", "/o", "--hermes-home", "/h", "--scope", "user", "-p", "kami"])

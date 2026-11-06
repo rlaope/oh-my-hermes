@@ -58,6 +58,17 @@ def state_path(root: Path) -> Path:
     return root / "self-update.json"
 
 
+def committed_generation(root: Path) -> str:
+    """The generation the last finished update left active, read from its state file; "" while an activation is under
+    way, or when the file cannot be read. The pointer moves first: the re-entry that installs the new plugin bundle
+    runs after that, and its failure moves the pointer back and deletes the candidate."""
+    state, _error = read_json_object_result(state_path(root))
+    if state is None or state.get("activation_in_progress"):
+        return ""
+    active = state.get("active")
+    return str(active.get("id", "")) if isinstance(active, dict) else ""
+
+
 def generation_entry(path: Path, kind: str = "generation", version: str = "") -> GenerationEntry:
     return {"id": path.name, "path": str(path), "kind": kind, "version": version}
 

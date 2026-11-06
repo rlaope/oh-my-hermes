@@ -1632,6 +1632,9 @@ def _self_update_target_label(plan: dict[str, object]) -> str:
 
 
 def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, object]) -> int:
+    # Imported before the update changes the files under this process: the gateway question runs after it.
+    from . import update_gateway  # noqa: F401
+
     if plan.get("method") == "package_manager":
         return _run_package_manager_self_update(args, plan)
     # Installer-owned packages are never mutated in place.  The transaction
@@ -1670,7 +1673,7 @@ def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, o
 def _offer_gateway_restart(args: argparse.Namespace, code: int) -> int:
     """After an update in the process the person started: ask about, or restart, each running Hermes gateway still on
     the old OMH plugin code (`update_gateway`); the exit code to return."""
-    from .update_gateway import SKIP, restart_after_update, restart_mode
+    from .update_gateway import NO_DESCRIPTION, SKIP, YES_DESCRIPTION, restart_after_update, restart_mode
 
     if not hasattr(args, "omh_home"):
         return code
@@ -1684,7 +1687,8 @@ def _offer_gateway_restart(args: argparse.Namespace, code: int) -> int:
 
     def ask(question: str) -> bool:
         try:
-            return _ask_yes_no(question, default=False, use_color=_use_color(), language=_resolve_language(args))
+            return _ask_yes_no(question, default=False, use_color=_use_color(), language=_resolve_language(args),
+                               yes_description=YES_DESCRIPTION, no_description=NO_DESCRIPTION)
         except KeyboardInterrupt:  # Ctrl+C at the question is a no: the update has finished and stays
             print()
             return False
@@ -1921,9 +1925,10 @@ def _bounded_command_error(value: str, *, limit: int = 2_000) -> str:
 
 
 def _reentry_argv_with_command_package_updated() -> list[str]:
+    from ..install.self_update import names_flag
     from .update_gateway import RESTART_FLAGS
 
-    argv = [item for item in sys.argv[1:] if item not in RESTART_FLAGS]  # the started process's alone
+    argv = [item for item in sys.argv[1:] if not names_flag(item, RESTART_FLAGS)]  # the started process's alone
     if "--command-package-updated" not in argv:
         argv.append("--command-package-updated")
     return argv
@@ -4660,14 +4665,19 @@ def _ask_update_check_choice(args: argparse.Namespace, paths: OmhPaths, language
     print(tr(language, "update_check_recorded", mode=mode))
 
 
-def _ask_yes_no(prompt: str, *, default: bool, use_color: bool, note: str = "", language: str = "en") -> bool:
+def _ask_yes_no(
+    prompt: str, *, default: bool, use_color: bool, note: str = "", language: str = "en", yes_description: str = "",
+    no_description: str = "",
+) -> bool:
     if _keyboard_menu_available():
         value = _ask_single_choice(
             prompt,
             [note] if note else [],
             [
-                {"choice": "1", "value": "yes", "label": tr(language, "yes"), "description": tr(language, "yes_desc")},
-                {"choice": "2", "value": "no", "label": tr(language, "no"), "description": tr(language, "no_desc")},
+                {"choice": "1", "value": "yes", "label": tr(language, "yes"),
+                 "description": yes_description or tr(language, "yes_desc")},
+                {"choice": "2", "value": "no", "label": tr(language, "no"),
+                 "description": no_description or tr(language, "no_desc")},
             ],
             default_choice="1" if default else "2",
             use_color=use_color,

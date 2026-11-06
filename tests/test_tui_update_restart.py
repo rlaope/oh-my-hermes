@@ -14,6 +14,7 @@ root, no gateway, no process.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -23,6 +24,15 @@ from unittest.mock import patch
 from test_tui_gateway_restart import HOST, pick, restart_app
 from test_tui_modes import make_app, notices, type_text
 from omh.install.generation_hold import generation_of
+from omh.install.self_update_state import (
+    committed_generation,
+    generation_entry,
+    load_state,
+    mark_activation,
+    mark_switched,
+    save_state,
+    state_path,
+)
 from omh.tui import launch
 from omh.tui.app import (
     GATEWAY_CANCEL_CHOICE,
@@ -43,6 +53,7 @@ from omh.tui.app import (
     UPDATE_RESTART_CHOICE,
     UPDATE_RESTART_QUESTION,
     App,
+    _Pending,
 )
 from omh.tui.gateway_restart import RestartImpact
 from omh.tui.generation_watch import CHECK_SECONDS, GenerationWatch, watch_for
@@ -64,6 +75,11 @@ class Pointer:
     def __init__(self, target: str = f"generations/{OLD}") -> None:
         self.target: str | None = target
         self.reads = 0
+        self.activating = False
+
+    def committed(self, root: Path) -> str:
+        """What the update's state file says: the link's generation, or nothing while the update runs."""
+        return "" if self.activating or self.target is None else Path(self.target).name
 
     def __call__(self, path: Path) -> str:
         self.reads += 1
@@ -78,7 +94,7 @@ class Pointer:
 
 
 def watched(app: App, pointer: Pointer, labels: dict[str, str] | None = None) -> GenerationWatch:
-    watch = GenerationWatch(ROOT / "generations" / OLD, read_link=pointer)
+    watch = GenerationWatch(ROOT / "generations" / OLD, read_link=pointer, read_committed=pointer.committed)
     watch.label = lambda name: (labels or {}).get(name, name)  # type: ignore[method-assign]
     app.generation_watch = watch
     return watch
@@ -117,7 +133,7 @@ def question(app: App) -> dict:
 class GenerationWatchTests(unittest.TestCase):
     def test_it_reads_the_link_at_most_every_few_seconds_and_says_only_a_move(self) -> None:
         pointer = Pointer()
-        watch = GenerationWatch(ROOT / "generations" / OLD, read_link=pointer)
+        watch = GenerationWatch(ROOT / "generations" / OLD, read_link=pointer, read_committed=pointer.committed)
         self.assertEqual((watch.root, watch.running), (ROOT, OLD))
         self.assertIsNone(watch.poll(0.0))  # its own: no move
         self.assertIsNone(watch.poll(CHECK_SECONDS - 0.1))
@@ -129,16 +145,70 @@ class GenerationWatchTests(unittest.TestCase):
         pointer.move(OLD)
         self.assertEqual(watch.poll(3 * CHECK_SECONDS), OLD)  # back on its own: a move too, which the TUI clears on
 
+    def test_a_move_counts_only_once_the_update_that_made_it_finished(self) -> None:
+        pointer = Pointer()
+        watch = GenerationWatch(ROOT / "generations" / OLD, read_link=pointer, read_committed=pointer.committed)
+        watch.poll(0.0)
+        pointer.activating = True
+        pointer.move(NEW)
+        self.assertIsNone(watch.poll(CHECK_SECONDS))  # the re-entry still runs, and may yet move it back
+        self.assertEqual(watch.seen, OLD)
+        pointer.activating = False
+        self.assertEqual(watch.poll(2 * CHECK_SECONDS), NEW)
+
+    def test_an_update_that_fails_after_moving_the_pointer_is_never_said(self) -> None:
+        pointer = Pointer()
+        watch = GenerationWatch(ROOT / "generations" / OLD, read_link=pointer, read_committed=pointer.committed)
+        watch.poll(0.0)
+        pointer.activating = True
+        pointer.move(NEW)
+        self.assertIsNone(watch.poll(CHECK_SECONDS))
+        pointer.activating = False
+        pointer.move(OLD)
+        self.assertIsNone(watch.poll(2 * CHECK_SECONDS))
+
+    def test_the_state_file_names_a_finished_generation_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertEqual(committed_generation(root), "")  # none yet
+            state_path(root).write_text(json.dumps({"active": {"id": NEW}, "activation_in_progress": None}))
+            self.assertEqual(committed_generation(root), NEW)
+            state_path(root).write_text(json.dumps({"active": {"id": OLD}, "activation_in_progress": {"candidate": NEW}}))
+            self.assertEqual(committed_generation(root), "")
+            state_path(root).write_text("{not json")
+            self.assertEqual(committed_generation(root), "")
+
+    def test_the_update_s_own_transaction_says_finished_only_at_its_last_save(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            previous, candidate = root / "generations" / OLD, root / "generations" / NEW
+            (previous / "venv").mkdir(parents=True)
+            (candidate / "venv").mkdir(parents=True)
+            state = load_state(root, previous)
+            state["active"] = generation_entry(previous)
+            save_state(root, state)
+            self.assertEqual(committed_generation(root), OLD)
+            mark_activation(state, candidate, previous)
+            save_state(root, state)
+            self.assertEqual(committed_generation(root), "")  # the pointer moves after this
+            mark_switched(state)
+            save_state(root, state)
+            self.assertEqual(committed_generation(root), "")  # the re-entry runs here
+            state["activation_in_progress"] = None
+            state["active"] = generation_entry(candidate)
+            save_state(root, state)
+            self.assertEqual(committed_generation(root), NEW)
+
     def test_a_link_that_cannot_be_read_is_no_move(self) -> None:
         pointer = Pointer()
         pointer.target = None
-        watch = GenerationWatch(ROOT / "generations" / OLD, read_link=pointer)
+        watch = GenerationWatch(ROOT / "generations" / OLD, read_link=pointer, read_committed=pointer.committed)
         self.assertIsNone(watch.poll(0.0))
         self.assertEqual(watch.seen, OLD)
 
     def test_an_absolute_windows_junction_names_the_generation_too(self) -> None:
         pointer = Pointer(rf"\\?\C:\Users\me\omh\generations\{NEW}".replace("\\", "/"))
-        watch = GenerationWatch(ROOT / "generations" / OLD, read_link=pointer)
+        watch = GenerationWatch(ROOT / "generations" / OLD, read_link=pointer, read_committed=pointer.committed)
         self.assertEqual(watch.poll(0.0), NEW)
 
     def test_the_label_is_the_version_and_commit_the_generation_records_else_its_name(self) -> None:
@@ -326,6 +396,79 @@ class OfferTests(unittest.TestCase):
             self.assertIn(RELAUNCH_AFTER_WAIT.format(label="4.0.6 main@1a2b3c4d"), notices(app))
             self.assertIsNone(app.exit_code)
 
+    def test_a_shell_line_or_command_still_out_holds_the_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, pointer, now = update_app(tmp)
+            app.pending["shell"] = _Pending("shell.exec", lambda result: None, command=object())
+            pointer.move(NEW)
+            tick(app, now)
+            self.assertIsNone(app.slot)
+            del app.pending["shell"]
+            tick(app, now, 0.0)
+            arm(now)
+            pick(app, UPDATE_RESTART_CHOICE)
+            app.pending["shell"] = _Pending("shell.exec", lambda result: None, command=object())
+            tick(app, now)
+            self.assertIn(RELAUNCH_AFTER_WAIT.format(label="4.0.6 main@1a2b3c4d"), notices(app))
+            self.assertIsNone(app.exit_code)
+            del app.pending["shell"]
+            tick(app, now)
+            self.assertEqual(app.exit_code, launch.RELAUNCH_EXIT)
+
+    def test_a_side_answer_still_out_for_this_session_holds_the_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, pointer, now = update_app(tmp)
+            app.sid = "sid-1"
+            app.side_tasks["task"] = "sid-1"
+            pointer.move(NEW)
+            tick(app, now)
+            self.assertIsNone(app.slot)
+            app.side_tasks["task"] = "another-session"  # its view is gone already
+            tick(app, now, 0.0)
+            self.assertIsNotNone(app.slot)
+
+    def test_an_open_pager_or_picker_is_not_taken_from_the_person(self) -> None:
+        for name in ("pager", "picker", "model_picker", "launch_picker", "rewind_picker", "chains_open"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                app, pointer, now = update_app(tmp)
+                setattr(app, name, True if name == "chains_open" else object())
+                pointer.move(NEW)
+                tick(app, now)
+                self.assertIsNone(app.slot)
+                setattr(app, name, False if name == "chains_open" else None)
+                tick(app, now, 0.0)
+                self.assertIsNotNone(app.slot)
+
+    def test_plan_mode_leaves_with_the_tui_and_comes_back_in_the_new_one(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, pointer, now = update_app(tmp)
+            app.plan_mode = True
+            pointer.move(NEW)
+            tick(app, now)
+            arm(now)
+            pick(app, UPDATE_RESTART_CHOICE)
+            tick(app, now)
+            self.assertEqual(app.exit_code, launch.RELAUNCH_EXIT)
+            self.assertEqual(launch.relaunch_updated_value(Path(tmp) / "relaunch"), launch.UPDATED_PLAN)
+        reopened, _client = make_app(environ={launch.UPDATED_ENV: launch.UPDATED_PLAN})
+        self.assertTrue(reopened.plan_mode)
+        plain, _client = make_app(environ={launch.UPDATED_ENV: launch.UPDATED_PLAIN})
+        self.assertFalse(plain.plan_mode)
+
+    def test_a_pointer_that_moved_back_while_the_question_was_open_says_so(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, pointer, now = update_app(tmp)
+            pointer.move(NEW)
+            tick(app, now)
+            pointer.move(OLD)
+            tick(app, now)
+            arm(now)
+            pick(app, UPDATE_RESTART_CHOICE)
+            self.assertIn(RELAUNCH_CANCELLED, notices(app))
+            tick(app, now)
+            self.assertIsNone(app.exit_code)
+            self.assertEqual(app.relaunch_label, "")
+
     def test_the_question_does_not_open_over_what_is_being_typed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             app, pointer, now = update_app(tmp)
@@ -478,7 +621,17 @@ class LaunchMarkerTests(unittest.TestCase):
                       session_file=Path("/d/session"))
         self.assertNotIn(launch.RELAUNCH_FILE_ENV, launch.omh_tui_environment(base, **common))
         env = launch.omh_tui_environment(base, relaunch_file=Path("/d/relaunch"), **common)
-        self.assertEqual(env[launch.RELAUNCH_FILE_ENV], "/d/relaunch")
+        self.assertEqual(env[launch.RELAUNCH_FILE_ENV], str(Path("/d/relaunch")))
+
+    def test_the_marker_carries_plan_mode_and_only_that(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = Path(tmp) / "relaunch"
+            environ = {launch.RELAUNCH_FILE_ENV: str(marker)}
+            self.assertTrue(launch.request_relaunch(environ))
+            self.assertEqual(launch.relaunch_updated_value(marker), launch.UPDATED_PLAIN)
+            self.assertTrue(launch.request_relaunch(environ, plan_mode=True))
+            self.assertEqual(launch.relaunch_updated_value(marker), launch.UPDATED_PLAN)
+            self.assertEqual(launch.relaunch_updated_value(Path(tmp) / "absent"), launch.UPDATED_PLAIN)
 
     def test_the_gateway_child_never_sees_the_marker_or_the_updated_flag(self) -> None:
         from omh.tui.gateway import gateway_spawn

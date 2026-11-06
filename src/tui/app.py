@@ -201,8 +201,8 @@ from .keys import (
 )
 from .generation_watch import GenerationWatch, watch_for
 from .launch import (
-    CLOSED_EXIT, PICK_SESSION_ENV, RELAUNCH_EXIT, RELAUNCH_FILE_ENV, SESSION_FILE_ENV, UPDATED_ENV, request_fallback,
-    request_relaunch,
+    CLOSED_EXIT, PICK_SESSION_ENV, RELAUNCH_EXIT, RELAUNCH_FILE_ENV, SESSION_FILE_ENV, UPDATED_ENV, UPDATED_PLAIN,
+    UPDATED_PLAN, request_fallback, request_relaunch,
 )
 from .agent_view import AGENT_STEER_LEFT_UNANSWERED_NOTICE, STEER_SAY, TAIL_ANSWER_SECONDS, AgentViewMixin
 from .aura import aura_ranges
@@ -659,7 +659,7 @@ UPDATE_NOTICE_SHORT = "↑ v{latest}"  # what stays beside the version once the 
 # answer defaults to not now. Restart leaves with `RELAUNCH_EXIT` once no turn runs and nothing typed waits, and
 # `omh` opens the installed generation's TUI on the same session (`_relaunch_when_due`).
 RESTART_TO_UPDATE = "restart to update"
-UPDATE_RESTART_QUESTION = "OMH updated to {label}. Restart the TUI now to use it? This session reopens where it is."
+UPDATE_RESTART_QUESTION = "OMH updated to {label}. Restart the TUI now to use it? This session reopens."
 UPDATE_LATER_CHOICE = "Not now"
 UPDATE_RESTART_CHOICE = "Restart the TUI"
 UPDATE_LATER_NOTICE = "This TUI keeps running the OMH it started with. To use {label}, {how}."
@@ -2153,7 +2153,7 @@ class App(ModesMixin, AgentViewMixin):
         self.context_max: float | None = None
         # What the info line shows (`mode`): accept while Hermes has approvals off, the TUI's own plan flag.
         self.approvals_off = False
-        self.plan_mode = False
+        self.plan_mode = environ.get(UPDATED_ENV) == UPDATED_PLAN  # a TUI left in plan mode for an update's restart
         self.yolo_by_tui = False  # the approvals off shown are the TUI's own confirmed `on`, not Hermes' own
         self.hermes_approvals_said = False  # HERMES_APPROVALS_NOTICE was shown in this session
         self.effort = ""  # the reasoning effort the info line shows; "" shows none
@@ -2452,7 +2452,7 @@ class App(ModesMixin, AgentViewMixin):
             self._draw_history(result.get("messages"))
         self._say_gateway_health()  # under a resumed session's history, where the launch's screen ends
         self._redeliver(result.get("open_requests"))
-        if self.environ.get(UPDATED_ENV) == "1":
+        if self.environ.get(UPDATED_ENV) in (UPDATED_PLAIN, UPDATED_PLAN):
             self._offer_gateway_after_update()
         if resume:
             self._offer_resume_continue(result)
@@ -3598,32 +3598,39 @@ class App(ModesMixin, AgentViewMixin):
         label = self.installed_label
 
         def decided(choice: str) -> None:
-            if choice == UPDATE_RESTART_CHOICE and self.installed == asked:
+            if self.installed != asked:  # the pointer moved while this was open: a newer one is asked about in turn
+                if choice == UPDATE_RESTART_CHOICE and not self.installed:
+                    self.transcript.add_notice(RELAUNCH_CANCELLED)
+                return
+            if choice == UPDATE_RESTART_CHOICE:
                 self.relaunch_label = self.installed_label
                 return
-            if choice != UPDATE_RESTART_CHOICE:
-                command = self._omh_resume_command()
-                how = UPDATE_LATER_HOW.format(command=command) if command else UPDATE_LATER_HOW_PLAIN
-                self.transcript.add_notice(UPDATE_LATER_NOTICE.format(how=how, label=label))
+            command = self._omh_resume_command()
+            how = UPDATE_LATER_HOW.format(command=command) if command else UPDATE_LATER_HOW_PLAIN
+            self.transcript.add_notice(UPDATE_LATER_NOTICE.format(how=how, label=label))
 
         self._ask_locally(UPDATE_RESTART_QUESTION.format(label=label), (UPDATE_LATER_CHOICE, UPDATE_RESTART_CHOICE),
                           decided)
 
     def _relaunch_hold(self) -> str | None:
-        """Why a restart waits, as a notice to say once ("" to wait without one: another question is open, or a session
-        switch that may move the id the restart resumes is out); None when it can go now.
+        """Why a restart waits, as a notice to say once ("" to wait without one: another question is open, a session
+        switch that may move the id the restart resumes is out, or the person reads a pager or picks from a list);
+        None when it can go now.
 
         A turn counts from before it starts: the `continue` the TUI is about to send (`auto_continue`), Hermes' queued
-        redirect (`hermes_next_due`), and a `/compress` that may rotate the session. So does what the session waits on
-        between turns, which wakes it (`_pending_wait`)."""
+        redirect (`hermes_next_due`), and a `/compress` that may rotate the session. What runs between turns counts
+        too: what the session waits on, which wakes it (`_pending_wait`), a `!` line or a slash command whose answer
+        is out, and a `/bg` or `/btw` task, whose answer the gateway sends only to the view that asked."""
         if self._busy() or self.auto_continue is not None or self.hermes_next_due is not None \
                 or self._compressing_since() is not None:
             return RELAUNCH_AFTER_TURN
         if self.gateway_restart is not None or self.respawn_reason:
             return RELAUNCH_AFTER_GATEWAY
-        if self.slot is not None or self._switching():
+        if self.slot is not None or self._switching() or self.pager is not None or self.chains_open or any(
+                (self.picker, self.model_picker, self.launch_picker, self.rewind_picker)):
             return ""
-        if self._pending_wait() is not None:
+        if self._pending_wait() is not None or any(call.command is not None for call in self.pending.values()) \
+                or self.sid in self.side_tasks.values():
             return RELAUNCH_AFTER_WAIT
         if self._auto_continue_held():  # a draft, a steer or a rewind open, a queued line, a held submit
             return RELAUNCH_AFTER_DRAFT
@@ -3643,7 +3650,7 @@ class App(ModesMixin, AgentViewMixin):
                 self.dirty = True
             return
         label, self.relaunch_label = self.relaunch_label, ""
-        if not request_relaunch(self.environ):
+        if not request_relaunch(self.environ, plan_mode=self.plan_mode):
             command = self._omh_resume_command() or "omh"
             self.transcript.add_notice(RELAUNCH_FAILED.format(command=command, label=label), NOTICE_WARN)
             self.dirty = True

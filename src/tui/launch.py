@@ -96,6 +96,9 @@ RELAUNCH_FILE_ENV = "OMH_TUI_RELAUNCH_FILE"
 # Set to "1" in the relaunched `omh`'s environment: the TUI it opens started for an update, so when the shared
 # gateway it attaches to still runs the old OMH plugin code it offers `/gateway restart` once.
 UPDATED_ENV = "OMH_TUI_UPDATED"
+# Its value and the marker's content when the TUI left in plan mode, which only the TUI knows (a prompt goes as `/plan`).
+UPDATED_PLAN = "plan"
+UPDATED_PLAIN = "1"
 # Windows opens a descriptor in text mode unless told otherwise, which rewrites line ends and stops at Ctrl+Z.
 _BINARY = getattr(os, "O_BINARY", 0)
 # The directory the TUI's interpreter imports `omh` from when its own path
@@ -287,16 +290,29 @@ def relaunch_requested(returncode: int, marker: Path) -> bool:
     return returncode == RELAUNCH_EXIT and os.path.lexists(marker)
 
 
-def request_relaunch(environ: Mapping[str, str]) -> bool:
-    """Create the file named in `RELAUNCH_FILE_ENV`, empty; whether it now exists, so the TUI may exit
-    `RELAUNCH_EXIT`. False when the environment names none or it cannot be created: then a 78 would only end the
-    session, and the TUI does not leave for it."""
+def relaunch_updated_value(marker: Path) -> str:
+    """What `UPDATED_ENV` says in the relaunched `omh`: what the marker holds (`request_relaunch`)."""
+    try:
+        return UPDATED_PLAN if marker.read_bytes() == UPDATED_PLAN.encode() else UPDATED_PLAIN
+    except OSError:
+        return UPDATED_PLAIN
+
+
+def request_relaunch(environ: Mapping[str, str], *, plan_mode: bool = False) -> bool:
+    """Create the file named in `RELAUNCH_FILE_ENV`, holding `UPDATED_PLAN` for a TUI in plan mode and empty otherwise;
+    whether it now exists, so the TUI may exit `RELAUNCH_EXIT`. False when the environment names none or it cannot be
+    written: then a 78 would only end the session, and the TUI does not leave for it."""
     path = environ.get(RELAUNCH_FILE_ENV, "")
     if not path:
         return False
     try:
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | _BINARY | getattr(os, "O_NOFOLLOW", 0)
-        os.close(os.open(path, flags, 0o600))
+        descriptor = os.open(path, flags, 0o600)
+        try:
+            if plan_mode:
+                os.write(descriptor, UPDATED_PLAN.encode())
+        finally:
+            os.close(descriptor)
     except OSError:
         return False
     return True

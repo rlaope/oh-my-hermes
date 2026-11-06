@@ -26,6 +26,11 @@ restarts without asking, under `--json` too, with Hermes' output on stderr;
 fails exits `GATEWAY_RESTART_EXIT_CODE`: the update stays active, and the
 code does not call the failure success. Running OMH TUIs are not touched;
 each notices the update itself (`tui.generation_watch`).
+
+The update imports this module before it changes anything
+(`setup._run_command_package_self_update`), and it reads with nothing it imports
+later: by the time the question runs, a package manager has replaced these files
+and an installer update has re-pointed them.
 """
 
 from __future__ import annotations
@@ -36,9 +41,12 @@ from typing import Any
 
 from ..install.self_update import PROFILE_REPAIR_EXIT_CODE
 from ..maintenance.hermes_gateway import stale_running_gateways
+from ..tui import bot_board  # noqa: F401 - read_impact's own lazy import, loaded here for the reason below
 from ..tui.gateway_restart import GATEWAY_MARKERS, RESTART_ARGS, impact_lines, manual_command, profile_args, read_impact
 
 RESTART_FLAGS = frozenset({"--restart-gateway", "--no-restart-gateway"})
+YES_DESCRIPTION = "Restart it now; this interrupts what it runs."
+NO_DESCRIPTION = "Leave it running on the old OMH plugin code."
 REENTRY_ENV = "OMH_UPDATE_COMMAND_PACKAGE_REENTERED"
 # The update activated: everything refreshed, or all but some bot profiles (`PROFILE_REPAIR_EXIT_CODE`).
 ACTIVE_CODES = frozenset({0, PROFILE_REPAIR_EXIT_CODE})
