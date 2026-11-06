@@ -2245,7 +2245,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "research-brief",
-        "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use omh-source-finder, for reference-implementation study use ulw-research, and for ongoing multi-role research use research-department.",
+        "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research, and for ongoing multi-role research use research-department.",
         (
             "research-brief",
             "business-research",
@@ -2267,11 +2267,11 @@ _DEFINITIONS = [
         # `research-department` ships only on Hermes.
         portable_overrides={
             "description": (
-                "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use omh-source-finder, and for reference-implementation study use ulw-research.",
+                "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research.",
             ),
         },
         portable_override_shadows={
-            "description": "60c029585ab7306b036125d9966501d1a1c96c3d5580e45f5735d7ab4a215419",
+            "description": "c6099e9cb9ce65a7119a2a37b1375bc59a0d11ff1a90ccfddabc8e8c26de1b4f",
         },
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",

@@ -1092,7 +1092,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### research-brief
 
-[omh] Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use omh-source-finder, for reference-implementation study use ulw-research, and for ongoing multi-role research use research-department.
+[omh] Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research, and for ongoing multi-role research use research-department.
 
 - Category: `research`
 - Phase: `business-brief`
