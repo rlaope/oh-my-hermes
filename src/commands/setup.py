@@ -1674,16 +1674,20 @@ def _offer_gateway_restart(args: argparse.Namespace, code: int) -> int:
 
     if not hasattr(args, "omh_home"):
         return code
-    mode = restart_mode(args, terminal=_stdin_is_tty() and sys.stdout.isatty(), environ=os.environ)
+    to_stderr = _wants_json(args)  # stdout holds the JSON payload, printed already
+    mode = restart_mode(args, terminal=_stdin_is_tty() and sys.stdout.isatty() and not to_stderr, environ=os.environ)
     if mode == SKIP:
         return code
-    to_stderr = _wants_json(args)  # stdout holds the JSON payload, printed already
 
     def say(line: str) -> None:
         print(line, file=sys.stderr if to_stderr else sys.stdout, flush=True)
 
     def ask(question: str) -> bool:
-        return _ask_yes_no(question, default=False, use_color=_use_color(), language=_resolve_language(args))
+        try:
+            return _ask_yes_no(question, default=False, use_color=_use_color(), language=_resolve_language(args))
+        except KeyboardInterrupt:  # Ctrl+C at the question is a no: the update has finished and stays
+            print()
+            return False
 
     def run(argv: list[str], env: dict[str, str]) -> int:
         # Its own session: a Ctrl+C here ends the wait, never Hermes' restart half done.

@@ -115,7 +115,7 @@ def restart_after_update(
         named = profile != "default"
         command = manual_command(profile)
         say(STALE_LINE.format(which=f" for profile {profile}" if named else ""))
-        for line in impact_lines(read_impact({"HERMES_HOME": str(home)}, profile if named else ""), False):
+        for line in impact_lines(read_impact(restart_env(environ, home), profile if named else ""), False):
             say(f"  {line}")
         if mode == ASK and not ask(PROFILE_QUESTION.format(profile=profile) if named else QUESTION):
             say(DECLINED_LINE.format(command=command))

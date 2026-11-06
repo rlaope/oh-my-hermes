@@ -1855,9 +1855,10 @@ default to no:
   environment notices the update within a few seconds. It shows
   `restart to update` on its info line and asks once, between turns:
   `OMH updated to 4.0.6 main@1a2b3c4d. Restart the TUI now to use it?`. If
-  you pick Restart the TUI, it leaves after the running turn and once what you
-  typed is sent or cleared, then opens again on the new version and resumes
-  the same session, as `omh --resume <id>` would. If the gateway it attaches
+  you pick Restart the TUI, it leaves after the running turn, once the work
+  the session waits on has ended and what you typed is sent or cleared, then
+  opens again on the new version and resumes the same session, as
+  `omh --resume <id>` would. If the gateway it attaches
   to still runs the old plugin code, the reopened TUI then offers
   `/gateway restart` once, with Cancel first. If you pick Not now, only the
   info line hint stays.

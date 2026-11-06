@@ -32,6 +32,7 @@ from omh.tui.app import (
     RELAUNCH_AFTER_DRAFT,
     RELAUNCH_AFTER_GATEWAY,
     RELAUNCH_AFTER_TURN,
+    RELAUNCH_AFTER_WAIT,
     RELAUNCH_CANCELLED,
     RELAUNCH_FAILED,
     RELAUNCH_FAREWELL,
@@ -266,6 +267,77 @@ class OfferTests(unittest.TestCase):
             tick(app, now)
             self.assertIn(RELAUNCH_AFTER_GATEWAY.format(label="4.0.6 main@1a2b3c4d"), notices(app))
             self.assertIsNone(app.exit_code)
+
+    def test_a_turn_about_to_start_or_a_compress_holds_the_question_and_the_restart(self) -> None:
+        label = "4.0.6 main@1a2b3c4d"
+        for name, value in (("auto_continue", ("20261106_120000_abcdef", 1e9)), ("hermes_next_due", 1e9)):
+            with self.subTest(state=name), tempfile.TemporaryDirectory() as tmp:
+                app, pointer, now = update_app(tmp)
+                setattr(app, name, value)
+                pointer.move(NEW)
+                tick(app, now)
+                self.assertIsNone(app.slot)  # not asked in the gap before that turn
+                setattr(app, name, None)
+                tick(app, now, 0.0)
+                arm(now)
+                pick(app, UPDATE_RESTART_CHOICE)
+                setattr(app, name, value)  # came up after the answer: the restart waits for it
+                tick(app, now)
+                self.assertIn(RELAUNCH_AFTER_TURN.format(label=label), notices(app))
+                self.assertIsNone(app.exit_code)
+                setattr(app, name, None)
+                tick(app, now)
+                self.assertEqual(app.exit_code, launch.RELAUNCH_EXIT)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(App, "_compressing_since", return_value=1.0):
+            app, pointer, now = update_app(tmp)
+            pointer.move(NEW)
+            tick(app, now)
+            self.assertIsNone(app.slot)
+
+    def test_a_session_switch_out_holds_the_restart_without_a_notice(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, patch.object(App, "_switching", return_value="switching") as out:
+            app, pointer, now = update_app(tmp)
+            pointer.move(NEW)
+            tick(app, now)
+            self.assertIsNone(app.slot)
+            out.return_value = ""
+            tick(app, now, 0.0)
+            arm(now)
+            pick(app, UPDATE_RESTART_CHOICE)
+            out.return_value = "switching"
+            before = list(notices(app))
+            tick(app, now)
+            self.assertEqual(notices(app), before)
+            self.assertIsNone(app.exit_code)
+
+    def test_work_the_session_waits_on_holds_the_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, patch.object(App, "_pending_wait", return_value=None) as wait:
+            app, pointer, now = update_app(tmp)
+            pointer.move(NEW)
+            wait.return_value = (5.0, 1, 0)
+            tick(app, now)
+            self.assertIsNone(app.slot)
+            wait.return_value = None
+            tick(app, now, 0.0)
+            arm(now)
+            pick(app, UPDATE_RESTART_CHOICE)
+            wait.return_value = (5.0, 1, 0)
+            tick(app, now)
+            self.assertIn(RELAUNCH_AFTER_WAIT.format(label="4.0.6 main@1a2b3c4d"), notices(app))
+            self.assertIsNone(app.exit_code)
+
+    def test_the_question_does_not_open_over_what_is_being_typed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, pointer, now = update_app(tmp)
+            type_text(app, "half a thought")
+            pointer.move(NEW)
+            tick(app, now)
+            self.assertIsNone(app.slot)
+            self.assertEqual(app.update_asked, "")  # still to be asked
+            self.assertIn(RESTART_TO_UPDATE, line_text(app._info_line(120)))
+            app.composer.replace(0, len(app.composer.text), "")
+            tick(app, now, 0.0)
+            self.assertIsNotNone(app.slot)
 
     def test_nothing_is_asked_while_another_restart_or_question_is_under_way(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

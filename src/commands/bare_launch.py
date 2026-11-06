@@ -442,13 +442,13 @@ def _launch_hermes_tui(args: argparse.Namespace) -> int | None:
     return returncode
 
 
-def _installer_root() -> Path | None:
-    """The installer root this `omh` runs from (`<root>/generations/<name>/venv`); None for a checkout, pip, or the
-    npm and Bun launcher, which have no `current` pointer to relaunch through."""
+def _installer_generation() -> Path | None:
+    """The generation this `omh` runs from (`<root>/generations/<name>`), read before the TUI starts: `sys.prefix` may
+    go through `current`, which an update moves. None for a checkout, pip, or the npm and Bun launcher, which have no
+    `current` pointer to relaunch through."""
     from ..install.generation_hold import generation_of
 
-    generation = generation_of(Path(sys.prefix))
-    return generation.parent.parent if generation is not None else None
+    return generation_of(Path(sys.prefix))
 
 
 def _relaunch_argv(args: argparse.Namespace, closed: tuple[str, str, tuple[str, ...]]) -> list[str]:
@@ -476,18 +476,21 @@ def _nothing_said(db_path: Path, session_id: str, args: argparse.Namespace) -> b
         return False
 
 
-def _relaunch_installed(args: argparse.Namespace, root: Path, closed: tuple[str, str, tuple[str, ...]]) -> int:
+def _relaunch_installed(args: argparse.Namespace, generation: Path, closed: tuple[str, str, tuple[str, ...]]) -> int:
     """Open the OMH TUI again on the generation `<root>/current` names, as `omh --resume <id>` would, and return its
-    exit code. It runs as `python -P -m omh.cli` on that generation (`self_update.current_omh_cli`), with
-    `UPDATED_ENV` set so its TUI offers `/gateway restart` once when the shared gateway still runs the old OMH plugin
-    code. It is waited on as the first launch's child is: SIGHUP and SIGTERM end this `omh`, and Ctrl+C, which the
-    new one reads itself, does not end the wait."""
+    exit code. `generation` is the one this `omh` runs from. It runs as `python -P -m omh.cli` on the current one
+    (`self_update.current_omh_cli`), with `UPDATED_ENV` set so its TUI offers `/gateway restart` once when the shared
+    gateway still runs the old OMH plugin code. It is waited on as the first launch's child is: SIGHUP and SIGTERM end
+    this `omh`, and Ctrl+C, which the new one reads itself, does not end the wait. This `omh` waits for a whole session
+    on its own generation's files, so it goes on holding that one, by path: its `sys.prefix` may now resolve to the new
+    one."""
+    from ..install.generation_hold import hold_running_generation
     from ..install.self_update import current_omh_cli
     from ..tui.launch import UPDATED_ENV, exit_on_signals
 
-    command = current_omh_cli(root, *_relaunch_argv(args, closed))
+    command = current_omh_cli(generation.parent.parent, *_relaunch_argv(args, closed))
     try:
-        with exit_on_signals():
+        with exit_on_signals(), hold_running_generation(str(generation / "venv")):
             child = subprocess.Popen(command, env={**os.environ, UPDATED_ENV: "1"})
             while True:
                 try:
@@ -554,9 +557,9 @@ def _run_terminal(
     `relaunch`, when given and this `omh` runs from an installer generation,
     lets the TUI ask to be opened again on the generation `omh update`
     installed under it: the launch names a marker file
-    (`RELAUNCH_FILE_ENV`), and `RELAUNCH_EXIT` with that file appends the
-    installer root to `relaunch` for the caller (`_relaunch_installed`). A
-    78 without the file is an exit code like any other.
+    (`RELAUNCH_FILE_ENV`), and `RELAUNCH_EXIT` with that file appends this
+    `omh`'s generation to `relaunch` for the caller (`_relaunch_installed`).
+    A 78 without the file is an exit code like any other.
 
     `CLOSED_EXIT` is the OMH TUI saying the person closed the session; it is
     returned as 0, after Hermes' launcher has skipped its own epilogue for it.
@@ -596,7 +599,7 @@ def _run_terminal(
         # gap: a SIGTERM sent to `omh` alone ends this block (and the hold)
         # while the child runs on, as described above; waiting for the child
         # there would make `omh` ignore that SIGTERM.
-        root = _installer_root() if relaunch is not None else None
+        generation = _installer_generation() if relaunch is not None else None
         with exit_on_signals(), fallback_sentinel() as sentinel, hold_running_generation():
             marker = sentinel.with_name("relaunch")
             environment = omh_tui_environment(
@@ -607,13 +610,13 @@ def _run_terminal(
                 fallback_sentinel=sentinel,
                 session_file=sentinel.with_name("session"),
                 pick_session=getattr(args, "tui_resume", None) == "",
-                relaunch_file=marker if root is not None else None,
+                relaunch_file=marker if generation is not None else None,
             )
             child = subprocess.Popen([hermes, *_hermes_passthrough_argv(args, tui=True)], env=environment)
             returncode = int(child.wait())
             fell_back = fallback_requested(returncode, sentinel)
-            if root is not None and relaunch is not None and relaunch_requested(returncode, marker):
-                relaunch.append(root)
+            if generation is not None and relaunch is not None and relaunch_requested(returncode, marker):
+                relaunch.append(generation)
             said = fallback_reason(sentinel) if fell_back else []
             if closed is not None and not fell_back:
                 closed.append(closed_session(sentinel.with_name("session")))

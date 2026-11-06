@@ -668,6 +668,7 @@ UPDATE_LATER_HOW_PLAIN = "quit and open the OMH TUI again"
 RELAUNCH_AFTER_TURN = "The TUI restarts on {label} once this turn ends."
 RELAUNCH_AFTER_GATEWAY = "The TUI restarts on {label} once Hermes' gateway is back."
 RELAUNCH_AFTER_DRAFT = "The TUI restarts on {label} once what you typed is sent or cleared."
+RELAUNCH_AFTER_WAIT = "The TUI restarts on {label} once the work this session waits on ends."
 RELAUNCH_CANCELLED = "OMH went back to the version this TUI runs, so it does not restart."
 RELAUNCH_FAILED = "The TUI could not ask omh to restart it. To use {label}, quit and run `{command}`."
 RELAUNCH_FAREWELL = "omh: restarting the OMH TUI on {label}…"
@@ -3584,14 +3585,14 @@ class App(ModesMixin, AgentViewMixin):
             self.relaunch_label = self.installed_label
 
     def _offer_restart_when_due(self) -> None:
-        """Ask once per installed generation whether to restart on it, between turns: not while a turn runs, a
-        question is open, or Hermes' gateway restarts. A TUI `omh` cannot relaunch (`RELAUNCH_FILE_ENV` unset) only
-        shows the info line's hint."""
+        """Ask once per installed generation whether to restart on it, only when a restart could go at once
+        (`_relaunch_hold`): the question never lands in a turn, on another question, or under what is being typed. A
+        TUI `omh` cannot relaunch (`RELAUNCH_FILE_ENV` unset) only shows the info line's hint."""
         if not self.installed or self.update_asked == self.installed or self.relaunch_label:
             return
         if not self.environ.get(RELAUNCH_FILE_ENV) or self.exit_code is not None:
             return
-        if self._busy() or self.slot is not None or self.gateway_restart is not None or self.respawn_reason:
+        if self._relaunch_hold() is not None:
             return
         self.update_asked = asked = self.installed
         label = self.installed_label
@@ -3609,15 +3610,22 @@ class App(ModesMixin, AgentViewMixin):
                           decided)
 
     def _relaunch_hold(self) -> str | None:
-        """Why a restart picked waits, as a notice to say once ("" to wait without one: another question is open
-        and is answered first); None when it can go now."""
-        if self._busy():
+        """Why a restart waits, as a notice to say once ("" to wait without one: another question is open, or a session
+        switch that may move the id the restart resumes is out); None when it can go now.
+
+        A turn counts from before it starts: the `continue` the TUI is about to send (`auto_continue`), Hermes' queued
+        redirect (`hermes_next_due`), and a `/compress` that may rotate the session. So does what the session waits on
+        between turns, which wakes it (`_pending_wait`)."""
+        if self._busy() or self.auto_continue is not None or self.hermes_next_due is not None \
+                or self._compressing_since() is not None:
             return RELAUNCH_AFTER_TURN
         if self.gateway_restart is not None or self.respawn_reason:
             return RELAUNCH_AFTER_GATEWAY
-        if self.slot is not None:
+        if self.slot is not None or self._switching():
             return ""
-        if self._draft().text.strip() or self.queued or self.held_submits:
+        if self._pending_wait() is not None:
+            return RELAUNCH_AFTER_WAIT
+        if self._auto_continue_held():  # a draft, a steer or a rewind open, a queued line, a held submit
             return RELAUNCH_AFTER_DRAFT
         return None
 
