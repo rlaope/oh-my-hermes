@@ -6,9 +6,9 @@ import asyncio
 import tempfile
 import threading
 import unittest
-import unittest.mock
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 from omh.plugin_bundle.omh import messenger_gate as gate
 from omh.plugin_bundle.omh.hooks import gateway_hooks
@@ -240,8 +240,8 @@ class ReviewFollowUpTests(unittest.TestCase):
         )
         constants = SimpleNamespace(get_hermes_home=lambda: str(launch))
         unscoped = gate.runtime_paths.UnattributableSessionError("no scope")
-        with unittest.mock.patch.object(gate.runtime_paths, "default_hermes_home", side_effect=unscoped), \
-                unittest.mock.patch.dict("sys.modules", {"hermes_constants": constants}):
+        with mock.patch.object(gate.runtime_paths, "default_hermes_home", side_effect=unscoped), \
+                mock.patch.dict("sys.modules", {"hermes_constants": constants}):
             result, _ack = gate.gate_event(self.event("민수야 봐줘"), None)
         self.assertEqual(result["reason"], gate.REASON_OTHER_NAME)
         self.assertEqual(len(gate.read_skips(home / "store")), 1)
@@ -255,7 +255,7 @@ class ReviewFollowUpTests(unittest.TestCase):
         on = SimpleNamespace(_add_reaction=react, _team_bot_user_ids={"T1": BOT})
         gateway = SimpleNamespace(_adapter_for_source=lambda source: on)
         home = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        with unittest.mock.patch.object(gate, "write_mute", return_value=False):
+        with mock.patch.object(gate, "write_mute", return_value=False):
             result, ack = gate.gate_event(self.event(), gateway, hermes_home=home, omh_home=home / "omh")
         self.assertEqual(result["reason"], gate.REASON_QUIET)
         self.assertIsNone(ack)
@@ -269,7 +269,7 @@ class ReviewFollowUpTests(unittest.TestCase):
         config = home / "config.yaml"
         config.write_text("plugins:\n  entries:\n    omh:\n      settings:\n        messenger_gate: mute_only\n", encoding="utf-8")
         self.assertEqual(gate.read_settings(home)["mode"], "mute_only")
-        with unittest.mock.patch.object(gate.runtime_paths, "plugin_setting_text", side_effect=AssertionError):
+        with mock.patch.object(gate.runtime_paths, "plugin_setting_text", side_effect=AssertionError):
             self.assertEqual(gate.read_settings(home)["mode"], "mute_only")
         config.write_text("plugins:\n  entries:\n    omh:\n      settings:\n        messenger_gate: off\n", encoding="utf-8")
         self.assertEqual(gate.read_settings(home)["mode"], "off")
@@ -289,8 +289,8 @@ class AckTests(unittest.TestCase):
 
         async def run():
             with tempfile.TemporaryDirectory() as tmp:
-                with unittest.mock.patch.object(gate, "hermes_home_for", return_value=Path(tmp) / "h"), \
-                        unittest.mock.patch.object(gate, "omh_home_for", return_value=Path(tmp) / "o"):
+                with mock.patch.object(gate, "hermes_home_for", return_value=Path(tmp) / "h"), \
+                        mock.patch.object(gate, "omh_home_for", return_value=Path(tmp) / "o"):
                     result = await gateway_hooks.pre_gateway_dispatch(event=event, gateway=gateway, session_store=None)
                 return result
 
@@ -317,7 +317,7 @@ class AckTests(unittest.TestCase):
 
     def test_hook_fails_open(self) -> None:
         broken = SimpleNamespace(source=SimpleNamespace(platform=property()), text=None)
-        with unittest.mock.patch.object(gateway_hooks, "gate_event", side_effect=RuntimeError("boom")):
+        with mock.patch.object(gateway_hooks, "gate_event", side_effect=RuntimeError("boom")):
             self.assertIsNone(asyncio.run(gateway_hooks.pre_gateway_dispatch(event=broken)))
 
 
@@ -341,7 +341,7 @@ class StateTests(unittest.TestCase):
 
     def test_mutes_keep_the_newest_within_the_limit(self) -> None:
         home = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        with unittest.mock.patch.object(gate, "MUTE_LIMIT", 3):
+        with mock.patch.object(gate, "MUTE_LIMIT", 3):
             for i in range(5):
                 gate.write_mute(home, f"k{i}", {"muted_ts": float(i)})
         self.assertEqual(sorted(gate.read_mutes(home)), ["k2", "k3", "k4"])
