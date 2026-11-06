@@ -211,6 +211,17 @@ All notable changes will be documented here.
   an unmapped key cancels it; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and
   do what they always do. Without vim mode nothing changes. Contributed by
   @DanRioDev in #2545.
+- **Vim NORMAL in the OMH TUI finds characters on the line and takes `iw`
+  and `aw`.** With `display.vim_mode` on, `f` `F` `t` `T` and a character move
+  to its next or previous copy on the line, or just before it; `;` repeats the
+  last find and `,` repeats it the other way, and a count works with each.
+  `d`, `c` and `y` take a find (`dt)`, `cf,`) and the word objects `iw` and
+  `aw` (`diw`, `caw`, `y2aw`), on one line and with words between blanks, as
+  `w` reads them. A find that misses changes nothing, and a `c` whose find
+  misses stays in NORMAL. While a find waits for its character, Esc, Ctrl+C
+  or any other key cancels it, and on a terminal that reports Shift with the
+  key (kitty, modifyOtherKeys) `fX` and `f(` find as they do elsewhere.
+  Contributed by @DanRioDev in #2576.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check

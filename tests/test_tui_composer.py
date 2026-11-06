@@ -372,6 +372,1430 @@ class NewlineAndSubmitTests(unittest.TestCase):
         self.assertEqual(composer.caret, len(f"see @file:src/{HANGUL}.md"))
 
 
+class VimWordObjectTests(unittest.TestCase):
+    """WO-1..WO-7: complete command outcomes and falsification cases from the accepted plan."""
+
+    def normal(self, text: str, caret: int = 0) -> Composer:
+        composer = Composer(text=text, caret=caret, vim=True)
+        composer.normal = True
+        return composer
+
+    def cleared(self, composer: Composer) -> None:
+        self.assertFalse(composer.pending)
+        self.assertEqual((composer._operator, composer._prefix, composer._count, composer._op_count), ("", "", "", ""))
+
+    def deletion(self, text: str, caret: int, command: str, result: str, at: int, captured: str) -> None:
+        composer = self.normal(text, caret)
+        typed(composer, command)
+        self.assertEqual((composer.text, composer.caret, composer.normal), (result, at, True))
+        self.cleared(composer)
+        self.assertIsNotNone(composer._register)
+        self.assertEqual((composer._register.text, composer._register.linewise,
+                          composer._register.pastes, composer._register.images), (captured, False, {}, {}))
+        self.assertEqual(len(composer._undo), 1)
+
+    def test_inner_range(self) -> None:
+        for caret in (6, 8, 9):
+            with self.subTest(caret=caret):
+                self.deletion("alpha beta gamma", caret, "diw", "alpha  gamma", 6, "beta")
+        for caret in (0, 2, 3):
+            with self.subTest(single=caret):
+                self.deletion("word", caret, "diw", "", 0, "word")
+
+    def test_whitespace_range(self) -> None:
+        for caret in (3, 4, 5):
+            with self.subTest(caret=caret):
+                self.deletion("one  \ttwo", caret, "diw", "onetwo", 3, "  \t")
+        for token in ("foo.bar-baz", "...!?", "one\u00a0two"):
+            with self.subTest(token=token):
+                self.deletion(token + " end", 2, "diw", " end", 0, token)
+        for text, caret, result, at, captured in (
+            (" \tone", 1, "one", 0, " \t"),
+            ("one \t ", 4, "one", 2, " \t "),
+            (" \t ", 1, "", 0, " \t "),
+        ):
+            with self.subTest(text=text):
+                self.deletion(text, caret, "diw", result, at, captured)
+        self.assertEqual(composer_module._word_end(list("one\u00a0two"), 0), 3)
+        self.assertEqual(composer_module.WORD_BREAKS, {" ", "\t"})
+
+    def test_around_range(self) -> None:
+        for caret in (5, 6, 7):
+            with self.subTest(caret=caret):
+                self.deletion("one  two\t  three", caret, "daw", "one  three", 5, "two\t  ")
+                self.deletion("one  two", caret, "daw", "one", 2, "  two")
+        self.deletion("word", 2, "daw", "", 0, "word")
+        self.deletion(" \tword", 3, "daw", "", 0, " \tword")
+        self.deletion("...!? end", 2, "daw", "end", 0, "...!? ")
+
+    def test_around_blank_range(self) -> None:
+        for caret in (3, 4):
+            with self.subTest(caret=caret):
+                self.deletion("one  two  three", caret, "daw", "one  three", 3, "  two")
+        for text, caret, result, at, captured in (
+            ("one \t ", 4, "one", 2, " \t "),
+            (" \t ", 1, "", 0, " \t "),
+            (" \tone  end", 1, "  end", 0, " \tone"),
+            ("one  two  ", 3, "one  ", 3, "  two"),
+        ):
+            with self.subTest(text=text):
+                self.deletion(text, caret, "daw", result, at, captured)
+
+    def test_count_range(self) -> None:
+        for command, result, captured in (
+            ("1diw", " b c d e", "a"), ("2diw", "b c d e", "a "),
+            ("d2iw", "b c d e", "a "), ("2d2iw", "c d e", "a b "),
+            ("2daw", "c d e", "a b "), ("d2aw", "c d e", "a b "),
+            ("2d2aw", "e", "a b c d "),
+        ):
+            with self.subTest(command=command):
+                self.deletion("a b c d e", 0, command, result, 0, captured)
+        self.deletion("a b  ", 1, "d99999aw", "a  ", 1, " b")
+        self.deletion("a b c", 2, "d99aw", "a", 0, " b c")
+        self.deletion("a  b  ", 3, "d99aw", "a  ", 2, "b  ")
+        for descriptor in "ia":
+            with self.subTest(descriptor=descriptor):
+                self.deletion("a b c\nnext  line", 0, "99999d99999" + descriptor + "w",
+                              "\nnext  line", 0, "a b c")
+        composer = self.normal("a b c")
+        typed(composer, "99999d99999i")
+        self.assertEqual((composer._count, composer._op_count), ("9999", "9999"))
+        self.assertEqual(composer._take_count(), 9999)
+        composer = self.normal("a b c")
+        typed(composer, "d20")
+        self.assertEqual((composer.text, composer.caret, composer.pending, composer._operator, composer._op_count),
+                         ("a b c", 0, True, "d", "20"))
+        composer = self.normal("a b c", 2)
+        typed(composer, "d0")
+        self.assertEqual((composer.text, composer.caret, composer._register.text), ("b c", 0, "a "))
+        self.cleared(composer)
+
+    def test_pending_state(self) -> None:
+        composer = self.normal("a b c d e")
+        composer._yank(8, 9, False)
+        register = composer._register
+        typed(composer, "2d3i")
+        self.assertEqual((composer.text, composer.caret, composer.normal, composer._register),
+                         ("a b c d e", 0, True, register))
+        self.assertTrue(composer.pending)
+        self.assertEqual((composer._operator, composer._count, composer._op_count, composer._prefix), ("d", "2", "3", "i"))
+        typed(composer, "w")
+        self.assertEqual((composer.text, composer.caret, composer.normal, composer._register.text), ("d e", 0, True, "a b c "))
+        self.cleared(composer)
+
+    def test_cancel_state(self) -> None:
+        events = (Key(ESCAPE), Key(CHAR, "x"), Key(CHAR, "2"), Key(CHAR, "g"),
+                  Key(CHAR, "r"), Key(CHAR, " "), Key(LEFT), Key(BACKSPACE), Key(DELETE))
+        for operator in "dcy":
+            for descriptor in "ia":
+                for event in events:
+                    with self.subTest(operator=operator, descriptor=descriptor, event=event):
+                        composer = self.normal("one two three", 4)
+                        composer._yank(0, 3, False)
+                        before = (composer._state(), composer.normal, composer._register)
+                        typed(composer, "2" + operator + "3" + descriptor)
+                        composer.handle(event)
+                        self.assertEqual((composer._state(), composer.normal, composer._register), before)
+                        self.cleared(composer)
+                        self.assertFalse(composer._undo)
+                        typed(composer, "w")
+                        self.assertEqual((composer.text, composer.caret, composer.normal), ("one two three", 8, True))
+                        self.cleared(composer)
+                for reset in ("off", "on", "paste", "undo", "redo", "vim_redo"):
+                    with self.subTest(operator=operator, descriptor=descriptor, reset=reset):
+                        composer, control = self.normal("one two", 4), self.normal("one two", 4)
+                        for c in (composer, control):
+                            typed(c, "x")
+                            if reset in ("redo", "vim_redo"):
+                                c.handle(ctrl("_"))
+                        typed(composer, "2" + operator + "3" + descriptor)
+                        for c in (composer, control):
+                            if reset in ("off", "on"):
+                                c.set_vim(reset == "on")
+                            else:
+                                c.handle({"paste": Paste("!"), "undo": ctrl("_"),
+                                          "redo": ctrl("y"), "vim_redo": ctrl("r")}[reset])
+                        self.cleared(composer)
+                        self.assertEqual((composer._state(), composer.normal, composer.vim, composer._register,
+                                          composer._undo, composer._redo),
+                                         (control._state(), control.normal, control.vim, control._register,
+                                          control._undo, control._redo))
+                        for c in (composer, control):
+                            c.set_vim(True)
+                            c.normal = True
+                            typed(c, "w")
+                        self.assertEqual(composer._state(), control._state())
+                        self.cleared(composer)
+
+    def test_operator_effects(self) -> None:
+        for operator in "dcy":
+            for descriptor, captured, result in (("i", "beta", "alpha  gamma"), ("a", "beta ", "alpha gamma")):
+                with self.subTest(operator=operator, descriptor=descriptor):
+                    composer = self.normal("alpha beta gamma", 8)
+                    typed(composer, operator + descriptor + "w")
+                    self.assertEqual((composer.text, composer.caret, composer.normal),
+                                     ("alpha beta gamma" if operator == "y" else result, 6, operator != "c"))
+                    self.cleared(composer)
+                    self.assertEqual((composer._register.text, composer._register.linewise,
+                                      composer._register.pastes, composer._register.images), (captured, False, {}, {}))
+                    self.assertEqual(len(composer._undo), 0 if operator == "y" else 1)
+
+    def test_undo_register(self) -> None:
+        for descriptor in "ia":
+            for operator in "dcy":
+                with self.subTest(operator=operator, descriptor=descriptor):
+                    composer = self.normal("alpha beta gamma", 8)
+                    before = composer._state()
+                    typed(composer, operator + descriptor + "w")
+                    register = composer._register
+                    if operator == "c":
+                        typed(composer, "NEW")
+                        composer.handle(Key(ESCAPE))
+                        self.assertEqual(composer.text, "alpha NEW gamma" if descriptor == "i" else "alpha NEWgamma")
+                    after = composer._state()
+                    self.assertEqual(len(composer._undo), 0 if operator == "y" else 1)
+                    typed(composer, "u")
+                    self.assertEqual(composer._state(), after if operator == "y" else before)
+                    composer.handle(ctrl("r"))
+                    self.assertEqual(composer._state(), after)
+                    self.assertEqual(composer._register, register)
+                    text, caret = composer.text, composer.caret
+                    typed(composer, "P")
+                    self.assertEqual(composer.text, text[:caret] + register.text + text[caret:])
+                    self.cleared(composer)
+
+    def test_empty_line_atomic(self) -> None:
+        for text, caret in (("", 0), ("\nnext", 0), ("prev\n\nnext", 5), ("prev\n", 5)):
+            for operator in "dcy":
+                for descriptor in "ia":
+                    with self.subTest(text=text, operator=operator, descriptor=descriptor):
+                        composer = self.normal(text, caret)
+                        composer._yank(0, len(text), False)
+                        register = composer._register
+                        typed(composer, operator + descriptor + "w")
+                        self.assertEqual((composer.text, composer.caret, composer.normal, composer._register),
+                                         (text, caret, operator != "c", register))
+                        self.assertFalse(composer._undo)
+                        self.cleared(composer)
+                        if operator == "c":
+                            typed(composer, "z")
+                            self.assertEqual(composer.text, text[:caret] + "z" + text[caret:])
+                            self.assertEqual(len(composer._undo), 1)
+        for descriptor in "ia":
+            self.deletion("prev\na b\nnext", 5, "d9999" + descriptor + "w", "prev\n\nnext", 5, "a b")
+            self.deletion("prev\n \t\nnext", 6, "d9999" + descriptor + "w", "prev\n\nnext", 5, " \t")
+        for unit in ("한", FAMILY, THUMBS_UP_TONED, FLAG_KR, Q_ACUTE):
+            for descriptor in "ia":
+                with self.subTest(unit=unit, descriptor=descriptor):
+                    captured = unit if descriptor == "i" else unit + " "
+                    self.deletion("a " + unit + " z", 2, "d" + descriptor + "w",
+                                  "a  z" if descriptor == "i" else "a z", 2, captured)
+        composer = Composer(vim=True)
+        composer.handle(Paste(HANGUL_NFD))
+        composer.normal, composer.caret = True, 0
+        typed(composer, "diw")
+        self.assertEqual((composer.text, composer._register.text), ("", HANGUL))
+        for kind in ("chip", "image", "image_adjacent"):
+            for operator in "dcy":
+                for descriptor in "ia":
+                    with self.subTest(kind=kind, operator=operator, descriptor=descriptor):
+                        composer = Composer(vim=True)
+                        if kind == "chip":
+                            composer.handle(Paste("line with spaces\n" * 10))
+                        else:
+                            composer.insert_image("[Image #1]", "shot.png")
+                            if kind == "image_adjacent":
+                                composer.replace(1, len(composer.text), "tail")
+                        composer.normal, composer.caret = True, 0
+                        composer._undo.clear()  # fixture construction is not part of the object operation
+                        before = composer._state()
+                        units, bounds, _ = composer._atoms()
+                        captured = composer.text.rstrip(" ") if kind == "image" and descriptor == "i" else composer.text
+                        span = composer._text_object_span(descriptor, 1)
+                        self.assertEqual((bounds[span[0]], bounds[span[1]]), (0, len(captured)))
+                        if kind == "chip":
+                            self.assertEqual(units, [composer.text])  # label spaces are inside one nonblank atom
+                        elif kind == "image":
+                            self.assertEqual(span, (0, 1 if descriptor == "i" else 2))
+                        expected = (captured, dict(composer.pastes), dict(composer.images), False)
+                        typed(composer, operator + descriptor + "w")
+                        register = composer._register
+                        self.assertEqual((register.text, register.pastes, register.images, register.linewise), expected)
+                        self.cleared(composer)
+                        if operator == "y":
+                            self.assertEqual(composer._state(), before)
+                            self.assertFalse(composer._undo)
+                        else:
+                            self.assertEqual((composer.pastes, composer.images), ({}, {}))
+                            self.assertEqual(len(composer._undo), 1)
+                            if operator == "c":
+                                composer.handle(Key(ESCAPE))
+                            after = composer._state()
+                            typed(composer, "u")
+                            self.assertEqual(composer._state(), before)
+                            composer.handle(ctrl("r"))
+                            self.assertEqual(composer._state(), after)
+                        composer.normal = True
+                        typed(composer, "P")
+                        self.assertTrue(all(value in composer.pastes.values() for value in register.pastes.values()))
+                        self.assertTrue(all(value in composer.images.values() for value in register.images.values()))
+                        self.assertIn("line with spaces" if kind == "chip" else "[Image #1]", composer.expanded())
+                        self.assertFalse(composer._register.linewise)
+
+    def test_isolation_regressions(self) -> None:
+        for options in ({"vim": True}, {"vim": False}, {"vim": True, "masked": True}):
+            composer = Composer(**options)
+            typed(composer, "diwdaw")
+            self.assertEqual((composer.text, composer.caret, composer.normal), ("diwdaw", 6, False))
+            self.cleared(composer)
+        for command, caret in (("i", 1), ("a", 2)):
+            composer = self.normal("abc", 1)
+            typed(composer, command)
+            self.assertEqual((composer.text, composer.caret, composer.normal), ("abc", caret, False))
+            self.cleared(composer)
+        for command, result, normal, captured, linewise in (
+            ("dw", "two", True, "one ", False), ("cw", " two", False, "one", False),
+            ("yw", "one two", True, "one ", False), ("dd", "", True, "one two", True),
+            ("cc", "", False, "one two", True), ("yy", "one two", True, "one two", True),
+        ):
+            with self.subTest(command=command):
+                composer = self.normal("one two")
+                typed(composer, command)
+                self.assertEqual((composer.text, composer.caret, composer.normal), (result, 0, normal))
+                self.assertEqual((composer._register.text, composer._register.linewise), (captured, linewise))
+                self.cleared(composer)
+        for prefix in "gr":
+            composer = self.normal("one two", 4)
+            typed(composer, prefix)
+            self.assertTrue(composer.pending)
+            composer.handle(Key(ESCAPE))
+            self.cleared(composer)
+            self.assertEqual((composer.text, composer.caret, composer.normal), ("one two", 4, True))
+        composer = self.normal("one two", 4)
+        typed(composer, "gg")
+        self.assertEqual(composer.caret, 0)
+        typed(composer, "rZ")
+        self.assertEqual((composer.text, composer.caret), ("Zne two", 0))
+        composer = self.normal("one two", 4)
+        composer.handle(Key(CHAR, "b", alt=True))
+        self.assertEqual(composer.caret, 0)
+        composer.handle(Key(CHAR, "f", alt=True))
+        self.assertEqual(composer.caret, 3)
+        for command in ("d ", "di ", "da "):
+            composer = self.normal("one two")
+            typed(composer, command)
+            self.cleared(composer)
+            self.assertFalse(composer.leader)
+            self.assertEqual((composer.text, composer.caret, composer.normal), ("one two", 0, True))
+        for follower in "diaw":
+            composer = self.normal("one two")
+            typed(composer, " " + follower)
+            self.cleared(composer)
+            self.assertEqual((composer.text, composer.caret, composer.normal), ("one two", 0, True))
+        from test_tui_modes import make_app
+        for text, busy in (("draft", False), ("", True), ("", False)):
+            for operator in "dcy":
+                for descriptor in "ia":
+                    with self.subTest(app_text=text, busy=busy, operator=operator, descriptor=descriptor):
+                        app, client = make_app(busy=busy)
+                        app.composer.set_vim(True)
+                        app.composer.replace(0, len(app.composer.text), text)
+                        app.composer.normal = True
+                        app.composer._clamp_normal()
+                        before = app.composer._state()
+                        for char in operator + descriptor:
+                            app._on_input(Key(CHAR, char))
+                        self.assertTrue(app.composer.pending)
+                        app._on_input(Key(ESCAPE))
+                        self.cleared(app.composer)
+                        self.assertEqual(app.composer._state(), before)
+                        self.assertIsNone(app.escape_armed)
+                        self.assertEqual(client.calls, [])
+                        app._on_input(Key(CHAR, "w"))
+                        self.cleared(app.composer)
+                        self.assertTrue(app.composer.normal)
+
+
+class VimCharSearchTests(unittest.TestCase):
+    """CS-1..CS-7: complete command outcomes and falsification cases from the accepted char-search plan."""
+
+    def normal(self, text: str, caret: int = 0) -> Composer:
+        composer = Composer(text=text, caret=caret, vim=True)
+        composer.normal = True
+        return composer
+
+    def cleared(self, composer: Composer) -> None:
+        self.assertFalse(composer.pending)
+        self.assertEqual(
+            (composer._operator, composer._prefix, composer._count, composer._op_count),
+            ("", "", "", ""),
+        )
+
+    def snapshot(self, composer: Composer) -> tuple:
+        reg = composer._register
+        reg_tuple = (reg.text, reg.linewise, dict(reg.pastes), dict(reg.images)) if reg is not None else None
+        return (
+            composer.text,
+            composer.caret,
+            composer.normal,
+            dict(composer.pastes),
+            dict(composer.images),
+            reg_tuple,
+            list(composer._undo),
+            list(composer._redo),
+            getattr(composer, "_last_search", None),
+        )
+
+    def test_directions(self) -> None:
+        # Four fresh xabcQabcx at caret 4: fx, Fx, tx, Tx land at 8, 0, 7, 1.
+        # Text/register/undo unchanged, NORMAL, pending false.
+        cases = (
+            ("fx", 8, ("f", "x")),
+            ("Fx", 0, ("F", "x")),
+            ("tx", 7, ("t", "x")),
+            ("Tx", 1, ("T", "x")),
+        )
+        for cmd, expected_caret, expected_last in cases:
+            with self.subTest(cmd=cmd):
+                composer = self.normal("xabcQabcx", 4)
+                composer._yank(0, 1, linewise=False)
+                expected_reg = composer._register
+                undo_before = list(composer._undo)
+
+                typed(composer, cmd)
+
+                self.assertEqual((composer.text, composer.caret, composer.normal), ("xabcQabcx", expected_caret, True))
+                self.assertEqual(composer._register, expected_reg)
+                self.assertEqual(composer._undo, undo_before)
+                self.assertEqual(getattr(composer, "_last_search", None), expected_last)
+                self.cleared(composer)
+
+    def test_atomic_targets(self) -> None:
+        # ab cd at 2: f + space misses and stays 2
+        composer = self.normal("ab cd", 2)
+        composer.handle(Key(CHAR, "f"))
+        self.assertTrue(composer.pending)
+        composer.handle(Key(CHAR, " "))
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("ab cd", 2, True))
+        self.cleared(composer)
+
+        # fresh ab cd at 0: hits space at 2
+        composer = self.normal("ab cd", 0)
+        composer.handle(Key(CHAR, "f"))
+        composer.handle(Key(CHAR, " "))
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("ab cd", 2, True))
+        self.cleared(composer)
+
+        # x1y1 at 0, f1 hits 1
+        composer = self.normal("x1y1", 0)
+        typed(composer, "f1")
+        self.assertEqual((composer.text, composer.caret), ("x1y1", 1))
+        self.cleared(composer)
+
+        # a,b at 0, f, hits 1
+        composer = self.normal("a,b", 0)
+        typed(composer, "f,")
+        self.assertEqual((composer.text, composer.caret), ("a,b", 1))
+        self.cleared(composer)
+
+        # Fresh aéz at 0 with one CHAR payload e\u0301 hits the whole atom at offset 1
+        composed_text = "aéz"
+        composer = self.normal(composed_text, 0)
+        composer.handle(Key(CHAR, "f"))
+        composer.handle(Key(CHAR, "e\u0301"))
+        self.assertEqual((composer.text, composer.caret), (composed_text, 1))
+        self.cleared(composer)
+
+        # Fresh ae\u0301z at 0 with target é hits decomposed atom starting at offset 1, never its interior
+        decomposed_text = "ae\u0301z"
+        composer = self.normal(decomposed_text, 0)
+        # Normal construction composes NFC; also exercise a decomposed stored atom.
+        composer.text = decomposed_text
+        composer.handle(Key(CHAR, "f"))
+        composer.handle(Key(CHAR, "é"))
+        self.assertEqual((composer.text, composer.caret), (decomposed_text, 1))
+        self.cleared(composer)
+
+        # Multi-codepoint printable graphemes accepted
+        for unit in (HANGUL[0], FAMILY, THUMBS_UP_TONED, FLAG_KR, Q_ACUTE):
+            with self.subTest(grapheme=unit):
+                composer = self.normal("a" + unit + "z", 0)
+                composer.handle(Key(CHAR, "f"))
+                composer.handle(Key(CHAR, unit))
+                self.assertEqual((composer.text, composer.caret), ("a" + unit + "z", 1))
+                self.cleared(composer)
+
+        # Invalid multi-grapheme/control/tab/NEWLINE/reserved tokens rejected
+        invalid_payloads = [
+            "", "\n", "\t", "\x00", "\x1b", "multi", "[Image #1]", IMAGE_LABEL, chr(0x100000),
+        ]
+        for payload in invalid_payloads:
+            with self.subTest(invalid=payload):
+                composer = self.normal("abc\ndef", 0)
+                before = self.snapshot(composer)
+                composer.handle(Key(CHAR, "f"))
+                self.assertTrue(composer.pending)
+                composer.handle(Key(CHAR, payload))
+                after = self.snapshot(composer)
+                self.assertEqual(after, before)
+                self.cleared(composer)
+
+        # Install real chip/image metadata with label-only x and no ordinary x:
+        # fx/dfx miss without splitting or metadata loss
+        # 1) Image token
+        composer = Composer(vim=True)
+        composer.insert_image("[Image #x]", "shot.png")
+        composer.normal = True
+        composer.caret = 0
+        img_before = self.snapshot(composer)
+        typed(composer, "fx")
+        self.assertEqual(self.snapshot(composer), img_before)
+        self.cleared(composer)
+
+        typed(composer, "dfx")
+        self.assertEqual(self.snapshot(composer), img_before)
+        self.cleared(composer)
+
+        # 2) Chip token
+        composer = Composer(vim=True)
+        composer.restore("[chip x]", [("[chip x]", "line with spaces\n" * 10)])
+        composer.normal = True
+        composer.caret = 0
+        chip_before = self.snapshot(composer)
+        typed(composer, "fx")
+        self.assertEqual(self.snapshot(composer), chip_before)
+        self.cleared(composer)
+
+        typed(composer, "dfx")
+        self.assertEqual(self.snapshot(composer), chip_before)
+        self.cleared(composer)
+
+        # Ordinary targets beyond whole tokens permit whole-token traversal
+        composer = Composer(vim=True)
+        composer.insert_image("[Image #1]", "shot.png")
+        composer.replace(len(composer.text), len(composer.text), "tail_z")
+        composer.normal = True
+        composer.caret = 0
+        target_idx = composer.text.index("z")
+        images_copy = dict(composer.images)
+        typed(composer, "fz")
+        self.assertEqual((composer.caret, composer.normal), (target_idx, True))
+        self.assertEqual(composer.images, images_copy)
+        self.cleared(composer)
+
+    def test_pending_literals(self) -> None:
+        # a2b2c at 0: 2f holds pending at 0; final 2 lands 3
+        composer = self.normal("a2b2c", 0)
+        typed(composer, "2f")
+        self.assertTrue(composer.pending)
+        self.assertEqual(composer.caret, 0)
+        self.assertEqual(composer._prefix, "f")
+        self.assertEqual(composer._count, "2")
+        composer.handle(Key(CHAR, "2"))
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("a2b2c", 3, True))
+        self.cleared(composer)
+
+        # For each target in d/i/a/g/r/f/;/comma/space, use fresh q+target+q at 0:
+        # pending f consumes literal target at 1, never a fresh operator/count/INSERT/leader.
+        targets = ("d", "i", "a", "g", "r", "f", ";", ",", " ")
+        for target in targets:
+            with self.subTest(target=target):
+                text = "q" + target + "q"
+                composer = self.normal(text, 0)
+                composer.handle(Key(CHAR, "f"))
+                self.assertTrue(composer.pending)
+                self.assertEqual(composer._prefix, "f")
+                composer.handle(Key(CHAR, target))
+                self.assertEqual((composer.text, composer.caret, composer.normal), (text, 1, True))
+                self.assertFalse(composer.leader)
+                self.cleared(composer)
+                self.assertEqual(getattr(composer, "_last_search", None), ("f", target))
+
+    def test_shifted_targets(self) -> None:
+        # A kitty or modifyOtherKeys terminal reports Shift beside the shifted character ("X", not "x"): the
+        # target is that character, so fX, f( and t: search as they do on a legacy terminal.
+        for kind, target, caret in (("f", "X", 4), ("f", "(", 1), ("t", ":", 2), ("F", "X", 4)):
+            with self.subTest(kind=kind, target=target):
+                composer = self.normal("a(b:XQ:X", 5 if kind == "F" else 0)
+                composer.handle(Key(CHAR, kind, reported_shift=kind.isupper()))
+                composer.handle(Key(CHAR, target, reported_shift=True))
+                self.assertEqual((composer.caret, composer.normal), (caret, True))
+                self.assertEqual(composer._last_search, (kind, target))
+                self.cleared(composer)
+
+    def test_cancel(self) -> None:
+        # Cover all f/F/t/T with standalone and d/c/y pending counts, including 2d3f.
+        # Escape, BACKSPACE, DELETE, Enter, arrows, modified CHAR and invalid CHAR cancel
+        # and consume without a search effect.
+        cancel_events = (
+            Key(ESCAPE),
+            Key(BACKSPACE),
+            Key(DELETE),
+            Key(ENTER),
+            Key(LEFT),
+            Key(RIGHT),
+            Key(UP),
+            Key(DOWN),
+            Key(CHAR, "a", ctrl=True),
+            Key(CHAR, "a", alt=True),
+            Key(CHAR, "\x00"),
+            Key(CHAR, "multi"),
+        )
+        for kind in ("f", "F", "t", "T"):
+            for event in cancel_events:
+                with self.subTest(kind=kind, event=event, mode="standalone"):
+                    composer = self.normal("abcbdbebfbgb", 4)
+                    before = self.snapshot(composer)
+                    typed(composer, kind)
+                    self.assertTrue(composer.pending)
+                    composer.handle(event)
+                    self.assertEqual(self.snapshot(composer), before)
+                    self.cleared(composer)
+
+            for op in "dcy":
+                for event in cancel_events:
+                    with self.subTest(kind=kind, op=op, event=event, mode="counted"):
+                        composer = self.normal("abcbdbebfbgb", 4)
+                        typed(composer, "Fb")
+                        before = self.snapshot(composer)
+                        typed(composer, "2" + op + "3" + kind)
+                        self.assertTrue(composer.pending)
+                        composer.handle(event)
+                        self.assertEqual(self.snapshot(composer), before)
+                        self.cleared(composer)
+
+        for event in cancel_events:
+            with self.subTest(mode="2d3f_cancel", event=event):
+                composer = self.normal("abcbdbebfbgb", 4)
+                before = self.snapshot(composer)
+                typed(composer, "2d3f")
+                self.assertTrue(composer.pending)
+                composer.handle(event)
+                self.assertEqual(self.snapshot(composer), before)
+                self.cleared(composer)
+
+        # On fresh abcbdbebfbgb at 0, cancel 2d3f, then:
+        # 1) fb must land 1 with no deletion
+        composer = self.normal("abcbdbebfbgb", 0)
+        typed(composer, "2d3f")
+        self.assertTrue(composer.pending)
+        composer.handle(Key(ESCAPE))
+        self.cleared(composer)
+        typed(composer, "fb")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("abcbdbebfbgb", 1, True))
+        self.cleared(composer)
+
+        # 2) x must delete rather than leak an operator
+        composer = self.normal("abcbdbebfbgb", 0)
+        typed(composer, "2d3f")
+        composer.handle(Key(ESCAPE))
+        self.cleared(composer)
+        typed(composer, "x")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("bcbdbebfbgb", 0, True))
+        self.cleared(composer)
+
+        # 3) i must enter INSERT
+        composer = self.normal("abcbdbebfbgb", 0)
+        typed(composer, "2d3f")
+        composer.handle(Key(ESCAPE))
+        self.cleared(composer)
+        typed(composer, "i")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("abcbdbebfbgb", 0, False))
+        self.cleared(composer)
+
+        # Pending Paste inserts via the existing path after clearing pending
+        composer = self.normal("one two", 4)
+        control = self.normal("one two", 4)
+        typed(composer, "2d3f")
+        self.assertTrue(composer.pending)
+        composer.handle(Paste("!"))
+        control.handle(Paste("!"))
+        self.cleared(composer)
+        self.assertEqual(self.snapshot(composer), self.snapshot(control))
+
+        # Shared Ctrl undo/redo uses a preseeded real undo/redo stack and has only its normal effect
+        for action in ("undo", "redo", "vim_redo"):
+            with self.subTest(action=action):
+                composer = self.normal("initial text", 0)
+                control = self.normal("initial text", 0)
+                for c in (composer, control):
+                    typed(c, "x")
+                    if action in ("redo", "vim_redo"):
+                        c.handle(ctrl("_"))
+                typed(composer, "2d3f")
+                self.assertTrue(composer.pending)
+                ev = {"undo": ctrl("_"), "redo": ctrl("y"), "vim_redo": ctrl("r")}[action]
+                composer.handle(ev)
+                control.handle(ev)
+                self.cleared(composer)
+                self.assertEqual(self.snapshot(composer), self.snapshot(control))
+
+    def test_counts(self) -> None:
+        # Fresh abcbdbebfbgb at 0, b indices 1, 3, 5, 7, 9, 11
+        # 2fb lands 3
+        composer = self.normal("abcbdbebfbgb", 0)
+        typed(composer, "2fb")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("abcbdbebfbgb", 3, True))
+        self.cleared(composer)
+
+        # d2fb deletes [0, 4) = abcb, leaving dbebfbgb
+        composer = self.normal("abcbdbebfbgb", 0)
+        typed(composer, "d2fb")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("dbebfbgb", 0, True))
+        self.cleared(composer)
+
+        # 2dfb deletes [0, 4) = abcb, leaving dbebfbgb
+        composer = self.normal("abcbdbebfbgb", 0)
+        typed(composer, "2dfb")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("dbebfbgb", 0, True))
+        self.cleared(composer)
+
+        # 2d3fb deletes [0, 12) to empty with one undo step
+        composer = self.normal("abcbdbebfbgb", 0)
+        typed(composer, "2d3fb")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("", 0, True))
+        self.assertEqual(len(composer._undo), 1)
+        self.cleared(composer)
+
+        # Cap-discriminating line a + b repeated 9999 times at 0 (total length 10000):
+        # 99999fb lands 9999 (uncapped 99999 would miss)
+        long_text = "a" + "b" * 9999
+        composer = self.normal(long_text, 0)
+        typed(composer, "99999fb")
+        self.assertEqual(composer.caret, 9999)
+        self.cleared(composer)
+
+        # fresh 9999d9999fb deletes all 10000 atoms (uncapped product would miss)
+        composer = self.normal(long_text, 0)
+        typed(composer, "9999d9999fb")
+        self.assertEqual((composer.text, composer.caret), ("", 0))
+        self.cleared(composer)
+
+        # One fewer b makes the capped request miss atomically
+        short_text = "a" + "b" * 9998
+        composer = self.normal(short_text, 0)
+        typed(composer, "99999fb")
+        self.assertEqual((composer.text, composer.caret), (short_text, 0))
+        self.cleared(composer)
+
+        # Backward and till counts
+        # On abcbdbebfbgb at 11:
+        # 2Fb lands at 7
+        composer = self.normal("abcbdbebfbgb", 11)
+        typed(composer, "2Fb")
+        self.assertEqual(composer.caret, 7)
+        self.cleared(composer)
+
+        # 2Tb lands at 8
+        composer = self.normal("abcbdbebfbgb", 11)
+        typed(composer, "2Tb")
+        self.assertEqual(composer.caret, 8)
+        self.cleared(composer)
+
+        # 2tb from 0 lands at 2
+        composer = self.normal("abcbdbebfbgb", 0)
+        typed(composer, "2tb")
+        self.assertEqual(composer.caret, 2)
+        self.cleared(composer)
+
+        # Literal 0 target
+        composer = self.normal("a0b0c", 0)
+        typed(composer, "f0")
+        self.assertEqual(composer.caret, 1)
+        self.cleared(composer)
+
+        composer = self.normal("a0b0c", 0)
+        typed(composer, "2f0")
+        self.assertEqual(composer.caret, 3)
+        self.cleared(composer)
+
+        # Insufficient matches do nothing
+        composer = self.normal("abcbdbebfbgb", 0)
+        before = self.snapshot(composer)
+        typed(composer, "7fb")
+        self.assertEqual(self.snapshot(composer), before)
+        self.cleared(composer)
+
+        typed(composer, "d7fb")
+        self.assertEqual(self.snapshot(composer), before)
+        self.cleared(composer)
+
+    def test_miss(self) -> None:
+        # Fresh abc\nb at 0: fz, 2fb, dfz, cfz, yfz are atomic misses; c stays NORMAL.
+        # later-line b cannot satisfy 2fb.
+        miss_cmds = ("fz", "2fb", "dfz", "cfz", "yfz")
+        for cmd in miss_cmds:
+            with self.subTest(cmd=cmd):
+                composer = self.normal("abc\nb", 0)
+                before = self.snapshot(composer)
+                typed(composer, cmd)
+                self.assertEqual(self.snapshot(composer), before)
+                self.assertTrue(composer.normal)
+                self.cleared(composer)
+
+        # Empty buffer/line also miss
+        for text in ("", "\n", "line1\n\nline3"):
+            caret = 6 if text == "line1\n\nline3" else 0
+            for cmd in ("fa", "dfa", "cfa", "yfa"):
+                with self.subTest(text=text, cmd=cmd):
+                    composer = self.normal(text, caret)
+                    before = self.snapshot(composer)
+                    typed(composer, cmd)
+                    self.assertEqual(self.snapshot(composer), before)
+                    self.assertTrue(composer.normal)
+                    self.cleared(composer)
+
+        # Hard line boundary & wrap width
+        # abc\ndef at 0: fe cannot cross line
+        composer = self.normal("abc\ndef", 0)
+        typed(composer, "fe")
+        self.assertEqual(composer.caret, 0)
+        self.cleared(composer)
+
+        # abc\ndef at 5: Fa cannot cross back
+        composer = self.normal("abc\ndef", 5)
+        typed(composer, "Fa")
+        self.assertEqual(composer.caret, 5)
+        self.cleared(composer)
+
+        # fa cannot wrap across newline
+        composer = self.normal("abc\ndefa", 0)
+        typed(composer, "fa")
+        self.assertEqual(composer.caret, 0)
+        self.cleared(composer)
+
+        # Same logical line rendered at different widths: wrap width must not alter result
+        for width in (4, 10, 80):
+            with self.subTest(width=width):
+                composer = self.normal("abcdef ghijkl", 0)
+                composer.render(width, max_rows=5)
+                typed(composer, "fk")
+                self.assertEqual(composer.caret, 11)
+                self.cleared(composer)
+
+        # Search target exactly at buffer edge must succeed without crossing
+        composer = self.normal("abc", 0)
+        typed(composer, "fc")
+        self.assertEqual(composer.caret, 2)
+        self.cleared(composer)
+
+        composer = self.normal("abc", 2)
+        typed(composer, "Fa")
+        self.assertEqual(composer.caret, 0)
+        self.cleared(composer)
+
+        # For memory retention, fresh xabcxabcx at 0: fx reaches 4;
+        # failed fz/cfz or cancelled pending search preserves f/x; following ; reaches 8.
+        composer = self.normal("xabcxabcx", 0)
+        typed(composer, "fx")
+        self.assertEqual(composer.caret, 4)
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+
+        # failed fz
+        typed(composer, "fz")
+        self.assertEqual(composer.caret, 4)
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+        self.cleared(composer)
+
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 8)
+        self.cleared(composer)
+
+        # repeat with cfz
+        composer = self.normal("xabcxabcx", 0)
+        typed(composer, "fx")
+        self.assertEqual(composer.caret, 4)
+        typed(composer, "cfz")
+        self.assertEqual(composer.caret, 4)
+        self.assertTrue(composer.normal)
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+        self.cleared(composer)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 8)
+        self.cleared(composer)
+
+    def test_operator_spans(self) -> None:
+        # All twelve d/c/y x fx/tx/Fx/Tx subtests use fresh xabcQabcx, caret 4
+        table = {
+            "fx": {"selected": "Qabcx", "d_text": "xabc", "d_caret": 3, "c_caret": 4, "y_caret": 4},
+            "tx": {"selected": "Qabc", "d_text": "xabcx", "d_caret": 4, "c_caret": 4, "y_caret": 4},
+            "Fx": {"selected": "xabc", "d_text": "Qabcx", "d_caret": 0, "c_caret": 0, "y_caret": 0},
+            "Tx": {"selected": "abc", "d_text": "xQabcx", "d_caret": 1, "c_caret": 1, "y_caret": 1},
+        }
+        for motion, exp in table.items():
+            for op in ("d", "c", "y"):
+                with self.subTest(op=op, motion=motion):
+                    composer = self.normal("xabcQabcx", 4)
+                    typed(composer, op + motion)
+                    if op == "d":
+                        self.assertEqual((composer.text, composer.caret, composer.normal), (exp["d_text"], exp["d_caret"], True))
+                    elif op == "c":
+                        self.assertEqual((composer.text, composer.caret, composer.normal), (exp["d_text"], exp["c_caret"], False))
+                    elif op == "y":
+                        self.assertEqual((composer.text, composer.caret, composer.normal), ("xabcQabcx", exp["y_caret"], True))
+                    self.assertIsNotNone(composer._register)
+                    self.assertEqual((composer._register.text, composer._register.linewise), (exp["selected"], False))
+                    self.cleared(composer)
+
+    def test_adjacent(self) -> None:
+        # xQ at 1 has backward x match m=0 and T span [1, 1)
+        for op in ("d", "y"):
+            with self.subTest(op=op):
+                composer = self.normal("xQ", 1)
+                composer._yank(0, 2, linewise=False)
+                typed(composer, "x")
+                composer.handle(ctrl("_"))
+                expected_reg = composer._register
+                undo_before = list(composer._undo)
+                redo_before = list(composer._redo)
+
+                typed(composer, op + "Tx")
+
+                self.assertEqual((composer.text, composer.caret, composer.normal), ("xQ", 1, True))
+                self.assertEqual(composer._register, expected_reg)
+                self.assertEqual(list(composer._undo), undo_before)
+                self.assertEqual(list(composer._redo), redo_before)
+                self.assertEqual(getattr(composer, "_last_search", None), ("T", "x"))
+                self.cleared(composer)
+
+        # cTx enters INSERT at 1 with unchanged undo/redo until typing
+        composer = self.normal("xQ", 1)
+        typed(composer, "x")
+        composer.handle(ctrl("_"))
+        undo_before = list(composer._undo)
+        redo_before = list(composer._redo)
+
+        typed(composer, "cTx")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("xQ", 1, False))
+        self.assertEqual(list(composer._undo), undo_before)
+        self.assertEqual(list(composer._redo), redo_before)
+        self.assertEqual(getattr(composer, "_last_search", None), ("T", "x"))
+        self.cleared(composer)
+
+        typed(composer, "Z")
+        composer.handle(Key(ESCAPE))
+        typed(composer, "u")
+        self.assertEqual(composer.text, "xQ")
+
+        # Directly assert successful remembered tuple, or fresh xQxQ at 3, Tx stays 3 and subsequent ; reaches 1
+        composer = self.normal("xQxQ", 3)
+        typed(composer, "Tx")
+        self.assertEqual(composer.caret, 3)
+        self.assertEqual(getattr(composer, "_last_search", None), ("T", "x"))
+        self.cleared(composer)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 1)
+        self.cleared(composer)
+
+        # Qx at 0: dtx spans [0, 1), leaves x at 0
+        composer = self.normal("Qx", 0)
+        typed(composer, "dtx")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("x", 0, True))
+        self.cleared(composer)
+
+        # Separate cfz stays NORMAL
+        composer = self.normal("xQ", 1)
+        typed(composer, "cfz")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("xQ", 1, True))
+        self.cleared(composer)
+
+    def test_effects(self) -> None:
+        for operator in ("", "d", "c", "y"):
+            with self.subTest(operator=operator):
+                composer = Composer(vim=True)
+                typed(composer, "head ")
+                composer.insert_image("[Image #1]", "shot.png")
+                composer.handle(Paste("chip content\n" * 10))
+                typed(composer, " tail_z")
+                composer.normal = True
+                composer.caret = 0
+                composer._undo.clear()
+                composer._redo.clear()
+                before = composer._state()
+                typed(composer, operator + "fz")
+                self.cleared(composer)
+                self.assertEqual(composer._last_search, ("f", "z"))
+                self.assertEqual(len(composer._undo), int(operator in ("d", "c")))
+                if not operator:
+                    self.assertEqual((composer.text, composer.pastes, composer.images),
+                                     (before[0], before[2], before[3]))
+                    continue
+                register = composer._register
+                self.assertEqual(register.text, before[0])
+                self.assertEqual((register.pastes, register.images, register.linewise),
+                                 (before[2], before[3], False))
+                if operator == "y":
+                    self.assertEqual(composer._state(), before)
+                    typed(composer, "x")  # clear the original h, then put the full captured metadata
+                    for put in ("P", "p"):
+                        typed(composer, put)
+                        self.assertTrue(all(value in composer.images.values() for value in register.images.values()))
+                        self.assertTrue(all(value in composer.pastes.values() for value in register.pastes.values()))
+                        self.assertIn("chip content", composer.expanded())
+                    continue
+                self.assertEqual((composer.text, composer.pastes, composer.images), ("", {}, {}))
+                if operator == "c":
+                    typed(composer, "REPLACED")
+                    composer.handle(Key(ESCAPE))
+                    self.assertEqual(len(composer._undo), 1)
+                after = composer._state()
+                typed(composer, "u")
+                self.assertEqual(composer._state(), before)
+                composer.handle(ctrl("r"))
+                self.assertEqual(composer._state(), after)
+                self.assertEqual(composer._last_search, ("f", "z"))
+                typed(composer, "P")
+                self.assertEqual(composer._register, register)
+                self.assertEqual(composer.pastes, register.pastes)
+                self.assertEqual(list(composer.images.values()), list(register.images.values()))
+
+    def test_repeat(self) -> None:
+        # xabcxabcxabcx at 0 has x indices 0, 4, 8, 12.
+        # fx -> 4; ; -> 8; comma -> 4; ; -> 8.
+        composer = self.normal("xabcxabcxabcx", 0)
+        typed(composer, "fx")
+        self.assertEqual(composer.caret, 4)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 8)
+        typed(composer, ",")
+        self.assertEqual(composer.caret, 4)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 8)
+        self.cleared(composer)
+
+        # Fresh fx state at 4 then d; selects [4,9)=xabcx, leaves xabcabcx, caret 4
+        composer = self.normal("xabcxabcxabcx", 0)
+        typed(composer, "fx")
+        self.assertEqual(composer.caret, 4)
+        typed(composer, "d;")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("xabcabcx", 4, True))
+        self.assertEqual(composer._register.text, "xabcx")
+        self.cleared(composer)
+
+        # Fresh fx; state at 8 then d-comma selects [4,8)=xabc, leaves xabcxabcx, caret 4;
+        # following ; reaches 8 with original f/x memory.
+        composer = self.normal("xabcxabcxabcx", 0)
+        typed(composer, "fx;")
+        self.assertEqual(composer.caret, 8)
+        typed(composer, "d,")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("xabcxabcx", 4, True))
+        self.assertEqual(composer._register.text, "xabc")
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+        self.cleared(composer)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 8)
+        self.cleared(composer)
+
+        # Mirror F direction
+        composer = self.normal("xabcxabcxabcx", 12)
+        typed(composer, "Fx")
+        self.assertEqual(composer.caret, 8)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 4)
+        typed(composer, ",")
+        self.assertEqual(composer.caret, 8)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 4)
+        self.cleared(composer)
+
+        # Mirror t and T direction pairs
+        composer = self.normal("xabcxabcxabcx", 0)
+        typed(composer, "tx")
+        self.assertEqual(composer.caret, 3)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 7)
+        typed(composer, ",")
+        self.assertEqual(composer.caret, 5)
+        self.cleared(composer)
+
+        composer = self.normal("xabcxabcxabcx", 12)
+        typed(composer, "Tx")
+        self.assertEqual(composer.caret, 9)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 5)
+        typed(composer, ",")
+        self.assertEqual(composer.caret, 7)
+        self.cleared(composer)
+
+        # d/c/y repeats consume normal product/cap
+        composer = self.normal("abcbdbebfbgb", 0)
+        typed(composer, "fb")
+        self.assertEqual(composer.caret, 1)
+        typed(composer, "2d2;")
+        self.assertEqual((composer.text, composer.caret), ("agb", 1))
+        self.cleared(composer)
+
+        for operator in "cy":
+            with self.subTest(counted_repeat=operator):
+                composer = self.normal("abcbdbebfbgb", 0)
+                typed(composer, "fb2" + operator + "2;")
+                self.assertEqual(composer._register.text, "bcbdbebfb")
+                self.assertEqual((composer.text, composer.caret, composer.normal),
+                                 ("agb" if operator == "c" else "abcbdbebfbgb", 1, operator == "y"))
+                self.cleared(composer)
+        for command in ("99999;", "9999d9999;", "9999c9999;", "9999y9999;"):
+            with self.subTest(capped_repeat=command):
+                composer = self.normal("a" + "b" * 10000, 0)
+                typed(composer, "fb" + command)
+                self.assertEqual(composer._last_search, ("f", "b"))
+                if command == "99999;":
+                    self.assertEqual(composer.caret, 10000)
+                else:
+                    self.assertEqual(len(composer._register.text), 10000)
+                    self.assertEqual(composer.text, "a" + "b" * 10000 if "y" in command else "a")
+                self.cleared(composer)
+
+        # Move organically before a repeat and search the current text/line, not cached offsets
+        composer = self.normal("xabcxabcxabcx", 0)
+        typed(composer, "fx")
+        self.assertEqual(composer.caret, 4)
+        typed(composer, "ll")
+        self.assertEqual(composer.caret, 6)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 8)
+        self.cleared(composer)
+
+    def test_memory(self) -> None:
+        # Establish successful search
+        composer = self.normal("xabcxabcx", 0)
+        typed(composer, "fx")
+        self.assertEqual(composer.caret, 4)
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+
+        # Failure/cancel retain last success
+        typed(composer, "fz")
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+        self.cleared(composer)
+
+        typed(composer, "2df")
+        composer.handle(Key(ESCAPE))
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+        self.cleared(composer)
+
+        # INSERT/Escape, unrelated motion/edit, history load and undo/redo preserve memory
+        typed(composer, "i")
+        composer.handle(Key(ESCAPE))
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+
+        typed(composer, "h")
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+
+        typed(composer, "rZ")
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+
+        typed(composer, "u")
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+
+        composer.handle(ctrl("r"))
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "x"))
+
+        # Real history browsing changes text but not search memory; repeats use that text.
+        composer = self.normal("xabcxabcx", 0)
+        typed(composer, "fx")
+        composer.history = ["x---x---x"]
+        composer.handle(Key(UP))
+        self.assertEqual(composer.text, "x---x---x")
+        self.assertEqual(composer._last_search, ("f", "x"))
+        typed(composer, "0;")
+        self.assertEqual(composer.caret, 4)
+
+        # Count not retained
+        composer = self.normal("abcbdbebfbgb", 0)
+        typed(composer, "2fb")
+        self.assertEqual(composer.caret, 3)
+        self.assertEqual(getattr(composer, "_last_search", None), ("f", "b"))
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 5)
+        self.cleared(composer)
+
+        # Independent/cleared instances no-op and drop pending counts/operators
+        fresh = self.normal("abcbdbebfbgb", 0)
+        self.assertIsNone(getattr(fresh, "_last_search", None))
+        for cmd in (";", ",", "2;", "d;", "c,", "2d3;"):
+            with self.subTest(fresh_cmd=cmd):
+                c = self.normal("abcbdbebfbgb", 0)
+                before = self.snapshot(c)
+                typed(c, cmd)
+                self.assertEqual(self.snapshot(c), before)
+                self.cleared(c)
+
+        # submit/set_vim/clear erase memory
+        composer = self.normal("xabcx", 0)
+        typed(composer, "fx")
+        self.assertIsNotNone(getattr(composer, "_last_search", None))
+        composer.set_vim(False)
+        self.assertIsNone(getattr(composer, "_last_search", None))
+
+        composer.set_vim(True)
+        composer.normal = True
+        composer.caret = 0
+        typed(composer, "fx")
+        self.assertIsNotNone(getattr(composer, "_last_search", None))
+        composer.set_vim(True)
+        self.assertIsNone(getattr(composer, "_last_search", None))
+
+        composer.set_vim(True)
+        composer.normal = True
+        composer.caret = 0
+        typed(composer, "fx")
+        self.assertIsNotNone(getattr(composer, "_last_search", None))
+        composer._clear()
+        self.assertIsNone(getattr(composer, "_last_search", None))
+
+        composer = self.normal("xabcx", 0)
+        typed(composer, "fx")
+        self.assertIsNotNone(getattr(composer, "_last_search", None))
+        composer.handle(Key(ENTER))
+        self.assertIsNone(getattr(composer, "_last_search", None))
+
+        # Memory is per-instance and excluded from undo snapshots
+        c1 = self.normal("xabcx", 0)
+        c2 = self.normal("xabcx", 0)
+        typed(c1, "fx")
+        self.assertEqual(getattr(c1, "_last_search", None), ("f", "x"))
+        self.assertIsNone(getattr(c2, "_last_search", None))
+
+        c1._undo.clear()
+        typed(c1, "x")
+        typed(c1, "u")
+        self.assertEqual(getattr(c1, "_last_search", None), ("f", "x"))
+
+    def test_till_repeat(self) -> None:
+        # Forward aXbXcX at 0:
+        # explicit tX stays 0; ; reaches 2, next ; reaches 4, comma reaches 2.
+        composer = self.normal("aXbXcX", 0)
+        typed(composer, "tX")
+        self.assertEqual(composer.caret, 0)
+        self.assertEqual(getattr(composer, "_last_search", None), ("t", "X"))
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 2)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 4)
+        typed(composer, ",")
+        self.assertEqual(composer.caret, 2)
+        self.cleared(composer)
+
+        # Fresh explicit-tX state: 2; reaches 4
+        composer = self.normal("aXbXcX", 0)
+        typed(composer, "tX")
+        self.assertEqual(composer.caret, 0)
+        typed(composer, "2;")
+        self.assertEqual(composer.caret, 4)
+        self.cleared(composer)
+
+        # d2; uses final match m=5, selects [0, 5) = aXbXc, leaves X at 0, one span/undo step
+        composer = self.normal("aXbXcX", 0)
+        typed(composer, "tX")
+        self.assertEqual(composer.caret, 0)
+        typed(composer, "d2;")
+        self.assertEqual((composer.text, composer.caret, composer.normal), ("X", 0, True))
+        self.assertEqual(len(composer._undo), 1)
+        self.cleared(composer)
+
+        # Backward mirror XcXbXa at 5:
+        # explicit TX lands 5; ; reaches 3, next ; reaches 1, comma reaches 3.
+        composer = self.normal("XcXbXa", 5)
+        typed(composer, "TX")
+        self.assertEqual(composer.caret, 5)
+        self.assertEqual(getattr(composer, "_last_search", None), ("T", "X"))
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 3)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 1)
+        typed(composer, ",")
+        self.assertEqual(composer.caret, 3)
+        self.cleared(composer)
+
+        # Fresh explicit-TX state: 2; reaches 1
+        composer = self.normal("XcXbXa", 5)
+        typed(composer, "TX")
+        self.assertEqual(composer.caret, 5)
+        typed(composer, "2;")
+        self.assertEqual(composer.caret, 1)
+        self.cleared(composer)
+
+        # A further ; from the exhausted progression misses without moving
+        composer = self.normal("aXbXcX", 0)
+        typed(composer, "tX;;")
+        self.assertEqual(composer.caret, 4)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 4)
+        self.cleared(composer)
+
+        composer = self.normal("XcXbXa", 5)
+        typed(composer, "TX;;")
+        self.assertEqual(composer.caret, 1)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 1)
+        self.cleared(composer)
+
+    def test_repeat_miss(self) -> None:
+        # Fresh aXbXcX at 0 with successful tX memory:
+        # 3; and c3; each fail atomically at original caret 0, with no partial edit/INSERT/register/undo change and pending false;
+        # next ; reaches 2, proving memory retention.
+        composer = self.normal("aXbXcX", 0)
+        typed(composer, "tX")
+        self.assertEqual(composer.caret, 0)
+        before = self.snapshot(composer)
+
+        typed(composer, "3;")
+        self.assertEqual(self.snapshot(composer), before)
+        self.assertTrue(composer.normal)
+        self.cleared(composer)
+
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 2)
+        self.cleared(composer)
+
+        # c3; fails atomically
+        composer = self.normal("aXbXcX", 0)
+        typed(composer, "tX")
+        self.assertEqual(composer.caret, 0)
+        before = self.snapshot(composer)
+
+        typed(composer, "c3;")
+        self.assertEqual(self.snapshot(composer), before)
+        self.assertTrue(composer.normal)
+        self.cleared(composer)
+
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 2)
+        self.cleared(composer)
+
+        # Fresh aX\nbX at 0 after tX: ; cannot cross NEWLINE and stays 0
+        composer = self.normal("aX\nbX", 0)
+        typed(composer, "tX")
+        self.assertEqual(composer.caret, 0)
+        typed(composer, ";")
+        self.assertEqual(composer.caret, 0)
+        self.cleared(composer)
+
+        # Mirror counted failure on XcXbXa at 5 after TX: 3; stays 5
+        composer = self.normal("XcXbXa", 5)
+        typed(composer, "TX")
+        self.assertEqual(composer.caret, 5)
+        before = self.snapshot(composer)
+
+        typed(composer, "3;")
+        self.assertEqual(self.snapshot(composer), before)
+        self.assertTrue(composer.normal)
+        self.cleared(composer)
+
+        typed(composer, "c3;")
+        self.assertEqual(self.snapshot(composer), before)
+        self.assertTrue(composer.normal)
+        self.cleared(composer)
+
+    def test_isolation(self) -> None:
+        # Discriminating inherited gate probes:
+        # Fresh ax at 0, single f must insert fax at caret 1 with no pending for:
+        # (vim=True, masked=False, normal=False)
+        c1 = Composer(text="ax", caret=0, vim=True, masked=False)
+        c1.normal = False
+        c1.handle(Key(CHAR, "f"))
+        self.assertEqual((c1.text, c1.caret, c1.normal), ("fax", 1, False))
+        self.cleared(c1)
+
+        # (vim=False, masked=False, normal=True)
+        c2 = Composer(text="ax", caret=0, vim=False, masked=False)
+        c2.normal = True
+        c2.handle(Key(CHAR, "f"))
+        self.assertEqual((c2.text, c2.caret), ("fax", 1))
+        self.cleared(c2)
+
+        # (vim=True, masked=True, normal=True)
+        c3 = Composer(text="ax", caret=0, vim=True, masked=True)
+        c3.normal = True
+        c3.handle(Key(CHAR, "f"))
+        self.assertEqual((c3.text, c3.caret), ("fax", 1))
+        self.cleared(c3)
+
+        # Also type each literal f/F/t/T/;/comma in ordinary INSERT/non-Vim/masked input
+        chars = ("f", "F", "t", "T", ";", ",")
+        for ch in chars:
+            with self.subTest(ch=ch, mode="insert"):
+                c = Composer(text="x", caret=0, vim=True)
+                c.normal = False
+                c.handle(Key(CHAR, ch))
+                self.assertEqual((c.text, c.caret, c.normal), (ch + "x", 1, False))
+                self.cleared(c)
+
+            with self.subTest(ch=ch, mode="non-vim"):
+                c = Composer(text="x", caret=0, vim=False)
+                c.handle(Key(CHAR, ch))
+                self.assertEqual((c.text, c.caret), (ch + "x", 1))
+                self.cleared(c)
+
+            with self.subTest(ch=ch, mode="masked"):
+                c = Composer(text="x", caret=0, vim=True, masked=True)
+                c.normal = True
+                c.handle(Key(CHAR, ch))
+                self.assertEqual((c.text, c.caret), (ch + "x", 1))
+                self.cleared(c)
+
+        # Pending f+space searches rather than arms leader
+        composer = self.normal("a b c", 0)
+        composer.handle(Key(CHAR, "f"))
+        self.assertTrue(composer.pending)
+        composer.handle(Key(CHAR, " "))
+        self.assertFalse(composer.leader)
+        self.assertFalse(composer.pending)
+        self.assertEqual(composer.caret, 1)
+        self.cleared(composer)
+
+        # Search does not steal word-object, replace or g-prefix followers
+        for cmd, expected_caret in (("i", 1), ("a", 2)):
+            composer = self.normal("abc", 1)
+            typed(composer, cmd)
+            self.assertEqual((composer.text, composer.caret, composer.normal), ("abc", expected_caret, False))
+            self.cleared(composer)
+
+        composer = self.normal("one two", 4)
+        typed(composer, "rZ")
+        self.assertEqual((composer.text, composer.caret), ("one Zwo", 4))
+        self.cleared(composer)
+
+        composer = self.normal("one two", 4)
+        typed(composer, "gg")
+        self.assertEqual(composer.caret, 0)
+        self.cleared(composer)
+
+        # Word objects iw/aw
+        composer = self.normal("alpha beta gamma", 8)
+        typed(composer, "diw")
+        self.assertEqual(composer.text, "alpha  gamma")
+        self.cleared(composer)
+
+        composer = self.normal("alpha beta gamma", 8)
+        typed(composer, "daw")
+        self.assertEqual(composer.text, "alpha gamma")
+        self.cleared(composer)
+
+        # Leader followers
+        composer = self.normal("one two", 0)
+        typed(composer, " ")
+        self.assertTrue(composer.leader)
+        composer.handle(Key(ESCAPE))
+        self.assertFalse(composer.leader)
+        self.cleared(composer)
+
+        # Legacy/modern Alt motions
+        composer = self.normal("one two", 4)
+        composer.handle(Key(CHAR, "b", alt=True))
+        self.assertEqual(composer.caret, 0)
+        composer.handle(Key(CHAR, "f", alt=True))
+        self.assertEqual(composer.caret, 3)
+
+        # Undo / redo
+        composer = self.normal("abc", 0)
+        typed(composer, "x")
+        self.assertEqual(composer.text, "bc")
+        typed(composer, "u")
+        self.assertEqual(composer.text, "abc")
+        composer.handle(ctrl("r"))
+        self.assertEqual(composer.text, "bc")
+
+
 class DeleteTests(unittest.TestCase):
     def test_backspace_removes_one_cluster(self) -> None:
         for unit in ("x", "한", FAMILY, THUMBS_UP_TONED, FLAG_KR, Q_ACUTE):

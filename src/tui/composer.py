@@ -444,6 +444,8 @@ class Composer:
     _op_count: str = field(default="", init=False, repr=False, compare=False)
     _prefix: str = field(default="", init=False, repr=False, compare=False)
     _leader: bool = field(default=False, init=False, repr=False, compare=False)
+    # Successful search memory is per draft, separate from transient prefixes and undo.
+    _last_search: tuple[str, str] | None = field(default=None, init=False, repr=False, compare=False)
     _register: _Register | None = field(default=None, init=False, repr=False, compare=False)
     _changing: bool = field(default=False, init=False, repr=False, compare=False)  # a change went to INSERT
     _paste_count: int = field(default=0, init=False, repr=False, compare=False)
@@ -687,6 +689,7 @@ class Composer:
         self._scroll = 0
 
     def _clear(self) -> None:
+        self._last_search = None
         self._load("")
         self.history_index = None
         self._draft, self._draft_images = "", {}
@@ -734,6 +737,7 @@ class Composer:
     def set_vim(self, on: bool) -> None:
         """Modal editing on or off; either way the composer is in INSERT with no command half typed."""
         self.vim = on
+        self._last_search = None
         self.normal = False
         self._drop_pending()
 
@@ -778,6 +782,11 @@ class Composer:
                 self._enter_normal()
                 return self._normal_char(event.char)
             return None
+        if self._prefix in ("f", "F", "t", "T"):
+            if event.name == CHAR and not (event.ctrl or event.alt):  # a reported Shift is in the char already
+                return self._normal_char(event.char)
+            self._drop_pending()
+            return NOTHING
         if is_leader_key(event) and not (self._operator or self._prefix):
             self._drop_pending()  # a count does not carry into a leader sequence
             self._leader = True
@@ -845,6 +854,15 @@ class Composer:
     def _normal_char(self, char: str) -> ComposerAction:
         """A character typed in NORMAL: part of a command, or the key that completes one."""
         prefix, self._prefix = self._prefix, ""
+        if prefix in ("f", "F", "t", "T"):
+            self._search(prefix, char, self._take_count() or 1, self._operator)
+            return NOTHING
+        if prefix in ("i", "a"):
+            count, operator = self._take_count() or 1, self._operator
+            self._drop_pending()
+            if char == "w" and operator:
+                self._operate_span(operator, self._text_object_span(prefix, count))
+            return NOTHING
         if prefix == "r":
             self._replace_chars(char, self._take_count() or 1)
             return NOTHING
@@ -860,11 +878,26 @@ class Composer:
             else:
                 self._count = str(min(int(self._count + char), VIM_COUNT_CAP))
             return NOTHING
+        if char in ("f", "F", "t", "T"):
+            self._prefix = char
+            return NOTHING
+        if char in (";", ","):
+            count, operator = self._take_count() or 1, self._operator
+            self._drop_pending()
+            if self._last_search is not None:
+                kind, target = self._last_search
+                if char == ",":
+                    kind = {"f": "F", "F": "f", "t": "T", "T": "t"}[kind]
+                self._search(kind, target, count, operator, repeat=True)
+            return NOTHING
         if char == "g" or (char == "r" and not self._operator):
             self._prefix = char
             return NOTHING
         if char in _VIM_OPERATORS and not self._operator:
             self._operator = char
+            return NOTHING
+        if self._operator and char in ("i", "a"):
+            self._prefix = char
             return NOTHING
         count = self._take_count()
         operator, self._operator = self._operator, ""
@@ -988,12 +1021,92 @@ class Composer:
             return index, (min(target, end) if index < end else target)  # `dw` stops at the end of the line
         return None
 
+    def _search_motion(self, kind: str, target: str, times: int, *, repeat: bool = False) -> tuple[int, int] | None:
+        """Resolve a complete line-local search without committing partial counted progress."""
+        target = _nfc(target)
+        if (len(clusters(target)) != 1 or cluster_width(target) <= 0
+                or any(is_control(ch) or ch in (NEWLINE, TAB_CHAR) or _is_token(ch) for ch in target)):
+            return None
+        units, _bounds, index = self._atoms()
+        start, end = _line_of(units, index)
+        direction = 1 if kind in ("f", "t") else -1
+        till = kind in ("t", "T")
+        cursor = index
+        remaining = times
+        for match in range(index + direction, end if direction > 0 else start - 1, direction):
+            unit = units[match]
+            if unit in self.pastes or any(_is_token(ch) for ch in unit) or _nfc(unit) != target:
+                continue
+            landing = match - direction if till else match
+            if repeat and till and landing == cursor:
+                continue  # explicit till accepts this success; repeats must progress
+            remaining -= 1
+            if remaining == 0:
+                return landing, match
+            if repeat:
+                cursor = landing
+        return None
+
+    def _search(self, kind: str, target: str, times: int, operator: str, *, repeat: bool = False) -> None:
+        """Commit one successful motion/span; a miss must never enter INSERT or replace memory."""
+        result = self._search_motion(kind, target, times, repeat=repeat)
+        self._drop_pending()
+        if result is None:
+            return
+        if not repeat:
+            self._last_search = kind, _nfc(target)
+        landing, match = result
+        _units, bounds, index = self._atoms()
+        if not operator:
+            self.caret = bounds[landing]
+            return
+        span = {"f": (index, match + 1), "t": (index, match),
+                "F": (match, index), "T": (match + 1, index)}[kind]
+        self._operate_span(operator, span)
+
+    def _text_object_span(self, descriptor: str, times: int) -> tuple[int, int] | None:
+        """Line-local `iw` runs or `aw` words, using space/tab breaks on whole NORMAL atoms."""
+        if descriptor not in ("i", "a"):
+            return None
+        units, _bounds, index = self._atoms()
+        line_start, line_end = _line_of(units, index)
+        if index >= line_end:
+            return index, index
+        blank = units[index] in WORD_BREAKS
+        start = index
+        while start > line_start and (units[start - 1] in WORD_BREAKS) == blank:
+            start -= 1
+        end = start
+        last_word_end = None
+        remaining = times
+        while end < line_end and remaining:
+            run_blank = units[end] in WORD_BREAKS
+            while end < line_end and (units[end] in WORD_BREAKS) == run_blank:
+                end += 1
+            if not run_blank:
+                last_word_end = end
+            if descriptor == "i" or not run_blank:
+                remaining -= 1
+        if descriptor == "a" and blank and last_word_end is not None:
+            end = last_word_end  # blank-start objects never add trailing padding, even with excess counts
+        if descriptor == "a" and not blank:
+            if end < line_end:  # prefer all trailing blanks after the aggregate word span
+                while end < line_end and units[end] in WORD_BREAKS:
+                    end += 1
+            elif last_word_end == end:  # no trailing padding: take the leading blank run, if any
+                while start > line_start and units[start - 1] in WORD_BREAKS:
+                    start -= 1
+        return start, end
+
     def _operate(self, operator: str, motion: str, times: int) -> None:
         """`d`, `c` or `y` over `motion` (`times` of it), or over `times` whole lines when `motion` is the operator."""
         if motion == operator:
             self._lines(operator, times)
             return
-        span = self._motion_span(motion, times, operator)
+        self._operate_span(operator, self._motion_span(motion, times, operator))
+
+    def _operate_span(self, operator: str, span: tuple[int, int] | None) -> None:
+        """Shared characterwise register, edit and change effects for motions and objects."""
         if span is None:
             return
         _units, bounds, _index = self._atoms()

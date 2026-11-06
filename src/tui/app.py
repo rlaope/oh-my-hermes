@@ -4291,6 +4291,19 @@ class App(ModesMixin, AgentViewMixin):
             self.composer._drop_pending()  # the picker owns input, including display keys that return below
         if self._display_key(event):
             return
+        if self.slot is None and self.composer.normal and self.composer._prefix in ("f", "F", "t", "T") and (
+            self._front_picker() is None
+        ):
+            # A search target owns even global shortcuts; keep picker acquisition and Paste's usual route.
+            if self.picker is not None and self._picker_arms(event):
+                self.composer._drop_pending()
+                self._picker_key(event)
+                return
+            if isinstance(event, Paste):
+                self.composer._drop_pending()
+            else:
+                self._on_composer(self._edit(self.composer, event), event)
+                return  # Composer keeps shared Ctrl undo/redo; every other non-target is consumed.
         if self.composer.leader and isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c":
             self.composer._drop_pending()  # Ctrl+C does what it does unarmed, a question's text field included
         if self.slot is not None and self._slot_arming(event):
@@ -4628,8 +4641,8 @@ class App(ModesMixin, AgentViewMixin):
         """
         if not isinstance(event, Key) or event.name != CHAR or not event.ctrl or event.alt or event.char not in ("o", "l", "z"):
             return False
-        if self.composer.leader:
-            self.composer._drop_pending()  # it works over an armed Vim leader, which it cancels
+        if self.composer.pending:
+            self.composer._drop_pending()  # it works over an armed Vim leader or a half-typed command, which it drops
         if event.char == "o":
             if self.slot is None:
                 self._details_view()
