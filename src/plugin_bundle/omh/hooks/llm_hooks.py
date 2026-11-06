@@ -56,7 +56,7 @@ from ..test_expectation_check import note_request as note_test_request
 from .nudge_budget import session_is_delegated
 from ..remote_wait_nudge import failed_wait_context
 from ..jev_consent import MESSAGING_ATTENDED_PLATFORMS
-from ..messenger_gate import session_room_key
+from ..messenger_gate import GATED_PLATFORMS, session_room_key
 from ..messenger_judgement import turn_instruction
 from ..jev_consent import clear_turn as clear_jev_turn
 from ..jev_consent import note_turn as note_jev_turn
@@ -596,9 +596,16 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
 
 
 def _room_instruction(kwargs: dict) -> str:
-    """The judged room's instruction for this turn, or "". A detached fork gets none."""
-    session_id = str(kwargs.get("session_id") or "").strip()
-    if session_id and str(kwargs.get("parent_session_id") or "").strip() == session_id:
+    """The judged room's instruction for this turn, or "".
+
+    Only the room's own turn gets it. A delegated child inherits the parent's
+    session ContextVars (`copy_context`), so its room key alone would name the
+    person's thread, and its ``[SHUTUP]`` would mute it. A child runs under
+    ``platform="subagent"`` and names a parent, as a detached fork does.
+    """
+    if str(kwargs.get("parent_session_id") or "").strip():
+        return ""
+    if str(kwargs.get("platform") or "").strip().casefold() not in GATED_PLATFORMS:
         return ""
     return turn_instruction(kwargs.get("turn_id"), session_room_key())
 

@@ -67,12 +67,13 @@ All notable changes will be documented here.
   true` (Hermes 0.22.6 and later) and streaming is off, the turn carries a
   short instruction: answer `[SHUTUP]` when asked to be quiet in any language
   or wording, `[SILENT]` when the message is clearly meant for someone else.
-  OMH turns an exact `[SHUTUP]` into Hermes' `[SILENT]`, mutes that thread and
-  adds the 🫡 reaction; Hermes drops a `[SILENT]` reply. In those rooms the
+  OMH turns `[SHUTUP]` into Hermes' `[SILENT]`, mutes that thread and adds the
+  🫡 reaction; Hermes drops a `[SILENT]` reply, and a message addressed to the
+  bot is never offered it. In those rooms the
   quiet-word list and calls by other names are off; a leading mention of
   someone else, muted threads and the unmute on a mention, reply or name
-  stay. Every other room, an older Hermes, or streaming on keeps the
-  word-list gate and gets no instruction, so Hermes' "returned only a silence
+  stay. Every other room, an older Hermes, streaming on, or a profile on
+  Codex's app-server runtime keeps the word-list gate and gets no instruction, so Hermes' "returned only a silence
   marker" notice never appears.
 - **`omh coding model-routing status` names each discovered model once.**
   Session history yields one observation per session, so the human line

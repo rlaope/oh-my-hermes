@@ -475,9 +475,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "src/plugin_bundle/omh/messenger_judgement.py",
         "judged_reply",
         INTENTIONAL,
-        "A judged room's `[SHUTUP]` reply: the room allows silence, so the reply is already `[SILENT]` "
-        "whatever happens to its side effects. A failed mute write or 🫡 scheduling is logged by "
-        "exception type and the hook still returns `[SILENT]`, so the raw token never reaches the chat.",
+        "A judged room's marker reply: the room allows silence, so the reply is already `[SILENT]` "
+        "whatever happens to its side effects. A failed skip-log line, mute write or 🫡 scheduling is "
+        "logged by exception type and the hook still returns the marker, so the raw token never reaches "
+        "the chat.",
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/approval_bypass.py",

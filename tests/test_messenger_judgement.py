@@ -20,7 +20,16 @@ from omh.plugin_bundle.omh.hooks import llm_hooks, result_transforms
 BOT = "UBOT"
 
 
-def hermes_modules(*, platform="slack", chat_type="thread", chat_id="C1", thread_id="171.1", profile=""):
+def _schedule_like_hermes(coro, loop, **_kwargs):
+    """`agent.async_utils.safe_schedule_threadsafe`: None and a closed coroutine when the loop is gone."""
+    try:
+        return asyncio.run_coroutine_threadsafe(coro, loop)
+    except RuntimeError:
+        coro.close()
+        return None
+
+
+def hermes_modules(*, platform="slack", chat_type="thread", chat_id="C1", thread_id="171.1", profile="", config=None):
     """Stand-ins for Hermes' `gateway.session_context` and `gateway.response_filters`."""
     context = ModuleType("gateway.session_context")
     for name, value in (("_SESSION_PROFILE", profile), ("_SESSION_PLATFORM", platform), ("_SESSION_CHAT_ID", chat_id),
@@ -29,16 +38,19 @@ def hermes_modules(*, platform="slack", chat_type="thread", chat_id="C1", thread
         var.set(value)
         vars(context)[name] = var
     filters = ModuleType("gateway.response_filters")
-    filters.is_intentional_silence_response = lambda text: text.strip().upper() in {"[SILENT]", "NO_REPLY"}
+    filters.is_intentional_silence_response = lambda text: text.strip().upper() in {"[SILENT]", "SILENT", "NO_REPLY"}
+    run = ModuleType("gateway.run")
+    run._load_gateway_config = lambda path: config if config is not None else {"model": {"default": "m"}}
     package = ModuleType("gateway")
     package.session_context = context
     package.response_filters = filters
+    package.run = run
     async_utils = ModuleType("agent.async_utils")
-    async_utils.safe_schedule_threadsafe = lambda coro, loop, **_kw: asyncio.run_coroutine_threadsafe(coro, loop)
+    async_utils.safe_schedule_threadsafe = _schedule_like_hermes
     agent = ModuleType("agent")
     agent.async_utils = async_utils
     return patch_modules({"gateway": package, "gateway.session_context": context, "gateway.response_filters": filters,
-                          "agent": agent, "agent.async_utils": async_utils})
+                          "gateway.run": run, "agent": agent, "agent.async_utils": async_utils})
 
 
 def judged_gateway(adapter, *, allow=True, streaming=False, capable=True, loop=None):
@@ -75,6 +87,9 @@ class StoreReset(unittest.TestCase):
         judge._turns.clear()
         self.addCleanup(judge._rooms.clear)
         self.addCleanup(judge._turns.clear)
+        hermes = hermes_modules()
+        hermes.start()
+        self.addCleanup(hermes.stop)
         self.home = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.reactions = Reactions()
         self.adapter = SimpleNamespace(_team_bot_user_ids={"T1": BOT}, _add_reaction=self.reactions.add)
@@ -85,40 +100,70 @@ class StoreReset(unittest.TestCase):
 
 class TokenTests(unittest.TestCase):
     def test_token_variants(self) -> None:
-        for text in ("[SHUTUP]", "  [shutup]\n", "*[SHUTUP]*", "[SHUTUP].", "[Shut Up]", "[SHUT_UP]"):
+        zero_width, bom = chr(0x200b), chr(0xfeff)
+        for text in ("[SHUTUP]", "  [shutup]\n", "*[SHUTUP]*", "[SHUTUP].", "[Shut Up]", "[SHUT_UP]", "`[SHUTUP]`",
+                     "```\n[SHUTUP]\n```", "```text\n[SHUTUP]\n```", "~~[SHUTUP]~~", "[SHUTUP]\n\nOK", "OK.\n\n[SHUTUP]",
+                     "［SHUTUP］", "[ SHUTUP ]", "\U0001fae1 [SHUTUP]", zero_width + "[SHUTUP]", bom + "[SHUTUP]"):
             with self.subTest(text=text):
                 self.assertTrue(judge.is_shutup(text))
 
-    def test_a_token_inside_text_or_code_is_not_a_token(self) -> None:
-        for text in ("[SHUTUP] okay, going quiet", "fine. [SHUTUP]", "`[SHUTUP]`", "SHUTUP", "shut up",
-                     "[SHUTUP", "", None, "[SHUTUP]" + " " * 80 + "x"):
+    def test_a_token_inside_a_sentence_is_not_a_token(self) -> None:
+        for text in ("[SHUTUP] okay, going quiet", "fine. [SHUTUP]", "use `[SHUTUP]` here", "SHUTUP", "shut up",
+                     "[SHUTUP", "", None, "[SHUTUP]" + " " * 80 + "x", "one\nI said [SHUTUP] to it\ntwo"):
             with self.subTest(text=text):
                 self.assertFalse(judge.is_shutup(text))
 
-    def test_instruction_by_mode(self) -> None:
+    def test_instruction_by_mode_and_address(self) -> None:
         on = judge.instruction("on")
         self.assertIn(judge.SHUTUP_TOKEN, on)
         self.assertIn(judge.SILENT_TOKEN, on)
         self.assertNotIn(judge.SILENT_TOKEN, judge.instruction("mute_only"))
+        addressed = judge.instruction("on", True)
+        self.assertIn(judge.SHUTUP_TOKEN, addressed)
+        self.assertNotIn(judge.SILENT_TOKEN, addressed)
 
 
 class RoomTests(StoreReset):
     def test_judged_room_needs_allow_silence_capability_and_no_streaming(self) -> None:
-        self.assertTrue(judge.judged_room(judged_gateway(self.adapter), None))
-        self.assertFalse(judge.judged_room(judged_gateway(self.adapter, allow=None), None))
-        self.assertFalse(judge.judged_room(judged_gateway(self.adapter, allow=False), None))
-        self.assertFalse(judge.judged_room(judged_gateway(self.adapter, streaming=True), None))
-        self.assertFalse(judge.judged_room(judged_gateway(self.adapter, capable=False), None))
+        self.assertTrue(judge.judged_room(judged_gateway(self.adapter), None, self.home))
+        self.assertFalse(judge.judged_room(judged_gateway(self.adapter, allow=None), None, self.home))
+        self.assertFalse(judge.judged_room(judged_gateway(self.adapter, allow=False), None, self.home))
+        self.assertFalse(judge.judged_room(judged_gateway(self.adapter, streaming=True), None, self.home))
+        self.assertFalse(judge.judged_room(judged_gateway(self.adapter, capable=False), None, self.home))
         no_config = judged_gateway(self.adapter)
         no_config.config = None
-        self.assertFalse(judge.judged_room(no_config, None))
+        self.assertFalse(judge.judged_room(no_config, None, self.home))
 
         def broken(source):
             raise LookupError("override table")
 
         failing = judged_gateway(self.adapter)
         failing._room_allow_silence = broken
-        self.assertFalse(judge.judged_room(failing, None))
+        self.assertFalse(judge.judged_room(failing, None, self.home))
+
+    def test_codex_app_server_or_an_unreadable_runtime_is_not_judged(self) -> None:
+        gateway = judged_gateway(self.adapter)
+        for config, judged in (
+            ({"model": {"openai_runtime": "codex_app_server", "default": "m"}}, False),
+            ({"model": {"openai_runtime": " Codex_App_Server "}}, False),
+            ({"model": {"api_mode": "codex_app_server"}}, False),
+            ({}, False),
+            ({"model": {"openai_runtime": "auto"}}, True),
+            ({"model": "gpt-x"}, True),
+            ({"streaming": {"enabled": False}}, True),
+        ):
+            with self.subTest(config=config), hermes_modules(config=config):
+                self.assertEqual(judge.judged_room(gateway, None, self.home), judged)
+        self.assertFalse(judge.judged_room(gateway, None, None))
+        with patch_modules({"gateway.run": None}):
+            self.assertFalse(judge.judged_room(gateway, None, self.home))
+
+    def test_codex_app_server_keeps_the_word_list_gate(self) -> None:
+        with hermes_modules(config={"model": {"openai_runtime": "codex_app_server"}}):
+            result, ack = self.gate(event("조용히 해"), judged_gateway(self.adapter))
+        self.assertEqual(result["reason"], gate.REASON_QUIET)
+        self.assertTrue(asyncio.run(ack))
+        self.assertEqual(judge._rooms, {})
 
     def test_judged_room_leaves_quiet_words_and_names_to_the_model(self) -> None:
         result, ack = self.gate(event("조용히 해"), judged_gateway(self.adapter))
@@ -154,6 +199,7 @@ class RoomTests(StoreReset):
 
         muted: list[float] = []
         judge.note_room("kami/slack/C1/171.1", judge.Room(1.0, "on", muted.append, lambda: None, None))
+        self.addCleanup(judge._turns.clear)
         self.assertEqual(other.turn_instruction("t7", "kami/slack/C1/171.1", now=2.0), judge.instruction("on"))
         self.assertEqual(other.judged_reply("t7", "[SHUTUP]", now=3.0), (True, judge.SILENT_TOKEN))
         self.assertEqual(muted, [3.0])
@@ -173,7 +219,8 @@ class InstructionTests(StoreReset):
         self.note()
         with hermes_modules():
             self.assertEqual(gate.session_room_key(), gate.thread_key("", "slack", "C1", "171.1"))
-            payload = llm_hooks._with_room_instruction(None, llm_hooks._room_instruction({"turn_id": "t1"}))
+            payload = llm_hooks._with_room_instruction(
+                None, llm_hooks._room_instruction({"turn_id": "t1", "platform": "slack"}))
         self.assertIn(judge.SHUTUP_TOKEN, payload["context"])
         self.assertTrue(payload["context"].startswith(llm_hooks.OMH_CONTEXT_FENCE_OPEN))
         self.assertIn("t1", judge._turns)
@@ -183,13 +230,38 @@ class InstructionTests(StoreReset):
         for modules in (hermes_modules(chat_type="dm"), hermes_modules(platform="telegram"),
                         hermes_modules(thread_id="999.1")):
             with self.subTest(modules=modules), modules:
-                self.assertEqual(llm_hooks._room_instruction({"turn_id": "t1"}), "")
+                self.assertEqual(llm_hooks._room_instruction({"turn_id": "t1", "platform": "slack"}), "")
         with hermes_modules():
-            self.assertEqual(llm_hooks._room_instruction({"turn_id": "t1", "session_id": "s", "parent_session_id": "s"}), "")
-            self.assertEqual(llm_hooks._room_instruction({}), "")
+            self.assertEqual(llm_hooks._room_instruction({"turn_id": "t1", "platform": "slack", "session_id": "s",
+                                                          "parent_session_id": "s"}), "")
+            self.assertEqual(llm_hooks._room_instruction({"platform": "slack"}), "")
         self.assertEqual(judge._turns, {})
         # Without Hermes' session ContextVars at all.
-        self.assertEqual(gate.session_room_key(), "")
+        with patch_modules({"gateway": None}):
+            self.assertEqual(gate.session_room_key(), "")
+
+    def test_a_delegated_child_in_the_parents_context_gets_nothing(self) -> None:
+        # The child's copy_context still names the person's thread; its session id is its own.
+        self.note()
+        with hermes_modules():
+            self.assertTrue(gate.session_room_key())
+            for child in (
+                {"turn_id": "c1", "session_id": "child", "parent_session_id": "parent", "platform": "subagent"},
+                {"turn_id": "c1", "session_id": "child", "parent_session_id": "parent", "platform": "slack"},
+                {"turn_id": "c1", "session_id": "child", "parent_session_id": "", "platform": "subagent"},
+            ):
+                with self.subTest(child=child):
+                    self.assertEqual(llm_hooks._room_instruction(child), "")
+        self.assertEqual(judge._turns, {})
+        self.assertEqual(judge.judged_reply("c1", "[SHUTUP]"), (False, None))
+        self.assertEqual(gate.read_mutes(self.home / "omh"), {})
+
+    def test_a_message_addressed_to_the_bot_is_not_offered_silent(self) -> None:
+        self.gate(event("hey", raw_text=f"<@{BOT}> hey"), judged_gateway(self.adapter))
+        key = gate.thread_key("", "slack", "C1", "171.1")
+        text = judge.turn_instruction("t2", key)
+        self.assertIn(judge.SHUTUP_TOKEN, text)
+        self.assertNotIn(judge.SILENT_TOKEN, text)
 
     def test_stale_room_gets_nothing(self) -> None:
         self.note()
@@ -207,7 +279,7 @@ class InstructionTests(StoreReset):
     def test_pre_llm_call_appends_the_instruction(self) -> None:
         self.note()
         with hermes_modules(), mock.patch.object(llm_hooks, "_turn_context", return_value=None):
-            payload = llm_hooks.pre_llm_call(session_id="s", turn_id="t1", platform="slack")
+            payload = llm_hooks.pre_llm_call(session_id="s", turn_id="t1", platform="Slack")
         self.assertIn(judge.ELSEWHERE_LINE, payload["context"])
 
 
@@ -235,6 +307,9 @@ class ReplyTests(StoreReset):
         self.assertEqual(list(mutes), [gate.thread_key("", "slack", "C1", "171.1")])
         self.assertTrue(next(iter(mutes.values()))["judged"])
         self.assertEqual(self.reactions.calls, [("C1", "171.2", gate.SLACK_ACK_EMOJI, "T1")])
+        skips = gate.read_skips(self.home / "omh")
+        self.assertEqual([(s["reason"], s["marker"], s["text"]) for s in skips],
+                         [(gate.REASON_JUDGED_SILENT, judge.SHUTUP_TOKEN, "hey")])
         # The muted thread is skipped until the bot is addressed.
         result, _ = self.gate(event("and then?"), judged_gateway(self.adapter))
         self.assertEqual(result["reason"], gate.REASON_MUTED)
@@ -245,11 +320,66 @@ class ReplyTests(StoreReset):
             self.assertEqual(judge.judged_reply("t1", "[SILENT]"), (True, None))
             self.assertIsNone(result_transforms.transform_llm_output(response_text="NO_REPLY", turn_id="t1"))
         self.assertEqual(gate.read_mutes(self.home / "omh"), {})
+        self.assertEqual([s["marker"] for s in gate.read_skips(self.home / "omh")], [judge.SILENT_TOKEN])
+
+    def test_wrapped_silent_comes_back_clean(self) -> None:
+        for text in ("`[SILENT]`", "```\n[SILENT]\n```", "~~[SILENT]~~", "[SILENT]\n\nnothing for me", "`SILENT`"):
+            with self.subTest(text=text):
+                asyncio.run(self.keep_turn()())
+                self.assertEqual(judge.judged_reply("t1", text), (True, judge.SILENT_TOKEN))
+        self.assertEqual(gate.read_mutes(self.home / "omh"), {})
+
+    def test_a_bare_marker_word_in_an_answer_is_an_answer(self) -> None:
+        for text in ("Silent\n\nThat is the word you wanted.", "It is one word.\n\nSilent"):
+            with self.subTest(text=text):
+                asyncio.run(self.keep_turn()())
+                self.assertEqual(judge.judged_reply("t1", text), (False, None))
+
+    def test_a_token_in_prose_is_scrubbed(self) -> None:
+        asyncio.run(self.keep_turn()())
+        self.assertEqual(judge.judged_reply("t1", "Fine, I said `[SHUTUP]` to it and [ SILENT ] too."),
+                         (False, "Fine, I said to it and too."))
+        asyncio.run(self.keep_turn()())
+        self.assertEqual(result_transforms.transform_llm_output(response_text="use ［SHUTUP］ here", turn_id="t1"),
+                         "use here")
+        self.assertEqual(gate.read_mutes(self.home / "omh"), {})
+
+    def test_tokens_with_no_prose_around_them_stay_silent(self) -> None:
+        for text in ("[SILENT] [SILENT]", "** [SHUTUP] [SILENT] **"):
+            with self.subTest(text=text):
+                asyncio.run(self.keep_turn()())
+                self.assertEqual(judge.judged_reply("t1", text), (True, judge.SILENT_TOKEN))
+
+    def test_a_round_end_restore_cannot_bring_back_a_marker(self) -> None:
+        asyncio.run(self.keep_turn()())
+        with mock.patch.object(result_transforms, "restore_round_end_answer", return_value="[SHUTUP]"):
+            self.assertEqual(result_transforms.transform_llm_output(response_text="sentinel", turn_id="t1"),
+                             judge.SILENT_TOKEN)
+        self.assertEqual(len(gate.read_mutes(self.home / "omh")), 1)
+        asyncio.run(self.keep_turn()())
+        with mock.patch.object(result_transforms, "restore_round_end_answer", return_value="[SILENT]"):
+            self.assertEqual(result_transforms.transform_llm_output(response_text="sentinel", turn_id="t1"),
+                             judge.SILENT_TOKEN)
+
+    def test_the_turns_age_starts_when_it_is_kept(self) -> None:
+        judge.note_room("k", judge.Room(100.0, "on", lambda t: True, lambda: None, None))
+        kept_at = 100.0 + judge.ROOM_TTL_SECONDS - 1
+        self.assertTrue(judge.turn_instruction("t3", "k", now=kept_at))
+        self.assertEqual(judge.judged_reply("t3", "[SHUTUP]", now=kept_at + judge.TURN_TTL_SECONDS - 1),
+                         (True, judge.SILENT_TOKEN))
+
+    def test_the_reaction_needs_a_written_mute(self) -> None:
+        loop = asyncio.new_event_loop()
+        self.addCleanup(loop.close)
+        reacted = []
+        judge._turns["t4"] = judge.Room(1.0, "on", lambda t: False, lambda: reacted.append(1), loop)
+        self.assertEqual(judge.judged_reply("t4", "[SHUTUP]", now=2.0), (True, judge.SILENT_TOKEN))
+        self.assertEqual(reacted, [])
 
     def test_turns_without_the_instruction_or_with_prose_are_not_handled(self) -> None:
         self.assertEqual(judge.judged_reply("never-kept", "[SHUTUP]"), (False, None))
         asyncio.run(self.keep_turn()())
-        self.assertEqual(judge.judged_reply("t1", "[SHUTUP] fine, I'll be quiet"), (False, None))
+        self.assertEqual(judge.judged_reply("t1", "All done, here is your answer."), (False, None))
         # The turn is used once.
         self.assertEqual(judge.judged_reply("t1", "[SHUTUP]"), (False, None))
         self.assertEqual(gate.read_mutes(self.home / "omh"), {})
@@ -266,6 +396,8 @@ class ReplyTests(StoreReset):
             with self.subTest(room=room):
                 judge._turns["t9"] = room._replace(noted=1.0)
                 self.assertEqual(judge.judged_reply("t9", "[SHUTUP]", now=2.0), (True, judge.SILENT_TOKEN))
+                judge._turns["t9"] = room._replace(noted=1.0, log=boom)
+                self.assertEqual(judge.judged_reply("t9", "[SHUTUP]", now=2.0), (True, judge.SILENT_TOKEN))
                 if room.loop is not None:
                     room.loop.close()
 
@@ -274,7 +406,8 @@ class ReplyTests(StoreReset):
         self.addCleanup(loop.close)
         # Without Hermes' scheduling helper the coroutine is closed, never left unawaited.
         pending = self.reactions.add("C1")
-        self.assertFalse(judge._schedule(lambda: pending, loop))
+        with patch_modules({"agent.async_utils": None}):
+            self.assertFalse(judge._schedule(lambda: pending, loop))
         self.assertIsNone(pending.cr_frame)
         self.assertFalse(judge._schedule(lambda: None, loop))
         self.assertFalse(judge._schedule(lambda: self.fail("no loop, no call"), None))

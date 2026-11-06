@@ -272,8 +272,10 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
             "message; read from the delegation ledger and Hermes' state.db, "
             "with the posted moment, run phase, counts and graph fingerprint, "
             "or the skip, written back to the ledger; and, on a turn given the "
-            "group-chat marker instruction, an exact [SHUTUP] replaced by "
-            "[SILENT] with that thread muted and a saluting-face reaction "
+            "group-chat marker instruction, a [SHUTUP] reply replaced by "
+            "[SILENT] with that thread muted and a saluting-face reaction, a "
+            "wrapped silence marker cleaned, a token inside prose removed, and "
+            "one skip-log line per marker "
             "(every other response passes through untouched)"
         ),
     },

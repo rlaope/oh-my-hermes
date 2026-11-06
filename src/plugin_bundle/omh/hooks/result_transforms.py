@@ -225,16 +225,21 @@ def transform_llm_output(**kwargs: Any) -> str | None:
     stored transcript and every caller get that answer byte for byte. This is
     one of two places OMH replaces a reply instead of appending to it.
 
-    First of all, the judged messenger room (`messenger_judgement`): on a turn
-    `pre_llm_call` gave the marker instruction, an exact ``[SHUTUP]`` becomes
-    Hermes' ``[SILENT]`` (the thread muted, the 🫡 scheduled), and a silence
-    marker the model wrote itself is left alone. Nothing is appended to
-    either, or the marker would stop being one and reach the chat.
+    Then the judged messenger room (`messenger_judgement`), on the answer the
+    sentinel restored, which can itself be a marker: on a turn `pre_llm_call`
+    gave the marker instruction, ``[SHUTUP]`` becomes Hermes' ``[SILENT]`` (the
+    thread muted, the 🫡 scheduled), and a silence marker comes back clean.
+    Nothing is appended to either, or the marker would stop being one and reach
+    the chat. A token inside that turn's prose is removed from it.
     """
-    handled, replacement = judged_reply(kwargs.get("turn_id"), kwargs.get("response_text"))
-    if handled:
-        return replacement
     restored = restore_round_end_answer(session_id=kwargs.get("session_id"), response_text=kwargs.get("response_text"))
+    handled, replacement = judged_reply(
+        kwargs.get("turn_id"), restored if restored is not None else kwargs.get("response_text"),
+    )
+    if handled:
+        return replacement if replacement is not None else restored
+    if replacement is not None:
+        restored = replacement
     if restored is not None:
         kwargs = {**kwargs, "response_text": restored}
     honest = honest_stop_output(

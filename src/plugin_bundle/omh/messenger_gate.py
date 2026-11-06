@@ -25,10 +25,11 @@ Order, per message in a Slack or Discord group, channel or thread chat:
    Skipped; never mutes.
 
 In a judged room (`messenger_judgement`: Hermes lets a silence marker stand
-there and streaming is off) the model is the judge instead: steps 1 and R2
-are off, the message opens a turn, and the turn is told to answer
-``[SHUTUP]`` to be quiet or ``[SILENT]`` when it is not for the bot. Steps 2,
-3 and R1 stand.
+there, streaming is off and the profile does not run Codex's app-server) the
+model is the judge instead: steps 1 and R2 are off, the message opens a turn,
+and the turn is told to answer ``[SHUTUP]`` to be quiet or, on a message not
+known to be addressed to the bot, ``[SILENT]`` when it is not for the bot.
+Steps 2, 3 and R1 stand.
 
 Only senders Hermes authorizes are gated. Every skip is appended to a bounded
 log so a wrong skip can be found. Mutes have no expiry. Records live in the
@@ -79,6 +80,7 @@ REASON_QUIET = "omh_messenger_quiet"
 REASON_MUTED = "omh_messenger_muted_thread"
 REASON_OTHER_MENTION = "omh_messenger_addressed_to_other_mention"
 REASON_OTHER_NAME = "omh_messenger_addressed_to_other_name"
+REASON_JUDGED_SILENT = "omh_messenger_judged_silent"
 
 _MENTION = re.compile(r"<@!?([A-Za-z0-9]+)(?:\|[^>]*)?>")
 _QUOTE_OPENERS = frozenset("\"'“”‘’「『«„>")
@@ -657,15 +659,23 @@ def ack_call(adapter: object, event: object, platform: str) -> object | None:
 
 
 def _judged_room_record(omh_home: Path, key: str, adapter: object, event: object, platform: str, mode: str,
-                        tick: float, loop: object) -> Room:
-    """What a turn in a judged room needs if it answers ``[SHUTUP]``: the same mute and 🫡 a quiet word gets."""
+                        tick: float, loop: object, *, addressed: bool) -> Room:
+    """What a turn in a judged room needs if it answers ``[SHUTUP]``: the same mute and 🫡 a quiet word gets.
+
+    Both markers leave one line in the skip log, so a wrong silence can be found.
+    """
     by = str(getattr(getattr(event, "source", None), "user_id", "") or "")
+    text = _text(getattr(event, "text", None))[:SKIP_TEXT_CHARS]
     return Room(
         noted=tick,
         mode=mode,
         mute=lambda muted_ts: write_mute(omh_home, key, {"muted_ts": muted_ts, "by": by, "judged": True}),
         react=lambda: ack_call(adapter, event, platform),
         loop=loop,
+        addressed=addressed,
+        log=lambda marker, ts: append_skip(omh_home, {
+            "ts": ts, "reason": REASON_JUDGED_SILENT, "marker": marker, "key": key, "text": text, "user_id": by,
+        }),
     )
 
 
@@ -696,7 +706,7 @@ def gate_event(event: object, gateway: object, *, hermes_home: Path | None = Non
         str(getattr(source, "chat_id", "") or ""), str(getattr(source, "thread_id", "") or ""),
     )
     mutes = read_mutes(omh_home)
-    judged = judged_room(gateway, source)
+    judged = judged_room(gateway, source, hermes_home)
     decision = decide(message, muted=key in mutes, mode=settings["mode"], judged=judged)
     tick = float(now if now is not None else time.time())
     if decision.action in ("allow", "unmute"):
@@ -704,7 +714,7 @@ def gate_event(event: object, gateway: object, *, hermes_home: Path | None = Non
             write_mute(omh_home, key, None)
         if judged:
             note_room(key, _judged_room_record(omh_home, key, adapter, event, platform, settings["mode"], tick,
-                                               gateway_loop(gateway)))
+                                               gateway_loop(gateway), addressed=decision.action == "unmute"))
         return None, None
     entry = {
         "ts": tick, "reason": decision.reason, "key": key,

@@ -8,16 +8,19 @@ Three seams, all in the gateway process:
    whether the message's room is judged. Hermes must resolve
    `allow_silence: true` for it through its own
    ``GatewayRunner._room_allow_silence`` (Hermes 0.22.6 and later; the method
-   is the capability check, never a version string), and streaming must be off.
+   is the capability check, never a version string), streaming must be off,
+   and the serving profile must not run the Codex app-server runtime, which
+   posts each finished message before the output hook runs.
    A message such a room lets through is noted with `note_room`.
 2. `pre_llm_call` appends `instruction(...)` when the turn's room, read from
    Hermes' session ContextVars, was noted (`turn_instruction`), and keeps the
    turn by its id.
-3. `transform_llm_output` (`judged_reply`) turns an exact ``[SHUTUP]`` from a
+3. `transform_llm_output` (`judged_reply`) turns a ``[SHUTUP]`` reply from a
    kept turn into Hermes' ``[SILENT]``, mutes the thread, and schedules the 🫡
    reaction on the gateway's event loop through Hermes' own
-   ``agent.async_utils.safe_schedule_threadsafe``. A ``[SILENT]`` the model wrote itself
-   goes to Hermes untouched.
+   ``agent.async_utils.safe_schedule_threadsafe``. A ``[SILENT]`` the model wrote
+   itself goes to Hermes, clean. A token inside a sentence stays prose with the
+   token removed, so a raw token never shows.
 
 Everywhere else (no `allow_silence`, an older Hermes, streaming on, a DM)
 nothing is noted and no instruction is sent, so the model is never asked for a
@@ -30,12 +33,14 @@ shared by every copy of this module in the process.
 from __future__ import annotations
 
 import logging
+import re
 import sys
 import threading
 import time
 import types
 import unicodedata
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
 SHUTUP_TOKEN = "[SHUTUP]"
@@ -56,7 +61,13 @@ ROOM_TTL_SECONDS = 15 * 60
 TURN_LIMIT = 256
 TURN_TTL_SECONDS = 60 * 60
 _TOKEN_LENGTH_CAP = 64
-_SHUTUP_FORMS = frozenset({"[SHUTUP]", "[SHUT UP]", "[SHUT_UP]"})
+_SHUTUP_LINE = re.compile(r"\[\s*SHUT[\s_-]*UP\s*\]", re.IGNORECASE)
+_SILENT_LINE = re.compile(r"\[\s*SILENT\s*\]", re.IGNORECASE)
+# A token inside prose: either bracket width, with the code ticks or marks around it.
+_TOKEN_IN_PROSE = re.compile(
+    r"[ \t]*[`~*_]*[\[［]\s*(?:SHUT[\s_-]*UP|SILENT)\s*[\]］][`~*_]*", re.IGNORECASE,
+)
+_CODEX_APP_SERVER = "codex_app_server"
 
 
 class Room(NamedTuple):
@@ -67,6 +78,8 @@ class Room(NamedTuple):
     mute: Callable[[float], object]
     react: Callable[[], object]
     loop: Any
+    addressed: bool = False
+    log: Callable[[str, float], object] | None = None
 
 
 _LOG = logging.getLogger(__name__)
@@ -104,7 +117,31 @@ def streaming_possible(gateway: object) -> bool:
     return getattr(streaming, "globally_enabled", True) is not False
 
 
-def judged_room(gateway: object, source: object) -> bool:
+def posts_before_output_hook(hermes_home: Path | None) -> bool:
+    """Whether the serving profile may run Codex's app-server, read as Hermes reads it.
+
+    That runtime posts a finished message (`_emit_interim_assistant_message`)
+    before `transform_llm_output` fires, so a token would reach the chat. The
+    setting alone decides, whatever the provider or display settings: only a
+    profile that names the runtime can get it. Hermes' loader answers ``{}`` for
+    a config it could not read, which is unknown here and reads as yes.
+    """
+    if hermes_home is None:
+        return True
+    try:
+        from gateway.run import _load_gateway_config
+    except (ImportError, AttributeError):
+        return True
+    config = _load_gateway_config(Path(hermes_home) / "config.yaml")
+    if not isinstance(config, dict) or not config:
+        return True
+    model = config.get("model")
+    if not isinstance(model, dict):
+        return False
+    return any(str(model.get(key) or "").strip().lower() == _CODEX_APP_SERVER for key in ("openai_runtime", "api_mode"))
+
+
+def judged_room(gateway: object, source: object, hermes_home: Path | None) -> bool:
     """Whether the model judges messages in `source`'s room: Hermes lets a silence marker stand there."""
     lookup = getattr(gateway, "_room_allow_silence", None)
     if not callable(lookup) or not callable(getattr(gateway, "_silence_allowed_for_source", None)):
@@ -112,9 +149,11 @@ def judged_room(gateway: object, source: object) -> bool:
     if streaming_possible(gateway):
         return False
     try:
-        return lookup(source) is True
+        if lookup(source) is not True:
+            return False
     except (AttributeError, LookupError, OSError, TypeError, ValueError):
         return False
+    return not posts_before_output_hook(hermes_home)
 
 
 def gateway_loop(gateway: object) -> Any:
@@ -138,9 +177,11 @@ def note_room(key: str, room: Room) -> None:
 # --- the turn -----------------------------------------------------------------------
 
 
-def instruction(mode: str) -> str:
+def instruction(mode: str, addressed: bool = False) -> str:
+    """The turn's instruction. A message the gate knows is addressed to the bot is never offered
+    ``[SILENT]``: a real request must not be dropped. "Be quiet" is still the model's to read."""
     lines = [INSTRUCTION_HEAD, QUIET_LINE]
-    if mode == "on":
+    if mode == "on" and not addressed:
         lines.append(ELSEWHERE_LINE)
     lines.append(CLOSING_LINE)
     return " ".join(lines)
@@ -155,8 +196,9 @@ def turn_instruction(turn_id: object, room_key: str, *, now: float | None = None
         room = _rooms.get(room_key)
         if room is None or tick - room.noted > ROOM_TTL_SECONDS:
             return ""
-        _put(_turns, turn_id, room, TURN_LIMIT)
-    return instruction(room.mode)
+        # The turn's own age starts here: a long queue wait must not shorten it.
+        _put(_turns, turn_id, room._replace(noted=tick), TURN_LIMIT)
+    return instruction(room.mode, room.addressed)
 
 
 def _take_turn(turn_id: object, now: float) -> Room | None:
@@ -172,22 +214,49 @@ def _take_turn(turn_id: object, now: float) -> Room | None:
 # --- the reply ----------------------------------------------------------------------
 
 
-def _canonical(text: str) -> str:
-    stripped = text.strip()
-    start, end = 0, len(stripped)
-    # Stray edge punctuation (`*[SHUTUP]*`, `[SHUTUP].`), never the brackets themselves.
-    while start < end and stripped[start] not in "[]" and unicodedata.category(stripped[start]).startswith("P"):
+def _normalized(text: str) -> str:
+    """NFKC (fullwidth ``［SHUTUP］``) with format characters (zero-width, BOM) dropped."""
+    folded = unicodedata.normalize("NFKC", text)
+    return "".join(c for c in folded if unicodedata.category(c) != "Cf")
+
+
+def _unwrapped(line: str) -> str:
+    """`line` without the marks a model wraps around a token: code ticks, ``~~``, emoji, punctuation.
+
+    Never the square brackets themselves, so a malformed ``[SHUTUP`` stays malformed.
+    """
+    start, end = 0, len(line)
+    while start < end and line[start] not in "[]" and unicodedata.category(line[start])[0] in "PSZC":
         start += 1
-    while end > start and stripped[end - 1] not in "[]" and unicodedata.category(stripped[end - 1]).startswith("P"):
+    while end > start and line[end - 1] not in "[]" and unicodedata.category(line[end - 1])[0] in "PSZC":
         end -= 1
-    return " ".join(stripped[start:end].upper().split())
+    return line[start:end]
+
+
+def _edge_lines(text: str) -> tuple[str, ...]:
+    """The first and last lines that hold anything but wrapping (a code fence's ticks hold nothing)."""
+    lines = [core for core in (_unwrapped(line) for line in text.splitlines()) if core]
+    return (lines[0], lines[-1]) if lines else ()
+
+
+def _line_is(text: object, token: re.Pattern[str]) -> bool:
+    if not isinstance(text, str):
+        return False
+    return any(len(line) <= _TOKEN_LENGTH_CAP and token.fullmatch(line) for line in _edge_lines(_normalized(text)))
 
 
 def is_shutup(text: object) -> bool:
-    """True only when `text` is the whole ``[SHUTUP]`` token; one inside other text is not."""
-    if not isinstance(text, str) or not 0 < len(text.strip()) <= _TOKEN_LENGTH_CAP:
-        return False
-    return _canonical(text) in _SHUTUP_FORMS
+    """True when the reply's first or last line is the ``[SHUTUP]`` token, however it is wrapped."""
+    return _line_is(text, _SHUTUP_LINE)
+
+
+def _is_silent(text: str) -> bool:
+    """A ``[SILENT]`` line at either edge, or a whole reply that is any Hermes marker once unwrapped.
+
+    A bare marker (``SILENT``, ``NO REPLY``) counts only as the whole reply: as one line of an
+    answer it can be an ordinary word.
+    """
+    return _line_is(text, _SILENT_LINE) or _hermes_silence(_unwrapped(_normalized(text)))
 
 
 def _hermes_silence(text: str) -> bool:
@@ -223,20 +292,30 @@ def _schedule(react: Callable[[], object], loop: Any) -> bool:
 def judged_reply(turn_id: object, response_text: object, *, now: float | None = None) -> tuple[bool, str | None]:
     """``(handled, replacement)`` for a turn's final reply.
 
-    `handled` is True only for a kept turn whose reply is a marker: an exact
-    ``[SHUTUP]`` becomes ``[SILENT]`` (the thread muted, the 🫡 scheduled), and
-    a Hermes silence marker the model wrote passes with no replacement. Either
-    way the caller adds nothing to it. Every other reply is not handled.
+    `handled` is True only for a kept turn whose reply is a marker, and the
+    caller then adds nothing to it. ``[SHUTUP]`` becomes ``[SILENT]`` (the
+    thread muted, the 🫡 scheduled once the mute is written). A silence marker
+    is logged and comes back clean: no replacement when Hermes already reads it
+    exactly, ``[SILENT]`` when it was wrapped. A kept turn's prose with a token
+    inside is not handled and comes back with the token removed. Every other
+    reply is ``(False, None)``.
     """
     tick = time.time() if now is None else now
     room = _take_turn(turn_id, tick)
     if room is None or not isinstance(response_text, str):
         return False, None
-    if not is_shutup(response_text):
-        return (True, None) if _hermes_silence(response_text) else (False, None)
+    shutup = is_shutup(response_text)
+    scrubbed = _TOKEN_IN_PROSE.sub("", response_text)
+    # Tokens with nothing else around them (`[SILENT] [SILENT]`) leave no prose to deliver.
+    if not shutup and not _is_silent(response_text) and _unwrapped(_normalized(scrubbed)):
+        return False, (scrubbed if scrubbed != response_text else None)
     try:
-        room.mute(tick)
-        _schedule(room.react, room.loop)
-    except Exception as exc:  # health: allow BLE001 -- the room allows silence; a failed mute or reaction must not send the raw token
-        _LOG.info("omh messenger judgement mute or reaction failed: %s", type(exc).__name__)
+        if room.log is not None:
+            room.log(SHUTUP_TOKEN if shutup else SILENT_TOKEN, tick)
+        if shutup and room.mute(tick):
+            _schedule(room.react, room.loop)
+    except Exception as exc:  # health: allow BLE001 -- the room allows silence; a failed log, mute or reaction must not send the raw token
+        _LOG.info("omh messenger judgement side effect failed: %s", type(exc).__name__)
+    if not shutup and _hermes_silence(response_text):
+        return True, None
     return True, SILENT_TOKEN

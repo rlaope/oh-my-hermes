@@ -3720,10 +3720,17 @@ marker stand, the model decides instead, in any language and any wording:
   the thread, exactly `[SILENT]` when the message is clearly meant for
   someone else, and otherwise answers as it normally would. The instruction
   asks only for a marker; it never changes the bot's voice.
+- A message known to be addressed to the bot (its mention, a reply to it, a
+  call by its name) is not offered `[SILENT]`, so a real request is never
+  dropped. It can still be told to be quiet.
 - `[SHUTUP]` mutes the thread with the 🫡 reaction and no text, the same as a
   quiet word. OMH hands Hermes `[SILENT]` in its place, so the token never
-  reaches the chat. A `[SILENT]` reply is dropped by Hermes; it stays in the
-  transcript.
+  reaches the chat, also when the model wraps it in code ticks or puts it on
+  the first or last line of a reply. A `[SILENT]` reply is dropped by Hermes;
+  it stays in the transcript. A token inside a sentence is removed from the
+  sentence, and the sentence is delivered. Each marker leaves a
+  `omh_messenger_judged_silent` line in the skip log, so a wrong silence can
+  be found.
 - The quiet words and calls by other names (`messenger_other_names`) are off
   there. A message that opens with someone else's mention is still skipped
   before a turn opens, a muted thread stays skipped, and a mention, reply or
@@ -3738,7 +3745,12 @@ A room is judged when all of these hold:
   channel (a Slack channel covers its threads; a Discord thread inherits its
   parent channel).
 - Streaming (`streaming.enabled`) is off, so a raw `[SHUTUP]` can never
-  stream into the chat before OMH replaces it.
+  stream into the chat before OMH replaces it. A multiplexed gateway reads
+  this from the launch profile for every route, as Hermes does.
+- The serving profile does not set `model.openai_runtime` or `model.api_mode`
+  to `codex_app_server`. That runtime posts each finished message before OMH
+  sees it, so such a profile stays on the word-list gate, whatever its display
+  settings, and so does a config OMH cannot read.
 
 To turn it on for a channel, add this to that profile's `config.yaml` and
 restart the gateway. OMH never writes Hermes' config.
@@ -3752,6 +3764,11 @@ platforms:
 ```
 
 Each channel needs its own entry: the keys are exact ids, with no wildcard. A
+Slack thread is covered by its channel's entry. A Discord thread inherits its
+parent channel only when it has no entry of its own: an entry that sets only
+`model:` stops the lookup, so repeat `allow_silence` there. A top-level
+`slack:` or `discord:` block's `channel_overrides` shadows the
+`platforms.<platform>` form, and `display.platforms` is not read at all. A
 channel id is in the channel's link (Slack: Copy link, the part starting with
 `C`; Discord: Developer Mode, Copy Channel ID). Any other room keeps the
 word-list gate and gets no instruction, because there Hermes answers a bare
@@ -3797,7 +3814,11 @@ characters of each skipped message, on this machine only, so a wrong skip can
 be found.
 
 Limits: the gate runs only where Hermes loads OMH's plugin in the gateway
-process. Discord messages Hermes batches into one event are judged as one
+process. A gateway in proxy mode runs its turns elsewhere, so a judged room
+there gets no instruction. A message that waits in a busy session's queue for
+more than 15 minutes also gets none, and a 🫡 lands on the thread's newest
+message. A profile switched to the Codex app-server runtime keeps any agent it
+already built until the gateway restarts. Discord messages Hermes batches into one event are judged as one
 message, so a quiet word batched with other text does not mute. The 🫡 goes
 through the adapter's private reaction method and follows its reactions
 setting.
