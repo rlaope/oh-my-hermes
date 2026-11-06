@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "12de7702ed50a83c4f484172a76542da2c0409ed1f381b8ac1d59ed6acdda29e",
+  "catalog_revision": "04fe18a03969a73435b632d96df93a204972b8c1a8c88247a84750a5cd4aec78",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -135,7 +135,7 @@
     "omh-image-cards/SKILL.md": "ee740154aa3459727914a038c8772667800c12a28a6cf969ceaa52ce0d45ebbb",
     "omh-inference-serving/SKILL.md": "37d283b2718b6e6d726e39a84e280af8e4844ea48b1aff2b75163d73abdb29bb",
     "omh-inference-serving/references/serving-bench.md": "31f452f33561faf2cd90edd1cf30f33bc74c14bc13c81d77a087db5392d56aa0",
-    "omh-inference-serving/references/serving-runbooks.md": "0f169625bf2133332da66c6882d693b4a5d2a5aa6a5e6c4043b9c0efc0f8a355",
+    "omh-inference-serving/references/serving-runbooks.md": "f6bed20ab8ac4dd4bc880277f7b49935f86e992ee7974b08e6f6bcc5413d3961",
     "omh-instinct-ledger/SKILL.md": "04ae9be3a58be5af721e5e1a342ae192fe33cbc83a0f300a4393ff6fdd16450e",
     "omh-internal-audit/SKILL.md": "53acbbd3ac500cfc7da65950d2b14ce03297f3ca421f73a5ce41c9af7ba90429",
     "omh-internal-audit/references/control-audit-method.md": "2b651418c2a5bdfbd659ebbff7c08e3670443e198e76ddd9d215d5cee821deaa",
@@ -149,7 +149,7 @@
     "omh-live-incident-response/references/incident-command-method.md": "16c72e5d0ef4ae68abae3d936a984472b6ccabe9c177b3e091ac4923e8df0fd0",
     "omh-live-info/SKILL.md": "4e2b9d22572702d42ce437c03ed9ddbb5f6dfeec90e5943e80208ba5c85f24a5",
     "omh-llm-app-dev/SKILL.md": "42b212f44a534f9255ae52cadadd053db7c70ba16f9bacd78596063691a019aa",
-    "omh-llm-app-dev/references/build-rails.md": "326a558b99017184d4baf6307e467bf77d9f8ee3658cf28301414ea9c42699da",
+    "omh-llm-app-dev/references/build-rails.md": "baa818be333de68d8688eb3ddc199e4e92867ffd2c188bdf00308e84b7cfee47",
     "omh-llm-app-dev/references/eval-harness.md": "f1689d2068219fdaf128071257585051ea2affc424a68923dcb010d324ab3678",
     "omh-llm-app-dev/references/public-board.md": "e69b890be7da4d91ce612722b180b229821db714bd72aa28a55db013364e7cca",
     "omh-llm-app-dev/references/stateful-contracts.md": "7bda4e79b8c60f406d3a4e7ea9d3e4f7c69d6ee80a23416678be678d6dd95816",
@@ -165,7 +165,7 @@
     "omh-meeting-brief/SKILL.md": "22f8df2abf8de20de398b7415615a78e93b525b9f71613c4a201e2045bb7dcd9",
     "omh-memory-new/SKILL.md": "00fd59c0e5e425f45e3c87ba2a5a1f5d33e97a230f9b25010a513878d326f392",
     "omh-mobile-release/SKILL.md": "de2625b0d225e1178feb2fd84496ffca79e72675e4fff1db8987499515a4272a",
-    "omh-mobile-release/references/mobile-release-method.md": "09961e6ca17bd87977762b30c207094a725aa5761ff331b0711e69fd147a0a4d",
+    "omh-mobile-release/references/mobile-release-method.md": "830153825e1e2127914003459f931c403c3e4da17f501f258b269905550c00b3",
     "omh-model-finetuning/SKILL.md": "84df7bec879838285888b02c076ff86606dba05ecae76f5fb42d35bc3db6638b",
     "omh-model-finetuning/references/finetuning-method.md": "bc91a5e192e20e4f3a0f61404f037288ce5a570e41bb8137ac3fd3b115567bbc",
     "omh-molecular-docking/SKILL.md": "7b0480991c54046889166cbe44c2d6c7a456bdeaad314f93c1660e7498a24549",

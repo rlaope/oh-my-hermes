@@ -19,7 +19,7 @@ GGUF ladder for llama.cpp, where `Q4_K_M` is the default, `Q5_K_M`/`Q6_K`/
 not yet a verdict: run the user's held-out eval on the unquantized model and
 on the quantized one and report the delta first, and name the calibration data
 for AWQ and GPTQ. FP8 weights and activations need Hopper- or Ada-class
-hardware; on A100 use a weight-only format. Tensor parallel size must divide
+hardware; on A100 use a weight-only format or INT8. Tensor parallel size must divide
 the model's attention head count and either divide its KV head count or be a
 multiple of it (8 KV heads at TP 16 is valid), and cannot exceed the GPUs that
 exist; use pipeline parallelism when the GPU count does not fit.
