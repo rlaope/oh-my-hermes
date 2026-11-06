@@ -43,8 +43,8 @@ Bad example:
 
 ## Completion Checklist
 
-- Outcomes, must-haves and trainable skills are separate; every criterion has anchors and states the outcome it predicts; interviewers score before the debrief; no candidate recommendation without interview evidence; no ATS, calendar or HRIS action is claimed.
-- A scored screen gets a job-relatedness and adverse-impact check (e.g. the four-fifths rule); jurisdiction questions go to `omh-legal-compliance-review`.
+- Outcomes, must-haves and trainable skills are separate; every criterion has anchors and states the outcome it predicts; every candidate gets the same core questions; interviewers score before the debrief, and the debrief separates evidence from impression; no candidate recommendation without interview evidence; no ATS, calendar or HRIS action is claimed.
+- Where selection-rate data by group exists, compare the rates; in the US the four-fifths rule (29 CFR 1607.4(D)) is an enforcement rule of thumb, not a safe harbour. With small numbers or no such data, mark the check not_observed and route the jurisdiction question to `omh-legal-compliance-review`.
 
 ## Recovery Notes
 
@@ -98,7 +98,7 @@ Safety rules:
 
 - Keep protected characteristics and missing interview evidence out of unsupported candidate recommendations.
 - Do not claim HRIS, ATS, outreach, interview, or employment-status actions occurred.
-- Draft no questions on protected traits or their proxies (age, family status, health).
+- Draft no questions on protected traits or their proxies (age, family status, health, origin), and check the local rule on what a form or question may ask (for example Korea's recruitment fairness act, Art. 4-3, bars requiring physical conditions, birthplace, marital status, property or family members' education, job or property on screening documents); say why and offer a job-related substitute.
 
 ## Runtime Evidence
 

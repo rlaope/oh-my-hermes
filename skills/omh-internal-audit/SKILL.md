@@ -111,7 +111,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- control_under_test/v1 names the control's objective, owner, frequency, and risk, and the population with its period, source, and completeness check
+- control_under_test/v1 names the control's objective, owner, frequency, and risk, the design result (would it prevent or detect the risk), and the population with its period, source, and completeness check
 - sample_design/v1 states the sampling method and derives the sample size from the control's frequency and the stated confidence and tolerable deviation rate, with a selection record that lets someone draw the same items again
 - evidence_request/v1 names, per sample item, the document, log, or approval that proves the control operated and who provides it, and separates evidence obtained from evidence described
 - reperformance_record/v1 records, per sample item, the independent re-performance of the control and its result -- operated, deviation, or not testable -- with the evidence reference
@@ -122,7 +122,7 @@ Safety rules:
 - Derive every severity grade from stated criteria -- likelihood, magnitude against a stated materiality, and compensating controls; with a criterion missing, withhold the grade rather than assert one.
 - Check the population's completeness before sampling from it; a sample from an incomplete population says nothing about the items left out.
 - Record evidence obtained, not evidence described; a control owner's explanation is inquiry, not proof the control operated.
-- Never drop a deviation found in the sample because it was explained; record it and evaluate it against the tolerable rate.
+- Never drop a deviation found in the sample because it was explained; record it, and judge the sample by its upper deviation limit against the tolerable rate, not by the sample rate.
 - OMH reads no ledger, tests no control, and signs off nothing; every population, sample, and result comes from observed output or is marked unverified.
 
 ## Runtime Evidence

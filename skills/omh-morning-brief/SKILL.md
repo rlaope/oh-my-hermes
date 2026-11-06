@@ -23,7 +23,7 @@ This is a Hermes-native `morning-brief` workflow skill.
 ## Do Not Use When
 
 - The user wants Hermes to check their email or calendar right now rather than set up the connection.
-- The connection is already configured and the user only wants today's brief, not a setup walkthrough; read and summarise it instead.
+- The connection is already configured and the user only wants today's brief, not a setup walkthrough; read mail and calendar with the connected tools and summarise them.
 - The request needs a repository code change rather than a local MCP config edit.
 
 ## Examples
@@ -44,7 +44,7 @@ Bad example:
 
 - If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
 - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
-- The connection is confirmed read and draft-only before the brief is reported ready: the exposed tool list holds no send operation (observed), else the check stays not_observed.
+- The send boundary is confirmed before the brief is reported ready: the include list and registered tools hold no send operation (observed), and the report says whether the credential itself can send; else the check stays not_observed.
 - With neither mail nor calendar connected the status is blocked, not complete.
 
 ## Recovery Notes
@@ -79,8 +79,8 @@ Quality bar:
 - Guide: use Hermes-native secure entry or user-side OAuth/token setup, never chat secrets.
 - Diff-approved apply: show the config or `.env` diff with redacted placeholders; apply only after the user explicitly approves.
 - Verify: confirm applicable items using non-secret metadata, never secret values.
-- Keep the read/draft-only access boundary — never enable Send permission — as a hard constraint on every apply step, not an optional recommendation.
-- When `manage_connections` is in your tool list or tool_search finds it, connect mail and calendar through it rather than a hand-written MCP config diff (`connect` for a hosted account, `install` or `authorize` for a catalog MCP server), and take each app's answer as given: `skipped` means continue with the surface that is connected or ask in chat, never calling it again on your own; when its result does not name the granted access, the read-and-draft-only check stays `not_observed` until the user confirms the account's access.
+- Keep the read/draft-only access boundary — never enable Send permission — as a hard constraint on every apply step, not an optional recommendation; on Gmail that means hiding the send tool, because no drafting scope is free of send.
+- When `manage_connections` is in your tool list or tool_search finds it, connect mail and calendar through it rather than a hand-written MCP config diff (`connect` for a hosted account, `install` or `authorize` for a catalog MCP server), and take each app's answer as given: `skipped` means continue with the surface that is connected or ask in chat, never calling it again on your own; when its result does not name the granted access, the send-boundary check stays `not_observed` until the include list is read.
 
 Handoff policy:
 
@@ -105,7 +105,7 @@ Safety rules:
 - Configure mail and calendar MCP access as read and draft only; never enable Send permission, even if the user asks — drafts stay for the user to send themselves.
 - Use Hermes-native secure entry or user-side OAuth/app-password setup, never chat; disclose authorized storage without exposing secrets.
 - Do not treat a prepared connection as an observed brief; only report a brief after the connection is verified.
-- Gmail cannot enforce draft-only by OAuth scope (every scope that creates drafts also sends); enforce it with the MCP server's tool allow-list: expose only read and create-draft tools and take their names as evidence, else request `gmail.readonly` alone. Microsoft 365: no `Mail.Send`.
+- A draft-capable Gmail credential can also send (every scope that creates drafts sends; `gmail.compose` is "Manage drafts and send emails"); say so before consent. The boundary is the MCP server's `mcp_servers.<name>.tools.include` list with read and create-draft tools only. Report "send tool not exposed, credential can send", never "read and draft-only". Evidence is the include list plus the tools the session registers, not `hermes mcp test`, which lists everything the server offers. Only `gmail.readonly` earns "cannot send", and it has no drafts. Microsoft 365: `Mail.ReadWrite` without `Mail.Send`, `Mail.Send.Shared` or `SMTP.Send`, and it can also delete.
 - The bundled `google-workspace` OAuth setup requests `gmail.send` and `gmail.modify` on every run, and its setup script accepts no `--services` flag to narrow the request, though that skill's own instructions show one; Google's consent screen lets the user untick a permission and the script then keeps only what was granted. Never apply that path as this skill's connection, and when the user connects it themselves, report `gmail.send` and `gmail.modify` as granted unless the setup script's `--check` lists them among the missing scopes, never as read-and-draft-only on the strength of the request.
 
 ## Runtime Evidence

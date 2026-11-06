@@ -57,7 +57,7 @@ DOCUMENT_QA_RULE = (
 # would point the model at a result that cannot show the rung.
 DOCUMENT_RUNGS_RULE = (
     "On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; "
-    "`microsoft-office` from v0.23; same scripts): PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count "
+    "`microsoft-office` from v0.22.6; same scripts): PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count "
     "matching `slide_count`, since it lists every image already in that directory); `pdf` gives `page_count` "
     "(`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); Excel gives `sheet_schema` (`xlsx_read.py "
     "--sheets`) and `formula_recalculation` (`xlsx_recalc.py --out <copy>`, since without `--out` it replaces the "
@@ -88,7 +88,7 @@ NATIVE_CLAUSES = {
         "the file.",
     ),
     "report-package": (
-        "On Hermes, that tool can be the bundled PowerPoint skill (`powerpoint`; `microsoft-office` from v0.23), "
+        "On Hermes, that tool can be the bundled PowerPoint skill (`powerpoint`; `microsoft-office` from v0.22.6), "
         "and a deck it builds counts as generated from "
         "its read-back (`pptx_read.py --outline`).",
         # The shared document rule and the `powerpoint` half of the rungs rule,

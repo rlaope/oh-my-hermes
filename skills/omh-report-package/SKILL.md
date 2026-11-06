@@ -79,7 +79,7 @@ Quality bar:
 - Keep report packaging independent from reliability review unless explicitly requested.
 - Open with the conclusion and any decision requested; show each metric against target or prior value or mark it no baseline.
 - Export only Markdown/JSON outlines unless a separate presentation tool produces a binary deck.
-- On Hermes, that tool can be the bundled PowerPoint skill (`powerpoint`; `microsoft-office` from v0.23), and a deck it builds counts as generated from its read-back (`pptx_read.py --outline`).
+- On Hermes, that tool can be the bundled PowerPoint skill (`powerpoint`; `microsoft-office` from v0.22.6), and a deck it builds counts as generated from its read-back (`pptx_read.py --outline`).
 - On Hermes, a rung taken from a bundled document skill is observed only from that skill's result for that exact file, judged by its field, not its exit code: `"rendered": false` or `"recalculated": false` exits 0 yet leaves that rung not observed, blocked on the missing tools it names; other observed evidence for a rung still counts.
 - On Hermes, PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count matching `slide_count`, since it lists every image already in that directory). Images that exist are not a render pass until each one has been inspected.
 

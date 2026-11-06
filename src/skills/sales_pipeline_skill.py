@@ -151,7 +151,7 @@ DEFINITION = SkillDefinition(
                 "target_source",
                 "coverage_ratio",
             ),
-            "Keep stage, supplied seller category or probability, model-derived scenario range, and observed buyer commitment as separate states: stage alone never creates a probability or commitment, a probability-weighted total is a scenario and not a promise, and calibration_status is `unavailable` unless matching prior snapshots and observed outcomes were supplied; coverage_ratio is pipeline over the supplied target and is `unavailable` when no target was supplied, never a benchmark multiple.",
+            "Keep stage, supplied seller category or probability, model-derived scenario range, and observed buyer commitment as separate states: stage alone never creates a probability or commitment, a probability-weighted total is a scenario and not a promise, and calibration_status is `unavailable` unless matching prior snapshots and observed outcomes were supplied; coverage_ratio is open pipeline over the target still to close (the target minus closed-won in the period) and is `unavailable` when no target was supplied, never a benchmark multiple.",
         ),
         ProcedureCheck(
             "sales_outcome_learning_check",

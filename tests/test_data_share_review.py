@@ -96,8 +96,9 @@ class DataShareReviewCatalogTests(unittest.TestCase):
         record = next(line for line in mine.artifact_expectations if line.startswith("share_record/v1"))
         self.assertEqual(
             record,
-            "share_record/v1 is metadata only -- destination, date, fields shipped, row count, and the sha256 digest "
-            "of the shipped file -- and holds no value from it",
+            "share_record/v1 is metadata only -- destination, date, fields shipped, row count, the sha256 digest of "
+            "the shipped file, and its data_state (pseudonymized, still personal data, when identifiers were "
+            "pseudonymized) -- and holds no value from it",
         )
 
     def test_rows_are_read_only_when_shape_counts_leave_a_field_unclear(self) -> None:

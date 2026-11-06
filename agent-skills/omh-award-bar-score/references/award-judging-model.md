@@ -119,7 +119,7 @@ The budgets stay authoritative. When an innovation move breaks one:
 
 Awwwards publishes four criteria instead (awwwards.com/about-evaluation, read
 2026-11-07): Design 40%, Usability 30%, Creativity 20%, Content 10%, with
-honorable mentions at 6.5 or more from the jury. Score those four axes against
+honorable mentions at 6.5 or more from the jury and the Developer Award above 7. Site of the Day has no published number (only "the sites scored the highest by the jury"), so report the distance from 6.5 and make no Site of the Day claim. Score those four axes against
 rendered evidence the same way, and never mix them with the CSSDA axes or
 thresholds above. For any other body, ask for its published rules URL and score
 only the axes it publishes.
@@ -136,7 +136,7 @@ survey; treat a single row as an example and never as a rule.
 ## Attribution
 
 The judging axes, weights, tiers, and thresholds are factual reporting of CSS
-Design Awards' published rules, read 2026-09-03. Per-axis scores are public
+Design Awards' and Awwwards' published rules, read 2026-11-07 (the sampled scores and stack rows date from 2026-09-03). Per-axis scores are public
 figures from entry pages; stack rows are measured from publicly served assets
 on the same date. No page text, markup, or asset is reproduced here. OMH is
 not affiliated with, endorsed by, or sponsored by CSS Design Awards, any award

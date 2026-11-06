@@ -12,7 +12,7 @@ A field's class comes from its content, not its name: a `notes` column holds ema
 | quasi-identifier | birth date, postcode, age, gender, job title, employer, exact timestamps, a rare value | generalize (year, region, band) or drop |
 | secret | API key, token, password, session cookie, private key, connection string with credentials | drop; a secret found in the data is also a leak to rotate |
 | free text | notes, comments, ticket bodies, transcript excerpts, log messages, URLs with query strings | drop, or keep only after the scan counts it clean |
-| sensitive category | health, biometric, genetic, political, union, religion, sexual orientation, criminal record | drop or aggregate; count groups smaller than k within these fields |
+| sensitive category | health, biometric, genetic, racial or ethnic origin, political opinion, philosophical or religious belief, union membership, sex life or sexual orientation, criminal record | drop or aggregate; count groups smaller than k within these fields |
 | not personal | product id, count, price, status code | keep when the destination needs it |
 
 ## 2. Minimization order
@@ -34,7 +34,7 @@ Run it on the exact file that leaves, after the last transform, and print counts
 
 | Class | What to count |
 | --- | --- |
-| direct identifier | email shapes; phone number shapes; card numbers that pass the Luhn check; IP addresses; national-id shapes for the countries in scope, each with its check digit where one exists (Korean resident registration number: 6 digits, optional hyphen, 7 digits; US SSN shape; passport shapes the user names); bank account shapes and mobile formats for the countries in scope (for Korea `01[016789]` with or without hyphens); and each original value of a dropped or pseudonymized identifier column, matched exactly in the output |
+| direct identifier | email shapes; phone number shapes; card numbers that pass the Luhn check; IP addresses; national-id shapes for the countries in scope: Korean resident registration number `(?<!\d)\d{6}[ \-\u2013]?[1-8]\d{6}(?!\d)` with the first six digits a valid date, a masked tail `(?<!\d)\d{6}[ \-\u2013]?[1-8][*xX#]{6}(?!\d)` counted too, and never the check digit as a filter (numbers issued since October 2020 reportedly carry a random tail, so the check digit may raise confidence and must never drop a hit); US SSN `(?<!\d)(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?!\d)`; passport shapes the user names; matches that fail the date or gender test but sit between digit boundaries (timestamps, barcodes) are reported as a separate shape-only count and accepted by name, never ignored; bank account shapes for the countries in scope; mobile numbers `(?<!\d)(?:\+?82[ .\-]?0?|0)1[016789][ .\-]?\d{3,4}[ .\-]?\d{4}(?!\d)` for Korea (national or `+82` form, space, hyphen or dot separators); and each original value of a dropped or pseudonymized identifier column, matched exactly in the output |
 | secret | vendor key prefixes, bearer tokens, private key headers, password assignments, connection strings with credentials |
 | quasi-identifier | rows whose combination of kept quasi-identifiers is shared by fewer than k rows; k comes from the team, and 5 is a common starting point |
 | sensitive category | groups of rows smaller than k within the kept sensitive fields |
@@ -44,7 +44,7 @@ The original-value check is the one a pattern scan cannot replace: a pseudonymiz
 
 A name-recognition tool may add candidates; its hits are leads for the user to accept, and a clean name result reads `checked against N known names`, never `no names`. Confirm the countries in scope before the scan.
 
-Verdict: `redacted` when every class counts zero, or each remaining hit is named and accepted by the user; `not_observed` when no scan ran or the digest of the scanned bytes differs from the share record's; otherwise not redacted, with the counts. `redacted` means the scan counted zero in each class, not that the data is anonymous: a file with pseudonymized identifiers or kept quasi-identifiers is `pseudonymized`, still personal data, and the lawful-basis question stays with `omh-legal-compliance-review`.
+Verdict: `redacted` when every class counts zero, or each remaining hit is named and accepted by the user; `not_observed` when no scan ran or the digest of the scanned bytes differs from the share record's; otherwise not redacted, with the counts. The verdict says what the scan counted, not that the data is anonymous. Record a separate `data_state` on the share record: `pseudonymized, still personal data` when identifiers were pseudonymized or quasi-identifiers kept, and say so even when the verdict is `redacted`; the lawful-basis question stays with `omh-legal-compliance-review`.
 
 ## 5. Share record
 

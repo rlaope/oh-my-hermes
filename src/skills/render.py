@@ -2896,9 +2896,11 @@ conversation. General media editing belongs to the media workflows.
 
 Prefer Hermes' normal `MEDIA:/absolute/path` delivery. If the native response
 path cannot deliver the file and the user still wants direct Buzz delivery,
-run the Buzz CLI as Hermes does: `buzz messages send --channel <observed
-channel id> --file <absolute path> --content -`, with `BUZZ_RELAY_URL` and
-`BUZZ_PRIVATE_KEY` in the subprocess environment only. Confirm the flags with
+run the Buzz CLI as Hermes' adapter does: the configured CLI path,
+`messages send --channel <observed channel id> --file <absolute path>
+--content -`, with `BUZZ_RELAY_URL`, `BUZZ_PRIVATE_KEY` and, when set,
+`BUZZ_AUTH_TAG` in the subprocess environment only. `--content -` reads the
+caption from stdin; give it the caption or an empty stdin. Confirm the flags with
 `buzz messages send --help` first and stop if they differ.
 
 Treat the receipt as valid delivery evidence only when it parses as an object,
@@ -2945,7 +2947,8 @@ def _self_host_reference() -> str:
     return """# Self-hosted Buzz Relay
 
 Use this lane to inspect or guide a Buzz relay deployed with the official
-Compose topology. Guide, don't drive: present state-changing commands and let
+Compose topology (the Compose file in the relay's own repository; if it cannot
+be opened, mark the topology `not_observed` and ask for the file). Guide, don't drive: present state-changing commands and let
 the user approve and run them unless execution was explicitly requested.
 
 ## Read-only Failure Tree
@@ -4579,11 +4582,11 @@ A commonly used starting point for a control expected to operate without deviati
 
 Raise the size for a higher reliance, a lower tolerable deviation rate, or a control with a history of exceptions. An automated control tested once, with its change management tested, is the usual exception to frequency sizing.
 
-When the firm gives a confidence level and a tolerable deviation rate and expects no deviations, the attribute-sampling size is ln(1 - confidence) / ln(1 - tolerable rate), rounded up (95% and 5% gives 59; 90% and 10% gives 22). Otherwise the table is a rule of thumb; say so.
+When the firm gives a confidence level and a tolerable deviation rate and expects no deviations, the attribute-sampling size is ln(1 - confidence) / ln(1 - tolerable rate), rounded up (95% and 5% gives 59; 90% and 10% gives 22), and never above the population (a quarterly control has 4 items, so test all 4); the formula assumes a large population. Otherwise the table is a rule of thumb; say so.
 
 ## 2b. Deviations
 
-For a control sampled at 25 items or fewer, one unexplained deviation means the control did not operate effectively for that population unless the firm's methodology allows a stated extended sample; record which rule applied. For a larger statistical sample compare the deviation rate with the tolerable rate. Evaluate compensating controls only after the deviation is recorded as a deviation.
+In a sample sized to expect no deviations, any deviation, explained or not, means the control did not operate effectively for that population, unless the firm's methodology allows a stated extended sample; record which rule applied. For a sample designed with expected deviations, compare the upper deviation limit at the stated confidence, not the sample rate, with the tolerable rate (1 deviation in 59 gives 7.8% at 95%, which fails a 5% tolerance although the sample rate is 1.7%). Evaluate compensating controls only after the deviation is recorded as a deviation.
 
 ## 3. Evidence, strongest first
 
@@ -4638,10 +4641,29 @@ def spend_gate_reference_templates() -> list[SkillReferenceTemplate]:
     ]
 
 
+KR_RRN_PATTERN = r"(?<!\d)\d{6}[ \-\u2013]?[1-8]\d{6}(?!\d)"
+KR_RRN_MASKED_PATTERN = r"(?<!\d)\d{6}[ \-\u2013]?[1-8][*xX#]{6}(?!\d)"
+US_SSN_PATTERN = r"(?<!\d)(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?!\d)"
+KR_MOBILE_PATTERN = r"(?<!\d)(?:\+?82[ .\-]?0?|0)1[016789][ .\-]?\d{3,4}[ .\-]?\d{4}(?!\d)"
+
+
+def _fill_scan_patterns(text: str) -> str:
+    """Write the tested scan patterns into the reference; `tests/test_data_share_review.py` runs them."""
+
+    for key, pattern in (
+        ("KR_RRN_MASKED", KR_RRN_MASKED_PATTERN),
+        ("KR_RRN", KR_RRN_PATTERN),
+        ("US_SSN", US_SSN_PATTERN),
+        ("KR_MOBILE", KR_MOBILE_PATTERN),
+    ):
+        text = text.replace("{{" + key + "}}", pattern)
+    return text
+
+
 def _data_share_review_reference() -> str:
     """Field classes, the minimization order, pseudonymization, the per-class residual scan, and the share record."""
 
-    return """# Data Share Method
+    return _fill_scan_patterns("""# Data Share Method
 
 Load this while preparing a file to leave the team. OMH prepares; the scan runs where the user or the session's tools run, and the file's verdict stays `not_observed` until its scan counts are observed. Where a team or regulator rule is stricter than this page, that rule governs; say which one was used.
 
@@ -4655,7 +4677,7 @@ A field's class comes from its content, not its name: a `notes` column holds ema
 | quasi-identifier | birth date, postcode, age, gender, job title, employer, exact timestamps, a rare value | generalize (year, region, band) or drop |
 | secret | API key, token, password, session cookie, private key, connection string with credentials | drop; a secret found in the data is also a leak to rotate |
 | free text | notes, comments, ticket bodies, transcript excerpts, log messages, URLs with query strings | drop, or keep only after the scan counts it clean |
-| sensitive category | health, biometric, genetic, political, union, religion, sexual orientation, criminal record | drop or aggregate; count groups smaller than k within these fields |
+| sensitive category | health, biometric, genetic, racial or ethnic origin, political opinion, philosophical or religious belief, union membership, sex life or sexual orientation, criminal record | drop or aggregate; count groups smaller than k within these fields |
 | not personal | product id, count, price, status code | keep when the destination needs it |
 
 ## 2. Minimization order
@@ -4677,7 +4699,7 @@ Run it on the exact file that leaves, after the last transform, and print counts
 
 | Class | What to count |
 | --- | --- |
-| direct identifier | email shapes; phone number shapes; card numbers that pass the Luhn check; IP addresses; national-id shapes for the countries in scope, each with its check digit where one exists (Korean resident registration number: 6 digits, optional hyphen, 7 digits; US SSN shape; passport shapes the user names); bank account shapes and mobile formats for the countries in scope (for Korea `01[016789]` with or without hyphens); and each original value of a dropped or pseudonymized identifier column, matched exactly in the output |
+| direct identifier | email shapes; phone number shapes; card numbers that pass the Luhn check; IP addresses; national-id shapes for the countries in scope: Korean resident registration number `{{KR_RRN}}` with the first six digits a valid date, a masked tail `{{KR_RRN_MASKED}}` counted too, and never the check digit as a filter (numbers issued since October 2020 reportedly carry a random tail, so the check digit may raise confidence and must never drop a hit); US SSN `{{US_SSN}}`; passport shapes the user names; matches that fail the date or gender test but sit between digit boundaries (timestamps, barcodes) are reported as a separate shape-only count and accepted by name, never ignored; bank account shapes for the countries in scope; mobile numbers `{{KR_MOBILE}}` for Korea (national or `+82` form, space, hyphen or dot separators); and each original value of a dropped or pseudonymized identifier column, matched exactly in the output |
 | secret | vendor key prefixes, bearer tokens, private key headers, password assignments, connection strings with credentials |
 | quasi-identifier | rows whose combination of kept quasi-identifiers is shared by fewer than k rows; k comes from the team, and 5 is a common starting point |
 | sensitive category | groups of rows smaller than k within the kept sensitive fields |
@@ -4687,7 +4709,7 @@ The original-value check is the one a pattern scan cannot replace: a pseudonymiz
 
 A name-recognition tool may add candidates; its hits are leads for the user to accept, and a clean name result reads `checked against N known names`, never `no names`. Confirm the countries in scope before the scan.
 
-Verdict: `redacted` when every class counts zero, or each remaining hit is named and accepted by the user; `not_observed` when no scan ran or the digest of the scanned bytes differs from the share record's; otherwise not redacted, with the counts. `redacted` means the scan counted zero in each class, not that the data is anonymous: a file with pseudonymized identifiers or kept quasi-identifiers is `pseudonymized`, still personal data, and the lawful-basis question stays with `legal-compliance-review`.
+Verdict: `redacted` when every class counts zero, or each remaining hit is named and accepted by the user; `not_observed` when no scan ran or the digest of the scanned bytes differs from the share record's; otherwise not redacted, with the counts. The verdict says what the scan counted, not that the data is anonymous. Record a separate `data_state` on the share record: `pseudonymized, still personal data` when identifiers were pseudonymized or quasi-identifiers kept, and say so even when the verdict is `redacted`; the lawful-basis question stays with `legal-compliance-review`.
 
 ## 5. Share record
 
@@ -4699,7 +4721,7 @@ Destination, date, fields shipped, row count, the sha256 digest of the shipped f
 - `security.redact_secrets` (on by default) masks secret-shaped strings in tool output before they enter the session and its logs.
 
 Neither edits a file on disk or a file that leaves, so neither replaces the scan in section 4.
-"""
+""")
 
 
 def _spend_gate_reference() -> str:
@@ -13581,7 +13603,7 @@ The budgets stay authoritative. When an innovation move breaks one:
 
 Awwwards publishes four criteria instead (awwwards.com/about-evaluation, read
 2026-11-07): Design 40%, Usability 30%, Creativity 20%, Content 10%, with
-honorable mentions at 6.5 or more from the jury. Score those four axes against
+honorable mentions at 6.5 or more from the jury and the Developer Award above 7. Site of the Day has no published number (only "the sites scored the highest by the jury"), so report the distance from 6.5 and make no Site of the Day claim. Score those four axes against
 rendered evidence the same way, and never mix them with the CSSDA axes or
 thresholds above. For any other body, ask for its published rules URL and score
 only the axes it publishes.
@@ -13598,7 +13620,7 @@ survey; treat a single row as an example and never as a rule.
 ## Attribution
 
 The judging axes, weights, tiers, and thresholds are factual reporting of CSS
-Design Awards' published rules, read 2026-09-03. Per-axis scores are public
+Design Awards' and Awwwards' published rules, read 2026-11-07 (the sampled scores and stack rows date from 2026-09-03). Per-axis scores are public
 figures from entry pages; stack rows are measured from publicly served assets
 on the same date. No page text, markup, or asset is reproduced here. OMH is
 not affiliated with, endorsed by, or sponsored by CSS Design Awards, any award

@@ -420,7 +420,7 @@ ENGINE_CLOSING_BRIEF_RULE = (
 
 # Hermes bundles the document producers (`skills/productivity/{powerpoint,pdf,
 # xlsx,docx}` at tag v2026.9.7 and at upstream main 63d0b94120, folded into
-# `skills/productivity/microsoft-office` from v0.23 with the same script names). Their
+# `skills/productivity/microsoft-office` from v0.22.6 with the same script names). Their
 # render and recalculation scripts exit 0 when the renderer is absent and say
 # so only in a result field, so the exit code is not the rung. The rung names
 # are `FORMAT_QA_LADDER`'s in `src/workflows/materials.py`. Composed into the
@@ -442,7 +442,7 @@ DOCUMENT_PRODUCER_POWERPOINT_RUNGS = (
 )
 DOCUMENT_PRODUCER_IMAGES_INSPECTED = "Images that exist are not a render pass until each one has been inspected"
 DOCUMENT_PRODUCER_RUNGS_RULE = (
-    "On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; `microsoft-office` from v0.23; same scripts): "
+    "On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; `microsoft-office` from v0.22.6; same scripts): "
     f"{DOCUMENT_PRODUCER_POWERPOINT_RUNGS}; "
     "`pdf` gives `page_count` (`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); Excel gives "
     "`sheet_schema` (`xlsx_read.py --sheets`) and `formula_recalculation` (`xlsx_recalc.py --out <copy>`, since "

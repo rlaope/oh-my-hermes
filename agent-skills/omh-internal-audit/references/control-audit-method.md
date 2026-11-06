@@ -27,11 +27,11 @@ A commonly used starting point for a control expected to operate without deviati
 
 Raise the size for a higher reliance, a lower tolerable deviation rate, or a control with a history of exceptions. An automated control tested once, with its change management tested, is the usual exception to frequency sizing.
 
-When the firm gives a confidence level and a tolerable deviation rate and expects no deviations, the attribute-sampling size is ln(1 - confidence) / ln(1 - tolerable rate), rounded up (95% and 5% gives 59; 90% and 10% gives 22). Otherwise the table is a rule of thumb; say so.
+When the firm gives a confidence level and a tolerable deviation rate and expects no deviations, the attribute-sampling size is ln(1 - confidence) / ln(1 - tolerable rate), rounded up (95% and 5% gives 59; 90% and 10% gives 22), and never above the population (a quarterly control has 4 items, so test all 4); the formula assumes a large population. Otherwise the table is a rule of thumb; say so.
 
 ## 2b. Deviations
 
-For a control sampled at 25 items or fewer, one unexplained deviation means the control did not operate effectively for that population unless the firm's methodology allows a stated extended sample; record which rule applied. For a larger statistical sample compare the deviation rate with the tolerable rate. Evaluate compensating controls only after the deviation is recorded as a deviation.
+In a sample sized to expect no deviations, any deviation, explained or not, means the control did not operate effectively for that population, unless the firm's methodology allows a stated extended sample; record which rule applied. For a sample designed with expected deviations, compare the upper deviation limit at the stated confidence, not the sample rate, with the tolerable rate (1 deviation in 59 gives 7.8% at 95%, which fails a 5% tolerance although the sample rate is 1.7%). Evaluate compensating controls only after the deviation is recorded as a deviation.
 
 ## 3. Evidence, strongest first
 

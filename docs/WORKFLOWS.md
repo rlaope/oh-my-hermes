@@ -1650,8 +1650,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Distinguish role outcomes from proxy criteria and missing evidence.
   - Keep inclusion, privacy, policy, and decision-owner gaps visible.
 - Completion checklist:
-  - Outcomes, must-haves and trainable skills are separate; every criterion has anchors and states the outcome it predicts; interviewers score before the debrief; no candidate recommendation without interview evidence; no ATS, calendar or HRIS action is claimed.
-  - A scored screen gets a job-relatedness and adverse-impact check (e.g. the four-fifths rule); jurisdiction questions go to `legal-compliance-review`.
+  - Outcomes, must-haves and trainable skills are separate; every criterion has anchors and states the outcome it predicts; every candidate gets the same core questions; interviewers score before the debrief, and the debrief separates evidence from impression; no candidate recommendation without interview evidence; no ATS, calendar or HRIS action is claimed.
+  - Where selection-rate data by group exists, compare the rates; in the US the four-fifths rule (29 CFR 1607.4(D)) is an enforcement rule of thumb, not a safe harbour. With small numbers or no such data, mark the check not_observed and route the jurisdiction question to `legal-compliance-review`.
 - Recovery notes:
   - If interview evidence cannot support a candidate debrief, retain the role outcomes, must-have versus trainable criteria, and scorecard, mark the recommendation unresolved, and hand back the missing evidence to the decision owner.
   - If policy constraints need a jurisdiction-specific ruling, retain the role brief and interview scorecard, mark the policy conclusion unresolved, and hand back the flagged questions to `legal-compliance-review`.
@@ -1674,7 +1674,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Safety rules:
   - Keep protected characteristics and missing interview evidence out of unsupported candidate recommendations.
   - Do not claim HRIS, ATS, outreach, interview, or employment-status actions occurred.
-  - Draft no questions on protected traits or their proxies (age, family status, health).
+  - Draft no questions on protected traits or their proxies (age, family status, health, origin), and check the local rule on what a form or question may ask (for example Korea's recruitment fairness act, Art. 4-3, bars requiring physical conditions, birthplace, marital status, property or family members' education, job or property on screening documents); say why and offer a job-related substitute.
 
 ### legal-compliance-review
 
@@ -1737,8 +1737,8 @@ These surfaces are generated command references, not installed Hermes workflow s
     - English: Which supplied authority identifiers, issuers, versions, effective status, exact pinpoints, hierarchy, and verification state may be used?
     - Korean: 사용 가능한 제공 근거의 식별자, 발행기관, 버전, 효력 상태, 정확한 인용 위치, 위계, 검증 상태는 무엇인가요?
   - `review objective`
-    - English: Which decision, risk tolerance, approval owner, deadline, and mandatory counsel questions should the review support?
-    - Korean: 이 검토가 지원할 의사결정, 위험 허용 범위, 승인 책임자, 기한, 필수 법률 자문 질문은 무엇인가요?
+    - English: Which decision, risk tolerance, approval owner, deadline, and mandatory counsel questions should the review support, and which playbook applies if it is a redline?
+    - Korean: 이 검토가 지원할 의사결정, 위험 허용 범위, 승인 책임자, 기한, 필수 법률 자문 질문, 협상안 작성이라면 적용할 플레이북은 무엇인가요?
 - Expected outputs:
   - legal_scope_authority_record/v1
   - legal_issue_traceability_matrix/v1
@@ -1764,7 +1764,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Criterion: Map facts to operative text, dependencies, exceptions and conflicts; inventory the families and mark each reviewed, not applicable with the reason, or not in the supplied documents: parties and authority to sign; term, renewal, termination and notice deadlines; payment; scope and deliverables; IP and licence; confidentiality (definition, exclusions, term, permitted recipients, compelled disclosure, return or destruction); warranty and disclaimer; indemnity and liability caps; data protection roles, basis, transfers, security, breach, retention, rights and DPIA; assignment and change of control; governing law and forum; boilerplate that changes risk such as entire agreement, amendment and order of precedence.
   - `legal_counsel_hold_check`
     - Required result fields: `trigger_ids`, `impact`, `likelihood_applicability`, `urgency`, `evidence_confidence`, `reversibility`, `hold_status`, `counsel_owner`
-    - Criterion: Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, contractual notice or auto-renewal deadlines inside the review horizon, and sensitive, high-risk or cross-border privacy or DPIA uncertainty.
+    - Criterion: Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, contractual notice or auto-renewal deadlines before the deadline in the review objective (with none supplied, any date not yet passed), and sensitive, high-risk or cross-border privacy or DPIA uncertainty.
   - `legal_negotiation_preparation_check`
     - Required result fields: `playbook_position`, `gap`, `proposed_language`, `fallback_position`, `walk_away_trigger`, `concession_order`, `counsel_hold_state`
     - Criterion: Every proposed clause traces to a cited playbook position and carries its fallback and walk-away; a row whose position cannot be cited becomes a counsel question, an open hold blocks its row, and the concession order states which rows are linked.
@@ -2389,7 +2389,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Keep report packaging independent from reliability review unless explicitly requested.
   - Open with the conclusion and any decision requested; show each metric against target or prior value or mark it no baseline.
   - Export only Markdown/JSON outlines unless a separate presentation tool produces a binary deck.
-  - On Hermes, that tool can be the bundled PowerPoint skill (`powerpoint`; `microsoft-office` from v0.23), and a deck it builds counts as generated from its read-back (`pptx_read.py --outline`).
+  - On Hermes, that tool can be the bundled PowerPoint skill (`powerpoint`; `microsoft-office` from v0.22.6), and a deck it builds counts as generated from its read-back (`pptx_read.py --outline`).
   - On Hermes, a rung taken from a bundled document skill is observed only from that skill's result for that exact file, judged by its field, not its exit code: `"rendered": false` or `"recalculated": false` exits 0 yet leaves that rung not observed, blocked on the missing tools it names; other observed evidence for a rung still counts.
   - On Hermes, PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count matching `slide_count`, since it lists every image already in that directory). Images that exist are not a render pass until each one has been inspected.
 - Completion checklist:
@@ -2439,7 +2439,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user only needs a weekly/monthly report outline; use `report-package`.
   - The user asks for recurring meeting minutes or scrum history; use `operating-rhythm`.
   - The request is code documentation, README, or project wiki maintenance; use the docs/wiki workflow.
-  - The user wants an operation done on one existing file - fill a PDF form, merge or split PDFs, or edit the text of a Word document, the slides of a deck, or the cells of a workbook - rather than a material plan with an export and QA ladder; load Hermes' bundled `pdf`, `docx`, `powerpoint`, or `xlsx` skill (`microsoft-office` from v0.23) for that file instead of this one.
+  - The user wants an operation done on one existing file - fill a PDF form, merge or split PDFs, or edit the text of a Word document, the slides of a deck, or the cells of a workbook - rather than a material plan with an export and QA ladder; load Hermes' bundled `pdf`, `docx`, `powerpoint`, or `xlsx` skill (`microsoft-office` from v0.22.6) for that file instead of this one.
 - Strong routing signals: `materials-package`, `material package`, `materials package`, `document package`, `deck file`, `binary export`, `file export`, `render qa`, `layout qa`, `ppt and pdf`, `pdf and ppt`, `ppt/pdf`, `pdf/ppt`, `spreadsheet to pdf`, `excel to pdf`, `monthly report pdf`, `attached spreadsheet`, `word document`, `word doc`, `document action items`, `compare pdfs`, `pdf differences`, `extract tables from pdf`, `pdf to csv`, `spreadsheet analysis brief`, `clean analysis brief`, `pdf`, `pptx`, `keynote`, `keynote deck`, `docx`, `xlsx`, `csv report`, `spreadsheet`, `excel`, `hwp`, `korean hwp`, `proposal document`, `PDF`, `HWP`, `첨부한 엑셀`, `첨부한 워드`, `워드 문서`, `PDF 두 개 비교`, `PDF 표를 CSV`, `PDF 표 추출`, `분석 브리프`, `엑셀을 월간 보고서`, `자료 패키지`, `자료 처리`, `자료 생성`, `문서 패키지`, `문서 생성`, `제안서 문서`, `엑셀`, `스프레드시트`, `피디에프`, `한글 문서`, `키노트`, `파일 export`, `파일 생성`, `렌더 QA`, `PDF랑 PPT`, `PPT랑 PDF`, `PDF와 PPT`, `PPT와 PDF`, `PDF랑 PPT로`
 - Good example:
   - Prompt: materials-package 엑셀 매출 리포트를 PDF로 공유할 수 있게 준비해줘.
@@ -2454,7 +2454,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Attach format-specific QA expectations before preparing a binary-generation handoff.
   - Record binary export, render QA, formula checks, approvals, and delivery only from observed evidence.
   - On Hermes, a rung taken from a bundled document skill is observed only from that skill's result for that exact file, judged by its field, not its exit code: `"rendered": false` or `"recalculated": false` exits 0 yet leaves that rung not observed, blocked on the missing tools it names; other observed evidence for a rung still counts.
-  - On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; `microsoft-office` from v0.23; same scripts): PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count matching `slide_count`, since it lists every image already in that directory); `pdf` gives `page_count` (`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); Excel gives `sheet_schema` (`xlsx_read.py --sheets`) and `formula_recalculation` (`xlsx_recalc.py --out <copy>`, since without `--out` it replaces the input and rungs or approvals already recorded were for other bytes, then the cached results read back with `xlsx_read.py --formulas`, where an error value or a formula with no cached value is a finding); Word gives `section_structure` and `required_clause_check` (`docx_read.py --structure` and `--text`) but no `page_count` or appearance until a converted PDF is rendered, and `docx_validate.py` checks package health, never rendering. Images that exist are not a render pass until each one has been inspected, and a producer's `"ok": true` is never the QA verdict.
+  - On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; `microsoft-office` from v0.22.6; same scripts): PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count matching `slide_count`, since it lists every image already in that directory); `pdf` gives `page_count` (`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); Excel gives `sheet_schema` (`xlsx_read.py --sheets`) and `formula_recalculation` (`xlsx_recalc.py --out <copy>`, since without `--out` it replaces the input and rungs or approvals already recorded were for other bytes, then the cached results read back with `xlsx_read.py --formulas`, where an error value or a formula with no cached value is a finding); Word gives `section_structure` and `required_clause_check` (`docx_read.py --structure` and `--text`) but no `page_count` or appearance until a converted PDF is rendered, and `docx_validate.py` checks package health, never rendering. Images that exist are not a render pass until each one has been inspected, and a producer's `"ok": true` is never the QA verdict.
   - No bundled reader covers HWP or Keynote: ask which tool the session has (Hancom Office or a converter for HWP, Keynote export for Keynote). With none, the plan ends at the outline, every QA rung for that file is not_observed, and a PDF export reviewed with the `pdf` rungs is the checkable substitute; say the layout of the HWP or Keynote file itself was not checked.
 - Completion checklist:
   - The material source, target format, audience, structure, and QA expectation are named.
@@ -2835,11 +2835,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: A rubric self-assessment cannot predict a jury result.
 - Quality bar:
   - Score each axis separately with named rendered evidence, then compute the weighted total; an overall impression is not a score and hides which axis is failing.
-  - Reserve binding-constraint language for a total within about 0.3 of the threshold. Measured axis spread is roughly a twentieth of site spread, so further below the bar a weak axis is a symptom: report that the site needs a level change, never a one-axis fix.
+  - For CSSDA, reserve binding-constraint language for a total within about 0.3 of the threshold. Measured axis spread is roughly a twentieth of site spread, so further below the bar a weak axis is a symptom: report that the site needs a level change, never a one-axis fix.
   - Load `references/award-judging-model.md` for the published axes, weights, and thresholds, the measured per-axis score table, and the stack table that separates entry-fee craft (fluid type, real typography) from optional spend (WebGL).
   - Record what an innovation move costs on the accessibility and performance budgets before recommending it; half the sampled motion-heavy winners drop `prefers-reduced-motion`, and the two highest-scoring entries keep it, so never present the inaccessible path as the higher-scoring one.
 - Completion checklist:
-  - Each of UI, UX, and innovation carries its own score and the rendered evidence it was read from.
+  - Each axis the chosen body publishes carries its own score and the rendered evidence it was read from.
   - The weighted total is computed from the stated weights and compared against the published threshold.
   - The binding constraint names one axis and what moving it requires.
   - Any innovation move that costs accessibility or performance budget is recorded as a tradeoff the user chooses.
@@ -2855,7 +2855,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - audience and primary user task
 - Expected outputs:
   - award_bar_score/v1
-  - per-axis scores with named evidence for UI, UX, and innovation
+  - per-axis scores with named evidence for each axis the chosen body publishes (UI, UX and innovation for CSSDA)
   - the weighted total and its distance from the published threshold
   - the binding constraint: the axis whose gain moves the total most
   - tradeoff_ledger/v1 when an innovation move costs accessibility or performance budget
@@ -6256,7 +6256,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Use when: Use when the user wants Hermes to connect mail and calendar access for an on-demand morning brief, following the shared prerequisite-check, diagnose, guide, diff-approved apply, and verify contract.
 - Do not use when:
   - The user wants Hermes to check their email or calendar right now rather than set up the connection.
-  - The connection is already configured and the user only wants today's brief, not a setup walkthrough; read and summarise it instead.
+  - The connection is already configured and the user only wants today's brief, not a setup walkthrough; read mail and calendar with the connected tools and summarise them.
   - The request needs a repository code change rather than a local MCP config edit.
 - Strong routing signals: `morning-brief`, `morning brief`, `connect my email for a morning brief`, `set up morning brief`, `configure morning brief`, `connect mail for morning brief`, `connect calendar for morning brief`, `set up my morning brief`, `모닝 브리핑 설정해줘`, `모닝 브리핑 설정`, `아침 브리핑 설정`, `메일 연동해서 브리핑`
 - Good example:
@@ -6273,12 +6273,12 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Guide: use Hermes-native secure entry or user-side OAuth/token setup, never chat secrets.
   - Diff-approved apply: show the config or `.env` diff with redacted placeholders; apply only after the user explicitly approves.
   - Verify: confirm applicable items using non-secret metadata, never secret values.
-  - Keep the read/draft-only access boundary — never enable Send permission — as a hard constraint on every apply step, not an optional recommendation.
-  - When `manage_connections` is in your tool list or tool_search finds it, connect mail and calendar through it rather than a hand-written MCP config diff (`connect` for a hosted account, `install` or `authorize` for a catalog MCP server), and take each app's answer as given: `skipped` means continue with the surface that is connected or ask in chat, never calling it again on your own; when its result does not name the granted access, the read-and-draft-only check stays `not_observed` until the user confirms the account's access.
+  - Keep the read/draft-only access boundary — never enable Send permission — as a hard constraint on every apply step, not an optional recommendation; on Gmail that means hiding the send tool, because no drafting scope is free of send.
+  - When `manage_connections` is in your tool list or tool_search finds it, connect mail and calendar through it rather than a hand-written MCP config diff (`connect` for a hosted account, `install` or `authorize` for a catalog MCP server), and take each app's answer as given: `skipped` means continue with the surface that is connected or ask in chat, never calling it again on your own; when its result does not name the granted access, the send-boundary check stays `not_observed` until the include list is read.
 - Completion checklist:
   - If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
   - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
-  - The connection is confirmed read and draft-only before the brief is reported ready: the exposed tool list holds no send operation (observed), else the check stays not_observed.
+  - The send boundary is confirmed before the brief is reported ready: the include list and registered tools hold no send operation (observed), and the report says whether the credential itself can send; else the check stays not_observed.
   - With neither mail nor calendar connected the status is blocked, not complete.
 - Recovery notes:
   - If the mail or calendar prerequisite is unmet, mark that surface "not applicable" and offer the brief scoped to whichever surface is connected.
@@ -6295,7 +6295,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Configure mail and calendar MCP access as read and draft only; never enable Send permission, even if the user asks — drafts stay for the user to send themselves.
   - Use Hermes-native secure entry or user-side OAuth/app-password setup, never chat; disclose authorized storage without exposing secrets.
   - Do not treat a prepared connection as an observed brief; only report a brief after the connection is verified.
-  - Gmail cannot enforce draft-only by OAuth scope (every scope that creates drafts also sends); enforce it with the MCP server's tool allow-list: expose only read and create-draft tools and take their names as evidence, else request `gmail.readonly` alone. Microsoft 365: no `Mail.Send`.
+  - A draft-capable Gmail credential can also send (every scope that creates drafts sends; `gmail.compose` is "Manage drafts and send emails"); say so before consent. The boundary is the MCP server's `mcp_servers.<name>.tools.include` list with read and create-draft tools only. Report "send tool not exposed, credential can send", never "read and draft-only". Evidence is the include list plus the tools the session registers, not `hermes mcp test`, which lists everything the server offers. Only `gmail.readonly` earns "cannot send", and it has no drafts. Microsoft 365: `Mail.ReadWrite` without `Mail.Send`, `Mail.Send.Shared` or `SMTP.Send`, and it can also delete.
   - The bundled `google-workspace` OAuth setup requests `gmail.send` and `gmail.modify` on every run, and its setup script accepts no `--services` flag to narrow the request, though that skill's own instructions show one; Google's consent screen lets the user untick a permission and the script then keeps only what was granted. Never apply that path as this skill's connection, and when the user connects it themselves, report `gmail.send` and `gmail.modify` as granted unless the setup script's `--check` lists them among the missing scopes, never as read-and-draft-only on the strength of the request.
 
 ### quality-evidence-loop
@@ -7581,7 +7581,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - reperformance_record/v1
   - deficiency_severity_grade/v1
 - Artifact expectations:
-  - control_under_test/v1 names the control's objective, owner, frequency, and risk, and the population with its period, source, and completeness check
+  - control_under_test/v1 names the control's objective, owner, frequency, and risk, the design result (would it prevent or detect the risk), and the population with its period, source, and completeness check
   - sample_design/v1 states the sampling method and derives the sample size from the control's frequency and the stated confidence and tolerable deviation rate, with a selection record that lets someone draw the same items again
   - evidence_request/v1 names, per sample item, the document, log, or approval that proves the control operated and who provides it, and separates evidence obtained from evidence described
   - reperformance_record/v1 records, per sample item, the independent re-performance of the control and its result -- operated, deviation, or not testable -- with the evidence reference
@@ -7590,7 +7590,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Derive every severity grade from stated criteria -- likelihood, magnitude against a stated materiality, and compensating controls; with a criterion missing, withhold the grade rather than assert one.
   - Check the population's completeness before sampling from it; a sample from an incomplete population says nothing about the items left out.
   - Record evidence obtained, not evidence described; a control owner's explanation is inquiry, not proof the control operated.
-  - Never drop a deviation found in the sample because it was explained; record it and evaluate it against the tolerable rate.
+  - Never drop a deviation found in the sample because it was explained; record it, and judge the sample by its upper deviation limit against the tolerable rate, not by the sample rate.
   - OMH reads no ledger, tests no control, and signs off nothing; every population, sample, and result comes from observed output or is marked unverified.
 
 ### data-share-review
@@ -7646,7 +7646,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If the scan cannot run in this session, hand the user the per-class scan and keep the verdict not_observed until the counts come back.
   - If a class still has hits after masking, fix the field or the free text and scan again; never ship on an explained hit that was not accepted by name.
 - Required inputs:
-  - the file or export about to leave, and the destination it goes to
+  - the file or export about to leave, the destination it goes to, and the countries whose id and phone formats apply
   - why the destination needs it, which decides the fields it may keep
   - the header or schema, and per-column shape counts when a field's content is unclear
   - where the pseudonym mapping may be kept locally, when a field must stay joinable
@@ -7656,10 +7656,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - residual_scan/v1
   - share_record/v1
 - Artifact expectations:
-  - field_inventory/v1 lists every column, key, and free-text field with its class -- direct identifier, quasi-identifier, secret, free text, or not personal -- and the evidence for the class
-  - minimization_plan/v1 gives each field one action -- drop, generalize, mask, or pseudonymize -- with the destination's need for the fields it keeps, and names the local path that holds any pseudonym mapping outside the shipped file
+  - field_inventory/v1 lists every column, key, and free-text field with its class -- direct identifier, quasi-identifier, secret, free text, sensitive category, or not personal -- and the evidence for the class
+  - minimization_plan/v1 gives each field one action -- drop, aggregate, generalize, mask, or pseudonymize -- with the destination's need for the fields it keeps, and names the local path that holds any pseudonym mapping outside the shipped file
   - residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran or its digest differs from the share record's
-  - share_record/v1 is metadata only -- destination, date, fields shipped, row count, and the sha256 digest of the shipped file -- and holds no value from it
+  - share_record/v1 is metadata only -- destination, date, fields shipped, row count, the sha256 digest of the shipped file, and its data_state (pseudonymized, still personal data, when identifiers were pseudonymized) -- and holds no value from it
 - Safety rules:
   - Call the output redacted only after an observed residual scan of the exact file that leaves, counted per class; without one the state is not_observed, whatever the masking step reported.
   - Minimize before masking: drop every field the destination does not need, because a masked field that ships still links rows back to people.
@@ -8584,7 +8584,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Criterion: Derive movement, aging, stalls, slips, exit-criteria gaps, next-step quality, and concentration from supplied records only, citing the record reference behind every exception; never infer buyer activity or stage progress from silence, and never rank deals a HOLD scope excluded; stage_movement and slipped_close_dates need a prior snapshot or stage and close-date history fields, so with one snapshot and neither mark both `unavailable` and still report records whose close date is before the as-of time.
   - `sales_forecast_state_check`
     - Required result fields: `supplied_seller_category`, `supplied_probability`, `scenario_range`, `observed_buyer_commitment`, `evidence_limits`, `prior_forecast_actual_comparison`, `calibration_status`, `confidence`, `target_source`, `coverage_ratio`
-    - Criterion: Keep stage, supplied seller category or probability, model-derived scenario range, and observed buyer commitment as separate states: stage alone never creates a probability or commitment, a probability-weighted total is a scenario and not a promise, and calibration_status is `unavailable` unless matching prior snapshots and observed outcomes were supplied; coverage_ratio is pipeline over the supplied target and is `unavailable` when no target was supplied, never a benchmark multiple.
+    - Criterion: Keep stage, supplied seller category or probability, model-derived scenario range, and observed buyer commitment as separate states: stage alone never creates a probability or commitment, a probability-weighted total is a scenario and not a promise, and calibration_status is `unavailable` unless matching prior snapshots and observed outcomes were supplied; coverage_ratio is open pipeline over the target still to close (the target minus closed-won in the period) and is `unavailable` when no target was supplied, never a benchmark multiple.
   - `sales_outcome_learning_check`
     - Required result fields: `cohort_bounds`, `observed_won_reasons`, `observed_lost_reasons`, `unqualified_reasons`, `contradictions`, `missing_evidence`, `research_followups`, `annex_status`
     - Criterion: Emit the learning annex only when supplied won, lost, or unqualified evidence covers a bounded cohort; keep reasons observed rather than causal, record contradictions and missing evidence, and set annex_status to `unsupported` when the cohort is empty.
@@ -10213,7 +10213,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
   - On Hermes, a rung taken from a bundled document skill is observed only from that skill's result for that exact file, judged by its field, not its exit code: `"rendered": false` or `"recalculated": false` exits 0 yet leaves that rung not observed, blocked on the missing tools it names; other observed evidence for a rung still counts.
-  - On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; `microsoft-office` from v0.23; same scripts): PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count matching `slide_count`, since it lists every image already in that directory); `pdf` gives `page_count` (`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); Excel gives `sheet_schema` (`xlsx_read.py --sheets`) and `formula_recalculation` (`xlsx_recalc.py --out <copy>`, since without `--out` it replaces the input and rungs or approvals already recorded were for other bytes, then the cached results read back with `xlsx_read.py --formulas`, where an error value or a formula with no cached value is a finding); Word gives `section_structure` and `required_clause_check` (`docx_read.py --structure` and `--text`) but no `page_count` or appearance until a converted PDF is rendered, and `docx_validate.py` checks package health, never rendering. Images that exist are not a render pass until each one has been inspected, and a producer's `"ok": true` is never the QA verdict.
+  - On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; `microsoft-office` from v0.22.6; same scripts): PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count matching `slide_count`, since it lists every image already in that directory); `pdf` gives `page_count` (`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); Excel gives `sheet_schema` (`xlsx_read.py --sheets`) and `formula_recalculation` (`xlsx_recalc.py --out <copy>`, since without `--out` it replaces the input and rungs or approvals already recorded were for other bytes, then the cached results read back with `xlsx_read.py --formulas`, where an error value or a formula with no cached value is a finding); Word gives `section_structure` and `required_clause_check` (`docx_read.py --structure` and `--text`) but no `page_count` or appearance until a converted PDF is rendered, and `docx_validate.py` checks package health, never rendering. Images that exist are not a render pass until each one has been inspected, and a producer's `"ok": true` is never the QA verdict.
   - A file is `generated` only from the producer's read-back of the written file, `approved` only from the person's answer, and `attached` only from the destination's own read-back, never from a reply that names the file.
   - `archived` only after the archive entry records the content sha256, the version, a poster frame or thumbnail for media, and a catalog row read back from the archive.
   - `published` only from the destination's own read-back - a URL resolving to the same content hash - never from an upload command's exit code.
