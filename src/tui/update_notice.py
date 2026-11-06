@@ -1,7 +1,8 @@
 """The OMH TUI's update notice: whether npm has published a newer oh-my-hermes than the one running.
 
 One of the two network clients in `src/` (`tests/test_handoff_safety_contract_enforcement.py`
-INVARIANT 2 pins it, and that only `tui/app.py` imports it). Everything here
+INVARIANT 2 pins it, and that only `tui/app.py` and, for the explicit stable
+`omh update`, `commands/setup.py` import it). Everything here
 keeps one small read narrow:
 
 * One URL, fixed in `LATEST_URL`: npm's `latest` dist-tag of the package. It

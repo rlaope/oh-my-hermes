@@ -493,6 +493,16 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "failure is never relabeled as a roster or a verdict.",
     ),
     ClassifiedSite(
+        "src/commands/setup.py",
+        "_installer_self_update_release",
+        INTENTIONAL,
+        "`omh update` on an installer-managed stable install asks npm for the newest release through "
+        "the update notice's urllib reader, which can raise an http.client error this module may not "
+        "import as well as OSError and ValueError. Any failure returns the skip reason naming the "
+        "error, so the command package stays on the installed release and the card says why; it is "
+        "never relabeled as an update, and it never falls back to the `main` archive.",
+    ),
+    ClassifiedSite(
         "src/commands/docs.py",
         "cmd_docs_skill_lint",
         INTENTIONAL,
@@ -1080,10 +1090,13 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # guessed "off").
 # 107 -> 108 / 97 -> 98: `consistency_trigger.shell_changed_files`, the re-index after a
 # command for the shell round end (a failure logs a named warning and adds no note).
-# 108 -> 110 / 98 -> 100: the messenger chat gate's hook boundary (`gateway_hooks.pre_gateway_dispatch`,
+# 108 -> 109 / 98 -> 99: `setup._installer_self_update_release`, the stable install's
+# newest-release read for `omh update` (a failure skips the command package move and
+# names the error, never the `main` archive).
+# 109 -> 111 / 99 -> 101: the messenger chat gate's hook boundary (`gateway_hooks.pre_gateway_dispatch`,
 # fail open) and its reaction (`gateway_hooks._acknowledge`).
-EXPECTED_HANDLER_COUNT = 110
-EXPECTED_ANCHOR_COUNT = 100
+EXPECTED_HANDLER_COUNT = 111
+EXPECTED_ANCHOR_COUNT = 101
 
 
 class DerivedSite(NamedTuple):

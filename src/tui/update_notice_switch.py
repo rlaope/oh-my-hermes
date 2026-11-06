@@ -1,7 +1,8 @@
 """What holds the OMH TUI's update notice off: no network client here, so `omh theme update-check` can report it.
 
-`tui/update_notice.py`, the client, may be imported only by `tui/app.py`
-(INVARIANT 2), so the switches it reads live in this module.
+`tui/update_notice.py`, the client, may be imported only by `tui/app.py` and,
+for the explicit stable `omh update`, `commands/setup.py` (INVARIANT 2), so the
+switches it reads live in this module.
 """
 
 from __future__ import annotations
