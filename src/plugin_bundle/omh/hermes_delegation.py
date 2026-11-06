@@ -453,6 +453,23 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     # OpenAI API catalog, and OpenRouter (`openai/gpt-6.1-terra`).
     "gpt-6.1-terra": ("openai-codex", "openai", "openrouter"),
     "gpt-6-luna": ("openai-codex", "openai"),
+    # Recognition-only, access-gated, never chained (onboarded 2026-11-06).
+    # Families are the vendor's statement, not an observation: OpenAI serves
+    # GPT-6 Cyber through the API and the Codex app to approved Daybreak Red
+    # organizations (model page; the system card says "when accessing GPT-6
+    # Cyber through the Codex app", though the Codex models page did not list
+    # it when read 2026-11-06), GPT-5.6 Cyber through the API's Responses
+    # endpoint to the same group (model page), and GPT-6 Rosalind through the
+    # API to approved Rosalind Research organizations (pricing page,
+    # changelog). No page names Codex for the last two, so they answer False
+    # there on the table's usual reading; no page denies it either, so a
+    # vendor statement moves that. The Codex subscription route on this
+    # maintainer host refused both Cyber ids with HTTP 400 on 2026-11-06, in
+    # the same wording a made-up id gets, so that probe says nothing about
+    # gating or about this row. No relay is claimed for any of them.
+    "gpt-6-cyber": ("openai-codex", "openai"),
+    "gpt-5.6-cyber": ("openai",),
+    "gpt-6-rosalind": ("openai",),
     "deepseek-flash": ("deepseek", "openrouter", "opencode"),
     # Recognition-only: the versioned spelling of the Flash pointer above
     # (the gateway id `deepseek/deepseek-v4.1-flash` arrives this way).
@@ -481,6 +498,10 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     # pricing page lists it and OpenRouter lists `z-ai/glm-5.3-flashx`; no
     # OpenCode serving was observed.
     "glm-5.3-flashx": ("zai", "openrouter"),
+    # Recognition-only, in no shipped chain (onboarded 2026-11-06): Z.ai's
+    # pricing page lists the legal-domain sibling. A third party reports an
+    # OpenRouter listing from 2026-11-02; not checked, so no relay family.
+    "glm-5.3-flashx-legal": ("zai",),
     "grok-build-0.1": ("xai", "openrouter"),
     # Retired on 2026-10-01: xAI lists it as an alias of grok-build-0.1.
     "grok-code-fast": ("xai", "openrouter"),
@@ -517,8 +538,8 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
 # stale provider/category metadata until its own rows are added here.
 EXACT_MODEL_CONTRACT_ALIASES: frozenset[str] = frozenset(
     {
-        "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna", "claude-opus-5-5",
-        "claude-sonnet-5-5", "claude-haiku-5-5", "deepseek-v4.1-flash", "kimi-k3.1-pro",
+        "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-cyber", "gpt-6-luna",
+        "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "deepseek-v4.1-flash", "kimi-k3.1-pro",
         "kimi-k3.1-pro-highspeed", "gemini-4-argon", "jev-1.13.0",
     }
 )
@@ -542,6 +563,14 @@ DECLARED_MODEL_ALIAS_PROJECTIONS: dict[str, tuple[str, str, str]] = {
     # DeepSeek-V4.1-Flash. The pointer moves with the next Flash release, so
     # it is a declared projection with a read date, not an exact contract.
     "deepseek-flash": ("deepseek-v4.1-flash", "thinking", "standard"),
+    # The 2026-10-17 upgrade the pointer now serves, under a relay's
+    # spelling (DeepSeek accepts no such model name); same contract, price,
+    # and calibration. Its row equals the pointer's, so it also labels the
+    # pointer's category; it is not a pointer itself, so nothing reaches it.
+    # It inherits the base's provider families, DeepSeek's own API included,
+    # as `deepseek-v4.1-flash` already does although DeepSeek rejects both
+    # spellings.
+    "deepseek-v4.1-flash-1017": ("deepseek-v4.1-flash", "thinking", "standard"),
     # Claude Opus 5.5's Bedrock id (the contract's `served_ids.bedrock`) and
     # its dotted gateway spelling (OpenRouter's live listing, 2026-09-23):
     # second spellings of the same model at the contract's mode and tier.
@@ -1494,6 +1523,19 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # long-context, and service-tier rates stay documented in
     # `src/coding/model_contracts.py`. GPT-5.6 Terra keeps its own 2/12 row.
     "gpt-6.1-terra": (1.0, 5.0),
+    # OpenAI list prices for the access-gated models (developers.openai.com
+    # /api/docs/pricing and each model page, read 2026-11-06), in no shipped
+    # chain. GPT-6 Cyber 20/100, cached input 2 (the default tenth); only a
+    # short-context rate is published, and its cache writes (25 for 30
+    # minutes, 50 for 12 hours) stay in `src/coding/model_contracts.py`.
+    # GPT-5.6 Cyber 12.5/75, cached input 1.25, and 2x input / 1.5x output
+    # for a prompt over 272K input tokens (model page). GPT-6 Rosalind 15/75,
+    # cached input 1.5, on a short-context card; its long-context card is
+    # 30/112.5. Like the Haiku 5.5 row, the table carries the lower card. Its
+    # model page returns 404, so there is no contract to hold the rest.
+    "gpt-6-cyber": (20.0, 100.0),
+    "gpt-5.6-cyber": (12.5, 75.0),
+    "gpt-6-rosalind": (15.0, 75.0),
     # Anthropic first-party list prices (docs.claude.com pricing, 2026-09):
     # Opus 5 5/25, Sonnet 5 2/10, Fable 5 and 5.1 10/50; Mythos 5.1 shares
     # Fable 5.1's per-token price. Earlier entries here were stale.
@@ -1554,6 +1596,14 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # own): 1M context, 128K output, thinking `enabled` only. Recognition-only,
     # in no shipped chain.
     "glm-5.3-flashx": (0.37, 1.25),
+    # Z.ai list price (docs.z.ai/guides/overview/pricing, read 2026-11-06):
+    # GLM-5.3-FlashX-Legal 0.37/1.25, cached input 0.075, the FlashX card.
+    # It is GLM-5.3-FlashX with legal-domain mid- and post-training (the
+    # glm-5.3-flash model page, which lists it under one model code with
+    # Flash and FlashX; thinking `enabled` only). The vendor's own blog dates
+    # it 2026-10-29; the docs give no API release date. Recognition-only, in
+    # no shipped chain: a legal specialist, not a coding model.
+    "glm-5.3-flashx-legal": (0.37, 1.25),
     # Z.ai publishes no separate rate for the 5.3-generation Ultrafast serving
     # (observed 2026-09-24), so this row carries the generation's own
     # documented list price (docs.z.ai pricing, 2026-08) rather than the
@@ -1669,10 +1719,13 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     "qwen3.8-max": (2.0, 6.0),
     "qwen3.8-flash": (0.15, 0.47),
     # Upstage list price (upstage.ai pricing, 2026-08): every Solar Pro 2
-    # version reaches end of service on 2026-10-30 KST, and Upstage
+    # version reached end of service on 2026-10-30 KST, and Upstage
     # recommends Solar Pro 4 (upstage.ai/pricing and
-    # console.upstage.ai/docs/models/solar-pro-2, read 2026-10-28). The row
-    # stays because a machine-level override may still name the id.
+    # console.upstage.ai/docs/models/solar-pro-2, read 2026-10-28;
+    # console.upstage.ai/docs/models/history marks `solar-pro2-251215`
+    # deprecated on 2026-10-30 and says to upgrade to `solar-pro4`, read
+    # 2026-11-06). The row stays because a machine-level override may still
+    # name the id.
     "solar-pro2": (0.15, 0.60),
     # Upstage list price (upstage.ai/pricing and
     # console.upstage.ai/docs/models/solar-pro-4, read 2026-10-28): 0.30/1.20,
@@ -1685,6 +1738,29 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # first-party provider does not serve it. Recognition-only, in no shipped
     # chain.
     "solar-pro4": (0.30, 1.20),
+    # Upstage list price (upstage.ai/pricing, read 2026-11-06): Solar Mini 4
+    # 0.10/0.40, cached input 0.01 (the default tenth), excluding VAT.
+    # `solar-mini4` is the alias of `solar-mini4-260922` (released
+    # 2026-09-22, console.upstage.ai/docs/models/history): 512K context, 128K
+    # output, reasoning and tool calling. Upstage marks `solar-mini-250422`
+    # deprecated on 2026-10-30 and says to upgrade to `solar-mini4`. No provider row, on the `solar-pro4`
+    # terms. Recognition-only, in no shipped chain.
+    "solar-mini4": (0.10, 0.40),
+    # Mistral list price (docs.mistral.ai/models/mistral-large-4-0, read
+    # 2026-11-06): Mistral Large 4 0.70/2.10, cached input 0.07 (the default
+    # tenth). The card carries no promotion mark; the 2026-10-06 changelog's
+    # "Launch pricing: 50% off for 2 weeks" names no figures, and two weeks
+    # have passed, though no dated page says the card is the full rate. Released in Public Preview on 2026-10-06 as
+    # `mistral-large-4` and `mistral-large-4-0` (both spellings in the
+    # reasoning guide), 1M context, max output not published. Its
+    # `reasoning_effort` takes `low`, `medium`, and `high` only: "Mistral
+    # Large 4 does not accept `none`, `minimal`, `xhigh`, or `max`" (the
+    # reasoning guide), so a chain row that names it must name one of those
+    # three. Mistral retires Large 3 and Medium 3.5 behind it (deprecated
+    # 2026-10-31). No provider row: the vocabulary has no Mistral family.
+    # Recognition-only, in no shipped chain.
+    "mistral-large-4": (0.70, 2.10),
+    "mistral-large-4-0": (0.70, 2.10),
     # MiniMax list price (platform.minimax.io/docs/guides/pricing-paygo, read
     # 2026-10-28), standard tier: MiniMax-M3 0.30/1.20 with cache read 0.06
     # (APPROX_CACHE_READ_RATIO) up to 512K input tokens; above that the card
@@ -1795,6 +1871,8 @@ APPROX_CACHE_READ_RATIO: dict[str, float] = {
     "glm-5.2": 0.186,
     "glm-5.2-ultrafast": 0.186,
     "glm-5.3-flashx": 0.203,
+    # GLM-5.3-FlashX-Legal: the same $0.075 against $0.37 (read 2026-11-06).
+    "glm-5.3-flashx-legal": 0.203,
     # Solar Pro 4 cached input 0.06 against 0.30 (upstage.ai/pricing, read
     # 2026-10-28), and MiniMax-M3 cache read 0.06 against 0.30 on both of its
     # cards (platform.minimax.io/docs/guides/pricing-paygo, read 2026-10-28).
@@ -2043,8 +2121,18 @@ def _model_alias_candidates(observed_model: str) -> list[str]:
     # `-fast` / `-flex` entry is a different mode or price and never labels
     # the base id. A dated snapshot of the exact id reaches the pointer
     # through its snapshot base; a mode or tier variant's projected base is
-    # deliberately not a root here, or `-fast` would reach the pointer.
-    for root in (observed_model, snapshot_base):
+    # deliberately not a root here, or `-fast` would reach the pointer. A
+    # declared second spelling whose row equals one of its contract's pointer
+    # rows (`deepseek-v4.1-flash-1017`, the snapshot `deepseek-flash` serves)
+    # is the same model at the same mode and tier, so its base is a root.
+    roots = [observed_model, snapshot_base]
+    declared = DECLARED_MODEL_ALIAS_PROJECTIONS.get(observed_model)
+    if declared is not None and any(
+        DECLARED_MODEL_ALIAS_PROJECTIONS.get(pointer) == declared
+        for pointer in EXACT_CONTRACT_POINTER_ALIASES.get(declared[0], ())
+    ):
+        roots.append(declared[0])
+    for root in roots:
         candidates.extend(
             alias
             for alias in EXACT_CONTRACT_POINTER_ALIASES.get(root, ())

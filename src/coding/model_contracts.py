@@ -650,6 +650,116 @@ _GPT_6_1_TERRA: Final[dict[str, object]] = {
     "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
 }
 
+# GPT-6 Cyber (2026-11-05), an access-gated sibling kept out of every chain
+# on the Mythos 5.1 terms, with no executor option row, as for GPT-6.1 Terra:
+# the system card calls it "a cyber-specialized variant of GPT-6 Astra", and
+# the model page serves it only to organizations with "Daybreak Red access and
+# approval". Recognized, priced, and provider-mapped so a user who names it
+# gets a contract, a cost, and Astra's calibration, but in no shipped chain:
+# most accounts cannot call it and its scope is authorized security work.
+# The model page lists "Reasoning token support" and no effort values, so the
+# ladder below is GPT-6 Astra's, inherited on the system card's statement and
+# labeled as such; a rung Astra rejects is raised on record here too. Only
+# the ladder is inherited: limits, endpoints, and price are this model's own
+# page, and Astra's unsupported parameters are not copied, because the Cyber
+# page names none.
+_GPT_6_CYBER: Final[dict[str, object]] = {
+    "schema_version": MODEL_CONTRACT_SCHEMA_VERSION,
+    "model_id": "gpt-6-cyber",
+    "reasoning_mode": "standard",
+    "service_tier": "standard",
+    "family": "gpt",
+    "generation": "gpt-6",
+    # The API changelog entry date ("Nov 5 ... Model: gpt-6-cyber").
+    "released": "2026-11-05",
+    "rollout": (
+        "only for organizations with Daybreak Red access and approval (model page), through the "
+        "API and the Codex app (the system card recommends Codex's sandboxing \"when accessing "
+        "GPT-6 Cyber through the Codex app\"), though the Codex models page did not list it when "
+        "read 2026-11-06; the OpenAI Codex subscription route on this "
+        "maintainer host returned HTTP 400 on 2026-11-06 with the same wording an unknown id gets, "
+        "so the probe cannot tell gated from absent; a released id is not account-level readiness "
+        "evidence"
+    ),
+    "access": (
+        "gated: \"Your organization needs Daybreak Red access and approval to use GPT-6-Cyber\" "
+        "(model page); the system card rates it Critical in Cybersecurity under OpenAI's "
+        "Preparedness Framework, the same designations as GPT-6 Astra, and scopes it to "
+        "authorized security work"
+    ),
+    "served_ids": {
+        "first_party": "gpt-6-cyber",
+    },
+    "knowledge_cutoff": "",
+    "context_window_tokens": 1_050_000,
+    "max_input_tokens": 922_000,
+    "max_output_tokens": 128_000,
+    "limits_note": (
+        "the model page documents a 1,050,000-token context, 922,000 maximum input tokens, and "
+        "128,000 max output; it states no knowledge cutoff and lists one snapshot, `gpt-6-cyber`"
+    ),
+    # GPT-6 Astra's ladder, inherited: the model page lists no effort values.
+    "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
+    "effort_floor": "low",
+    "effort_default": "",
+    "unsupported_efforts": {
+        "off": "the model page documents no effort values; GPT-6 Astra, its base, returns HTTP 400 for `none`",
+        "minimal": "the model page documents no effort values; not in GPT-6 Astra's ladder",
+    },
+    "effort_ladder_source": (
+        "inherited from GPT-6 Astra on the system card's statement that GPT-6 Cyber is a variant "
+        "of it; the model page says only \"Reasoning token support\""
+    ),
+    "tool_calling": {
+        "api": "responses",
+        "note": (
+            "the model page lists Chat Completions and Responses as supported endpoints and every "
+            "other endpoint, Batch included, as not supported; it states no tool-calling "
+            "restriction of its own (GPT-6 Astra's tool calling requires Responses)"
+        ),
+    },
+    "unsupported_parameters": (),
+    "runtime_mechanisms": {},
+    "surface_notes": {
+        "hermes": (
+            "Hermes v0.22.5 (bf0203a794) and origin/main 44ec783afd (2026-11-06) carry no "
+            "`gpt-6-cyber` id, price, or context row; origin/main's Daybreak switch (60f5029394, "
+            "2026-11-02) sends `access_programs.cyber: daybreak_blue` for models the account's "
+            "Codex catalog lists, which is Daybreak Blue on existing models, not this Daybreak Red "
+            "model; observed in the Hermes source, not a vendor statement"
+        ),
+    },
+    "documented_traits": (
+        "the system card: a cyber-specialized variant of GPT-6 Astra for authorized security work, "
+        "including vulnerability discovery, exploit development, and web pentesting",
+        "the changelog: investigates vulnerabilities, reproduces them in an authorized test "
+        "environment, and verifies fixes",
+        "its model page, changelog entry, and system card give no prompting guidance; GPT-6 Astra's "
+        "documented traits are the nearest record",
+    ),
+    # OpenAI list price (developers.openai.com model page and pricing page,
+    # "Cyber models" table, read 2026-11-06). Only a short-context rate is
+    # published: the long-context columns are "-" and the page names no
+    # Batch, Flex, or priority row. Cached input is a tenth of input.
+    "pricing_usd_per_mtok": {
+        "input": 20.0,
+        "cached_input": 2.0,
+        "cache_write": 25.0,
+        "cache_write_12h": 50.0,
+        "output": 100.0,
+        "long_context_over_272k_input": "not published",
+    },
+    "data_handling": _DATA_HANDLING_NOT_READ,
+    "sources": (
+        "https://developers.openai.com/api/docs/models/gpt-6-cyber",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/changelog",
+        "https://deploymentsafety.openai.com/gpt-6-cyber",
+    ),
+    "sources_read": "2026-11-06",
+    "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
+}
+
 # Claude Opus 5.5, the first Claude contract. Thinking is always on: a
 # thinking-disabled request or a manual budget returns HTTP 400, so a
 # no-thinking rung is raised to `low` on record. One optional key joins
@@ -996,12 +1106,16 @@ _DEEPSEEK_V41_FLASH: Final[dict[str, object]] = {
     "rollout": (
         "generally available on the first-party API as `deepseek-flash`; `deepseek-v4-flash` and "
         "`deepseek-v4-flash-vision-exp` are routed to it; `deepseek-v4-pro` stays a separately "
-        "priced model (pricing page re-read 2026-10-28); a released id is not account-level "
-        "readiness evidence"
+        "priced model (pricing page re-read 2026-10-28); since 2026-10-17 the pointer serves "
+        "DeepSeek-V4.1-Flash-1017, an upgrade of this model with \"The API calling method and "
+        "pricing remain unchanged\" (change log and pricing page re-read 2026-11-06; the pricing "
+        "page names the snapshot only as the MODEL VERSION, never as a model name); a released "
+        "id is not account-level readiness evidence"
     ),
     "served_ids": {
         "first_party": "deepseek-flash",
         "openrouter": "deepseek/deepseek-v4.1-flash",
+        "openrouter_snapshot_1017": "deepseek/deepseek-v4.1-flash-1017",
         "huggingface": "deepseek-ai/DeepSeek-V4.1-Flash",
     },
     "knowledge_cutoff": "",
@@ -1492,6 +1606,7 @@ MODEL_CONTRACTS: Final[dict[str, Mapping[str, object]]] = {
     "gpt-6-sol": _GPT_6_SOL,
     "gpt-6.1-sol": _GPT_6_1_SOL,
     "gpt-6.1-terra": _GPT_6_1_TERRA,
+    "gpt-6-cyber": _GPT_6_CYBER,
     "gpt-6-luna": _GPT_6_LUNA,
     "claude-opus-5-5": _CLAUDE_OPUS_5_5,
     "claude-sonnet-5-5": _CLAUDE_SONNET_5_5,
@@ -1555,6 +1670,21 @@ DECLARED_MODEL_CONTRACT_PROJECTIONS: Final[dict[str, Mapping[str, str]]] = {
     # Flash release moves it, which is exactly why it is a declared row with
     # a read date and not a second exact contract.
     "deepseek-flash": {
+        "contract_model_id": "deepseek-v4.1-flash",
+        "reasoning_mode": "thinking",
+        "service_tier": "standard",
+    },
+    # DeepSeek-V4.1-Flash-1017, the 2026-10-17 upgrade the pointer above now
+    # serves ("The API calling method and pricing remain unchanged",
+    # api-docs.deepseek.com/updates, read 2026-11-06). DeepSeek accepts no
+    # such model name; the spelling is a relay's (Hermes' static OpenRouter
+    # catalog lists `deepseek/deepseek-v4.1-flash-1017`, "dated snapshot of
+    # v4.1-flash"), so a child observed under it keeps the V4.1 Flash
+    # contract, price, and calibration. Its row equals the pointer's, so the
+    # plugin also labels it with the pointer's category; it is not a pointer
+    # itself. The MMDD suffix is not the `-YYYY-MM-DD` shape and never
+    # projects on its own.
+    "deepseek-v4.1-flash-1017": {
         "contract_model_id": "deepseek-v4.1-flash",
         "reasoning_mode": "thinking",
         "service_tier": "standard",
