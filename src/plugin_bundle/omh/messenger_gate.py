@@ -244,7 +244,8 @@ def decide(message: Message, *, muted: bool, mode: str = DEFAULT_GATE_MODE) -> D
         word in _QUIET
         and body[0] not in _QUOTE_OPENERS
         and not body.startswith("&gt;")
-        and not region.endswith("?")
+        # a `?` anywhere in the closing punctuation run (`?!`, `!?`, folded `？`) asks, not orders.
+        and "?" not in region[len(body):]
         and not region.startswith(("~", "`"))
         and (addressed or (message.in_thread and word not in _QUIET_NEEDS_ADDRESS))
     ):
