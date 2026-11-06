@@ -19,7 +19,7 @@ This is a Hermes-native `idea-to-deploy` workflow skill.
 
 ## Why This Exists
 
-`idea-to-deploy` exists to keep `delivery` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`idea-to-deploy` exists because an idea becomes a running product through decisions nobody owns together: it keeps metric, plan, executor, and release evidence as separate gates.
 
 ## Do Not Use When
 
@@ -36,15 +36,15 @@ Good example:
 
 Bad example:
 
-- Prompt: idea-to-deploy: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `idea-to-deploy`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: idea-to-deploy: build the whole app and deploy it, I will check later.
+- Expected behavior: Refuse the single jump: ask for the success metric and scope, then produce the stage rail with an owner per stage.
+- Why: An unscoped build has no acceptance test and no rollback.
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- The idea, user, success metric, and non-goals are written down.
+- Each stage has an owner and the skill that runs it; plan acceptance and executor choice precede any coding handoff.
+- Where it runs, how secrets are provided, and the first environment are decided before deploy; deploy evidence is observed.
 
 ## Recovery Notes
 
@@ -79,6 +79,7 @@ Quality bar:
 - Prepare coding handoffs only after plan acceptance and selected executor/runtime choice.
 - Mark deploy, monitoring, and rollback as unobserved until the wrapper or operator records evidence.
 - For a fresh, empty, or newly `git init`-ed target that is expected to outlive the session, run the greenfield bootstrap pass before or alongside delivery planning - load `references/project-bootstrap.md` for the six-step order (git and .gitignore, LICENSE, README, agent context file, CI skeleton, docs/ seed) and its per-file verify line; explicitly skip it for throwaway or scratch work instead of silently running it.
+- Name the skill per stage: `backend`, `omh-relational-db`, `omh-frontend`, `omh-application-threat-model`, `omh-iac-change`, `omh-production-audit`, `omh-release-cut`, `omh-deploy-and-monitor`. Settle where it runs, how secrets are provided, and the first environment before deploy.
 
 Handoff policy:
 

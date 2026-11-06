@@ -10,14 +10,14 @@ Run the steps in this order; each carries its own verify line, and a step whose 
 
 1. **Git and .gitignore.** Initialize version control before anything else touches the tree.
    - `git init` if no repository exists yet.
-   - Build `.gitignore` from the toolchain actually observed in the project (language, package manager, editor artifacts) - never paste in an unrelated kitchen-sink template.
+   - Build `.gitignore` from the toolchain actually observed in the project (language, package manager, editor artifacts) - never paste in an unrelated kitchen-sink template. Always include the local-only files: `.env*` (with a committed `.env.example` holding names only), key and certificate files, and OS and editor files. Turn on secret scanning or push protection on the remote before the first push.
    - Commit the empty or near-empty tree as the first commit so later history has a clean root.
    - Wrong: a Python project ignoring `node_modules/` it will never create. Right: a `.gitignore` whose every line maps to a file this project's own build actually produces.
-   - Self-test: does every line in `.gitignore` correspond to a byproduct this project's own toolchain generates?
+   - Self-test: does every line in `.gitignore` correspond to a byproduct this project's own toolchain generates or to a local-only file (`.env*`, keys, OS and editor files), with no line unrelated to either?
    - Verify: `git status --short` shows no generated or vendor noise after a build runs.
 
 2. **LICENSE.** One canonical file, one declared identifier, everywhere that identifier appears.
-   - Pick a single SPDX license identifier and write the matching `LICENSE` file at the repository root.
+   - Ask the owner which license applies; the choice is theirs. With one stated, write the matching `LICENSE` file at the repository root and use its single SPDX identifier. With none stated, add no open-source license: write no `LICENSE` (or a proprietary notice), set the metadata license field to the `UNLICENSED` value, and record the open question.
    - Match that identifier everywhere a license gets declared: package metadata, README license line, plugin or extension manifests.
    - Never declare a license in metadata without committing the file it names - license-declared-but-no-file is a named drift class, not a cosmetic gap, because it leaves a legal claim with nothing backing it.
    - Treat a license change as a decision requiring the same review as any other file it touches; do not silently swap identifiers between files.

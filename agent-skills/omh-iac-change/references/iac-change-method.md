@@ -12,6 +12,10 @@ Load this while planning an infrastructure-as-code change. OMH prepares; the ope
 | Kubernetes / kustomize | `kubectl diff` against the live objects | `kubectl diff -f` or `kustomize build` output | `kubectl rollout status` within a stated timeout | `kubectl rollout undo` for a workload; re-apply the prior manifest otherwise |
 | Helm | `helm diff upgrade` (plugin) or `helm get manifest` | `helm diff upgrade` or `helm template` | `--wait` with a timeout, then the release's own probes | `helm rollback <release> <revision>` |
 
+A saved plan is a secret-bearing artifact: Terraform writes sensitive values into the plan file in cleartext even when its terminal output hides them. Keep it where the state is kept, do not attach it to a pull request or paste it into chat, and share `show` output only after checking it for sensitive values.
+
+What the listed rollbacks cannot undo: Helm CRDs and hook-created resources, PersistentVolumeClaim contents, a destroyed Terraform volume, a CloudFormation resource with `DeletionPolicy: Delete`, and config or secrets changed in the same release. Name the retain or snapshot policy before the stage runs.
+
 ## 2. Reading the blast radius
 
 - Count creates, in-place updates, replacements and destroys from the saved plan, not from the code diff.
@@ -21,7 +25,7 @@ Load this while planning an infrastructure-as-code change. OMH prepares; the ope
 
 ## 3. Drift before the change
 
-Resolve drift first, one resource at a time: import it, move it, re-declare it, or revert the manual change. Record which. An apply over unresolved drift silently reverts someone's hotfix or re-creates something deliberately removed.
+Resolve drift first, one resource at a time: import it, move it, re-declare it, or revert the manual change. Record which. Before any state operation take a state snapshot (`terraform state pull > backup`), confirm the backend lock is held by this operator only, and prefer a `moved` or `import` block in code (reviewable, and part of the saved plan) over `state mv`. An apply over unresolved drift silently reverts someone's hotfix or re-creates something deliberately removed.
 
 ## 4. Cost delta
 

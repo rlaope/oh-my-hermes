@@ -143,8 +143,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            (skill_capabilities, 533907, FULL_ROW_DELTA_CAP,
-             'd6dfefff9df440fda6bdeb7fa17b920ad28c1fcfe2676e049210c6df7751fc71',
+            # 533907 -> 533903 and the digest re-derived: the application-threat-model
+            # asset-register output line drops a word (-4); no other row moved, and the pin
+            # before it was d6dfefff...fc71.
+            (skill_capabilities, 533903, FULL_ROW_DELTA_CAP,
+             'd0970edd6e728b46b7f656693864914fb26793fac6f3518a08f6d7ba5b9b7c76',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -376,7 +379,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then the render rail: every body names its siblings by the label `skill_view`
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
-        self.assertEqual(_digest(legacy_hashes), '7e537e8dbd4e8d9a0104d0bba4b7eb5d645e14f031baea6674df7c01e1884b2c')
+        self.assertEqual(_digest(legacy_hashes), '80fdd98d2feee49235dd646e82902d1c2426b17f600e209fdef9dbec29436325')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -391,7 +394,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
         # 122431 -> 124814: the render rail writes each sibling under its loadable label
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
-        self.assertEqual(legacy['repeated']['bytes'], 124814)
+        # 124814 -> 123708: nine skills' own Completion Checklist, Why and example
+        # replace the generic fallback they repeated, and the audit's body additions
+        # are measured here; the ceilings keep their headroom.
+        self.assertEqual(legacy['repeated']['bytes'], 123708)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

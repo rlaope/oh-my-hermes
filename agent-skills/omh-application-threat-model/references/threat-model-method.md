@@ -6,7 +6,7 @@ This models an application. The agent's own prompt, tool, file, credential, and 
 
 ## 1. Assets
 
-An asset is something an attacker wants, not every table in the schema. Each row carries a data class and exactly one loss; an asset with no loss is not an asset.
+An asset is something an attacker wants, not every table in the schema. Each row carries a data class and its primary loss; any other loss that applies gets its own scenario row, and an asset with no loss is not an asset.
 
 | Data class | Examples | Loss that usually matters |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ Boundaries this repeatedly finds: internet to edge, edge to service, service to 
 
 ## 3. Scenarios: the STRIDE prompts
 
-Run all six against every boundary. One prompt, one scenario, or a recorded reason the category does not reach this boundary.
+Run all six against every boundary. One prompt, one scenario, or a recorded reason the category does not reach this boundary. Run them again against each data store, external entity, and process that holds an asset, since a store at rest or a process inside one zone has no boundary of its own, and add one more prompt for a compromised third-party dependency or build step.
 
 | Category | Prompt for this boundary |
 | --- | --- |
@@ -56,6 +56,8 @@ One decision per scenario, from a closed vocabulary, each with a named owner:
 - **Eliminate** — remove the feature, the data, or the path. Requires what is being removed.
 
 A scenario with two decisions has not been decided.
+
+Rank before deciding. Rate each scenario's likelihood and impact (low, medium, high, each defined in one sentence for this system) and order the list by the product. Accept is allowed only below the threshold the owner states; above it the decision is mitigate, transfer, or eliminate.
 
 ## 5. Control state
 

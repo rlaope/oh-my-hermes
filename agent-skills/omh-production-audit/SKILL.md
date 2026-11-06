@@ -71,6 +71,8 @@ Quality bar:
 - Check build/test/CI, security/privacy, performance, observability, rollback, docs/support, and release communication.
 - Return GO, HOLD, or BLOCK only with evidence IDs and missing evidence.
 - Convert remediation into explicit follow-up workflows instead of silently patching.
+- Verdict: GO only when all nine rows are observed, BLOCK when any row failed an observed check, else HOLD naming the rows lacking evidence.
+- Evidence floor: rollback = command exercised, restore tested, RPO/RTO; performance = load result at peak; observability = alerts to a named on-call with a runbook; security_privacy = secrets store, least privilege, cert expiry.
 
 Required inputs:
 

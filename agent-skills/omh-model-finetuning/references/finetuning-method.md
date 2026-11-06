@@ -16,11 +16,13 @@ Climb the ladder in order and stop at the first rung that closes the measured ga
 
 Rungs 1 to 4 return `do_not_finetune` with the score that closed the gap. Knowledge that changes weekly belongs in retrieval, not in weights.
 
+Tune prompts and retrieval on a development split. The held-out set is touched only to report the baseline and the candidates, so a prompt fitted to it never becomes the number a checkpoint is promoted against.
+
 ## 2. Choose the method from the data
 
 | Method | The data you have | Use when | Failure mode to watch |
 | --- | --- | --- | --- |
-| SFT | demonstrations: an input and the output you want | the target behavior can be written down | copies the demonstrations' errors and narrows general ability |
+| SFT | demonstrations: an input and the output you want | the target behavior can be written down | copies the demonstrations' errors and narrows general ability; breaks when the chat template or stop tokens differ from the serving path |
 | DPO | preference pairs: a chosen and a rejected output for the same input | good and bad are easier to rank than to write | drifts from the reference model when pairs are noisy or one-sided |
 | RLVR | inputs whose answers a program can check: tests, exact answers, a validator | correctness is verifiable and demonstrations are scarce | reward hacking: passes the checker without solving the task |
 
@@ -33,10 +35,11 @@ SFT first and DPO after is the common order when both kinds of data exist. A LoR
 3. Draw the held-out split before training, from the same distribution as real traffic.
 4. Check that no held-out example, or a near duplicate of one, is in the training set.
 5. Record the counts per source and per split.
+6. Scan the examples for personal data and credentials and remove or mask them: trained weights can emit what they saw, and consent to a file is not consent to a model that reproduces it.
 
 ## 4. Compare and promote
 
 1. Run the same held-out eval, same prompt and same decoding settings, on the untuned baseline and on every candidate checkpoint.
 2. Add a regression set for general capability the task does not cover.
-3. Promote only when the candidate beats the baseline by the stated margin on the task metric and regresses no more than the stated tolerance elsewhere.
+3. Promote only when the candidate beats the baseline by the stated margin on the task metric and regresses no more than the stated tolerance elsewhere. State the held-out size and choose the margin from the baseline's run-to-run spread (repeat the baseline at least three times); a margin smaller than that spread, or measured on a few dozen items, is no difference.
 4. Keep the baseline serving, and keep it as the rollback, until the promoted checkpoint's live metrics are observed.

@@ -17,7 +17,7 @@ This is an OMH `reliability-review` workflow skill, projected for Agent Skills h
 
 ## Why This Exists
 
-`reliability-review` exists to make SRE-style review strict: service reliability claims must point to metrics or references, and remediation remains separate from the review narrative.
+`reliability-review` exists because a reliability claim is cheap to write and expensive to check: it holds an SLO to its arithmetic and a postmortem to its structure, and keeps remediation separate from the review.
 
 ## Do Not Use When
 
@@ -42,9 +42,10 @@ Bad example:
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- An SLO conclusion states the SLI (good over valid events), window, target, budget consumed, and burn rate, or reads unresolved.
+- A postmortem draft names impact, detection and resolution times, trigger, contributing factors (systems, not people), and action items with owner and due date.
+- A pre-launch review names, per dependency, the slow, down, and wrong-answer behavior and the SLOs and runbooks that exist.
+- Every remediation item reads open or closed with the observed evidence.
 
 ## Recovery Notes
 

@@ -3556,7 +3556,7 @@ This models an application. The agent's own prompt, tool, file, credential, and 
 
 ## 1. Assets
 
-An asset is something an attacker wants, not every table in the schema. Each row carries a data class and exactly one loss; an asset with no loss is not an asset.
+An asset is something an attacker wants, not every table in the schema. Each row carries a data class and its primary loss; any other loss that applies gets its own scenario row, and an asset with no loss is not an asset.
 
 | Data class | Examples | Loss that usually matters |
 | --- | --- | --- |
@@ -3581,7 +3581,7 @@ Boundaries this repeatedly finds: internet to edge, edge to service, service to 
 
 ## 3. Scenarios: the STRIDE prompts
 
-Run all six against every boundary. One prompt, one scenario, or a recorded reason the category does not reach this boundary.
+Run all six against every boundary. One prompt, one scenario, or a recorded reason the category does not reach this boundary. Run them again against each data store, external entity, and process that holds an asset, since a store at rest or a process inside one zone has no boundary of its own, and add one more prompt for a compromised third-party dependency or build step.
 
 | Category | Prompt for this boundary |
 | --- | --- |
@@ -3606,6 +3606,8 @@ One decision per scenario, from a closed vocabulary, each with a named owner:
 - **Eliminate** — remove the feature, the data, or the path. Requires what is being removed.
 
 A scenario with two decisions has not been decided.
+
+Rank before deciding. Rate each scenario's likelihood and impact (low, medium, high, each defined in one sentence for this system) and order the list by the product. Accept is allowed only below the threshold the owner states; above it the decision is mitigate, transfer, or eliminate.
 
 ## 5. Control state
 
@@ -4210,6 +4212,7 @@ Load this while planning database work. OMH never connects to a database: every 
 | `ALTER TABLE ... ADD FOREIGN KEY` | `SHARE ROW EXCLUSIVE` on both tables + scan | writes | `ADD CONSTRAINT ... NOT VALID`, then `VALIDATE CONSTRAINT` |
 | `ALTER TABLE ... ALTER COLUMN TYPE` | `ACCESS EXCLUSIVE` + rewrite (most types) | everything | new column, dual write, backfill, switch, drop |
 | `VACUUM FULL`, `CLUSTER` | `ACCESS EXCLUSIVE` + rewrite | everything | `pg_repack` or plain `VACUUM` |
+| `REINDEX` of a bloated index | `SHARE` on the table | writes, and reads that need the index | `REINDEX INDEX CONCURRENTLY` (12+; `SHARE UPDATE EXCLUSIVE`, about twice the index size in free disk, an invalid index is left on failure and must be dropped) |
 
 Every DDL statement on a live table runs under `SET lock_timeout = '2s'` (or the service's tolerance) with a retry. Without it, a statement queued behind one long transaction blocks every query that arrives after it, which is how a sub-second `ALTER` becomes an outage.
 
@@ -4223,7 +4226,7 @@ Every DDL statement on a live table runs under `SET lock_timeout = '2s'` (or the
 | Change a column type | `COPY` | `SHARED` | blocks writes; use `gh-ost` or `pt-online-schema-change` |
 | Drop the primary key | `COPY` | `SHARED` | blocks writes |
 
-State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refuses instead of silently falling back to a blocking copy. Every DDL still waits for a metadata lock; a long transaction holds it up and queues everything behind it, so bound it with `lock_wait_timeout`.
+State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refuses instead of silently falling back to a blocking copy. Every DDL still waits for a metadata lock; a long transaction holds it up and queues everything behind it, so bound it with `lock_wait_timeout`. A bloated InnoDB table is rebuilt with `ALTER TABLE ... ENGINE=InnoDB, ALGORITHM=INPLACE, LOCK=NONE`; `OPTIMIZE TABLE` runs the same rebuild.
 
 ## 3. Online migration order
 
@@ -4235,14 +4238,14 @@ State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refus
 Every step carries its statement, the lock it takes and for how long, its timeout, and its rollback. A plan with any step missing lock behaviour or rollback is not ready.
 
 - **Non-transactional DDL gets its own migration.** Most migration tools wrap each migration in a transaction, and `CREATE INDEX CONCURRENTLY` (and `DROP INDEX CONCURRENTLY`) refuses to run inside one. Mark that migration non-transactional in the project's tool and keep the statement alone in it. Removing `CONCURRENTLY` to get past the error turns an online build into a write lock.
-- **Each backfill batch runs under a `statement_timeout`** sized to the batch, beside the `lock_timeout`, so a batch that hits a slow plan fails fast and resumes instead of holding locks.
+- **Each backfill batch runs under a `statement_timeout`** sized to the batch, beside the `lock_timeout`, so a batch that hits a slow plan fails fast and resumes instead of holding locks. Check replica lag between batches and pause above a stated bound, so a fast backfill does not push replicas behind.
 - **Read the SQL that will run.** When an ORM or migration tool generates the statement, plan against the SQL it emits (its statement log or its to-SQL output), not against the call that produced it.
 
 ## 4. Index selection and sizing
 
 | Need | Index type |
 | --- | --- |
-| Equality and range on scalar columns | B-tree, most selective equality column first, range column last |
+| Equality and range on scalar columns | B-tree: equality columns first (order them by which prefixes the most queries use alone), then the sort or range column last |
 | Array, JSONB containment, full-text | GIN |
 | Geometric, range overlap, nearest neighbour | GiST |
 | Huge append-only table ordered by time | BRIN |
@@ -4250,7 +4253,7 @@ Every step carries its statement, the lock it takes and for how long, its timeou
 | Query reads few columns | covering index (`INCLUDE`) for an index-only scan |
 | Keyset (cursor) pagination: `WHERE (sort_col, id) > ($1, $2) ORDER BY sort_col, id LIMIT n` | B-tree on the equality-filter columns first, then the sort columns in sort direction, then the unique tie-breaker; the plan shows an index scan with no sort step. Mixed sort directions need the index to match them and the predicate written as `OR` terms, because a row comparison assumes one direction. On MySQL write the expanded `OR` form even for a single direction, because an equality prefix followed by a row comparison uses only the prefix columns of the index; check that the plan's `key_len` and range cover the sort columns, not only that there is no filesort |
 
-Size before proposing: rows times (key width plus about 20 bytes of per-entry overhead), plus fill-factor slack. Every index adds a write per insert and per update of its columns; name that cost next to the read it saves. Cite the observed plan the index changes (`EXPLAIN (ANALYZE, BUFFERS)`), and re-read the plan after the build.
+Size before proposing: rows times (key width plus about 20 bytes of per-entry overhead), plus fill-factor slack. Every index adds a write per insert and per update of its columns; name that cost next to the read it saves. Cite the observed plan the index changes (`EXPLAIN (ANALYZE, BUFFERS)`), and re-read the plan after the build. `ANALYZE` executes the statement: for a read, run it on a replica or a restored copy when one exists; for an `INSERT`, `UPDATE` or `DELETE`, use plain `EXPLAIN`, or wrap `EXPLAIN ANALYZE` in `BEGIN; ... ROLLBACK;` on a copy, never on the primary.
 
 ## 5. N+1 queries
 
@@ -4329,7 +4332,7 @@ Wait for the release branch's own CI on its last merge before starting the cut. 
 | Partial | 25-50% | one more peak | the same signals hold with more load |
 | Full | 100% | until the rollback window closes | the previous artifact may be retired |
 
-Promotion reads a named signal against a threshold. A clock alone is not a promotion criterion.
+Promotion reads a named signal against a threshold. A clock alone is not a promotion criterion. A stage also states the minimum number of requests it must serve before the signal is read: zero failures in 300 requests only bounds the true failure rate below about 1% at 95% confidence. When traffic cannot reach that count inside the bake time, call the canary coarse and widen the stage or extend the bake.
 
 ## 4. Rollback trigger and command
 
@@ -4337,7 +4340,7 @@ A rollback trigger is a signal, a threshold, and a window: "5xx rate above 1% fo
 
 | Mechanism | Command shape | Cannot undo |
 | --- | --- | --- |
-| Redeploy the previous artifact | `kubectl rollout undo deployment/<name>`, or redeploy the previous image tag | data the new version already wrote |
+| Redeploy the previous artifact | `kubectl rollout undo deployment/<name>`, or redeploy the previous image tag | data the new version already wrote, and config or secrets changed in the same release (roll those back with the same trigger) |
 | Traffic shift | set the canary weight to 0 | nothing, while the old version still runs |
 | Feature flag | turn the flag off | side effects already emitted |
 | Revert and re-release | revert the merge, then cut a patch | a published package: yank or deprecate it, never delete and reuse the version |
@@ -4387,6 +4390,8 @@ An `INSERT` or append with none of these is not idempotent. Fix the write before
 | change a type's meaning or unit | breaking even when the type is unchanged |
 | change the partition or key | breaking for every rerun and every incremental reader |
 
+Name the deploy order with the change. For a backward-compatible change upgrade consumers before producers; for a forward-compatible one, producers first. With a schema registry, state the compatibility mode and the subject.
+
 ## 3. Replay and backfill
 
 1. Bound the window and name the target partitions, tables or offsets.
@@ -4396,7 +4401,7 @@ An `INSERT` or append with none of these is not idempotent. Fix the write before
 5. Pass the quality gate (section 4), then publish or resume readers.
 6. Rerun one partition and confirm nothing changes; that is the idempotency proof.
 
-For a stream, name the consumer group and the offsets or timestamps to reset to, and whether downstream sinks dedupe by event id.
+For a stream, name the consumer group and the offsets or timestamps to reset to, and whether downstream sinks dedupe by event id. Check the topic's retention against the oldest event in the window before planning the reset: a reset to a time before the earliest retained offset replays from the log start with no error, and the replay is partial. When retention does not cover the window, name the archive or source system to rebuild from instead of resetting.
 
 ## 4. Data-quality gate
 
@@ -4411,6 +4416,14 @@ For a stream, name the consumer group and the offsets or timestamps to reset to,
 ## 5. Lineage
 
 Take lineage from the orchestrator or transformation graph (the dbt manifest, the Airflow DAG, an OpenLineage record) first. Readers found only by searching queries, dashboards or exports are marked as such, because a search misses what it did not index.
+
+## 6. Late data
+
+State the event-time column, the allowed lateness (how long a partition stays open), and what happens to a row that arrives after it: reprocess the trailing N partitions on every run, route it to a late-arrival table, or drop it with a counter. A partition overwrite silently drops rows that land after their partition closed. The quality gate's row-count band is compared at the same lateness, otherwise the count is expected to grow after the check passed.
+
+## 7. What "exactly once" means
+
+"Exactly once" is at-least-once delivery plus an idempotent or transactional sink. Name the sink's mechanism: a key upsert, or the offset stored in the same transaction as the write. Broker-level exactly-once covers reads and writes inside the broker; a write to a warehouse or an API is still at-least-once unless the sink supplies one of those. A claim that rests on the broker alone is recorded as at-least-once.
 """
 
 
@@ -4448,11 +4461,13 @@ Climb the ladder in order and stop at the first rung that closes the measured ga
 
 Rungs 1 to 4 return `do_not_finetune` with the score that closed the gap. Knowledge that changes weekly belongs in retrieval, not in weights.
 
+Tune prompts and retrieval on a development split. The held-out set is touched only to report the baseline and the candidates, so a prompt fitted to it never becomes the number a checkpoint is promoted against.
+
 ## 2. Choose the method from the data
 
 | Method | The data you have | Use when | Failure mode to watch |
 | --- | --- | --- | --- |
-| SFT | demonstrations: an input and the output you want | the target behavior can be written down | copies the demonstrations' errors and narrows general ability |
+| SFT | demonstrations: an input and the output you want | the target behavior can be written down | copies the demonstrations' errors and narrows general ability; breaks when the chat template or stop tokens differ from the serving path |
 | DPO | preference pairs: a chosen and a rejected output for the same input | good and bad are easier to rank than to write | drifts from the reference model when pairs are noisy or one-sided |
 | RLVR | inputs whose answers a program can check: tests, exact answers, a validator | correctness is verifiable and demonstrations are scarce | reward hacking: passes the checker without solving the task |
 
@@ -4465,12 +4480,13 @@ SFT first and DPO after is the common order when both kinds of data exist. A LoR
 3. Draw the held-out split before training, from the same distribution as real traffic.
 4. Check that no held-out example, or a near duplicate of one, is in the training set.
 5. Record the counts per source and per split.
+6. Scan the examples for personal data and credentials and remove or mask them: trained weights can emit what they saw, and consent to a file is not consent to a model that reproduces it.
 
 ## 4. Compare and promote
 
 1. Run the same held-out eval, same prompt and same decoding settings, on the untuned baseline and on every candidate checkpoint.
 2. Add a regression set for general capability the task does not cover.
-3. Promote only when the candidate beats the baseline by the stated margin on the task metric and regresses no more than the stated tolerance elsewhere.
+3. Promote only when the candidate beats the baseline by the stated margin on the task metric and regresses no more than the stated tolerance elsewhere. State the held-out size and choose the margin from the baseline's run-to-run spread (repeat the baseline at least three times); a margin smaller than that spread, or measured on a few dozen items, is no difference.
 4. Keep the baseline serving, and keep it as the rollback, until the promoted checkpoint's live metrics are observed.
 """
 
@@ -4501,9 +4517,11 @@ Load this while planning a store release. OMH prepares; the operator or CI build
 | --- | --- | --- |
 | signing | distribution certificate and App Store provisioning profile, each with an expiry; an App Store Connect API key for CI | an upload key in a keystore; with Play App Signing, Google holds the app signing key and a lost upload key can be reset |
 | privacy | `PrivacyInfo.xcprivacy`: declared data types, tracking domains, and a reason for every required-reason API; third-party SDKs on Apple's list ship their own manifest | the Data safety form in Play Console, covering what every bundled SDK collects and shares |
-| beta | TestFlight: internal testers without review; external groups need Beta App Review for the first build of a version; builds expire | testing tracks: internal, closed, open; each promotes to the next or to production |
+| beta | TestFlight: internal testers without review; external groups need Beta App Review for the first build of a version; builds expire | testing tracks: internal, closed, open; each promotes to the next or to production; a personal developer account created after 2023-11-13 needs a closed test with at least 12 testers opted in continuously for 14 days before it can apply for production access |
 | rollout | phased release of automatic updates over seven days, pausable; a manual download still gets the new build | staged rollout by percentage, raised step by step, haltable |
 | no rollback | a released build stays installed; ship a higher build number, optionally with an expedited review request | a released `versionCode` stays installed; ship a higher `versionCode`, even when it is the old code rebuilt |
+
+Toolchain minimum, checked at upload: iOS builds use the Xcode and SDK version Apple currently requires (Xcode 26 and the OS 26 SDKs since 2026-04-28); Android builds target the API level Play currently requires and ship as an app bundle. Read the current numbers from the two upcoming-requirements pages and record the date read.
 
 ## 2. Before submitting
 
@@ -4511,6 +4529,7 @@ Load this while planning a store release. OMH prepares; the operator or CI build
 2. The SDK list the build actually ships, compared against the privacy manifest and the Data safety form.
 3. The version string and the build number (`CFBundleVersion`, `versionCode`), and the next one reserved for a hotfix.
 4. The beta group or track, its testers, and the checks they must pass.
+5. The Play account type and creation date: a personal account created after 2023-11-13 puts the 14-day closed test on the timeline ahead of production access.
 
 ## 3. Rollout halt thresholds
 
@@ -4521,12 +4540,21 @@ Load this while planning a store release. OMH prepares; the operator or CI build
 | store rating or review volume | the store console | a stated drop within the step |
 | a business metric the release touches | analytics | a stated drop against the previous version |
 
+Each step also states the minimum number of sessions observed before its threshold is read; below it the step holds, because a crash-free rate over a handful of sessions is noise.
+
 ## 4. Hotfix
 
 1. Halt or pause the rollout, so no new users receive the bad build.
 2. Contain it server-side first when a feature flag or kill switch exists.
 3. Build the fix with the reserved higher build number, run the shortest beta that proves it, and submit; on iOS decide whether to request an expedited review.
 4. Roll the fix out in stages behind the same halt thresholds.
+
+## 5. If the review rejects the build
+
+1. Record the guideline number and the reviewer's message verbatim.
+2. Decide between fix and resubmit (a new build number) and reply or appeal (no change to the binary).
+3. Put a demo account with working credentials, and the way to reach any gated feature, in the review notes.
+4. Before resubmitting, check the usual causes against the shipped build: in-app account deletion, a reachable privacy policy URL, App Privacy answers that match the SDKs, and the toolchain minimum in section 1.
 """
 
 
@@ -4759,6 +4787,10 @@ Load this while planning an infrastructure-as-code change. OMH prepares; the ope
 | Kubernetes / kustomize | `kubectl diff` against the live objects | `kubectl diff -f` or `kustomize build` output | `kubectl rollout status` within a stated timeout | `kubectl rollout undo` for a workload; re-apply the prior manifest otherwise |
 | Helm | `helm diff upgrade` (plugin) or `helm get manifest` | `helm diff upgrade` or `helm template` | `--wait` with a timeout, then the release's own probes | `helm rollback <release> <revision>` |
 
+A saved plan is a secret-bearing artifact: Terraform writes sensitive values into the plan file in cleartext even when its terminal output hides them. Keep it where the state is kept, do not attach it to a pull request or paste it into chat, and share `show` output only after checking it for sensitive values.
+
+What the listed rollbacks cannot undo: Helm CRDs and hook-created resources, PersistentVolumeClaim contents, a destroyed Terraform volume, a CloudFormation resource with `DeletionPolicy: Delete`, and config or secrets changed in the same release. Name the retain or snapshot policy before the stage runs.
+
 ## 2. Reading the blast radius
 
 - Count creates, in-place updates, replacements and destroys from the saved plan, not from the code diff.
@@ -4768,7 +4800,7 @@ Load this while planning an infrastructure-as-code change. OMH prepares; the ope
 
 ## 3. Drift before the change
 
-Resolve drift first, one resource at a time: import it, move it, re-declare it, or revert the manual change. Record which. An apply over unresolved drift silently reverts someone's hotfix or re-creates something deliberately removed.
+Resolve drift first, one resource at a time: import it, move it, re-declare it, or revert the manual change. Record which. Before any state operation take a state snapshot (`terraform state pull > backup`), confirm the backend lock is held by this operator only, and prefer a `moved` or `import` block in code (reviewable, and part of the saved plan) over `state mv`. An apply over unresolved drift silently reverts someone's hotfix or re-creates something deliberately removed.
 
 ## 4. Cost delta
 
@@ -4879,12 +4911,15 @@ Load this while responding to a security event. OMH never scans, never contacts 
 
 ## 1. Leaked secret
 
+Decide the case first, and write down the evidence for it. **Compromised:** the secret was pushed to a public repository or log, or the issuer's access log shows a call nobody made. The exposure outranks availability, so revoke first (step 3 before step 2), accept the outage, then issue and deploy the replacement. **Planned or contained:** a private repository, no sign of use, a short window. Use the order in the table, which keeps the service up through an overlap window. The case rule is the same one `omh-security-safety-review/references/credential-rotation.md` states for any rotation.
+
 | Order | Step | Observed when |
 | --- | --- | --- |
 | 1 | Record the credential type, its scope, where it was pushed, whether the repository or log is public, and the first push time | the push is located in the history or the log |
 | 2 | Issue the replacement and deploy it to every consumer | the service runs on the new credential |
 | 3 | Revoke the leaked credential at its issuer | a call with the old credential is rejected; the revoke command's exit status only says the request was accepted |
 | 4 | Audit the issuer's access log for the exposure window | the window's calls are listed and attributed |
+| 4a | Remove persistence: list the identities, keys, roles, grants, and automations created in the window and remove or revoke them; treat tokens and sessions derived from the credential as live until they expire or the identity's permissions are removed, and record the longest lifetime | every created item is removed and the longest derived-token lifetime has passed |
 | 5 | Rewrite history (`git filter-repo`, BFG) and coordinate every clone, only if the value must also leave the repository | the rewritten refs are pushed and forks and caches are named |
 | 6 | Add prevention: push protection, a pre-commit secret scan, the ignore rule | the guard rejects a planted test secret |
 
@@ -4895,7 +4930,7 @@ Rotation comes before any rewrite. A rewrite does not reach clones, forks, CI ca
 1. Read the advisory: id (CVE, GHSA), affected range, fixed version, vulnerable function or input.
 2. Read the installed version from the lockfile, not the manifest range, including every transitive path to the package.
 3. Reachability: find the repository call sites that reach the vulnerable function or accept the vulnerable input, or observe that none do.
-4. Severity: start from the advisory score, then adjust. Reachable from untrusted input on a request path keeps it; reachable only from trusted input or tooling lowers it; unreachable is a scheduled upgrade, not an event. State the adjustment and its evidence.
+4. Severity: start from the advisory score, then adjust. Reachable from untrusted input on a request path keeps it; reachable only from trusted input or tooling lowers it; unreachable is a scheduled upgrade, not an event, unless the advisory is listed as exploited in the wild (CISA KEV) or has a published exploit; then the upgrade is next, not scheduled. State the adjustment and its evidence.
 5. Contain: upgrade to the fixed version, pin or override a transitive version, or disable the feature path; a workaround is recorded as a workaround, not a fix.
 6. Close only when the fixed version is observed in the lockfile and the build that ships it.
 
@@ -4914,9 +4949,13 @@ When the fixed version is only in a new major, hand the migration to its own sta
 
 Read the declared license from the package metadata and the repository `LICENSE`, not from a README badge. The verdict is fits, conflicts, or needs counsel, for the stated distribution model; anything past the declared terms is a legal question for counsel.
 
-## 4. Closure
+## 4. Suspected unauthorized access
 
-`event_closure_verdict/v1` is closed only when every closing step is observed: the rotation and the old credential's rejection for a secret, the fixed version in the shipped build for a CVE, the recorded decision for a license. Name each step that is still prepared.
+An unfamiliar admin login, a possible account takeover, or data leaving that nobody sent is an event with no code to patch. In order: (1) preserve evidence before cleaning, by exporting the relevant logs and snapshotting the affected host or account state; (2) contain, by disabling the account, revoking its sessions and tokens, and isolating the host; (3) scope from the logs what the identity touched and when; (4) remove persistence as in section 1; (5) check the notification obligations and their clocks with the owner and counsel; (6) when the access is ongoing or the service is affected, hand command to `omh-live-incident-response` with this record as input.
+
+## 5. Closure
+
+`event_closure_verdict/v1` is closed only when every closing step is observed: the rotation and the old credential's rejection for a secret, the fixed version in the shipped build for a CVE, the recorded decision for a license, and the observed refusal of the identity's sessions with an empty persistence list for unauthorized access. Name each step that is still prepared.
 """
 
 
@@ -5111,7 +5150,7 @@ Severity is a value somebody set at a time, from an observed fact. Record the le
 | --- | --- | --- |
 | SEV1 | A core flow is unavailable or wrong for most users, or data is being lost or corrupted | page immediately, commander required, customer notice drafted before mitigation lands |
 | SEV2 | A core flow is degraded, or one flow is unavailable for a bounded set of tenants or regions | page the owning team, commander required, customer notice prepared |
-| SEV3 | A non-core flow is degraded, or a core flow has a working workaround | owning team handles in hours, commander optional, no customer notice unless asked |
+| SEV3 | A non-core flow is degraded, or a core flow has a working workaround | owning team handles in hours, commander required (it may also be the scribe), no customer notice unless asked |
 
 Two rules the ladder cannot state for you. Severity is set from observed blast radius, never from how alarming the alert text reads. And an unknown blast radius is declared at the higher level until measured, then lowered by an appended entry that names the measurement.
 
@@ -5124,7 +5163,7 @@ One person per role, and one role per person while the incident is small.
 - **Communications** — owns the customer notice, the status-page text, and internal updates. Writes them; `connector-operator` sends them.
 - **Scribe** — owns the timeline. Appends what was observed, changed, and decided, with times.
 
-A role nobody filled is recorded unfilled with the reason, never left blank. Below SEV3 the commander may hold scribe; the commander may never hold operations.
+A role nobody filled is recorded unfilled with the reason, never left blank. At SEV3 the commander may hold scribe; the commander may never hold operations, except in the single-human case: with one human, that person is commander and operations, the assistant takes scribe and drafts communications, and the record says that single-handed operation is the risk being accepted.
 
 ## 3. Timeline entries are append-only
 
@@ -5141,6 +5180,8 @@ A correction is a fourth entry of the matching type that names the entry id it c
 Record the reason at the time it was believed, not the reason that turned out to be right. A timeline rewritten with hindsight teaches the review nothing.
 
 ## 4. Mitigation is not a fix
+
+First mitigation: ask what changed in the last hour -- a deploy, a flag, a configuration change, a migration, a dependency, traffic. When a change precedes the onset, reverting it is the default first mitigation, verified against the recovery signal; diagnose after the impact stops. Record each hypothesis and its disproof as timeline entries with an owner, and hand code-level causes to `omh-app-debugging`.
 
 A mitigation stops the damage; a fix removes the cause. Record every mitigation with four fields: what changed, where, `temporary` or `permanent`, and what removes it.
 
@@ -5850,14 +5891,14 @@ Run the steps in this order; each carries its own verify line, and a step whose 
 
 1. **Git and .gitignore.** Initialize version control before anything else touches the tree.
    - `git init` if no repository exists yet.
-   - Build `.gitignore` from the toolchain actually observed in the project (language, package manager, editor artifacts) - never paste in an unrelated kitchen-sink template.
+   - Build `.gitignore` from the toolchain actually observed in the project (language, package manager, editor artifacts) - never paste in an unrelated kitchen-sink template. Always include the local-only files: `.env*` (with a committed `.env.example` holding names only), key and certificate files, and OS and editor files. Turn on secret scanning or push protection on the remote before the first push.
    - Commit the empty or near-empty tree as the first commit so later history has a clean root.
    - Wrong: a Python project ignoring `node_modules/` it will never create. Right: a `.gitignore` whose every line maps to a file this project's own build actually produces.
-   - Self-test: does every line in `.gitignore` correspond to a byproduct this project's own toolchain generates?
+   - Self-test: does every line in `.gitignore` correspond to a byproduct this project's own toolchain generates or to a local-only file (`.env*`, keys, OS and editor files), with no line unrelated to either?
    - Verify: `git status --short` shows no generated or vendor noise after a build runs.
 
 2. **LICENSE.** One canonical file, one declared identifier, everywhere that identifier appears.
-   - Pick a single SPDX license identifier and write the matching `LICENSE` file at the repository root.
+   - Ask the owner which license applies; the choice is theirs. With one stated, write the matching `LICENSE` file at the repository root and use its single SPDX identifier. With none stated, add no open-source license: write no `LICENSE` (or a proprietary notice), set the metadata license field to the `UNLICENSED` value, and record the open question.
    - Match that identifier everywhere a license gets declared: package metadata, README license line, plugin or extension manifests.
    - Never declare a license in metadata without committing the file it names - license-declared-but-no-file is a named drift class, not a cosmetic gap, because it leaves a legal claim with nothing backing it.
    - Treat a license change as a decision requiring the same review as any other file it touches; do not silently swap identifiers between files.
@@ -6970,13 +7011,15 @@ Two rules the table exists to force:
 | Failure mode | Status / code | Body shape | Retryable? | Logged / redacted |
 | --- | --- | --- | --- | --- |
 | bad input | 4xx validation | error envelope with field paths | no | log shape, never values |
-| unauthenticated | 401 | error envelope, no detail | no | log attempt, never the token |
+| unauthenticated | 401 | error envelope, no detail, plus a WWW-Authenticate challenge naming the scheme | no | log attempt, never the token |
 | unauthorized | 403 | error envelope, no resource hint | no | log subject and object |
 | not found vs not permitted | pick one deliberately | must not leak existence | no | log the real reason |
 | conflict / version mismatch | 409 | current version, expected version | after refetch | log both versions |
 | duplicate create (unique constraint) | 409 | error envelope naming the conflicting field | no; a replay with the same idempotency key gets the stored response | log the constraint name, never the value |
 | upstream dependency failure | 5xx or 503 | error envelope, retry hint | yes, with backoff | log upstream identity |
-| timeout | 504 or 408 | error envelope | yes, bounded | log duration and budget |
+| timeout | 504 when a dependency or upstream timed out, 503 when the service sheds load; 408 only for a client that sent its request too slowly | error envelope | yes, bounded | log duration and budget |
+| rate limited / quota | 429 | error envelope naming the limit | yes, after the Retry-After interval | log caller and limit, never the key |
+| payload over the bound | 413 | error envelope naming the bound | no | log the size, never the body |
 
 The two rows that are always argued about and always matter: **not-found versus not-permitted** must be chosen on purpose, because returning 404 for a forbidden object hides existence and returning 403 confirms it; and **retryable** is a contract promise, because a client that retries a non-idempotent write you marked retryable will double-charge someone.
 
@@ -6990,6 +7033,7 @@ The two rows that are always argued about and always matter: **not-found versus 
 - An offset page reads and discards every row before it, so a surface that pages deep or grows without bound uses a cursor. The index that serves the cursor is a `relational-db` question; name it in the handoff.
 - Time is one representation. Nullability is explicit. An optional field that is sometimes absent and sometimes `null` is two shapes.
 - Versioning: name how a breaking change reaches clients before the first breaking change, not during it.
+- A 429 or 503 carries `Retry-After`, and the contract states the backoff a client is expected to apply; a client that ignores it is the next incident.
 
 ## 5. Integrity under concurrency
 
@@ -7439,7 +7483,7 @@ The rails, in the order a late decision gets expensive: {rails}.
 
 One module owns the provider client. It holds the model ID, the credential lookup, the timeout, the retry policy, and the rate-limit backoff, and every feature calls through it.
 
-- **Model ID is exact.** `claude-opus-4-1-20250805`, not `claude-opus-latest`. A floating alias silently re-points under a benchmark, and the run that "regressed" was measuring a different model. Keep the ID in one named constant or config value, and record it beside any result meant to be compared with another result.
+- **Model ID is exact.** A snapshot ID in the form the provider documents (`<model>-<snapshot-date>`), not an alias the provider re-points. A floating alias silently re-points under a benchmark, and the run that "regressed" was measuring a different model. Keep the ID in one named constant or config value, and record it beside any result meant to be compared with another result. Record the provider's retirement date beside the pin, and schedule a golden-set run on the named successor before that date; a call that fails with a model-not-found error is classified apart from an invalid request.
 - **Credentials come from the environment or a secret store.** Never a literal in source, a prompt file, a test fixture, or an example. A key committed once is a key rotated forever.
 - **Failures are classified, not swallowed.** Timeout, rate limit, transient 5xx, invalid request, content refusal, and truncation at the output cap are six different outcomes, and only the first three are safe to retry as sent. A single broad `except` around the call turns a schema bug into an infinite retry loop and a quota exhaustion into a silent empty answer.
 - **Retries are bounded and idempotent.** Cap the attempts, back off exponentially with jitter, honor the provider's retry-after header when it sends one, and never retry a request the caller cannot afford to have executed twice. When the production adapter wraps a provider SDK, turn the SDK's own retries off, because most SDKs retry by default and those retries stack under the boundary's policy; the boundary owns retry.
@@ -7480,6 +7524,9 @@ Only build this rail if the feature retrieves. If it does, it is the rail most l
 - **Chunking is a decision, not a default.** Chunk size, overlap, and boundary (paragraph, section, semantic) change what can be retrieved at all. Record the choice; a retrieval failure caused by a mid-sentence split cannot be prompted away.
 - **Citations are grounding, not decoration.** Every claim the model makes from retrieved context carries the chunk it came from, so an unsupported claim is visible rather than plausible.
 - **Evaluate retrieval before generation.** Measure whether the right chunk was in the context window at all, with a retrieval metric on a labeled set. A generation score sitting on top of unmeasured retrieval cannot separate a bad answer from a bad document set, and the team spends a week rewriting a prompt that was never the problem.
+
+- **Filter by permission inside retrieval.** When documents have different audiences, the caller's permissions are applied in the retrieval query (a metadata filter or a per-tenant index), before ranking and before the model sees any context, never after generation.
+- **The embedding model is pinned with the index.** Changing it means re-embedding everything and re-running the retrieval metric (recall@k and MRR on a labeled set).
 
 Deferring this rail means every quality complaint gets answered with a prompt edit.
 
@@ -7599,6 +7646,7 @@ Run the regression **before** the swap, not after it.
 - **Capture tokens and cost per run.** Prompt tokens, completion tokens, and cost belong in the record, because a candidate that is two points better and four times more expensive is a decision, not a win.
 - **Cost is per successful task.** When comparing models or effort settings, divide total cost including failed attempts by tasks that passed; a cheaper call that fails more often is not cheaper. Report time to first useful rendered output and full-task latency separately, with tail percentiles beside the median, and report difficult-task failures on their own line instead of averaging them away.
 - **Configuration first, then calibrated prompts.** Hold the harness and prompt fixed to isolate a model or effort change; only afterward allow comparable prompt tuning per candidate on separate tuning cases, and report the held-out result with each prompt version. Keeping the two comparisons distinct stops a prompt fitted to one model from settling the selection.
+- **Account for run-to-run variance.** A model call is not deterministic. Record the decoding settings on both sides, run each case at least three times (or at temperature 0 where the provider supports it, and say so), and report pass counts per case. A change smaller than the baseline's own run-to-run spread is reported as no difference, and the case count is stated beside every pass rate.
 - **Report per-case movement.** Which cases newly pass, which newly fail. A net-positive run that broke a case someone reported last month is not an improvement. A failing case names its class -- validation failure, truncation at the output cap, refusal, timeout -- so a candidate that only truncates more is not read as one that reasons worse.
 - **Missing telemetry stays null.** If the harness did not report tokens, latency, or cost, the field is null and the report says the harness did not report it. Never reconstruct a token count from a pricing table or a character count; an estimate presented beside observed numbers reads as observed.
 
@@ -9859,8 +9907,11 @@ A deprecation with no date is a warning nobody acts on:
 - **Sunset date** - when the old behaviour stops. Name what is observed before
   it arrives: the old surface's traffic falling to zero, or to a known set of
   consumers who have accepted the break.
-- **What happens after** - the removed surface returns a specific status and
-  error body rather than a generic 404, so a late caller gets a diagnosis.
+- **What happens after** - the removed surface returns 410 Gone with an
+  error body naming the replacement, rather than a generic 404, so a late caller
+  gets a diagnosis. While the window is open, every response from the old
+  surface carries the `Sunset` header (RFC 8594) and a `Deprecation` header, so
+  clients that log headers see the date without reading a changelog.
 
 An open consumer set does not block the deprecation; it changes the window and
 the announcement, and it must say so rather than shortening the window on an
@@ -10991,8 +11042,13 @@ prepared context: it counts only when its exit status and output are observed.
 Quantization follows the engine: AWQ for large models with minimal loss, GPTQ
 for widest support, FP8 where the hardware serves it natively - versus the
 GGUF ladder for llama.cpp, where `Q4_K_M` is the default, `Q5_K_M`/`Q6_K`/
-`Q8_0` buy quality, and `Q2_K`/`Q3_K` exist to fit, not to ship. Tensor
-parallel degree is a power of two, never more than the GPUs that exist.
+`Q8_0` buy quality, and `Q2_K`/`Q3_K` exist to fit, not to ship. A choice is
+not yet a verdict: run the user's held-out eval on the unquantized model and
+on the quantized one and report the delta first, and name the calibration data
+for AWQ and GPTQ. FP8 weights and activations need Hopper- or Ada-class
+hardware; on A100 use a weight-only format. Tensor parallel size must divide
+the model's attention and KV head counts and cannot exceed the GPUs that
+exist; use pipeline parallelism when the GPU count does not fit.
 
 ## Docker runbook (vLLM)
 
@@ -11004,7 +11060,7 @@ and `HF_TOKEN` for gated models.
 docker run --rm --gpus all \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   --env HF_TOKEN --ipc=host -p 8000:8000 \
-  vllm/vllm-openai:latest --model <model-id>
+  vllm/vllm-openai:<pinned-tag> --model <model-id>
 ```
 
 Failure ladder, in order: nvidia-container-toolkit installed and configured;
@@ -11021,16 +11077,23 @@ Five steps, idempotent, in order - each step is a gate, not a suggestion:
 3. **Apply** the Service and Deployment.
 4. **Verify** with `kubectl rollout status` plus pod readiness - the runbook's
    only completion evidence.
-5. **Summarize**: table of what exists, then a port-forward and one curl smoke
-   request against `/v1/models`.
+5. **Summarize**: table of what exists, then a port-forward, a `/v1/models` check, and one `chat/completions`
+   request with `max_tokens: 8` whose latency is recorded as the first sample.
 
 Sane defaults until measured otherwise: `--gpu-memory-utilization 0.85`,
-tensor parallel 1, a large dshm volume, liveness/readiness probes on the
-server port. **The port invariant**: changing the serving port touches four
+tensor parallel 1, a large dshm volume, readiness and liveness probes on `/health`,
+plus a `startupProbe` whose failureThreshold times periodSeconds exceeds the
+measured cold-cache load time of the weights (liveness starts only after it
+passes; a pod restarting while it loads is the first thing to check when
+rollout status never completes). **The port invariant**: changing the serving port touches four
 places - containerPort, Service port/targetPort, all health probes, and
 `--port` in args; a runbook that changes fewer has not changed the port.
 Cleanup mirrors setup and ends at an explicit keep-or-delete decision for the
 secret.
+
+## Who may reach the endpoint
+
+State who may reach the server before exposing it. Bind to localhost or a ClusterIP Service unless exposure is the goal, and set `--api-key` from a named secret. The key only authenticates the OpenAI-compatible paths (`/v1`, `/v2`, `/inference`, `/cohere`); other paths such as `/metrics` stay behind the network boundary. The image tag is pinned and recorded with the benchmark metadata, so two runs are comparable.
 
 ## Symptom -> flag
 
@@ -12544,6 +12607,19 @@ chart:
 MUI X Charts exposes the three as `piecewise`, `continuous`, and `ordinal`
 color maps, with an `unknownColor` fallback on the ordinal one.
 
+## Color is never the only encoding
+
+A palette that passes the token rules can still be unreadable for a reader
+with color-vision deficiency, and marks need their own contrast.
+
+- Every series also differs by a direct label, a marker shape, or a line dash
+  (WCAG 1.4.1).
+- Marks, and the gridlines or axes a reader needs, meet 3:1 against their
+  background (WCAG 1.4.11).
+- The chart carries a text alternative or a data table for its main finding.
+- Check the categorical set under a deuteranopia and a protanopia simulation,
+  and record the result beside the tokens.
+
 ## Categorical slot exhaustion
 
 When the series outnumber the categorical slots, do not generate more hues.
@@ -13335,7 +13411,10 @@ does not know, and the order check never sees it.
     the accent budget in practice, the rules of any named style preset, and
     the patterns this surface refuses.
 11. **Accessibility Constraints & Accepted Debt** *(OMH)* — the constraints
-    honored (keyboard paths, focus order, contrast) and the debt knowingly
+    honored (keyboard paths, focus order, contrast, pointer targets of at least
+    24x24 CSS px (WCAG 2.2 SC 2.5.8) and 44 for primary touch controls, a
+    focused element never fully covered by a sticky bar (SC 2.4.11), a
+    single-pointer alternative to any drag (SC 2.5.7)) and the debt knowingly
     accepted, each with its reason.
 12. **Research Log** *(OMH, greenfield builds)* — an entry for every
     research lane that ran: the source consulted, what was taken from it
@@ -13849,6 +13928,20 @@ consistently across every screen, prompt, help line, and empty state:
   light terminal themes, or `DESIGN.md` states the supported-theme
   decision explicitly.
 
+## Cells, not characters
+
+A terminal is a grid of cells, and text is not one cell per character.
+
+- Measure and truncate by cell width, not by code points: East Asian wide
+  characters take two cells, combining marks take none, and emoji vary by
+  terminal. Verify one render with Korean (or another wide script) and one
+  with emoji-bearing content at 80 columns, because a column that lines up in
+  Latin text drifts the box-drawing borders in CJK.
+- Honor `NO_COLOR` and a non-TTY stdout: drop color and cursor control, and
+  keep the hierarchy through spacing and weight.
+- Redraw on resize (SIGWINCH) and say what the layout does below the minimum
+  width.
+
 ## Keyboard states are the interaction states
 
 There is no pointer. Focus, selection, and activation must each be
@@ -13952,7 +14045,9 @@ work lands.
 2. Capture the affected pages and states at 1440px, 768px, and 375px
    wide — desktop, tablet, and mobile. These are the web minimum, the
    counterpart of the TUI's 80x24 and 120x40; add the widths the
-   product actually targets.
+   product actually targets. Capture each in every theme the contract
+   defines, and once with `prefers-reduced-motion: reduce` for any surface
+   that animates.
 3. Compare each capture against the comparison target, side by side.
 4. List every difference — spacing, weight, color, alignment,
    truncation, state treatment — however small. A difference you did

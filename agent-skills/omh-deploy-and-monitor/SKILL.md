@@ -17,7 +17,7 @@ This is an OMH `deploy-and-monitor` workflow skill, projected for Agent Skills h
 
 ## Why This Exists
 
-`deploy-and-monitor` exists to keep `monitoring` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`deploy-and-monitor` exists because a deploy is judged healthy by whoever last looked at a dashboard: it fixes the baseline before the change and names the thresholds that mean roll back.
 
 ## Do Not Use When
 
@@ -35,15 +35,15 @@ Good example:
 
 Bad example:
 
-- Prompt: deploy-and-monitor: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `deploy-and-monitor`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: deploy-and-monitor: ship it and tell me when it is healthy.
+- Expected behavior: Refuse a health claim; name the missing baseline, signals, window, and rollback owner.
+- Why: Healthy with no baseline is whatever the dashboard shows after the fact.
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- Each health signal has a pre-deploy baseline, a threshold, a window, and the action it triggers.
+- The rollback owner and trigger are named, and the gate says whether the old version runs on the new schema.
+- A bake time is stated; post-deploy status cites observed values or reads not_observed.
 
 ## Recovery Notes
 
@@ -73,6 +73,8 @@ Quality bar:
 - Mark health and rollback status unknown until observed evidence arrives.
 - A watchlist that must keep running after this turn is prepared for a scheduler the user runs, with the user's own source (a health URL or a script whose output carries no timestamps, never one OMH writes), and is activated by the user, never by OMH.
 - On Hermes, the first monitor tick runs against a baseline with nothing to diff, so it is not a detected change; a silent tick says only that nothing was delivered (a no_change run, or an agent run that answered `[SILENT]`) and never that the release is healthy; a source that failed is an error, not a change; and what the job finds enters the post-deploy status only from its recorded runs (`hermes cron runs <job_id>`) and its open `hermes cron incidents`.
+- Name an error, a latency, and a saturation signal per service and record each pre-deploy value over the same window; healthy is a comparison to that baseline.
+- Set a bake time, and list migrations and flags in the decision gate with whether the old version still runs on the new schema.
 
 Required inputs:
 

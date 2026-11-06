@@ -323,8 +323,11 @@ NON_SKILL_BACKTICKS = frozenset(
 # `systematic-review` defers topic discovery to `source-finder`, one supplied
 # paper to `paper-learning` and a HellaSwag log check to `repro-audit`; no
 # sibling gains a statement pointing back. Three cases, three pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 410
-EXPECTED_DEFERENCE_PAIRS = 426
+# `model-optimization` defers weight-level optimization to `inference-serving`
+# (serving format and quantization) and `model-finetuning` (distillation); no
+# sibling gains a statement pointing back. Two cases, two pairs, one owner.
+EXPECTED_DEFERENCE_CASES = 412
+EXPECTED_DEFERENCE_PAIRS = 428
 EXPECTED_DEFERRING_OWNERS = 121
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,

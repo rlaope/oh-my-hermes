@@ -88,6 +88,7 @@ Quality bar:
 - Adjust severity by reachability: a critical advisory on a function nothing calls is not the same event as one on the request path.
 - Keep prepared, observed, and closed as separate states for every containment step.
 - Hand a fix that needs a planned version jump to its own upgrade plan, and keep this event open until that fix is observed.
+- For a leaked secret, decide the case with evidence first: a public push or any sign of use revokes first; otherwise keep the overlap order. Suspected unauthorized access: reference section 4.
 
 Handoff policy:
 

@@ -3690,6 +3690,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Check build/test/CI, security/privacy, performance, observability, rollback, docs/support, and release communication.
   - Return GO, HOLD, or BLOCK only with evidence IDs and missing evidence.
   - Convert remediation into explicit follow-up workflows instead of silently patching.
+  - Verdict: GO only when all nine rows are observed, BLOCK when any row failed an observed check, else HOLD naming the rows lacking evidence.
+  - Evidence floor: rollback = command exercised, restore tested, RPO/RTO; performance = load result at peak; observability = alerts to a named on-call with a runbook; security_privacy = secrets store, least privilege, cert expiry.
 - Completion checklist:
   - Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
   - Open questions, residual risk, and missing verification are named.
@@ -4235,12 +4237,13 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep safety review in Hermes. Scans, dependency updates, sandbox changes, credential checks, external security tools, and code fixes require explicit observed executor or operator evidence.
-- Why this exists: `security-safety-review` adapts ECC's AgentShield and safety-review posture into OMH as a review-first gate for agentic coding and operator workflows without adding hidden scanners or external dependencies.
+- Why this exists: `security-safety-review` adapts ECC's AgentShield and safety-review posture into OMH as a review-first gate for agentic coding and operator workflows without adding hidden scanners or external dependencies, because an agent that runs commands and reads untrusted text can be steered into running them.
 - Use when: Use when Hermes should identify security, prompt-injection, tool-permission, secret, dependency, destructive-action, or explicit local plugin risks before execution or release.
 - Do not use when:
   - The user asks for production readiness across release, rollback, and observability; use `production-audit`.
   - The user asks for merge verification commands; use `verification-gate`.
   - The user asks for a normal code review focused on bugs; use `code-review`.
+  - The request is a vulnerability review of application code (injection, authorization, SSRF); use `code-review`.
   - The subject is an application or service rather than the agent's own runtime -- its assets, trust boundaries, attack scenarios, and the controls that defend them; use `application-threat-model`.
   - Something already happened to shipped code -- a CVE published against a dependency, a credential pushed to a repository, a license question about a package; use `security-event-response`, which orders containment and closes only on an observed rotation or fix.
 - Strong routing signals: `security-safety-review`, `security safety review`, `ai coding safety`, `agent safety review`, `prompt injection review`, `tool permission review`, `secret exposure review`, `destructive action review`, `supply chain safety`, `sandbox safety`, `plugin risk audit`, `Hermes plugin audit`, `local plugin guard`, `key rotation`, `secret rotation`, `credential rotation`, `certificate rotation`, `rotate the api key`, `rotate this api key`, `rotate the credentials`, `revoke the old key`, `보안 안전 검토`, `에이전트 안전`, `프롬프트 인젝션`, `시크릿 노출`, `파괴적 명령`, `ревью безопасности`, `аудит безопасности`, `проверь на уязвимости`, `секьюрити ревью`, `утечка секретов в коде`
@@ -4259,10 +4262,12 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Order a credential replacement issue-new, deploy-new, verify-new, revoke-old, verify-revoked, and name what breaks if the order changes; revocation is proven by a call that fails with the old credential, never by the revoke command's exit status, which reports that the request was accepted. Load `references/credential-rotation.md` for the overlap window and the per-credential-type steps.
   - Project every blocked terminal-command row into a proposed `approvals.deny` glob list the user applies; a blocked action that is not a terminal command (a file write, an MCP or HTTP call) stays a guidance-only row, because the deny list never sees it.
   - Return PASS, HOLD, or BLOCK with missing evidence and confirmation requirements.
+  - A downloaded script is read in full, never piped to a shell, and run in a disposable VM without credentials.
 - Completion checklist:
-  - Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
-  - Open questions, residual risk, and missing verification are named.
-  - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+  - Findings are grounded in concrete file, command, or source evidence.
+  - The verdict is PASS, HOLD, or BLOCK with the missing evidence and confirmation required.
+  - Residual risk and missing verification are named; fixes are separate handoffs.
+  - A credential replacement states its case: compromised revokes first, planned keeps an overlap window.
 - Recovery notes:
   - If verify-new lacks an observed credential check, retain the redacted risk matrix and credential_rotation_sequence/v1, mark replacement unresolved, and hand back the verify-new evidence requirement before the operator revokes the old credential.
   - If no single local plugin directory is explicitly named, no plugin audit finding stands; mark plugin_risk_audit/v1 not_observed and hand back the directory question without importing, registering, or activating any plugin.
@@ -4395,7 +4400,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep incident/SLO/error-budget review in Hermes; prepare remediation handoffs only after an accepted fix direction exists and record closure only from observed evidence.
-- Why this exists: `reliability-review` exists to make SRE-style review strict: service reliability claims must point to metrics or references, and remediation remains separate from the review narrative.
+- Why this exists: `reliability-review` exists because a reliability claim is cheap to write and expensive to check: it holds an SLO to its arithmetic and a postmortem to its structure, and keeps remediation separate from the review.
 - Use when: Use when Hermes should review incident notes, SLOs, error budgets, or service reliability evidence while keeping remediation and closure claims observed.
 - Do not use when:
   - The user only needs a generic status report or leadership deck.
@@ -4416,9 +4421,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate supplied metrics, incident notes, assumptions, and remediation follow-ups.
   - Keep closure and remediation status unobserved until evidence is supplied.
 - Completion checklist:
-  - Confirm the workflow target, evidence boundary, and stop condition are named.
-  - Report which outputs are prepared, observed, blocked, or missing.
-  - Name the smallest next verification or handoff instead of claiming completion from narration.
+  - An SLO conclusion states the SLI (good over valid events), window, target, budget consumed, and burn rate, or reads unresolved.
+  - A postmortem draft names impact, detection and resolution times, trigger, contributing factors (systems, not people), and action items with owner and due date.
+  - A pre-launch review names, per dependency, the slow, down, and wrong-answer behavior and the SLOs and runbooks that exist.
+  - Every remediation item reads open or closed with the observed evidence.
 - Recovery notes:
   - If metrics do not cover the named service and time window, retain the cited incident notes, mark SLO and error-budget conclusions unresolved, and hand back the evidence and missing-evidence list with the uncovered window.
   - If remediation closure has no supporting reference, retain the source-backed reliability review, mark closure not_observed, and hand back the remediation follow-ups and missing closure evidence without claiming the fix completed.
@@ -4457,7 +4463,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep idea shaping, decision gates, planning, release narration, and status in Hermes; prepare selected executor/runtime handoffs only for accepted code work and record deploy/monitoring only from observed operator or wrapper evidence.
-- Why this exists: `idea-to-deploy` exists to keep `delivery` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+- Why this exists: `idea-to-deploy` exists because an idea becomes a running product through decisions nobody owns together: it keeps metric, plan, executor, and release evidence as separate gates.
 - Use when: Use when Hermes should carry a product or app idea through shaping, decision gates, plan acceptance, executor handoff, verification, release readiness, deploy, and monitoring boundaries, including a fresh or empty repository that needs the greenfield bootstrap pass (git, license, README, agent context file, CI skeleton) before delivery work starts.
 - Do not use when:
   - The task is already a concrete repo change whose stopping point is one PR-ready cycle, not product or release operations; use `ultrawork`.
@@ -4468,19 +4474,20 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expected behavior: Prepare the idea-to-release lane while keeping implementation, QA, and deploy evidence observed-only.
   - Why: The request spans product shaping through deploy readiness instead of a single task.
 - Bad example:
-  - Prompt: idea-to-deploy: treat casual chat or unaccepted work as if this workflow already produced verified results.
-  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `idea-to-deploy`.
-  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+  - Prompt: idea-to-deploy: build the whole app and deploy it, I will check later.
+  - Expected behavior: Refuse the single jump: ask for the success metric and scope, then produce the stage rail with an owner per stage.
+  - Why: An unscoped build has no acceptance test and no rollback.
 - Quality bar:
   - Name the idea, user value, decision owner, non-goals, and success metric before planning delivery.
   - Expose idea, decision, plan, handoff, verification, release, deploy, and monitor stages as separate status steps.
   - Prepare coding handoffs only after plan acceptance and selected executor/runtime choice.
   - Mark deploy, monitoring, and rollback as unobserved until the wrapper or operator records evidence.
   - For a fresh, empty, or newly `git init`-ed target that is expected to outlive the session, run the greenfield bootstrap pass before or alongside delivery planning - load `references/project-bootstrap.md` for the six-step order (git and .gitignore, LICENSE, README, agent context file, CI skeleton, docs/ seed) and its per-file verify line; explicitly skip it for throwaway or scratch work instead of silently running it.
+  - Name the skill per stage: `backend`, `relational-db`, `frontend`, `application-threat-model`, `iac-change`, `production-audit`, `release-cut`, `deploy-and-monitor`. Settle where it runs, how secrets are provided, and the first environment before deploy.
 - Completion checklist:
-  - Confirm the workflow target, evidence boundary, and stop condition are named.
-  - Report which outputs are prepared, observed, blocked, or missing.
-  - Name the smallest next verification or handoff instead of claiming completion from narration.
+  - The idea, user, success metric, and non-goals are written down.
+  - Each stage has an owner and the skill that runs it; plan acceptance and executor choice precede any coding handoff.
+  - Where it runs, how secrets are provided, and the first environment are decided before deploy; deploy evidence is observed.
 - Recovery notes:
   - If the success metric or release scope is missing, retain the supplied idea and user value, mark delivery planning unresolved, and hand back the stage rail with the missing decision before an executor handoff.
   - If plan acceptance or executor choice is absent, retain the prepared decision gates and stage rail, mark the coding handoff unresolved, and hand back the acceptance or runtime-choice question.
@@ -4666,7 +4673,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep release checklist, health criteria, rollback gates, and status narration in Hermes; record deploy, monitor, incident, or rollback evidence only when the wrapper or operator observes it.
-- Why this exists: `deploy-and-monitor` exists to keep `monitoring` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+- Why this exists: `deploy-and-monitor` exists because a deploy is judged healthy by whoever last looked at a dashboard: it fixes the baseline before the change and names the thresholds that mean roll back.
 - Use when: Use when Hermes should prepare or narrate a release operation with deploy checklist, health signals, rollback criteria, and post-deploy status without pretending to run infrastructure.
 - Do not use when:
   - An incident has already been declared and the work is commanding it -- severity, commander, running timeline, recovery verification -- rather than watching a release; use `live-incident-response`.
@@ -4678,19 +4685,21 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expected behavior: Create release monitoring guidance with deployment, metric, rollback, and observation boundaries.
   - Why: The request is about deploy readiness and monitoring rather than code review alone.
 - Bad example:
-  - Prompt: deploy-and-monitor: treat casual chat or unaccepted work as if this workflow already produced verified results.
-  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `deploy-and-monitor`.
-  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+  - Prompt: deploy-and-monitor: ship it and tell me when it is healthy.
+  - Expected behavior: Refuse a health claim; name the missing baseline, signals, window, and rollback owner.
+  - Why: Healthy with no baseline is whatever the dashboard shows after the fact.
 - Quality bar:
   - Name release scope, target environment, health signals, rollback criteria, and evidence owner.
   - Show pre-deploy, deploy decision, monitor, rollback, and post-deploy as distinct stages.
   - Mark health and rollback status unknown until observed evidence arrives.
   - On Hermes, a watchlist that must keep running after this turn is prepared as a native blueprint through `automation-blueprint` (a cron job whose `monitor` source, a health URL or a script whose output carries no timestamps, is the user's source, never one OMH writes), activated by the user or Hermes and never by OMH.
   - On Hermes, the first monitor tick runs against a baseline with nothing to diff, so it is not a detected change; a silent tick says only that nothing was delivered (a no_change run, or an agent run that answered `[SILENT]`) and never that the release is healthy; a source that failed is an error, not a change; and what the job finds enters the post-deploy status only from its recorded runs (`hermes cron runs <job_id>`) and its open `hermes cron incidents`.
+  - Name an error, a latency, and a saturation signal per service and record each pre-deploy value over the same window; healthy is a comparison to that baseline.
+  - Set a bake time, and list migrations and flags in the decision gate with whether the old version still runs on the new schema.
 - Completion checklist:
-  - Confirm the workflow target, evidence boundary, and stop condition are named.
-  - Report which outputs are prepared, observed, blocked, or missing.
-  - Name the smallest next verification or handoff instead of claiming completion from narration.
+  - Each health signal has a pre-deploy baseline, a threshold, a window, and the action it triggers.
+  - The rollback owner and trigger are named, and the gate says whether the old version runs on the new schema.
+  - A bake time is stated; post-deploy status cites observed values or reads not_observed.
 - Recovery notes:
   - If a monitor has only its first baseline tick or a silent tick, retain the checklist and watchlist, mark release health not_observed, and hand back the recorded cron runs and open incidents needed to assess health.
   - If the rollback owner is missing, retain the release scope and health signals, mark the deploy decision gate unresolved, and hand back the rollback criteria with the owner question before advancing.
@@ -5368,14 +5377,14 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `inference-serving`, `inference serving`, `serve this model`, `serve the model`, `model serving`, `serving endpoint`, `vllm`, `llama.cpp`, `llama cpp`, `serve with vllm`, `deploy vllm`, `vllm deployment`, `serving benchmark`, `benchmark the endpoint`, `prefix caching benchmark`, `gguf quantization`, `which quantization`, `모델 서빙`, `모델 서빙해줘`, `모델 배포해서 서빙`, `서빙 벤치마크`, `vllm 배포`, `vllm 서빙`, `추론 서버 띄워줘`, `모델 띄워줘`
 - Good example:
   - Prompt: Serve Qwen on our two A100s for the team and tell me if prefix caching is worth turning on.
-  - Expected behavior: Engine verdict (vLLM, TP as a power of two), quantization check, the k8s or docker runbook with its gates and verification, then the prefix-cache A/B protocol with hit-rate assumptions recorded - numbers only from observed runs.
+  - Expected behavior: Engine verdict (vLLM, TP dividing the head counts), quantization check, the k8s or docker runbook with its gates and verification, then the prefix-cache A/B protocol with hit-rate assumptions recorded - numbers only from observed runs.
   - Why: Serving plus a measured tuning question is exactly the decide-deploy-measure process this workflow owns.
 - Bad example:
   - Prompt: Just tell me the endpoint is fast enough, we already know it works.
   - Expected behavior: Refuse the unmeasured claim; run the benchmark protocol against the stated SLO or report the capacity question as unanswered.
   - Why: A fast-enough claim without a load shape and observed results is the folklore this skill replaces.
 - Quality bar:
-  - Decide before deploying: engine from the situation table (vLLM for multi-user NVIDIA APIs, llama.cpp for CPU/Apple Silicon/edge, TensorRT-LLM only with ops budget), quantization to match (AWQ/GPTQ/FP8 vs the GGUF ladder with `Q4_K_M` default), tensor parallel a power of two.
+  - Decide before deploying: engine from the situation table (vLLM for multi-user NVIDIA APIs, llama.cpp for CPU/Apple Silicon/edge, TensorRT-LLM only with ops budget), quantization to match (AWQ/GPTQ/FP8 vs the GGUF ladder with `Q4_K_M` default), tensor parallel head-divisible.
   - Deploy as the gated runbook: docker's three load-bearing flags (`--ipc=host`, HF cache mount, `HF_TOKEN`) or the Kubernetes five-step (secret gate, existing-deployment gate, apply, rollout+readiness verify, summary+smoke); the port invariant touches four places or it did not change the port.
   - Troubleshoot from the symptom table first - slow TTFT to prefix caching/chunked prefill, OOM to gpu-memory-utilization/max-model-len/quantization - before inventing flags.
   - Measure with the protocol: TTFT/TPOT/ITL/E2EL as mean/median/P99, goodput against an explicit SLO, one load shape per run, results saved with metadata; the full contract is `omh-inference-serving/references/serving-bench.md`.
@@ -5430,7 +5439,8 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The user wants their own machine's model routing configured or providers connected; use `model-setup`.
   - The goal is measurable performance of an application or system, not model handling; use `ultraperf`.
-  - The user wants benchmark-superiority or provider-readiness claims without measurements.
+  - The user wants benchmark-superiority or provider-readiness claims without measurements; decline and offer the measurement plan.
+  - Making a model's weights smaller or faster (quantizing, pruning, distilling); use `inference-serving` for serving format and quantization, `model-finetuning` for distillation.
 - Strong routing signals: `model-optimization`, `model optimization`, `optimize for model`, `onboard new model`, `calibrate new model`, `new model calibration`, `model calibration`
 - Good example:
   - Prompt: GLM 5.3 and 5.3 Flash just shipped; check what we should optimize for them.
@@ -6615,10 +6625,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: The two surfaces share vocabulary and nothing else; modeling the agent's runtime here is how the artifacts get confused.
 - Quality bar:
   - Name every component, data store, and external dependency of the real system before naming one threat; a model of a system nobody described is a checklist.
-  - Give each asset a data class and exactly one loss: disclosure, corruption, unavailability, or fraud.
+  - Give each asset a data class and its primary loss: disclosure, corruption, unavailability, or fraud.
   - For each trust boundary, state what crosses it, what authenticates the crossing, and what the receiver assumes without checking.
   - Run all six STRIDE prompts from `omh-application-threat-model/references/threat-model-method.md` per boundary; drop an unreachable scenario with its reason instead of carrying it.
   - Resolve every scenario to one decision (mitigate, transfer, accept, eliminate) with an owner, and give every mitigating control a test whose observable fails when the control is removed.
+  - Rank scenarios by likelihood times impact; accept only below the owner's threshold.
 - Completion checklist:
   - Every asset carries a data class and one named loss; every boundary names what crosses it and what authenticates the crossing.
   - Every scenario resolves to mitigate, transfer, accept, or eliminate, with an owner.
@@ -6645,7 +6656,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Korean: 어떤 공격자를 범위에 포함하나요 — 외부, 인증된 테넌트, 내부자, 침해된 의존성 — 그리고 제외 범위는 무엇인가요?
 - Expected outputs:
   - application_threat_model/v1
-  - asset register: data class plus the one loss that makes each asset worth defending
+  - asset register: data class plus the loss that makes each asset worth defending
   - trust boundaries: what crosses, what authenticates the crossing, what the receiver assumes unchecked
   - attack scenarios: entry point, path, precondition, impact
   - one decision per scenario (mitigate, transfer, accept, eliminate) with an owner
@@ -6708,7 +6719,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Recovery cites the named signal, its healthy value, the observed value, and the observer, never the mitigation alone.
   - Paging, status-page, and customer-send entries read prepared unless a connector result was observed.
 - Recovery notes:
-  - If nobody is named commander, ask for one before anything else; an incident without a commander produces opinions instead of decisions.
+  - If nobody is named commander, ask for one before anything else; an incident without a commander produces opinions instead of decisions. With one human, that person is commander and operations.
   - If the recovery signal is not stated, ask which signal and which value counts as healthy before calling anything recovered.
   - If the incident turns out to be closed, hand the postmortem to `reliability-review` and leave this record as the timeline it reads.
   - If a connector call fails or returns nothing, keep the send prepared and name the channel that is unconfirmed instead of assuming delivery.
@@ -7100,6 +7111,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Adjust severity by reachability: a critical advisory on a function nothing calls is not the same event as one on the request path.
   - Keep prepared, observed, and closed as separate states for every containment step.
   - Hand a fix that needs a planned version jump to its own upgrade plan, and keep this event open until that fix is observed.
+  - For a leaked secret, decide the case with evidence first: a public push or any sign of use revokes first; otherwise keep the overlap order. Suspected unauthorized access: reference section 4.
 - Completion checklist:
   - The event kind, source, and exposure window are stated.
   - Every severity call cites the reachable path or its observed absence.

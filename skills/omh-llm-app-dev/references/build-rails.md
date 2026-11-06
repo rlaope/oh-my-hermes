@@ -10,7 +10,7 @@ The rails, in the order a late decision gets expensive: `provider boundary`, `st
 
 One module owns the provider client. It holds the model ID, the credential lookup, the timeout, the retry policy, and the rate-limit backoff, and every feature calls through it.
 
-- **Model ID is exact.** `claude-opus-4-1-20250805`, not `claude-opus-latest`. A floating alias silently re-points under a benchmark, and the run that "regressed" was measuring a different model. Keep the ID in one named constant or config value, and record it beside any result meant to be compared with another result.
+- **Model ID is exact.** A snapshot ID in the form the provider documents (`<model>-<snapshot-date>`), not an alias the provider re-points. A floating alias silently re-points under a benchmark, and the run that "regressed" was measuring a different model. Keep the ID in one named constant or config value, and record it beside any result meant to be compared with another result. Record the provider's retirement date beside the pin, and schedule a golden-set run on the named successor before that date; a call that fails with a model-not-found error is classified apart from an invalid request.
 - **Credentials come from the environment or a secret store.** Never a literal in source, a prompt file, a test fixture, or an example. A key committed once is a key rotated forever.
 - **Failures are classified, not swallowed.** Timeout, rate limit, transient 5xx, invalid request, content refusal, and truncation at the output cap are six different outcomes, and only the first three are safe to retry as sent. A single broad `except` around the call turns a schema bug into an infinite retry loop and a quota exhaustion into a silent empty answer.
 - **Retries are bounded and idempotent.** Cap the attempts, back off exponentially with jitter, honor the provider's retry-after header when it sends one, and never retry a request the caller cannot afford to have executed twice. When the production adapter wraps a provider SDK, turn the SDK's own retries off, because most SDKs retry by default and those retries stack under the boundary's policy; the boundary owns retry.
@@ -51,6 +51,9 @@ Only build this rail if the feature retrieves. If it does, it is the rail most l
 - **Chunking is a decision, not a default.** Chunk size, overlap, and boundary (paragraph, section, semantic) change what can be retrieved at all. Record the choice; a retrieval failure caused by a mid-sentence split cannot be prompted away.
 - **Citations are grounding, not decoration.** Every claim the model makes from retrieved context carries the chunk it came from, so an unsupported claim is visible rather than plausible.
 - **Evaluate retrieval before generation.** Measure whether the right chunk was in the context window at all, with a retrieval metric on a labeled set. A generation score sitting on top of unmeasured retrieval cannot separate a bad answer from a bad document set, and the team spends a week rewriting a prompt that was never the problem.
+
+- **Filter by permission inside retrieval.** When documents have different audiences, the caller's permissions are applied in the retrieval query (a metadata filter or a per-tenant index), before ranking and before the model sees any context, never after generation.
+- **The embedding model is pinned with the index.** Changing it means re-embedding everything and re-running the retrieval metric (recall@k and MRR on a labeled set).
 
 Deferring this rail means every quality complaint gets answered with a prompt edit.
 

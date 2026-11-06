@@ -59,6 +59,20 @@ consistently across every screen, prompt, help line, and empty state:
   light terminal themes, or `DESIGN.md` states the supported-theme
   decision explicitly.
 
+## Cells, not characters
+
+A terminal is a grid of cells, and text is not one cell per character.
+
+- Measure and truncate by cell width, not by code points: East Asian wide
+  characters take two cells, combining marks take none, and emoji vary by
+  terminal. Verify one render with Korean (or another wide script) and one
+  with emoji-bearing content at 80 columns, because a column that lines up in
+  Latin text drifts the box-drawing borders in CJK.
+- Honor `NO_COLOR` and a non-TTY stdout: drop color and cursor control, and
+  keep the hierarchy through spacing and weight.
+- Redraw on resize (SIGWINCH) and say what the layout does below the minimum
+  width.
+
 ## Keyboard states are the interaction states
 
 There is no pointer. Focus, selection, and activation must each be

@@ -5892,6 +5892,8 @@ _DEFINITIONS = [
             "Check build/test/CI, security/privacy, performance, observability, rollback, docs/support, and release communication.",
             "Return GO, HOLD, or BLOCK only with evidence IDs and missing evidence.",
             "Convert remediation into explicit follow-up workflows instead of silently patching.",
+            "Verdict: GO only when all nine rows are observed, BLOCK when any row failed an observed check, else HOLD naming the rows lacking evidence.",
+            "Evidence floor: rollback = command exercised, restore tested, RPO/RTO; performance = load result at peak; observability = alerts to a named on-call with a runbook; security_privacy = secrets store, least privilege, cert expiry.",
         ),
         why_this_exists=(
             "`production-audit` gives OMH a preflight release surface so operators can see production risks before launch "
@@ -6739,15 +6741,24 @@ _DEFINITIONS = [
             "Order a credential replacement issue-new, deploy-new, verify-new, revoke-old, verify-revoked, and name what breaks if the order changes; revocation is proven by a call that fails with the old credential, never by the revoke command's exit status, which reports that the request was accepted. Load `references/credential-rotation.md` for the overlap window and the per-credential-type steps.",
             "Project every blocked terminal-command row into a proposed `approvals.deny` glob list the user applies; a blocked action that is not a terminal command (a file write, an MCP or HTTP call) stays a guidance-only row, because the deny list never sees it.",
             "Return PASS, HOLD, or BLOCK with missing evidence and confirmation requirements.",
+            "A downloaded script is read in full, never piped to a shell, and run in a disposable VM without credentials.",
+        ),
+        final_checklist=(
+            "Findings are grounded in concrete file, command, or source evidence.",
+            "The verdict is PASS, HOLD, or BLOCK with the missing evidence and confirmation required.",
+            "Residual risk and missing verification are named; fixes are separate handoffs.",
+            "A credential replacement states its case: compromised revokes first, planned keeps an overlap window.",
         ),
         why_this_exists=(
             "`security-safety-review` adapts ECC's AgentShield and safety-review posture into OMH as a review-first gate "
-            "for agentic coding and operator workflows without adding hidden scanners or external dependencies."
+            "for agentic coding and operator workflows without adding hidden scanners or external dependencies, because an agent that "
+            "runs commands and reads untrusted text can be steered into running them."
         ),
         do_not_use_when=(
             "The user asks for production readiness across release, rollback, and observability; use `production-audit`.",
             "The user asks for merge verification commands; use `verification-gate`.",
             "The user asks for a normal code review focused on bugs; use `code-review`.",
+            "The request is a vulnerability review of application code (injection, authorization, SSRF); use `code-review`.",
             "The subject is an application or service rather than the agent's own runtime -- its assets, trust boundaries, attack scenarios, and the controls that defend them; use `application-threat-model`.",
             "Something already happened to shipped code -- a CVE published against a dependency, a credential pushed to a repository, a license question about a package; use `security-event-response`, which orders containment and closes only on an observed rotation or fix.",
         ),
@@ -6936,7 +6947,16 @@ _DEFINITIONS = [
             "Separate supplied metrics, incident notes, assumptions, and remediation follow-ups.",
             "Keep closure and remediation status unobserved until evidence is supplied.",
         ),
-        why_this_exists="`reliability-review` exists to make SRE-style review strict: service reliability claims must point to metrics or references, and remediation remains separate from the review narrative.",
+        why_this_exists=(
+            "`reliability-review` exists because a reliability claim is cheap to write and expensive to check: it holds an SLO to its "
+            "arithmetic and a postmortem to its structure, and keeps remediation separate from the review."
+        ),
+        final_checklist=(
+            "An SLO conclusion states the SLI (good over valid events), window, target, budget consumed, and burn rate, or reads unresolved.",
+            "A postmortem draft names impact, detection and resolution times, trigger, contributing factors (systems, not people), and action items with owner and due date.",
+            "A pre-launch review names, per dependency, the slow, down, and wrong-answer behavior and the SLOs and runbooks that exist.",
+            "Every remediation item reads open or closed with the observed evidence.",
+        ),
         do_not_use_when=(
             "The user only needs a generic status report or leadership deck.",
             "No service, incident, SLO, metric, or reliability source boundary is available.",
@@ -7009,6 +7029,21 @@ _DEFINITIONS = [
             "Prepare coding handoffs only after plan acceptance and selected executor/runtime choice.",
             "Mark deploy, monitoring, and rollback as unobserved until the wrapper or operator records evidence.",
             "For a fresh, empty, or newly `git init`-ed target that is expected to outlive the session, run the greenfield bootstrap pass before or alongside delivery planning - load `references/project-bootstrap.md` for the six-step order (git and .gitignore, LICENSE, README, agent context file, CI skeleton, docs/ seed) and its per-file verify line; explicitly skip it for throwaway or scratch work instead of silently running it.",
+            "Name the skill per stage: `backend`, `relational-db`, `frontend`, `application-threat-model`, `iac-change`, `production-audit`, `release-cut`, `deploy-and-monitor`. Settle where it runs, how secrets are provided, and the first environment before deploy.",
+        ),
+        why_this_exists=(
+            "`idea-to-deploy` exists because an idea becomes a running product through decisions nobody owns together: "
+            "it keeps metric, plan, executor, and release evidence as separate gates."
+        ),
+        bad_example=SkillExample(
+            prompt="idea-to-deploy: build the whole app and deploy it, I will check later.",
+            expected="Refuse the single jump: ask for the success metric and scope, then produce the stage rail with an owner per stage.",
+            why="An unscoped build has no acceptance test and no rollback.",
+        ),
+        final_checklist=(
+            "The idea, user, success metric, and non-goals are written down.",
+            "Each stage has an owner and the skill that runs it; plan acceptance and executor choice precede any coding handoff.",
+            "Where it runs, how secrets are provided, and the first environment are decided before deploy; deploy evidence is observed.",
         ),
         do_not_use_when=(
             "The task is already a concrete repo change whose stopping point is one PR-ready cycle, not product or release operations; use `ultrawork`.",
@@ -7255,6 +7290,22 @@ _DEFINITIONS = [
                 "A watchlist that must keep running after this turn is prepared for a scheduler the user runs, with the user's own source (a health URL or a script whose output carries no timestamps, never one OMH writes), and is activated by the user, never by OMH.",
             ),
             "On Hermes, the first monitor tick runs against a baseline with nothing to diff, so it is not a detected change; a silent tick says only that nothing was delivered (a no_change run, or an agent run that answered `[SILENT]`) and never that the release is healthy; a source that failed is an error, not a change; and what the job finds enters the post-deploy status only from its recorded runs (`hermes cron runs <job_id>`) and its open `hermes cron incidents`.",
+            "Name an error, a latency, and a saturation signal per service and record each pre-deploy value over the same window; healthy is a comparison to that baseline.",
+            "Set a bake time, and list migrations and flags in the decision gate with whether the old version still runs on the new schema.",
+        ),
+        why_this_exists=(
+            "`deploy-and-monitor` exists because a deploy is judged healthy by whoever last looked at a dashboard: "
+            "it fixes the baseline before the change and names the thresholds that mean roll back."
+        ),
+        bad_example=SkillExample(
+            prompt="deploy-and-monitor: ship it and tell me when it is healthy.",
+            expected="Refuse a health claim; name the missing baseline, signals, window, and rollback owner.",
+            why="Healthy with no baseline is whatever the dashboard shows after the fact.",
+        ),
+        final_checklist=(
+            "Each health signal has a pre-deploy baseline, a threshold, a window, and the action it triggers.",
+            "The rollback owner and trigger are named, and the gate says whether the old version runs on the new schema.",
+            "A bake time is stated; post-deploy status cites observed values or reads not_observed.",
         ),
         do_not_use_when=(
             "An incident has already been declared and the work is commanding it -- severity, commander, running timeline, recovery verification -- rather than watching a release; use `live-incident-response`.",
@@ -8246,7 +8297,7 @@ _DEFINITIONS = [
         ),
         quality_tier="observed-command-gated",
         quality_bar=(
-            "Decide before deploying: engine from the situation table (vLLM for multi-user NVIDIA APIs, llama.cpp for CPU/Apple Silicon/edge, TensorRT-LLM only with ops budget), quantization to match (AWQ/GPTQ/FP8 vs the GGUF ladder with `Q4_K_M` default), tensor parallel a power of two.",
+            "Decide before deploying: engine from the situation table (vLLM for multi-user NVIDIA APIs, llama.cpp for CPU/Apple Silicon/edge, TensorRT-LLM only with ops budget), quantization to match (AWQ/GPTQ/FP8 vs the GGUF ladder with `Q4_K_M` default), tensor parallel head-divisible.",
             "Deploy as the gated runbook: docker's three load-bearing flags (`--ipc=host`, HF cache mount, `HF_TOKEN`) or the Kubernetes five-step (secret gate, existing-deployment gate, apply, rollout+readiness verify, summary+smoke); the port invariant touches four places or it did not change the port.",
             "Troubleshoot from the symptom table first - slow TTFT to prefix caching/chunked prefill, OOM to gpu-memory-utilization/max-model-len/quantization - before inventing flags.",
             "Measure with the protocol: TTFT/TPOT/ITL/E2EL as mean/median/P99, goodput against an explicit SLO, one load shape per run, results saved with metadata; the full contract is `omh-inference-serving/references/serving-bench.md`.",
@@ -8266,7 +8317,7 @@ _DEFINITIONS = [
         ),
         good_example=SkillExample(
             prompt="Serve Qwen on our two A100s for the team and tell me if prefix caching is worth turning on.",
-            expected="Engine verdict (vLLM, TP as a power of two), quantization check, the k8s or docker runbook with its gates and verification, then the prefix-cache A/B protocol with hit-rate assumptions recorded - numbers only from observed runs.",
+            expected="Engine verdict (vLLM, TP dividing the head counts), quantization check, the k8s or docker runbook with its gates and verification, then the prefix-cache A/B protocol with hit-rate assumptions recorded - numbers only from observed runs.",
             why="Serving plus a measured tuning question is exactly the decide-deploy-measure process this workflow owns.",
         ),
         bad_example=SkillExample(
@@ -8368,7 +8419,8 @@ _DEFINITIONS = [
         do_not_use_when=(
             "The user wants their own machine's model routing configured or providers connected; use `model-setup`.",
             "The goal is measurable performance of an application or system, not model handling; use `ultraperf`.",
-            "The user wants benchmark-superiority or provider-readiness claims without measurements.",
+            "The user wants benchmark-superiority or provider-readiness claims without measurements; decline and offer the measurement plan.",
+            "Making a model's weights smaller or faster (quantizing, pruning, distilling); use `inference-serving` for serving format and quantization, `model-finetuning` for distillation.",
         ),
         good_example=SkillExample(
             prompt="GLM 5.3 and 5.3 Flash just shipped; check what we should optimize for them.",
@@ -10005,7 +10057,7 @@ _DEFINITIONS.append(
         ),
         expected_outputs=(
             "application_threat_model/v1",
-            "asset register: data class plus the one loss that makes each asset worth defending",
+            "asset register: data class plus the loss that makes each asset worth defending",
             "trust boundaries: what crosses, what authenticates the crossing, what the receiver assumes unchecked",
             "attack scenarios: entry point, path, precondition, impact",
             "one decision per scenario (mitigate, transfer, accept, eliminate) with an owner",
@@ -10025,10 +10077,11 @@ _DEFINITIONS.append(
         quality_tier="security-safety-gated",
         quality_bar=(
             "Name every component, data store, and external dependency of the real system before naming one threat; a model of a system nobody described is a checklist.",
-            "Give each asset a data class and exactly one loss: disclosure, corruption, unavailability, or fraud.",
+            "Give each asset a data class and its primary loss: disclosure, corruption, unavailability, or fraud.",
             "For each trust boundary, state what crosses it, what authenticates the crossing, and what the receiver assumes without checking.",
             "Run all six STRIDE prompts from `omh-application-threat-model/references/threat-model-method.md` per boundary; drop an unreachable scenario with its reason instead of carrying it.",
             "Resolve every scenario to one decision (mitigate, transfer, accept, eliminate) with an owner, and give every mitigating control a test whose observable fails when the control is removed.",
+            "Rank scenarios by likelihood times impact; accept only below the owner's threshold.",
         ),
         why_this_exists=(
             "`application-threat-model` exists because the nearest neighbour does not merely miss this request. `security-safety-review` "
@@ -10219,7 +10272,7 @@ _DEFINITIONS.append(
             "Paging, status-page, and customer-send entries read prepared unless a connector result was observed.",
         ),
         recovery_notes=(
-            "If nobody is named commander, ask for one before anything else; an incident without a commander produces opinions instead of decisions.",
+            "If nobody is named commander, ask for one before anything else; an incident without a commander produces opinions instead of decisions. With one human, that person is commander and operations.",
             "If the recovery signal is not stated, ask which signal and which value counts as healthy before calling anything recovered.",
             "If the incident turns out to be closed, hand the postmortem to `reliability-review` and leave this record as the timeline it reads.",
             "If a connector call fails or returns nothing, keep the send prepared and name the channel that is unconfirmed instead of assuming delivery.",
@@ -10872,6 +10925,7 @@ _DEFINITIONS.append(
             "Adjust severity by reachability: a critical advisory on a function nothing calls is not the same event as one on the request path.",
             "Keep prepared, observed, and closed as separate states for every containment step.",
             "Hand a fix that needs a planned version jump to its own upgrade plan, and keep this event open until that fix is observed.",
+            "For a leaked secret, decide the case with evidence first: a public push or any sign of use revokes first; otherwise keep the overlap order. Suspected unauthorized access: reference section 4.",
         ),
         why_this_exists=(
             "`security-event-response` exists because an event had no owner: `security-safety-review` and "

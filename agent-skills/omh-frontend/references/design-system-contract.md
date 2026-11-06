@@ -119,7 +119,10 @@ does not know, and the order check never sees it.
     the accent budget in practice, the rules of any named style preset, and
     the patterns this surface refuses.
 11. **Accessibility Constraints & Accepted Debt** *(OMH)* — the constraints
-    honored (keyboard paths, focus order, contrast) and the debt knowingly
+    honored (keyboard paths, focus order, contrast, pointer targets of at least
+    24x24 CSS px (WCAG 2.2 SC 2.5.8) and 44 for primary touch controls, a
+    focused element never fully covered by a sticky bar (SC 2.4.11), a
+    single-pointer alternative to any drag (SC 2.5.7)) and the debt knowingly
     accepted, each with its reason.
 12. **Research Log** *(OMH, greenfield builds)* — an entry for every
     research lane that ran: the source consulted, what was taken from it
