@@ -27,7 +27,7 @@ This is an OMH `ultrawork` workflow skill, projected for Agent Skills hosts (Cla
 ## Do Not Use When
 
 - Avoid conflicting parallel writers; use single-owner or ordered execution.
-- Plan not accepted or verification missing; use `omh-plan` (`ulw-plan` for a stated risk) unless a delivery cycle was asked for or this is one concrete change with its own acceptance criteria and verification command.
+- Plan not accepted, lanes unclear or verification missing; use `omh-plan` (`ulw-plan` for a stated risk) unless a delivery cycle was asked for or it is one concrete change with its own acceptance criteria and verification command.
 - The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.
 - For a decision spike, use `omh-decision-prototype`.
 - [capability:coordinated_scope] The lanes are exploratory research or QA coordination without an accepted implementation plan; frame them with the `coordinated_scope` capability before parallel delivery.
@@ -133,7 +133,7 @@ Quality bar:
 
 Required inputs:
 
-- accepted plan
+- accepted plan, or one concrete change's acceptance criteria and verification command
 - work units with read/write scopes
 - dependency edges or shared invariants
 - verification commands

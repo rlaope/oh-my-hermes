@@ -1250,7 +1250,7 @@ _DEFINITIONS = [
             "a separate opt-in path, never the default recommendation."
         ),
         required_inputs=(
-            "accepted plan",
+            "accepted plan, or one concrete change's acceptance criteria and verification command",
             "work units with read/write scopes",
             "dependency edges or shared invariants",
             "verification commands",
@@ -1328,11 +1328,11 @@ _DEFINITIONS = [
             # rationale clauses around it rather than by raising the ceiling.
             "Initialize the phase todo before engine work (todo init) in ONE tool, never both: "
             f"`{NATIVE_TODO_TOOL}` when {native_tool_presence_clause(NATIVE_TODO_TOOL, code=True)} (OMH mirrors it), else `omh_todo`; an accepted plan stays in `omh_todo`. "
-            "Declare numbered phases in delivery order — bootstrap, one implement/verify/deliver task per lane or work unit, independent review lanes, and an evidence-and-cleanup close, one task per observable outcome — keep exactly one item active, and update states as lanes complete, so the run walks a bounded checklist. Phase names and task titles are written in English as short labels even when the conversation runs in another language, since the HUD checklist is an operator surface.",
+            "Declare numbered phases in delivery order — bootstrap, one implement/verify/deliver task per lane or work unit, independent review lanes, and an evidence-and-cleanup close, one task per observable outcome — keep exactly one item active, and update states as lanes complete, so the run walks a bounded checklist. Phase names and task titles are written in English as short labels even when the conversation runs in another language (the HUD is an operator surface).",
         ),
         do_not_use_when=(
             "Avoid conflicting parallel writers; use single-owner or ordered execution.",
-            "Plan not accepted or verification missing; use `plan` (`ralplan` for a stated risk) unless a delivery cycle was asked for or this is one concrete change with its own acceptance criteria and verification command.",
+            "Plan not accepted, lanes unclear or verification missing; use `plan` (`ralplan` for a stated risk) unless a delivery cycle was asked for or it is one concrete change with its own acceptance criteria and verification command.",
             "The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.",
         "For a decision spike, use `decision-prototype`.",
             "[capability:coordinated_scope] The lanes are exploratory research or QA coordination without an accepted implementation plan; frame them with the `coordinated_scope` capability before parallel delivery.",
@@ -1462,7 +1462,7 @@ _DEFINITIONS = [
         portable_override_shadows={
             "quality_bar": "b6444536d60f9df17070e0ac1b28ecc32aa54286626cc2c1daf5e8de389be364",
             "safety_rules": "f5a8f74812425af82829bc083dac62883a283ed8acfa5bc299a594c107ccd4f7",
-            "opening_steps": "632f26cd6eeb333b99ad0312a3c568a456d6e36c66d510b6af201ae25f65abf0",
+            "opening_steps": "cc7bce444d54a55fd937ea0529db186acdd6500c4f02a37cc8929081d403fefb",
             "final_checklist": "95ac04078f55d2c16dfc5f8a7d0a2ca5e833cae7ae1f2a0c03856687557762d5",
             "why_this_exists": "537b436c502275cd7aea748406d5018300d92d31fe670a4c3b48090058b4c0c6",
         },

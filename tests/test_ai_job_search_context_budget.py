@@ -143,12 +143,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            # 533907 -> 535043 and the digest re-derived: the coding-core skill audit round edits the
+            # 533907 -> 535114 and the digest re-derived: the coding-core skill audit round edits the
             # ultraperf, ultraqa, ask, strategy-brief, plan, ralplan, loop, ultrawork, maestro and research
-            # quality bars, safety rules and inputs (+1136 net, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT);
+            # quality bars, safety rules and inputs (+1207 net, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT);
             # the pin before it was d6dfefff...fc71.
-            (skill_capabilities, 535043, FULL_ROW_DELTA_CAP,
-             '0f26dac882013000da9d63aea80d4a1a0f1466eb9d1867ac2b71f79122ff7f08',
+            (skill_capabilities, 535114, FULL_ROW_DELTA_CAP,
+             '3ecb516ebc80269bf3a9deb0d0a0bb13752b3d74994f0552c099d1bc2dae4882',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -383,7 +383,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The coding-core audit round moves fourteen bodies (adversarial-consensus, ask, dag-ulw, deep-interview,
         # loop, maestro, plan, ralplan, research, research-brief, strategy-brief, ultraperf, ultraqa, ultrawork);
         # the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '9be83ccb1f60b2b43d3a1cd1b449e43db3748fb6b4e431e90d1c727bd04f975c')
+        self.assertEqual(_digest(legacy_hashes), '0afada795c079cc2d826831016bdf07fb221bddf2cfea5120b7293ad8adcb9f7')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -422,8 +422,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         expected = {
             'skill_index_line_max_chars': 100,
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
-            'pre_llm_call_context_chars_max': 6041,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
-            'pre_llm_call_context_fallback_chars_max': 7593,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
+            'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
+            'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 3630,  # Human-voice reply sentence (+110).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,

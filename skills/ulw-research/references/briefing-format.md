@@ -76,7 +76,7 @@ Confirm the current state by retrieval rather than recall. Separate durable prin
 
 The output language is declared by the requester and never inferred from the language of the request. Body prose, role labels, chapter headings, and appendix captions follow the declared language together -- a Korean briefing under English section captions is a half-translated document. Identifiers, schema ids, file paths, command names, and code stay as written. The language declaration is required; omission is refused.
 
-OMH holds no translation table for the scaffolding, because one would have to be maintained for every language the engine can write in. Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints the first five errors it finds, and writes the markdown, the print-ready page, or both. `claim_boundary` must be the exact sentence below, `export` must map each format to `prepared`, `handoff_prepared` or `rendered_observed`, each section needs a lowercase `role` from the closed list, a `title` and at least one paragraph, and `figures`, `sources`, `role_labels` and `captions` are optional (`role_labels` and `captions` are required for a non-English `language`). The smallest payload that renders:
+OMH holds no translation table for the scaffolding, because one would have to be maintained for every language the engine can write in. Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints the first five errors it finds, and writes the markdown, the print-ready page, or both. `title` and `question` are both required (both renderers print `title`), `claim_boundary` must be the exact sentence below, `export` must map each format to `prepared`, `handoff_prepared` or `rendered_observed`, each section needs a lowercase `role` from the closed list, a `title` and at least one paragraph, and `figures`, `sources`, `role_labels` and `captions` are optional (`role_labels` and `captions` are required for a non-English `language`). The smallest payload that renders:
 
 ```json
 {
@@ -86,6 +86,7 @@ OMH holds no translation table for the scaffolding, because one would have to be
     "markdown"
   ],
   "language": "en",
+  "title": "Cache eviction options",
   "question": "Which cache fits?",
   "as_of": "2026-11-07",
   "sections": [

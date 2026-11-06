@@ -167,6 +167,8 @@ def research_briefing_errors(value: Any) -> list[str]:
         issues.append("language must be declared explicitly; it is never inferred from the request")
     if not _text(value.get("question")):
         issues.append("question is required")
+    if not _text(value.get("title")):
+        issues.append("title is required; both renderers print it")
     if not _text(value.get("as_of")):
         issues.append("as_of is required so time-dependent figures carry their date")
 

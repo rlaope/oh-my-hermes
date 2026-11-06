@@ -248,8 +248,7 @@ _HANDOFF_RECOVERY_NOTES = (
 # reaches agents that only ever read `SKILL.md`.
 DELEGATE_PROMPT_DISPLAY_RULE = (
     "When delegating, show the composed delegate prompt in a fenced code block in the status message; "
-    "truncate a long prompt to a bounded preview ending with `... [truncated, N chars total]` — the user "
-    "must see WHAT was asked, not just that something was."
+    "truncate a long prompt to a bounded preview ending with `... [truncated, N chars total]`."
 )
 DELEGATE_MODEL_LABEL_RULE = (
     "Name every delegated or parallel lane's model and, when the host exposes it, its reasoning effort "

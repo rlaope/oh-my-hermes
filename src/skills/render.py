@@ -6682,7 +6682,7 @@ A TDD cycle is observed only when a non-zero (red) run precedes a zero (green) r
 
 Commit the failing test as a checkpoint before the first implementation edit. The red commit makes tampering diff-visible: any later change to the test files appears in `git diff <red-commit>.. -- <test paths>` and must be explained in the lane report. The `omh_gather_evidence` tool accepts `git diff` probes for exactly this check.
 
-The red commit lives on the lane's own branch or worktree. Record its SHA in the evidence ledger, then after the tamper check above, fold it into the green commit (`git reset --soft <red-commit>~1`, then commit once) before the branch is offered for merge, unless the repository keeps red commits: otherwise the delivered history carries a commit whose tree fails its own test, CI on that commit is red, and `git bisect` lands on it.
+The red commit lives on the lane's own branch or worktree. Record its SHA in the evidence ledger, then after the tamper check above, fold it into the green commit (`git reset --soft <red-commit>~1`, then commit once; with several red-green cycles in one lane, do this per cycle from that cycle's red commit, and not on commits already pushed) before the branch is offered for merge, unless the repository keeps red commits: otherwise the delivered history carries a commit whose tree fails its own test, CI on that commit is red, and `git bisect` lands on it.
 
 ## Forbidden Moves
 
@@ -9254,10 +9254,10 @@ provenance, not authenticated facts. The validator checks no quotation entailmen
 
 ## Search budget across waves
 
-`omh_search` accepts one `plan` per host request, and a second one in the same session is refused, so
+`omh_search` accepts one `plan` per host request, and a second one for that request is refused, so
 replanning never raises the caps in `search-method.md`. A depth budget the user declared for exhaustive
 research (unit and limit in `research_progress/v1`) is the authority to run later waves directly through
-the host's search and read tools. Count every attempt against that limit in `research_progress/v1`; the
+the host's search and read tools. Later waves stay out of the plan's `assess` ledger: `assess` refuses more attempts than the plan's cap with `invalid_budget`. Count every attempt against that limit in `research_progress/v1`; the
 declared limit, not an `omh_search` plan, bounds the run. Without a declared limit, the caps in
 `search-method.md` are the whole budget.
 
@@ -9425,7 +9425,7 @@ Confirm the current state by retrieval rather than recall. Separate durable prin
 
 The output language is declared by the requester and never inferred from the language of the request. Body prose, role labels, chapter headings, and appendix captions follow the declared language together -- a Korean briefing under English section captions is a half-translated document. Identifiers, schema ids, file paths, command names, and code stay as written. The language declaration is required; omission is refused.
 
-OMH holds no translation table for the scaffolding, because one would have to be maintained for every language the engine can write in. Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints the first five errors it finds, and writes the markdown, the print-ready page, or both. `claim_boundary` must be the exact sentence below, `export` must map each format to `prepared`, `handoff_prepared` or `rendered_observed`, each section needs a lowercase `role` from the closed list, a `title` and at least one paragraph, and `figures`, `sources`, `role_labels` and `captions` are optional (`role_labels` and `captions` are required for a non-English `language`). The smallest payload that renders:
+OMH holds no translation table for the scaffolding, because one would have to be maintained for every language the engine can write in. Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints the first five errors it finds, and writes the markdown, the print-ready page, or both. `title` and `question` are both required (both renderers print `title`), `claim_boundary` must be the exact sentence below, `export` must map each format to `prepared`, `handoff_prepared` or `rendered_observed`, each section needs a lowercase `role` from the closed list, a `title` and at least one paragraph, and `figures`, `sources`, `role_labels` and `captions` are optional (`role_labels` and `captions` are required for a non-English `language`). The smallest payload that renders:
 
 ```json
 {
@@ -9435,6 +9435,7 @@ OMH holds no translation table for the scaffolding, because one would have to be
     "markdown"
   ],
   "language": "en",
+  "title": "Cache eviction options",
   "question": "Which cache fits?",
   "as_of": "2026-11-07",
   "sections": [
@@ -15242,7 +15243,7 @@ Load the one for the advisor the user named, when it is in your skill list, and 
 What stays with `ask`:
 
 - The advisor is the one the user named or configured. None of these CLIs is the default, and this table recommends none of them.
-- An advisor answers; it does not edit. Run Claude Code as `claude -p --tools Read,Grep,Glob` (`--tools` removes the shell and write tools; `--allowedTools` only skips prompts and does not restrict, and `--permission-mode plan` still runs read-only shell commands unprompted), and Codex as `codex exec --sandbox read-only --skip-git-repo-check` (Codex refuses to start outside a git repository without the last flag). For any other CLI, use its read-only mode from its `--help`. When it ran in the repository, read `git status` afterwards: a changed file means the run did more than advise, and you say so.
+- An advisor answers; it does not edit. Run Claude Code as `claude -p "<question>" --tools Read,Grep,Glob` (put the prompt first: `--tools` takes a list and swallows a prompt placed after it; it removes the shell and write tools but does not affect MCP tools, so add `--disallowedTools "mcp__*"` when MCP servers are configured; `--allowedTools` only skips prompts and does not restrict, and `--permission-mode plan` still runs read-only shell commands unprompted), and Codex as `codex exec --sandbox read-only --skip-git-repo-check` (Codex refuses to start outside a git repository without the last flag). For any other CLI, use its read-only mode from its `--help`. When it ran in the repository, read `git status` afterwards: a changed file means the run did more than advise, and you say so.
 - The question carries what the advisor needs to answer: the question, and the files or excerpts it concerns. Secrets, credentials, and private material stay out unless the user opted in for this question.
 - The answer is advice. Attribute it to the advisor, say which points you accept and which you reject and why, and record no review, verification, or approval from it.
 - A run that fails, times out, or stops for a sign-in is reported as that, with no advice written in its place.

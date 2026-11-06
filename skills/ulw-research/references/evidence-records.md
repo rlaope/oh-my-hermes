@@ -78,10 +78,10 @@ provenance, not authenticated facts. The validator checks no quotation entailmen
 
 ## Search budget across waves
 
-`omh_search` accepts one `plan` per host request, and a second one in the same session is refused, so
+`omh_search` accepts one `plan` per host request, and a second one for that request is refused, so
 replanning never raises the caps in `search-method.md`. A depth budget the user declared for exhaustive
 research (unit and limit in `research_progress/v1`) is the authority to run later waves directly through
-the host's search and read tools. Count every attempt against that limit in `research_progress/v1`; the
+the host's search and read tools. Later waves stay out of the plan's `assess` ledger: `assess` refuses more attempts than the plan's cap with `invalid_budget`. Count every attempt against that limit in `research_progress/v1`; the
 declared limit, not an `omh_search` plan, bounds the run. Without a declared limit, the caps in
 `search-method.md` are the whole budget.
 

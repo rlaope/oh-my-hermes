@@ -966,9 +966,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # 536969 -> 536979: the `dag-ulw` row only. Its handoff policy names the third
 # way an external coding owner is chosen (naming it in a dag-ulw request) and
 # the per-owner `exports` list (+10). Measured from the producer; no headroom.
-# 536979 -> 538115: the coding-core audit round edits quality-bar, safety-rule and input lines on ten
-# skills (+1136 net). Measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 538115
+# 536979 -> 538186: the coding-core audit round edits quality-bar, safety-rule and input lines on ten
+# skills (+1207 net). Measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 538186
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -2159,12 +2159,12 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # body (+11,249), merged over the Vietnamese pack. Its own measurement on
 # 32878e25d (1,332,345) and this pack's (1,325,671) each raised the ceiling to
 # 1,500,000; together they read 1,336,920, whose 10% still rounds to it.
-# 1336920 -> 1474123 (measured; the ceiling 1500000 -> 1650000): the pack had grown to 1,471,273 across
+# 1336920 -> 1473872 (measured; the ceiling 1500000 -> 1650000): the pack had grown to 1,471,273 across
 # the bodies merged since the last re-derive, leaving 1,778 chars under the point where
 # `test_one_more_ordinary_lane_member_fits_every_body_budget` finds that the largest lane-mate copy
-# (`ultrawork`, +26,949) no longer fits. The coding-core audit round adds 2,850 net across fourteen
-# bodies, which tipped it. 1,474,324 plus 10%, rounded up to the next 50,000, is 1,650,000.
-FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1474123
+# (`ultrawork`, +26,949) no longer fits. The coding-core audit round adds 2,599 net across fourteen
+# bodies, which tipped it. 1,474,123 plus 10%, rounded up to the next 50,000, is 1,650,000.
+FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1473872
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
 FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1650000

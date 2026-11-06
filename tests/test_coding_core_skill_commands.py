@@ -47,7 +47,12 @@ class CodingCoreSkillCommandTests(unittest.TestCase):
     def test_briefing_reference_example_is_a_payload_the_validator_accepts(self) -> None:
         import json
 
-        from omh.workflows.research_briefing import BRIEFING_CLAIM_BOUNDARY, research_briefing_errors
+        from omh.workflows.research_briefing import (
+            BRIEFING_CLAIM_BOUNDARY,
+            render_research_briefing_markdown,
+            render_research_briefing_page,
+            research_briefing_errors,
+        )
 
         text = _reference("research", "references/briefing-format.md")
         block = re.search(r"```json\n(.*?)\n```", text, re.S)
@@ -55,7 +60,27 @@ class CodingCoreSkillCommandTests(unittest.TestCase):
         payload = json.loads(block.group(1))
         self.assertEqual(research_briefing_errors(payload), [])
         self.assertEqual(payload["claim_boundary"], BRIEFING_CLAIM_BOUNDARY)
+        self.assertIn("# " + payload["title"], render_research_briefing_markdown(payload))
+        self.assertIn(payload["title"], render_research_briefing_page(payload))
         self.assertIn("first five errors", text)
+
+    def test_a_briefing_without_a_title_is_reported_not_a_traceback(self) -> None:
+        import json
+        import tempfile
+
+        from _cli_harness import run_cli
+        from omh.workflows.research_briefing import research_briefing_errors
+
+        text = _reference("research", "references/briefing-format.md")
+        payload = json.loads(re.search(r"```json\n(.*?)\n```", text, re.S).group(1))
+        del payload["title"]
+        self.assertTrue(any("title" in issue for issue in research_briefing_errors(payload)))
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "b.json"
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            status, _, stderr = run_cli(["hermes", "briefing", "--input", str(source), "--markdown", str(Path(tmp) / "o.md")])
+        self.assertNotEqual(status, 0)
+        self.assertIn("title", stderr)
 
     def test_project_terms_reference_quotes_the_capture_commands(self) -> None:
         text = _reference("context", "references/project-terms.md")
@@ -77,11 +102,12 @@ class CodingCoreSkillCommandTests(unittest.TestCase):
         self.assertNotIn("each wave is a new plan", guidance)
         evidence = _reference("research", "references/evidence-records.md")
         self.assertIn("accepts one `plan` per host request", evidence)
+        self.assertIn("`invalid_budget`", evidence)
         self.assertIn("research_progress/v1", evidence)
 
     def test_advisor_reference_uses_flags_the_vendors_document(self) -> None:
         text = _reference("ask", "references/cli-advisors.md")
-        for token in ("claude -p --tools Read,Grep,Glob", "codex exec --sandbox read-only --skip-git-repo-check"):
+        for token in ('claude -p "<question>" --tools Read,Grep,Glob', "codex exec --sandbox read-only --skip-git-repo-check"):
             self.assertIn(token, text)
         self.assertNotIn("--allowedTools Read", text)
 
