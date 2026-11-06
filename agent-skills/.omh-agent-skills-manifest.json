@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "d4f07a621d399c9e1c03965e12c1d427932d5a4adbad9d3134c2b2996cfad67a",
+  "catalog_revision": "af54881776fb35cf6c7dc8e21b13719f9aa4c4582d49b797b59b09cfeeed3b10",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -327,7 +327,7 @@
     "ulw-perf/SKILL.md": "dc30678d5e28b4f00b6706e4659245624331cd6753aad246d4222aded0c14ebc",
     "ulw-plan/SKILL.md": "bd3533637ee72f9a56a1bbe99da7f9be4f4f0157f0cacf6cb3aa815362a2a5e2",
     "ulw-qa/SKILL.md": "bf2766f01272c1f8c390f2552572688d2cd92641845dc5bdfb8becd568cb5fa9",
-    "ulw-research/SKILL.md": "696b52b0548a5e016c1323e233ecc162a7a66e1564b71b101f3418f3d9627008",
+    "ulw-research/SKILL.md": "398c9085fad2766d48984b05abb17f0d85a2cfbe8e05101a7013ba47a612cb00",
     "ulw-research/references/briefing-format.md": "32c2fc92b8ff37877b623d30f79697a015c7be139121f60bac9de82f6bedfdcc",
     "ulw-research/references/evidence-records.md": "0cfeb3c0fcc99cc78d0d8e8a14fae833f97ac48bbef29b20f8cbe94fedc9aa11",
     "ulw-research/references/search-examples.md": "2dd2c4cb91f0388a3fcf5ba6fb13094bbc6234edab6dce28ac036334d3718821",

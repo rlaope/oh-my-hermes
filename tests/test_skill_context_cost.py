@@ -117,7 +117,9 @@ class SkillContextCostTests(unittest.TestCase):
         # and nested phrases) to their pre-feature bodies; the search guidance
         # increment itself (286 and 305) is unchanged. The citation receipts rule
         # (`omh research receipts verify`, 262 bytes) joins both bodies.
-        baseline = {'research': 20_295, 'web-research': 12_073, 'source-finder': 9_221}
+        # research's entity-match clause (answer only from a source on the exact
+        # named entity; a different name is a different entity) adds 222 bytes.
+        baseline = {'research': 20_517, 'web-research': 12_073, 'source-finder': 9_221}
         for name, before in baseline.items():
             record = skill_record(name)
             body = record.body().content

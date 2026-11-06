@@ -360,7 +360,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # with main after the bail points; main's pin before it was fb4303cb...1fcf.
         # systematic-review joins the research lane (+27 -> +28 more) with its narrowed Korean pack;
         # restoring +28 -> +27 and dropping it reproduces 2b0982e6...8db3.
-        self.assertEqual(_digest(legacy_hashes), '5404bf98149708d4ee110e9bc62a86ba531a339b04817063d927fd559ca32229')
+        # ulw-research's entity-match clause (answer only from a source on the exact named entity);
+        # only ulw-research moves, and the pin before it was 5404bf98...ca32229.
+        self.assertEqual(_digest(legacy_hashes), '8ea92d7d1dc66af3b26a67c90e17c66d9968992f878faf4351c377bde00758d7')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
