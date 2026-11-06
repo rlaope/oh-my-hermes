@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "aad492a3896e9637a771d1e71c61a913f5aa85886f4a4776013d68df3a3274b3",
+  "catalog_revision": "eab86d041e328a159bbca0fce3c96a8e5a1b97d9f46d3f2b8136578f783bd283",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -127,7 +127,7 @@
     "omh-git-workflow/references/git-repair-method.md": "7c5b14e1d8972467fc7a59e84bbd7c200106e983d7ef277d147ddb5792b7980e",
     "omh-github-event-ops/SKILL.md": "a6e157b489b945ea3ad7965130febda126d16bf8c4d07644642503214b47b67e",
     "omh-github-issue-intake/SKILL.md": "119ad6c2476aac00d53334444e37e4bf310fc3ada31cf19d3a7d1a33782210af",
-    "omh-harness-session-inventory/SKILL.md": "8b8fb57512baa8792fa939e06d34f1545aecfa8d592543e8de1493dad5c08ce6",
+    "omh-harness-session-inventory/SKILL.md": "b12e22e2a4930ebcaf6ebdd14c69f65d70d5fa6d312ab3c537120e7d1add757d",
     "omh-iac-change/SKILL.md": "54925e39babd99d783a98f2e960cd82e1c1801c8f9e203c27be0d2ea3d224ede",
     "omh-iac-change/references/iac-change-method.md": "25c75f8974c19cd74028d093a703facb0c66f7b199ca1dc16e937d93b5dbdb5a",
     "omh-idea-to-deploy/SKILL.md": "1b792737ec9e0652ddb00f6af713a6f23ea0433c23ff3b46edd504a0d5f9ee00",
@@ -277,8 +277,8 @@
     "omh-source-finder/references/search-examples.md": "2dd2c4cb91f0388a3fcf5ba6fb13094bbc6234edab6dce28ac036334d3718821",
     "omh-source-finder/references/search-fields.md": "a237da3fc2ab1db91f86056bd53e95e860e130255d4461888607d7f4295e526f",
     "omh-source-finder/references/search-method.md": "1280b6c6a72bb4bc2c1428001f2c58ca3cf01b25fc83a1b0f95795c934c0cc4e",
-    "omh-spend-gate/SKILL.md": "6838c808c77f1ab95a77ee90dd6eec2ef7bbf303facd91299054690058b824cd",
-    "omh-spend-gate/references/spend-rails.md": "cb9d6327559798eef1c342a18991146beb6b0923440aa163626f4d3f675f1bcb",
+    "omh-spend-gate/SKILL.md": "97a17fa5d0539163b04db77baf3d4ac66be6c49eab2953e074794f95a7f211fe",
+    "omh-spend-gate/references/spend-rails.md": "046094ef67e13d7b06fbbf6a75fb207ca7f2628ca354d4ada46dd9c4155439b6",
     "omh-sprite-forge/SKILL.md": "ee0e33de03d58f4e9c5d81a396893b1a7459cb9b662753580dd08f9cb8ccc197",
     "omh-sprite-forge/references/character-art-direction.md": "a49d7e80a293abbd77658ef54531348c73f8b36fbcda2b0076aaeb5644634847",
     "omh-sprite-forge/references/execution-and-qa.md": "8ef5369bde824c8dccbc01ec65f100b1e7865d1085b9f60075108eec6de60db8",

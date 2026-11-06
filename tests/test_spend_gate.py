@@ -103,7 +103,7 @@ class SpendGateContractTests(unittest.TestCase):
     def test_the_card_names_every_field_and_the_approver_is_the_payer(self) -> None:
         self.assertInBoth(
             "names the payee with its exact origin or address, the item, the total with fees and taxes in its "
-            "currency, the rail, the cap and what remains of it, the refund terms, whether the spend can be reversed, "
+            "currency, the rail, the cap and what remains of it (or that the cap cannot be checked), the refund terms, whether the spend can be reversed, "
             "and the approver, who is the person whose money moves",
             _bodies(),
         )
@@ -269,8 +269,10 @@ class SpendGateContractTests(unittest.TestCase):
             _references(),
         )
         self.assertInBoth(
-            "The `hermes-mpp` plugin, with no `MPP_ALLOWED_ORIGINS` allow list set, auto-pays any supported 402 that "
-            "ordinary HTTP traffic meets, with no cap or confirmation: stop and tell the person before any HTTP call.",
+            "The `hermes-mpp` plugin is present when `mpp_fetch` is in the tool list: with no `MPP_ALLOWED_ORIGINS` "
+            "allow list set it auto-pays any supported 402 that ordinary HTTP traffic meets, with no cap or "
+            "confirmation, so stop and tell the person before any HTTP call, and a call to an allowed origin is still "
+            "the spend and comes only after the typed confirmation.",
             _references(),
         )
 
@@ -278,7 +280,9 @@ class SpendGateContractTests(unittest.TestCase):
         self.assertInBoth(
             "If they cannot say, what is already spent is unknown: never assume zero and never show the full cap as "
             "remaining. The card says the cap cannot be checked, and the spend goes ahead only against a cap the "
-            "person sets for this spend alone, with the total checked against it.",
+            "person sets for this spend alone, with the total checked against it; for a recurring charge that cap also "
+            "covers its renewals, and an `unknown` charge from a timed-out payment is still reconciled first, so a cap "
+            "never stands in for that.",
             _references(),
         )
 

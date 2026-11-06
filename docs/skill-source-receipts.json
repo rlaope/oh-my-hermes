@@ -890,7 +890,7 @@
       "disposition": "adopted",
       "decision_ref": "#2628",
       "reviewed_on": "2026-11-07",
-      "rationale": "Adopted the pay and pay-cli plugins as confirming 402 clients beside the typed yes, and the hermes-mpp stop; mpp-agent kept only for a Hermes that still ships it.",
+      "rationale": "Adopted pay and pay-cli as confirming 402 clients beside the typed yes and the hermes-mpp stop; vault commits in range leave card-fill rules unchanged; mpp-agent kept for older Hermes.",
       "supersedes": null
     }
   ]

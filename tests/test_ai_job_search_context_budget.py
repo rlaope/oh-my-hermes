@@ -380,7 +380,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # running-work-board, agent-board, achievements, context-budget-review, ops-review,
         # feedback-triage, workspace-audit, automation-blueprint, parallel-tools, run-efficiency and
         # failure-signal-audit move their own bodies only; the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '9d6ca78e27d506a173112c5df8ed7b17a691d3e5ede4a599f4e5e1db6c205d62')
+        self.assertEqual(_digest(legacy_hashes), 'f4e747655a4f2cf7fe668426411bcfda73b45caceab0dca51ff0754b9ed120cb')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

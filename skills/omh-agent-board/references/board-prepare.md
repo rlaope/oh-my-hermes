@@ -11,7 +11,7 @@ The repository's operator page is not part of an installed skill, so the fields 
 
 | Field | Value |
 | --- | --- |
-| `request_id` | a string matching `[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}`: letters, digits, `_ . : -`, no spaces, at most 128 characters; repeating a `create` with the same `request_id` returns the task already observed |
+| `request_id` | a new string for every request, matching `[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}`: letters, digits, `_ . : -`, no spaces, at most 128 characters; reusing an id for a different request is denied, and repeating the same `create` returns the task already observed |
 | `coordination` | `durable` for a `kanban_<operation>` action that survives a restart or crosses profiles; `bounded_research` for one `delegate_task` |
 | `operation` | with `durable`, one of the operations in section 3; with `bounded_research`, only `research` |
 | `board` | the named board; a board other than the one bound to this host is refused |
@@ -21,22 +21,24 @@ The repository's operator page is not part of an installed skill, so the fields 
 
 ## 3. Durable operations and their arguments
 
-| Operation | Required arguments | Optional arguments |
-| --- | --- | --- |
-| `create` | `title`, `assignee` | `body`, `parents`, `skills`, `workspace_kind`, `workspace_path`, `priority`, `max_runtime_seconds`, `idempotency_key`, `initial_status`, `model`, `provider`, `completion_contract`, `goal_mode`, `goal_max_turns` |
-| `link` | `parent_id`, `child_id` | none |
-| `comment` | `task_id`, `body` | none |
-| `heartbeat` | none | `task_id`, `note` |
-| `request_review` | `summary` | `task_id`, `reviewer`, `metadata` |
-| `request_changes` | `reason` | `task_id` |
-| `block` | `reason` | `task_id`, `kind` |
-| `unblock` | `task_id` | none |
-| `complete` | none | `task_id`, `summary`, `result`, `metadata`, `created_cards` |
-| `show` | none | `task_id` |
-| `list` | none | `assignee`, `status`, `tenant`, `include_archived`, `limit` |
-| `attachments` | none | `task_id` |
+| Operation | Top-level `task_id` | Required `arguments` | Optional `arguments` |
+| --- | --- | --- | --- |
+| `create` | refused | `title`, `assignee` | `body`, `parents`, `skills`, `workspace_kind`, `workspace_path`, `priority`, `max_runtime_seconds`, `idempotency_key`, `initial_status`, `model`, `provider`, `completion_contract`, `goal_mode`, `goal_max_turns` |
+| `link` | refused | `parent_id`, `child_id` | none |
+| `comment` | required | `body` | none |
+| `heartbeat` | required | none | `note` |
+| `request_review` | required | `summary` | `reviewer`, `metadata` |
+| `request_changes` | required | `reason` | none |
+| `block` | required | `reason` | `kind` |
+| `unblock` | required | none | none |
+| `complete` | required | none | `summary`, `result`, `metadata`, `created_cards` |
+| `show` | required | none | none |
+| `list` | refused | none | `assignee`, `status`, `tenant`, `include_archived`, `limit` |
+| `attachments` | required | none | none |
 
-A required `task_id` is satisfied by the top-level `task_id`; if `arguments` repeats it, the two must match.
+`task_id` always goes at the top level of the call, never only inside `arguments`: a call without it is refused as `invalid_reference` for every operation marked required, even `show` and `heartbeat`. If `arguments` repeats it, the two must match.
+
+Beyond the key sets: `complete` needs `summary` or `result`; a block `kind` is one of `dependency`, `needs_input`, `capability`, `transient`; a `list` `status` is any board status except `review` and `scheduled`; `initial_status` is one of `todo`, `running`, `blocked`, `triage`; `workspace_kind` is `scratch`, `dir` or `worktree`, and a `workspace_path` needs a `workspace_kind` of `dir` or `worktree`; a `link` may not join a task to itself.
 
 `bounded_research`, operation `research`: `arguments` is exactly `{"tasks": [{"goal": "...", "context": "..."}]}`, one or more tasks, each with exactly `goal` and `context`, and no top-level `task_id`.
 

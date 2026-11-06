@@ -43,6 +43,8 @@ class SkillInputShapeTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn(name, body)
         self.assertIn("`id` and `version`", body)
+        self.assertIn("`opencode-mcp-tool-naming`", body)
+        self.assertIn("`unsupported_adapter`", body)
 
     def test_harness_documented_snapshot_is_accepted(self) -> None:
         raw = {

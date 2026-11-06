@@ -4617,11 +4617,14 @@ def agent_board_reference_templates() -> list[SkillReferenceTemplate]:
 
 def _agent_board_reference() -> str:
     """What `omh_agent_board prepare` needs, read from the engine's own tables so the page cannot drift from it."""
-    from ..workflows.agent_board import _OPERATIONS, _REFERENCE
+    from ..workflows.agent_board import _NO_TASK_ID, _OPERATIONS, _REFERENCE
+
+    def names(value: str) -> str:
+        # `task_id` is a top-level field, never an entry of `arguments`; its own column says which.
+        return ", ".join(f"`{name}`" for name in value.split() if name != "task_id") or "none"
 
     rows = "\n".join(
-        f"| `{operation}` | {', '.join(f'`{name}`' for name in required.split()) or 'none'} | "
-        f"{', '.join(f'`{name}`' for name in optional.split()) or 'none'} |"
+        f"| `{operation}` | {'refused' if operation in _NO_TASK_ID else 'required'} | {names(required)} | {names(optional)} |"
         for operation, (required, optional, _) in _OPERATIONS.items()
     )
     return f"""# Agent Board: Preparing a Request
@@ -4637,7 +4640,7 @@ The repository's operator page is not part of an installed skill, so the fields 
 
 | Field | Value |
 | --- | --- |
-| `request_id` | a string matching `{_REFERENCE.pattern.removesuffix(chr(92) + "Z")}`: letters, digits, `_ . : -`, no spaces, at most 128 characters; repeating a `create` with the same `request_id` returns the task already observed |
+| `request_id` | a new string for every request, matching `{_REFERENCE.pattern.removesuffix(chr(92) + "Z")}`: letters, digits, `_ . : -`, no spaces, at most 128 characters; reusing an id for a different request is denied, and repeating the same `create` returns the task already observed |
 | `coordination` | `durable` for a `kanban_<operation>` action that survives a restart or crosses profiles; `bounded_research` for one `delegate_task` |
 | `operation` | with `durable`, one of the operations in section 3; with `bounded_research`, only `research` |
 | `board` | the named board; a board other than the one bound to this host is refused |
@@ -4647,11 +4650,13 @@ The repository's operator page is not part of an installed skill, so the fields 
 
 ## 3. Durable operations and their arguments
 
-| Operation | Required arguments | Optional arguments |
-| --- | --- | --- |
+| Operation | Top-level `task_id` | Required `arguments` | Optional `arguments` |
+| --- | --- | --- | --- |
 {rows}
 
-A required `task_id` is satisfied by the top-level `task_id`; if `arguments` repeats it, the two must match.
+`task_id` always goes at the top level of the call, never only inside `arguments`: a call without it is refused as `invalid_reference` for every operation marked required, even `show` and `heartbeat`. If `arguments` repeats it, the two must match.
+
+Beyond the key sets: `complete` needs `summary` or `result`; a block `kind` is one of `dependency`, `needs_input`, `capability`, `transient`; a `list` `status` is any board status except `review` and `scheduled`; `initial_status` is one of `todo`, `running`, `blocked`, `triage`; `workspace_kind` is `scratch`, `dir` or `worktree`, and a `workspace_path` needs a `workspace_kind` of `dir` or `worktree`; a `link` may not join a task to itself.
 
 `bounded_research`, operation `research`: `arguments` is exactly `{{"tasks": [{{"goal": "...", "context": "..."}}]}}`, one or more tasks, each with exactly `goal` and `context`, and no top-level `task_id`.
 
@@ -4783,7 +4788,7 @@ Each surface below is used only when it is present, and none replaces the person
 - `clarify`: when {clarify}, ask for the confirmation with the card in the question; otherwise ask in a plain reply and end the turn.
 - Browser tools (`browser_navigate`, `browser_snapshot`, `browser_click`): read the quote and the receipt with them. A snapshot of the confirmation page with its order number is an observed receipt; a snapshot of the cart is a quote.
 - The approval prompt Hermes shows for a flagged command: when the paying command raises it, record its answer beside the typed confirmation. An auto-approval (`/yolo`, `approvals.mode: off`, or a call the default `smart` mode judged low-risk and approved itself) or a command the check did not flag is no confirmation at all.
-- The optional Hermes skill `stripe-link-cli`, the Hermes Pay plugins `pay` (hosted) and `pay-cli` (local), and the `mppx` CLI (`mpp-agent` on a Hermes that still ships it), only when the person installed them. `stripe-link-cli` with `--request-approval` asks the person in their Link app, and `pay` and `pay-cli` confirm each payment through an MCP elicitation and decline when nobody can answer; those answers are additional evidence recorded beside the typed confirmation, never in place of it. `mppx` pays the 402 challenge as it runs and asks no one, so running it is the spend and comes only after the typed confirmation. The `hermes-mpp` plugin, with no `MPP_ALLOWED_ORIGINS` allow list set, auto-pays any supported 402 that ordinary HTTP traffic meets, with no cap or confirmation: stop and tell the person before any HTTP call. The receipt any of them returns fills `spend_receipt/v1`.
+- The optional Hermes skill `stripe-link-cli`, the Hermes Pay plugins `pay` (hosted) and `pay-cli` (local), and the `mppx` CLI (`mpp-agent` on a Hermes that still ships it), only when the person installed them. `stripe-link-cli` with `--request-approval` asks the person in their Link app, and `pay` and `pay-cli` confirm each payment through an MCP elicitation and decline when nobody can answer; those answers are additional evidence recorded beside the typed confirmation, never in place of it. `mppx` pays the 402 challenge as it runs and asks no one, so running it is the spend and comes only after the typed confirmation. The `hermes-mpp` plugin is present when `mpp_fetch` is in the tool list: with no `MPP_ALLOWED_ORIGINS` allow list set it auto-pays any supported 402 that ordinary HTTP traffic meets, with no cap or confirmation, so stop and tell the person before any HTTP call, and a call to an allowed origin is still the spend and comes only after the typed confirmation. The receipt any of them returns fills `spend_receipt/v1`.
 
 ## 3. Unknown outcomes
 
@@ -4797,7 +4802,7 @@ An outcome nobody saw -- a timeout, a dropped connection, a page that reloaded, 
 
 ## 4. Cap ledger
 
-`spend_cap_ledger/v1` is a list of rows the person can read: date, payee, amount, currency, rail, state, and receipt reference, with the running total against the cap. It never holds a card number, security code, wallet key, password, one-time code, or a whole receipt body. An `unknown` row counts against the cap until it is reconciled. The ledger lives where the person keeps it; OMH writes no ledger file of its own. When no ledger is supplied, ask the person for what they already spent against this cap in the period and put it on the card. If they cannot say, what is already spent is unknown: never assume zero and never show the full cap as remaining. The card says the cap cannot be checked, and the spend goes ahead only against a cap the person sets for this spend alone, with the total checked against it. Show the new row for the person to store.
+`spend_cap_ledger/v1` is a list of rows the person can read: date, payee, amount, currency, rail, state, and receipt reference, with the running total against the cap. It never holds a card number, security code, wallet key, password, one-time code, or a whole receipt body. An `unknown` row counts against the cap until it is reconciled. The ledger lives where the person keeps it; OMH writes no ledger file of its own. When no ledger is supplied, ask the person for what they already spent against this cap in the period and put it on the card. If they cannot say, what is already spent is unknown: never assume zero and never show the full cap as remaining. The card says the cap cannot be checked, and the spend goes ahead only against a cap the person sets for this spend alone, with the total checked against it; for a recurring charge that cap also covers its renewals, and an `unknown` charge from a timed-out payment is still reconciled first, so a cap never stands in for that. Show the new row for the person to store.
 """
 
 

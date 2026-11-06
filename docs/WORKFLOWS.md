@@ -7811,7 +7811,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - spend_receipt/v1
   - spend_cap_ledger/v1
 - Artifact expectations:
-  - pre_spend_card/v1 names the payee with its exact origin or address, the item, the total with fees and taxes in its currency, the rail, the cap and what remains of it, the refund terms, whether the spend can be reversed, and the approver, who is the person whose money moves
+  - pre_spend_card/v1 names the payee with its exact origin or address, the item, the total with fees and taxes in its currency, the rail, the cap and what remains of it (or that the cap cannot be checked), the refund terms, whether the spend can be reversed, and the approver, who is the person whose money moves
   - spend_confirmation/v1 records the person's typed yes in this session to that card's payee and total, with a host approval prompt's answer beside it as additional evidence when one appeared, and is void once the payee, the total, the currency, or the item changes
   - spend_receipt/v1 cites the observed order id, transaction id, or receipt header with the amount actually charged, and keeps quoted, confirmed, submitted, charged, declined, and unknown as separate states
   - spend_cap_ledger/v1 holds metadata only -- date, payee, amount, currency, rail, and receipt reference -- with the running total against the cap, and never a card number, security code, wallet key, password, or one-time code
@@ -10107,7 +10107,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The next wrapper action is explicit and platform-safe.
   - For `send_message` the delivery target is a bare platform name (its home channel), `platform:chat_id` (channel-level) or `platform:chat_id:thread_id` (thread-level); `origin` is only a cron job's `deliver` value and `send_message` refuses it, and a reply to the same chat is just the reply.
   - An attachment is a `MEDIA:/absolute/path` line in the reply, and the platform adapter that cannot send it is named instead of promising the file.
-  - A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat stays silent for an internal or heartbeat turn, a message known to expect no reply, or a healthy completed turn in a room with `allow_silence: true` (Hermes 0.22.6 and later); on any other human message Hermes replaces the marker with a visible warning asking them to retry, and cron and webhook runs follow a looser rule.
+  - A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat stays silent for an internal or heartbeat turn, a message known to expect no reply, or a healthy completed turn in a room with `allow_silence: true` (Hermes 0.22.6 and later); on any other human message Hermes 0.21.6 and later replaces the marker with a visible warning asking them to retry, an older Hermes drops it with no reply, and cron and webhook runs follow a looser rule.
 - Recovery notes:
   - If silent update conflicts with a status notice, keep the thread; hand back the silent-or-notify choice.
   - If an action would touch a thread other than the named one, mark it unresolved; hand back the target.
@@ -11202,7 +11202,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If config sources are unavailable, report only the discovered surfaces and mark the missing hosts not_observed.
   - If cleanup, host load, connector execution, or session progress is requested, route to the owning workflow instead of folding it into inventory.
   - To recover a previous coding session, list candidates read-only by metadata only (file name, modified time, size): Codex `~/.codex/sessions/`, Claude Code `~/.claude/projects/<project-slug>/`, Hermes `hermes sessions list`; mark an unreadable source not_observed, and read a transcript body only when the person asks for that next step.
-  - For `omh harness mcp-tool-name-compatibility`, each snapshot is a JSON file with exactly `schema_version` (`mcp_tool_name_compatibility_snapshot/v1`), `target_harness`, `adapter` (an object of `id` and `version`), `required_tools` (entries of `logical_name` and `evidence_refs`) and `advertised_tools` (entries of `name`, `observation` of `registered` or `config_only`, and `evidence_refs`); one `--snapshot` per distinct target harness (1 to 20 files), and a malformed file is refused with no field named.
+  - For `omh harness mcp-tool-name-compatibility`, each snapshot is a JSON file with exactly `schema_version` (`mcp_tool_name_compatibility_snapshot/v1`), `target_harness`, `adapter` (an object of `id` and `version`; only `id` `opencode-mcp-tool-naming` with `version` `v1` and `target_harness` `opencode` carries naming rules, and any other adapter reports `unsupported_adapter`), `required_tools` (entries of `logical_name` and `evidence_refs`) and `advertised_tools` (entries of `name`, `observation` of `registered` or `config_only`, and `evidence_refs`); one `--snapshot` per distinct target harness (1 to 20 files), and a malformed file is refused with no field named.
   - Write each of the other inventory artifacts as a table with columns entry, source path, and state in {observed, prepared, missing, stale, drifted, not_observed}, so completion can be checked row by row.
 - Required inputs:
   - user request
