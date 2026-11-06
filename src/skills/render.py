@@ -6639,6 +6639,8 @@ A quiet, queued, or scheduled node is not stalled. A returned blocked response i
 
 On a graph-capable host, encode real edges and dispatch the dependency-ready frontier. OMH's `fanout_contract/v2` is the reference behavior: unknown or cyclic dependencies fail, overlapping files without an edge fail, and admission advances as dependencies complete.
 
+When the accepted plan's tasks form an ordered graph with a separate verification task and the user did not name this skill themselves, recommend `dag-ulw` with a one-line reason (it validates the graph, settles each node from its handoff, and reports a verdict) rather than running the order here. Stay here for live coordinated lanes, a durable ledger, or a single owner.
+
 On a host without native DAG support, run edge-free units as plain parallel native subagents and run ordered units sequentially in topological order. This is a fallback inside `ulw-work`, not a separate skill or hidden runtime.
 """
 
@@ -6679,6 +6681,8 @@ Output that was not pasted did not happen.
 A TDD cycle is observed only when a non-zero (red) run precedes a zero (green) run of the same test command, both with pasted output. A lane that reports only a green run - or narrates a red run without its output - is `prepared_not_observed` on its red phase and stays there: it does not count as tests-first delivery, and the completion claim must say so.
 
 Commit the failing test as a checkpoint before the first implementation edit. The red commit makes tampering diff-visible: any later change to the test files appears in `git diff <red-commit>.. -- <test paths>` and must be explained in the lane report. The `omh_gather_evidence` tool accepts `git diff` probes for exactly this check.
+
+The red commit lives on the lane's own branch or worktree. Record its SHA in the evidence ledger, then fold it into the green commit (`git commit --fixup` and autosquash) before the branch is offered for merge, unless the repository keeps red commits: otherwise the delivered history carries a commit whose tree fails its own test, CI on that commit is red, and `git bisect` lands on it.
 
 ## Forbidden Moves
 
@@ -6838,7 +6842,7 @@ The order is the contract. Independence exists only before any seat has read ano
 
 ### Round 1 - independent findings
 
-Each perspective produces its findings without seeing any other perspective's output. Prompt each seat separately with the same problem statement, and give each one the same context: the proposal, the decision it must inform, and the known constraints. Nothing else.
+Each perspective produces its findings without seeing any other perspective's output. Prompt each seat separately with the same problem statement, and give each one the same context: the proposal, the decision it must inform, and the known constraints. Nothing else. When `delegate_task` is in your tool list, run each seat as its own child so the contexts really are separate; otherwise run the seats in sequence and mark the caveat below.
 
 Every finding names its evidence or labels itself an assumption. "This will not scale" is not a finding; "this holds every session in one process, and the deploy target runs four replicas behind a round-robin balancer" is.
 
@@ -7800,6 +7804,8 @@ Read only what the question needs. Report whether the answer came from repositor
 ## Capture
 
 Normal users describe the intent in Hermes chat. Agent/operator control-plane work may preview repository-root `PROJECT_TERMS.md`; preview is `prepared_not_observed`, reports no predicted candidate ids, and writes nothing. Before staging, show the machine-only projection and ask for explicit confirmation. Staging is atomic and pending-only. Approval is a separate review action.
+
+Once per project, `omh memory project-identity init` names the scope; without it the next command stops with `scope_unresolved`. Preview with `omh memory domain-capture --from-file PROJECT_TERMS.md` (read-only, `prepared_not_observed`). After the user confirms, add `--stage` to write pending candidates. Review and approval stay with `omh memory domain-review` and `omh memory domain-approve`, which this workflow never runs. When no shell tool is available, show the projection in prose and stop.
 
 Never create, rewrite, synchronize, approve, retire, or commit the source automatically. Never infer execution, review, model use, CI, or merge from source bytes, candidate state, profile state, or freshness.
 
@@ -9410,7 +9416,7 @@ Confirm the current state by retrieval rather than recall. Separate durable prin
 
 The output language is declared by the requester and never inferred from the language of the request. Body prose, role labels, chapter headings, and appendix captions follow the declared language together -- a Korean briefing under English section captions is a half-translated document. Identifiers, schema ids, file paths, command names, and code stay as written. The language declaration is required; omission is refused.
 
-OMH holds no translation table for the scaffolding, because one would have to be maintained for every language the engine can write in. Supply the labels with the payload instead: `role_labels` maps a role to its label in the document's language, `captions` supplies headings, metadata labels and the displayed evidence boundary. Explicit `en` may use English defaults; non-English output requires caller-supplied translations for every role and caption actually rendered. Unused labels need no translation. Translating the body while leaving rendered captions unset is refused. Structured receipt values and schema boundaries stay unchanged; only display labels are translated.
+OMH holds no translation table for the scaffolding, because one would have to be maintained for every language the engine can write in. Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints every error it finds, and writes the markdown, the print-ready page, or both. The payload's top-level fields are `schema_version`, `audience`, `output_formats` (human briefing only), `language`, `question`, `as_of`, `sections`, `figures`, `sources`, `role_labels`, `captions`, `export` and `claim_boundary`. Supply the labels with the payload instead: `role_labels` maps a role to its label in the document's language, `captions` supplies headings, metadata labels and the displayed evidence boundary. Explicit `en` may use English defaults; non-English output requires caller-supplied translations for every role and caption actually rendered. Unused labels need no translation. Translating the body while leaving rendered captions unset is refused. Structured receipt values and schema boundaries stay unchanged; only display labels are translated.
 
 ## Evidence boundary
 
@@ -11369,8 +11375,9 @@ has a measured throughput.
 on the roadmap and always happens: support escalations, on-call, code review,
 interviewing, and the maintenance nobody plans. Take those from the last two
 quarters rather than from intention - the gap between planned and actual is
-frequently the whole finding, and a demand figure that omits them understates
-by a third or more in most teams.
+frequently the whole finding. In the worked example below the omitted work is
+29% of demand (21 of 73 person-weeks); take the real figure from your own
+actuals.
 
 **Capacity.** Headcount times weeks, minus holiday, leave, onboarding time for
 anyone who joined in the window, and the fraction of senior time the other
@@ -11402,7 +11409,7 @@ price and a different lag.
 | --- | --- | --- | --- | --- |
 | Hire | the gap permanently, once ramped | one to two quarters, counting ramp | salary plus the senior time recruiting and onboarding consume - which comes out of this quarter's capacity | the gap is worse before it is better |
 | Outsource | a bounded, specifiable slice | weeks | contract rate plus the internal time to specify and review | only works where the work can be handed over without the context that is not written down |
-| Cut scope | exactly what is cut | immediately | whatever the cut item was for | the only option that closes the gap this quarter, and the only one whose cost is a commitment to somebody |
+| Cut scope | exactly what is cut | immediately | whatever the cut item was for | closes the gap fully and immediately, and is the only one whose cost is a commitment to somebody; outsourcing closes part of it within the quarter, hiring none of it |
 
 The comparison is the deliverable. Hiring to close a 17-week gap that exists
 this quarter does not close it this quarter; saying so is the analysis.
@@ -14518,6 +14525,14 @@ still admit two incompatible builds. `Missing` means nothing addresses it.
 The scored map is working state, not output. Report it only when no question
 will be asked, where it is the evidence for asking nothing.
 
+The interview header scores three dimensions, not ten categories. Map the
+categories onto them: Scope and behavior, Interaction flow, and Domain and data
+feed the outcome; Constraints and tradeoffs, Security and privacy, Quality
+attributes, Integration surface, and Edge cases feed constraints and non-goals;
+Completion signals feed success criteria; Terminology feeds whichever it
+affects. A dimension counts as resolved when none of its categories is
+`Missing` and no `Partial` one admits two incompatible builds.
+
 ## Which gaps earn a question
 
 A `Partial` or `Missing` category is a candidate, not a question. Promote it only
@@ -14526,8 +14541,9 @@ whether it is accepted. Drop it when it is a matter of implementation technique,
 a choice the executing lane can make and reverse cheaply, or already answered
 somewhere in the material.
 
-Rank the survivors by impact times uncertainty and ask in that order. Five
-questions is the ceiling for the whole session. Spend them on the worst
+Rank the survivors by impact times uncertainty and ask in that order. The
+interview's round budget (one question per round) is the ceiling for the whole
+session. Spend it on the worst
 unresolved categories rather than clearing several cheap ones - two low-impact
 answers and an unresolved security posture is a worse session than one question.
 
@@ -14542,7 +14558,7 @@ One question per round, and the round advances only on an accepted answer.
 - An id may follow the question mark in parentheses. Never before it.
 - Follow with one plain sentence on what the answer changes. A question whose
   stake cannot be stated in one sentence has not earned a round.
-- Offer two to five mutually exclusive options, or constrain a short answer to a
+- Offer two to four mutually exclusive options, or constrain a short answer to a
   few words. Name which option is recommended and why, in one line, so the
   answerer can accept rather than adjudicate.
 - Never show the queue. A visible queue invites answering ahead, which collapses
@@ -14574,11 +14590,15 @@ transcript, not a clarified brief.
 
 ## Stopping
 
-Stop at the first of: every high-impact category resolved, the person says to
-stop, or five questions asked. Then report the outcome and, when the budget ran
+Stop at the first of: all three dimensions resolved, the person says to
+stop, or the round budget spent. Then report the outcome and, when the budget ran
 out first, list the categories still `Partial` or `Missing` and say what was
 assumed for each. A named unresolved assumption is a usable result. A silent one
 is the failure this whole pass exists to prevent.
+
+A caller that cannot answer (a subagent, a scheduled run) or a question that timed out ends the
+interview the same way: emit the clarified brief with each unresolved dimension recorded as an
+assumption marked `unconfirmed`, and stop.
 """
 
 
@@ -15180,12 +15200,12 @@ def _cli_advisors_reference() -> str:
 | Codex | `codex` |
 | OpenCode | `opencode` |
 
-Load the one for the advisor the user named, when it is in your skill list, and take only the invocation from it: a single non-interactive run, started in the repository the question is about. Those skills are written for handing coding work to the CLI; here the CLI answers a question. A CLI with no bundled skill is run from its own help output, or reported as unavailable.
+Load the one for the advisor the user named, when it is in your skill list, and take only the invocation from it: a single non-interactive run. Start it in a scratch directory that holds only copies of the files the question needs, not in the live repository, unless the user opted in to repository access for this question: a coding CLI started in a repository can read every file in it, `.env` included, whatever the prompt says. Those skills are written for handing coding work to the CLI; here the CLI answers a question. A CLI with no bundled skill is run from its own help output, or reported as unavailable.
 
 What stays with `ask`:
 
 - The advisor is the one the user named or configured. None of these CLIs is the default, and this table recommends none of them.
-- An advisor answers; it does not edit. Run it in its read-only or planning mode where it has one, or with its file-writing tools turned off, and read `git status` afterwards: a changed file means the run did more than advise, and you say so.
+- An advisor answers; it does not edit. Run Claude Code as `claude -p --permission-mode plan` (or with `--allowedTools Read,Grep,Glob`), and any other CLI in its own read-only or sandbox mode (read its `--help`) or with its file-writing tools turned off. When it ran in the repository, read `git status` afterwards: a changed file means the run did more than advise, and you say so.
 - The question carries what the advisor needs to answer: the question, and the files or excerpts it concerns. Secrets, credentials, and private material stay out unless the user opted in for this question.
 - The answer is advice. Attribute it to the advisor, say which points you accept and which you reject and why, and record no review, verification, or approval from it.
 - A run that fails, times out, or stops for a sign-in is reported as that, with no advice written in its place.

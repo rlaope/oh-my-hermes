@@ -323,9 +323,15 @@ NON_SKILL_BACKTICKS = frozenset(
 # `systematic-review` defers topic discovery to `source-finder`, one supplied
 # paper to `paper-learning` and a HellaSwag log check to `repro-audit`; no
 # sibling gains a statement pointing back. Three cases, three pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 410
-EXPECTED_DEFERENCE_PAIRS = 426
-EXPECTED_DEFERRING_OWNERS = 121
+# The coding-core skill audit adds declining statements: `plan` defers a risky change to `ralplan`,
+# vague requirements to `deep-interview` and a decided refactor to `refactor-plan`; `ralplan` defers an
+# ordinary change to `plan`; `strategy-brief` defers technical choices to `decision-prototype`, `plan`
+# and `adversarial-consensus`; `ask` defers a multi-perspective attack to `adversarial-consensus`;
+# `ultrawork` defers an unplanned request to `ralplan`; `ultraperf` is rewritten to name `maestro`.
+# Eight cases, nine pairs, one new owner (`plan`).
+EXPECTED_DEFERENCE_CASES = 418
+EXPECTED_DEFERENCE_PAIRS = 435
+EXPECTED_DEFERRING_OWNERS = 122
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

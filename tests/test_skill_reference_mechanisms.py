@@ -93,7 +93,7 @@ MECHANISM_TOKENS: dict[str, tuple[str, ...]] = {
         "Clear",            # the three per-category coverage states
         "Partial",
         "Missing",
-        "five questions asked",  # the session cap
+        "round budget spent",  # the session cap
         "write",            # the write-back target, the thing OMH lacked
     ),
     "ultrawork": (

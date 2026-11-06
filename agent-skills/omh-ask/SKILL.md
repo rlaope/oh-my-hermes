@@ -24,6 +24,7 @@ This is an OMH `ask` workflow skill, projected for Agent Skills hosts (Claude Co
 - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
 - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - The user wants typed yes/no, pick-one, or scored probabilities from Jev over supplied text.
+- The user wants several perspectives to attack a proposal and a distilled constraint bundle; use `omh-adversarial-consensus`. Use this skill for one named outside advisor.
 
 ## Examples
 
@@ -35,9 +36,9 @@ Good example:
 
 Bad example:
 
-- Prompt: ask: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ask`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: ask: should I rename this variable?
+- Expected behavior: Answer directly; no outside advisor would change the answer.
+- Why: An outside critique is worth its cost only when it could change the decision.
 
 ## Completion Checklist
 
@@ -68,7 +69,7 @@ Reasoning demand: `standard`
 
 Quality bar:
 
-- Before consulting, name the question, why an outside answer could change yours, and the advisor the user named or configured; with none configured, say so and answer without one.
+- Before consulting, name the question, why an outside answer could change yours, and the advisor the user named or configured (named in this request, or already set up on this machine; if neither, ask once); with none, say so and answer without one.
 - Report the advice as one input: which points you accept, which you reject and why, and none of it as a verdict, a review, or a verified fact.
 
 Required inputs:

@@ -322,7 +322,9 @@ class RouterContentTests(unittest.TestCase):
         # 33,000 -> 33,194: `systematic-review` adds one 194-byte index line
         # (32,978 -> 33,172 measured); the existing 22-byte allowance is kept,
         # not widened.
-        self.assertLess(len(rendered.encode("utf-8")), 33_194)
+        # 33,194 -> 33,300: `research-brief` names `source-finder` for raw link gathering and keeps
+        # `ulw-research` for reference-implementation study (+58 measured; 33,172 -> 33,230).
+        self.assertLess(len(rendered.encode("utf-8")), 33_300)
         for line in rendered.splitlines():
             self.assertLess(len(line.encode("utf-8")), 400, line)
 
@@ -520,7 +522,7 @@ class RouterContentTests(unittest.TestCase):
             if template.skill_name == "oh-my-hermes" and template.relative_path == "references/workflow-registry.md":
                 limit = 33_841
             elif template.skill_name == "oh-my-hermes" and template.relative_path == "references/catalog-index.md":
-                limit = 33_194
+                limit = 33_300
             else:
                 limit = 33_100
             self.assertLess(len(template.content.encode("utf-8")), limit, template.relative_path)

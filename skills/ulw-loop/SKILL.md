@@ -25,7 +25,7 @@ This is a Hermes-native `loop` workflow skill.
 
 - The user asks for one bounded delivery cycle; use `ulw-work`'s delivery-boundary capability instead.
 - Scope and milestones are already known and only durable checkpoint/resume tracking is needed; use `ulw-work`'s durable-checkpoint capability.
-- The user gives only a north-star outcome such as revenue, stars, or adoption and has not accepted a bounded first loop goal.
+- The user gives only a north-star outcome such as revenue, stars, or adoption and declines the bounded first loop goal you proposed; stop at the proposed arena, problem and verification and wait.
 - The goal is too vague to name an observable problem, next artifact, verification signal, or stop condition.
 - The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.
 - The permission profile does not allow repeated research, handoff, queue, or feedback cycles.
@@ -87,7 +87,7 @@ Reasoning demand: `heavy`
 
 Quality bar:
 
-- Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path.
+- Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path, unless a Do Not Use condition holds; then name that condition and the skill to use instead.
 - Classify the goal as task, project, ambition, external-wait, or unclear inside the loop, then keep progressing until a real permission, evidence, verification, context, budget, or external-wait gate appears.
 - A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it. A mid-run message is the latest steering for the active task, not automatically a replacement objective: it replaces the objective when the user says so and steers the current one otherwise.
 - A follow-up that needs new authority, materially expands the scope, or changes external state not already authorized is described first and started only on the user's approval: the turn ends by naming that next action and asking whether to take it, as one question carrying the choices the user has, never by declaring what will not be done; persistence never broadens the authorized scope. A refused escalation is answered the same way, with a safer alternative inside the boundary or the authorization the boundary asks for — never a workaround or an indirect execution.
@@ -110,7 +110,7 @@ Quality bar:
 - Treat ticks as preparation only. Advance one legal role phase through loop_phase_transition/v1 only after its named gate has observed evidence.
 - Treat a judge `done` verdict, a turn-ceiling pause, or a gate-retry pause as narration; completion still requires the linked goal ledger completion gate and observed evidence.
 - When the stop ladder names `replan_stuck_loop_once`, re-plan once from the goal ledger and recorded failures alone, not the transcript or recalled memory; record the new approach and continue; a second stop names the blocker step.
-- Treat any future change to the default as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.
+- Treat any future change to the default goal driver (native `/goal`) as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.
 - Compare only observed outcomes under matched task, model/provider, permissions, turn budget, and verification surface; unresolved evidence keeps the current default.
 - Keep promotion governance separate from goal-ledger completion and ordinary measured-loop keep/discard decisions; do not invent subjective scorers, fixed numeric thresholds, minimum run counts, weighted percentages, or per-turn artifact quotas.
 - Name the one element gating this loop from the `loop_constraint_assessment/v1` block before choosing the next action; if none is binding, say so from the recorded reason rather than assuming.

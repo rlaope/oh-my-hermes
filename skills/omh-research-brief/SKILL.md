@@ -1,6 +1,6 @@
 ---
 name: "omh-research-brief"
-description: "[omh] Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research, and for ongoing multi-role research use research-department. Use when the user says: research-brief, business-research, business research, research brief, decision brief, pricing decision brief, decision-ready brief, source-backed business research."
+description: "[omh] Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use omh-source-finder, for reference-implementation study use ulw-research, and for ongoing multi-role research use research-department. Use when the user says: research-brief, business-research, business research, research brief, decision brief, pricing decision brief, decision-ready brief, source-backed business research."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:

@@ -56,4 +56,6 @@ A quiet, queued, or scheduled node is not stalled. A returned blocked response i
 
 On a graph-capable host, encode real edges and dispatch the dependency-ready frontier. OMH's `fanout_contract/v2` is the reference behavior: unknown or cyclic dependencies fail, overlapping files without an edge fail, and admission advances as dependencies complete.
 
+When the accepted plan's tasks form an ordered graph with a separate verification task and the user did not name this skill themselves, recommend `dag-ulw` with a one-line reason (it validates the graph, settles each node from its handoff, and reports a verdict) rather than running the order here. Stay here for live coordinated lanes, a durable ledger, or a single owner.
+
 On a host without native DAG support, run edge-free units as plain parallel native subagents and run ordered units sequentially in topological order. This is a fallback inside `ulw-work`, not a separate skill or hidden runtime.

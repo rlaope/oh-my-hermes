@@ -412,6 +412,23 @@ All notable changes will be documented here.
   when the failed node was a verify node) before editing. There is still no
   rollback: the worktree is shared. Every other node's task reads byte for
   byte as before.
+- **The coding-core skills no longer contradict each other or dead-end.**
+  A fix pass over the skills most coding runs load: `ulw-interview`'s
+  question budget, dimensions and option count now agree with its taxonomy;
+  `ulw-work` and `ulw-plan` no longer send an unplanned request back and
+  forth, and `ulw-work` names `dag-ulw` for an ordered plan; `omh-plan` and
+  `ulw-plan` say which one an ordinary or a risky change belongs to;
+  `ulw-loop` handles a north-star goal and a direct invocation that matches a
+  Do Not Use line; `ulw-perf` runs its edits in the Hermes harness unless an
+  external owner was chosen, and asks for repeated runs, spread and the metric
+  direction before a regression budget; `ulw-qa` caps fix rounds and requires
+  a cleanup receipt; `ulw-research` takes defaults when it cannot ask, names
+  the briefing renderer and the budget a declared depth gives; `ulw-context`
+  names the terminology capture command; `omh-ask` runs an advisor read-only
+  and out of the live repository. Smaller edits in `omh-decide`,
+  `omh-adversarial-consensus`, `dag-ulw`, `ulw-maestro` and the TDD
+  reference. This round is one owner goal split into two pull requests so each
+  rolls back alone; this one carries the skill text.
 - **A dag-ulw run that waits shows whole and moves, and says what it waits
   on.** A run of up to 12 lanes (the transcript's own small-run measure)
   shows every layer and node. A done layer of one node is one dim row

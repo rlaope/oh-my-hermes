@@ -34,15 +34,16 @@ Good example:
 
 Bad example:
 
-- Prompt: ultraqa: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ultraqa`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: ultraqa that the profile page looks right on mobile
+- Expected behavior: Route to `omh-visual-qa`; no changed behavior is being attacked.
+- Why: The question is how a rendered page looks, which the viewport and state matrix answers.
 
 ## Completion Checklist
 
 - The scenario, expected behavior, observed result, and pass/fail basis are named.
 - Proposed fixes are separated from observed QA evidence.
-- Missing or failed verification routes back to plan, fix, or a narrower test.
+- A failed scenario gets at most two fix-and-rerun rounds; after the second failed rerun it is reported as an open finding with its evidence, and the scenario is not redefined to pass.
+- Everything the hostile scenarios created or changed (accounts, rows, files, processes, ports) was listed before the first one ran and removed or restored afterwards, with the command and its observed result as the cleanup receipt, or what remains is named.
 
 ## Recovery Notes
 

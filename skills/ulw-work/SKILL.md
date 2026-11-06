@@ -10,7 +10,7 @@ metadata:
     phase: parallel-delivery
     role: handoff-guide
     quality_tier: handoff-gated
-    related_skills: [omh-decision-prototype, ulw-loop]
+    related_skills: [ulw-plan, omh-decision-prototype, ulw-loop]
 ---
 
 # Ultrawork
@@ -28,7 +28,7 @@ This is a Hermes-native `ultrawork` workflow skill.
 ## Do Not Use When
 
 - Avoid conflicting parallel writers; use single-owner or ordered execution.
-- The plan is not accepted, lane boundaries are unclear, or verification commands are missing.
+- Plan not accepted, lane boundaries unclear, or verification commands missing; use `ulw-plan` unless a delivery cycle was asked for.
 - The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.
 - For a decision spike, use `omh-decision-prototype`.
 - [capability:coordinated_scope] The lanes are exploratory research or QA coordination without an accepted implementation plan; frame them with the `coordinated_scope` capability before parallel delivery.

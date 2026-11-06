@@ -553,7 +553,7 @@ _DEFINITIONS = [
         ),
         quality_tier="loop-gated",
         quality_bar=(
-            "Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path.",
+            "Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path, unless a Do Not Use condition holds; then name that condition and the skill to use instead.",
             "Classify the goal as task, project, ambition, external-wait, or unclear inside the loop, then keep progressing until a real permission, evidence, verification, context, budget, or external-wait gate appears.",
             ENGINE_INTERJECTION_RESUME_RULE,
             ENGINE_FOLLOW_UP_AUTHORITY_RULE,
@@ -576,7 +576,7 @@ _DEFINITIONS = [
             "Treat ticks as preparation only. Advance one legal role phase through loop_phase_transition/v1 only after its named gate has observed evidence.",
             "Treat a judge `done` verdict, a turn-ceiling pause, or a gate-retry pause as narration; completion still requires the linked goal ledger completion gate and observed evidence.",
             "When the stop ladder names `replan_stuck_loop_once`, re-plan once from the goal ledger and recorded failures alone, not the transcript or recalled memory; record the new approach and continue; a second stop names the blocker step.",
-            "Treat any future change to the default as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.",
+            "Treat any future change to the default goal driver (native `/goal`) as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.",
             "Compare only observed outcomes under matched task, model/provider, permissions, turn budget, and verification surface; unresolved evidence keeps the current default.",
             "Keep promotion governance separate from goal-ledger completion and ordinary measured-loop keep/discard decisions; do not invent subjective scorers, fixed numeric thresholds, minimum run counts, weighted percentages, or per-turn artifact quotas.",
             "Name the one element gating this loop from the `loop_constraint_assessment/v1` block before choosing the next action; if none is binding, say so from the recorded reason rather than assuming.",
@@ -593,7 +593,7 @@ _DEFINITIONS = [
         do_not_use_when=(
             "The user asks for one bounded delivery cycle; use `ultrawork`'s delivery-boundary capability instead.",
             "Scope and milestones are already known and only durable checkpoint/resume tracking is needed; use `ultrawork`'s durable-checkpoint capability.",
-            "The user gives only a north-star outcome such as revenue, stars, or adoption and has not accepted a bounded first loop goal.",
+            "The user gives only a north-star outcome such as revenue, stars, or adoption and declines the bounded first loop goal you proposed; stop at the proposed arena, problem and verification and wait.",
             "The goal is too vague to name an observable problem, next artifact, verification signal, or stop condition.",
             "The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.",
             "The permission profile does not allow repeated research, handoff, queue, or feedback cycles.",
@@ -637,7 +637,7 @@ _DEFINITIONS = [
         ),
         portable_overrides={
             "quality_bar": (
-                "Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path.",
+                "Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path, unless a Do Not Use condition holds; then name that condition and the skill to use instead.",
                 "Classify the goal as task, project, ambition, external-wait, or unclear inside the loop, then keep progressing until a real permission, evidence, verification, context, budget, or external-wait gate appears.",
                 "A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it. A mid-run message is the latest steering for the active task, not automatically a replacement objective: it replaces the objective when the user says so and steers the current one otherwise.",
                 "A follow-up that needs new authority, materially expands the scope, or changes external state not already authorized is described first and started only on the user's approval; persistence never broadens the authorized scope. A refused escalation gets a safer alternative inside the boundary, or the authorization the boundary asks for — never a workaround or an indirect execution.",
@@ -660,7 +660,7 @@ _DEFINITIONS = [
                 "Treat ticks as preparation only. Record host phase results separately; never manufacture native phase-transition evidence from a host task declaration.",
                 "Treat a judge `done` verdict, a turn-ceiling pause, or a gate-retry pause as narration; completion still requires the linked goal ledger completion gate and observed evidence.",
                 "When the stop ladder names `replan_stuck_loop_once`, re-plan once from the goal ledger and recorded failures alone, not the transcript or recalled memory; record the new approach and continue; a second stop names the blocker step.",
-                "Treat any future change to the default as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.",
+                "Treat any future change to the default goal driver (native `/goal`) as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.",
                 "Compare only observed outcomes under matched task, model/provider, permissions, turn budget, and verification surface; unresolved evidence keeps the current default.",
                 "Keep promotion governance separate from goal-ledger completion and ordinary measured-loop keep/discard decisions; do not invent subjective scorers, fixed numeric thresholds, minimum run counts, weighted percentages, or per-turn artifact quotas.",
                 "Name the one element gating this loop from the `loop_constraint_assessment/v1` block before choosing the next action; if none is binding, say so from the recorded reason rather than assuming.",
@@ -726,16 +726,16 @@ _DEFINITIONS = [
             "do_not_use_when": (
                 "The user asks for one bounded delivery cycle; use `ultrawork`'s delivery-boundary capability instead.",
                 "Scope and milestones are already known and only durable checkpoint/resume tracking is needed; use `ultrawork`'s durable-checkpoint capability.",
-                "The user gives only a north-star outcome such as revenue, stars, or adoption and has not accepted a bounded first loop goal.",
+                "The user gives only a north-star outcome such as revenue, stars, or adoption and declines the bounded first loop goal you proposed; stop at the proposed arena, problem and verification and wait.",
                 "The goal is too vague to name an observable problem, next artifact, verification signal, or stop condition.",
                 "The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.",
                 "The permission profile does not allow repeated research, handoff, queue, or feedback cycles.",
             ),
         },
         portable_override_shadows={
-            "do_not_use_when": "e62a657bc560a98ec06add69e143b2d65ce7a3c488d953d60cfacd1e1104645e",
+            "do_not_use_when": "2ba0707196aad88775b85e179de7daf89d7d869c7ec67550ce4c233d88837318",
             # Re-plan rule added to both copies; shadow was 90edd0de before it.
-            "quality_bar": "2370be2b5ea8b687eee7115f3c42d6b2afa8c706090fbf14ece46c5eb048ef0f",
+            "quality_bar": "e758354b0414ce5e51a3690835f0866fa2e33b8b254cfc3310a71c62a72aaa58",
             "expected_outputs": "780eec788fe069700b05a39880a50a3813715f50fcd6401cb6fe486f1750616d",
             "artifact_expectations": "a0b60b9744a8ba2ea968e39cb84e90f2bc7125aaa4f40cee0996c658eeddc7ff",
             "final_checklist": "0e74ac3a35cd511b7db3310dc8040cfd5340bef69e367ee912228348616aa2c4",
@@ -1332,7 +1332,7 @@ _DEFINITIONS = [
         ),
         do_not_use_when=(
             "Avoid conflicting parallel writers; use single-owner or ordered execution.",
-            "The plan is not accepted, lane boundaries are unclear, or verification commands are missing.",
+            "Plan not accepted, lane boundaries unclear, or verification commands missing; use `ralplan` unless a delivery cycle was asked for.",
             "The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.",
         "For a decision spike, use `decision-prototype`.",
             "[capability:coordinated_scope] The lanes are exploratory research or QA coordination without an accepted implementation plan; frame them with the `coordinated_scope` capability before parallel delivery.",
@@ -1542,8 +1542,8 @@ _DEFINITIONS = [
             "choice and dispatch permission within scope, with no redundant confirmation. After readiness and "
             "permission probes, invoke the fanout-dispatch bridge (`omh coding run` for one unit); clarify missing "
             "owner or action authority first.",
-            "State the handoff mode before composing: claude-code is prompt-only (`coding_prompt_handoff/v1` -- "
-            "the prepared handoff record is never dispatchable and never described as a run; only the "
+            "State the handoff mode before composing: the claude-code handoff record is prompt-only (`coding_prompt_handoff/v1` -- "
+            "that record is never dispatchable and never described as a run; a user-commanded Claude Code run goes through the bridge below, and only the "
             "fanout-dispatch bridge -- `omh coding fanout dispatch` or its `omh coding run` single-run entry -- "
             "ever spawns a CLI), codex is a dispatchable `coding_executor_handoff/v1`, and "
             "omx-runtime/pi-family-runtime/omc-runtime are `coding_runtime_handoff/v1`.",
@@ -1779,7 +1779,7 @@ _DEFINITIONS = [
         ),
         quality_tier="source-gated",
         quality_bar=(
-            "Ask for the research question, source boundaries, freshness, jurisdiction, and version assumptions before retrieval.",
+            "Ask for the research question, source boundaries, freshness, jurisdiction, and version assumptions before retrieval. When another workflow or a lane that cannot ask called you, take audience = coding agent, skip the format and language questions, use the caller's stated question and depth, and record each defaulted input in the dossier `scope` as `defaulted: <why>`; ask only when a human is in the loop.",
             "Ask who the output is for before retrieval and never infer it: a human reader gets a briefing document, a coding agent gets the dense handoff of findings, exact symbols, and file paths. The answer changes what the run records, not only how it is written up.",
             "On the human branch ask the output format (markdown, a print-ready page, or both) and the output language before writing, then hold the document to `references/briefing-format.md` - noun-phrase titles carrying a role label from its closed vocabulary, cause before effect, terms defined at first use, figures drawn in code blocks, and the fixed chapter-and-appendix structure.",
             "Keep the coding-agent branch dense: findings, exact symbols, file paths, and the plan-feed block, with no narrative framing and no briefing structure.",
@@ -2245,7 +2245,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "research-brief",
-        "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research, and for ongoing multi-role research use research-department.",
+        "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use omh-source-finder, for reference-implementation study use ulw-research, and for ongoing multi-role research use research-department.",
         (
             "research-brief",
             "business-research",
@@ -2267,11 +2267,11 @@ _DEFINITIONS = [
         # `research-department` ships only on Hermes.
         portable_overrides={
             "description": (
-                "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research.",
+                "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use omh-source-finder, and for reference-implementation study use ulw-research.",
             ),
         },
         portable_override_shadows={
-            "description": "c6099e9cb9ce65a7119a2a37b1375bc59a0d11ff1a90ccfddabc8e8c26de1b4f",
+            "description": "60c029585ab7306b036125d9966501d1a1c96c3d5580e45f5735d7ab4a215419",
         },
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
@@ -2624,7 +2624,13 @@ _DEFINITIONS = [
             "When a record is warranted, draft it per `omh-decide/references/decision-records.md` - the `docs/adr/` convention with Context, Drivers, Considered Options, Decision, Consequences with mitigations, and Related - and stop for the user's approval before any file is written.",
             "Never edit an accepted record: status moves Proposed to Accepted to Deprecated or Superseded, supersession is a new record pointing back at the old one, and a Rejected record is kept - it is what `decision-recall` reads later.",
         ),
+        why_this_exists=(
+            "`strategy-brief` exists so a team decision ends as a recommendation whose options are priced in one unit "
+            "with their lag (and, when hard to reverse, a proposed ADR), not a discussion where each option is argued "
+            "in different terms."
+        ),
         do_not_use_when=(
+            "A technical choice one cheap experiment can settle; use `decision-prototype`. A technical choice inside a plan being written; use `plan`. A technical choice the user wants attacked; use `adversarial-consensus`. Use this skill for the decision note and ADR once the options are known.",
             "The strategic question is whether an early idea's customer problem and segment are real, and no validated discovery receipt exists yet; use `product-discovery-validation`.",
             "The question is how to run a hiring process — scorecards, interview loops, candidate comparison — rather than whether to hire at all; use `people-ops`.",
             "The user wants Jev's typed probabilities for a yes/no, pick-one, or scored question over supplied text rather than tradeoffs and a recommendation; use `jev-ask`.",
@@ -7316,6 +7322,17 @@ _DEFINITIONS = [
             "nobody wrote down: it turns the changed behavior and known risks into hostile scenarios, records each "
             "one's observed pass or fail apart from any proposed fix, and hands fixes to the selected coding executor."
         ),
+        final_checklist=(
+            "The scenario, expected behavior, observed result, and pass/fail basis are named.",
+            "Proposed fixes are separated from observed QA evidence.",
+            "A failed scenario gets at most two fix-and-rerun rounds; after the second failed rerun it is reported as an open finding with its evidence, and the scenario is not redefined to pass.",
+            "Everything the hostile scenarios created or changed (accounts, rows, files, processes, ports) was listed before the first one ran and removed or restored afterwards, with the command and its observed result as the cleanup receipt, or what remains is named.",
+        ),
+        bad_example=SkillExample(
+            prompt="ultraqa that the profile page looks right on mobile",
+            expected="Route to `visual-qa`; no changed behavior is being attacked.",
+            why="The question is how a rendered page looks, which the viewport and state matrix answers.",
+        ),
         do_not_use_when=(
             HermesSkillLine(
                 "Exploratory bug-hunting across a web app with no changed behavior to attack; on Hermes, use the bundled `dogfood` skill when it is available, and bring a finding back here as a scenario to reproduce.",
@@ -7418,6 +7435,23 @@ _DEFINITIONS = [
             "shape written down and accepted by the user before any code moves, with every step small enough to check "
             "and no implementation hidden inside the plan text."
         ),
+        do_not_use_when=(
+            "The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.",
+            "The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.",
+            "The change is risky or architectural and the user wants alternatives compared, a risk review and a recorded decision; use `ralplan`, and keep this skill for the ordinary plan.",
+            "Requirements are too vague to list non-goals or acceptance criteria; use `deep-interview`.",
+            "The direction is decided and what is missing is the phase-by-phase refactor shape; use `refactor-plan`.",
+        ),
+        good_example=SkillExample(
+            prompt="plan: add CSV export to the reports page; admins only, and it must stream 100k rows.",
+            expected="Write goals, non-goals, risks, tasks with ids, dependencies and done checks, a closing gate, and the acceptance criteria; hand back for acceptance before any handoff.",
+            why="A feature with real acceptance questions needs a plan the user accepts before any code moves.",
+        ),
+        bad_example=SkillExample(
+            prompt="plan: fix the null check in parse_user (one line, the test already exists)",
+            expected="Make the edit directly and run the test; a plan adds a round trip with nothing to decide.",
+            why="One bounded edit with a known check has no goals or tradeoffs to write down.",
+        ),
         final_checklist=_CATEGORY_FINAL_CHECKLISTS["planning"]
         + (
             "When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning task ids, or one stating the check found none.",
@@ -7505,6 +7539,7 @@ _DEFINITIONS = [
             "The refactor's direction is already decided and what is missing is its execution shape - which files move in which phase, what verifies each phase, where each phase rolls back to; use `refactor-plan`.",
             "One plan-blocking choice still needs behavior evidence rather than argument; run `decision-prototype` first and consume its decision receipt without transcript replay.",
             "The user wants a pure source lookup, citation check, or paper explanation with no implementation plan.",
+            "An ordinary feature or fix that needs a plan but not a consensus review (no architectural, regression or user-visible risk the user named); use `plan`.",
             "The unresolved work is repository terminology alignment or a project-language decision frontier; use `context` before planning.",
         ),
         good_example=SkillExample(
@@ -7522,14 +7557,14 @@ _DEFINITIONS = [
             "Observed repo facts and source/web evidence gaps are named.",
             "At least two options or one chosen option plus rejected alternatives are recorded.",
             "Risks, acceptance criteria, and verification commands are testable or explicitly blocked.",
-            "Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped.",
+            "Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped: the plan states the count of target-state differences and the count of `Success criteria` rows, and the two are equal or each gap is named as a user-excluded non-goal.",
             _PLAN_AMBITION_CHECK,
             "The plan exists as a recorded file-backed artifact, not only as chat narration.",
             "The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.",
             "The follow-on engine or executor path was started only after the user's explicit go-ahead in this conversation, never from plan acceptance alone.",
         ),
         recovery_notes=(
-            "If requirements are still fuzzy, route back to deep-interview before planning.",
+            "If requirements are still fuzzy, route back to the `deep-interview` workflow before planning.",
             "If current-source evidence is missing, route a `research` step before accepting the plan.",
             PortableLine(
                 "If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.",
@@ -7645,7 +7680,7 @@ _DEFINITIONS = [
             "Round two attacks only: every perspective attacks other perspectives' findings and never defends or restates its own. A perspective with no objection to any other seat says so explicitly rather than filling the round with agreement.",
             "Round three answers each objection with exactly one verdict — defend with evidence, refine the finding, or concede it — and a conceded finding is struck from the record instead of being softened.",
             f"The lead distills only. Nothing new enters at distillation: every line in the bundle traces to a surviving finding, and it goes into one of {', '.join(ADVERSARIAL_CONSENSUS_BUCKETS)} — never into a fifth bucket, a recommendation, a sequence of steps, or a task list.",
-            "End with the mandatory handoff: state that the bundle is INPUT to planning, name the follow-on planning workflow (`ralplan` for a reviewed plan, `plan` when the shape is already agreed), and stop. Treating the bundle as the plan is the anti-pattern this workflow exists to prevent.",
+            "End with the mandatory handoff: state that the bundle is INPUT to planning, name the follow-on planning workflow (the `ralplan` workflow for a reviewed plan, the `plan` workflow when the shape is already agreed), and stop. Treating the bundle as the plan is the anti-pattern this workflow exists to prevent.",
             "Keep round transitions and perspective outputs as declarations: a stated round change is not evidence that the round happened, and a distilled bundle is not plan acceptance, implementation, review, CI, or merge evidence.",
         ),
         why_this_exists=(
@@ -8446,8 +8481,9 @@ _DEFINITIONS = [
         hermes_role="hybrid-measurement",
         delegation_boundary="retained-catalog-intent",
         handoff_policy=(
-            "Hermes owns the audit, baseline, hypothesis, budget, and status; every optimization code edit becomes a "
-            "selected executor/runtime handoff and returns as observed re-measurement."
+            "Hermes owns the audit, baseline, hypothesis, budget, and status; each optimization code edit runs in the "
+            "Hermes harness (a `delegate_task` lane routed with `omh_delegate_route`) unless the user chose an external "
+            "coding owner, in which case it goes through `maestro`; either way it returns as observed re-measurement."
         ),
         required_inputs=(
             "symptom or suspected slow surface",
@@ -8476,10 +8512,13 @@ _DEFINITIONS = [
         quality_bar=(
             "Record a baseline and name the evaluator command before proposing any optimization edit.",
             "Attack only a hot path shown by a measurement or profile; never micro-optimize unmeasured code.",
-            "Keep every fix the smallest reversible change and route code edits to the selected executor.",
-            "Re-measure after each change and report deltas only from observed evidence.",
+            PortableLine(
+                "Keep every fix the smallest reversible change and run its code edit in the Hermes harness, or through `maestro` when the user chose an external coding owner.",
+                "Keep every fix the smallest reversible change and run its code edit through the host's coding mechanism, or with the coding agent the user chose.",
+            ),
+            "Re-measure after each change and report deltas only from observed evidence; record the baseline as repeated runs (count and warm-up stated) with median and spread, and treat a delta smaller than the spread as no result.",
             "Never present a restart, cache flush, or resource bump as a leak fix; prove causation by revert-verify.",
-            "Set the regression budget as baseline x (1 + tolerance) and name the CI gate that enforces it.",
+            "Set the regression budget as baseline x (1 + tolerance) for a lower-is-better metric (latency, memory, cost) or baseline x (1 - tolerance) for a higher-is-better one (throughput), with a tolerance at least the observed spread, and name the CI gate that enforces it.",
             ENGINE_INTERJECTION_RESUME_RULE,
             ENGINE_FOLLOW_UP_AUTHORITY_RULE,
             ENGINE_CLOSING_BRIEF_RULE,
@@ -8503,9 +8542,9 @@ _DEFINITIONS = [
             why="The problem is real but unlocalized across more than one domain.",
         ),
         bad_example=SkillExample(
-            prompt="$ultraperf make the recommender p95 under 200ms; baseline 340ms, benchmark is 'make bench'",
-            expected="Skip the discovery audit: record 340ms as the baseline and `make bench` as the evaluator command, then hand the fix to the selected executor and re-measure against the 200ms target.",
-            why="A single declared measurable goal does not need a discovery loop.",
+            prompt="$ultraperf the docstring on parse_user is wrong",
+            expected="Fix the docstring directly; there is no measured cost and no hot path to rank.",
+            why="A wrong comment is a correctness edit, not a performance problem, so no baseline or regression budget applies.",
         ),
         final_checklist=(
             "Baseline, workload, environment, and evaluator command are recorded before any edit is proposed.",
@@ -8516,7 +8555,7 @@ _DEFINITIONS = [
         recovery_notes=(
             "If no evaluator command exists, stop the loop and produce one before touching code.",
             "If the re-measure does not move, revert the change and re-rank hypotheses instead of stacking fixes.",
-            "If the goal turns out to be one declared metric with a budget, keep the loop and start from that baseline instead of profiling for a hot path.",
+            "If the goal turns out to be one declared metric with a budget (for example p95 340ms to 200ms with `make bench`), skip the discovery audit: record the declared baseline and evaluator command, then fix and re-measure against the target.",
         ),
         situations=(
             "the app got slow and we don't know why",
@@ -8661,7 +8700,7 @@ _DEFINITIONS = [
             "Do not send secrets or private prompts without explicit opt-in.",
         ),
         quality_bar=(
-            "Before consulting, name the question, why an outside answer could change yours, and the advisor the user named or configured; with none configured, say so and answer without one.",
+            "Before consulting, name the question, why an outside answer could change yours, and the advisor the user named or configured (named in this request, or already set up on this machine; if neither, ask once); with none, say so and answer without one.",
             "Report the advice as one input: which points you accept, which you reject and why, and none of it as a verdict, a review, or a verified fact.",
             HermesReferenceLine(
                 "When the advisor is a coding CLI the user named and Hermes' bundled skill for it (`claude-code`, `codex`, or `opencode`) is in your skill list, take only the invocation from that skill and keep the run to advice, with no edits; load `references/cli-advisors.md`. None of these CLIs is the default advisor.",
@@ -8677,6 +8716,12 @@ _DEFINITIONS = [
             "The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.",
             "The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.",
             "The user wants typed yes/no, pick-one, or scored probabilities from Jev over supplied text; use `jev-ask`.",
+            "The user wants several perspectives to attack a proposal and a distilled constraint bundle; use `adversarial-consensus`. Use this skill for one named outside advisor.",
+        ),
+        bad_example=SkillExample(
+            prompt="ask: should I rename this variable?",
+            expected="Answer directly; no outside advisor would change the answer.",
+            why="An outside critique is worth its cost only when it could change the decision.",
         ),
         situations=(
             "what would gemini say about this",

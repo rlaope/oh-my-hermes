@@ -583,6 +583,30 @@ PORTABLE_SUPPORT_PATHS = frozenset({
 # the reference exactly once, so an edit that moves it fails the render
 # instead of shipping the old pointer.
 PORTABLE_REFERENCE_REWRITES: dict[str, tuple[tuple[str, str], ...]] = {
+    'ultrawork/references/dependency-topology.md': (
+        (
+            "When the accepted plan's tasks form an ordered graph with a separate verification task and the user did not name this skill themselves, recommend `dag-ulw` with a one-line reason (it validates the graph, settles each node from its handoff, and reports a verdict) rather than running the order here. Stay here for live coordinated lanes, a durable ledger, or a single owner.\n\n",
+            "",
+        ),
+    ),
+    'research/references/briefing-format.md': (
+        (
+            "Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints every error it finds, and writes the markdown, the print-ready page, or both. The payload's top-level fields are `schema_version`, `audience`, `output_formats` (human briefing only), `language`, `question`, `as_of`, `sections`, `figures`, `sources`, `role_labels`, `captions`, `export` and `claim_boundary`. ",
+            "",
+        ),
+    ),
+    'context/references/project-terms.md': (
+        (
+            "Once per project, `omh memory project-identity init` names the scope; without it the next command stops with `scope_unresolved`. Preview with `omh memory domain-capture --from-file PROJECT_TERMS.md` (read-only, `prepared_not_observed`). After the user confirms, add `--stage` to write pending candidates. Review and approval stay with `omh memory domain-review` and `omh memory domain-approve`, which this workflow never runs. When no shell tool is available, show the projection in prose and stop.",
+            "Show the machine-only projection in prose and stop for the user's confirmation. Staging, review and approval belong to the host's own terminology tooling, which this workflow never runs.",
+        ),
+    ),
+    'adversarial-consensus/references/consensus-protocol.md': (
+        (
+            "When `delegate_task` is in your tool list, run each seat as its own child so the contexts really are separate; otherwise run the seats in sequence and mark the caveat below.",
+            "When the host can run a seat as a separate subagent or task, do so, so the contexts really are separate; otherwise run the seats in sequence and mark the caveat below.",
+        ),
+    ),
     'wiki/references/wiki-blueprint.md': (
         (
             "Route existing `USER.md`/`MEMORY.md` cleanup to `omh-memory-sync`, new durable project facts to `omh-memory-new`,",

@@ -17,6 +17,8 @@ Read only what the question needs. Report whether the answer came from repositor
 
 Normal users describe the intent in Hermes chat. Agent/operator control-plane work may preview repository-root `PROJECT_TERMS.md`; preview is `prepared_not_observed`, reports no predicted candidate ids, and writes nothing. Before staging, show the machine-only projection and ask for explicit confirmation. Staging is atomic and pending-only. Approval is a separate review action.
 
+Show the machine-only projection in prose and stop for the user's confirmation. Staging, review and approval belong to the host's own terminology tooling, which this workflow never runs.
+
 Never create, rewrite, synchronize, approve, retire, or commit the source automatically. Never infer execution, review, model use, CI, or merge from source bytes, candidate state, profile state, or freshness.
 
 ## Attribution

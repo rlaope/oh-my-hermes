@@ -90,6 +90,10 @@ conditions and stop reason. Supported rows may retain independent unsearched-sou
 gaps without requiring more work. Inaccessible, failed and not searched never
 mean universal absence. Broader scope/budget requires explicit new authority,
 not a new caller request_id, plan reset or an indirect tool workaround.
+A depth budget the user declared for exhaustive research (units and limit, recorded in
+`research_progress/v1`) is that explicit authority: each wave is a new plan, and total
+external attempts across waves stay within the declared limit. Without a declared limit,
+the caps above are the whole budget.
 
 ## Host context, fallback and privacy
 
