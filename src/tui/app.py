@@ -849,7 +849,7 @@ GATEWAY_EXTERNAL_REATTACHING_NOTICE = (
     "then, and ctrl+c leaves."
 )
 GATEWAY_EXTERNAL_GAVE_UP = "Hermes' gateway did not come back within {seconds:g} s ({error})"
-GATEWAY_STOPPED_REASON = "Hermes' gateway was stopped (`hermes gateway start` starts it again)"
+GATEWAY_STOPPED_REASON = "Hermes' gateway is stopped; `hermes gateway start` starts it again"
 GATEWAY_START_FAILED_REASON = "the new Hermes gateway did not start ({why})"
 GATEWAY_REATTACH_SAY = ("Hermes' gateway is restarting… {elapsed} · ctrl+c leaves", "gateway restarting… {elapsed}")
 # `gateway_state.json` `gateway_state`: letting running work finish, ended, a start that failed, a start under way.
