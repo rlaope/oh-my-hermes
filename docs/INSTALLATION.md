@@ -794,7 +794,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   whole, in order, at the boundary. Briefings are the TUI's own rows, not
   part of the session Hermes stores: a resumed or rewound session is drawn
   again without them. The messenger's replies are unchanged.
-- The OMH TUI takes the mouse on the main screen once it can tell which row
+- With `OMH_TUI_MOUSE=1` the OMH TUI takes the mouse on the main screen once it can tell which row
   a report lands on (once the session's output has reached the bottom of the
   screen, or after Ctrl+L). A drag over the transcript or the rows under it
   selects the text (shown reversed) and copies it when you let go, without
@@ -851,12 +851,12 @@ run and approval decision stays Hermes'; the screen is OMH's.
   `terminal.integrated.macOptionClickForcesSelection` is on. That selection
   copies the rail, as it always has. Inside tmux the reports reach the OMH
   TUI with `set -g mouse` on or off, and with it on tmux hands the OMH TUI
-  the wheel and the drag instead of starting copy mode. `OMH_TUI_MOUSE=0`
-  leaves the main screen's mouse to the terminal as before: the wheel
-  scrolls its scrollback and a drag selects natively, rail included, and
-  click reports are on only while the agent list or the `/theme` picker is
-  open, as the next item says.
-- With `OMH_TUI_MOUSE=0` the OMH TUI asks the terminal for click reports only while the agent list
+  the wheel and the drag instead of starting copy mode. Without
+  `OMH_TUI_MOUSE=1` (the default) the main screen's mouse is the terminal's:
+  the wheel scrolls its scrollback and a drag selects natively, rail
+  included, and click reports are on only while the agent list or the
+  `/theme` picker is open, as the next item says.
+- By default the OMH TUI asks the terminal for click reports only while the agent list
   is open, so during a turn the wheel scrolls and a drag selects as in any
   shell, and the agent view is reached with Down; nothing in it, and
   nothing on the info line, is clickable while the list is closed. While the list is open a plain drag no longer selects text in
@@ -866,7 +866,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   the window is being resized. While click reports are on there, and for 0.5 s after they go off, an Esc pressed on
   its own acts after 0.3 s, the time a click report split by a slow
   connection has to arrive whole. Where the main screen takes the mouse
-  (without `OMH_TUI_MOUSE=0`) the Esc waits only where a report can still
+  (with `OMH_TUI_MOUSE=1`) the Esc waits only where a report can still
   come split: over SSH or WSL, while a mouse button is held, and for 0.5 s
   after the last report (a wheel turn, a click); otherwise it acts at the
   first silence, as with reports off. Another key typed within that time ends
@@ -903,8 +903,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   SSH. Elsewhere it
   goes out as OSC 52 with nothing to confirm it, and the footer says `⚠ copy
   sent (terminal may not support OSC 52)` (under tmux, that tmux passes it on
-  only with `set-clipboard on`). The terminal's own selection (its bypass
-  modifier, or everywhere with `OMH_TUI_MOUSE=0`) copies what the screen
+  only with `set-clipboard on`). The terminal's own selection (everywhere by
+  default, or its bypass modifier with `OMH_TUI_MOUSE=1`) copies what the screen
   shows, so it keeps each row's rail (`┃ ` in front of each row, and a
   reply's margin after it), and the terminal shows no copy notice of its
   own.
