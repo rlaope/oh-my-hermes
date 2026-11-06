@@ -288,7 +288,9 @@ class RouterTests(unittest.TestCase):
                         "add sign-in, billing and export features", "build the upload, preview and download screens",
                         "build search, filters and sorting", "build login, list and notifications",
                         "implement everything from onboarding to checkout",
-                        "develop it from sign-up to the knowledge graph", "implement several features"):
+                        "develop it from sign-up to the knowledge graph", "implement several features",
+                        # The neighbours of an obligation stated and of a range that names no stage, below.
+                        "로그인, 회원가입, 검색 기능 만들어줘", "회원가입부터 결제까지 만들어줘", "build it from signup to billing"):
             with self.subTest(message=message):
                 self.assertTrue(names_several_features(message))
                 self.assertFalse(dispatches_dag_ulw(message))
@@ -328,6 +330,8 @@ class RouterTests(unittest.TestCase):
             "로그인 버그 고쳐줘", "로그인, 목록, 알림 다 하지 마", "검색, 필터, 정렬 기능 나중에 붙여줘",
             "what is the difference between login, signup and sso?", "로그인, 회원가입, 검색 기능 리뷰해줘",
             "다음 문장을 교정해줘: 로그인, 회원가입, 검색 기능 만들어줘",
+            # What has to happen, stated rather than asked; a range from a to z names no stage.
+            "로그인, 회원가입, 검색 기능 만들어야 해", "회원가입부터 결제까지 만들어야 해", "build it from a to z",
         ):
             with self.subTest(message=message):
                 self.assertFalse(names_several_features(message))

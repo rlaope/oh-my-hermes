@@ -2254,9 +2254,10 @@ _EN_RANGE: Final = re.compile(
     r"from\s+(?:the\s+)?(?P<start>[a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s+(?:to|through|until)\s+(?:the\s+)?"
     rf"(?P<end>[a-z][\w-]*(?:\s+[a-z][\w-]*)?){_EN_EXTENT}\s*[.!]*$"
 )
-# An end of a range that names a place or a date rather than a stage ("from start to finish", "from monday to friday").
+# An end of a range that names a place or a date rather than a stage ("from start to finish", "from a to z", "from monday
+# to friday").
 _EN_NOT_A_STAGE: Final = re.compile(
-    r"\d|^(?:start|finish|beginning|end|top|bottom|left|right|front|back|scratch|here|there|today|tomorrow|yesterday"
+    r"\d|^(?:a|z|start|finish|beginning|end|top|bottom|left|right|front|back|scratch|here|there|today|tomorrow|yesterday"
     r"|(?:mon|tues|wednes|thurs|fri|satur|sun)day|january|february|march|april|may|june|july|august|september|october"
     r"|november|december)$"
 )
@@ -2320,7 +2321,8 @@ def _korean_build_request(folded: str) -> tuple[str, str] | None:
     """The request's head and its build verb, when a Korean request ends on a verb that builds something new; the verb
     is empty for a bare 해 after an adverb of extent or order ("여러 기능 나눠서 다 해줘", "결제, 쿠폰, 환불 기능을 순서대로해")."""
     verb, bare = _korean_request_verb(folded)
-    if not verb:
+    # "만들어야 해" states what has to happen and asks for nothing, as `work_over_many_targets` reads it too.
+    if not verb or verb.endswith("야"):
         return None
     head = folded[: folded.rfind(verb)].rstrip()
     build = re.search(_KOREAN_NEW_VERB, verb)
