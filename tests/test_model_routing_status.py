@@ -199,5 +199,18 @@ class ModelRoutingResetTests(unittest.TestCase):
             self.assertIn("corrupt", stderr.lower())
 
 
+class ModelIdSummaryTests(unittest.TestCase):
+    def test_each_model_is_named_once_with_its_observation_count(self) -> None:
+        from omh.commands.coding import _model_id_summary
+
+        entries = [{"model_id": "claude-opus-5-5"}] * 412 + [{"model_id": "claude-sonnet-5-5"}] * 61 + [{"model_id": "fast"}]
+        self.assertEqual(_model_id_summary(entries), "claude-opus-5-5 (x412), claude-sonnet-5-5 (x61), fast")
+
+    def test_no_entries_reads_none(self) -> None:
+        from omh.commands.coding import _model_id_summary
+
+        self.assertEqual(_model_id_summary([]), "none")
+
+
 if __name__ == "__main__":
     unittest.main()

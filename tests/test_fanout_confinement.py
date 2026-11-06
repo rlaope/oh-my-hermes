@@ -636,6 +636,7 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
                 "TMPDIR": str(scratch),
                 "TMPPREFIX": str(scratch / "zsh"),
                 "UV_CACHE_DIR": str(scratch / "uv-cache"),
+                "CLAUDE_CODE_TMPDIR": str(scratch / "claude-code"),
             },
         )
 
@@ -667,6 +668,10 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
 
             self.assertEqual(enforced["TMPPREFIX"], str(scratch / "zsh"))
             self.assertEqual(enforced["UV_CACHE_DIR"], str(scratch / "uv-cache"))
+            self.assertEqual(enforced["CLAUDE_CODE_TMPDIR"], str(scratch / "claude-code"))
+            claude_temp = Path(enforced["CLAUDE_CODE_TMPDIR"])
+            (claude_temp / "claude-501" / "project").mkdir(parents=True)
+            (claude_temp / "cc-socks").mkdir()
             self.assertEqual(unenforced, {"PATH": "/usr/bin"})
 
     def test_caller_uv_cache_and_tmpprefix_are_kept_only_inside_a_write_root(self) -> None:
@@ -693,6 +698,20 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
             self.assertEqual(replaced["UV_CACHE_DIR"], str(scratch / "uv-cache"))
             self.assertEqual(replaced["TMPPREFIX"], str(scratch / "zsh"))
             self.assertEqual(relative["UV_CACHE_DIR"], str(scratch / "uv-cache"))
+            for configured, expected in (
+                (str(worktree / "claude-temp"), str(worktree / "claude-temp")),
+                (str(worktree), str(worktree)),
+                (str(root / "outside"), str(scratch / "claude-code")),
+                ("relative/claude", str(scratch / "claude-code")),
+            ):
+                with self.subTest(claude_temp=configured):
+                    environment = confinement.command_environment({"CLAUDE_CODE_TMPDIR": configured})
+                    self.assertEqual(environment["CLAUDE_CODE_TMPDIR"], expected)
+            unenforced = self._scratch_confinement(worktree, enforced=False)
+            self.assertEqual(
+                unenforced.command_environment({"CLAUDE_CODE_TMPDIR": "/outside"}),
+                {"CLAUDE_CODE_TMPDIR": "/outside"},
+            )
 
     def test_seatbelt_profile_adds_only_the_preference_read_ipc_and_no_write(self) -> None:
         # #1996: Codex fails startup when CFPreferencesAppSynchronize returns

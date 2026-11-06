@@ -343,8 +343,9 @@ reattach to. It first asks in the slot, naming what the gateway's record
 affects: the profiles it serves, the messenger platforms connected to it, the
 work it runs (turns and cron jobs), and this session's own turn. For a gateway
 a custom supervisor runs (`--external-supervisor` in its recorded argv) that
-running work finishes first, up to `agent.restart_after_turn_timeout` read
-from the gateway home's `config.yaml`; any other gateway drains the same way
+running work finishes first, up to `HERMES_RESTART_AFTER_TURN_TIMEOUT` when
+it is set, else `agent.restart_after_turn_timeout` read from the gateway
+home's `config.yaml`, as Hermes reads them; any other gateway drains the same way
 if Hermes' own systemd or launchd service runs it (Hermes sends it SIGUSR1,
 which its argv does not show), so the slot says the drain depends on a service
 running it, and otherwise the work is interrupted. Without a live record it

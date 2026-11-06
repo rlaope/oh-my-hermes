@@ -4,21 +4,29 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **Several features or stages asked to be built are offered as a dag-ulw
-  graph, in Korean as in English.** A request that names three or more
-  features as one build verb's object ("메일 가져오기, 파일 업로드, 검색
-  기능 개발해줘", "장바구니랑 주문이랑 배송조회 기능 구현해", "build the
-  upload, preview and download screens"), a range from one stage to
-  another ("회원가입부터 결제까지 개발해줘", "implement everything from
-  onboarding to checkout") or several counted features ("여러 기능 나눠서
-  다 해줘") got no route hint, or a hint for a rule one item's word matched
-  ("검색" for web-research), so the agent ran the parts one subagent at a
-  time. `names_several_features` reads that shape; the route hint offers
-  dag-ulw first (ask once) and the router asks with dag-ulw as its
-  candidate where it would ask anyway. Nothing starts a run on it. A list
-  that fills one thing ("우유, 계란, 빵 장보기 목록 만들어줘"), a range of
-  numbers, pages or dates, a comparison, a question, one fix and every
-  hard exclude of the many-targets reading stay off it.
+- **Codex and Claude Code units dispatched by OMH now come back accepted,
+  and one dag-ulw run can send different coding nodes to both owners.**
+  Untracked executor plugin state under `.omx/` and `.omc/` no longer fails
+  committed-result intake; tracked changes and unrelated untracked files
+  still do. Claude Code's temp directory stays inside the fence, and its
+  result-file directory is explicitly allowed. A readiness decision stale
+  only because it came from another checkout is re-observed at dispatch.
+  Naming Codex or Claude Code in a dag-ulw request in Hermes chat records
+  each owner's one-day choice; coding nodes can name their `owner`, and
+  each owner's batch exports separately while cross-owner dependencies wait.
+- **In Slack and Discord group chats, telling the bot to be quiet now mutes
+  it in that thread, and a message meant for someone else no longer opens a
+  turn.** OMH registers Hermes' `pre_gateway_dispatch` hook. A whole-message
+  quiet word aimed at the bot (`shut up`, `조용히 해`, `黙って`, `闭嘴`,
+  `cállate` and the rest of eleven languages' closed lists) mutes the thread
+  with a 🫡 reaction and no text; a mention of the bot, a reply to it, or a
+  call by its name unmutes it. A message that opens with a real mention of
+  someone else, or calls a configured other name at its start or end without
+  naming the bot or saying "you", is skipped. Only senders Hermes authorizes
+  are gated, and every skip is logged under the owning profile's OMH home;
+  `messenger_gate: off` or
+  `mute_only` turns it down per profile. DMs, slash commands and other
+  platforms are untouched.
 
 - **Ctrl+Enter in the OMH TUI sends now into the running turn, not after
   it.** Ctrl+Enter, Ctrl+J on an empty composer and the text typed after a
@@ -38,6 +46,26 @@ All notable changes will be documented here.
   without redirect, or a redirect refused between a tool batch and the
   next model call, gets `session.steer`. `/steer <text>` stays Hermes'
   steer, read after the next tool call without interrupting.
+- **`omh update` keeps a stable install on stable releases, and
+  `--dry-run` says when a real run would update the command package.** The
+  installer-managed self-update still defaulted to `--channel preview`, so a
+  plain `omh update` after the documented stable install downloaded the
+  `main` archive, while `omh update --dry-run` printed "Command package:
+  unchanged (preview only)". With no `--channel`, `--version`, or
+  `--package-url`, the self-update now reads the installed package's PEP 610
+  record, as `omh setup` has since #2294: a stable install moves to the
+  newest published release and is left alone when it is already on it, when
+  it is newer than npm's `latest` (the GitHub release is created before
+  `npm publish`, so `latest` can trail it for a while), or when the newest
+  release cannot be read; a `main` install, or one that records
+  nothing, keeps tracking `main`. A dry run now plans like a real run and
+  its card reads "Command package: a real run would update it to v4.0.6".
+- **`omh coding model-routing status` names each discovered model once.**
+  Session history yields one observation per session, so the human line
+  repeated one model id hundreds of times. It now reads
+  `claude-opus-5-5 (x412), claude-sonnet-5-5 (x61)`; `--json` keeps every
+  observation.
+
 - **A reply that opens with a code block keeps its `⚚ Hermes` header in
   the OMH TUI's scrollback, and a table after a released one keeps its own
   box whatever spaces its divider holds.** When a reply's first line was a
@@ -72,6 +100,19 @@ All notable changes will be documented here.
   comes back ends after the budget with the same resume hint.
   `/gateway restart`'s own reattach shares the pauses, the drain wait and
   the status row.
+
+- **Follow-ups to the messenger quiet gate, the Ctrl+Enter redirect and
+  `/gateway restart`.** A quiet word that ends in a question in any order of
+  marks (`shut up?!`, `shut up!?`, `닥쳐？!`, `‽`, `¿`) no longer mutes the
+  thread; `shut up!` still does. When a turn ends cleanly with a redirect
+  Hermes queued as its own next prompt, the OMH TUI's queue waits for that
+  turn instead of sending its next line beside it; a turn that fails, or a
+  queued turn that does not start within a few seconds, lets the queue go on.
+  A redirect that cuts reasoning while it streams
+  seals that reasoning, so the retry's reasoning reads as its own block. A
+  stopped gateway is now said plainly, as a state, with
+  `hermes gateway start` to start it again, and the restart wait reads
+  `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, as Hermes does.
 
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
@@ -311,6 +352,22 @@ All notable changes will be documented here.
   clock. A turn's working row takes over when a turn starts, and the row
   goes when nothing is left to wait on. It is read from structure, never
   from what the model said, and the info line is unchanged.
+- **Several features or stages asked to be built are offered as a dag-ulw
+  graph, in Korean as in English.** A request that names three or more
+  features as one build verb's object ("메일 가져오기, 파일 업로드, 검색
+  기능 개발해줘", "장바구니랑 주문이랑 배송조회 기능 구현해", "build the
+  upload, preview and download screens"), a range from one stage to
+  another ("회원가입부터 결제까지 개발해줘", "implement everything from
+  onboarding to checkout") or several counted features ("여러 기능 나눠서
+  다 해줘") got no route hint, or a hint for a rule one item's word matched
+  ("검색" for web-research), so the agent ran the parts one subagent at a
+  time. `names_several_features` reads that shape; the route hint offers
+  dag-ulw first (ask once) and the router asks with dag-ulw as its
+  candidate where it would ask anyway. Nothing starts a run on it. A list
+  that fills one thing ("우유, 계란, 빵 장보기 목록 만들어줘"), a range of
+  numbers, pages or dates, a comparison, a question, one fix and every
+  hard exclude of the many-targets reading stay off it.
+
 - **The OMH TUI's dag tree lists the nodes that run, not every finished one.**
   A layer with work moving shows at most three of its quiet nodes as rows;
   more fold into its `▸ N more` row from the start, however tall the

@@ -728,6 +728,9 @@ INTERRUPTED_WHY = "Interrupted"
 # notice asks the person for, as typed. At most AUTO_CONTINUE_LIMIT times between two prompts of the person's own.
 AUTO_CONTINUE_TEXT = "continue"
 AUTO_CONTINUE_SECONDS = 3.0
+# A turn end that leaves the queue to a redirect Hermes queued (`_turn_ended`) waits this long for that turn's
+# `message.start`; without one the queue goes on (`_drain_when_hermes_next_missed`).
+HERMES_NEXT_TURN_SECONDS = 5.0
 AUTO_CONTINUE_LIMIT = 2
 AUTO_CONTINUE_HELD_NOTICE = "Not resumed: {why}; send `continue` to go on."
 AUTO_CONTINUE_ESCAPED = "Esc"
@@ -849,7 +852,7 @@ GATEWAY_EXTERNAL_REATTACHING_NOTICE = (
     "then, and ctrl+c leaves."
 )
 GATEWAY_EXTERNAL_GAVE_UP = "Hermes' gateway did not come back within {seconds:g} s ({error})"
-GATEWAY_STOPPED_REASON = "Hermes' gateway was stopped (`hermes gateway start` starts it again)"
+GATEWAY_STOPPED_REASON = "Hermes' gateway is stopped; `hermes gateway start` starts it again"
 GATEWAY_START_FAILED_REASON = "the new Hermes gateway did not start ({why})"
 GATEWAY_REATTACH_SAY = ("Hermes' gateway is restarting… {elapsed} · ctrl+c leaves", "gateway restarting… {elapsed}")
 # `gateway_state.json` `gateway_state`: letting running work finish, ended, a start that failed, a start under way.
@@ -2174,6 +2177,7 @@ class App(ModesMixin, AgentViewMixin):
         # Redirects Hermes answered `queued`: its own next prompt, read only after the turn and cleared by a stop, so
         # no tool finishing settles them (`_track_sent_now`); the line, for a sent-now one.
         self.hermes_queued: list[tuple[SteerBlock, QueuedLine | None]] = []
+        self.hermes_next_due: float | None = None  # the queue waits for Hermes' queued redirect until then
         self.turns_ended = 0  # turns of this TUI that ended: a steer remembers which turn it was meant for
         self.queue_held = False  # the queue waits for the person after an interrupt (`_hold_queue`)
         self.interrupting = False  # the person interrupted the running turn and Hermes has not ended it yet
@@ -2667,6 +2671,7 @@ class App(ModesMixin, AgentViewMixin):
         self.sent_now = []  # steers into the session being left: theirs to settle
         self._settle_unread_steers(STEER_TAKEN)
         self._settle_hermes_queued()
+        self.hermes_next_due = None  # a wait for the left session's next turn
         self.turn_unknown = None  # the drift watch was for a turn of the session being left
         self.busy_since = self.clock()
         self.turn_waited = 0.0
@@ -2847,6 +2852,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.exit_code is not None:
             return
         self._auto_continue_when_due()  # after the gateway's news: a turn started meanwhile drops it
+        self._drain_when_hermes_next_missed()  # likewise: Hermes' queued turn starting drops the wait
         self._expire_calls()
         self._expire_notification()
         self._expire_escape()
@@ -2912,6 +2918,8 @@ class App(ModesMixin, AgentViewMixin):
             due.append(self.path_due)
         if self.auto_continue is not None and not self.decoder.holding:  # a held Esc has its own deadline above
             due.append(self.auto_continue[1])
+        if self.hermes_next_due is not None:
+            due.append(self.hermes_next_due)
         tail = self._tail_due_at()
         if tail is not None:
             due.append(tail)
@@ -3875,6 +3883,7 @@ class App(ModesMixin, AgentViewMixin):
                 self.bg_done = None  # the session is awake: the row's offer was for an idle one
                 # A turn started (this TUI's prompt, another client's): a `continue` that waited is not sent into it.
                 self.auto_continue, self.auto_continue_out = None, False
+                self.hermes_next_due = None  # Hermes' queued redirect, or any turn: the queue goes at its end
                 self.turn_ours = self.turn_pending
                 self._note_turn(TURN_OPEN)  # its end, once seen, says how it ended (`turn_ends`)
                 if not self.turn_pending:  # a turn this TUI did not start (a resumed one, a server queue)
@@ -3890,7 +3899,7 @@ class App(ModesMixin, AgentViewMixin):
                 seconds = self.clock() - self.busy_since
                 self.transcript.add_turn_summary(seconds, self._turn_tokens(), self._turn_wait())
                 self._alert_turn_end(seconds)
-                self._turn_ended()
+                self._turn_ended(failed=isinstance(payload, Mapping) and as_text(payload.get("status")) == "error")
 
     def _dag_moment(self, payload: Mapping[str, Any]) -> None:
         """An `omh_dag` call that defined, repaired, extended or ended a run prints the run's graph (`dag_block`)."""
@@ -3998,7 +4007,7 @@ class App(ModesMixin, AgentViewMixin):
         self._settle_steers_at_turn_end()
         self.transcript.fail_turn(message)
         self.turn_pending = False
-        self._turn_ended()
+        self._turn_ended(failed=True)
 
     def _on_connection_request(self, payload: Mapping[str, Any]) -> None:
         """Hermes waits on an app connection the TUI cannot complete; say so once per operation."""
@@ -5870,8 +5879,13 @@ class App(ModesMixin, AgentViewMixin):
         self._turn_ended()
         return False
 
-    def _turn_ended(self) -> None:
-        """The turn is over: the next queued line goes, unless the person interrupted it (`_hold_queue`).
+    def _turn_ended(self, failed: bool = False) -> None:
+        """The turn is over: the next queued line goes, unless the person interrupted it (`_hold_queue`) or Hermes
+        runs a redirect it queued next (`hermes_queued`), after whose turn it goes.
+
+        Hermes runs its queued redirect only after a turn that did not fail: one that `failed` (an `error`
+        `message.complete`, a bare `error`) can end before the agent was ready, with nothing drained, so the
+        queue goes on as after any turn. A held queue waits HERMES_NEXT_TURN_SECONDS for that turn to start.
 
         Then whether Hermes' default model moved (`_check_default`); a queued
         prompt that goes waits for that check before its turn starts (`_start_turn`).
@@ -5889,8 +5903,14 @@ class App(ModesMixin, AgentViewMixin):
         else:
             self.sent_now = []  # the turn ended on its own: Hermes passes a steer it held on as the next turn
             self._settle_unread_steers(STEER_TAKEN)
+            hermes_runs_next = bool(self.hermes_queued) and not failed
             self._settle_hermes_queued()
-            self._drain_queue()
+            # A redirect Hermes queued is its own next prompt, which it starts as this turn ends: a queued line sent
+            # now could start ahead of it. The queue goes on when that turn ends (a turn this TUI did not start).
+            if hermes_runs_next:
+                self.hermes_next_due = self.clock() + HERMES_NEXT_TURN_SECONDS
+            else:
+                self._drain_queue()
         self._check_default()
 
     def _hold_queue(self, why: str) -> None:
@@ -5925,8 +5945,9 @@ class App(ModesMixin, AgentViewMixin):
         did not do: no Esc, `/stop` or interrupting prompt was asked for the turn (`Transcript.hermes_interrupted`).
         Only a turn this TUI submitted (`turn_ours`) counts: another client's stop looks the same from here.
         An end carrying an error is not one, nor one past AUTO_CONTINUE_LIMIT. Nor is one the person has moved past
-        already: a draft, a queued line (it goes now, `_turn_ended`), a picked rewind or agent steer, an open
-        question; then the notice asks for `continue` as before.
+        already: a draft, a queued line (it goes now, `_turn_ended`, or after the turn Hermes runs for a redirect
+        it queued, `hermes_queued`), a picked rewind or agent steer, an open question; then the notice asks for
+        `continue` as before.
         """
         self.auto_continue = None
         ours, self.turn_ours, self.auto_continue_out = self.turn_ours, False, False
@@ -5979,6 +6000,16 @@ class App(ModesMixin, AgentViewMixin):
         self.dirty = True
         self._send_typed(AUTO_CONTINUE_TEXT)
         self.auto_continue_out = True
+
+    def _drain_when_hermes_next_missed(self) -> None:
+        """The queue held for Hermes' queued redirect goes on when that turn did not start in time (a drain Hermes
+        cancelled says nothing); a turn started meanwhile (`message.start`) or another session cleared the wait."""
+        if self.hermes_next_due is None or self.clock() < self.hermes_next_due:
+            return
+        self.hermes_next_due = None
+        if not self._busy():
+            self.dirty = True
+            self._drain_queue()
 
     def _cancel_auto_continue(self, why: str) -> None:
         """The person did something that moves past the waiting `continue`: it is not sent, and a notice says why."""
@@ -6288,11 +6319,13 @@ class App(ModesMixin, AgentViewMixin):
             self._steer_refused(block, STEER_REJECTED_REASON, queued, turn)
         elif status == contract.STEER_REDIRECTED:
             self.transcript.steer_redirected(block)
+        elif redirect and (not self._busy() or turn != self.turns_ended):
+            # Answered after the turn it was meant for ended (the TUI may already run its next one): Hermes runs it
+            # as a next prompt, and the turn running now does not wait for it.
+            self.transcript.steer_answered(block, STEER_TAKEN)
         elif redirect:
             self.transcript.steer_answered(block, STEER_QUEUED)
             self.hermes_queued.append((block, queued))
-            if not self._busy():  # answered after its turn ended: Hermes sends it as the next prompt
-                self._settle_hermes_queued()
         else:
             self.transcript.steer_answered(block, STEER_QUEUED)  # held under the live blocks until read
             self.unread_steers.append(block)
