@@ -365,7 +365,10 @@ def pre_llm_call_context_scenario_chars() -> dict[str, int]:
       names, emitted only when a local call failed;
     - the `[OMH dag]` open-run line (`dag_open_run_nudge`): one fixed line
       per reason naming a run id and at most three node ids, once per
-      situation, and needs a stored dag run with no node running.
+      situation, and needs a stored dag run with no node running;
+    - the `[OMH group chat]` marker instruction (`messenger_judgement`): one
+      fixed sentence set, only in a Slack or Discord room where Hermes lets a
+      silence marker stand, and needs a message the gateway let through.
     """
     no_seed: tuple[Callable[[Path], None], ...] = ()
     later = {"is_first_turn": False}

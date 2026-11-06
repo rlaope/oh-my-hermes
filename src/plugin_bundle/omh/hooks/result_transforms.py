@@ -98,6 +98,7 @@ from ..code_mode_guidance import annotate_execute_code_result
 from ..delegation_snapshot import appended, messenger_snapshot
 from ..engagement_nudges import annotate_engagement_nudge
 from ..kanban_readback import KANBAN_READBACK_TOOLS, transform_kanban_readback
+from ..messenger_judgement import judged_reply
 from ..remote_wait_nudge import annotate_remote_wait, honest_stop_output
 from ..truncated_read_recovery import annotate_truncated_read_recovery
 from .diff_presentation import transform_tool_result as _pad_diff_result
@@ -222,9 +223,24 @@ def transform_llm_output(**kwargs: Any) -> str | None:
     swapped back to the answer the turn stopped with, which `pre_verify`
     stashed. Hermes fires this hook before the final row is persisted, so the
     stored transcript and every caller get that answer byte for byte. This is
-    the one place OMH replaces a reply instead of appending to it.
+    one of two places OMH replaces a reply instead of appending to it.
+
+    Then the judged messenger room (`messenger_judgement`), on the answer the
+    sentinel restored, which can itself be a marker: on a turn `pre_llm_call`
+    gave the marker instruction, ``[SHUTUP]`` becomes Hermes' ``[SILENT]`` (the
+    thread muted, the 🫡 scheduled), and a silence marker comes back clean.
+    Nothing is appended to either, or the marker would stop being one and reach
+    the chat. A token at the edge of that turn's answer is removed; every other
+    answer passes unchanged.
     """
     restored = restore_round_end_answer(session_id=kwargs.get("session_id"), response_text=kwargs.get("response_text"))
+    handled, replacement = judged_reply(
+        kwargs.get("turn_id"), restored if restored is not None else kwargs.get("response_text"),
+    )
+    if handled:
+        return replacement if replacement is not None else restored
+    if replacement is not None:
+        restored = replacement
     if restored is not None:
         kwargs = {**kwargs, "response_text": restored}
     honest = honest_stop_output(

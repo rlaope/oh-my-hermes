@@ -56,6 +56,8 @@ from ..test_expectation_check import note_request as note_test_request
 from .nudge_budget import session_is_delegated
 from ..remote_wait_nudge import failed_wait_context
 from ..jev_consent import MESSAGING_ATTENDED_PLATFORMS
+from ..messenger_gate import GATED_PLATFORMS, session_room_key
+from ..messenger_judgement import turn_instruction
 from ..jev_consent import clear_turn as clear_jev_turn
 from ..jev_consent import note_turn as note_jev_turn
 from ..todo_reconciliation import (
@@ -584,7 +586,46 @@ def _rendered_route_hint(
 
 
 def pre_llm_call(**kwargs) -> dict[str, object] | None:
-    """Inject bounded OMH role/status context without storing prompts."""
+    """Inject bounded OMH role/status context without storing prompts.
+
+    The turn's OMH context, plus, in a Slack or Discord room where the model
+    judges "be quiet" and "not for me" (`messenger_judgement`), the short
+    marker instruction, inside the same fence.
+    """
+    return _with_room_instruction(_turn_context(**kwargs), _room_instruction(kwargs))
+
+
+def _room_instruction(kwargs: dict) -> str:
+    """The judged room's instruction for this turn, or "".
+
+    Only the room's own turn gets it. A delegated child inherits the parent's
+    session ContextVars (`copy_context`), so its room key alone would name the
+    person's thread, and its ``[SHUTUP]`` would mute it. A child runs under
+    ``platform="subagent"`` and names a parent, as a detached fork does.
+    """
+    if str(kwargs.get("parent_session_id") or "").strip():
+        return ""
+    if str(kwargs.get("platform") or "").strip().casefold() not in GATED_PLATFORMS:
+        return ""
+    return turn_instruction(kwargs.get("turn_id"), session_room_key())
+
+
+def _with_room_instruction(payload: dict[str, object] | None, note: str) -> dict[str, object] | None:
+    if not note:
+        return payload
+    payload = dict(payload or {})
+    context = payload.get("context")
+    if isinstance(context, str) and context.endswith(OMH_CONTEXT_FENCE_CLOSE):
+        payload["context"] = f"{context[: -len(OMH_CONTEXT_FENCE_CLOSE)]}\n{note}\n{OMH_CONTEXT_FENCE_CLOSE}"
+    elif isinstance(context, str) and context.strip():
+        payload["context"] = f"{context}\n\n{fence_omh_context([note])}"
+    else:
+        payload["context"] = fence_omh_context([note])
+    return payload
+
+
+def _turn_context(**kwargs) -> dict[str, object] | None:
+    """The turn's OMH context: role, status, route hint and the rest."""
     # A detached fork is not one of the session's turns, and gets nothing.
     # Hermes builds its background review and the `/btw` side question as a
     # fork of the live agent that keeps the parent's session id and names
