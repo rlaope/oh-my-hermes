@@ -11,9 +11,10 @@ All notable changes will be documented here.
   `cállate` and the rest of eleven languages' closed lists) mutes the thread
   with a 🫡 reaction and no text; a mention of the bot, a reply to it, or a
   call by its name unmutes it. A message that opens with a real mention of
-  someone else, or calls someone else by name at its start or end without
-  naming the bot or saying "you", is skipped. Every skip is logged in
-  `<omh_home>/runtime/messenger_gate.json`; `messenger_gate: off` or
+  someone else, or calls a configured other name at its start or end without
+  naming the bot or saying "you", is skipped. Only senders Hermes authorizes
+  are gated, and every skip is logged under the owning profile's OMH home;
+  `messenger_gate: off` or
   `mute_only` turns it down per profile. DMs, slash commands and other
   platforms are untouched.
 

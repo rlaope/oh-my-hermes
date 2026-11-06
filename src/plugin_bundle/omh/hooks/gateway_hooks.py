@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 
-from .. import runtime_paths
 from ..messenger_gate import gate_event
 
 _LOG = logging.getLogger(__name__)
@@ -16,11 +15,7 @@ async def pre_gateway_dispatch(event=None, gateway=None, session_store=None, **_
     Fails open: any error lets Hermes dispatch the message as it would without OMH.
     """
     try:
-        result, ack = gate_event(
-            event, gateway,
-            hermes_home=runtime_paths.default_hermes_home(),
-            omh_home=runtime_paths.default_omh_home(),
-        )
+        result, ack = gate_event(event, gateway)
     except Exception as exc:  # health: allow BLE001 -- the gate must never stop dispatch; fail open and log
         _LOG.warning("omh messenger gate failed open: %s", type(exc).__name__)
         return None

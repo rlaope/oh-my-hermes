@@ -3693,16 +3693,22 @@ message through.
 - **Quiet.** A message whose whole text is a quiet word (`shut up`,
   `조용히 해`, `黙って`, `闭嘴`, `cállate`, `tais-toi`, `sei still`,
   `cala a boca`, `замолчи`, `im đi` and a few more), aimed at the bot (its
-  mention, a reply to it, a call by its name, or any message in a thread),
-  mutes that thread. The bot reacts with 🫡 and sends no text. A quiet word
-  inside a longer sentence, or quoted, does nothing.
+  mention, a reply to it, a call by its name, or a reply inside a thread),
+  mutes that thread. The bot reacts with 🫡 and sends no text. Words that are
+  also ordinary single words (`quiet`, `silence`, `うるさい`, `빠져`) need the
+  mention, reply or name. A quiet word inside a longer sentence, quoted,
+  formatted, or asked as a question does nothing. A Slack top-level message
+  is not inside a thread; a mute it sets covers only the thread it opens.
 - **Unmute.** A real mention of the bot, a reply to one of its messages, or
   a call by its name at the start or end of a message. Mutes do not expire.
 - **Not for the bot.** A message that opens with a real mention of someone
-  else, or calls someone else by name at its start or end (`민수야 …`,
-  `alex, …`, `田中さん、…`, `… @alex`), is skipped, unless it also names
-  the bot or says "you" (`니가`, `you`, `あなた`, `你`, `tú`, `du`, …). It
-  never mutes.
+  else, or calls a configured other name at its start, or at its end after
+  punctuation (`민수야 …`, `alex, …`, `田中さん、…`, `…, alex`), is skipped,
+  unless it also names the bot or says "you" (`니가`, `you`, `あなた`, `你`,
+  `tú`, `du`, …). A mention at the end (`summarize this for @alex`) and a
+  sentence ending in a name (`범인은 민수야`) are not calls. It never mutes.
+
+Only senders Hermes authorizes are gated; everyone else is left to Hermes.
 
 The word lists cover English, Korean, Japanese, Simplified and Traditional
 Chinese, Spanish, French, German, Portuguese, Russian and Vietnamese, and are
@@ -3715,12 +3721,23 @@ Settings, per profile under `plugins.entries.omh.settings`:
 | Setting | Values | Default |
 | --- | --- | --- |
 | `messenger_gate` | `on`, `mute_only` (quiet and mutes only), `off` | `on` |
-| `messenger_self_names` | comma-separated extra names the bot answers to | the bot's platform names |
-| `messenger_other_names` | comma-separated names of other people or bots in the chats | none (calls by name are not checked) |
+| `messenger_self_names` | extra names the bot answers to, comma-separated or a YAML flow list | the bot's platform names |
+| `messenger_other_names` | names of other people or bots in the chats, same format | none (calls by name are not checked) |
 
-Mutes and the last 200 skips (reason, chat and thread ids, the first 120
-characters) are kept in `<omh_home>/runtime/messenger_gate.json`, so a wrong
-skip can be found. Deleting a key under `mutes` unmutes that thread.
+The gate reads the settings of the profile that owns the message, also at a
+multiplexed gateway's ingress. Mutes (the newest 1,000) are kept in
+`runtime/messenger_gate.json` and the last 200 skips in
+`runtime/messenger_gate_skips.jsonl` under that profile's OMH home: its
+`omh_home` setting, else the home it is bound to, else `~/.omh`. Deleting a
+key under `mutes` unmutes that thread. The skip log holds the first 120
+characters of each skipped message, on this machine only, so a wrong skip can
+be found.
+
+Limits: the gate runs only where Hermes loads OMH's plugin in the gateway
+process. Discord messages Hermes batches into one event are judged as one
+message, so a quiet word batched with other text does not mute. The 🫡 goes
+through the adapter's private reaction method and follows its reactions
+setting.
 
 ### Build identity
 
