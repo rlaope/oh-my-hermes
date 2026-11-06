@@ -3691,7 +3691,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Return GO, HOLD, or BLOCK only with evidence IDs and missing evidence.
   - Convert remediation into explicit follow-up workflows instead of silently patching.
   - Verdict: GO only when all nine rows are observed, BLOCK when any row failed an observed check, else HOLD naming the rows lacking evidence.
-  - Evidence floor: rollback = command exercised, restore tested; performance = load result at peak; observability = alerts to a named on-call; security_privacy = secrets store, least privilege.
+  - Evidence floor: rollback = command exercised, restore tested, RPO/RTO; performance = load result at peak; observability = alerts to a named on-call with a runbook; security_privacy = secrets store, least privilege, cert expiry.
 - Completion checklist:
   - Each of the nine matrix rows reads observed, failed, or missing, with its evidence id, and the verdict follows the GO, BLOCK, HOLD rule.
   - The rollback plan names signals, owner, threshold, and recovery path; OMH deployed and scanned nothing.
@@ -4261,11 +4261,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Order a credential replacement issue-new, deploy-new, verify-new, revoke-old, verify-revoked, and name what breaks if the order changes; revocation is proven by a call that fails with the old credential, never by the revoke command's exit status, which reports that the request was accepted. Load `references/credential-rotation.md` for the overlap window and the per-credential-type steps.
   - Project every blocked terminal-command row into a proposed `approvals.deny` glob list the user applies; a blocked action that is not a terminal command (a file write, an MCP or HTTP call) stays a guidance-only row, because the deny list never sees it.
   - Return PASS, HOLD, or BLOCK with missing evidence and confirmation requirements.
-  - A downloaded script is read in full, never piped to a shell, and run only in a disposable VM.
+  - A downloaded script is read in full, never piped to a shell, checksum-verified, and run only in a disposable VM without credentials.
 - Completion checklist:
   - Findings are grounded in concrete file, command, or source evidence.
   - The verdict is PASS, HOLD, or BLOCK with the missing evidence and confirmation required.
-  - Residual risk is named; fixes are separate handoffs; a credential replacement states compromised (revoke first) or planned.
+  - Residual risk and missing verification are named; fixes are separate handoffs; a credential replacement states compromised (revoke first) or planned.
 - Recovery notes:
   - If verify-new lacks an observed credential check, retain the redacted risk matrix and credential_rotation_sequence/v1, mark replacement unresolved, and hand back the verify-new evidence requirement before the operator revokes the old credential.
   - If no single local plugin directory is explicitly named, no plugin audit finding stands; mark plugin_risk_audit/v1 not_observed and hand back the directory question without importing, registering, or activating any plugin.
@@ -4422,7 +4422,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - An SLO conclusion states the SLI (good over valid events), window, target, budget consumed, and burn rate, or reads unresolved.
   - A postmortem draft names impact, detection and resolution times, trigger, contributing factors (systems, not people), and action items with owner and due date.
-  - A pre-launch review names, per dependency, its slow, down, and wrong-answer behavior; remediation items read open or closed with evidence.
+  - A pre-launch review names, per dependency, its slow, down, and wrong-answer behavior and the SLOs and runbooks that exist; remediation items read open or closed with evidence.
 - Recovery notes:
   - If metrics do not cover the named service and time window, retain the cited incident notes, mark SLO and error-budget conclusions unresolved, and hand back the evidence and missing-evidence list with the uncovered window.
   - If remediation closure has no supporting reference, retain the source-backed reliability review, mark closure not_observed, and hand back the remediation follow-ups and missing closure evidence without claiming the fix completed.
@@ -4431,6 +4431,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - time window
   - metric/source references
   - known remediation items or gaps
+  - for a pre-launch review: the dependency list, and the SLOs and runbooks that exist
 - Expected outputs:
   - reliability review
   - evidence and missing-evidence list
@@ -5437,7 +5438,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The user wants their own machine's model routing configured or providers connected; use `model-setup`.
   - The goal is measurable performance of an application or system, not model handling; use `ultraperf`.
-  - The user wants benchmark-superiority or provider-readiness claims without measurements.
+  - The user wants benchmark-superiority or provider-readiness claims without measurements; decline the claim and offer the measurement plan from this skill's checklist.
   - Making a model's weights smaller or faster: quantizing is `inference-serving` (serving format and quantization), distilling is `model-finetuning`; OMH has no pruning workflow.
 - Strong routing signals: `model-optimization`, `model optimization`, `optimize for model`, `onboard new model`, `calibrate new model`, `new model calibration`, `model calibration`
 - Good example:
@@ -7098,7 +7099,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `security-event-response`, `security event response`, `cve`, `triage this cve`, `cve in our dependency`, `cve in a dependency`, `security advisory`, `dependabot alert`, `dependabot security`, `vulnerable dependency`, `vulnerability in our dependency`, `reachability analysis`, `npm audit`, `committed a secret`, `committed an api key`, `leaked secret`, `leaked a secret`, `leaked credential`, `leaked api key`, `leaked an api key`, `leaked aws key`, `leaked an aws key`, `secret in git history`, `secret in the history`, `dependency license`, `dependency's license`, `license ok`, `license compatibility`, `license compatible`, `gpl dependency`, `agpl dependency`
 - Good example:
   - Prompt: we committed a secret, what now
-  - Expected behavior: Record the credential type, scope, and exposure window, then prepare containment_plan/v1: revoke and replace, observe the old credential rejected, audit its use in the window, and only then rewrite history; the closure verdict stays open until the rotation is observed.
+  - Expected behavior: Record the credential type, scope, and exposure window, then prepare containment_plan/v1: revoke and replace, observe the old credential rejected, audit its use in the window, and only then rewrite history; the closure verdict stays open until the rotation is observed and the persistence list is empty.
   - Why: A rewritten history does not revoke a secret that was already cloned or scraped.
 - Bad example:
   - Prompt: just force-push the history without the key and we are done
@@ -7115,13 +7116,13 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The event kind, source, and exposure window are stated.
   - Every severity call cites the reachable path or its observed absence.
   - A leaked secret's rotation precedes any history rewrite in the plan.
-  - The closure verdict is closed only when the rotation or fixed version is observed.
+  - The closure verdict is closed only when the rotation (with an empty persistence list), the fixed version, the license decision, or the ended access is observed.
   - No secret value appears anywhere, and OMH scanned, contacted, or rotated nothing.
 - Recovery notes:
   - If the exposure window is unknown, treat the secret as exposed from its first push and say so.
   - If no reachability evidence is available, keep the advisory's own severity and mark the adjustment unverified.
 - Required inputs:
-  - the event kind: CVE or advisory, leaked secret, license question, or an advisory that forces a major version
+  - the event kind: CVE or advisory, leaked secret, license question, an advisory that forces a major version, or suspected unauthorized access
   - for a CVE: the advisory id, the affected package and version range, and the installed version from the lockfile
   - for a leaked secret: the credential type and scope, where it was pushed, whether the repository is public, and when
   - for a license: the package, its declared license, and how the product is distributed
@@ -7134,11 +7135,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - license_fit_verdict/v1 when a license is asked
   - event_closure_verdict/v1
 - Artifact expectations:
-  - security_event_record/v1 names the event kind, the source, the affected package or credential class, and the exposure window, separately from the suspected impact
+  - security_event_record/v1 names the event kind, the source, the affected package, credential class, or identity and host, and the exposure window, separately from the suspected impact
   - reachability_analysis/v1 names the vulnerable function or path, the repository call sites that reach it or the observed absence of any, and a severity call from the advisory score adjusted by that reachability
   - containment_plan/v1 orders every step; for a leaked secret the rotation and the observed rejection of the old credential come before any history rewrite, because a rewrite does not un-publish a secret already cloned
   - license_fit_verdict/v1 gives the SPDX id, the obligation it triggers for this distribution model, and fits, conflicts, or needs counsel
-  - event_closure_verdict/v1 reads closed only when the rotation with an empty persistence list, the fixed version, or the ended access is recorded observed; a prepared step keeps the event open and is named
+  - event_closure_verdict/v1 reads closed only when the rotation with an empty persistence list, the fixed version, the recorded license decision, or the ended access with an empty persistence list is recorded observed; a prepared step keeps the event open and is named
 - Safety rules:
   - A leaked-secret event cannot close while its rotation is prepared rather than observed or attacker persistence remains; `event_closure_verdict/v1` names the missing observation instead.
   - Order rotation before history rewriting: revoke and replace the credential, observe the old one rejected, then rewrite history if at all.

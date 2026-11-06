@@ -17,19 +17,19 @@ Run the steps in this order; each carries its own verify line, and a step whose 
    - Verify: `git status --short` shows no generated or vendor noise after a build runs.
 
 2. **LICENSE.** One canonical file, one declared identifier, everywhere that identifier appears.
-   - Ask the owner which license applies; the choice is theirs. With one stated, write the matching `LICENSE` file at the repository root and use its single SPDX identifier. With none stated, add no open-source license: write no `LICENSE` (or a proprietary notice), set the metadata license field to the `UNLICENSED` value, and record the open question.
+   - Ask the owner which license applies; the choice is theirs. With one stated, write the matching `LICENSE` file at the repository root and use its single SPDX identifier. With none stated, add no open-source license and record the open question: put any proprietary notice in `NOTICE` or `COPYRIGHT` (not in a file named `LICENSE`), and declare it the way the ecosystem does: npm `UNLICENSED` (an npm convention, not an SPDX identifier), Python `LicenseRef-Proprietary` or no license field, Cargo `publish = false`.
    - Match that identifier everywhere a license gets declared: package metadata, README license line, plugin or extension manifests.
    - Never declare a license identifier in metadata without committing the file it names - license-declared-but-no-file is a named drift class, not a cosmetic gap, because it leaves a legal claim with nothing backing it.
    - Treat a license change as a decision requiring the same review as any other file it touches; do not silently swap identifiers between files.
-   - Self-test: does grep for the SPDX identifier return a hit in the LICENSE file itself and every metadata site that names it, with none disagreeing?
-   - Verify: with a license chosen, the LICENSE file exists AND every declared SPDX identifier in the project matches it byte-for-byte; with none chosen, no LICENSE file exists, no SPDX identifier is declared anywhere, the metadata field reads `UNLICENSED` (an npm convention, not an SPDX identifier), and the README license line says the license is undecided instead of linking a file.
+   - Self-test: with a license chosen, does grep for the SPDX identifier return a hit in the LICENSE file itself and every metadata site that names it, with none disagreeing; with none chosen, does it return no hit anywhere?
+   - Verify: with a license chosen, the LICENSE file exists AND every declared SPDX identifier in the project matches it byte-for-byte; with none chosen, no file named LICENSE exists, no open-source SPDX identifier is declared, each manifest uses its ecosystem's form from above, and the README license line says the license is undecided instead of linking a file.
 
 3. **README.md.** Sections in a fixed order, and every command in it has actually been run.
    - What it is: one paragraph, plain description, no marketing language.
    - Quickstart: copy-pasteable commands, each one proven by execution before it is written down.
    - Build and test commands: the exact commands the project uses, not a framework's generic default.
    - Project layout: only when the layout is non-obvious: a flat single-file project earns no layout section.
-   - License line: the one-line pointer to LICENSE, using the same SPDX identifier as step 2.
+   - License line: the one-line pointer to LICENSE, using the same SPDX identifier as step 2; with no license chosen, one line saying the license is undecided.
    - Length discipline: when a section would run longer than roughly one screen, it moves to `docs/` and the README keeps a one-line pointer instead of the full text.
    - Wrong: a README quickstart copied from a template with commands nobody ran against this project. Right: every quickstart line pasted from a terminal that actually executed it and produced the output claimed.
    - Self-test: has every command in this README been executed, with its observed output matching what the README claims?

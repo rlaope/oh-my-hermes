@@ -45,7 +45,7 @@ Bad example:
 
 - An SLO conclusion states the SLI (good over valid events), window, target, budget consumed, and burn rate, or reads unresolved.
 - A postmortem draft names impact, detection and resolution times, trigger, contributing factors (systems, not people), and action items with owner and due date.
-- A pre-launch review names, per dependency, its slow, down, and wrong-answer behavior; remediation items read open or closed with evidence.
+- A pre-launch review names, per dependency, its slow, down, and wrong-answer behavior and the SLOs and runbooks that exist; remediation items read open or closed with evidence.
 
 ## Recovery Notes
 
@@ -79,6 +79,7 @@ Required inputs:
 - time window
 - metric/source references
 - known remediation items or gaps
+- for a pre-launch review: the dependency list, and the SLOs and runbooks that exist
 
 Expected outputs:
 

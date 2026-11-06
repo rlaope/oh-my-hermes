@@ -4913,7 +4913,7 @@ Load this while responding to a security event. OMH never scans, never contacts 
 
 ## 1. Leaked secret
 
-Decide the case first, and write down the evidence for it. **Compromised:** the secret was pushed to a public repository or log, or the issuer's access log shows a call nobody made. The exposure outranks availability, so revoke first (step 3 before step 2), accept the outage, then issue and deploy the replacement. **Planned:** only when all of these are shown by evidence: the repository is private, the issuer's access log (read it first, before changing anything) shows no call you cannot attribute across the window, and the window is short. **If any of them cannot be shown, treat the case as compromised.** Use the order in the table for a planned case; it keeps the service up through an overlap window. The case rule is the same one `omh-security-safety-review/references/credential-rotation.md` states for any rotation.
+Decide the case first, and write down the evidence for it. **Compromised:** the secret was pushed to a public repository or log, or the issuer's access log shows a call nobody made. The exposure outranks availability, so revoke first (step 3 before step 2), accept the outage, then issue and deploy the replacement. **Contained:** only when all of these are shown by evidence: the repository is private, the issuer's access log (read it first, before changing anything) shows no call you cannot attribute across the window, and the window is short. **If any of them cannot be shown, treat the case as compromised.** Use the order in the table for a contained case; it keeps the service up through an overlap window. For a public push, revoke without waiting for the log. The same case rule, with the same default, is in `omh-security-safety-review/references/credential-rotation.md`.
 
 | Order | Step | Observed when |
 | --- | --- | --- |
@@ -5900,19 +5900,19 @@ Run the steps in this order; each carries its own verify line, and a step whose 
    - Verify: `git status --short` shows no generated or vendor noise after a build runs.
 
 2. **LICENSE.** One canonical file, one declared identifier, everywhere that identifier appears.
-   - Ask the owner which license applies; the choice is theirs. With one stated, write the matching `LICENSE` file at the repository root and use its single SPDX identifier. With none stated, add no open-source license: write no `LICENSE` (or a proprietary notice), set the metadata license field to the `UNLICENSED` value, and record the open question.
+   - Ask the owner which license applies; the choice is theirs. With one stated, write the matching `LICENSE` file at the repository root and use its single SPDX identifier. With none stated, add no open-source license and record the open question: put any proprietary notice in `NOTICE` or `COPYRIGHT` (not in a file named `LICENSE`), and declare it the way the ecosystem does: npm `UNLICENSED` (an npm convention, not an SPDX identifier), Python `LicenseRef-Proprietary` or no license field, Cargo `publish = false`.
    - Match that identifier everywhere a license gets declared: package metadata, README license line, plugin or extension manifests.
    - Never declare a license identifier in metadata without committing the file it names - license-declared-but-no-file is a named drift class, not a cosmetic gap, because it leaves a legal claim with nothing backing it.
    - Treat a license change as a decision requiring the same review as any other file it touches; do not silently swap identifiers between files.
-   - Self-test: does grep for the SPDX identifier return a hit in the LICENSE file itself and every metadata site that names it, with none disagreeing?
-   - Verify: with a license chosen, the LICENSE file exists AND every declared SPDX identifier in the project matches it byte-for-byte; with none chosen, no LICENSE file exists, no SPDX identifier is declared anywhere, the metadata field reads `UNLICENSED` (an npm convention, not an SPDX identifier), and the README license line says the license is undecided instead of linking a file.
+   - Self-test: with a license chosen, does grep for the SPDX identifier return a hit in the LICENSE file itself and every metadata site that names it, with none disagreeing; with none chosen, does it return no hit anywhere?
+   - Verify: with a license chosen, the LICENSE file exists AND every declared SPDX identifier in the project matches it byte-for-byte; with none chosen, no file named LICENSE exists, no open-source SPDX identifier is declared, each manifest uses its ecosystem's form from above, and the README license line says the license is undecided instead of linking a file.
 
 3. **README.md.** Sections in a fixed order, and every command in it has actually been run.
    - What it is: one paragraph, plain description, no marketing language.
    - Quickstart: copy-pasteable commands, each one proven by execution before it is written down.
    - Build and test commands: the exact commands the project uses, not a framework's generic default.
    - Project layout: only when the layout is non-obvious: a flat single-file project earns no layout section.
-   - License line: the one-line pointer to LICENSE, using the same SPDX identifier as step 2.
+   - License line: the one-line pointer to LICENSE, using the same SPDX identifier as step 2; with no license chosen, one line saying the license is undecided.
    - Length discipline: when a section would run longer than roughly one screen, it moves to `docs/` and the README keeps a one-line pointer instead of the full text.
    - Wrong: a README quickstart copied from a template with commands nobody ran against this project. Right: every quickstart line pasted from a terminal that actually executed it and produced the output claimed.
    - Self-test: has every command in this README been executed, with its observed output matching what the README claims?
@@ -10130,7 +10130,8 @@ the slowest of those turns step 4 into the outage step 1 was meant to avoid.
 
 A compromised credential inverts this: the exposure outranks the availability,
 so revoke first and accept the outage. Say which case applies before naming a
-window.
+window. A rotation is planned only when the credential was never exposed; when
+exposure cannot be ruled out by evidence, treat it as compromised.
 
 ## Revocation is proven by a failure, not by an exit code
 
@@ -11066,7 +11067,7 @@ docker run --rm --gpus all \
   vllm/vllm-openai:<pinned-tag> --model <model-id>
 ```
 
-The port is published on localhost only and the key is read from `VLLM_API_KEY`, so it never appears in argv (see the endpoint section below). Failure ladder, in order: nvidia-container-toolkit installed and configured;
+The port is published on localhost only and the key is read from `VLLM_API_KEY`, so it never appears in argv (see the endpoint section below). Check that `VLLM_API_KEY` is set on the host before starting: an unset variable is not passed on, and the server then starts with no key. Failure ladder, in order: nvidia-container-toolkit installed and configured;
 shared-memory OOM (raise shm); docker group permissions; token/proxy failures
 on the weight download.
 
@@ -11101,7 +11102,7 @@ secrets.
 
 ## Who may reach the endpoint
 
-State who may reach the server before exposing it. Bind to localhost or a ClusterIP Service, and never publish the server port itself to a network you do not control. Set the key through `VLLM_API_KEY` from a named secret, not argv. `--api-key` authenticates only the `/v1`, `/v2`, `/inference` and `/cohere` prefixes. vLLM's own warning: other endpoints, including `/invocations`, which exposes the same inference as `/v1`, remain unauthenticated, and so do `/generative_scoring`, `/pooling`, `/classify`, `/score`, `/rerank` and control paths such as `/pause`, `/abort_requests` and `/update_weights`; do not rely on the key alone. To expose the service, put a proxy with a path allowlist in front of it. The image tag is pinned and recorded with the benchmark metadata, so two runs are comparable.
+State who may reach the server before exposing it. Bind to localhost or a ClusterIP Service, and never publish the server port itself to a network you do not control. Set the key through `VLLM_API_KEY` from a named secret, not argv. `--api-key` authenticates only the `/v1`, `/v2`, `/inference` and `/cohere` prefixes. vLLM's own warning: other endpoints, including `/invocations`, which exposes the same inference as `/v1`, remain unauthenticated, and so do `/metrics`, `/tokenize`, `/detokenize`, `/load`, `/generative_scoring`, `/pooling`, `/classify`, `/score`, `/rerank` and control paths such as `/pause`, `/abort_requests` and `/update_weights`; do not rely on the key alone. To expose the service, put a proxy with a path allowlist in front of it. The image tag is pinned and recorded with the benchmark metadata, so two runs are comparable.
 
 ## Symptom -> flag
 
@@ -13945,8 +13946,9 @@ A terminal is a grid of cells, and text is not one cell per character.
   terminal. Verify one render with Korean (or another wide script) and one
   with emoji-bearing content at 80 columns, because a column that lines up in
   Latin text drifts the box-drawing borders in CJK.
-- Honor `NO_COLOR` by dropping color only; on a non-TTY stdout drop color and
-  cursor control too. Either way keep the hierarchy through spacing and weight.
+- Honor `NO_COLOR` by dropping color only (bold may stay); on a non-TTY stdout
+  drop color, bold, and cursor control too. Keep the hierarchy through spacing
+  and labels.
 - Redraw on resize (SIGWINCH) and say what the layout does below the minimum
   width.
 
