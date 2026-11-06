@@ -1183,6 +1183,7 @@ print(json.dumps(observed, ensure_ascii=False))
                     "on_session_start",
                     "post_api_request",
                     "post_tool_call",
+                    "pre_gateway_dispatch",
                     "pre_llm_call",
                     "pre_tool_call",
                     "pre_verify",

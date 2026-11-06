@@ -199,6 +199,21 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
             "handle; no goal text)"
         ),
     },
+    "pre_gateway_dispatch": {
+        "source_path": "hooks/gateway_hooks.py",
+        "event_scope": ("pre_gateway_dispatch",),
+        "reviewed_timeout_ms": 1000,
+        "capability": (
+            "skipping a Slack or Discord group message before it opens a turn: "
+            "a whole-message quiet word aimed at the bot mutes that thread "
+            "(a saluting-face reaction, no text), a muted thread stays silent "
+            "until the bot is mentioned, replied to or called by name, and a "
+            "message that opens with someone else's mention or calls someone "
+            "else by name is skipped; mutes and a bounded skip log (ids and "
+            "the first 120 characters) are kept in the OMH home; never writes "
+            "a reply and fails open"
+        ),
+    },
     "pre_verify": {
         "source_path": "hooks/verify_hooks.py",
         "event_scope": ("pre_verify",),

@@ -218,7 +218,7 @@ class PreVerifyHookTests(unittest.TestCase):
         register(context)
 
         # Only the rejected optional hook is absent; the other optional hooks
-        # (on_session_start, post_api_request, post_tool_call, subagent_start,
+        # (on_session_start, post_api_request, post_tool_call, pre_gateway_dispatch, subagent_start,
         # subagent_stop, transform_llm_output, transform_tool_result) still
         # register on this host.
         self.assertEqual(
@@ -227,6 +227,7 @@ class PreVerifyHookTests(unittest.TestCase):
                 "on_session_end",
                 "on_session_start",
                 "post_api_request",
+                "pre_gateway_dispatch",
                 "pre_llm_call",
                 "pre_tool_call",
                 "post_tool_call",
