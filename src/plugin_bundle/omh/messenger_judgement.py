@@ -299,6 +299,15 @@ def _token_lines_marker(text: str) -> str | None:
     return SHUTUP_TOKEN if any(_SHUTUP_WHOLE.fullmatch(token) for token in tokens) else SILENT_TOKEN
 
 
+def _remainder_marker(answer: str) -> str | None:
+    """The marker what edge removal left is, or None, read no wider than Hermes reads silence: token lines, what
+    Hermes itself would drop, or the exact ``[SHUTUP]`` opening one short line. `reply_marker` unwraps any edge mark
+    because the whole reply was the model's; here the model also wrote an answer, which must not be lost."""
+    if _acknowledged(answer):
+        return SHUTUP_TOKEN
+    return _token_lines_marker(answer) or (SILENT_TOKEN if _hermes_silence(answer) else None)
+
+
 def _quoted_at(lines: list[str], index: int) -> bool:
     """Whether the line at `index` is shown, not said: in a fence, in a list, or introduced by a colon."""
     if sum(line.lstrip().startswith("```") for line in lines[:index]) % 2:
@@ -384,10 +393,10 @@ def judged_reply(turn_id: object, response_text: object, *, now: float | None = 
     thread muted, the 🫡 scheduled once the mute is written). A silence marker
     is logged and comes back clean: no replacement when Hermes already reads it
     exactly, ``[SILENT]`` when it was wrapped. An answer with a token at its edge
-    is not handled and comes back without it, unless what is left is itself a
-    marker: then it is handled as one, as ``[SHUTUP]`` when one came off the edge.
-    So the caller is never given a bare marker to add to. Every other reply is
-    ``(False, None)``.
+    is not handled and comes back without it, unless what is left is a marker by
+    `_remainder_marker`: then it is handled as one, as ``[SHUTUP]`` when one came
+    off the edge. So the caller is never given what Hermes would read as silence
+    to add to. Every other reply is ``(False, None)``.
     """
     tick = time.time() if now is None else now
     room = _take_turn(turn_id, tick)
@@ -396,7 +405,7 @@ def judged_reply(turn_id: object, response_text: object, *, now: float | None = 
     marker = reply_marker(response_text)
     answer = without_edge_tokens(response_text)
     if marker is None and answer != response_text:
-        marker = reply_marker(answer)
+        marker = _remainder_marker(answer)
         if marker is not None and response_text.count(SHUTUP_TOKEN) > answer.count(SHUTUP_TOKEN):
             marker = SHUTUP_TOKEN
     if marker is None and answer.strip():

@@ -6298,7 +6298,8 @@ class App(ModesMixin, AgentViewMixin):
     # ── `!` shell lines ──
 
     def _shell_line(self, text: str, shown: str = "") -> None:
-        """A `!command` the person sent: run it now, or after the running turn, as a command waits in Claude Code.
+        """A `!command` the person sent: run it now, or after the running turn, as a command waits in Claude Code, or
+        behind the lines queued for after the turn Hermes runs next (`hermes_next_due`).
 
         `shown` is the line as the composer showed it (paste chips), which the echo shows.
         """
@@ -6306,7 +6307,7 @@ class App(ModesMixin, AgentViewMixin):
         echo = SHELL_PREFIX + shown[len(SHELL_PREFIX) :].strip() if shown and shown != text else ""
         if not command:
             self.transcript.add_notice(SHELL_USAGE, NOTICE_WARN)
-        elif self._busy():
+        elif self._busy() or (self.hermes_next_due is not None and self.queued and not self.queue_held):
             self.queued.append(QueuedLine(text, echo, shell=True))
         else:
             self._run_shell(command, echo=echo)

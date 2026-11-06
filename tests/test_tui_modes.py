@@ -783,6 +783,32 @@ class SteerTests(unittest.TestCase):
         self.assertEqual([line.text for line in app.queued], ["held line"])
         self.assertFalse(app.queue_held)
 
+    def test_a_shell_line_sent_during_the_wait_stays_behind_the_older_queued_lines(self) -> None:
+        app, client, now = self.steer_left_unread("typed", "older queued line")
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        type_text(app, "!make clean")
+        app._on_input(Key(ENTER))
+        self.assertEqual((client.named("shell.exec"), client.named("prompt.submit")), ([], []))
+        self.assertEqual([line.text for line in app.queued], ["older queued line", "!make clean"])
+        now[0] += app_module.HERMES_NEXT_TURN_SECONDS
+        app._drain_when_hermes_next_missed()
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "older queued line", "queued": True}])
+        self.assertEqual(client.named("shell.exec"), [])
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("message.complete", SID, {"text": "older answer"}))
+        self.assertEqual([params["command"] for params in client.named("shell.exec")], ["make clean"])
+
+    def test_a_shell_line_sent_during_the_wait_runs_at_once_with_nothing_ahead_of_it_to_keep(self) -> None:
+        for held in (False, True):
+            with self.subTest(queue_held=held):
+                app, client, _now = self.steer_left_unread("typed", *(("held line",) if held else ()))
+                app.queue_held = held
+                app._on_event(Event("message.complete", SID, {"text": "done"}))
+                self.assertIsNotNone(app.hermes_next_due)
+                type_text(app, "!make clean")
+                app._on_input(Key(ENTER))
+                self.assertEqual([params["command"] for params in client.named("shell.exec")], ["make clean"])
+
     def test_a_steer_the_last_model_call_read_starts_no_turn_so_the_queue_waits_out_the_backstop(self) -> None:
         # Hermes drains a steer into the request it is about to make, which no `tool.complete` says: the TUI cannot
         # tell this end from one with a next prompt coming. Nothing starts, and the queue goes when the wait is over.
