@@ -323,9 +323,14 @@ NON_SKILL_BACKTICKS = frozenset(
 # `systematic-review` defers topic discovery to `source-finder`, one supplied
 # paper to `paper-learning` and a HellaSwag log check to `repro-audit`; no
 # sibling gains a statement pointing back. Three cases, three pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 410
-EXPECTED_DEFERENCE_PAIRS = 426
-EXPECTED_DEFERRING_OWNERS = 121
+# `executor-runtime-readiness` defers a named plugin or API to
+# `external-connector-readiness` and a missing tool to `toolbelt-readiness`;
+# `provider-profile-posture` defers connector adoption, the tool inventory and
+# a model-provider login to those two and `model-setup`; no sibling gains a
+# statement pointing back. Five cases, five pairs, two new owners.
+EXPECTED_DEFERENCE_CASES = 415
+EXPECTED_DEFERENCE_PAIRS = 431
+EXPECTED_DEFERRING_OWNERS = 123
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

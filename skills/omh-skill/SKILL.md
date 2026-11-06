@@ -26,7 +26,7 @@ This is a Hermes-native `skill` workflow skill.
 - The user wants an OMH capability family turned on or off; use `omh-capability-toggle`.
 - The user wants a public skill found and vetted before installing it; use `omh-skill-scout`.
 - The user wants skill health checked: stale surfaces, failure patterns, or pending amendments; use `omh-skill-health`.
-- The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' bundled `hermes-agent-skill-authoring` skill instead of this one.
+- The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' optional `hermes-agent-skill-authoring` skill instead of this one (install: hermes skills install official/software-development/hermes-agent-skill-authoring).
 
 ## Examples
 

@@ -23,7 +23,6 @@ This is a Hermes-native `websearch-setup` workflow skill.
 ## Do Not Use When
 
 - The user wants Hermes to run a web search now, not configure how web search is set up.
-- No provider key, backend, or tier intent has been named yet.
 - The request needs a repository code change rather than a local `.env` or Hermes config edit.
 
 ## Examples
@@ -49,7 +48,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If no provider account or key is available, mark the key step "not applicable" and continue with the backend and tier step alone; the keyless free tier needs no key.
+- If no provider account or key is available, mark the key step "not applicable" and continue with the backend and tier step alone, the keyless free tier needs no key. Never set a keyed backend or `web.provider_tier.<name>: paid` while its key is absent.
+- If nothing is named yet, run the read-only diagnosis first, then ask which paid provider, if any.
 - If either diff is rejected, keep the other step's state independent and do not roll both back together.
 - If the config still holds an `auxiliary.web_extract` block, report it as a leftover Hermes ignores and leave it in place unless the user asks to remove it as its own diff.
 

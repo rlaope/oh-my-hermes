@@ -708,12 +708,13 @@ def _harness_summary(harness: HarnessDefinition) -> str:
 
 
 def _compact_harness_purpose(purpose: str, limit: int = 56) -> str:
+    purpose = purpose.rstrip(".")
     if len(purpose) <= limit:
         return purpose
     prefix = purpose[: limit - 3].rstrip()
     if " " in prefix:
         prefix = prefix.rsplit(" ", 1)[0]
-    return f"{prefix}..."
+    return f"{prefix.rstrip(',;:')}..."
 
 
 def _compact_sequence(items: tuple[str, ...], limit: int, keep_contains: tuple[str, ...] = ()) -> tuple[str, ...]:
@@ -1146,7 +1147,7 @@ The pattern account adapts concepts from `blader/humanizer` (Siqi Chen, MIT,
 reviewed at 8c307f3, v3.1.0), which is based on Wikipedia's
 "Signs of AI writing" (WikiProject AI Cleanup). The wording, the Korean habits,
 the reply rules and the lint hook are OMH's own.
-""".rstrip() + "\\n"
+""".rstrip() + "\n"
 
 
 def _router_workflow_artifacts_reference() -> str:
@@ -1187,7 +1188,7 @@ def _router_skill_common_rail_reference() -> str:
     return f"""# OMH Skill Common Rail
 
 Every generated OMH workflow skill shares this policy. It is kept here once instead of
-inside each `SKILL.md` so an install does not pay the same bytes 88 times per turn.
+inside each `SKILL.md` so an install does not pay the same bytes in every skill.
 Each workflow skill still states its own harness, its own runtime-record command, its
 own evidence boundary, and a pointer to this file.
 
@@ -1238,13 +1239,15 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 unavailable, keep the result explicit as `not_available` or `not_observed`. A recorded run is
 preparation, not execution, review, CI, merge-readiness, or merge evidence.
 
+Keep the `run.id` printed by the start record: `omh runtime delegate --run <run-id>` needs it. `omh runtime record` only creates a run, so when the work ends record the outcome with another record using `--status completed|blocked|failed|cancelled --verification-summary "<what was observed>"`.
+
 ## Delegation Transparency
 
 {delegation_transparency}
 
 ## Waiting On Long-Running Work
 
-{EXECUTION_WAIT_DISCIPLINE_RULE}
+{EXECUTION_WAIT_DISCIPLINE_RULE.removesuffix(' Ladder and terminal states: shared rail.')}
 
 Pick the row that matches the work, then the best mechanism the host actually supports. Degrade down the
 column and say which capability was missing; never degrade silently, and never substitute a status loop for a
@@ -1513,7 +1516,7 @@ artifacts; pass only event summaries and refs into Hermes chat context.
 
 Wrappers can run `omh memory inspect`, `omh memory pack`, and `omh memory apply` to review OMH-local or wrapper-supplied context before preparing a handoff. This emits `{MEMORY_REVIEW_SCHEMA}` and `{HANDOFF_CONTEXT_PACK_SCHEMA}` artifacts only; it does not read or mutate opaque Hermes internal memory.
 
-For planning-shaped requests, wrappers or operators can run `omh hermes plan` to create a deterministic `hermes_plan/v1` scaffold. The stdout `wrapper_contract` is the adapter contract for follow-on work; after acceptance, pass the accepted plan artifact or generated context pack to `omh coding delegate --from-plan` instead of treating Discord/channel summary text as the executor plan.
+For planning-shaped requests, wrappers or operators can run `omh hermes plan` to create a deterministic `hermes_plan/v1` scaffold. The stdout `wrapper_contract` is the adapter contract for follow-on work; after acceptance, pass the accepted plan artifact or generated context pack to `omh coding delegate --from-plan <artifact> --executor <the owner the user chose>` (leaving `--executor` out selects codex) instead of treating Discord/channel summary text as the executor plan.
 
 ## Backend Boundary
 
@@ -1617,6 +1620,8 @@ Short OMH maintenance commands are operator commands, not workflow or coding req
 Exact or near-exact requests such as `omh update`, `omh setup`, `omh doctor`, `omh uninstall`, `omh install`, `omh list`, `omh 업데이트해줘`, `omh 닥터 돌려줘`, `omh 삭제해줘`, and `omh 셋업해줘` route as `operator_maintenance_command` with task type `omh_cli_maintenance`.
 
 They outrank stale coding context, router-design feedback, runtime portability, migration, and workflow implementation signals unless the user explicitly asks for code changes.
+
+`omh uninstall` with no flag removes all OMH-managed local state, the plugin bundle, and the Hermes config keys OMH set, with no confirmation prompt. Run `omh uninstall --dry-run` first, show what it would remove, and run the real command only after the user confirms or typed the exact command. `--registration-only` removes only the `skills.external_dirs` registration.
 
 ## Semantics
 
@@ -1830,7 +1835,7 @@ Treat OMH as the operating layer above individual Hermes-native skills. For a wo
 
 ## Priority Rules
 
-1. Exact or near-exact OMH maintenance commands (`omh update`, `omh setup`, `omh doctor`, `omh uninstall`, `omh install`, `omh list`, and Korean equivalents such as `omh 업데이트해줘`, `omh 닥터 돌려줘`, `omh 삭제해줘`, `omh 셋업해줘`) route as `operator_maintenance_command`. Run the requested command, report observed output, and avoid repo mutation unless the user separately asks for code changes.
+1. Exact or near-exact OMH maintenance commands (`omh update`, `omh setup`, `omh doctor`, `omh uninstall`, `omh install`, `omh list`, and Korean forms such as `omh 업데이트해줘`, `omh 닥터 돌려줘`, `omh 삭제해줘`, `omh 셋업해줘`) route as `operator_maintenance_command`. Run the requested command, report observed output, and avoid repo mutation unless asked. `omh uninstall`: `--dry-run`, then confirm.
 2. Explicit slash skill invocation wins when it is not one of those maintenance commands.
 3. Explicit workflow keywords route to the matching adapted skill when installed.
 4. Broad planning requests route to `ralplan` or `plan` before implementation.

@@ -150,5 +150,16 @@ class ProviderProfilePostureTests(unittest.TestCase):
             self.assertIn("not credential validation, provider connectivity", posture["claim_boundary"])
 
 
+class ProviderProfilePostureSkillTextTests(unittest.TestCase):
+    def test_skill_names_the_capabilities_and_command_the_tool_accepts(self):
+        from omh.skills.render import builtin_skill_templates
+        from omh.workflows.provider_profile_posture import _CAPABILITIES
+
+        body = next(t.content for t in builtin_skill_templates() if t.name == "provider-profile-posture")
+        self.assertIn("omh ops provider-profile-posture --input", body)
+        listed = body.split("requested capabilities (", 1)[1].split(")", 1)[0]
+        self.assertEqual(set(listed.replace(" ", "").split(",")), set(_CAPABILITIES))
+
+
 if __name__ == "__main__":
     unittest.main()

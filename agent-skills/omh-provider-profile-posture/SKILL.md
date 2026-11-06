@@ -17,13 +17,13 @@ This is an OMH `provider-profile-posture` workflow skill, projected for Agent Sk
 
 ## Why This Exists
 
-`provider-profile-posture` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+`provider-profile-posture` exists so a profile's required secret names and capabilities are recorded as present, missing, or unknown without any secret value being read or any provider being called.
 
 ## Do Not Use When
 
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Choosing or adopting a connector; use `omh-external-connector-readiness`.
+- Listing every tool and credential a workflow needs; use `omh-toolbelt-readiness`.
+- Connecting a model provider or its login.
 
 ## Examples
 
@@ -41,7 +41,7 @@ Bad example:
 
 ## Completion Checklist
 
-- Provider ID, profile ID, requested capabilities, and secret-presence metadata are explicit.
+- Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret-presence metadata are explicit, and `omh ops provider-profile-posture --input <file>` produced the record.
 - No secret value, credential validation, provider call, model route, wallet, or payment action is claimed.
 - Any host observation reference remains supplied metadata, not a live connector check.
 

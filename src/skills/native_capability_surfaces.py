@@ -125,11 +125,20 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
             next_action="prepare_provider_profile_posture",
             boundary="Provider/profile posture is OMH-local preparation metadata; it is not credential validation, provider connectivity, model routing, payment/wallet, or host execution evidence.",
             good_prompt="Prepare provider profile posture for this connector using metadata-only secret presence.",
+            why_this_exists=(
+                "`provider-profile-posture` exists so a profile's required secret names and capabilities are recorded as present, "
+                "missing, or unknown without any secret value being read or any provider being called."
+            ),
+            do_not_use_when=(
+                "Choosing or adopting a connector; use `external-connector-readiness`.",
+                "Listing every tool and credential a workflow needs; use `toolbelt-readiness`.",
+                "Connecting a model provider or its login; use `model-setup`.",
+            ),
             bad_prompt="Read the secret, validate the credential, call the provider, or create a payment route.",
             expected_outputs=("provider_profile_posture/v1", "metadata-only secret requirements", "allowed and prohibited actions"),
             artifact_expectations=("provider_profile_posture/v1 metadata-only preparation record",),
             final_checklist=(
-                "Provider ID, profile ID, requested capabilities, and secret-presence metadata are explicit.",
+                "Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret-presence metadata are explicit, and `omh ops provider-profile-posture --input <file>` produced the record.",
                 "No secret value, credential validation, provider call, model route, wallet, or payment action is claimed.",
                 "Any host observation reference remains supplied metadata, not a live connector check.",
             ),

@@ -18,7 +18,7 @@ This is a Hermes-native `capability-toggle` workflow skill.
 
 ## Why This Exists
 
-`capability-toggle` exists because OMH shipped one binary install lever -- 9 core skills or all of them -- so a user who wanted the coding surface but not the memory surface had to take both. It turns that into a per-family choice without uninstalling OMH.
+`capability-toggle` exists because OMH shipped one binary install lever -- the small core set or all installable skills -- so a user who wanted the coding surface but not the memory surface had to take both. It turns that into a per-family choice without uninstalling OMH.
 
 ## Do Not Use When
 
@@ -32,7 +32,7 @@ This is a Hermes-native `capability-toggle` workflow skill.
 Good example:
 
 - Prompt: turn off memory, I already run my own memory system
-- Expected behavior: Disable the retain_knowledge family, report the four memory workflows removed and the five core skills retained, and name the enable command.
+- Expected behavior: Run `omh capability-policy disable retain_knowledge`; report the four memory workflows withheld, memory off, the five core skills retained, and the enable command.
 - Why: The request is about which OMH surfaces are offered locally, not about capturing a memory.
 
 Bad example:
@@ -44,15 +44,15 @@ Bad example:
 ## Completion Checklist
 
 - The affected family is named by its canonical id, not guessed from a partial word.
-- Removed workflows and retained core skills are listed separately.
-- The reversing command is stated so the change never reads as permanent.
-- Locally modified skill files are reported as retained exceptions rather than deleted.
+- Withheld workflows and retained core skills are listed separately.
+- The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capabilities`), routing is unchanged, and no workflow is called removed.
+- The change is made with `omh capability-policy disable|enable <family>` (`--dry-run` previews, `status` lists), never by editing setup-profile.json, and the printed reversing command is stated so it never reads as permanent.
 
 ## Recovery Notes
 
 - If the family id is ambiguous, list all six and ask rather than picking the closest match.
 - If a disable would remove a core skill, refuse that part and report it; core skills are the floor doctor checks for.
-- If files were kept with --keep-files, say the policy changed but the files remain so the state is not misread as a full removal.
+- The policy never deletes skill files.
 
 ## Workflow Lane
 

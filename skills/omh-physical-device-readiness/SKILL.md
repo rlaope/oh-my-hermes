@@ -33,7 +33,7 @@ Good example:
 
 - Prompt: physical-device-readiness check Snapmaker printer safety with camera gate, slicer dry-run, heat command approval, and emergency-stop evidence before printing.
 - Expected behavior: Produce `prepare_physical_device_readiness` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Why: Heat and motion commands act within seconds and cannot be taken back; the card must hold the emergency stop, camera gate, and approval wording before any print starts.
 
 Bad example:
 
@@ -45,14 +45,14 @@ Bad example:
 
 - Device scope, actuator and hazard classes, sensor/camera gates, operator approval, dry-run policy, emergency stop, and stop condition are explicit.
 - Physical actions, heat commands, relay toggles, robot movement, print starts, camera inspections, and telemetry readings are marked observed, missing, risky, or not_observed.
-- Route external APIs or provider setup to external-connector-readiness, terminal commands to command-operator, safety concerns to security-safety-review, visual/camera checks to visual-qa, and missing tools to toolbelt-readiness.
+- Route external APIs or provider setup to `omh-external-connector-readiness`, terminal commands to `omh-terminal`, safety concerns to `omh-security-safety-review`, visual/camera checks to `omh-visual-qa`, and missing tools to `omh-toolbelt-readiness`.
 - Do not claim device movement, heat, print, relay, robot, camera, sensor, or emergency-stop success without observed device-trial evidence.
 
 ## Recovery Notes
 
 - If the device, workspace, actuator, or authority is unclear, keep readiness blocked until the missing safety context is named.
-- If the user asks to execute commands, move hardware, heat a bed/nozzle, flip a relay, or start a print, route to command-operator or connector-operator and require observed operator approval before any execution claim.
-- If camera or telemetry evidence is required but unavailable, route to visual-qa or toolbelt-readiness and keep the physical device readiness card prepared_not_observed.
+- If the user asks to execute commands, move hardware, heat a bed/nozzle, flip a relay, or start a print, route to `omh-terminal` or `omh-apps` and require observed operator approval before any execution claim.
+- If camera or telemetry evidence is required but unavailable, route to `omh-visual-qa` or `omh-toolbelt-readiness` and keep the physical device readiness card prepared_not_observed.
 
 ## Workflow Lane
 
@@ -112,7 +112,7 @@ Artifact expectations:
 - sensor_camera_gate_policy/v1 for camera/OCR, sensor telemetry, stale readings, manual inspection, and blocked/no-camera fallback
 - operator_approval_policy/v1 with explicit human authority, confirmation moment, disallowed autonomous actions, and emergency contact or stop owner, plus a proposed `approvals.deny` glob list for the terminal commands that actuate the device: on Hermes a match blocks the command for the agent even under yolo; the user applies the list, OMH writes no host config, and a device driven through an MCP or HTTP tool rather than a terminal command stays outside it
 - dry_run_and_simulation_policy/v1 for slicer/G-code dry-runs, command previews, mock relays, simulated robot paths, and no-hardware trial mode
-- emergency_stop_and_rollback_plan/v1 with stop command, power/network isolation, recovery boundary, and abort condition
+- emergency_stop_and_rollback_plan/v1 with stop command, power/network isolation, recovery boundary, and abort condition, naming the stop that still works when the agent, host, and network are gone (a physical e-stop, switch, or power cut) and who is within reach of it; for any heater, whether firmware thermal-runaway protection is on and verified, and that heating never starts unattended without a camera or sensor gate
 - device_trial_manifest/v1 only when real telemetry, camera capture id, dry-run output, command transcript, operator confirmation, or hardware observation is recorded
 
 Safety rules:

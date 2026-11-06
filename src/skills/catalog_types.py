@@ -1476,6 +1476,7 @@ def _feature_surface_skill(
     extra_quality_bar: tuple[str, ...] = (),
     extra_do_not_use_when: tuple[str, ...] = (),
     why_this_exists: str = "",
+    good_why: str = "",
     do_not_use_when: tuple[str, ...] = (),
     situations: tuple[str, ...] = (),
     portable_overrides: Mapping[str, tuple[str, ...]] | None = None,
@@ -1533,7 +1534,7 @@ def _feature_surface_skill(
         good_example=SkillExample(
             prompt=good_prompt,
             expected=f"Produce `{next_action}` with required context, wrapper actions, and not-evidence boundaries.",
-            why="The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.",
+            why=good_why or "The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.",
         ),
         bad_example=SkillExample(
             prompt=bad_prompt,
