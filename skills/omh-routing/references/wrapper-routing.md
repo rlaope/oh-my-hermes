@@ -31,7 +31,7 @@ Two host-side consequences follow, both accepted. Host slash commands derive fro
 When a chat message is implementation-shaped and a wrapper wants a concrete executor handoff, run `omh coding delegate` after or instead of generic chat routing:
 
 ```sh
-omh coding delegate --source discord --executor codex --record "risky refactor"
+omh coding delegate --source discord --executor <owner> --record "risky refactor"
 ```
 
 The payload is deterministic local adapter data: recommended workflow, harness, executor/runtime profile, acceptance criteria, verification expectations, and handoff prompt template. Hermes still narrates the user-facing state.

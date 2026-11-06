@@ -8,7 +8,7 @@ Exact or near-exact requests such as `omh update`, `omh setup`, `omh doctor`, `o
 
 They outrank stale coding context, router-design feedback, runtime portability, migration, and workflow implementation signals unless the user explicitly asks for code changes.
 
-`omh uninstall` with no flag removes all OMH-managed local state, the plugin bundle, and the Hermes config keys OMH set, with no confirmation prompt. Run `omh uninstall --dry-run` first, show what it would remove, and run the real command only after the user confirms or typed the exact command. `--registration-only` removes only the `skills.external_dirs` registration.
+`omh uninstall` with no flag removes all OMH-managed local state, the plugin bundle, the installer-managed `omh` command, and the Hermes config keys OMH set, with no confirmation prompt. Run `omh uninstall --dry-run` first, show what it would remove, and run the real command only after the user confirms (add `--keep-command` to keep the `omh` command). `--registration-only` removes only the `skills.external_dirs` registration.
 
 ## Semantics
 

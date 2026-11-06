@@ -124,6 +124,7 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
             phase="provider-profile-posture",
             next_action="prepare_provider_profile_posture",
             boundary="Provider/profile posture is OMH-local preparation metadata; it is not credential validation, provider connectivity, model routing, payment/wallet, or host execution evidence.",
+            good_why="The card records which key names are present, missing, or unknown, and never reads a value.",
             good_prompt="Prepare provider profile posture for this connector using metadata-only secret presence.",
             why_this_exists=(
                 "`provider-profile-posture` exists so a profile's required secret names and capabilities are recorded as present, "
@@ -138,7 +139,7 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
             expected_outputs=("provider_profile_posture/v1", "metadata-only secret requirements", "allowed and prohibited actions"),
             artifact_expectations=("provider_profile_posture/v1 metadata-only preparation record",),
             final_checklist=(
-                "Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret-presence metadata are explicit, and `omh ops provider-profile-posture --input <file>` produced the record.",
+                "Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret-presence metadata are explicit, and `omh ops provider-profile-posture --input <file>` produced the record from JSON with `provider_profile_posture_input/v1`, `provider_id`, `profile_id`, `requested_capabilities`, `secret_requirements` as `{name, present}`, optional `host_observations`.",
                 "No secret value, credential validation, provider call, model route, wallet, or payment action is claimed.",
                 "Any host observation reference remains supplied metadata, not a live connector check.",
             ),

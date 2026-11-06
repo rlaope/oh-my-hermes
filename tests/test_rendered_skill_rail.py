@@ -147,13 +147,14 @@ class RenderedReferenceShapeTests(unittest.TestCase):
 
         self.assertFalse(_router_human_voice_reference().endswith("\\n"))
 
-    def test_compact_harness_purpose_never_stacks_dots(self):
-        from omh.skills.render import _compact_harness_purpose
-
-        for purpose in ("Direction.", "Keep audience, source-grounded motion production, and QA gates together."):
-            rendered = _compact_harness_purpose(purpose)
-            self.assertNotIn("..", rendered.replace("...", "", 1), rendered)
-            self.assertFalse(rendered.endswith("...."), rendered)
+    def test_rendered_harness_registry_never_stacks_dots(self):
+        registry = next(
+            t.content
+            for t in builtin_skill_reference_templates()
+            if t.skill_name == "oh-my-hermes" and t.relative_path == "references/harness-registry.md"
+        )
+        self.assertNotIn("....", registry)
+        self.assertNotIn("..:", registry)
 
 
 if __name__ == "__main__":

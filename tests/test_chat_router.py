@@ -3508,7 +3508,11 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
                 self.assertEqual(task_card["task_type"], "omh_cli_maintenance")
                 self.assertEqual(task_card["route_level"], "operator_maintenance_command")
                 self.assertEqual(task_card["command"], command)
-                self.assertEqual(task_card["command_argv"], ["omh", command])
+                # A flagless uninstall is the full purge, so its card previews with --dry-run.
+                self.assertEqual(
+                    task_card["command_argv"],
+                    ["omh", command, "--dry-run"] if command == "uninstall" else ["omh", command],
+                )
                 self.assertEqual(task_card["recommended_next_action"], f"run_omh_{command}")
                 self.assertIn("code changes require a separate request", task_card["user_facing_summary"])
                 self.assertTrue(
@@ -5384,6 +5388,18 @@ selected_workflow=ultraprocess
                     route_owner(route_chat_message(message, source="discord"), allow_clarify=message in _REPINNED_DIRECT_TRANSLATION_FALLBACK_DOES_NOT_STEAL_WORKFLOW_REQUESTS),
                     expected_skill,
                 )
+
+
+class MaintenanceUninstallCardTests(unittest.TestCase):
+    def test_uninstall_card_previews_before_the_full_purge(self) -> None:
+        from omh.routing.task_cards import _maintenance_command_card
+
+        card = _maintenance_command_card("uninstall")
+        self.assertEqual(card["command_argv"], ["omh", "uninstall", "--dry-run"])
+        self.assertIn("omh uninstall --dry-run", card["first_safe_action"])
+        self.assertEqual(card["recommended_next_action"], "run_omh_uninstall")
+        for command in ("update", "setup", "doctor", "install", "list"):
+            self.assertNotIn("--dry-run", _maintenance_command_card(command)["command_argv"])
 
 
 if __name__ == "__main__":

@@ -33,7 +33,7 @@ Good example:
 
 - Prompt: prompt-import-readiness review Codex and Claude Code prompt folders before exposing them as Hermes slash commands with $ARGUMENTS mapping.
 - Expected behavior: Produce `prepare_prompt_import_readiness` with required context, wrapper actions, and not-evidence boundaries.
-- Why: Codex and Claude Code prompt folders use different argument syntax, and a name can shadow a built-in slash command; both must be settled before anything is written.
+- Why: Argument syntax differs per CLI and a name can shadow a built-in command; settle both before writing.
 
 Bad example:
 
@@ -47,7 +47,7 @@ Bad example:
 - Explicit-path audit reads and compatibility results are observed only in their audit output; source discovery, command registration, prompt mutation, slash-command activation, and dry-run execution remain marked not_observed.
 - Route broad candidate discovery to `omh-skill-scout`, prompt/tool safety to `omh-security-safety-review`, missing CLIs or directories to `omh-toolbelt-readiness`, and approved implementation to a selected executor handoff.
 - Imported prompts, generated command files, registry updates, and dry-run results are reported only from observed prompt-import evidence.
-- Seed `prompt_source_inventory/v1` from the user's `hermes import-agent claude-code --dry-run` (or `codex`) preview, which imports nothing (it only writes a default `config.yaml` when the Hermes home has none): it reports Claude Code's `commands/` directory as one skipped item with no direct Hermes equivalent, so this card enumerates the `*.md` files in it itself, and it reads no Codex prompt files at all, so those come from the files the user names. The preview is observed only when its output is seen. `hermes import-agent` comes from the `agent-importers` catalog plugin, so when the command is not recognised the plugin is not installed: build the inventory from the folders the user names and do not install it for them.
+- Seed `prompt_source_inventory/v1` from the user's `hermes import-agent claude-code --dry-run` (or `codex`) preview, which imports nothing (it only writes a default `config.yaml` when the Hermes home has none): it reports Claude Code's `commands/` directory as one skipped item with no direct Hermes equivalent, so this card enumerates the `*.md` files in it itself, and it reads no Codex prompt files at all, so those come from the files the user names. The preview is observed only when its output is seen. On a Hermes where `hermes import-agent` is not core, it comes from the `agent-importers` catalog plugin, so when the command is not recognised the plugin is not installed: build the inventory from the folders the user names and do not install it for them.
 - Make a skill the conversion target for a prompt the model should follow; a Hermes quick command (`quick_commands`) runs only a shell command (`exec`) or another slash command (`alias`) and cannot hold a prompt.
 - In the Hermes CLI a slash name resolves to a built-in command first, then a quick command, a plugin command, a skill bundle, and a skill, so `slash_command_collision_report/v1` checks each candidate name against all five in that order.
 

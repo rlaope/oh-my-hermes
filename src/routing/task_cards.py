@@ -694,6 +694,13 @@ def _maintenance_command_card(command: str) -> dict[str, object]:
     command_argv = ["omh", command]
     if command == "list":
         first_safe_action = "Run `omh list` and summarize the installed workflow catalog without starting repo work."
+    elif command == "uninstall":
+        # A flagless uninstall is the full purge with no prompt, so the card previews it first.
+        command_argv = ["omh", "uninstall", "--dry-run"]
+        first_safe_action = (
+            "Run `omh uninstall --dry-run`, show what it would remove, and run the real command "
+            "only after the user confirms."
+        )
     else:
         first_safe_action = f"Run `omh {command}` and report only the observed maintenance output."
     return {
@@ -707,7 +714,9 @@ def _maintenance_command_card(command: str) -> dict[str, object]:
         "command": command,
         "command_argv": command_argv,
         "user_facing_summary": (
-            f"I will run the OMH maintenance {command} path; code changes require a separate request."
+            "I will preview the OMH maintenance uninstall path with --dry-run first; code changes require a separate request."
+            if command == "uninstall"
+            else f"I will run the OMH maintenance {command} path; code changes require a separate request."
         ),
         "not_a_workflow": [
             "coding_handoff",

@@ -65,7 +65,7 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 unavailable, keep the result explicit as `not_available` or `not_observed`. A recorded run is
 preparation, not execution, review, CI, merge-readiness, or merge evidence.
 
-Keep the `run.id` printed by the start record: `omh runtime delegate --run <run-id>` needs it. `omh runtime record` only creates a run, so when the work ends record the outcome with another record using `--status completed|blocked|failed|cancelled --verification-summary "<what was observed>"`.
+Keep the `run.run_id` printed by the start record: `omh runtime delegate --run <run-id>` needs it. `omh runtime record` only creates a run, so when the work ends, a second record with `--status completed|blocked|failed|cancelled --verification-summary "<what was observed>"` states the outcome; it does not update the started run.
 
 ## Delegation Transparency
 

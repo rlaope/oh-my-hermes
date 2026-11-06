@@ -966,10 +966,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # 536969 -> 536979: the `dag-ulw` row only. Its handoff policy names the third
 # way an external coding owner is chosen (naming it in a dag-ulw request) and
 # the per-owner `exports` list (+10). Measured from the producer; no headroom.
-# 536979 -> 536949: host-readiness skills (capability-toggle, executor-runtime-readiness,
-# provider-profile-posture, websearch-setup) rewrite Do-Not-Use and handoff text (-30 net).
-# Measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536949
+# 536979 -> 536962: `executor-runtime-readiness` (-16) and `provider-profile-posture` (-14)
+# shorten their first Do-Not-Use line, and `capability-toggle`'s handoff policy (+13) names
+# `omh capability-policy`; no other row moved. Measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536962
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

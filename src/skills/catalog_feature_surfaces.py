@@ -411,6 +411,7 @@ _FEATURE_SURFACE_SKILLS = (
         phase="runtime-selection",
         next_action="prepare_executor_runtime_readiness",
         boundary="Runtime readiness is not executor dispatch, plugin load, tool invocation, repository mutation, review, CI, or merge evidence.",
+        good_why="The choice depends on which CLI is on PATH and the flags it accepts.",
         good_prompt="executor-runtime-readiness can this task run in Codex, Claude Code, or Hermes coding?",
         bad_prompt="executor-runtime-readiness claim Codex already started the session.",
         do_not_use_when=(
@@ -1211,7 +1212,7 @@ _FEATURE_SURFACE_SKILLS = (
         phase="prompt-import-readiness",
         next_action="prepare_prompt_import_readiness",
         boundary="An explicit-path prompt compatibility audit observes only bounded local file classification and metadata. It is not source-directory discovery, prompt import, slash command registration, prompt mutation, command activation, imported prompt trust, or successful dry-run evidence.",
-        good_why="Codex and Claude Code prompt folders use different argument syntax, and a name can shadow a built-in slash command; both must be settled before anything is written.",
+        good_why="Argument syntax differs per CLI and a name can shadow a built-in command; settle both before writing.",
         good_prompt="prompt-import-readiness review Codex and Claude Code prompt folders before exposing them as Hermes slash commands with $ARGUMENTS mapping.",
         bad_prompt="prompt-import-readiness silently import every external prompt, overwrite slash commands, and claim the prompts are trusted without review.",
         expected_outputs=(
@@ -1241,7 +1242,7 @@ _FEATURE_SURFACE_SKILLS = (
             "Explicit-path audit reads and compatibility results are observed only in their audit output; source discovery, command registration, prompt mutation, slash-command activation, and dry-run execution remain marked not_observed.",
             "Route broad candidate discovery to `skill-scout`, prompt/tool safety to `security-safety-review`, missing CLIs or directories to `toolbelt-readiness`, and approved implementation to a selected executor handoff.",
             "Imported prompts, generated command files, registry updates, and dry-run results are reported only from observed prompt-import evidence.",
-            "Seed `prompt_source_inventory/v1` from the user's `hermes import-agent claude-code --dry-run` (or `codex`) preview, which imports nothing (it only writes a default `config.yaml` when the Hermes home has none): it reports Claude Code's `commands/` directory as one skipped item with no direct Hermes equivalent, so this card enumerates the `*.md` files in it itself, and it reads no Codex prompt files at all, so those come from the files the user names. The preview is observed only when its output is seen. `hermes import-agent` comes from the `agent-importers` catalog plugin, so when the command is not recognised the plugin is not installed: build the inventory from the folders the user names and do not install it for them.",
+            "Seed `prompt_source_inventory/v1` from the user's `hermes import-agent claude-code --dry-run` (or `codex`) preview, which imports nothing (it only writes a default `config.yaml` when the Hermes home has none): it reports Claude Code's `commands/` directory as one skipped item with no direct Hermes equivalent, so this card enumerates the `*.md` files in it itself, and it reads no Codex prompt files at all, so those come from the files the user names. The preview is observed only when its output is seen. On a Hermes where `hermes import-agent` is not core, it comes from the `agent-importers` catalog plugin, so when the command is not recognised the plugin is not installed: build the inventory from the folders the user names and do not install it for them.",
             "Make a skill the conversion target for a prompt the model should follow; a Hermes quick command (`quick_commands`) runs only a shell command (`exec`) or another slash command (`alias`) and cannot hold a prompt.",
             "In the Hermes CLI a slash name resolves to a built-in command first, then a quick command, a plugin command, a skill bundle, and a skill, so `slash_command_collision_report/v1` checks each candidate name against all five in that order.",
         ),
@@ -1300,7 +1301,7 @@ _FEATURE_SURFACE_SKILLS = (
         phase="device-readiness",
         next_action="prepare_physical_device_readiness",
         boundary="A physical device readiness card is not device discovery, network pairing, credential validation, slicer output, G-code safety, camera inspection, sensor reading, relay actuation, robot movement, heat command, print start, emergency stop test, or successful hardware trial evidence unless observed device-trial evidence records it.",
-        good_why="Heat and motion commands act within seconds and cannot be taken back; the card must hold the emergency stop, camera gate, and approval wording before any print starts.",
+        good_why="Heat and motion act within seconds; the card holds the emergency stop, camera gate, and approval wording first.",
         good_prompt="physical-device-readiness check Snapmaker printer safety with camera gate, slicer dry-run, heat command approval, and emergency-stop evidence before printing.",
         bad_prompt="physical-device-readiness start the printer, heat the bed, flip relays, and claim the robot is safe without observed operator approval or device telemetry.",
         expected_outputs=(
@@ -1654,9 +1655,9 @@ _FEATURE_SURFACE_SKILLS = (
         boundary="A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
         good_prompt="toolbelt-readiness what MCP or CLI tools do I need for weekly Linear and GitHub triage?",
         bad_prompt="toolbelt-readiness claim Gmail access works without an observed credential check.",
-        good_why="Weekly Linear and GitHub triage needs two read credentials and the matching MCP servers or CLIs; the card must list each as present or missing before the first run.",
+        good_why="Linear and GitHub triage needs two read credentials and matching MCP servers or CLIs, listed before the first run.",
         final_checklist=(
-            "Each required tool is listed once as present, missing, optional, or unsafe, with how it was observed: the tool list or `tool_search` for native tools, `hermes mcp list` for MCP servers, `command -v <cli>` for CLIs, and the env-var NAME only for credentials, never the value.",
+            "Each required tool is listed once as present, missing, optional, or unsafe, with how it was observed: the tool list or `tool_search` for native tools, `hermes mcp list` on Hermes (else the host's MCP list) for MCP servers, `command -v <cli>` for CLIs, the env-var NAME only for credentials.",
             "Unsafe says why: a tool that writes outside the stated scope, or a credential broader than the task needs.",
             "Name the smallest next verification or handoff and who runs it, instead of claiming completion from narration.",
         ),
@@ -2212,6 +2213,7 @@ _FEATURE_SURFACE_SKILLS = (
         phase="skill-scout",
         next_action="prepare_skill_scout",
         boundary="A skill scout report is not skill installation, external source trust, marketplace mutation, file copy, network retrieval, credential use, implementation, review, CI, or proof that a candidate is safe to adopt.",
+        good_why="Reuse is judged by candidate and source trust; the scout installs nothing.",
         good_prompt="skill-scout find existing skill candidates before we create a release-note workflow skill.",
         bad_prompt="skill-scout install the best GitHub skill and copy it into the marketplace without review.",
         expected_outputs=(
@@ -2283,6 +2285,7 @@ _FEATURE_SURFACE_SKILLS = (
         phase="skill-health",
         next_action="prepare_skill_health",
         boundary="A skill health dashboard is not install/setup health, live skill execution success, automatic skill mutation, model training, verification, review, CI, or proof that future routing is fixed.",
+        good_why="Drift comes from the curator ledger and `lint_warnings`, not use counts.",
         good_prompt="skill-health show the OMH skill portfolio dashboard with stale surfaces, failure patterns, pending amendments, and top improvement actions.",
         bad_prompt="skill-health claim every skill is working and patch the failures automatically without observed signals or review.",
         expected_outputs=(

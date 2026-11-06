@@ -45,10 +45,11 @@ Bad example:
 - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
 - The provider API key write and the `web` backend or tier change were verified as two separate, independently-approved changes, each read back from the key Hermes consumes.
 - Nothing was written to `auxiliary.web_extract`, and a leftover block there was reported as ignored rather than counted as configuration.
+- Verified means every keyed backend or `paid` tier in the merged `web` section has its key present; else report not verified.
 
 ## Recovery Notes
 
-- If no provider account or key is available, mark the key step "not applicable" and continue with the backend and tier step alone, the keyless free tier needs no key. Never set a keyed backend or `web.provider_tier.<name>: paid` while its key is absent.
+- If no provider account or key is available, mark the key step "not applicable" and continue with the backend and tier step alone, never set a keyed backend or `web.provider_tier.<name>: paid` while its key is absent.
 - If nothing is named yet, run the read-only diagnosis first, then ask which paid provider, if any.
 - If either diff is rejected, keep the other step's state independent and do not roll both back together.
 - If the config still holds an `auxiliary.web_extract` block, report it as a leftover Hermes ignores and leave it in place unless the user asks to remove it as its own diff.

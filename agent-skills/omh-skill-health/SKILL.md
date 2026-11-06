@@ -32,7 +32,7 @@ Good example:
 
 - Prompt: skill-health show the OMH skill portfolio dashboard with stale surfaces, failure patterns, pending amendments, and top improvement actions.
 - Expected behavior: Produce `prepare_skill_health` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Why: Drift comes from the curator ledger and `lint_warnings`, not use counts.
 
 Bad example:
 

@@ -244,7 +244,7 @@ class EfficiencyContractTests(unittest.TestCase):
         # ~1.6k the earlier entries recorded.
         # 88,000 -> 89,000: the core `doctor`, `skill`, `oh-my-hermes` and
         # `executor-runtime-readiness` bodies name the command or probe that
-        # produces their evidence. Main measures 87,926 and this tree 88,3xx;
+        # produces their evidence. Main measures 87,926 and this tree 88,345;
         # the ceiling leaves ~0.6k headroom.
         self.assertLess(core["skill_body"]["bytes"], 89_000)
         # 815,000 -> 825,000: one new installable body (`web-research`) plus the

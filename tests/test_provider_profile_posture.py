@@ -159,6 +159,17 @@ class ProviderProfilePostureSkillTextTests(unittest.TestCase):
         self.assertIn("omh ops provider-profile-posture --input", body)
         listed = body.split("requested capabilities (", 1)[1].split(")", 1)[0]
         self.assertEqual(set(listed.replace(" ", "").split(",")), set(_CAPABILITIES))
+        from omh.workflows.provider_profile_posture import (
+            PROVIDER_PROFILE_POSTURE_INPUT_SCHEMA_VERSION,
+            _INPUT_REQUIRED_KEYS,
+            _SECRET_REQUIREMENT_KEYS,
+        )
+
+        for key in _INPUT_REQUIRED_KEYS:
+            if key != "schema_version":
+                self.assertIn(f"`{key}`", body)
+        self.assertIn(PROVIDER_PROFILE_POSTURE_INPUT_SCHEMA_VERSION, body)
+        self.assertIn("{" + ", ".join(sorted(_SECRET_REQUIREMENT_KEYS)) + "}", body)
 
 
 if __name__ == "__main__":

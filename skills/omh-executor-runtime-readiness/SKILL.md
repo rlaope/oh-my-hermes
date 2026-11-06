@@ -32,7 +32,7 @@ Good example:
 
 - Prompt: executor-runtime-readiness can this task run in Codex, Claude Code, or Hermes coding?
 - Expected behavior: Produce `prepare_executor_runtime_readiness` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Why: The choice depends on which CLI is on PATH and the flags it accepts.
 
 Bad example:
 

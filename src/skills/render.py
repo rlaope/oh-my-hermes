@@ -702,7 +702,7 @@ def _harness_summary(harness: HarnessDefinition) -> str:
         f"`{action}`" for action in _compact_sequence(harness.wrapper_actions, 3, keep_contains=keep_markers)
     )
     return (
-        f"- `{harness.name}`: {_compact_harness_purpose(harness.purpose)}. "
+        f"- `{harness.name}`: {_compact_harness_purpose(harness.purpose)}{'' if _compact_harness_purpose(harness.purpose).endswith('...') else '.'} "
         f"L: {evidence_ladder}. A: {wrapper_actions or '`show_status`'}."
     )
 
@@ -1239,7 +1239,7 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 unavailable, keep the result explicit as `not_available` or `not_observed`. A recorded run is
 preparation, not execution, review, CI, merge-readiness, or merge evidence.
 
-Keep the `run.id` printed by the start record: `omh runtime delegate --run <run-id>` needs it. `omh runtime record` only creates a run, so when the work ends record the outcome with another record using `--status completed|blocked|failed|cancelled --verification-summary "<what was observed>"`.
+Keep the `run.run_id` printed by the start record: `omh runtime delegate --run <run-id>` needs it. `omh runtime record` only creates a run, so when the work ends, a second record with `--status completed|blocked|failed|cancelled --verification-summary "<what was observed>"` states the outcome; it does not update the started run.
 
 ## Delegation Transparency
 
@@ -1443,7 +1443,7 @@ Two host-side consequences follow, both accepted. Host slash commands derive fro
 When a chat message is implementation-shaped and a wrapper wants a concrete executor handoff, run `omh coding delegate` after or instead of generic chat routing:
 
 ```sh
-omh coding delegate --source discord --executor codex --record "risky refactor"
+omh coding delegate --source discord --executor <owner> --record "risky refactor"
 ```
 
 The payload is deterministic local adapter data: recommended workflow, harness, executor/runtime profile, acceptance criteria, verification expectations, and handoff prompt template. Hermes still narrates the user-facing state.
@@ -1621,7 +1621,7 @@ Exact or near-exact requests such as `omh update`, `omh setup`, `omh doctor`, `o
 
 They outrank stale coding context, router-design feedback, runtime portability, migration, and workflow implementation signals unless the user explicitly asks for code changes.
 
-`omh uninstall` with no flag removes all OMH-managed local state, the plugin bundle, and the Hermes config keys OMH set, with no confirmation prompt. Run `omh uninstall --dry-run` first, show what it would remove, and run the real command only after the user confirms or typed the exact command. `--registration-only` removes only the `skills.external_dirs` registration.
+`omh uninstall` with no flag removes all OMH-managed local state, the plugin bundle, the installer-managed `omh` command, and the Hermes config keys OMH set, with no confirmation prompt. Run `omh uninstall --dry-run` first, show what it would remove, and run the real command only after the user confirms (add `--keep-command` to keep the `omh` command). `--registration-only` removes only the `skills.external_dirs` registration.
 
 ## Semantics
 
@@ -1767,7 +1767,7 @@ Prepared routing, plans, task cards, and handoffs are not execution evidence. `p
 When local shell access or a bot wrapper is available, record prepared handoffs and observed workflow evidence under `.omh/runtime/`:
 
 ```sh
-omh coding delegate --source discord --executor codex --record "risky refactor"
+omh coding delegate --source discord --executor <owner> --record "risky refactor"
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

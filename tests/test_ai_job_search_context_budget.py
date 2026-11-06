@@ -143,10 +143,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            # Host-readiness skills: the capability-toggle, executor-runtime-readiness, provider-profile-posture and
-            # websearch-setup rows move (net change measured from the producer; the pin before it was d6dfefff...1fc71).
-            (skill_capabilities, 533877, FULL_ROW_DELTA_CAP,
-             'b58cc5564df5e55b7c98f00d0a9ae059bd1cf8e3e835259b311e940865c1f894',
+            # 536979 -> 536962 and the digest re-derived: executor-runtime-readiness (-16) and
+            # provider-profile-posture (-14) shorten their first Do-Not-Use line, and capability-toggle's
+            # handoff policy (+13) names `omh capability-policy`; no other row moved. The pin before
+            # it was d6dfefff...1fc71.
+            (skill_capabilities, 533890, FULL_ROW_DELTA_CAP,
+             '41ef38b407102277af700b0b225b489bb685c2538e99fe9b39108b2271b29923',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -379,7 +381,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
         # Host-readiness skills: thirteen bodies name the command or probe behind their evidence; the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '44b5753051a89d5a38da92ed0b2aa4a087d28eba73f24dbab4dccb7609bd98ff')
+        self.assertEqual(_digest(legacy_hashes), '56263bcd05dbfd469c3972b90a812a36af72725201ef636da49c7a96c8fc33c3')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -394,7 +396,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
         # 122431 -> 124814: the render rail writes each sibling under its loadable label
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
-        # 124814 -> 123267: host-readiness skills drop generic repeated Do-Not-Use and checklist lines.
+        # 124814 -> 123267: host-readiness skills replace the repeated hollow `Why:` example line and generic Do-Not-Use and checklist lines with skill-specific ones.
         self.assertEqual(legacy['repeated']['bytes'], 123267)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))

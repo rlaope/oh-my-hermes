@@ -45,13 +45,12 @@ Bad example:
 
 - The affected family is named by its canonical id, not guessed from a partial word.
 - Withheld workflows and retained core skills are listed separately.
-- The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capabilities`), routing is unchanged, and no workflow is called removed.
+- The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capability-policy status` shows it), routing is unchanged, and no workflow is called removed.
 - The change is made with `omh capability-policy disable|enable <family>` (`--dry-run` previews, `status` lists), never by editing setup-profile.json, and the printed reversing command is stated so it never reads as permanent.
 
 ## Recovery Notes
 
 - If the family id is ambiguous, list all six and ask rather than picking the closest match.
-- If a disable would remove a core skill, refuse that part and report it; core skills are the floor doctor checks for.
 - The policy never deletes skill files.
 
 ## Workflow Lane
@@ -81,7 +80,7 @@ Quality bar:
 
 Handoff policy:
 
-Read and write the local capability policy directly; propose executor work only when a repository fix is required.
+Change the local capability policy with `omh capability-policy`; propose executor work only when a repository fix is required.
 
 Required inputs:
 
@@ -91,7 +90,7 @@ Required inputs:
 Expected outputs:
 
 - policy change summary
-- what was removed versus retained
+- what was withheld versus retained
 - the exact command that reverses it
 
 Artifact expectations:

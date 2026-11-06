@@ -31,7 +31,7 @@ Good example:
 
 - Prompt: physical-device-readiness check Snapmaker printer safety with camera gate, slicer dry-run, heat command approval, and emergency-stop evidence before printing.
 - Expected behavior: Produce `prepare_physical_device_readiness` with required context, wrapper actions, and not-evidence boundaries.
-- Why: Heat and motion commands act within seconds and cannot be taken back; the card must hold the emergency stop, camera gate, and approval wording before any print starts.
+- Why: Heat and motion act within seconds; the card holds the emergency stop, camera gate, and approval wording first.
 
 Bad example:
 
