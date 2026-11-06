@@ -10048,6 +10048,31 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "workflow-learning",
     ),
+    # #2610: a list that fills one thing stays off the several-features offer, and the router's question names no graph.
+    RoutingPrecisionCase(
+        "korean-columns-added-to-a-table-are-not-several-features",
+        "Three columns added to one table are that table's content, not several features",
+        "회원 테이블에 이름, 이메일, 전화번호 컬럼 추가해줘",
+        "answer_clarification",
+        "",
+        "dag-ulw",
+    ),
+    RoutingPrecisionCase(
+        "korean-fields-put-in-a-log-are-not-several-features",
+        "Three fields put in a log line are its content, not several features",
+        "로그에 시간, 레벨, 메시지 넣어줘",
+        "answer_clarification",
+        "",
+        "dag-ulw",
+    ),
+    RoutingPrecisionCase(
+        "english-validation-of-three-fields-is-not-several-features",
+        "Validation of three fields is one thing, not several features",
+        "add name, email and phone validation",
+        "answer_clarification",
+        "",
+        "dag-ulw",
+    ),
 )
 
 
@@ -20063,6 +20088,25 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "Rebasing every open PR is several parts: a dag-ulw graph",
         "열린 PR들 전부 리베이스해줘",
         "dispatch", "dag-ulw", "start_dag_run", "dag_run",
+    ),
+    # #2610: several features or stages asked to be built are offered as a dag-ulw graph, never started.
+    RoutingInterventionCase(
+        "korean-several-features-to-build-are-offered-not-started",
+        "Three named features asked to be built are offered as a dag-ulw graph, not started",
+        "업로드, 미리보기, 다운로드 기능 개발해주세요",
+        "clarify", "oh-my-hermes", "answer_clarification", "clarification", "dag-ulw",
+    ),
+    RoutingInterventionCase(
+        "korean-stage-range-to-build-is-offered-not-started",
+        "A range from one stage to another asked to be built is offered as a dag-ulw graph, not started",
+        "온보딩부터 결제까지 구현해줘",
+        "clarify", "oh-my-hermes", "answer_clarification", "clarification", "dag-ulw",
+    ),
+    RoutingInterventionCase(
+        "english-several-screens-to-build-are-offered-not-started",
+        "Three named screens asked to be built are offered as a dag-ulw graph, not started",
+        "build the dashboard, settings and billing screens",
+        "clarify", "oh-my-hermes", "answer_clarification", "clarification", "dag-ulw",
     ),
     RoutingInterventionCase(
         "review-every-open-pr-is-offered-not-started",

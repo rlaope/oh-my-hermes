@@ -13,6 +13,7 @@ import unittest
 from unittest import mock
 
 from _local_package import load_local_package
+from _standalone_bundle import _load_standalone_bundle_awareness
 
 load_local_package()
 
@@ -283,10 +284,11 @@ class RouterTests(unittest.TestCase):
                         "로그인하고 대시보드하고 리포트 기능까지 개발해", "온보딩, 홈, 마이페이지 화면 다 구현하자",
                         "회원가입 로그인부터 일반채팅, 판단질문, 지식그래프, 온톨로지 과정을 설계에 맞게 개발해줘",
                         "회원가입부터 결제까지 개발해줘", "데이터 수집부터 리포트 생성까지 만들어줘", "가입부터 탈퇴까지 전부 개발해",
-                        "설계부터 배포까지 한번에 진행해", "여러 기능 나눠서 다 해줘", "세 기능 같이넣고 테스트까지 다해줘",
+                        "여러 기능 나눠서 다 해줘", "기능 여러 개 한꺼번에 개발해줘", "3개 기능 구현해줘",
                         "add sign-in, billing and export features", "build the upload, preview and download screens",
-                        "build search, filters and sorting", "implement everything from onboarding to checkout",
-                        "develop it from sign-up to the knowledge graph"):
+                        "build search, filters and sorting", "build login, list and notifications",
+                        "implement everything from onboarding to checkout",
+                        "develop it from sign-up to the knowledge graph", "implement several features"):
             with self.subTest(message=message):
                 self.assertTrue(names_several_features(message))
                 self.assertFalse(dispatches_dag_ulw(message))
@@ -300,17 +302,56 @@ class RouterTests(unittest.TestCase):
         for message in ("장바구니랑 주문이랑 배송조회 기능 구현해", "여러 기능 나눠서 다 해줘"):
             with self.subTest(message=message):
                 self.assertEqual(self._dag_ulw_starts(message), (False, False, "dag-ulw"))
-        # A list that fills one thing, a range of numbers, pages or dates, a comparison, a question, one fix, or a
-        # list held by a stop word is no build of several features.
-        for message in ("우유, 계란, 빵 장보기 목록 만들어줘", "빨강, 파랑, 초록으로 버튼 색만 바꿔줘", "1부터 10까지 더하는 함수 만들어줘",
-                        "1페이지부터 3페이지까지 요약해줘", "월요일부터 금요일까지 일정 알려줘", "서울부터 부산까지 몇 시간 걸려?",
-                        "로그인, 목록, 알림 화면 차이 설명해줘", "검색, 필터, 정렬 중 어떤 걸 먼저 할까?", "사과, 배, 귤 중에 뭐가 제일 싸?",
-                        "로그인 버그 고쳐줘", "로그인, 목록, 알림 다 하지 마", "검색, 필터, 정렬 기능 나중에 붙여줘",
-                        "make a grocery list with milk, eggs and bread", "summarize pages 1 to 3",
-                        "rename the variable from foo to bar", "what is the difference between login, signup and sso?",
-                        "build a function that sums from 1 to 10"):
+
+    def test_a_list_or_range_without_a_named_feature_stays_off_the_offer(self) -> None:
+        # The reading needs positive evidence; these show none, so they read as they did before it existed.
+        for message in (
+            # One thing the list fills, or a thing the list sits inside.
+            "우유, 계란, 빵 장보기 목록 만들어줘", "빨강, 파랑, 초록으로 버튼 색만 바꿔줘", "빨강, 파랑, 초록 버튼 만들어줘",
+            "김철수, 이영희, 박민수 명단 만들어줘", "이름, 이메일, 전화번호 입력 화면 만들어줘", "아이디, 비밀번호, 이메일 가입 화면 만들어줘",
+            "설정 페이지에 테마, 언어, 시간대 탭 추가해줘", "로그인, 회원가입, 검색 버튼 만들어줘", "커피, 케이크, 샌드위치 메뉴 만들어줘",
+            "파이썬, 고, 러스트로 구현해줘", "이름, 나이, 주소 구현해줘", "빨래, 설거지, 청소 다 해줘",
+            "make a grocery list with milk, eggs and bread", "add alice, bob and carol", "add name, email and phone validation",
+            "add login, signup and search", "build login, signup and search buttons",
+            # Targets, functions and things named under a verb that builds software.
+            "build api, web and worker", "build linux, macos and windows", "build the api, web and worker images",
+            "implement get, set and delete", "implement sin, cos and tan",
+            # A range of numbers, pages, dates or positions; the other verbs; counted one thing.
+            "1부터 10까지 더하는 함수 만들어줘", "1페이지부터 3페이지까지 요약해줘", "월요일부터 금요일까지 일정 알려줘", "서울부터 부산까지 몇 시간 걸려?",
+            "처음부터 끝까지 만들어줘", "처음부터 끝까지 진행해", "아침부터 저녁까지 만들어줘", "로그인부터 결제까지 고쳐줘",
+            "summarize pages 1 to 3", "rename the variable from foo to bar", "build a function that sums from 1 to 10",
+            "build it from start to finish", "build it from monday to friday", "build from source to binary",
+            "두 단계 인증 구현해줘", "세 페이지 보고서 만들어줘", "여러 페이지 PDF 만들어줘", "네 화면 만들어줘", "여러 기능이 안 돼",
+            "several features are broken", "review multiple modules", "build several pages",
+            # Comparisons, questions, one fix, stop words, later, and text of a request held in another one.
+            "로그인, 목록, 알림 화면 차이 설명해줘", "검색, 필터, 정렬 중 어떤 걸 먼저 할까?", "사과, 배, 귤 중에 뭐가 제일 싸?",
+            "로그인 버그 고쳐줘", "로그인, 목록, 알림 다 하지 마", "검색, 필터, 정렬 기능 나중에 붙여줘",
+            "what is the difference between login, signup and sso?", "로그인, 회원가입, 검색 기능 리뷰해줘",
+            "다음 문장을 교정해줘: 로그인, 회원가입, 검색 기능 만들어줘",
+        ):
             with self.subTest(message=message):
                 self.assertFalse(names_several_features(message))
+
+    def test_several_features_reads_no_long_message(self) -> None:
+        # A brief or a pasted log reads as on main, and adds nothing to what its length costs the other readers.
+        request = "로그인, 회원가입, 검색 기능 만들어줘"
+        self.assertTrue(names_several_features(request))
+        self.assertFalse(names_several_features(" " * 1000 + request))
+
+    def test_several_features_offer_is_the_same_on_a_host_without_the_package(self) -> None:
+        # Hermes loads the bundle on its own interpreter: the offer and its absence read alike there.
+        standalone = _load_standalone_bundle_awareness()
+        for message in ("메일 가져오기, 파일 업로드, 검색 기능 개발해줘", "회원가입부터 결제까지 개발해줘", "build the upload, preview and download screens",
+                        "빨강, 파랑, 초록 버튼 만들어줘", "build api, web and worker"):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    [hint.get("next_action") for hint in standalone.awareness_route_hint(message)["hints"]],
+                    [hint.get("next_action") for hint in awareness_route_hint(message)["hints"]],
+                )
+                self.assertEqual(
+                    standalone.awareness_route_hint(message)["selected_workflow"],
+                    awareness_route_hint(message)["selected_workflow"],
+                )
 
     def test_each_hard_exclude_alone_keeps_a_change_off_the_graph(self) -> None:
         # Each row is a change the router would dispatch on but for one hard exclude: a skill or engine named first

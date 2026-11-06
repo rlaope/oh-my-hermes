@@ -995,7 +995,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # A Korean manuscript, paper search and PRISMA diagram, five reviews
             # of a pointed-at software object, logging practices and our test
             # coverage stay off it too (+10).
-            expected=1406,
+            # #2610: columns added to one table, fields put in a log line and the
+            # validation of three fields stay off the several-features offer (+3).
+            expected=1409,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1589,7 +1591,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # keep their own owners (+6). A Korean two-reviewer abstract screen, a
             # statin-trial review and a telehealth scoping review reach it, and a
             # plain PR review clarifies toward code-review (+4).
-            expected=1249,
+            # #2610: named features, a stage range and named screens asked to be
+            # built are offered as a dag-ulw graph, not started (+3).
+            expected=1252,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
