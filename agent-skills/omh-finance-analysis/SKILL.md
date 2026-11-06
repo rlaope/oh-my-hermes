@@ -27,7 +27,7 @@ This is an OMH `finance-analysis` workflow skill, projected for Agent Skills hos
 - The user wants pipeline coverage, deal health, or a seller forecast scenario rather than authoritative revenue or close reporting; use `omh-sales-pipeline-review`.
 - The user needs an enterprise or product direction decision after analysis; route that decision to `omh-decide`.
 - The ask is testing whether an internal control operated -- a SOX or ICFR sample, re-performance, or a deficiency's severity; use `omh-internal-audit`.
-- The ask is a valuation, DCF, multiples or a stock comparison from published statements; this procedure does not cover it. Hermes' optional dcf-model and comps-analysis skills do when installed; otherwise compute ratios with code from the supplied statements, state the formulas, give no recommendation, and stop at facts.
+- The ask is a valuation, DCF, multiples or a stock comparison from published statements; this procedure does not cover it. A host valuation skill does, when installed (Hermes ships optional finance skills); otherwise compute ratios with code from the supplied statements, state the formulas, give no recommendation, and stop at facts.
 
 ## Examples
 

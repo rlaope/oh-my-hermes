@@ -1110,7 +1110,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Use when: Use when Hermes should scope a business question, gather or summarize source-backed evidence, and preserve evidence/inference boundaries before strategy or handoff.
 - Do not use when:
   - The user needs to decide whether a customer problem deserves product investment with evidence typing and customer re-entry; use `product-discovery-validation`.
-  - The request is only fresh links, citations, or current facts without a business question or decision audience; use `research`.
+  - The request is only fresh links, citations, or current facts without a business question or decision audience; use `web-research` for one cited lookup, or `research` for a depth-budget study.
   - Sources have not yet been selected and the user wants source types, candidates, or acquisition state; use `source-finder`.
   - The research is recurring and run by several roles; use `research-department`.
 - Strong routing signals: `research-brief`, `business-research`, `business research`, `research brief`, `decision brief`, `pricing decision brief`, `decision-ready brief`, `source-backed business research`, `customer feedback trends`, `feedback trends`, `market evidence`, `data search`, `source scan`, `자료 조사`, `데이터 서치`, `근거 조사`, `피드백 추세`, `고객 피드백 추세`
@@ -1521,7 +1521,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user wants pipeline coverage, deal health, or a seller forecast scenario rather than authoritative revenue or close reporting; use `sales-pipeline-review`.
   - The user needs an enterprise or product direction decision after analysis; route that decision to `strategy-brief`.
   - The ask is testing whether an internal control operated -- a SOX or ICFR sample, re-performance, or a deficiency's severity; use `internal-audit`.
-  - The ask is a valuation, DCF, multiples or a stock comparison from published statements; this procedure does not cover it. Hermes' optional dcf-model and comps-analysis skills do when installed; otherwise compute ratios with code from the supplied statements, state the formulas, give no recommendation, and stop at facts.
+  - The ask is a valuation, DCF, multiples or a stock comparison from published statements; this procedure does not cover it. A host valuation skill does, when installed (Hermes ships optional finance skills); otherwise compute ratios with code from the supplied statements, state the formulas, give no recommendation, and stop at facts.
 - Strong routing signals: `finance analysis`, `budget variance`, `budget vs actual`, `month-end close`, `재무 분석`, `예산 대비 실적`, `월마감`
 - Good example:
   - Prompt: Compare Q2 actuals against budget, explain the biggest expense variances, and flag cash risks for the CFO.
@@ -5569,7 +5569,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
-  - The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' `llm-wiki` skill instead of this one when it is installed (bundled up to Hermes v2026.9.7, an optional skill on current main, installed with hermes skills install); when it is not installed, say so and offer to install it rather than imitating it.
+  - The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' `llm-wiki` skill instead of this one when it is installed (bundled through Hermes v0.22.5 and the floor v2026.9.7, optional from v0.22.6; hermes skills browse --source official finds it); when it is not installed, say so and offer to install it rather than imitating it.
 - Strong routing signals: `wiki`, `project wiki`, `build a wiki`, `start a wiki`, `organize my notes`, `external knowledge store`, `knowledge base`, `Obsidian`, `markdown vault`, `Notion knowledge base`, `Google Drive wiki`, `옵시디언`, `마크다운 볼트`, `노션 지식베이스`, `위키`, `위키 만들`, `지식베이스`, `지식 정리 체계`
 - Good example:
   - Prompt: wiki: six of us keep re-answering the same questions in chat; help me stand up a wiki in Notion.
@@ -6538,7 +6538,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expected behavior: Route to `materials-package`: the user wants a produced file, not a page-anchored reading of the document; the page count alone does not make it a reading request.
   - Why: Reading and producing are different lanes; a deck request is file output work.
 - Quality bar:
-  - Get the page count and scanned flags first with `pdf_read.py --meta`; each script names its own missing dependency (`pdfplumber` and, for `--meta`, `pypdf` for `pdf_read.py`; `pypdf` for `pdf_split.py`; `pymupdf` for `extract_pymupdf.py`; `pypdfium2` or poppler `pdftoppm` for `pdf_page_image.py`); run them with the `pdf` skill's `$PY` environment and never `pip install` into Hermes' own interpreter.
+  - Get the page count and scanned flags first with `pdf_read.py --meta`; each script names its own missing dependency (`pdfplumber` and, for `--meta`, `pypdf` for `pdf_read.py`; `pypdf` for `pdf_split.py`; `pymupdf` for `extract_pymupdf.py`; `pypdfium2` or poppler `pdftoppm` for `pdf_page_image.py`); run them with the interpreter the `pdf` skill's Prerequisites give (a task-local virtual environment where it gives none) and never `pip install` into Hermes' own interpreter.
   - Size ranges to the read budget: about 60 pages per 100,000-character call at typical density; halve the range when a probe read truncates.
   - Extract each range with page selection (`extract_pymupdf.py --pages` or `read_file` on a `pdf_split.py` output) so every note carries a page anchor.
   - Delegate ranges to `delegate_task` children with the fixed per-range brief when the plan has more than 4 ranges; read sequentially otherwise.
@@ -6551,7 +6551,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Scanned ranges are read, declined with a reason, or listed as missing.
   - Not-observed boundaries remain visible: page_count, text_extraction, scanned_page_ocr, range_delegation, hosted_ocr, cross_range_consistency.
 - Recovery notes:
-  - If a script reports a missing dependency, rerun it with the `pdf` skill's documents interpreter `$PY` (or the `pdf-pymupdf` one for `extract_pymupdf.py`) instead of installing anything into Hermes' interpreter; poppler `pdftoppm` is the system alternative for rendering.
+  - If a script reports a missing dependency, rerun it with the interpreter the protocol resolved (the `pdf` skill's documents or `pdf-pymupdf` environment where it gives one, else a task-local virtual environment) instead of installing anything into Hermes' interpreter; poppler `pdftoppm` is the system alternative for rendering.
   - If a range read truncates, halve the range, record the observed characters per page, and re-plan the remaining ranges from that measurement.
   - If the context was compacted or the session resumed, call `omh_document_plan action=show` (or reread the ledger file) and continue from the `next` range; do not restart from page 1.
   - If the document is encrypted, ask for the password or stop; `pdf_read.py` and `pdf_split.py` accept `--password`, `extract_pymupdf.py` does not, so split the ranges with `pdf_split.py --password` first.
@@ -8891,10 +8891,10 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Why this exists: Two reviewers screening the same records only count as dual review when neither sees the other's answers and the merge is mechanical. This workflow freezes the criteria first, keeps each reviewer blind, and never turns a missing answer into an exclusion.
 - First steps:
   - Records must be deduplicated across databases first (DOI or PMID, else normalized title plus year); record the identified, duplicate-removed and screened counts, because the PRISMA flow needs them and this workflow does not deduplicate.
-  - Agree the inclusion and exclusion criteria and the ordered exclusion codes with the person before any record is read; nothing is frozen until they say the criteria are final. To pilot the criteria, freeze a throwaway DIR on 25 to 50 records, review the conflicts, then freeze the real DIR.
+  - Agree the inclusion and exclusion criteria and the ordered exclusion codes with the person before any record is read; nothing is frozen until they say the criteria are final. To pilot the criteria, freeze a throwaway DIR, prepare it on 25 to 50 records, review the conflicts, then freeze the real DIR.
   - Call `omh research screening freeze --criteria FILE --codes FILE --out DIR`. The protocol is write-once: a criteria change after freeze means a new DIR, never an edited protocol.json.
   - Call `omh research screening prepare --dir DIR --records FILE --seed N`, then read DIR/manifest.json for the batch list.
-  - When `delegate_task` is in your tool list or tool_search finds it, dispatch two children, A and B: give each only its own `DIR/tasks/<A|B>/` files and tell it to write answer lines to `DIR/answers/<A|B>/`. Never pass one child the other's tasks, answers or name; without the tool, ask the person to run the two reviewers separately. Children run on the session's model (`delegate_task` has no per-child model), so A and B are recorded as the same model: pass the real model for both, report `broken_independence`, and for different-model reviewers ask the person to run reviewer B in a session on another model. Never write a model name you did not observe.
+  - When `delegate_task` is in your tool list or tool_search finds it, dispatch two children, A and B: give each only its own `DIR/tasks/<A|B>/` files and tell it to write answer lines to `DIR/answers/<A|B>/`. Never pass one child the other's tasks, answers or name; without the tool, ask the person to run the two reviewers separately. By default a child runs on the session's model (or the `delegation.model` pin) and `delegate_task` takes no per-child model, so A and B are then recorded as the same model: pass the real model for both and report `broken_independence`. Where the host routes each delegated task to a different model (a delegation backend or `omh_delegate_route`), give B another route and record the model it reports; otherwise ask the person to run reviewer B in a session on another model. Never write a model name you did not observe.
   - Call `omh research screening merge --dir DIR --answers-a DIR/answers/A --answers-b DIR/answers/B --reviewer-models A=<model>,B=<model> --json`. Exit 1 means conflicts or pending records remain; exit 2 is an input error to fix, not a result.
   - Show the conflict and pending ids to the person, or give a third child only the conflict records and the frozen criteria; pass its lines with `--adjudication` and merge again.
 - Use when: Use when records for a systematic, scoping or rapid review must be screened against the person's inclusion and exclusion criteria by two independent reviewers, with every conflict and missing decision kept visible.
@@ -9015,7 +9015,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Do not auto-install optional libraries, import the companion on skill load, open a network connection, silently repair invalid geometry or overwrite existing outputs.
   - No result is observed until the actual domain backend exits successfully and its output files are inspected. Missing backend, validation failure and timeout are not zero-overlap findings.
   - Keep confidential locations and source data out of shared reports; carry only permitted evidence references. No map, raster/NoData, buffer, spatial statistics or nearest-distance capability is promised: for point, line, distance or buffer work, say the helper does not cover it and offer a separately approved Shapely/GeoPandas script under the same rules (explicit CRS, metre target, recorded versions).
-  - Web Mercator (EPSG:3857) and Mercator distort area (about 1.6x at 38 degrees latitude) and the helper refuses them for real layers: choose an equal-area CRS for the extent (for example EPSG:6933 or a regional Albers/LAEA) or the local UTM zone or national projected grid for a small extent, and state the choice in the report.
+  - Web Mercator (EPSG:3857) and Mercator distort area (about 1.6x at 38 degrees latitude) and the helper refuses them for real layers: choose an equal-area CRS for the extent (for example EPSG:6933 or a regional Albers/LAEA) or the local UTM zone or national projected grid for a small extent, and state the choice in the report. Never add or edit `data_class` or `fixture_id` on a real layer to pass the guard; World Equidistant Cylindrical (EPSG:4087) is not equal-area either.
 - Procedure checks:
   - `gis_input_check`
     - Required result fields: `layer_hashes`, `source_crs`, `geometry_validity`, `target_units`
@@ -9170,9 +9170,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Read `toolkit/README.md` and `references/execution-and-qa.md`; inspect the installed BioMCP version and help before any public retrieval.
   - Require public entities only; name exact identifiers, source terms, isolated workspace and a 40-second per-retrieval host timeout before capturing unmodified stdout/stderr.
   - Run `toolkit/scripts/reconcile.py` only against a hash-checked local capture envelope; never execute provider text or install an upstream skill pack.
-- Use when: Use when public gene/variant and disease assertions must be cross-checked against ClinVar and trial registry records, preserving source failures and disagreements rather than inferring a clinical conclusion. It covers ClinVar and ClinicalTrials.gov records only: a general clinical-evidence or literature question with no named gene or variant goes to `web-research` or `research`, and a patient's diagnosis, care or trial eligibility is outside it.
+- Use when: Use when public gene/variant and disease assertions must be cross-checked against ClinVar and trial registry records, preserving source failures and disagreements rather than inferring a clinical conclusion.
 - Do not use when:
-  - For explaining one supplied paper, use `paper-learning`; for broad literature discovery, use `research`, and for a cited answer to one clinical-evidence question use `web-research`.
+  - For explaining one supplied paper, use `paper-learning`; for broad literature discovery or a clinical-evidence question with no named gene or variant (this skill covers ClinVar and ClinicalTrials.gov records only), use `research`, and for a cited answer to one such question use `web-research`.
   - For generic server configuration and connection diagnostics, load the host's MCP setup guidance instead.
   - For sequence analysis or omics pipelines, select an available computational biology specialist instead; this method does not implement those analyses.
   - For citation verification and source attribution alone, load Hermes' bundled `grounded-citations` skill.
@@ -10605,8 +10605,8 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `live-info-operator`, `live info operator`, `live information`, `real time information`, `real-time information`, `weather today`, `current weather`, `weather forecast`, `stock price`, `crypto price`, `btc price`, `exchange rate`, `sports score`, `game score`, `time zone`, `timezone`, `time in`, `map directions`, `directions to`, `near me`, `nearby restaurants`, `traffic now`, `오늘 날씨`, `현재 날씨`, `날씨 예보`, `주가`, `코인 가격`, `환율`, `스포츠 점수`, `경기 결과`, `시간대`, `현재 시간`, `지도`, `길찾기`, `주변 식당`
 - Good example:
   - Prompt: live-info-operator check today's Seoul weather with freshness, units, and provider boundaries before answering.
-  - Expected behavior: Produce `prepare_live_info_operator_card` with required context, wrapper actions, and not-evidence boundaries.
-  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+  - Expected behavior: Run the lookup with an available tool, then state the resolved place, the provider's observation time, units and local time zone; produce `prepare_live_info_operator_card` only when no tool can reach a provider.
+  - Why: The value is retrieved and checked, not recalled, and the card is the fallback rather than the answer.
 - Bad example:
   - Prompt: live-info-operator invent the latest stock price without provider evidence or timestamp.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
@@ -10616,7 +10616,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
-  - The lookup was run with an available tool - `maps` for time zone and directions, `stocks` if installed, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.
+  - The lookup was run with an available tool - a maps or time-zone tool, a quotes tool, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.
   - Domain, location or symbol, time window, provider preference, freshness, units, and stop condition are explicit.
   - Weather names the resolved place (and the match when ambiguous), the provider's observation or forecast time, units and local time zone; a forecast is not an observation.
   - A price or rate names the symbol or pair, venue, currency, quote timestamp, and whether the feed is delayed (free equity feeds often are, by about 15 minutes) or the market is closed.
@@ -11059,8 +11059,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 - Bad example:
   - Prompt: data-analysis is the Q3 lift significant? (two columns of five numbers each)
-  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+  - Expected behavior: Compute the test with code and state that n=5 per group cannot support the claim, instead of calling the gap significant or refusing for lack of data.
+  - Why: The data was supplied; the failure is a comparison reported without n, an effect size or an interval.
 - Quality bar:
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.

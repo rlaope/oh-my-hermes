@@ -966,11 +966,11 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # 536969 -> 536979: the `dag-ulw` row only. Its handoff policy names the third
 # way an external coding owner is chosen (naming it in a dag-ulw request) and
 # the per-owner `exports` list (+10). Measured from the producer; no headroom.
-# 536979 -> 537279: the research-lane skill fixes move five rows, +300 in all, measured
-# from the producer: biomedical-evidence (+77, its scope sentence), data-analysis (+2),
-# live-info-operator (+23), long-document-reading (+102, its environment rule) and
+# 536979 -> 537464: the research-lane skill fixes move five rows, +485 in all, measured
+# from the producer: biomedical-evidence (+190, its Do-Not-Use scope), data-analysis (+2),
+# live-info-operator (+23), long-document-reading (+174, its environment rule) and
 # research-department (+96). No other row moved; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 537279
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 537464
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

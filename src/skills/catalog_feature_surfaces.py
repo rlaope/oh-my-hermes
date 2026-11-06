@@ -920,6 +920,8 @@ _FEATURE_SURFACE_SKILLS = (
         next_action="prepare_live_info_operator_card",
         boundary="A live information card is not provider availability, API access, live data retrieval, weather, market price, sports score, exchange-rate, time-zone, map, or place-result evidence unless observed live-info result evidence records it.",
         good_prompt="live-info-operator check today's Seoul weather with freshness, units, and provider boundaries before answering.",
+        good_expected="Run the lookup with an available tool, then state the resolved place, the provider's observation time, units and local time zone; produce `prepare_live_info_operator_card` only when no tool can reach a provider.",
+        good_why="The value is retrieved and checked, not recalled, and the card is the fallback rather than the answer.",
         bad_prompt="live-info-operator invent the latest stock price without provider evidence or timestamp.",
         expected_outputs=(
             "live_info_task_card/v1",
@@ -946,7 +948,7 @@ _FEATURE_SURFACE_SKILLS = (
             "The request would create, update, send or mutate state in an external app; use `connector-operator`.",
         ),
         final_checklist=(
-            "The lookup was run with an available tool - `maps` for time zone and directions, `stocks` if installed, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.",
+            "The lookup was run with an available tool - a maps or time-zone tool, a quotes tool, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.",
             "Domain, location or symbol, time window, provider preference, freshness, units, and stop condition are explicit.",
             "Weather names the resolved place (and the match when ambiguous), the provider's observation or forecast time, units and local time zone; a forecast is not an observation.",
             "A price or rate names the symbol or pair, venue, currency, quote timestamp, and whether the feed is delayed (free equity feeds often are, by about 15 minutes) or the market is closed.",
@@ -1569,6 +1571,8 @@ _FEATURE_SURFACE_SKILLS = (
         boundary="A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, hallucination-safe numeric evidence, association, or causality unless observed data and method evidence records it.",
         good_prompt="data-analysis analyze this CSV and summarize anomalies by segment.",
         bad_prompt="data-analysis is the Q3 lift significant? (two columns of five numbers each)",
+        bad_expected="Compute the test with code and state that n=5 per group cannot support the claim, instead of calling the gap significant or refusing for lack of data.",
+        bad_why="The data was supplied; the failure is a comparison reported without n, an effect size or an interval.",
         why_this_exists=(
             "`data-analysis` exists because a model that reads a table by eye returns means, trends and anomalies that look "
             "observed and are wrong, and a gap between two groups reads as a finding with no test, sample size or "

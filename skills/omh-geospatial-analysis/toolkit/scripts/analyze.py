@@ -179,6 +179,23 @@ def mercator_family(crs):
     return method.startswith("mercator") or "pseudo mercator" in method or "auxiliary sphere" in method
 
 
+FIXTURE_ID = "synthetic-rectangles-v1"
+
+
+def area_guard_refusal(target_is_mercator, layers):
+    """Why a Mercator-family target may not measure these layers, or None when it may.
+
+    Only the shipped synthetic fixture (both layers carry its data_class and fixture_id) is measured in
+    Web Mercator; the refusal does not say how to qualify, so a real layer is never relabelled to pass.
+    """
+    if not target_is_mercator:
+        return None
+    if all(layer.get("data_class") == "synthetic" and layer.get("fixture_id") == FIXTURE_ID for layer in layers):
+        return None
+    return ("Web Mercator and Mercator distort area (about 1.6x at 38 degrees latitude): "
+            "choose an equal-area or local projected metre CRS for the study extent")
+
+
 def compute(args, left, right, shapely, pyproj):
     """Do real polygon overlay. Imports remain inside explicit invocation only."""
     from shapely.geometry import shape, mapping
@@ -194,10 +211,9 @@ def compute(args, left, right, shapely, pyproj):
                 or any(axis.unit_conversion_factor != 1.0 or axis.unit_name.lower() not in ("metre", "meter")
                        for axis in target.axis_info)):
             raise ValueError("measurement CRS must be projected with metre axes; geographic degree area/distance is refused")
-        if mercator_family(target) and not all(layer[2].get("data_class") == "synthetic" for layer in (left, right)):
-            raise ValueError("Web Mercator and Mercator distort area (about 1.6x at 38 degrees latitude): "
-                             "use an equal-area or local projected metre CRS for real data; "
-                             "only layers declared data_class synthetic may be measured in them")
+        refusal = area_guard_refusal(mercator_family(target), (left[2], right[2]))
+        if refusal:
+            raise ValueError(refusal)
         crs_left, crs_right = pyproj.CRS(args.input_crs), pyproj.CRS(args.overlay_crs)
         def checked(geom, crs):
             if geom.is_empty or not geom.is_valid or geom.geom_type not in ("Polygon", "MultiPolygon"):

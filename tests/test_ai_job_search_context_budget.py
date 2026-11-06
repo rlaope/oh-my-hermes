@@ -143,11 +143,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            # 533907 -> 534207 and the digest re-derived: the research-lane skill fixes move
-            # five rows, +300 (itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the
+            # 533907 -> 534392 and the digest re-derived: the research-lane skill fixes move
+            # five rows, +485 (itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the
             # career row is unchanged, and the pin before it was d6dfefff...fc71.
-            (skill_capabilities, 534207, FULL_ROW_DELTA_CAP,
-             '922a010f47e289206e0544a136e14ba4cb17409048210e82e5060b96db7bbe54',
+            (skill_capabilities, 534392, FULL_ROW_DELTA_CAP,
+             'a82bbbdee27afd0fc374ab5e9dcef961d37b1fd3314116a3a6a4a0417d960e9e',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -379,7 +379,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then the render rail: every body names its siblings by the label `skill_view`
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
-        self.assertEqual(_digest(legacy_hashes), 'b62925d4dc589b137628e0939dafb3da35e8c3314a39e0fb26958bbbc35ae815')
+        self.assertEqual(_digest(legacy_hashes), 'c0e7cde53f30eb7fc9b9dfce0849303686cfc6aaf1c4a91cc9b57f4f40fa1312')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

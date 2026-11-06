@@ -37,7 +37,8 @@ def box(x0=0, y0=0, x1=10, y1=10):
 
 
 def layer(*features):
-    return {"type": "FeatureCollection", "data_class": "synthetic", "features": list(features)}
+    return {"type": "FeatureCollection", "data_class": "synthetic", "fixture_id": "synthetic-rectangles-v1",
+            "features": list(features)}
 
 
 class CliFixture(unittest.TestCase):
@@ -284,6 +285,25 @@ class MercatorGuardTests(unittest.TestCase):
         for method in ("Transverse Mercator", "Lambert Cylindrical Equal Area", "Albers Equal Area", "Hotine Oblique Mercator (variant B)"):
             self.assertFalse(api.mercator_family(self.crs(method)), method)
         self.assertFalse(api.mercator_family(self.crs("")))
+
+    def test_compute_consults_the_guard_before_any_projection(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        compute = source[source.index("def compute("):]
+        self.assertIn("area_guard_refusal(mercator_family(target), (left[2], right[2]))", compute)
+        self.assertLess(compute.index("area_guard_refusal("), compute.index("project_layer(left, crs_left)"))
+
+    def test_the_guard_decision_passes_only_the_shipped_fixture(self):
+        api = helper_api()
+        fixture = {"data_class": "synthetic", "fixture_id": "synthetic-rectangles-v1"}
+        self.assertIsNone(api.area_guard_refusal(False, ({}, {})))
+        self.assertIsNone(api.area_guard_refusal(True, (fixture, fixture)))
+        for layers in (({}, {}), (fixture, {}), ({"data_class": "synthetic"}, {"data_class": "synthetic"}),
+                       (fixture, {"data_class": "synthetic", "fixture_id": "mine"})):
+            with self.subTest(layers=layers):
+                message = api.area_guard_refusal(True, layers)
+                self.assertIn("distort area", message)
+                self.assertNotIn("synthetic", message)
+                self.assertNotIn("data_class", message)
 
 
 @unittest.skipUnless(os.environ.get("OMH_GIS_RUN_REAL") == "1", "optional spatial backend")

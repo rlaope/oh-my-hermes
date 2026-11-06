@@ -36,8 +36,8 @@ Good example:
 Bad example:
 
 - Prompt: data-analysis is the Q3 lift significant? (two columns of five numbers each)
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Expected behavior: Compute the test with code and state that n=5 per group cannot support the claim, instead of calling the gap significant or refusing for lack of data.
+- Why: The data was supplied; the failure is a comparison reported without n, an effect size or an interval.
 
 ## Completion Checklist
 

@@ -25,7 +25,7 @@ This is a Hermes-native `wiki` workflow skill.
 
 - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
 - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
-- The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' `llm-wiki` skill instead of this one when it is installed (bundled up to Hermes v2026.9.7, an optional skill on current main, installed with hermes skills install); when it is not installed, say so and offer to install it rather than imitating it.
+- The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' `llm-wiki` skill instead of this one when it is installed (bundled through Hermes v0.22.5 and the floor v2026.9.7, optional from v0.22.6; hermes skills browse --source official finds it); when it is not installed, say so and offer to install it rather than imitating it.
 
 ## Examples
 

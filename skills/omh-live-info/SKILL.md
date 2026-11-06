@@ -32,8 +32,8 @@ This is a Hermes-native `live-info-operator` workflow skill.
 Good example:
 
 - Prompt: live-info-operator check today's Seoul weather with freshness, units, and provider boundaries before answering.
-- Expected behavior: Produce `prepare_live_info_operator_card` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Expected behavior: Run the lookup with an available tool, then state the resolved place, the provider's observation time, units and local time zone; produce `prepare_live_info_operator_card` only when no tool can reach a provider.
+- Why: The value is retrieved and checked, not recalled, and the card is the fallback rather than the answer.
 
 Bad example:
 
@@ -43,7 +43,7 @@ Bad example:
 
 ## Completion Checklist
 
-- The lookup was run with an available tool - `maps` for time zone and directions, `stocks` if installed, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.
+- The lookup was run with an available tool - a maps or time-zone tool, a quotes tool, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.
 - Domain, location or symbol, time window, provider preference, freshness, units, and stop condition are explicit.
 - Weather names the resolved place (and the match when ambiguous), the provider's observation or forecast time, units and local time zone; a forecast is not an observation.
 - A price or rate names the symbol or pair, venue, currency, quote timestamp, and whether the feed is delayed (free equity feeds often are, by about 15 minutes) or the market is closed.

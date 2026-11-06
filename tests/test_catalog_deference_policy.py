@@ -329,10 +329,11 @@ NON_SKILL_BACKTICKS = frozenset(
 # broad current-facts question to `web-research`, a ledger to `finance-analysis`
 # and an app write to `connector-operator`; `research-brief` defers recurring
 # multi-role research to `research-department`; `source-finder` and
-# `research-department` defer a cited lookup to `web-research`. Seven cases,
-# ten pairs, two new owners.
+# `research-department` defer a cited lookup to `web-research`, and
+# `research-brief` defers fresh links or current facts to it as well. Seven cases,
+# eleven pairs, two new owners.
 EXPECTED_DEFERENCE_CASES = 417
-EXPECTED_DEFERENCE_PAIRS = 436
+EXPECTED_DEFERENCE_PAIRS = 437
 EXPECTED_DEFERRING_OWNERS = 123
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,

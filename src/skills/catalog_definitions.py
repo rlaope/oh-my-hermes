@@ -2297,7 +2297,7 @@ _DEFINITIONS = [
         ),
         do_not_use_when=(
             "The user needs to decide whether a customer problem deserves product investment with evidence typing and customer re-entry; use `product-discovery-validation`.",
-            "The request is only fresh links, citations, or current facts without a business question or decision audience; use `research`.",
+            "The request is only fresh links, citations, or current facts without a business question or decision audience; use `web-research` for one cited lookup, or `research` for a depth-budget study.",
             "Sources have not yet been selected and the user wants source types, candidates, or acquisition state; use `source-finder`.",
             "The research is recurring and run by several roles; use `research-department`.",
         ),
@@ -2925,7 +2925,7 @@ _DEFINITIONS = [
             "The user wants pipeline coverage, deal health, or a seller forecast scenario rather than authoritative revenue or close reporting; use `sales-pipeline-review`.",
             "The user needs an enterprise or product direction decision after analysis; route that decision to `strategy-brief`.",
             "The ask is testing whether an internal control operated -- a SOX or ICFR sample, re-performance, or a deficiency's severity; use `internal-audit`.",
-            "The ask is a valuation, DCF, multiples or a stock comparison from published statements; this procedure does not cover it. Hermes' optional dcf-model and comps-analysis skills do when installed; otherwise compute ratios with code from the supplied statements, state the formulas, give no recommendation, and stop at facts.",
+            "The ask is a valuation, DCF, multiples or a stock comparison from published statements; this procedure does not cover it. A host valuation skill does, when installed (Hermes ships optional finance skills); otherwise compute ratios with code from the supplied statements, state the formulas, give no recommendation, and stop at facts.",
         ),
         good_example=SkillExample(
             prompt="Compare Q2 actuals against budget, explain the biggest expense variances, and flag cash risks for the CFO.",
@@ -8645,7 +8645,7 @@ _DEFINITIONS = [
         ),
         do_not_use_when=(
             HermesSkillLine(
-                "The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' `llm-wiki` skill instead of this one when it is installed (bundled up to Hermes v2026.9.7, an optional skill on current main, installed with hermes skills install); when it is not installed, say so and offer to install it rather than imitating it.",
+                "The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' `llm-wiki` skill instead of this one when it is installed (bundled through Hermes v0.22.5 and the floor v2026.9.7, optional from v0.22.6; hermes skills browse --source official finds it); when it is not installed, say so and offer to install it rather than imitating it.",
                 ("llm-wiki",),
             ),
         ),
@@ -9914,7 +9914,7 @@ _DEFINITIONS.append(
         ),
         quality_tier="long-document-gated",
         quality_bar=(
-            "Get the page count and scanned flags first with `pdf_read.py --meta`; each script names its own missing dependency (`pdfplumber` and, for `--meta`, `pypdf` for `pdf_read.py`; `pypdf` for `pdf_split.py`; `pymupdf` for `extract_pymupdf.py`; `pypdfium2` or poppler `pdftoppm` for `pdf_page_image.py`); run them with the `pdf` skill's `$PY` environment and never `pip install` into Hermes' own interpreter.",
+            "Get the page count and scanned flags first with `pdf_read.py --meta`; each script names its own missing dependency (`pdfplumber` and, for `--meta`, `pypdf` for `pdf_read.py`; `pypdf` for `pdf_split.py`; `pymupdf` for `extract_pymupdf.py`; `pypdfium2` or poppler `pdftoppm` for `pdf_page_image.py`); run them with the interpreter the `pdf` skill's Prerequisites give (a task-local virtual environment where it gives none) and never `pip install` into Hermes' own interpreter.",
             "Size ranges to the read budget: about " + str(DEFAULT_PAGES_PER_RANGE) + " pages per " + f"{HERMES_READ_FILE_CHAR_BUDGET:,}" + "-character call at typical density; halve the range when a probe read truncates.",
             "Extract each range with page selection (`extract_pymupdf.py --pages` or `read_file` on a `pdf_split.py` output) so every note carries a page anchor.",
             "Delegate ranges to `delegate_task` children with the fixed per-range brief when the plan has more than " + str(DELEGATION_RANGE_THRESHOLD) + " ranges; read sequentially otherwise.",
@@ -9952,7 +9952,7 @@ _DEFINITIONS.append(
             "Not-observed boundaries remain visible: " + ", ".join(LONG_DOCUMENT_NOT_OBSERVED) + ".",
         ),
         recovery_notes=(
-            "If a script reports a missing dependency, rerun it with the `pdf` skill's documents interpreter `$PY` (or the `pdf-pymupdf` one for `extract_pymupdf.py`) instead of installing anything into Hermes' interpreter; poppler `pdftoppm` is the system alternative for rendering.",
+            "If a script reports a missing dependency, rerun it with the interpreter the protocol resolved (the `pdf` skill's documents or `pdf-pymupdf` environment where it gives one, else a task-local virtual environment) instead of installing anything into Hermes' interpreter; poppler `pdftoppm` is the system alternative for rendering.",
             "If a range read truncates, halve the range, record the observed characters per page, and re-plan the remaining ranges from that measurement.",
             "If the context was compacted or the session resumed, call `omh_document_plan action=show` (or reread the ledger file) and continue from the `next` range; do not restart from page 1.",
             "If the document is encrypted, ask for the password or stop; `pdf_read.py` and `pdf_split.py` accept `--password`, `extract_pymupdf.py` does not, so split the ranges with `pdf_split.py --password` first.",

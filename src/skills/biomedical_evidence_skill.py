@@ -17,7 +17,7 @@ DEFINITION = SkillDefinition(
     name="biomedical-evidence",
     description="Public variant claims to cross-check: retrieve and reconcile source-labelled biomedical evidence with identity, conflict and freshness checks.",
     triggers=("biomedical-evidence", "biomedical evidence reconciliation", "ClinVar cross-check", "variant evidence matrix", "BioMCP capture reconciliation"),
-    use_when="Use when public gene/variant and disease assertions must be cross-checked against ClinVar and trial registry records, preserving source failures and disagreements rather than inferring a clinical conclusion. It covers ClinVar and ClinicalTrials.gov records only: a general clinical-evidence or literature question with no named gene or variant goes to `web-research` or `research`, and a patient's diagnosis, care or trial eligibility is outside it.",
+    use_when="Use when public gene/variant and disease assertions must be cross-checked against ClinVar and trial registry records, preserving source failures and disagreements rather than inferring a clinical conclusion.",
     category="analysis", phase="biomedical-evidence", hermes_role="operator",
     delegation_boundary="retained-catalog-intent", progressive_disclosure=True,
     reasoning_demand="heavy",
@@ -71,7 +71,7 @@ DEFINITION = SkillDefinition(
     quality_tier="evidence-gated",
     quality_bar=("Require observed source receipts and verified helper output hashes, not a mock result or health-only check.", "Retain contradictory source assertions and date/identity gaps without deriving a clinical consensus."),
     do_not_use_when=(
-        "For explaining one supplied paper, use `paper-learning`; for broad literature discovery, use `research`, and for a cited answer to one clinical-evidence question use `web-research`.",
+        "For explaining one supplied paper, use `paper-learning`; for broad literature discovery or a clinical-evidence question with no named gene or variant (this skill covers ClinVar and ClinicalTrials.gov records only), use `research`, and for a cited answer to one such question use `web-research`.",
         "For generic server configuration and connection diagnostics, load the host's MCP setup guidance instead.",
         "For sequence analysis or omics pipelines, select an available computational biology specialist instead; this method does not implement those analyses.",
         HermesSkillLine("For citation verification and source attribution alone, load Hermes' bundled `grounded-citations` skill.", ("grounded-citations",)),

@@ -108,7 +108,7 @@ Safety rules:
 - Do not auto-install optional libraries, import the companion on skill load, open a network connection, silently repair invalid geometry or overwrite existing outputs.
 - No result is observed until the actual domain backend exits successfully and its output files are inspected. Missing backend, validation failure and timeout are not zero-overlap findings.
 - Keep confidential locations and source data out of shared reports; carry only permitted evidence references. No map, raster/NoData, buffer, spatial statistics or nearest-distance capability is promised: for point, line, distance or buffer work, say the helper does not cover it and offer a separately approved Shapely/GeoPandas script under the same rules (explicit CRS, metre target, recorded versions).
-- Web Mercator (EPSG:3857) and Mercator distort area (about 1.6x at 38 degrees latitude) and the helper refuses them for real layers: choose an equal-area CRS for the extent (for example EPSG:6933 or a regional Albers/LAEA) or the local UTM zone or national projected grid for a small extent, and state the choice in the report.
+- Web Mercator (EPSG:3857) and Mercator distort area (about 1.6x at 38 degrees latitude) and the helper refuses them for real layers: choose an equal-area CRS for the extent (for example EPSG:6933 or a regional Albers/LAEA) or the local UTM zone or national projected grid for a small extent, and state the choice in the report. Never add or edit `data_class` or `fixture_id` on a real layer to pass the guard; World Equidistant Cylindrical (EPSG:4087) is not equal-area either.
 
 Procedure: load `references/procedure.md`.
 

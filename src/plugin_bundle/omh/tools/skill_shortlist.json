@@ -1857,12 +1857,11 @@
 "name":"biomedical-evidence",
 "situation":"Public variant claims to cross-check",
 "terms":{
-"1":"against assertion care claim clinical clinicaltrial conclusion conflict cover diagnosis disagreement diseas eligibility failur freshness general goes gov identity infer labell literatur named outsid patient preserv question rather reconcil research retriev trial web",
+"1":"against assertion claim clinical conclusion conflict disagreement diseas failur freshness identity infer labell preserv rather reconcil retriev trial",
 "2":"accession alteration biomcp build cach captur classification command current date differ different disagree genom last matrix omit provider reconciliation respons return sourc success timed transcript updat",
 "3":"clinvar gene record registry",
 "4":"check cross public variant",
-"6":"biomedical",
-"7":"evidenc"
+"6":"biomedical evidenc"
 }
 },
 {
