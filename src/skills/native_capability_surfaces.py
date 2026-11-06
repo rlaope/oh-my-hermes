@@ -71,7 +71,7 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
                 "not_observed provider and billing gaps",
             ),
             artifact_expectations=(
-                "run_efficiency_report/v1 metadata-only report",
+                "run_efficiency_report/v1 metadata-only report, built with `omh runtime efficiency-report --input <run_efficiency_input/v1 file> [--hermes-session <id>] [--write]`; the input carries the supplied run id, context budget, surfaces and tool durations, and with no input file you ask for the timings and never write estimates into it",
                 "supplied `session_activity_receipt/v1` when available; unavailable metrics stay unavailable, never zero",
                 "`host_usage` from the Hermes-accounted part of the cost receipt `omh_run_summary` returns (the "
                 "session, its delegated children, and its kanban workers; `--hermes-session`, and a local Hermes "

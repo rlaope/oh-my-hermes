@@ -10,6 +10,7 @@ metadata:
     phase: observability
     role: tracker
     quality_tier: evidence-gated
+    related_skills: [omh-agent-board]
 ---
 
 # Running Work Board
@@ -23,6 +24,7 @@ This is a Hermes-native `running-work-board` workflow skill.
 ## Do Not Use When
 
 - The user wants to start, plan, or dispatch coding work rather than observe it.
+- The user wants to create or change tasks on an agent board, or to coordinate profiles; use `omh-agent-board`.
 - The user wants review, CI, or merge evidence, which a status board never provides.
 - The user is asking about their own application's runtime status rather than OMH coding units.
 
@@ -42,6 +44,7 @@ Bad example:
 
 ## Completion Checklist
 
+- The board is rendered with `omh coding status-board --json` (read-only: local dispatch and progress artifacts; on Hermes it also reads delegate children and workers from Hermes' own records), not recalled.
 - Runtime and model are named per unit, or explicitly reported as unknown.
 - Token counts and session references are observed values or the literal unknown, never estimates.
 - Elapsed time for an unfinished unit comes from its start marker, which cannot prove the unit is still alive.

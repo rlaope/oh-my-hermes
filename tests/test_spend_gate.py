@@ -262,12 +262,13 @@ class SpendGateContractTests(unittest.TestCase):
     def test_an_mppx_call_is_the_spend_and_only_link_asks(self) -> None:
         self.assertInBoth(
             "`stripe-link-cli` with `--request-approval` asks the person in their Link app, which is additional "
-            "evidence beside the typed confirmation. `mpp-agent`'s `mppx` call pays the 402 as it runs and asks no "
-            "one, so running it is the spend and comes only after the typed confirmation.",
+            "evidence beside the typed confirmation. A 402 client such as `mppx` pays the challenge as it runs and "
+            "asks no one, so running it is the spend and comes only after the typed confirmation.",
             _references(),
         )
         self.assertInBoth(
-            "The optional Hermes skills `stripe-link-cli` and `mpp-agent`, only when the person installed them.",
+            "The optional Hermes skill `stripe-link-cli`, and an HTTP 402 payment client (the `mppx` CLI, a Hermes Pay "
+            "plugin, or `mpp-agent` on a Hermes that still ships it), only when the person installed them.",
             _references(),
         )
 

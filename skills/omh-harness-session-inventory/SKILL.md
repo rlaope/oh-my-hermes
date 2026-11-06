@@ -10,6 +10,7 @@ metadata:
     phase: harness-session-inventory
     role: tracker
     quality_tier: workflow-surface-gated
+    related_skills: [omh-workspace-audit]
 ---
 
 # Harness Session Inventory
@@ -25,6 +26,7 @@ This is a Hermes-native `harness-session-inventory` workflow skill.
 - The request is already handled by a narrower explicit skill with stronger evidence.
 - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
 - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- The request is one repository's own skill, prompt, plugin, or config surfaces and gaps with no cross-harness comparison; use `omh-workspace-audit`.
 
 ## Examples
 
@@ -50,6 +52,9 @@ Bad example:
 
 - If config sources are unavailable, report only the discovered surfaces and mark the missing hosts not_observed.
 - If cleanup, host load, connector execution, or session progress is requested, route to the owning workflow instead of folding it into inventory.
+- To recover a previous coding session, list candidates read-only by metadata only (file name, modified time, size, first user line): Codex `~/.codex/sessions/`, Claude Code `~/.claude/projects/<project-slug>/`, Hermes `hermes sessions list`; mark an unreadable source not_observed, and read a transcript body only when the person asks for that next step.
+- For `omh harness mcp-tool-name-compatibility`, each snapshot is a `mcp_tool_name_compatibility_snapshot/v1` JSON file with `target_harness`, `adapter`, `required_tools` and `advertised_tools`, one `--snapshot` per distinct target harness (1 to 20 files).
+- Write each of the other inventory artifacts as a table with columns entry, source path, and state in {observed, prepared, missing, stale, drifted}, so completion can be checked row by row.
 
 ## Workflow Lane
 

@@ -242,7 +242,10 @@ class EfficiencyContractTests(unittest.TestCase):
         # and offers `dag-ulw` after acceptance. Main measures 84,762 and this
         # tree 86,249 (+1,487); the ceiling leaves ~1.75k headroom, about the
         # ~1.6k the earlier entries recorded.
-        self.assertLess(core["skill_body"]["bytes"], 88_000)
+        # 88,000 -> 90,000: the operations-and-boards audit fixes grow the core bodies they
+        # touch (cancel's stop commands and the checklists of the observability skills),
+        # +1,067 over main's 87,926; the ceiling restores the ~1k headroom this gate carried.
+        self.assertLess(core["skill_body"]["bytes"], 90_000)
         # 815,000 -> 825,000: one new installable body (`web-research`) plus the
         # sentence that split `best-practice-research`'s boundary in two. Set to
         # restore the ~10k headroom this gate is meant to carry rather than to

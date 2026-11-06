@@ -10,6 +10,7 @@ metadata:
     phase: intent-card
     role: guide
     quality_tier: workflow-surface-gated
+    related_skills: [omh-automation-blueprint]
 ---
 
 # Gateway Intent Card
@@ -25,6 +26,7 @@ This is a Hermes-native `gateway-intent-card` workflow skill.
 - The request is already handled by a narrower explicit skill with stronger evidence.
 - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
 - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- The request names a cadence or a recurring job (every morning, a daily digest, a cron job); use `omh-automation-blueprint`.
 
 ## Examples
 
@@ -45,6 +47,9 @@ Bad example:
 - The origin platform, thread/session boundary, delivery target, and update policy are named.
 - Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.
 - The next wrapper action is explicit and platform-safe.
+- The delivery target is written as `origin`, a bare platform name (its home channel), or `platform:chat_id:thread_id`; a target without the thread segment is channel-level, not thread-level.
+- An attachment is a `MEDIA:/absolute/path` line in the reply, and the platform adapter that cannot send it is named instead of promising the file.
+- A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat drops it only for a message that expected no reply or in a room with `allow_silence: true`, and otherwise delivers it as text.
 
 ## Recovery Notes
 

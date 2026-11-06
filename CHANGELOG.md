@@ -310,6 +310,28 @@ All notable changes will be documented here.
   pushes out a hint already there, and a message over 1000 characters is not
   read. Hint text and routes are unchanged.
 
+- **The operations and board skills now name the commands and Hermes
+  surfaces they depend on.** `cancel` lists what exists before clearing and
+  hands a running scheduled job to `hermes cron cancel`, `pause` and `runs`;
+  `running-work-board` names `omh coding status-board`; `run-efficiency` names
+  `omh runtime efficiency-report` and its input; `agent-board` ships a
+  reference with the `prepare` fields, the supported operations and the
+  refusal reasons instead of pointing at repository docs; `gateway-intent-card`
+  states the `platform:chat_id:thread_id` target, the `MEDIA:` attachment line
+  and when `[SILENT]` is dropped in a live chat; `harness-session-inventory`
+  says where a previous coding session lives and what a snapshot file holds;
+  `achievements` says a snapshot exists only after the dashboard tab ran.
+  `context-budget-review`, `achievements`, `ops-review`, `feedback-triage` and
+  `gateway-intent-card` write their own completion checklist in place of a
+  category default that did not fit them, the must-keep file in
+  `context-budget-review` now carries `item_classes` so the class comparison
+  can run, `feedback-triage` ranks by distinct customers and masks personal
+  data in quotes, and `spend-gate` stops treating an absent ledger as zero
+  spend and no longer presents the removed `mpp-agent` skill as current.
+  `gateway-intent-card` and `automation-blueprint`, `harness-session-inventory`
+  and `workspace-audit`, `agent-board` and `running-work-board` each name the
+  other for the requests that belong to it.
+
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`

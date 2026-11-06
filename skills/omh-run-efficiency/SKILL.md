@@ -98,7 +98,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- run_efficiency_report/v1 metadata-only report
+- run_efficiency_report/v1 metadata-only report, built with `omh runtime efficiency-report --input <run_efficiency_input/v1 file> [--hermes-session <id>] [--write]`; the input carries the supplied run id, context budget, surfaces and tool durations, and with no input file you ask for the timings and never write estimates into it
 - supplied `session_activity_receipt/v1` when available; unavailable metrics stay unavailable, never zero
 - `host_usage` from the Hermes-accounted part of the cost receipt `omh_run_summary` returns (the session, its delegated children, and its kanban workers; `--hermes-session`, and a local Hermes terminal holds the id in `$HERMES_SESSION_ID`): observed only when Hermes recorded tokens for it; no session row or no tokens stays not_observed, never zero
 

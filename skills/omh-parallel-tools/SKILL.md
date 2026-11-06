@@ -46,6 +46,7 @@ Bad example:
 - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
 - The reported capability status matches an observed read, not an assumed default.
 - Each proposed `supports_parallel_tool_calls` diff names one server and carries the read/write race caution for that server's tools.
+- The diff names the profile whose config holds `mcp_servers.<name>`; the flag applies only to the profile that set it.
 
 ## Recovery Notes
 

@@ -323,9 +323,14 @@ NON_SKILL_BACKTICKS = frozenset(
 # `systematic-review` defers topic discovery to `source-finder`, one supplied
 # paper to `paper-learning` and a HellaSwag log check to `repro-audit`; no
 # sibling gains a statement pointing back. Three cases, three pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 410
-EXPECTED_DEFERENCE_PAIRS = 426
-EXPECTED_DEFERRING_OWNERS = 121
+# The operations-and-boards audit adds six statements, each with a statement pointing back:
+# `gateway-intent-card` <-> `automation-blueprint` (a scheduled delivery against a single
+# in-session one), `harness-session-inventory` <-> `workspace-audit` (cross-harness drift
+# against one workspace's own surfaces) and `agent-board` <-> `running-work-board` (changing a
+# task against only seeing what runs). Six cases, six pairs, four new owners.
+EXPECTED_DEFERENCE_CASES = 416
+EXPECTED_DEFERENCE_PAIRS = 432
+EXPECTED_DEFERRING_OWNERS = 125
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

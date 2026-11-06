@@ -49,8 +49,8 @@ Bad example:
 ## Recovery Notes
 
 - If no code/trace/runtime evidence is supplied, prepare the audit plan and request the smallest source surface to inspect.
-- If the user wants live service SLO or incident review, route to reliability-review.
-- If the user wants rendered browser proof, route frontend visual evidence to visual-qa before PASS.
+- If the user wants live service SLO or incident review, route to the `omh-reliability-review` workflow.
+- If the user wants rendered browser proof, route frontend visual evidence to the `omh-visual-qa` workflow before any PASS is claimed.
 
 
 

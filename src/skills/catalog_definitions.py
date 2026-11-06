@@ -2759,6 +2759,14 @@ _DEFINITIONS = [
             "The user wants current market research rather than triage of supplied signals.",
             "The triage result asks for a retention or activation intervention rather than another cluster; use `lifecycle-growth`.",
             "The supplied material is opportunity records and the request is portfolio health or forecast review; use `sales-pipeline-review`.",
+            "The request is one reproducible bug with a fix asked for, not a set of reports to cluster; use the coding handoff.",
+        ),
+        final_checklist=(
+            "The source boundary, signal clusters, severity, and follow-up lane are named.",
+            "Bug, feature, research, strategy, and coding handoff outcomes stay separate.",
+            "The next workflow is recommended before any implementation claim.",
+            "A cluster is ranked by distinct customers reporting it (one customer counted once), severity (lost data or money, then a blocked task, then annoyance), and whether a workaround exists, with the count and its source.",
+            "Quotes carry names, emails, order ids, and card digits masked, and keep the raw item reference.",
         ),
         good_example=SkillExample(
             prompt="Cluster these customer payment failure reports and feature requests before we plan fixes.",
@@ -3728,6 +3736,12 @@ _DEFINITIONS = [
             "Tie every status claim to observed evidence or mark it as unknown.",
             "Separate risks, blockers, priorities, and follow-up owners.",
             "Keep code fixes as explicit follow-up handoffs, not implicit ops-review output.",
+        ),
+        final_checklist=(
+            "Confirm the workflow target, evidence boundary, and stop condition are named.",
+            "Report which outputs are prepared, observed, blocked, or missing.",
+            "Order priorities by impact on the next release or customer, then by time left; a blocker names who unblocks it and by when, or says the owner is unknown.",
+            "Name the smallest next verification or handoff instead of claiming completion from narration.",
         ),
         do_not_use_when=(
             "The review is over sales stages, forecast categories, deal aging, or seller forecast rather than generic operating status; use `sales-pipeline-review`.",
@@ -5812,6 +5826,7 @@ _DEFINITIONS = [
             "The user already named a concrete implementation task with files and acceptance criteria; use the coding handoff or delivery workflow.",
             "The request is local OMH installation health only; use `doctor`.",
             "The request is a source acquisition or current web lookup; use `source-finder` or `research`.",
+            "The request compares several harnesses, sessions, MCP hosts, or worktrees for drift; use `harness-session-inventory`.",
         ),
         good_example=SkillExample(
             prompt="workspace-audit OMH에 스킬/프롬프트/플러그인 표면이 어디 비어있는지 먼저 점검해줘.",
@@ -6636,6 +6651,12 @@ _DEFINITIONS = [
             "The user asks to continue a loopable goal; use `loop` unless budget planning is the explicit blocker.",
             "The task is a short one-step answer with no meaningful context risk.",
         ),
+        final_checklist=(
+            "`context_budget_plan/v1` names the route (the wire model) and its usable budget with a class of observed, assumed, or unknown.",
+            "The must-keep pack lists its items under the closed classes prohibitions, decisions, open_questions, requirements, paths, pr_state, and verification_gaps, with a count for each.",
+            "The checkpoint gives a cadence and the exact `/compress <focus>` text, and compaction is reported only after Hermes' own reply to it.",
+            "Estimated, observed, and billed figures are stated apart; capacity nobody published is `capacity_unknown_hold`, never a number.",
+        ),
         good_example=SkillExample(
             prompt="context-budget-review 이 장기 PR 작업에서 어떤 맥락을 꼭 유지하고 언제 요약해야 하는지 잡아줘.",
             expected="Prepare context_budget_plan/v1, must_keep_context_pack/v1, checkpoint plan, risk register, and overflow recovery route.",
@@ -6869,6 +6890,7 @@ _DEFINITIONS = [
             "The user needs a one-off report or deck; use `report-package` or `materials-package`.",
             "The user asks to review incident metrics once; use `reliability-review`.",
             "The user needs actual code changes; prepare a selected executor/runtime handoff after the blueprint or plan is accepted.",
+            "The request is one message, thread reply, or attachment delivered now with no schedule; use `gateway-intent-card`.",
             "The person is inside Hermes' own /blueprint setup for one of its catalog automations; answer the questions that flow asks and let it create the job instead of preparing a second blueprint.",
             "The recurring job would move money -- a purchase, a renewal, a top-up, or a transfer; use `spend-gate`, because an agent run on a schedule never spends, and a no-agent script that pays is a spend set up now: its card, typed yes, and cap come before the job exists.",
         ),
@@ -8722,6 +8744,10 @@ _DEFINITIONS = [
             "`/goal pause` or `/goal clear`, `/heartbeat clear`, `/pause` (all new work on a gateway).",
             "Report an OMH clear as done only from its command result, and a host stop as requested until the "
             "host's own reply to it is seen.",
+            "List what exists before clearing: `omh state status` (workflow state) and `omh goal board` (goals); on "
+            "Hermes a scheduled job's stop is also the person's command: `hermes cron cancel <job_id>` stops its live run and "
+            "leaves the schedule, `hermes cron pause <job_id>` stops later runs, and `hermes cron runs <job_id>` "
+            "shows whether the run ended.",
         ),
         why_this_exists=(
             "`cancel` exists so a request to stop ends the right thing: OMH clears the state this session owns, and "
@@ -9014,6 +9040,7 @@ _DEFINITIONS = [
         ),
         do_not_use_when=(
             "The user wants to start, plan, or dispatch coding work rather than observe it.",
+            "The user wants to create or change tasks on an agent board, or to coordinate profiles; use `agent-board`.",
             "The user wants review, CI, or merge evidence, which a status board never provides.",
             "The user is asking about their own application's runtime status rather than OMH coding units.",
         ),
@@ -9028,6 +9055,7 @@ _DEFINITIONS = [
             why="Observed activity is not result, review, CI, or merge evidence.",
         ),
         final_checklist=(
+            "The board is rendered with `omh coding status-board --json` (read-only: local dispatch and progress artifacts; on Hermes it also reads delegate children and workers from Hermes' own records), not recalled.",
             "Runtime and model are named per unit, or explicitly reported as unknown.",
             "Token counts and session references are observed values or the literal unknown, never estimates.",
             "Elapsed time for an unfinished unit comes from its start marker, which cannot prove the unit is still alive.",
@@ -9346,6 +9374,7 @@ _DEFINITIONS = [
         + (
             "The reported capability status matches an observed read, not an assumed default.",
             "Each proposed `supports_parallel_tool_calls` diff names one server and carries the read/write race caution for that server's tools.",
+            "The diff names the profile whose config holds `mcp_servers.<name>`; the flag applies only to the profile that set it.",
         ),
         recovery_notes=(
             "If the installed version cannot be read, report the read failure and continue with the per-server diagnosis; recommend no update on a version you could not read.",
