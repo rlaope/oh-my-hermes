@@ -339,7 +339,7 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/hooks/llm_hooks.py",
-        "pre_llm_call",
+        "_turn_context",
         INTENTIONAL,
         "The activity fast path and the enclosing status/HUD projection both append "
         "`runtime_status_read` plus a sanitized error type before returning a bounded "
@@ -470,6 +470,14 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "The 🫡 acknowledgement through the adapter's private `_add_reaction`: the thread is already "
         "muted and the skip recorded, so a failed, timed-out or moved reaction call can only lose "
         "the reaction. The handler logs the exception type and the hook still returns the skip.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/messenger_judgement.py",
+        "judged_reply",
+        INTENTIONAL,
+        "A judged room's `[SHUTUP]` reply: the room allows silence, so the reply is already `[SILENT]` "
+        "whatever happens to its side effects. A failed mute write or 🫡 scheduling is logged by "
+        "exception type and the hook still returns `[SILENT]`, so the raw token never reaches the chat.",
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/approval_bypass.py",
@@ -981,7 +989,7 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 )
 
 # Ruff reports one hit per handler; the inventory is keyed per enclosing
-# function. `_write_candidate_batch`, `_is_catalog_question`, `pre_llm_call`,
+# function. `_write_candidate_batch`, `_is_catalog_question`, `llm_hooks._turn_context`,
 # `_resume_unlocked`, `_execute_cell`, `host_process.this_process`,
 # `host_process.process_alive` and `dag_tool._backend_lines` each hold two
 # handlers, so the handler count is eight above the anchor count.
@@ -1095,8 +1103,11 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # names the error, never the `main` archive).
 # 109 -> 111 / 99 -> 101: the messenger chat gate's hook boundary (`gateway_hooks.pre_gateway_dispatch`,
 # fail open) and its reaction (`gateway_hooks._acknowledge`).
-EXPECTED_HANDLER_COUNT = 111
-EXPECTED_ANCHOR_COUNT = 101
+# 111 -> 112 / 101 -> 102: the judged messenger room's `[SHUTUP]` side effects
+# (`messenger_judgement.judged_reply`: a failed mute or reaction still returns `[SILENT]`).
+# `llm_hooks.pre_llm_call`'s body moved to `_turn_context` unchanged.
+EXPECTED_HANDLER_COUNT = 112
+EXPECTED_ANCHOR_COUNT = 102
 
 
 class DerivedSite(NamedTuple):

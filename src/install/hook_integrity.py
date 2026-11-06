@@ -156,7 +156,11 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
         "source_path": "hooks/llm_hooks.py",
         "event_scope": ("pre_llm_call",),
         "reviewed_timeout_ms": 2000,
-        "capability": "OMH awareness, context brief, and route hint injection before a Hermes LLM call",
+        "capability": (
+            "OMH awareness, context brief, and route hint injection before a Hermes LLM call, "
+            "and, in a Slack or Discord room where Hermes lets a silence marker stand, a short "
+            "instruction to answer [SHUTUP] to be quiet or [SILENT] when a message is not for the bot"
+        ),
     },
     "pre_tool_call": {
         "source_path": "hooks/tool_hooks.py",
@@ -209,7 +213,9 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
             "(a saluting-face reaction, no text), a muted thread stays silent "
             "until the bot is mentioned, replied to or called by name, and a "
             "message that opens with someone else's mention or calls someone "
-            "else by name is skipped; mutes and a bounded skip log (ids and "
+            "else by name is skipped; in a room where Hermes lets a silence "
+            "marker stand the quiet words and name calls are left to the model; "
+            "mutes and a bounded skip log (ids and "
             "the first 120 characters) are kept in the OMH home; never writes "
             "a reply and fails open"
         ),
@@ -265,8 +271,10 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
             "the count line alone where a block and the reply do not fit one "
             "message; read from the delegation ledger and Hermes' state.db, "
             "with the posted moment, run phase, counts and graph fingerprint, "
-            "or the skip, written back to the ledger (every other response "
-            "passes through untouched)"
+            "or the skip, written back to the ledger; and, on a turn given the "
+            "group-chat marker instruction, an exact [SHUTUP] replaced by "
+            "[SILENT] with that thread muted and a saluting-face reaction "
+            "(every other response passes through untouched)"
         ),
     },
     "transform_tool_result": {

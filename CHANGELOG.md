@@ -50,6 +50,20 @@ All notable changes will be documented here.
   release cannot be read; a `main` install, or one that records
   nothing, keeps tracking `main`. A dry run now plans like a real run and
   its card reads "Command package: a real run would update it to v4.0.6".
+- **In a Slack or Discord room where Hermes lets a silence marker stand, the
+  model, not a word list, decides when to go quiet and when a message is not
+  for the bot.** Where the serving profile sets
+  `platforms.<slack|discord>.channel_overrides.<channel id>.allow_silence:
+  true` (Hermes 0.22.6 and later) and streaming is off, the turn carries a
+  short instruction: answer `[SHUTUP]` when asked to be quiet in any language
+  or wording, `[SILENT]` when the message is clearly meant for someone else.
+  OMH turns an exact `[SHUTUP]` into Hermes' `[SILENT]`, mutes that thread and
+  adds the 🫡 reaction; Hermes drops a `[SILENT]` reply. In those rooms the
+  quiet-word list and calls by other names are off; a leading mention of
+  someone else, muted threads and the unmute on a mention, reply or name
+  stay. Every other room, an older Hermes, or streaming on keeps the
+  word-list gate and gets no instruction, so Hermes' "returned only a silence
+  marker" notice never appears.
 - **`omh coding model-routing status` names each discovered model once.**
   Session history yields one observation per session, so the human line
   repeated one model id hundreds of times. It now reads

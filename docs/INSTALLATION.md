@@ -3710,6 +3710,54 @@ message through.
 
 Only senders Hermes authorizes are gated; everyone else is left to Hermes.
 
+#### Rooms where the model judges
+
+The word lists above are the fallback. In a room where Hermes lets a silence
+marker stand, the model decides instead, in any language and any wording:
+
+- Each turn there carries one short instruction. The model answers exactly
+  `[SHUTUP]` when the latest message asks it to be quiet or stop replying in
+  the thread, exactly `[SILENT]` when the message is clearly meant for
+  someone else, and otherwise answers as it normally would. The instruction
+  asks only for a marker; it never changes the bot's voice.
+- `[SHUTUP]` mutes the thread with the 🫡 reaction and no text, the same as a
+  quiet word. OMH hands Hermes `[SILENT]` in its place, so the token never
+  reaches the chat. A `[SILENT]` reply is dropped by Hermes; it stays in the
+  transcript.
+- The quiet words and calls by other names (`messenger_other_names`) are off
+  there. A message that opens with someone else's mention is still skipped
+  before a turn opens, a muted thread stays skipped, and a mention, reply or
+  call by name unmutes it. In `mute_only`, the instruction asks for
+  `[SHUTUP]` only; `messenger_gate: off` turns this off too.
+
+A room is judged when all of these hold:
+
+- Hermes is 0.22.6 or later. OMH checks for Hermes' per-room silence lookup,
+  not a version number.
+- The serving profile's `config.yaml` sets `allow_silence: true` for the
+  channel (a Slack channel covers its threads; a Discord thread inherits its
+  parent channel).
+- Streaming (`streaming.enabled`) is off, so a raw `[SHUTUP]` can never
+  stream into the chat before OMH replaces it.
+
+To turn it on for a channel, add this to that profile's `config.yaml` and
+restart the gateway. OMH never writes Hermes' config.
+
+```yaml
+platforms:
+  slack:            # or discord
+    channel_overrides:
+      "C0123456789":   # the channel id
+        allow_silence: true
+```
+
+Each channel needs its own entry: the keys are exact ids, with no wildcard. A
+channel id is in the channel's link (Slack: Copy link, the part starting with
+`C`; Discord: Developer Mode, Copy Channel ID). Any other room keeps the
+word-list gate and gets no instruction, because there Hermes answers a bare
+`[SILENT]` with its "returned only a silence marker" notice. A mute the model
+set is recorded with `"judged": true` in `runtime/messenger_gate.json`.
+
 How this relates to Hermes' own Slack options:
 
 - `ignore_other_user_mentions` already skips a message that opens with
