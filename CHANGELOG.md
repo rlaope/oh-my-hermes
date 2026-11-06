@@ -30,8 +30,10 @@ All notable changes will be documented here.
   unchanged (preview only)". With no `--channel`, `--version`, or
   `--package-url`, the self-update now reads the installed package's PEP 610
   record, as `omh setup` has since #2294: a stable install moves to the
-  newest published release and is left alone when it is already on it or
-  the newest release cannot be read; a `main` install, or one that records
+  newest published release and is left alone when it is already on it, when
+  it is newer than npm's `latest` (the GitHub release is created before
+  `npm publish`, so `latest` can trail it for a while), or when the newest
+  release cannot be read; a `main` install, or one that records
   nothing, keeps tracking `main`. A dry run now plans like a real run and
   its card reads "Command package: a real run would update it to v4.0.6".
 - **`omh coding model-routing status` names each discovered model once.**

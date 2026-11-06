@@ -359,16 +359,22 @@ def _installer_self_update_release(args: argparse.Namespace, requested: ReleaseS
     installed = release_from_direct_url(_installed_direct_url() or {})
     if installed is None or installed.channel != "stable":
         return requested
-    from ..tui.update_notice import fetch_latest
+    from ..tui.update_notice import fetch_latest, is_newer
 
     try:
         latest = fetch_latest()
-    except (OSError, ValueError) as exc:
-        return f"could not read the newest stable release ({_bounded_command_error(str(exc))}); pass --version or --channel"
+    except Exception as exc:  # urllib can raise http.client errors this module may not import; any failure skips the move
+        detail = _bounded_command_error(str(exc)) or type(exc).__name__
+        return f"could not read the newest stable release ({detail}); pass --version or --channel"
     if not RELEASE_WHEEL_VERSION_RE.fullmatch(latest):
         return f"the newest published release {latest!r} is not a stable version; pass --version or --channel"
-    if latest == __version__:
-        return f"already on the newest stable release v{latest}"
+    # Only ever forward: the release workflow creates the GitHub release before
+    # `npm publish`, so npm's `latest` can trail an install made from the new
+    # release's wheel, and installing it would downgrade the command package.
+    if not is_newer(latest, __version__):
+        if latest == __version__:
+            return f"already on the newest stable release v{latest}"
+        return f"installed v{__version__} is newer than the newest published release v{latest}; pass --version to move"
     return package_url_for("stable", latest)
 
 

@@ -348,6 +348,35 @@ class InstalledChannelSelfUpdateTests(unittest.TestCase):
         self.assertFalse(plan["should_update"])
         self.assertIn("not a stable version", plan["reason"])
 
+    def test_an_install_newer_than_npm_latest_is_not_downgraded(self) -> None:
+        # The release workflow creates the GitHub release before `npm publish`, so npm's
+        # `latest` can trail a stable install made from the new release's wheel.
+        current = tuple(int(part) for part in setup_commands.__version__.split("."))
+        older = ".".join(map(str, current[:-1] + (current[-1] - 1,))) if current[-1] else "0.0.1"
+        for latest in (older, "0.0.1"):
+            with self.subTest(latest=latest):
+                plan = self._plan(self.STABLE_WHEEL, latest=latest)
+                self.assertFalse(plan["should_update"])
+                self.assertNotIn("release", plan)
+                self.assertIn("is newer than the newest published release", plan["reason"])
+
+    def test_a_numerically_newer_release_is_taken_even_when_it_sorts_lower_as_text(self) -> None:
+        major, minor, _patch = setup_commands.__version__.split(".")
+        latest = f"{major}.{minor}.{int(_patch) + 10}"
+        plan = self._plan(self.STABLE_WHEEL, latest=latest)
+        self.assertTrue(plan["should_update"])
+        self.assertEqual(plan["release"].version, latest)
+
+    def test_an_http_client_failure_skips_the_command_package_instead_of_raising(self) -> None:
+        import http.client
+
+        for error in (http.client.IncompleteRead(b'{"ver'), http.client.BadStatusLine("garbled")):
+            with self.subTest(error=type(error).__name__):
+                plan = self._plan(self.STABLE_WHEEL, latest=error)
+                self.assertFalse(plan["should_update"])
+                self.assertNotIn("release", plan)
+                self.assertIn("could not read the newest stable release", plan["reason"])
+
     def test_a_main_install_and_an_unrecorded_install_keep_tracking_main(self) -> None:
         for record in (self.MAIN_ARCHIVE, None):
             with self.subTest(record=record):

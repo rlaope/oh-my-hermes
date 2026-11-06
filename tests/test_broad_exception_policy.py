@@ -476,6 +476,16 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "failure is never relabeled as a roster or a verdict.",
     ),
     ClassifiedSite(
+        "src/commands/setup.py",
+        "_installer_self_update_release",
+        INTENTIONAL,
+        "`omh update` on an installer-managed stable install asks npm for the newest release through "
+        "the update notice's urllib reader, which can raise an http.client error this module may not "
+        "import as well as OSError and ValueError. Any failure returns the skip reason naming the "
+        "error, so the command package stays on the installed release and the card says why; it is "
+        "never relabeled as an update, and it never falls back to the `main` archive.",
+    ),
+    ClassifiedSite(
         "src/commands/docs.py",
         "cmd_docs_skill_lint",
         INTENTIONAL,
@@ -1063,8 +1073,11 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # guessed "off").
 # 107 -> 108 / 97 -> 98: `consistency_trigger.shell_changed_files`, the re-index after a
 # command for the shell round end (a failure logs a named warning and adds no note).
-EXPECTED_HANDLER_COUNT = 108
-EXPECTED_ANCHOR_COUNT = 98
+# 108 -> 109 / 98 -> 99: `setup._installer_self_update_release`, the stable install's
+# newest-release read for `omh update` (a failure skips the command package move and
+# names the error, never the `main` archive).
+EXPECTED_HANDLER_COUNT = 109
+EXPECTED_ANCHOR_COUNT = 99
 
 
 class DerivedSite(NamedTuple):
