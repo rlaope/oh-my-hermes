@@ -278,6 +278,24 @@ All notable changes will be documented here.
   never writes the setting. On a Docker or SSH terminal, where Hermes skips
   isolation, nothing changes; a config that cannot be read counts as off, as
   before.
+- **The dag-ulw offer for several features reads what it can show, and a
+  count with its list after the verb gets it.** "기능 네 개 개발해줘: 검색,
+  필터, 정렬, 페이징", "다음 기능들 개발해줘: 로그인, 검색, 알림" and "build these
+  four features: search, filter, sort and export" got only web-research or
+  no hint; they now get the offer, ahead of web-research where it sits. A
+  range is read only between product features or stages of the work ("상품
+  탐색부터 주문 완료까지 개발해줘", "implement the flow from cart to order
+  confirmation"), not between any two words ("봄부터 여름까지 만들어줘", "build
+  it from soup to nuts"). A count has to be the verb's own object of
+  features ("세 페이지 보고서 만들어줘" is off it). A list has to show it names
+  features: the fields of one screen ("이름, 이메일, 전화번호 입력 화면
+  만들어줘"), non-software objects ("build confidence, momentum and
+  credibility"), build targets ("build dev, staging and prod") and work
+  quoted after a colon or a full stop stay off it, and so do verbs that
+  change what exists and stated obligations or intent. The offer no longer
+  pushes out a hint already there, and a message over 1000 characters is not
+  read. Hint text and routes are unchanged.
+
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`

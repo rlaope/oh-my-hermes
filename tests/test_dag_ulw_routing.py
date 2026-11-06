@@ -13,6 +13,7 @@ import unittest
 from unittest import mock
 
 from _local_package import load_local_package
+from _standalone_bundle import _load_standalone_bundle_awareness
 
 load_local_package()
 
@@ -322,6 +323,118 @@ class RouterTests(unittest.TestCase):
                 self.assertFalse(names_several_features(message))
         # A specialist hint that read the whole request keeps its place: no offer is put ahead of it.
         self.assertEqual(awareness_route_hint("PPT, PDF, 엑셀 다 만들어줘")["selected_workflow"], "materials-package")
+
+    def test_a_range_is_read_between_product_features_or_stages_only(self) -> None:
+        for message in ("상품 탐색부터 주문 완료까지 개발해줘", "데이터 수집부터 대시보드까지 구현해줘", "회원가입부터 결제까지 개발해줘",
+                        "설계부터 배포까지 한번에 진행해", "implement the flow from cart to order confirmation",
+                        "build it from signup to the payment flow", "develop it from sign-up to the knowledge graph"):
+            with self.subTest(message=message):
+                self.assertTrue(names_several_features(message))
+                self.assertEqual(self._dag_ulw_starts(message)[:2], (False, False))
+        for message in ("봄부터 여름까지 만들어줘", "머리부터 발끝까지 만들어줘", "오전부터 오후까지 개발해줘", "입문부터 심화까지 만들어줘",
+                        "강남부터 잠실까지 만들어줘", "A부터 Z까지 만들어줘", "build it from soup to nuts", "build it from a to z",
+                        "implement it from python to rust", "implement the flow from client to server",
+                        # The same ends, without a verb that makes the whole of them.
+                        "회원가입부터 결제까지 고쳐줘", "회원가입부터 결제까지 다 해줘", "로그인부터 결제까지 진행해",
+                        "회원가입부터 결제까지 만들어야 해", "회원가입부터 결제까지 만들려고 해", "add everything from login to checkout"):
+            with self.subTest(message=message):
+                self.assertFalse(names_several_features(message))
+
+    def test_a_count_is_read_as_the_verbs_own_object_of_features(self) -> None:
+        for message in ("여러 기능 나눠서 다 해줘", "기능 여러 개 한꺼번에 개발해줘", "3개 기능 구현해줘", "세 화면 만들어줘",
+                        "세 기능 같이넣고 테스트까지 다해줘"):
+            with self.subTest(message=message):
+                self.assertTrue(names_several_features(message))
+        for message in ("세 페이지 보고서 만들어줘", "5페이지 슬라이드 만들어줘", "여러 페이지 PDF 만들어줘", "두 단계 인증 구현해줘",
+                        "세 단계 파이프라인 만들어줘", "10개 작업 추가해줘", "여러 탭 구현해줘", "두 화면 사이 전환 구현해줘",
+                        "세 기능 중 하나만 만들어줘", "여러 기능 있는 앱 만들어줘", "여러 화면에서 쓸 버튼 만들어줘", "세 화면 비교해줘"):
+            with self.subTest(message=message):
+                self.assertFalse(names_several_features(message))
+
+    def test_a_list_shows_it_names_features(self) -> None:
+        for message in ("로그인, 회원가입, 비밀번호 찾기 기능 만들어줘", "상품 목록, 장바구니, 결제 화면 구현해줘", "회원 관리, 권한 설정, 접속 기록 구현해줘",
+                        "대시보드, 설정, 알림 페이지 구현해줘", "홈, 탐색, 마이페이지 탭 추가해줘", "build login, signup and notifications",
+                        "build login, list and notifications", "implement cart, checkout and refunds",
+                        "build the pricing, docs and blog pages", "create the auth, billing and notification modules"):
+            with self.subTest(message=message):
+                self.assertTrue(names_several_features(message))
+        for message in (
+            # The fields or the content of one screen or feature.
+            "이름, 이메일, 전화번호 입력 화면 만들어줘", "가격, 평점, 거리 정렬 기능 만들어줘", "아이디, 비밀번호, 이메일 가입 화면 만들어줘",
+            "빨강, 파랑, 초록 테마 페이지 만들어줘", "좌측 사이드바에 홈, 설정, 로그아웃 메뉴 추가해줘", "커피, 케이크, 샌드위치 메뉴 만들어줘",
+            "국어, 영어, 수학 탭 만들어줘", "로그인, 회원가입, 검색 버튼 만들어줘", "리액트, 타입스크립트, 테일윈드로 개발해줘", "이름, 나이, 주소 구현해줘",
+            # What build and develop take when they build no software, and build targets.
+            "build confidence, momentum and credibility", "build walls, doors and windows", "develop patience, focus and discipline",
+            "build dev, staging and prod", "build linux, macos and windows", "build api, web and worker", "implement get, set and delete",
+            "build login, signup and search buttons", "build research, borders and dashboards",
+            "add all, unread and archived tabs",
+            # A verb that changes what exists, or states what has to happen.
+            "로그인, 회원가입, 검색 기능 수정해줘", "로그인, 회원가입, 검색 기능 리팩토링해줘", "로그인, 회원가입, 검색 기능 진행해줘",
+            "로그인, 회원가입, 검색 기능 만들어야 해", "로그인, 회원가입, 검색 기능 만들까 해", "로그인, 회원가입, 검색 기능 만들려고 해",
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(names_several_features(message))
+
+    def test_words_set_apart_by_a_colon_or_a_full_stop_are_not_the_work(self) -> None:
+        self.assertTrue(names_several_features("로그인, 회원가입, 검색 기능 만들어줘"))
+        self.assertTrue(names_several_features("회원가입부터 결제까지 구현해줘"))
+        for message in ("다음 문장을 교정해줘: 로그인, 회원가입, 검색 기능 만들어줘", "아래 문장 번역해줘: 가입부터 결제까지 구현해줘",
+                        "프롬프트 예시: 주문, 결제, 리뷰 기능 만들어줘", "이 문장 번역해줘. 가입부터 결제까지 구현해줘",
+                        "translate: build login, signup and notifications"):
+            with self.subTest(message=message):
+                self.assertFalse(names_several_features(message))
+
+    def test_a_count_then_a_verb_then_its_list_is_offered_ahead_of_web_research(self) -> None:
+        # The symptom #2610 reported: "검색" in the list won the hint.
+        for message in ("기능 네 개 개발해줘: 검색, 필터, 정렬, 페이징", "다음 기능들 개발해줘: 로그인, 검색, 알림"):
+            with self.subTest(message=message):
+                self.assertTrue(names_several_features(message))
+                self.assertFalse(dispatches_dag_ulw(message))
+                hints = awareness_route_hint(message)["hints"]
+                self.assertEqual([hint["workflow"] for hint in hints], ["dag-ulw", "web-research"])
+                self.assertEqual(hints[0]["next_action"], "ask_one_clarification")
+                self.assertEqual(self._dag_ulw_starts(message)[:2], (False, False))
+        for message in ("build these four features: search, filter, sort and export", "세 가지 기능을 만들어줘. 태그, 즐겨찾기, 최근 본 항목",
+                        "implement the following features: search, filter and sort", "화면 세 개 만들어줘: 홈, 설정, 프로필"):
+            with self.subTest(message=message):
+                self.assertTrue(names_several_features(message))
+                self.assertEqual(self._dag_ulw_starts(message)[:2], (False, False))
+        for message in ("다음 기능들 개발했어: 로그인, 검색, 알림", "다음 기능 설명해줘: 로그인, 검색, 알림", "다음 기능들 고쳐줘: 로그인, 검색, 알림",
+                        "다음 기능들 개발해야 해: 로그인, 검색, 알림", "다음 기능들 만들지 마: 로그인, 검색, 알림", "다음 기능들 개발해줘: 로그인, 검색, 알림?",
+                        "기능 네 개 중 하나 개발해줘: 검색, 필터, 정렬, 페이징", "기능 세 개 개발해줘: 검색이 느려, 필터가 안 돼",
+                        "기능 세 개 만들어줘. 좋아, 고마워", "다음 파일들 만들어줘: a.py, b.py, c.py", "다음 문장 번역해줘: 로그인, 검색, 알림",
+                        "explain these four features: search, filter, sort and export",
+                        "we built these four features: search, filter, sort and export",
+                        "don't build these four features: search, filter, sort and export",
+                        "build these three files: a.py, b.py and c.py", "build these four features", "build three features: search"):
+            with self.subTest(message=message):
+                self.assertFalse(names_several_features(message))
+
+    def test_the_offer_never_pushes_out_a_hint_already_there(self) -> None:
+        # Two hints fill the default limit; the one a list item's word matched stays rather than give way to the offer.
+        message = "이미지 업로드, 문서 검색, 웹 크롤링 기능 개발해줘"
+        self.assertTrue(names_several_features(message))
+        self.assertEqual([hint["workflow"] for hint in awareness_route_hint(message)["hints"]], ["img-summary", "web-research"])
+        message = "메일 가져오기, 파일 업로드, 검색 기능 개발해줘"
+        self.assertEqual([hint["workflow"] for hint in awareness_route_hint(message)["hints"]], ["dag-ulw", "web-research"])
+        self.assertEqual([hint["workflow"] for hint in awareness_route_hint(message, max_hints=1)["hints"]], ["web-research"])
+
+    def test_several_features_reads_no_long_message(self) -> None:
+        # A brief or a pasted log stays unread, and adds nothing to what its length costs the other readers.
+        request = "로그인, 회원가입, 검색 기능 만들어줘"
+        self.assertTrue(names_several_features(request))
+        self.assertFalse(names_several_features(" " * 1000 + request))
+
+    def test_several_features_offer_is_the_same_on_a_host_without_the_package(self) -> None:
+        # Hermes loads the bundle on its own interpreter: the offer and its absence read alike there.
+        standalone = _load_standalone_bundle_awareness()
+        for message in ("기능 네 개 개발해줘: 검색, 필터, 정렬, 페이징", "상품 탐색부터 주문 완료까지 개발해줘", "build these four features: search, filter, sort and export",
+                        "봄부터 여름까지 만들어줘", "이름, 이메일, 전화번호 입력 화면 만들어줘", "build dev, staging and prod"):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    [hint.get("workflow") for hint in standalone.awareness_route_hint(message)["hints"]],
+                    [hint.get("workflow") for hint in awareness_route_hint(message)["hints"]],
+                )
 
     def test_each_hard_exclude_alone_keeps_a_change_off_the_graph(self) -> None:
         # Each row is a change the router would dispatch on but for one hard exclude: a skill or engine named first
