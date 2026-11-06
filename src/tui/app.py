@@ -2003,14 +2003,29 @@ def run_model_chain_picker(
     reaches the picker as a key that cancels instead of a signal.
     """
     from ..catalogs.model_chain_table import CHAIN_SURFACE_PURPOSES, MODEL_DISPLAY_LABELS
+    from ..coding.model_contracts import contract_effort_option
     from ..commands.model_chain_picker import run_picker
-    from ..plugin_bundle.omh.model_chain_picker import apply_picker_changes, chain_entries, picker_rows
+    from ..plugin_bundle.omh.model_chain_picker import (
+        apply_picker_changes,
+        effort_option_resolver,
+        picker_rows,
+        picker_store,
+    )
 
     omh_home = environ.get("OMH_HOME") or None
     hermes_home = environ.get("HERMES_HOME") or None
     try:
+        store = picker_store(omh_home, hermes_home)
+        effort_options, effort_status = effort_option_resolver(
+            store, contract_option=contract_effort_option, hermes_home=hermes_home
+        )
         payload = picker_rows(
-            omh_home, hermes_home=hermes_home, labels=MODEL_DISPLAY_LABELS, purposes=CHAIN_SURFACE_PURPOSES
+            store,
+            hermes_home=hermes_home,
+            labels=MODEL_DISPLAY_LABELS,
+            purposes=CHAIN_SURFACE_PURPOSES,
+            effort_options=effort_options,
+            effort_status=effort_status,
         )
     except (OSError, ValueError) as error:
         return f"/omh-model could not read the model chains: {error}"
@@ -2027,16 +2042,26 @@ def run_model_chain_picker(
         return f"Cancelled; {payload['path']} was not changed."
     if not changes:
         return "No model-chain changes."
+    effort_options, effort_status = effort_option_resolver(
+        store, contract_option=contract_effort_option, hermes_home=hermes_home
+    )
     result = apply_picker_changes(
-        omh_home, {name: chain_entries(chain) for name, chain in changes.items()}, hermes_home=hermes_home
+        store,
+        changes,
+        hermes_home=hermes_home,
+        effort_options=effort_options,
+        effort_status=effort_status,
     )
     if "error" in result:
-        return f"/omh-model did not save: {result['error']}"
+        return f"/omh-model save incomplete: {result['error']}"
     count = len(result["changed"])
-    return (
+    message = (
         f"Saved {count} categor{'y' if count == 1 else 'ies'} to {result['path']}. "
         "New delegations use this order; running children keep theirs."
     )
+    if result.get("warning"):
+        message += f" Warning: {result['warning']}."
+    return message
 
 
 # ── the loop ──────────────────────────────────────────────────────────────

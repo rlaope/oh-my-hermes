@@ -2438,6 +2438,74 @@ when OMH knows that id. Among the shipped chains it appears only for
 Ultrafast id, and the chains name DeepSeek's `deepseek-flash` pointer, which
 has none of its own either.
 
+### Per-model reasoning efforts
+
+`-`/`+` in the picker steps the head model's effort only through the rungs
+that model is configured to offer; left/right still changes the model. The
+built-in list is the source-backed ladder in `src/coding/model_contracts.py`
+for the exact model, a declared alias, or a dated snapshot, with a contract's
+`surface_efforts` read when it records one for the lane. `none` is offered
+only when the contract documents a thinking-disable capability, either as a
+`none` rung or as an accepted thinking-disabled request; models whose thinking
+is always on (Claude Opus and Sonnet 5.5, Kimi K3.1 Pro, GPT-6 Astra) never
+list it. A documented provider mapping is not an independent rung: DeepSeek's
+`medium` and `xhigh` map to `high`, so the picker steps `none -> low -> high -> max`
+and leaves a stored mapping value marked until the person edits that row. A
+model with no contract and no user entry is *unconfigured*: the picker keeps
+its stored effort, paints `unconfigured`, and disables both effort keys rather
+than guessing a common ladder.
+
+A model's list can be replaced in the sibling document
+`~/.omh/routing/model-efforts.json` (`model_effort_options/v1`):
+
+```json
+{
+  "schema_version": "model_effort_options/v1",
+  "models": {
+    "claude-haiku-5-5": {"efforts": ["low", "high"]},
+    "my-custom-model": {"efforts": ["none", "max"]},
+    "fixed-model": {"efforts": []}
+  }
+}
+```
+
+`models.<id>.efforts` is the complete replacement list, in any order (the
+picker normalizes it to `none, minimal, low, medium, high, xhigh, max`). An
+empty list is a deliberate "no effort knob", distinct from an absent entry;
+the picker paints `no knob` and refuses both effort keys. Rungs outside that
+vocabulary, `off` (write `none`; installed Hermes does not recognize `off`),
+`auto`, duplicates, empty elements, unknown fields, and non-string values make
+the whole document invalid. An invalid document is ignored whole, the picker
+says so, built-in ladders keep applying, and a custom model it meant to
+configure stays unconfigured. The file is user metadata, not proof that a
+provider accepts a rung.
+
+Resolution for one chain entry checks the exact wire model named by that
+alias's `model-providers.json` route first, then the alias itself. A user entry
+at either key replaces the built-in ladder; otherwise the contract ladder for
+that key applies. `omh model-chains set` keeps its historical semantics and
+does not validate an effort against this list. Opening, cancelling, or saving
+another row never rewrites an unedited value: an old `off`, a provider mapping
+alias, or a value a later override removed stays stored, is marked `!` with a
+warning, and only a `-`/`+` press moves it into the current list. Changing the
+head model keeps the old effort visible the same way; it is not silently
+escalated, disabled, or clamped. Saving re-reads this document, so an edit
+made while the picker was open cannot write a now-invalid choice: a model
+switch and a `-`/`+` press in the same picker session are re-checked
+together, because stepping the head model keeps its effort and only a press
+changes it. Untouched rows and model-only edits are not revalidated.
+If the file turns malformed while the picker is open, its ladders fall back
+to the built-in ones, so an effort edit is refused with the file named; a
+save with no effort edit still goes through and reports that the ignored
+file's fallback applied. Bare `omh model-chains`
+and `/omh-model` share this resolution; `show`, `set`, and `interview` are
+unchanged.
+
+The list is per model id, not per provider or executor. Identity chains also
+feed the external CLI lanes, whose own ladders can differ; a user override is
+the explicit way to bound a shared chain, and OMH does not claim a built-in
+ladder is accepted on every provider serving the id.
+
 Next to those two documents, `omh_delegate_route` maintains
 `~/.omh/routing/route-provenance.json` (`delegation_route_provenance/v1`): a
 capped history of the routes it prepared (head, explicit, fallback, chain
