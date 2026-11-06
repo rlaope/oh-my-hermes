@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import datetime
+from pathlib import Path
 import re
+import shutil
+import subprocess
+import tempfile
 import unicodedata
 import unittest
 
@@ -96,6 +100,30 @@ class ScanPatternTests(unittest.TestCase):
         self.assertIsNone(self.SSN.search("912-70-1234"))
         self.assertIsNotNone(self.ITIN.search("912-70-1234"))
         self.assertIsNotNone(self.SSN_MASKED.search("XXX-XX-6789"))
+
+    def test_every_pattern_compiles_and_hits_the_same_lines_under_ripgrep_pcre(self) -> None:
+        names = [n for n in dir(render) if n.endswith("_PATTERN") and isinstance(getattr(render, n), str)]
+        self.assertGreaterEqual(len(names), 9)
+        samples = [
+            "900101-1123454", "900101 1123454", "900101\uff0d1123454", "900101.1123454", "900101-1******",
+            "900101-*******", "900101-1\u25cf\u25cf\u25cf\u25cf\u25cf\u25cf", "+82 10-1234-5678", "010.1234.5678",
+            "(010) 1234 5678", "123-45-6789", "912-70-1234", "XXX-XX-6789", "price 1731000000000", "order 20101234567",
+            "version 1.2.3-4", "2024-01-01", "plain text", "123456789", "10-1234-5678",
+        ]
+        lines = [_norm(s) for s in samples]
+        rg = shutil.which("rg")
+        for name in names:
+            pattern = getattr(render, name)
+            python_hits = [line for line in lines if re.search(pattern, line)]
+            if rg is None:
+                continue
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory, "samples.txt")
+                path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                done = subprocess.run([rg, "-P", "--no-line-number", "--", pattern, str(path)], capture_output=True, text=True)
+            with self.subTest(pattern=name):
+                self.assertIn(done.returncode, (0, 1), done.stderr)
+                self.assertEqual(done.stdout.splitlines(), python_hits)
 
     def test_the_reference_states_the_patterns_and_the_floor(self) -> None:
         text = _reference("data-share-review", "references/data-share-method.md")

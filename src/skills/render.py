@@ -4641,8 +4641,8 @@ def spend_gate_reference_templates() -> list[SkillReferenceTemplate]:
     ]
 
 
-_SEP = r"[\s\-\u2010-\u2015\u2212.]{0,3}"
-_MASK = r"[*xX#\u25cf\u25cb\u25a0\u25a1\u2022]"
+_SEP = r"[\s\-‐-―−.]{0,3}"
+_MASK = r"[*xX#●○■□•]"
 KR_RRN_PATTERN = rf"(?<!\d)\d{{6}}{_SEP}[1-8]\d{{6}}(?!\d)"
 KR_RRN_MASKED_PATTERN = rf"(?<!\d)\d{{6}}{_SEP}(?:[1-8]{_MASK}{{6}}|{_MASK}{{7}})"
 US_SSN_PATTERN = rf"(?<!\d)(?!000|666|9\d\d)\d{{3}}{_SEP}(?!00)\d{{2}}{_SEP}(?!0000)\d{{4}}(?!\d)"
