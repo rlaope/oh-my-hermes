@@ -19,7 +19,7 @@ This is a Hermes-native `mobile-release` workflow skill.
 
 ## Why This Exists
 
-`mobile-release` exists because store releases had no owner: `release-cut` decides a service release that can roll back, `deploy-and-monitor` watches a deploy, and `production-audit` audits readiness platform-neutrally, while signing, a privacy manifest, a TestFlight beta or a Play staged rollout had nothing that knew the store's gates.
+`mobile-release` exists because store releases had no owner: `omh-release-cut` decides a service release that can roll back, `omh-deploy-and-monitor` watches a deploy, and `omh-production-audit` audits readiness platform-neutrally, while signing, a privacy manifest, a TestFlight beta or a Play staged rollout had nothing that knew the store's gates.
 
 ## First Steps
 
@@ -63,7 +63,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

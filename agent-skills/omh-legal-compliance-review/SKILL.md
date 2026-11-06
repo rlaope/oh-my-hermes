@@ -13,11 +13,11 @@ metadata:
 
 # Legal Compliance Review
 
-This is an OMH `legal-compliance-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-legal-compliance-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`legal-compliance-review` prepares scoped issues for human legal review without claiming counsel or filing authority.
+`omh-legal-compliance-review` prepares scoped issues for human legal review without claiming counsel or filing authority.
 
 ## Do Not Use When
 
@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: Audit this OAuth integration for secret and permission risks.
-- Expected behavior: Route to `security-safety-review`, not `legal-compliance-review`.
+- Expected behavior: Route to `omh-security-safety-review`, not `omh-legal-compliance-review`.
 - Why: The target is technical security risk rather than contract or compliance analysis.
 
 ## Completion Checklist

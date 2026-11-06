@@ -14,11 +14,11 @@ metadata:
 
 # Cancel
 
-This is an OMH `cancel` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-cancel` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`cancel` exists so a request to stop ends the right thing: OMH clears the state this session owns, and work the host owns stops through the person's own host command, so nothing reads as stopped before a record or the host's own reply says it is.
+`omh-cancel` exists so a request to stop ends the right thing: OMH clears the state this session owns, and work the host owns stops through the person's own host command, so nothing reads as stopped before a record or the host's own reply says it is.
 
 ## Do Not Use When
 

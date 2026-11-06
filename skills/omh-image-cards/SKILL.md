@@ -56,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -87,7 +87,7 @@ Quality bar:
 - Separate prompt prepared, image generated, visual QA passed, and delivered states.
 - Bind an image result to the card digest, action, attempt, and content digest, then warn on route mismatch, unknown route, stale card, digest drift, and response reuse rather than resolving any of them.
 - For transformations, preserve requested identity, composition, text, and protected regions; verify the observed result against the edit brief before a PASS claim.
-- Prefer `img-summary` over `materials-package` only when the request asks for an image, visual card, or summary card.
+- Prefer `img-summary` over `omh-materials-package` only when the request asks for an image, visual card, or summary card.
 - Use materials/report workflows only after an observed generated file needs packaging.
 
 Handoff policy:

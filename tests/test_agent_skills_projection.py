@@ -442,14 +442,13 @@ class AgentSkillsProjectionTests(unittest.TestCase):
                 problems.append(f"{name} (overrides a skill with no Agent Skills projection)")
                 continue
             body = agent_skill_template(definition).content
-            # Do Not Use When and Recovery Notes lines render their siblings
-            # under loadable labels (`loadable_skill_mentions`), so that is the
-            # line to find.
+            # Every rendered line names its siblings under loadable labels
+            # (`loadable_skill_mentions`), so that is the line to find.
             problems.extend(
                 f"{name}::{section} (replacement line absent from the portable body)"
                 for section, lines in definition.portable_overrides.items()
                 if any(
-                    (loadable_skill_mentions(line) if section in {"do_not_use_when", "recovery_notes"} else line) not in body
+                    loadable_skill_mentions(line) not in body
                     for line in lines
                 )
             )

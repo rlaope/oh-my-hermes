@@ -34,14 +34,14 @@ brief does not prove coding, accessibility, visual QA, or Apple certification.
 
 ## Compose remediation
 
-- Use `design-orchestration` for broad direction and alternatives.
-- Use `frontend` for Apple-inspired web or selected-owner implementation briefs.
-- Use `design-quality-gate` for a broad craft and content bar.
-- Use `accessibility-audit` for semantic, keyboard, VoiceOver, WCAG, and
+- Use `omh-design-orchestration` for broad direction and alternatives.
+- Use `omh-frontend` for Apple-inspired web or selected-owner implementation briefs.
+- Use `omh-design-quality-gate` for a broad craft and content bar.
+- Use `omh-accessibility-audit` for semantic, keyboard, VoiceOver, WCAG, and
   assistive-technology evidence.
-- Use `visual-qa` for fresh captured states, viewports, motion, and visual
+- Use `omh-visual-qa` for fresh captured states, viewports, motion, and visual
   PASS/REVISE/BLOCK.
-- Use `award-bar-score` only for an external web-award rubric, never as Apple
+- Use `omh-award-bar-score` only for an external web-award rubric, never as Apple
   compliance.
 
 The selected coding owner remains the implementation owner; do not substitute

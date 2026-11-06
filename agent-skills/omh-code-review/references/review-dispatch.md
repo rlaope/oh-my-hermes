@@ -1,6 +1,6 @@
 # Requesting a Review
 
-`code-review` states what a review must contain. This states how to obtain one.
+`omh-code-review` states what a review must contain. This states how to obtain one.
 Load it when dispatching a reviewer, not when reading a finding.
 
 ## Name the range before dispatching
@@ -53,7 +53,7 @@ requirements, and the constraints, and nothing else.
 
 The return is checked as a shape before anyone reads its verdict. Hand the
 reviewer this JSON Schema as the return contract. Its fields, priorities, and
-verdicts are the ones `code-review` already names.
+verdicts are the ones `omh-code-review` already names.
 
 ```json
 {
@@ -273,7 +273,7 @@ verdicts are the ones `code-review` already names.
 ```
 
 - A finding with no `path` and `line_range` does not validate as a finding. It
-  goes under `open_questions`, which is where `code-review` already puts it.
+  goes under `open_questions`, which is where `omh-code-review` already puts it.
 - `confidence` is `low`, `medium`, or `high`, on each finding and on the verdict.
   The skill leaves those values open; the schema is where they are fixed.
 - Report the correctness/risk and spec axes side by side, never re-ranked against

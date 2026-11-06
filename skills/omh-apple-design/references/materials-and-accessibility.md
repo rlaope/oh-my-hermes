@@ -35,7 +35,7 @@ current platform APIs and the actual target state.
 For Apple-inspired web, require semantic HTML, keyboard and focus behavior,
 reflow/zoom, contrast, pointer targets, motion reduction, and WCAG
 applicability. An accessibility plan is not WCAG PASS: hand observed proof to
-`accessibility-audit`; hand rendered state and motion evidence to `visual-qa`.
+`omh-accessibility-audit`; hand rendered state and motion evidence to `omh-visual-qa`.
 
 ## Boundary
 

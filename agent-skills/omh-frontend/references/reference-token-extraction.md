@@ -50,7 +50,7 @@ and PASS verdicts belong to the visual-QA owner and stay observed-only.
 
 The idea of pairing a design-system contract file with taste-direction
 material and an evidence-bound critique lane adapts concepts from the
-`frontend` skill of `code-yeongyu/oh-my-openagent@9c62b62` (Sustainable Use
+`omh-frontend` skill of `code-yeongyu/oh-my-openagent@9c62b62` (Sustainable Use
 License 1.0) and its permissively licensed design upstreams:
 `Leonxlnx/taste-skill` (MIT), `nextlevelbuilder/ui-ux-pro-max-skill` (MIT),
 `Owl-Listener/designpowers` (MIT), and `nexu-io/open-design` (Apache-2.0).

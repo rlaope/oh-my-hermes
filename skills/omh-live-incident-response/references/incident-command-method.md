@@ -2,7 +2,7 @@
 
 The ladders, entry shapes, and cadences the workflow body points at. Open this while the incident is open; the body carries the rules that hold whether or not it is open.
 
-This commands an incident that is still running. Once it is closed, the postmortem, the SLO consequence, and the remediation follow-ups belong to `reliability-review`, which reads the timeline this workflow wrote.
+This commands an incident that is still running. Once it is closed, the postmortem, the SLO consequence, and the remediation follow-ups belong to `omh-reliability-review`, which reads the timeline this workflow wrote.
 
 ## 1. Severity is declared state, not an adjective
 
@@ -22,7 +22,7 @@ One person per role, and one role per person while the incident is small.
 
 - **Commander** — owns decisions and the severity level. Does not debug. When the commander starts debugging, the incident has no commander.
 - **Operations** — the only person changing production during the incident. Every change is announced to the commander before it is made and appended afterwards.
-- **Communications** — owns the customer notice, the status-page text, and internal updates. Writes them; `connector-operator` sends them.
+- **Communications** — owns the customer notice, the status-page text, and internal updates. Writes them; `omh-apps` sends them.
 - **Scribe** — owns the timeline. Appends what was observed, changed, and decided, with times.
 
 A role nobody filled is recorded unfilled with the reason, never left blank. Below SEV3 the commander may hold scribe; the commander may never hold operations.
@@ -66,10 +66,10 @@ Every outbound message has two states and never both: `prepared` (text written, 
 
 | Channel | Prepared here | Sent by |
 | --- | --- | --- |
-| Page to on-call | who to page, why, at which severity | `connector-operator` |
-| Status page | the public sentence, the affected components, the next update time | `connector-operator` |
-| Customer notice | the draft, the audience, the facts it may state | `connector-operator` |
-| Internal update | the channel, the cadence, the next update time | `connector-operator` |
+| Page to on-call | who to page, why, at which severity | `omh-apps` |
+| Status page | the public sentence, the affected components, the next update time | `omh-apps` |
+| Customer notice | the draft, the audience, the facts it may state | `omh-apps` |
+| Internal update | the channel, the cadence, the next update time | `omh-apps` |
 
 Every public message states the next update time, and a missed update time is itself a timeline entry. What a message may state is bounded by the timeline: no cause that has not been observed, no restoration that has not been verified, no apology that commits to remediation nobody has decided.
 
@@ -79,4 +79,4 @@ An incident that outlives one shift hands over explicitly: the incoming commande
 
 ## 8. Closing
 
-Close when the recovery verification is on the record and every temporary mitigation is either removed or carried as a named follow-up. Then hand the record to `reliability-review`: the postmortem, the error-budget consequence, and the remediation tracking are its work, and the timeline is its source.
+Close when the recovery verification is on the record and every temporary mitigation is either removed or carried as a named follow-up. Then hand the record to `omh-reliability-review`: the postmortem, the error-budget consequence, and the remediation tracking are its work, and the timeline is its source.

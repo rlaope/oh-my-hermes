@@ -104,12 +104,22 @@ class SkillTemplate:
     name: str
     content: str
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "content", translate_sibling_mentions(self.content, owner=self.name))
+
 
 @dataclass(frozen=True)
 class SkillReferenceTemplate:
     skill_name: str
     relative_path: str
     content: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "content",
+            translate_sibling_mentions(self.content, owner=self.skill_name),
+        )
 
 
 TARGET_TOPOLOGY_SCHEMA = "omh_target_topology/v1"
@@ -349,6 +359,79 @@ def loadable_skill_mentions(line: str) -> str:
         return f"`{omh_skill_display_name(name)}`" if name in installed else match.group(0)
 
     return _BACKTICKED_SKILL_NAME.sub(_label, line)
+
+
+# Lines that list catalog values on purpose: trigger lists and the metadata
+# block carry the canonical identifiers routing reads back.
+_CANONICAL_LINE_PREFIXES = (
+    "strong routing signals",
+    "routing signals",
+    "category:",
+    "phase:",
+    "hermes role:",
+    "quality tier:",
+    "reasoning demand:",
+    "preferred harness",
+    "- current lane:",
+    "name:",
+    "related_skills:",
+)
+
+# The router's own body and references are the catalog's registries and keyword
+# lists: they speak catalog names because `omh_recommend` does.
+_CANONICAL_NAME_OWNERS = frozenset({"oh-my-hermes", "omh-routing"})
+
+# A backticked word that is an installed skill's name but means something else
+# in that skill's files (a Terraform subcommand, a DOM event, a tool argument).
+# Each entry is (owning skill, token).
+_NOT_A_SIBLING = frozenset(
+    {
+        ("iac-change", "plan"),
+        ("frontend", "cancel"),
+        ("show-reel", "plan"),
+        ("maestro", "research"),
+        ("ultrawork", "context"),
+        ("dag-ulw", "backend"),
+        ("geospatial-analysis", "backend"),
+        ("design-quality-gate", "frontend"),
+        ("visual-qa", "frontend"),
+    }
+)
+
+
+def translate_sibling_mentions(text: str, *, owner: str = "") -> str:
+    """Write each backticked installed skill name in a rendered file as its loadable label.
+
+    The body and each reference are the text a model reads, so a sibling named
+    anywhere in them (description, examples, safety rules, a reference file) must
+    be a name `skill_view` loads. Fenced code, the trigger lists and the metadata
+    lines keep the canonical identifiers they carry; `./<name>` and `--skill
+    <name>` recipes are not a bare backticked name, so they never match. The
+    skill's own name, the router's registries and the `_NOT_A_SIBLING` words stay.
+    """
+    if owner in _CANONICAL_NAME_OWNERS:
+        return text
+    installed = _installable_skill_names()
+    skipped = {token for skill, token in _NOT_A_SIBLING if skill == owner} | {owner}
+    out: list[str] = []
+    fenced = False
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            fenced = not fenced
+            out.append(line)
+        elif fenced or stripped.lower().startswith(_CANONICAL_LINE_PREFIXES):
+            out.append(line)
+        else:
+
+            def _label(match: re.Match[str]) -> str:
+                name = match.group(1)
+                if name in skipped or name not in installed:
+                    return match.group(0)
+                return f"`{omh_skill_display_name(name)}`"
+
+            out.append(_BACKTICKED_SKILL_NAME.sub(_label, line))
+    return "\n".join(out)
 
 
 def related_skill_names(definition: SkillDefinition) -> tuple[str, ...]:
@@ -753,6 +836,27 @@ Artifact expectations:
 Safety rules:
 
 {_tuple_list(definition.safety_rules)}{_procedure_skill_suffix(definition)}"""
+
+
+def workflow_lane_section(name: str, *, shared_rail_stated: bool = False) -> str:
+    """The `## Workflow Lane` section a body ends with: its lane and the hand-back line.
+
+    A compact body that already states the shared-rail pointer in its own prose
+    passes `shared_rail_stated`, so the pointer is not repeated in the same body.
+    """
+    lines = awareness_workflow_context_markdown(name).split("\n")
+    if shared_rail_stated:
+        lines = [line for line in lines if not line.startswith("- Shared product, routing")]
+    return "\n".join(lines)
+
+
+def _detailed_procedure_line(definition: SkillDefinition) -> str:
+    """Name `references/procedure.md` only for a skill that ships it."""
+    return "\n\nDetailed procedure steps: `references/procedure.md`." if definition.procedure_steps else ""
+
+
+def _procedure_pointer(definition: SkillDefinition) -> str:
+    return " Procedure: `references/procedure.md`." if definition.procedure_steps else ""
 
 
 def _procedure_skill_suffix(definition: SkillDefinition) -> str:
@@ -3036,9 +3140,7 @@ Expected outputs:
 
 Artifact expectations:
 
-{_tuple_list(definition.artifact_expectations)}{_artifact_contract_block(definition)}{safety}
-
-Detailed procedure steps: `references/procedure.md`.
+{_tuple_list(definition.artifact_expectations)}{_artifact_contract_block(definition)}{safety}{_detailed_procedure_line(definition)}
 """
 
 
@@ -3062,13 +3164,13 @@ Required: {", ".join(definition.required_inputs)}. Output: {", ".join(definition
 
 ## Why This Exists
 
-{loadable_skill_mentions(definition.why_this_exists)}
+{definition.why_this_exists}
 
 ## First Steps
 
 {_tuple_list(definition.opening_steps)}
 
-Contract: `references/full-contract.md`, loaded before analysis. Procedure: `references/procedure.md`. These are working methods, not an OMH runtime operation.
+Contract: `references/full-contract.md`, loaded before analysis.{_procedure_pointer(definition)} These are working methods, not an OMH runtime operation.
 
 ## Safety Rules
 
@@ -3190,7 +3292,7 @@ Shared product, routing, compatibility, and evidence rules: `{SHARED_RAIL_SKILL_
 
 Agent/operator: `omh runtime workflow-artifact {name} {operation} --input <json-file-or->` {verb} bounded metadata only. Shared operator reference: `{skill_view_call(WORKFLOW_ARTIFACTS_REFERENCE_PATH)}`.
 
-Contract: `references/full-contract.md`. Procedure: `references/procedure.md`.
+Contract: `references/full-contract.md`.{_procedure_pointer(definition)}
 
 ## Completion Checklist
 
@@ -3203,9 +3305,7 @@ Contract: `references/full-contract.md`. Procedure: `references/procedure.md`.
 
 - If a required input, authority, or runtime capability is unavailable, HOLD and name the smallest safe next action; do not invent observation or approval.
 
-## Workflow Lane
-
-advisory local context
+{workflow_lane_section(name, shared_rail_stated=True)}
 """
 
 

@@ -1,6 +1,6 @@
 # Sprite Forge
 
-Load this on-demand contract after the compact `sprite-forge` body identifies the
+Load this on-demand contract after the compact `omh-sprite-forge` body identifies the
 workflow. The main body owns routing signals, shared rules, the runtime
 operation, delegation fallback, and completion/recovery pointers; this file
 holds the workflow-specific detail without copying those shared rails.

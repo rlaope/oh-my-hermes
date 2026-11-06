@@ -55,7 +55,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Retained knowledge** (`memory-new`, `memory-sync`, `decision-recall`, `wiki`) - memory, rejected alternatives, wiki notes, retrieval, and staleness.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## Candidate Decision
@@ -132,7 +132,7 @@ Safety rules:
 ## Harness
 
 - Use `memory-new` to keep candidate capture, review, approval, and observed writes distinct.
-- Route stale, conflicting, duplicate, overgeneralized, or risky existing `USER.md`/`MEMORY.md` facts to `memory-sync`.
+- Route stale, conflicting, duplicate, overgeneralized, or risky existing `USER.md`/`MEMORY.md` facts to `omh-memory-sync`.
 - Capture a clear durable fact directly through `omh_memory`; ask one question only for an ambiguous scope or durability, and keep the remember/refuse/defer decision explicit.
 - Keep each capture bounded and durable; never retain material that belongs in refuse or defer.
 

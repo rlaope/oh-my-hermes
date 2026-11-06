@@ -13,11 +13,11 @@ metadata:
 
 # Reliability Review
 
-This is an OMH `reliability-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-reliability-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`reliability-review` exists to make SRE-style review strict: service reliability claims must point to metrics or references, and remediation remains separate from the review narrative.
+`omh-reliability-review` exists to make SRE-style review strict: service reliability claims must point to metrics or references, and remediation remains separate from the review narrative.
 
 ## Do Not Use When
 
@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: reliability-review make a monthly PPT report for leadership.
-- Expected behavior: Use `report-package` unless the report specifically asks for reliability evidence review.
+- Expected behavior: Use `omh-report-package` unless the report specifically asks for reliability evidence review.
 - Why: Report packaging and reliability validation are independent operations surfaces.
 
 ## Completion Checklist

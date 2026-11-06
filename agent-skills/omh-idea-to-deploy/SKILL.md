@@ -13,11 +13,11 @@ metadata:
 
 # Idea To Deploy
 
-This is an OMH `idea-to-deploy` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-idea-to-deploy` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`idea-to-deploy` exists to keep `delivery` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`omh-idea-to-deploy` exists to keep `delivery` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 
 ## Do Not Use When
 
@@ -35,7 +35,7 @@ Good example:
 Bad example:
 
 - Prompt: idea-to-deploy: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `idea-to-deploy`.
+- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `omh-idea-to-deploy`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
 ## Completion Checklist

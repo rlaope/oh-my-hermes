@@ -13,7 +13,7 @@ metadata:
 
 # Molecular Docking
 
-This is an OMH `molecular-docking` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-molecular-docking` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 

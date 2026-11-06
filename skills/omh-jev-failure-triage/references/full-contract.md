@@ -26,13 +26,13 @@ Good example:
 Bad example:
 
 - Prompt: triage this failing build
-- Expected behavior: Route to `build-failure-triage`; the user did not ask for Jev.
+- Expected behavior: Route to `omh-build-failure-triage`; the user did not ask for Jev.
 - Why: Mentioning a failure is not asking Jev.
 
 ## Completion Checklist
 
 - The preset outcome and its rule are reported beside the raw answers.
-- `build-failure-triage` or `agent-debug` still owns the fix.
+- `omh-build-failure-triage` or `omh-agent-debug` still owns the fix.
 
 ## Recovery Notes
 
@@ -85,5 +85,3 @@ Safety rules:
 - A non-answer status is never an answer: report it and continue without Jev.
 - `retry_once_suggested` is a suggestion: the host's own approval still applies to the rerun.
 - You supply `attempts_so_far`; never ask Jev to count attempts.
-
-Detailed procedure steps: `references/procedure.md`.

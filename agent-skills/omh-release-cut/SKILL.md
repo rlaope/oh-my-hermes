@@ -13,11 +13,11 @@ metadata:
 
 # Release Cut
 
-This is an OMH `release-cut` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-release-cut` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`release-cut` exists because nothing owned deciding a release: `deploy-and-monitor` watches a rollout that is already happening, and a cut, a canary, or a rollback decision reached an image card or a watch lane with no rollback trigger at all.
+`omh-release-cut` exists because nothing owned deciding a release: `omh-deploy-and-monitor` watches a rollout that is already happening, and a cut, a canary, or a rollback decision reached an image card or a watch lane with no rollback trigger at all.
 
 ## First Steps
 

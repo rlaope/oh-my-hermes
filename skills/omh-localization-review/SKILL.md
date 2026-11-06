@@ -39,7 +39,7 @@ Good example:
 Bad example:
 
 - Prompt: Translate 'Your trial ends tomorrow' into Korean.
-- Expected behavior: Answer directly or route to `content-operator`, not `localization-review`.
+- Expected behavior: Answer directly or route to `omh-content-operator`, not `localization-review`.
 - Why: A one-off sentence has no product locale QA or release-review objective.
 
 ## Completion Checklist
@@ -56,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

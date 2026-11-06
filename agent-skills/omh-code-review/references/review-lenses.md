@@ -1,6 +1,6 @@
 # Review Lenses
 
-`code-review` runs one bug-first pass. This splits the reading into five named
+`omh-code-review` runs one bug-first pass. This splits the reading into five named
 lenses run as separate passes over the same diff. Load it when a change is large
 enough, or its failure mode quiet enough, that one pass will find the first
 class of problem and stop looking.
@@ -85,7 +85,7 @@ Each lens reports under its own name, so a reader can tell a structural opinion
 from a verification gap. Within the verification-gap lens, do not assign
 severity, confidence, or priority: a gap is present or it is not, and ranking
 invites resolving it by argument instead of by a test. The other four lenses
-carry severity as `code-review` already defines it.
+carry severity as `omh-code-review` already defines it.
 
 Put these gap rows in `verification_gaps`, not in `findings`. Require `path`,
 `line_range`, and `evidence`; include the regression and search scope in the

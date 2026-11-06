@@ -13,7 +13,7 @@ metadata:
 
 # Ai Job Search
 
-This is an OMH `ai-job-search` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-ai-job-search` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 

@@ -13,7 +13,7 @@ metadata:
 
 # Sprite Forge
 
-This is an OMH `sprite-forge` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-sprite-forge` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 

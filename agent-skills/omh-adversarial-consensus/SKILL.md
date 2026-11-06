@@ -13,11 +13,11 @@ metadata:
 
 # Adversarial Consensus
 
-This is an OMH `adversarial-consensus` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-adversarial-consensus` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`adversarial-consensus` exists because agreement reached by perspectives that read each other is not review — it is convergence. Independent findings, an attack round nobody is allowed to defend against, and a distillation that may only subtract produce objections a single planning pass never surfaces, and the mandatory handoff keeps that bundle from being mistaken for the plan.
+`omh-adversarial-consensus` exists because agreement reached by perspectives that read each other is not review — it is convergence. Independent findings, an attack round nobody is allowed to defend against, and a distillation that may only subtract produce objections a single planning pass never surfaces, and the mandatory handoff keeps that bundle from being mistaken for the plan.
 
 ## Do Not Use When
 
@@ -32,13 +32,13 @@ This is an OMH `adversarial-consensus` workflow skill, projected for Agent Skill
 Good example:
 
 - Prompt: $adversarial-consensus we plan to move session state into Redis before the launch — attack it from every angle before I write the plan.
-- Expected behavior: Name the roster and their distinct angles, take blind findings from each, run one attack-only round, resolve each objection to defend/refine/concede, distill only into the four buckets, and hand the bundle to `ralplan` as planning input.
+- Expected behavior: Name the roster and their distinct angles, take blind findings from each, run one attack-only round, resolve each objection to defend/refine/concede, distill only into the four buckets, and hand the bundle to `ulw-plan` as planning input.
 - Why: The decision is contested and pre-plan, which is exactly where independent objections are worth more than one planner's confidence.
 
 Bad example:
 
 - Prompt: $adversarial-consensus give me the migration plan with the steps and the rollout order.
-- Expected behavior: Produce the distilled bundle and hand it to `ralplan`; the steps and rollout order are the planner's output, not this workflow's.
+- Expected behavior: Produce the distilled bundle and hand it to `ulw-plan`; the steps and rollout order are the planner's output, not this workflow's.
 - Why: The bundle is INPUT to planning. Emitting a plan here skips the reviewed-plan gate and turns the buckets into a task list.
 
 ## Completion Checklist
@@ -80,7 +80,7 @@ Quality bar:
 - Round two attacks only: every perspective attacks other perspectives' findings and never defends or restates its own. A perspective with no objection to any other seat says so explicitly rather than filling the round with agreement.
 - Round three answers each objection with exactly one verdict — defend with evidence, refine the finding, or concede it — and a conceded finding is struck from the record instead of being softened.
 - The lead distills only. Nothing new enters at distillation: every line in the bundle traces to a surviving finding, and it goes into one of Hard Constraints, Decisions, Risks, Open Questions — never into a fifth bucket, a recommendation, a sequence of steps, or a task list.
-- End with the mandatory handoff: state that the bundle is INPUT to planning, name the follow-on planning workflow (`ralplan` for a reviewed plan, `plan` when the shape is already agreed), and stop. Treating the bundle as the plan is the anti-pattern this workflow exists to prevent.
+- End with the mandatory handoff: state that the bundle is INPUT to planning, name the follow-on planning workflow (`ulw-plan` for a reviewed plan, `omh-plan` when the shape is already agreed), and stop. Treating the bundle as the plan is the anti-pattern this workflow exists to prevent.
 - Keep round transitions and perspective outputs as declarations: a stated round change is not evidence that the round happened, and a distilled bundle is not plan acceptance, implementation, review, CI, or merge evidence.
 
 Required inputs:

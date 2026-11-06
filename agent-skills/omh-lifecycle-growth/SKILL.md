@@ -13,11 +13,11 @@ metadata:
 
 # Lifecycle Growth
 
-This is an OMH `lifecycle-growth` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-lifecycle-growth` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`lifecycle-growth` exists so audience eligibility, consent and frequency safety, sticky exposure, causal measurement, and the stop decision travel together in one plan instead of being assembled ad hoc from analysis, copy, scheduling, and connector work.
+`omh-lifecycle-growth` exists so audience eligibility, consent and frequency safety, sticky exposure, causal measurement, and the stop decision travel together in one plan instead of being assembled ad hoc from analysis, copy, scheduling, and connector work.
 
 ## Do Not Use When
 
@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: Send the re-engagement push to every inactive user tonight.
-- Expected behavior: Route to `connector-operator` with explicit authorization, or return HOLD if consent, suppression, and frequency eligibility are unknown.
+- Expected behavior: Route to `omh-apps` with explicit authorization, or return HOLD if consent, suppression, and frequency eligibility are unknown.
 - Why: An immediate external send is a connector action, and lifecycle-growth never sends or claims delivery.
 
 ## Completion Checklist

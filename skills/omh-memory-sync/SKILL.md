@@ -56,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Retained knowledge** (`memory-new`, `memory-sync`, `decision-recall`, `wiki`) - memory, rejected alternatives, wiki notes, retrieval, and staleness.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## English-Canonical Interview Protocol
@@ -65,7 +65,7 @@ Bad example:
 - **Pending writes (대기)** - Also list the memory writes Hermes is holding for approval: one JSON record per write under `pending/memory/` in the active profile's Hermes home, carrying `id`, `action`, `summary`, `origin`, and `created_at`. `/memory pending` shows the same list and tags `[auto]` a write whose `origin` is `background_review`, one Hermes' own background review proposed. Read the directory whatever `memory.write_approval` says now, since a record stays there until the person decides it. A pending write is not in `MEMORY.md` or `USER.md` yet: review it as a proposal, never as a remembered claim, and leave approving or rejecting it to the person (`/memory approve <id>` or `/memory reject <id>`).
 - **Claim extraction (추출)** - Break the `USER.md` and `MEMORY.md` material into claims; quote only observed claims and never invent provenance.
 - **Provenance (출처)** - Ask for the source class and distinguish Hermes-native, provider, and vector material as `not_omh_reviewed`. A provider posture's `input_fidelity_summary.readiness` is literal: only `complete_observed` rests on an observed complete receipt (`docs/MEMORY-SYNC-FIDELITY.md`).
-- **Target (대상)** - Review existing native-memory claims only; route a new project/product fact to `memory-new`.
+- **Target (대상)** - Review existing native-memory claims only; route a new project/product fact to `omh-memory-new`.
 - **Candidate selection (후보)** - Open records first (see Open Records below); then a short interview, not a census: pick about five candidates per pass and say why. Rank by dreaming reminders (duplicate clusters, deadline, `stale_review_required`), status-bridge similarity rows, and claims that look stale, conflicting, or overgeneralized. Walk the full inventory only on request.
 - **Per-entry confirmation (확인)** - One candidate at a time: quote it back from your own memory file, say what you take it to mean, then ask the user to keep, revise, or archive it before moving on. A review the user cannot correct entry by entry is not a review.
 - **Cursor (이어하기)** - Close every pass with reviewed entry indexes, remaining candidates, and the next entry a resumed review starts from. The resume point lives only in the conversation; name it.

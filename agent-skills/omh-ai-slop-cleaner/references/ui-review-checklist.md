@@ -22,12 +22,12 @@ the last three are findings it hands on.
 | Extreme gradients | loud multi-stop gradients on surfaces, buttons, or headline text | delete or flatten them unless the brand owns that look |
 | Stacked section labels | a small label, a heading, a subheading, and one more paragraph over each section; decorative emoji badges | delete every layer that repeats what the heading says |
 | Korean body text below 14px | Korean body copy at 11-13px | raise it to 14px; a dense data table keeps its size only with the reason written down |
-| Default palette | a framework-default blue (`#3B82F6`) or a blue-to-purple scheme nobody chose | report it; a new palette is a design decision for `frontend` |
-| Uniform grid | rows of equal cards in a perfect 3 or 4 columns when the items are not equals | report it; a new layout is `frontend` work |
+| Default palette | a framework-default blue (`#3B82F6`) or a blue-to-purple scheme nobody chose | report it; a new palette is a design decision for `omh-frontend` |
+| Uniform grid | rows of equal cards in a perfect 3 or 4 columns when the items are not equals | report it; a new layout is `omh-frontend` work |
 
 Deletion-first still holds. Removing a shadow, a label, or a gradient is a
 cleanup. Picking a new palette or a new layout is a redesign, and a redesign
-goes to `frontend`, or to `frontend-refactor` when component behavior must stay
+goes to `omh-frontend`, or to `omh-frontend-refactor` when component behavior must stay
 identical.
 
 ## Evidence
@@ -39,5 +39,5 @@ what renders. Say which of the two a finding rests on.
 ## Attribution
 
 The six prompts and the review-mode split adapt concepts from the
-`ai-slop-cleaner` skill of `Yeachan-Heo/oh-my-claudecode@8262f9f` (MIT),
+`omh-ai-slop-cleaner` skill of `Yeachan-Heo/oh-my-claudecode@8262f9f` (MIT),
 reconstructed in OMH's own wording; the cleanup treatments are OMH's.

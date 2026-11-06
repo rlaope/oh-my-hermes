@@ -1,6 +1,6 @@
 # Ambiguity Taxonomy
 
-`deep-interview` asks one question at a time and stops on clarity. This says how
+`ulw-interview` asks one question at a time and stops on clarity. This says how
 to decide which questions are worth a round, and where the answers go so the
 next lane reads them instead of the transcript. Load it before the first
 question.

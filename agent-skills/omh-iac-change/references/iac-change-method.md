@@ -6,7 +6,7 @@ Load this while planning an infrastructure-as-code change. OMH prepares; the ope
 
 | Tool | Drift | Saved plan or diff | Health gate | Rollback |
 | --- | --- | --- | --- | --- |
-| Terraform / OpenTofu | `plan -refresh-only` | `plan -out=tfplan`, then `show tfplan` | a follow-up `plan` reports no changes, plus the service's own signal | revert the commit and apply the prior configuration; a destroyed resource does not come back |
+| Terraform / OpenTofu | `plan -refresh-only` | `plan -out=tfplan`, then `show tfplan` | a follow-up `omh-plan` reports no changes, plus the service's own signal | revert the commit and apply the prior configuration; a destroyed resource does not come back |
 | Pulumi | `pulumi refresh --preview-only` | `pulumi preview --diff` | `pulumi preview` shows no changes | revert and `pulumi up` the prior program |
 | CloudFormation | drift detection on the stack | a change set, reviewed before execution | stack reaches `UPDATE_COMPLETE` | automatic rollback on failure, or a new change set to the prior template |
 | Kubernetes / kustomize | `kubectl diff` against the live objects | `kubectl diff -f` or `kustomize build` output | `kubectl rollout status` within a stated timeout | `kubectl rollout undo` for a workload; re-apply the prior manifest otherwise |

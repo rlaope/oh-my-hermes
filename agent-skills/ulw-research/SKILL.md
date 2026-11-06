@@ -13,11 +13,11 @@ metadata:
 
 # Research
 
-This is an OMH `research` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `ulw-research` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`research` exists to make the host a careful research engine: it routes research demands to source-backed evidence gathering - from live web citations to studied reference implementations - verifies contested claims, and distills decision-grounding output so planning starts from evidence instead of guesses.
+`ulw-research` exists to make the host a careful research engine: it routes research demands to source-backed evidence gathering - from live web citations to studied reference implementations - verifies contested claims, and distills decision-grounding output so planning starts from evidence instead of guesses.
 
 ## First Steps
 
@@ -45,7 +45,7 @@ Good example:
 Bad example:
 
 - Prompt: 이 레포 코드 구조만 파악해줘.
-- Expected behavior: Route to `codebase-onboarding` because the study target is this repository, not external sources or reference implementations.
+- Expected behavior: Route to `omh-codebase-onboarding` because the study target is this repository, not external sources or reference implementations.
 - Why: Local repo orientation needs no external evidence gathering or claim verification.
 
 ## Completion Checklist

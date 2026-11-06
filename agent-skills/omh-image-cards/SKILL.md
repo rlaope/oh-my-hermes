@@ -13,11 +13,11 @@ metadata:
 
 # Img Summary
 
-This is an OMH `img-summary` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-image-cards` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format, domain mood, background, texture, lighting, camera, and poster grammar, and keeping generation, QA, and delivery as observed-only evidence.
+`omh-image-cards` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format, domain mood, background, texture, lighting, camera, and poster grammar, and keeping generation, QA, and delivery as observed-only evidence.
 
 ## Do Not Use When
 
@@ -80,7 +80,7 @@ Quality bar:
 - Separate prompt prepared, image generated, visual QA passed, and delivered states.
 - Bind an image result to the card digest, action, attempt, and content digest, then warn on route mismatch, unknown route, stale card, digest drift, and response reuse rather than resolving any of them.
 - For transformations, preserve requested identity, composition, text, and protected regions; verify the observed result against the edit brief before a PASS claim.
-- Prefer `img-summary` over `materials-package` only when the request asks for an image, visual card, or summary card.
+- Prefer `omh-image-cards` over `omh-materials-package` only when the request asks for an image, visual card, or summary card.
 - Use materials/report workflows only after an observed generated file needs packaging.
 
 Required inputs:

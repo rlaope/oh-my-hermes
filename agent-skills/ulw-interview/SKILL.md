@@ -13,11 +13,11 @@ metadata:
 
 # Deep Interview
 
-This is an OMH `deep-interview` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `ulw-interview` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`deep-interview` exists to stop the host from guessing through ambiguous product, workflow, or implementation intent; it converts uncertainty into a clarified brief before planning or handoff.
+`ulw-interview` exists to stop the host from guessing through ambiguous product, workflow, or implementation intent; it converts uncertainty into a clarified brief before planning or handoff.
 
 ## Do Not Use When
 

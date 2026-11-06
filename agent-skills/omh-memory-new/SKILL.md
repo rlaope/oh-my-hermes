@@ -14,11 +14,11 @@ metadata:
 
 # Memory New
 
-This is an OMH `memory-new` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-memory-new` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`memory-new` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+`omh-memory-new` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 
 ## Do Not Use When
 

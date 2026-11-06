@@ -13,11 +13,11 @@ metadata:
 
 # Sales Development
 
-This is an OMH `sales-development` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-sales-development` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`sales-development` prepares evidence-bounded discovery and qualification guidance without claiming sales execution.
+`omh-sales-development` prepares evidence-bounded discovery and qualification guidance without claiming sales execution.
 
 ## Do Not Use When
 
@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: Write a LinkedIn launch post for our new feature.
-- Expected behavior: Route to `content-operator`, not `sales-development`.
+- Expected behavior: Route to `omh-content-operator`, not `omh-sales-development`.
 - Why: A one-off social post has no account qualification or discovery objective.
 
 ## Completion Checklist

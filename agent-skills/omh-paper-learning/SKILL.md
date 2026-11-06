@@ -13,11 +13,11 @@ metadata:
 
 # Paper Learning
 
-This is an OMH `paper-learning` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-paper-learning` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`paper-learning` exists so Hermes can act like a strong human tutor for papers: choose the right explanation level, walk through the full paper section by section, and keep PDF extraction and validation evidence honest.
+`omh-paper-learning` exists so Hermes can act like a strong human tutor for papers: choose the right explanation level, walk through the full paper section by section, and keep PDF extraction and validation evidence honest.
 
 ## Do Not Use When
 
@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: paper-learning 이 PDF를 PPT로 변환해서 공유용 파일 만들어줘.
-- Expected behavior: Route to `materials-package` because the user wants file conversion/export, not conceptual paper explanation.
+- Expected behavior: Route to `omh-materials-package` because the user wants file conversion/export, not conceptual paper explanation.
 - Why: PDF file output and render QA are material packaging work, not paper learning evidence.
 
 ## Completion Checklist

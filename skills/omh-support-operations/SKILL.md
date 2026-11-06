@@ -40,7 +40,7 @@ Good example:
 Bad example:
 
 - Prompt: Cluster last quarter's support feedback into roadmap opportunities.
-- Expected behavior: Route to `feedback-triage`, not `support-operations`.
+- Expected behavior: Route to `omh-feedback-triage`, not `support-operations`.
 - Why: A historical signal backlog needs product-pattern triage rather than case-level support guidance.
 
 ## Completion Checklist
@@ -57,7 +57,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

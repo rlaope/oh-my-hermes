@@ -13,11 +13,11 @@ metadata:
 
 # Finance Analysis
 
-This is an OMH `finance-analysis` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-finance-analysis` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`finance-analysis` prepares a source-bounded decision brief without claiming an authoritative financial action.
+`omh-finance-analysis` prepares a source-bounded decision brief without claiming an authoritative financial action.
 
 ## Do Not Use When
 
@@ -39,7 +39,7 @@ Good example:
 Bad example:
 
 - Prompt: What is the USD/KRW exchange rate right now?
-- Expected behavior: Route to `live-info-operator`, not `finance-analysis`.
+- Expected behavior: Route to `omh-live-info`, not `omh-finance-analysis`.
 - Why: A live exchange rate needs observed provider data rather than a finance analysis brief.
 
 ## Completion Checklist

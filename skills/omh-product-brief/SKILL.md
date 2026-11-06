@@ -41,7 +41,7 @@ Good example:
 Bad example:
 
 - Prompt: Implement the accepted onboarding PRD and open a PR.
-- Expected behavior: Route to `ultrawork` or `ralplan`, not `product-brief`.
+- Expected behavior: Route to `ulw-work` or `ulw-plan`, not `product-brief`.
 - Why: Accepted implementation work should move into planning or delivery rather than recreate a PRD.
 
 ## Completion Checklist
@@ -59,7 +59,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

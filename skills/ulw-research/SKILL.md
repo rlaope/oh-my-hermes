@@ -47,7 +47,7 @@ Good example:
 Bad example:
 
 - Prompt: 이 레포 코드 구조만 파악해줘.
-- Expected behavior: Route to `codebase-onboarding` because the study target is this repository, not external sources or reference implementations.
+- Expected behavior: Route to `omh-codebase-onboarding` because the study target is this repository, not external sources or reference implementations.
 - Why: Local repo orientation needs no external evidence gathering or claim verification.
 
 ## Completion Checklist
@@ -70,7 +70,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

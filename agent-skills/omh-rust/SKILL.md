@@ -13,11 +13,11 @@ metadata:
 
 # Rust
 
-This is an OMH `rust` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-rust` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`rust` closes OMH's zero-coverage Rust domain and makes the escalation from ordinary Rust work to undefined-behavior discipline a deterministic routing rule rather than something a model is trusted to notice.
+`omh-rust` closes OMH's zero-coverage Rust domain and makes the escalation from ordinary Rust work to undefined-behavior discipline a deterministic routing rule rather than something a model is trusted to notice.
 
 ## Do Not Use When
 

@@ -13,11 +13,11 @@ metadata:
 
 # Spend Gate
 
-This is an OMH `spend-gate` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-spend-gate` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`spend-gate` exists because money movement had at most one native guard, on one rail: where Hermes' saved-card fill is present it asks before filling a card and refuses when nobody can confirm, while an HTTP 402 call, a wallet transfer, a booking, or a paid data endpoint had no pre-spend check, no receipt rule, and no cap. `omh-provider-profile-posture` claims no payment at all.
+`omh-spend-gate` exists because money movement had at most one native guard, on one rail: where Hermes' saved-card fill is present it asks before filling a card and refuses when nobody can confirm, while an HTTP 402 call, a wallet transfer, a booking, or a paid data endpoint had no pre-spend check, no receipt rule, and no cap. `omh-provider-profile-posture` claims no payment at all.
 
 ## First Steps
 

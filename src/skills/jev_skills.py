@@ -437,6 +437,8 @@ def jev_skill_body(definition: SkillDefinition, name: str) -> str:
     # Imported here: `render` imports the catalog, which imports this module.
     from .render import SHARED_RAIL_SKILL_VIEW
 
+    from .render import workflow_lane_section
+
     title = "Jev " + name.removeprefix("jev-").replace("-", " ").title()
     steps = "\n".join(f"{index}. {step}" for index, step in enumerate(_PROCEDURES[name], start=1))
     preset = JEV_PRESET_BY_SKILL.get(name)
@@ -465,9 +467,7 @@ Contract: `references/full-contract.md`.{preset_line}
 
 - Tool missing, `consent_not_observed`, or refused: follow the rail's recovery section; never simulate an answer.
 
-## Workflow Lane
-
-advisory local context
+{workflow_lane_section(name, shared_rail_stated=True)}
 """
 
 

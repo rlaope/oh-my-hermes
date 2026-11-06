@@ -2,7 +2,7 @@
 
 The prompts, vocabularies, and test shapes the workflow body points at. Open this while modeling; the body carries the rules that must hold whether or not it is open.
 
-This models an application. The agent's own prompt, tool, file, credential, and dependency surface is `security-safety-review`, which emits `threat_surface_map/v1` — a different artifact, and the reason this reference never asks about prompts or tool permissions.
+This models an application. The agent's own prompt, tool, file, credential, and dependency surface is `omh-security-safety-review`, which emits `threat_surface_map/v1` — a different artifact, and the reason this reference never asks about prompts or tool permissions.
 
 ## 1. Assets
 

@@ -41,7 +41,7 @@ Good example:
 Bad example:
 
 - Prompt: What is the USD/KRW exchange rate right now?
-- Expected behavior: Route to `live-info-operator`, not `finance-analysis`.
+- Expected behavior: Route to `omh-live-info`, not `finance-analysis`.
 - Why: A live exchange rate needs observed provider data rather than a finance analysis brief.
 
 ## Completion Checklist
@@ -59,7 +59,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

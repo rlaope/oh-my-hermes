@@ -13,11 +13,11 @@ metadata:
 
 # Github Event Ops
 
-This is an OMH `github-event-ops` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-github-event-ops` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`github-event-ops` exists because a GitHub event arrives as a payload, not a decision: it sorts the event into review, triage, or a fix hand-off, re-reads remote state rather than trusting the payload, and never reports a label, rerun, or review the run did not observe.
+`omh-github-event-ops` exists because a GitHub event arrives as a payload, not a decision: it sorts the event into review, triage, or a fix hand-off, re-reads remote state rather than trusting the payload, and never reports a label, rerun, or review the run did not observe.
 
 ## Do Not Use When
 

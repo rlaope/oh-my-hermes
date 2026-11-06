@@ -13,11 +13,11 @@ metadata:
 
 # Backend
 
-This is an OMH `backend` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-backend` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`backend` gives OMH a first-class server-side workflow so Hermes can prepare auth boundaries, error paths, response shapes, and migration order without becoming the hidden runtime that executes them.
+`omh-backend` gives OMH a first-class server-side workflow so Hermes can prepare auth boundaries, error paths, response shapes, and migration order without becoming the hidden runtime that executes them.
 
 ## Do Not Use When
 

@@ -39,7 +39,7 @@ Good example:
 Bad example:
 
 - Prompt: Should we even split billing out of orders?
-- Expected behavior: Route to `ralplan`: the direction is not decided, so consensus planning comes before phase planning.
+- Expected behavior: Route to `ulw-plan`: the direction is not decided, so consensus planning comes before phase planning.
 - Why: A phase plan for a contested direction launders a decision through logistics.
 
 ## Completion Checklist
@@ -60,7 +60,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

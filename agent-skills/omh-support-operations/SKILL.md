@@ -13,11 +13,11 @@ metadata:
 
 # Support Operations
 
-This is an OMH `support-operations` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-support-operations` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`support-operations` turns a bounded customer case into response and escalation guidance without treating drafts or recommendations as helpdesk actions.
+`omh-support-operations` turns a bounded customer case into response and escalation guidance without treating drafts or recommendations as helpdesk actions.
 
 ## Do Not Use When
 
@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: Cluster last quarter's support feedback into roadmap opportunities.
-- Expected behavior: Route to `feedback-triage`, not `support-operations`.
+- Expected behavior: Route to `omh-feedback-triage`, not `omh-support-operations`.
 - Why: A historical signal backlog needs product-pattern triage rather than case-level support guidance.
 
 ## Completion Checklist
@@ -99,7 +99,7 @@ Artifact contracts:
 
 This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
 
-- contract_id: `support-operations`; enforcement_level: `guidance_only`; consumer_id: `none`
+- contract_id: `omh-support-operations`; enforcement_level: `guidance_only`; consumer_id: `none`
 
 Safety rules:
 

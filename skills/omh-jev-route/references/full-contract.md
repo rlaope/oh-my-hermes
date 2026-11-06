@@ -86,5 +86,3 @@ Safety rules:
 - A non-answer status is never an answer: report it and continue without Jev.
 - The deterministic route stays in force: present Jev's pick as a clarification and dispatch nothing without the user.
 - Pass the block unchanged; editing a question changes its digest and breaks the record join.
-
-Detailed procedure steps: `references/procedure.md`.

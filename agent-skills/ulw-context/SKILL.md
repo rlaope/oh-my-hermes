@@ -14,11 +14,11 @@ metadata:
 
 # Context
 
-This is an OMH `context` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `ulw-context` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`context` exists to reduce repository terminology drift without creating a second machine store or a vocabulary router: the host can answer lookups, facilitate dependency-aware alignment, and project approved results into existing review and handoff boundaries.
+`ulw-context` exists to reduce repository terminology drift without creating a second machine store or a vocabulary router: the host can answer lookups, facilitate dependency-aware alignment, and project approved results into existing review and handoff boundaries.
 
 ## Do Not Use When
 

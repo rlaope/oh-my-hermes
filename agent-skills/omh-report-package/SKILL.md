@@ -13,11 +13,11 @@ metadata:
 
 # Report Package
 
-This is an OMH `report-package` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-report-package` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`report-package` exists to make reporting a first-class operations surface: Hermes can produce clean report and slide outlines while keeping approvals, delivery, and binary deck export as separate evidence.
+`omh-report-package` exists to make reporting a first-class operations surface: Hermes can produce clean report and slide outlines while keeping approvals, delivery, and binary deck export as separate evidence.
 
 ## Do Not Use When
 
@@ -36,7 +36,7 @@ Good example:
 Bad example:
 
 - Prompt: report-package prove our SLO passed and close the incident.
-- Expected behavior: Route to `reliability-review` and require metric or incident evidence.
+- Expected behavior: Route to `omh-reliability-review` and require metric or incident evidence.
 - Why: Report packaging cannot satisfy reliability closure evidence.
 
 ## Completion Checklist

@@ -40,7 +40,7 @@ Good example:
 Bad example:
 
 - Prompt: Design a six-week Python syllabus with weekly assessments.
-- Expected behavior: Route to `curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.
+- Expected behavior: Route to `omh-curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.
 - Why: Just-in-time target selection should not displace an explicit curriculum-design request.
 
 ## Completion Checklist
@@ -62,7 +62,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

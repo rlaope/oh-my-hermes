@@ -14,11 +14,11 @@ metadata:
 
 # Loop
 
-This is an OMH `loop` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `ulw-loop` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`loop` exists for goals whose correct implementation cannot be known upfront but can be discovered through bounded cycles of definition, action, verification, and revision without confusing planned cycles with observed progress.
+`ulw-loop` exists for goals whose correct implementation cannot be known upfront but can be discovered through bounded cycles of definition, action, verification, and revision without confusing planned cycles with observed progress.
 
 ## Do Not Use When
 
@@ -78,7 +78,7 @@ Reasoning demand: `heavy`
 
 Quality bar:
 
-- Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path.
+- Treat direct `ulw-loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path.
 - Classify the goal as task, project, ambition, external-wait, or unclear inside the loop, then keep progressing until a real permission, evidence, verification, context, budget, or external-wait gate appears.
 - A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it. A mid-run message is the latest steering for the active task, not automatically a replacement objective: it replaces the objective when the user says so and steers the current one otherwise.
 - A follow-up that needs new authority, materially expands the scope, or changes external state not already authorized is described first and started only on the user's approval; persistence never broadens the authorized scope. A refused escalation gets a safer alternative inside the boundary, or the authorization the boundary asks for — never a workaround or an indirect execution.
@@ -111,7 +111,7 @@ Quality bar:
 - Log a long-running cycle to a file and pull only the declared metric and error lines into context; read the whole log only when the cycle crashed.
 - Choose the wait strategy before starting long-running work and bind it to a completion signal the host exposes, never to a status loop: a command that fits one tool call runs once in the foreground with a duration-sized timeout; a longer terminal command runs in the background with completion notification armed and no process-status polling; a delegated lane relies on its delivered result while the parent continues independent work or ends the turn; a CI, PR, deploy, file, port, log-line, or external-session condition uses the host's monitor when observed, else exactly ONE bounded watcher or adaptive backoff outside model turns. Record the handle and observation mode at dispatch; every armed wait needs a hard deadline, a cancellation path, and a fallback naming the missing capability. Each wait closes in one terminal state with bounded evidence; an unbounded idle or busy-wait is a defect and a lost notification times out. One decision-changing midpoint peek and any user-requested status check stay allowed; neither is the wait mechanism. Ladder and terminal states: shared rail.
 - On an equal metric keep the simpler change, always keep an improvement achieved by deletion, and do not let a small gain buy added complexity.
-- After the judge passes, run an `ai-slop-cleaner` pass scoped to the `changed_files` the cycle's `loop_subagent_result_contract/v1` results reported, never wider; the loop's own verification then reruns and must not regress - on a measured loop neither may the metric - or the cleaner's edits are reverted. When the linked goal carries AC-SLOP (a loop allowed `repo_edit` arms it), the goal refuses completion until an outcome record made with `omh runtime record --skill ai-slop-cleaner --harness coding-handling --status completed --cleanup-outcome passed|skipped|reverted --goal <linked goal id> --outputs-summary <what changed, or why skipped>` is cited by `omh goal checkpoint --goal <goal_id> --summary <outcome> --criterion AC-SLOP --evidence-ref run:<run_id>`; one accepted record satisfies AC-SLOP for the goal, so later cycles need no new one. A user's skip, or a cycle that reported no `changed_files`, is an explicit `skipped`, and a reverted pass is `reverted`, never `passed`; a missing record is never read as nothing to clean.
+- After the judge passes, run an `omh-ai-slop-cleaner` pass scoped to the `changed_files` the cycle's `loop_subagent_result_contract/v1` results reported, never wider; the loop's own verification then reruns and must not regress - on a measured loop neither may the metric - or the cleaner's edits are reverted. When the linked goal carries AC-SLOP (a loop allowed `repo_edit` arms it), the goal refuses completion until an outcome record made with `omh runtime record --skill ai-slop-cleaner --harness coding-handling --status completed --cleanup-outcome passed|skipped|reverted --goal <linked goal id> --outputs-summary <what changed, or why skipped>` is cited by `omh goal checkpoint --goal <goal_id> --summary <outcome> --criterion AC-SLOP --evidence-ref run:<run_id>`; one accepted record satisfies AC-SLOP for the goal, so later cycles need no new one. A user's skip, or a cycle that reported no `changed_files`, is an explicit `skipped`, and a reverted pass is `reverted`, never `passed`; a missing record is never read as nothing to clean.
 
 Required inputs:
 

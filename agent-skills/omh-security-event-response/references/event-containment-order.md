@@ -13,7 +13,7 @@ Load this while responding to a security event. OMH never scans, never contacts 
 | 5 | Rewrite history (`git filter-repo`, BFG) and coordinate every clone, only if the value must also leave the repository | the rewritten refs are pushed and forks and caches are named |
 | 6 | Add prevention: push protection, a pre-commit secret scan, the ignore rule | the guard rejects a planted test secret |
 
-Rotation comes before any rewrite. A rewrite does not reach clones, forks, CI caches, or a scraper that read the public push in its first minutes, so a rewrite without a rotation leaves a live credential in circulation. The per-credential issue-deploy-verify-revoke steps live with `security-safety-review` (`credential_rotation_sequence/v1`); this event owns the order around them and the closure.
+Rotation comes before any rewrite. A rewrite does not reach clones, forks, CI caches, or a scraper that read the public push in its first minutes, so a rewrite without a rotation leaves a live credential in circulation. The per-credential issue-deploy-verify-revoke steps live with `omh-security-safety-review` (`credential_rotation_sequence/v1`); this event owns the order around them and the closure.
 
 ## 2. CVE or advisory in a dependency
 

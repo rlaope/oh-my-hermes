@@ -40,7 +40,7 @@ Good example:
 Bad example:
 
 - Prompt: Audit this OAuth integration for secret and permission risks.
-- Expected behavior: Route to `security-safety-review`, not `legal-compliance-review`.
+- Expected behavior: Route to `omh-security-safety-review`, not `legal-compliance-review`.
 - Why: The target is technical security risk rather than contract or compliance analysis.
 
 ## Completion Checklist
@@ -58,7 +58,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

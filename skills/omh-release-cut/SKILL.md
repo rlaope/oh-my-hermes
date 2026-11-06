@@ -19,7 +19,7 @@ This is a Hermes-native `release-cut` workflow skill.
 
 ## Why This Exists
 
-`release-cut` exists because nothing owned deciding a release: `deploy-and-monitor` watches a rollout that is already happening, and a cut, a canary, or a rollback decision reached an image card or a watch lane with no rollback trigger at all.
+`release-cut` exists because nothing owned deciding a release: `omh-deploy-and-monitor` watches a rollout that is already happening, and a cut, a canary, or a rollback decision reached an image card or a watch lane with no rollback trigger at all.
 
 ## First Steps
 
@@ -64,7 +64,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

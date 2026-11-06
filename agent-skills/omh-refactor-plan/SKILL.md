@@ -13,11 +13,11 @@ metadata:
 
 # Refactor Plan
 
-This is an OMH `refactor-plan` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-refactor-plan` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`refactor-plan` exists because boundary-changing refactors bounced between goal planning and behavior-preserving cleanup with neither owning the execution shape: the phase order, the per-phase rollback, and the files table that make a large refactor reviewable and abortable.
+`omh-refactor-plan` exists because boundary-changing refactors bounced between goal planning and behavior-preserving cleanup with neither owning the execution shape: the phase order, the per-phase rollback, and the files table that make a large refactor reviewable and abortable.
 
 ## Do Not Use When
 
@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: Should we even split billing out of orders?
-- Expected behavior: Route to `ralplan`: the direction is not decided, so consensus planning comes before phase planning.
+- Expected behavior: Route to `ulw-plan`: the direction is not decided, so consensus planning comes before phase planning.
 - Why: A phase plan for a contested direction launders a decision through logistics.
 
 ## Completion Checklist

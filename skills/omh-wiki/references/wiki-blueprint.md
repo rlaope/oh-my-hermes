@@ -10,7 +10,7 @@ Two or three questions per turn, five turns at most. Skip what the request alrea
 4. **Maintenance** — cadence, owner, retirement rule. No owner means `unmaintained`, which rules out models that need curation.
 5. **Proposal** — one model plus one alternative, each with rationale and breaking conditions, shown as a skeleton to approve before anything is written.
 
-Route existing `USER.md`/`MEMORY.md` cleanup to `memory-sync`, new durable project facts to `memory-new`, and connector access or workspace permissions to `external-connector-readiness`.
+Route existing `USER.md`/`MEMORY.md` cleanup to `omh-memory-sync`, new durable project facts to `omh-memory-new`, and connector access or workspace permissions to `omh-external-connector-readiness`.
 
 ## `wiki_blueprint/v1` fields
 

@@ -13,11 +13,11 @@ metadata:
 
 # Live Incident Response
 
-This is an OMH `live-incident-response` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-live-incident-response` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`live-incident-response` exists because an incident that is still open had no owner. `support-operations` sent an active incident to `reliability-review`, and `reliability-review` reviews incident notes after the fact, so the one skill that saw the request handed it to a postmortem while the outage was still running.
+`omh-live-incident-response` exists because an incident that is still open had no owner. `omh-support-operations` sent an active incident to `omh-reliability-review`, and `omh-reliability-review` reviews incident notes after the fact, so the one skill that saw the request handed it to a postmortem while the outage was still running.
 
 ## Do Not Use When
 
@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: live-incident-response write up the postmortem for last week's outage and what it cost the error budget
-- Expected behavior: Route to `reliability-review`: a closed incident is reviewed, never commanded.
+- Expected behavior: Route to `omh-reliability-review`: a closed incident is reviewed, never commanded.
 - Why: Severity, roles, and a running timeline have no subject once the incident is over.
 
 ## Completion Checklist
@@ -115,7 +115,7 @@ Artifact expectations:
 Safety rules:
 
 - Never rewrite or delete a timeline entry. A correction is a new entry naming the entry it corrects, because the timeline is what the review reads afterwards.
-- Do not claim a page was sent, a status page was updated, or a customer was notified; those are `connector-operator` requests, observed only when the connector returns a result.
+- Do not claim a page was sent, a status page was updated, or a customer was notified; those are `omh-apps` requests, observed only when the connector returns a result.
 - Do not call the incident recovered because a mitigation was applied; recovery needs the named signal observed at its healthy value, with the observer recorded.
 - Never leave a temporary mitigation unmarked; record what it changed and what removes it, or it becomes permanent because nobody wrote it down.
 - Never print customer records, credentials, tokens, or connection strings pulled into the timeline as evidence.

@@ -19,9 +19,9 @@ lets a reader infer the first has claimed a merge nobody observed.
 | Source | Held where | Read these | What it supplies |
 | --- | --- | --- | --- |
 | Plan record (`omh_todo/v1` item) | durable record, read with `omh runtime todo show` | `state`, `phase`, `blocked_reason` | what was done, which stage it belonged to, and what was skipped with its reason |
-| Verification gate (`verification-gate`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `observed_check_results/v1`, `claim_verdict/v1` | command, source, exit status, summary, scope, freshness, and origin for each check that ran (`origin` on a failing check only), plus which checks are missing or failed |
-| Review (`code-review`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `ranked findings per axis` | what a reader misses unless someone tells them |
-| QA (`ultraqa`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `pass/fail evidence` | what nobody thought of the first time |
+| Verification gate (`omh-verification-gate`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `observed_check_results/v1`, `claim_verdict/v1` | command, source, exit status, summary, scope, freshness, and origin for each check that ran (`origin` on a failing check only), plus which checks are missing or failed |
+| Review (`omh-code-review`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `ranked findings per axis` | what a reader misses unless someone tells them |
+| QA (`ulw-qa`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `pass/fail evidence` | what nobody thought of the first time |
 
 Read the live plan with `omh runtime todo show`, and the accepted scope checkpoint
 with `omh_todo action=recall`. Verification gate, Review and QA can now survive the session as
@@ -155,11 +155,11 @@ all, which is `plan_record_absent` and never "nothing was blocked".
   the session in a way the conversation does not. An open item reported as
   open costs a sentence; an open item marked `done` is a false record.
 - **Do not issue a verdict here.** PASS, HOLD, and BLOCK over build, lint,
-  typecheck, tests, docs and CI belong to `verification-gate`, which runs
+  typecheck, tests, docs and CI belong to `omh-verification-gate`, which runs
   before this phase rather than inside it. A close report restating one of its
   verdicts has not re-proved it.
 - **Do not let the deep guide, the ELI5 pass, or the quiz stand in for the
-  close.** Those are `wiki`'s three handover artifacts and they are retained
+  close.** Those are `omh-wiki`'s three handover artifacts and they are retained
   knowledge, not a report of what the plan says.
 
 ## Boundary

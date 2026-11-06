@@ -1,6 +1,6 @@
 # Requirement Coverage Map
 
-`verification-gate` names which commands count as evidence. This names what the
+`omh-verification-gate` names which commands count as evidence. This names what the
 evidence has to cover. Load it when a change answers to a written spec, plan, or
 issue and the question is whether anything was left unbuilt, not whether the
 build passed.

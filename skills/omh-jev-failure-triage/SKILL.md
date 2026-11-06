@@ -27,7 +27,7 @@ Contract: `references/full-contract.md`. Preset: `references/preset.md`.
 1. Name what leaves the machine: the command and an error excerpt (plus earlier attempt excerpts when repeating).
 2. Call `omh_jev_ask` with `preset: failure_triage/v1`, `state` {error_excerpt, last_command, earlier_attempts}, and `attempts_so_far`.
 3. Report `policy_result.outcome` and its rule beside the raw answers.
-4. Hand the fix to `build-failure-triage` or `agent-debug`; a rerun still needs the host's approval.
+4. Hand the fix to `omh-build-failure-triage` or `omh-agent-debug`; a rerun still needs the host's approval.
 
 ## Completion Checklist
 
@@ -42,4 +42,5 @@ Contract: `references/full-contract.md`. Preset: `references/preset.md`.
 
 ## Workflow Lane
 
-advisory local context
+- Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.

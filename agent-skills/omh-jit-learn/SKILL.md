@@ -13,11 +13,11 @@ metadata:
 
 # Jit Learn
 
-This is an OMH `jit-learn` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-jit-learn` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`jit-learn` exists to choose what is worth learning for the user's present problem and convert credible sources into an immediate application path, instead of returning a generic self-help shelf or a popularity list.
+`omh-jit-learn` exists to choose what is worth learning for the user's present problem and convert credible sources into an immediate application path, instead of returning a generic self-help shelf or a popularity list.
 
 ## Do Not Use When
 
@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: Design a six-week Python syllabus with weekly assessments.
-- Expected behavior: Route to `curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.
+- Expected behavior: Route to `omh-curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.
 - Why: Just-in-time target selection should not displace an explicit curriculum-design request.
 
 ## Completion Checklist

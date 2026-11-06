@@ -13,11 +13,11 @@ metadata:
 
 # Product Brief
 
-This is an OMH `product-brief` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `omh-product-brief` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`product-brief` turns product evidence into a reviewable PRD and prioritization frame before delivery planning without treating a draft as an accepted roadmap commitment.
+`omh-product-brief` turns product evidence into a reviewable PRD and prioritization frame before delivery planning without treating a draft as an accepted roadmap commitment.
 
 ## Do Not Use When
 
@@ -39,7 +39,7 @@ Good example:
 Bad example:
 
 - Prompt: Implement the accepted onboarding PRD and open a PR.
-- Expected behavior: Route to `ultrawork` or `ralplan`, not `product-brief`.
+- Expected behavior: Route to `ulw-work` or `ulw-plan`, not `omh-product-brief`.
 - Why: Accepted implementation work should move into planning or delivery rather than recreate a PRD.
 
 ## Completion Checklist
