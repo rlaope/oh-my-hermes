@@ -112,7 +112,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- plan artifact when durable execution will follow, via `omh hermes plan --record --plan-file <file>`
+- plan artifact when durable execution will follow, via `omh hermes plan --record --plan-file <file> "<task>"`
 
 Safety rules:
 

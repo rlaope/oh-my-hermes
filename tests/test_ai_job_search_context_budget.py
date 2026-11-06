@@ -381,7 +381,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # section; the pin before it was 4f552dc5...a07a.
         # The plan, ralplan and adversarial-consensus bodies name `--plan-file` / `--input-bundle`; only those
         # three move, and the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '0333881aa847d43c28046c787308d85ee1a3649a6ee70a7c0bbe2f316031a197')
+        self.assertEqual(_digest(legacy_hashes), '8c5d5eede91c056339f2aee6baeaf93bc9f704be51e228359a89bb8231a29c53')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

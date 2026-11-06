@@ -5045,6 +5045,14 @@ under `.hermes/plans/`. Each plan includes a deterministic `quality_gate` and
 so Hermes can ask one blocking clarification. Review gates remain
 `not_observed` unless the wrapper can prove a separate review happened.
 
+The sections of that file are generated. To record a plan someone reviewed, pass it
+with `--plan-file <path>`: the file replaces the generated sections and the front
+matter says `plan_body: reviewed`. Without it the file says `plan_body: scaffold`,
+and `plan-accept` on it still succeeds but returns `reviewed_body: false` and a
+`say`. `--input-bundle` (with `--plan-file`) records planning input that
+`plan-accept` refuses. Stdout `plan.goals` and `plan.options` stay generated either way;
+the recorded file is the plan.
+
 The stdout JSON also includes `wrapper_contract`. Wrappers should use that JSON,
 not the Markdown body, to decide the next local action. If
 `wrapper_contract.coding_delegate.available` is `true`, the listed

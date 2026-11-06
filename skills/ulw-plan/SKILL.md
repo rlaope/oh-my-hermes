@@ -133,7 +133,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- write the reviewed plan (options, rejected alternatives, risks, `Success criteria` table, target-state coverage, lanes in node-prompt shape) to a Markdown file, then record it with `omh hermes plan --record --plan-file <file> "<task>"`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one; without `--plan-file` the file holds only a generated scaffold, and its `say` field tells you so
+- write the reviewed plan (options, rejected alternatives, risks, `Success criteria` table, target-state coverage, lanes in node-prompt shape) to a Markdown file outside the repository and the OMH store (the system temp directory is fine), then record it with `omh hermes plan --record --plan-file <file> "<task>"`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one; without `--plan-file` the file holds only a generated scaffold, and its `say` field tells you so
 - mark acceptance with `omh hermes plan-accept <path>` only for a file recorded with `--plan-file` (front matter `plan_body: reviewed`), so acceptance_recorded and handoff_ready point at the reviewed plan; accepting a scaffold-only file returns `reviewed_body: false` and is not a reviewed plan
 
 Safety rules:

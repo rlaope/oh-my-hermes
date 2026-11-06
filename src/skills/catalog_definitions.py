@@ -7388,7 +7388,7 @@ _DEFINITIONS = [
         expected_outputs=("plan", "acceptance criteria", "verification strategy"),
         artifact_expectations=(
             PortableLine(
-                "plan artifact when durable execution will follow, via `omh hermes plan --record --plan-file <file>`",
+                "plan artifact when durable execution will follow, via `omh hermes plan --record --plan-file <file> \"<task>\"`",
                 "plan artifact when durable execution will follow",
             ),
         ),
@@ -7471,7 +7471,7 @@ _DEFINITIONS = [
         # no path and no command, so no plan file was ever produced and the
         # planning harness rungs below had nothing to record.
         artifact_expectations=(
-            "write the reviewed plan (options, rejected alternatives, risks, `Success criteria` table, target-state coverage, lanes in node-prompt shape) to a Markdown file, then record it with `omh hermes plan --record --plan-file <file> \"<task>\"`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one; without `--plan-file` the file holds only a generated scaffold, and its `say` field tells you so",
+            "write the reviewed plan (options, rejected alternatives, risks, `Success criteria` table, target-state coverage, lanes in node-prompt shape) to a Markdown file outside the repository and the OMH store (the system temp directory is fine), then record it with `omh hermes plan --record --plan-file <file> \"<task>\"`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one; without `--plan-file` the file holds only a generated scaffold, and its `say` field tells you so",
             "mark acceptance with `omh hermes plan-accept <path>` only for a file recorded with `--plan-file` (front matter `plan_body: reviewed`), so acceptance_recorded and handoff_ready point at the reviewed plan; accepting a scaffold-only file returns `reviewed_body: false` and is not a reviewed plan",
         ),
         safety_rules=(
@@ -7584,7 +7584,7 @@ _DEFINITIONS = [
             ),
         },
         portable_override_shadows={
-            "artifact_expectations": "77d5a67495610773acd9105ba6ccdb7ae84e6c4da6ce35f00937d96520092aa3",
+            "artifact_expectations": "a8d0abdc76de4e76641b6c958937b875bb0c6103cc5c8a5374965a8ef6531213",
             "safety_rules": "da7d45f616a86bdbcddd220ab3e4768f29770f898d106e144012d60ae5f34fa2",
             "opening_steps": "f839a5ee9ecaca2834a76d29b601f18e03ca292e0abc0b2af5c92274b5fa4c7e",
             "quality_bar": "f5ffeed8483244fd0c5f9ed2e606ffe5b7871c20906c0208cf1bc683b38e0fa9",

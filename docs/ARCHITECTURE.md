@@ -1853,8 +1853,13 @@ Hermes-facing plans live under the configured Hermes home:
 uses `schema_version: hermes_plan/v1`, `status: draft` or `blocked`, the source
 surface, and a review gate with `architect` and `critic` statuses. The command is
 deterministic and local-only; it does not run review agents, call services, or
-execute the plan. A `not_observed` review gate means the artifact is a planning
-scaffold, not consensus approval.
+execute the plan. A `not_observed` review gate means no separate architect or
+critic review was observed; it says nothing about whether the body is a scaffold.
+The front-matter key `plan_body` says that: `scaffold` (generated sections),
+`reviewed` (the caller's own plan, recorded with `--plan-file`, which replaces the
+generated sections and is a claim by the caller, not a verification), or absent
+(an older file, state unknown). `--plan-file ... --input-bundle` records planning
+input as `hermes_plan_input/v1`, which `plan-accept` refuses.
 
 The plan body and stdout payload include `quality_gate` and `deep_interview`
 blocks. `quality_gate` names readiness, pass conditions, and evidence that must

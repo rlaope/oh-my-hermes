@@ -225,9 +225,48 @@ def build_hermes_plan_event_payload(
     )
 
 
+_HANDOFF_DELIMITER = re.compile(r"^(\s*)(-{5} (?:BEGIN|END) ACCEPTED HERMES PLAN -{5})", re.MULTILINE)
+
+
+def read_plan_file(path: str) -> str:
+    """The text of a `--plan-file`, size-checked before it is read, or ValueError."""
+    plan_path = Path(path).expanduser()
+    if not plan_path.is_file():
+        raise ValueError(f"--plan-file is not a readable file: {path}")
+    if plan_path.stat().st_size > REVIEWED_BODY_MAX_BYTES:
+        raise ValueError(f"--plan-file is larger than {REVIEWED_BODY_MAX_BYTES} bytes")
+    return validate_reviewed_body(plan_path.read_text(encoding="utf-8"))
+
+
+def mark_payload_as_planning_input(payload: dict[str, object]) -> None:
+    """Make stdout of `--input-bundle` say what the file says: input, not a plan to accept."""
+    plan = payload.get("plan")
+    gate = {
+        "schema_version": "hermes_plan_quality/v1",
+        "readiness": "input_not_a_plan",
+        "status_claim": "planning_input_not_a_plan",
+        "coding_handoff_ready": False,
+    }
+    if isinstance(plan, dict):
+        plan["status"] = "input"
+        plan["quality_gate"] = dict(gate)
+    contract = payload.get("wrapper_contract")
+    if isinstance(contract, dict):
+        contract["next_action"] = "hand_bundle_to_planner"
+        contract["current_step"] = "planning_input_recorded"
+        contract.pop("coding_delegate", None)
+        contract.pop("decision_gate", None)
+        contract["quality_gate"] = dict(gate)
+    payload["say"] = (
+        "Recorded the bundle as planning input (hermes_plan_input/v1). It is not a plan: hand it to a planner; "
+        "plan-accept refuses it."
+    )
+
+
 def validate_reviewed_body(body: str) -> str:
     """The reviewed plan text a caller wants recorded, or ValueError."""
     text = body.replace("\r\n", "\n").strip()
+    text = _HANDOFF_DELIMITER.sub(r"\1> \2", text)
     if not text:
         raise ValueError("--plan-file is empty: nothing reviewed to record")
     if len(text.encode("utf-8")) > REVIEWED_BODY_MAX_BYTES:
@@ -254,6 +293,16 @@ def write_hermes_plan(
         raise ValueError("hermes plan payload is missing plan")
     if input_bundle and reviewed_body is None:
         raise ValueError("--input-bundle needs --plan-file")
+    if reviewed_body is not None and not input_bundle:
+        # The caller's plan replaces the generated one wholesale: the composed
+        # workflow, the stock stop condition and a "blocked" verdict derived
+        # from a short task statement all belong to the scaffold, and would sit
+        # next to the reviewed lanes as if the executor should follow both.
+        plan = dict(plan)
+        if plan.get("status") == "blocked":
+            plan["status"] = "draft"
+        plan["stop_condition"] = "The plan is accepted or a reviewer requests concrete changes."
+        payload = {**payload, "plan": plan, "workflow_composition": None}
     slug = _slugify(str(plan.get("task_statement", "plan")))
     plans_dir = project_artifact_dir(paths, "plans")
     ensure_project_store_ignored(plans_dir)
@@ -309,6 +358,7 @@ def attach_plan_artifact_to_wrapper_contract(payload: dict[str, object], artifac
         "schema_version": artifact.get("schema_version", SCHEMA_VERSION),
         "status": artifact.get("status", "draft"),
         "path": artifact.get("path", ""),
+        "plan_body": artifact.get("plan_body", "unknown"),
     }
     if artifact.get("context_path"):
         plan_artifact["context_path"] = artifact["context_path"]
@@ -334,7 +384,7 @@ def read_hermes_plan_artifact(path: str | Path) -> dict[str, object]:
         "body": body,
         "text": text,
         "frontmatter": frontmatter,
-        "plan_body": str(frontmatter.get("plan_body", "scaffold")),
+        "plan_body": str(frontmatter.get("plan_body", "unknown")),
     }
 
 
@@ -361,13 +411,19 @@ def update_hermes_plan_status(
         "cancelled": "plan_cancelled",
     }.get(status, "plan_artifact_created")
     result: dict[str, object] = {"artifact": _plan_artifact_summary(artifact)}
-    scaffold_only = status == "accepted" and artifact.get("plan_body") != "reviewed"
-    if scaffold_only:
-        result["say"] = (
+    body_state = str(artifact.get("plan_body", "unknown"))
+    note = ""
+    if status == "accepted" and body_state == "scaffold":
+        note = (
             "This plan file holds only the generated scaffold, not a reviewed plan. "
             "Accepting it accepts the scaffold; record the reviewed plan with --plan-file first."
         )
         result["reviewed_body"] = False
+    elif status == "accepted" and body_state == "unknown":
+        note = "This plan file does not record whether it holds a reviewed plan or only the generated scaffold."
+        result["reviewed_body"] = None
+    if note:
+        result["say"] = note
     try:
         result["journal_event"] = append_observation_event(
             paths,
@@ -379,12 +435,7 @@ def update_hermes_plan_status(
                 "source": "hermes_plan",
                 "plan_artifact": str(plan_path),
                 "plan_status": status,
-                "summary": summary
-                or (
-                    "Hermes plan marked accepted, but it holds only the generated scaffold."
-                    if scaffold_only
-                    else f"Hermes plan marked {status}."
-                ),
+                "summary": " ".join(part for part in (summary or f"Hermes plan marked {status}.", note) if part),
             },
         )
     except (OSError, ValueError) as exc:
@@ -426,6 +477,7 @@ def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_tar
             "plan_artifact_status": str(artifact.get("status", "")),
             "plan_artifact_schema_version": str(artifact.get("schema_version", "")),
             "plan_artifact_sha256": str(artifact.get("sha256", "")),
+            "plan_artifact_plan_body": str(artifact.get("plan_body", "unknown")),
         },
         "source_refs": [
             {
@@ -441,6 +493,8 @@ def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_tar
                 "key": "plan_artifact",
                 "summary": (
                     f"Accepted Hermes plan artifact status={artifact.get('status', '')}; "
+                    f"plan_body={artifact.get('plan_body', 'unknown')}"
+                    f"{' (generated scaffold, no reviewed plan)' if artifact.get('plan_body') == 'scaffold' else ''}; "
                     f"sha256={artifact.get('sha256', '')}."
                 ),
                 "artifact_ref": plan_artifact_path,
@@ -704,7 +758,7 @@ def _split_frontmatter(text: str) -> tuple[dict[str, object], str]:
 
 
 def _replace_frontmatter_status(text: str, *, status: str, summary: str) -> str:
-    lines = text.splitlines()
+    lines = text.split("\n")
     if not lines or lines[0].strip() != "---":
         return "\n".join(
             [
@@ -790,7 +844,7 @@ def _plan_artifact_summary(artifact: dict[str, object]) -> dict[str, object]:
         "sha256": artifact.get("sha256", ""),
         "task_statement_sha256": artifact.get("task_statement_sha256", ""),
         "task_statement_length": artifact.get("task_statement_length", 0),
-        "plan_body": artifact.get("plan_body", "scaffold"),
+        "plan_body": artifact.get("plan_body", "unknown"),
     }
 
 

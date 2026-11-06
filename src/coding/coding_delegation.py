@@ -616,7 +616,8 @@ def _build_coding_delegation_payload_native(
     # `target_paths` declaration -- reused here (and re-derived there) rather
     # than threaded through the dataclass, since it is a pure, cheap scan of
     # the message and the two call sites read it for unrelated purposes.
-    verification_target_paths = _safety_preflight_target_paths(message)
+    target_scan_text = _plan_task_statement(plan_artifact) or message
+    verification_target_paths = _safety_preflight_target_paths(target_scan_text)
     # The explicit post-completion merge/deploy intent, read from the user's own
     # message only. It preserves the intent through the gate; it grants nothing.
     post_completion_directive = _user_merge_directive(message)
@@ -700,7 +701,7 @@ def _build_coding_delegation_payload_native(
     # intents, target paths — and rebuilding it there would scan the message a
     # second time to produce a value this build already has.
     preflight_request = _safety_preflight_request(
-        message,
+        target_scan_text,
         owner=proposed_selection.selected_executor_profile or "hermes",
         workflow=delegation.recommended_workflow,
         message_context_mode=message_context_mode,
@@ -1554,6 +1555,31 @@ def _is_preflight_filesystem_target(token: str) -> bool:
         or "\\" in token
         or "." in token
     )
+
+
+def _plan_task_statement(plan_artifact: dict[str, object] | None) -> str:
+    """The Task Statement of a supplied plan, or "" when there is none to trust.
+
+    With `--from-plan` the handoff message carries the whole plan file, reviewed
+    body included. Target paths are what the *user* named, and the user's
+    statement is the Task Statement; a path inside the plan body (a results
+    file, a forbidden `~/.ssh`, an endpoint) is retrieved content, not a target.
+    The statement is read back from the file and kept only when it matches the
+    digest the artifact summary recorded, so an edited file falls back to
+    scanning the whole message.
+    """
+    if not plan_artifact or not plan_artifact.get("path"):
+        return ""
+    try:
+        from ..workflows.hermes_planning import read_hermes_plan_artifact
+
+        artifact = read_hermes_plan_artifact(str(plan_artifact["path"]))
+    except (OSError, ValueError, ImportError):
+        return ""
+    statement = str(artifact.get("task_statement", ""))
+    if not statement or artifact.get("task_statement_sha256") != plan_artifact.get("task_statement_sha256"):
+        return ""
+    return statement
 
 
 def _safety_preflight_target_paths(message: str, *, excluded_path: str = "") -> list[str]:
