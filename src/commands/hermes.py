@@ -13,6 +13,8 @@ from ..hermes_planning import (
     update_hermes_plan_status,
     apply_reviewed_body_to_payload,
     mark_payload_as_planning_input,
+    outside_repository_targets,
+    outside_targets_note,
     read_plan_file,
     write_hermes_plan,
     write_plan_handoff_context_pack,
@@ -88,6 +90,10 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
             attach_plan_artifact_to_wrapper_contract(payload, artifact)
             if input_bundle:
                 mark_payload_as_planning_input(payload)
+            elif reviewed_body is not None:
+                outside = outside_repository_targets(reviewed_body)
+                if outside:
+                    payload["say"] = " ".join(filter(None, (str(payload.get("say", "")), outside_targets_note(outside))))
             elif reviewed_body is None:
                 payload["say"] = (
                     "Recorded the generated scaffold only; the reviewed plan is not in the file. "

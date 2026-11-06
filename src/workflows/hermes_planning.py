@@ -236,46 +236,6 @@ def _neutralise_handoff_delimiters(text: str) -> str:
     return _HANDOFF_DELIMITER.sub(r"\1\2> \3", text)
 
 
-def _one_line(text: object) -> str:
-    """A title must stay on one line: a task with line breaks cannot start sections."""
-    return re.sub(f"[{_LINE_BREAKS}]+", " ", str(text)).strip()
-
-
-def _verbatim_task(plan: dict[str, object]) -> str:
-    return str(plan.get("task_statement", ""))
-
-
-def recorded_task_text(plan_text: str) -> str:
-    """The task exactly as recorded, or "" when it cannot be trusted.
-
-    `plan` stores the verbatim task as a JSON string beside its sha256 in the
-    front matter. Both must be present and agree; a missing key (an older plan),
-    a hand-edit that touched only one of them, or a body that moved the front
-    matter all return "" so the caller falls back to scanning the whole file.
-    """
-    lines = plan_text.split("\n")
-    if not lines or lines[0].strip() != "---":
-        return ""
-    digest = ""
-    raw = ""
-    for line in lines[1:]:
-        if line.strip() == "---":
-            break
-        if line.startswith("task_sha256: "):
-            digest = line[len("task_sha256: ") :].strip()
-        elif line.startswith("task_json: "):
-            raw = line[len("task_json: ") :]
-    else:
-        return ""
-    try:
-        task = json.loads(raw)
-    except ValueError:
-        return ""
-    if not isinstance(task, str) or not task or hashlib.sha256(task.encode("utf-8")).hexdigest() != digest:
-        return ""
-    return task
-
-
 def read_plan_file(path: str) -> str:
     """The text of a `--plan-file`, size-checked before it is read, or ValueError."""
     plan_path = Path(path).expanduser()
@@ -284,6 +244,90 @@ def read_plan_file(path: str) -> str:
     if plan_path.stat().st_size > REVIEWED_BODY_MAX_BYTES:
         raise ValueError(f"--plan-file is larger than {REVIEWED_BODY_MAX_BYTES} bytes")
     return validate_reviewed_body(plan_path.read_text(encoding="utf-8"))
+
+
+_BODY_BEGIN = "<!-- omh-reviewed-body-begin:{nonce} -->"
+_BODY_END = "<!-- omh-reviewed-body-end:{nonce} -->"
+_DIGEST_LINE = re.compile(r"^(?:body_nonce|body_sha256): .*\n", re.MULTILINE)
+
+
+def _reviewed_body_lines(body: str, nonce: str) -> list[str]:
+    return [
+        "## Reviewed Plan",
+        "",
+        _BODY_BEGIN.format(nonce=nonce),
+        validate_reviewed_body(body),
+        _BODY_END.format(nonce=nonce),
+        "",
+    ]
+
+
+def split_reviewed_body(text: str) -> tuple[str, str] | None:
+    """(text without the reviewed body, the body) for a plan file whose body is intact.
+
+    The body sits between two markers carrying a random nonce that is stored in
+    the front matter beside the body's sha256. The nonce is chosen when the file
+    is written, after the task is fixed, so text the person wrote cannot carry the
+    markers. Both markers must occur exactly once and the digest must match;
+    otherwise this returns None and the caller treats the whole text as not
+    reviewed. The two front-matter digest lines and the markers go with the body.
+    """
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return None
+    nonce = digest = ""
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if line.startswith("body_nonce: "):
+            nonce = line[len("body_nonce: ") :].strip()
+        elif line.startswith("body_sha256: "):
+            digest = line[len("body_sha256: ") :].strip()
+    if not re.fullmatch(r"[0-9a-f]{32}", nonce) or not digest:
+        return None
+    begin, end = _BODY_BEGIN.format(nonce=nonce), _BODY_END.format(nonce=nonce)
+    if text.count(begin) != 1 or text.count(end) != 1:
+        return None
+    start = text.index(begin)
+    stop = text.index(end)
+    if stop < start:
+        return None
+    body = text[start + len(begin) : stop].strip("\n")
+    if hashlib.sha256(body.encode("utf-8")).hexdigest() != digest:
+        return None
+    rest = text[:start] + text[stop + len(end) :]
+    return _DIGEST_LINE.sub("", rest, count=2), body
+
+
+def scan_text_without_reviewed_body(text: str) -> str:
+    """What the delegate gate scans for a plan: everything main scanned, minus an intact reviewed body."""
+    marker = "----- BEGIN ACCEPTED HERMES PLAN -----\n"
+    head = ""
+    if marker in text:
+        cut = text.index(marker) + len(marker)
+        head, text = text[:cut], text[cut:]
+    split = split_reviewed_body(text)
+    return head + (split[0] if split else text)
+
+
+def outside_targets_note(paths: list[str]) -> str:
+    return (
+        "The reviewed plan names a path that may be outside the repository ("
+        + ", ".join(paths)
+        + "). The coding handoff gate scans the task, not the reviewed plan, so nothing else will flag it: "
+        "check it before the executor starts."
+    )
+
+
+def outside_repository_targets(body: str) -> list[str]:
+    """Absolute, home or parent-relative paths a reviewed body names, for a visibility note only."""
+    from ..coding.coding_delegation import _safety_preflight_target_paths
+
+    return [
+        path
+        for path in _safety_preflight_target_paths(body)
+        if path.startswith(("/", "~", "..")) or re.match(r"^[A-Za-z]:[\\/]", path)
+    ][:5]
 
 
 def apply_reviewed_body_to_payload(payload: dict[str, object]) -> None:
@@ -500,6 +544,11 @@ def update_hermes_plan_status(
     elif status == "accepted" and body_state == "unknown":
         note = "This plan file does not record whether it holds a reviewed plan or only the generated scaffold."
         result["reviewed_body"] = None
+    if status == "accepted" and body_state == "reviewed":
+        split = split_reviewed_body(original)
+        outside = outside_repository_targets(split[1]) if split else []
+        if outside:
+            note = outside_targets_note(outside)
     if note:
         result["say"] = note
     try:
@@ -620,14 +669,21 @@ def render_plan_markdown(
     if not isinstance(metadata, dict):
         metadata = {}
 
+    nonce = secrets.token_hex(16)
     lines = [
         "---",
         f"schema_version: {SCHEMA_VERSION}",
         f"status: {plan.get('status', 'draft')}",
         f"source: {payload.get('source', 'generic')}",
         f"plan_body: {'scaffold' if reviewed_body is None else 'reviewed'}",
-        f"task_sha256: {hashlib.sha256(_verbatim_task(plan).encode('utf-8')).hexdigest()}",
-        f"task_json: {json.dumps(_verbatim_task(plan), ensure_ascii=True)}",
+        *(
+            [
+                f"body_nonce: {nonce}",
+                f"body_sha256: {hashlib.sha256(validate_reviewed_body(reviewed_body).encode('utf-8')).hexdigest()}",
+            ]
+            if reviewed_body is not None
+            else []
+        ),
         "review_gate:",
         f"  architect: {review_gate.get('architect', 'not_observed')}",
         f"  critic: {review_gate.get('critic', 'not_observed')}",
@@ -642,7 +698,7 @@ def render_plan_markdown(
         [
             "---",
             "",
-            f"# Hermes Plan: {_one_line(plan.get('task_statement', 'Untitled task'))}",
+            f"# Hermes Plan: {plan.get('task_statement', 'Untitled task')}",
             "",
             f"Artifact: `{artifact_name}`",
             "",
@@ -651,7 +707,7 @@ def render_plan_markdown(
             str(plan.get("task_statement", "")).strip(),
             "",
             *(
-                ["## Reviewed Plan", "", validate_reviewed_body(reviewed_body), ""]
+                _reviewed_body_lines(reviewed_body, nonce)
                 if reviewed_body is not None
                 else _scaffold_section_lines(plan)
             ),
@@ -745,7 +801,7 @@ def render_plan_input_markdown(payload: dict[str, object], body: str, artifact_n
             f"source: {payload.get('source', 'generic')}",
             "---",
             "",
-            f"# Planning Input: {_one_line(plan.get('task_statement', 'Untitled task'))}",
+            f"# Planning Input: {plan.get('task_statement', 'Untitled task')}",
             "",
             f"Artifact: `{artifact_name}`",
             "",
@@ -775,7 +831,7 @@ def render_context_markdown(payload: dict[str, object], artifact_name: str = "co
             f"source: {payload.get('source', 'generic')}",
             "---",
             "",
-            f"# Hermes Context: {_one_line(plan.get('task_statement', 'Untitled task'))}",
+            f"# Hermes Context: {plan.get('task_statement', 'Untitled task')}",
             "",
             f"Artifact: `{artifact_name}`",
             "",

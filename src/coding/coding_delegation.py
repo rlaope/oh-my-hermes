@@ -616,7 +616,7 @@ def _build_coding_delegation_payload_native(
     # `target_paths` declaration -- reused here (and re-derived there) rather
     # than threaded through the dataclass, since it is a pure, cheap scan of
     # the message and the two call sites read it for unrelated purposes.
-    target_scan_text = _plan_task_statement(plan_artifact) or message
+    target_scan_text = _plan_scan_text(message, plan_artifact)
     verification_target_paths = _safety_preflight_target_paths(target_scan_text)
     # The explicit post-completion merge/deploy intent, read from the user's own
     # message only. It preserves the intent through the gate; it grants nothing.
@@ -1557,25 +1557,22 @@ def _is_preflight_filesystem_target(token: str) -> bool:
     )
 
 
-def _plan_task_statement(plan_artifact: dict[str, object] | None) -> str:
-    """The task a supplied plan recorded, or "" when it cannot be trusted.
+def _plan_scan_text(message: str, plan_artifact: dict[str, object] | None) -> str:
+    """What the target scan reads for a supplied plan: the message minus an intact reviewed body.
 
-    With `--from-plan` the handoff message carries the whole plan file, reviewed
-    body included. Target paths are what the *user* named, and the user's text is
-    the task, which `omh hermes plan --record` stores verbatim with its sha256 in
-    the front matter. The task is returned only when that digest is present and
-    matches. Anything else -- an older plan, a hand-edit, a missing key -- returns
-    "" and the caller scans the whole message, exactly as before this existed, so
-    the gate never allows what it denied for text the person wrote.
+    With `--from-plan` the message carries the whole plan file. A reviewed body is
+    text a reviewer wrote after the person did, so a path inside it (a results
+    file, a forbidden `~/.ssh`, an endpoint) is not a target the user named.
+    Everything else -- title, task, generated sections, a scaffold -- is scanned
+    exactly as before, so nothing the person wrote can move the gate from deny to
+    allow. The body is cut only between markers whose random nonce was written
+    with the file and whose digest matches; any doubt leaves the whole message.
     """
     if not plan_artifact or not plan_artifact.get("path"):
-        return ""
-    try:
-        from ..workflows.hermes_planning import recorded_task_text
+        return message
+    from ..workflows.hermes_planning import scan_text_without_reviewed_body
 
-        return recorded_task_text(Path(str(plan_artifact["path"])).read_text(encoding="utf-8"))
-    except (OSError, ValueError, ImportError):
-        return ""
+    return scan_text_without_reviewed_body(message)
 
 
 def _safety_preflight_target_paths(message: str, *, excluded_path: str = "") -> list[str]:
