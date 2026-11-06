@@ -47,6 +47,7 @@ from ..plugin_bundle.omh.dag_ulw_cues import (
     big_work_for_dag_ulw,
     dag_ulw_control,
     dispatches_dag_ulw,
+    names_several_features,
     reports_or_asks_after_the_name,
     refuses_dag_ulw,
     splits_without_evidence,
@@ -2699,7 +2700,10 @@ def _route_chat_message_cached(
         action in {"clarify", "fallback"}
         and selected_skill == _ROUTER_SKILL
         and not explicit_skill
-        and work_over_many_targets(routing_message, reference_regions(message).links)
+        and (
+            work_over_many_targets(routing_message, reference_regions(message).links)
+            or names_several_features(routing_message, reference_regions(message).links)
+        )
     ):
         # Work over many targets without that evidence ("review all open PRs") asks once, with dag-ulw as the skill it
         # asks about; it never dispatches it.
@@ -7092,7 +7096,9 @@ def _keeps_dag_ulw_by_size(route: Mapping[str, object], request: str) -> bool:
     of the skill ("stop using dag ulw")."""
     regions = reference_regions(request)
     return route.get("candidate_skill") == DAG_ULW and (
-        big_work_for_dag_ulw(regions.executable_text) or work_over_many_targets(regions.executable_text, regions.links)
+        big_work_for_dag_ulw(regions.executable_text)
+        or work_over_many_targets(regions.executable_text, regions.links)
+        or names_several_features(regions.executable_text, regions.links)
     )
 
 

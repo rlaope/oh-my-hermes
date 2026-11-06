@@ -26,6 +26,7 @@ from omh.plugin_bundle.omh.dag_ulw_cues import (  # noqa: E402
     dispatches_dag_ulw,
     refuses_dag_ulw,
     invokes_dag_ulw,
+    names_several_features,
     work_over_many_targets,
 )
 from omh.routing.chat import route_chat_message  # noqa: E402
@@ -272,6 +273,44 @@ class RouterTests(unittest.TestCase):
                  if hint.get("workflow") == "dag-ulw"]
         self.assertEqual([hint.get("next_action") for hint in offer], ["ask_one_clarification"])
         self.assertEqual(self._dag_ulw_starts("migrate across all modules to the new logger")[2], "dag-ulw")
+
+    def test_several_features_named_to_build_are_offered(self) -> None:
+        # Several features or stages, named or counted, as a build verb's object: the hint offers dag-ulw first (ask
+        # once), ahead of a rule one item's word matched ("검색" for web-research), and nothing starts.
+        for message in ("메일 가져오기, 파일 업로드, 검색 기능 개발해줘", "검색, 필터, 정렬 기능을 붙여줘",
+                        "목록, 상세, 저장 기능 전부만들어", "로그인, 목록, 알림 다 해줘", "댓글, 좋아요, 신고 기능 추가해줘",
+                        "장바구니랑 주문이랑 배송조회 기능 구현해", "알림 설정과 이메일 발송과 푸시 기능 만들어",
+                        "로그인하고 대시보드하고 리포트 기능까지 개발해", "온보딩, 홈, 마이페이지 화면 다 구현하자",
+                        "회원가입 로그인부터 일반채팅, 판단질문, 지식그래프, 온톨로지 과정을 설계에 맞게 개발해줘",
+                        "회원가입부터 결제까지 개발해줘", "데이터 수집부터 리포트 생성까지 만들어줘", "가입부터 탈퇴까지 전부 개발해",
+                        "설계부터 배포까지 한번에 진행해", "여러 기능 나눠서 다 해줘", "세 기능 같이넣고 테스트까지 다해줘",
+                        "add sign-in, billing and export features", "build the upload, preview and download screens",
+                        "build search, filters and sorting", "implement everything from onboarding to checkout",
+                        "develop it from sign-up to the knowledge graph"):
+            with self.subTest(message=message):
+                self.assertTrue(names_several_features(message))
+                self.assertFalse(dispatches_dag_ulw(message))
+                hint = awareness_route_hint(message)
+                # A coding-delivery hint already reads some of them as ultrawork-shaped work and keeps them.
+                self.assertIn(hint["selected_workflow"], ("dag-ulw", "ulw-work"))
+                if hint["selected_workflow"] == "dag-ulw":
+                    self.assertEqual(hint["hints"][0]["next_action"], "ask_one_clarification")
+                self.assertEqual(self._dag_ulw_starts(message)[:2], (False, False))
+        # The router asks about dag-ulw where it would ask anyway.
+        for message in ("장바구니랑 주문이랑 배송조회 기능 구현해", "여러 기능 나눠서 다 해줘"):
+            with self.subTest(message=message):
+                self.assertEqual(self._dag_ulw_starts(message), (False, False, "dag-ulw"))
+        # A list that fills one thing, a range of numbers, pages or dates, a comparison, a question, one fix, or a
+        # list held by a stop word is no build of several features.
+        for message in ("우유, 계란, 빵 장보기 목록 만들어줘", "빨강, 파랑, 초록으로 버튼 색만 바꿔줘", "1부터 10까지 더하는 함수 만들어줘",
+                        "1페이지부터 3페이지까지 요약해줘", "월요일부터 금요일까지 일정 알려줘", "서울부터 부산까지 몇 시간 걸려?",
+                        "로그인, 목록, 알림 화면 차이 설명해줘", "검색, 필터, 정렬 중 어떤 걸 먼저 할까?", "사과, 배, 귤 중에 뭐가 제일 싸?",
+                        "로그인 버그 고쳐줘", "로그인, 목록, 알림 다 하지 마", "검색, 필터, 정렬 기능 나중에 붙여줘",
+                        "make a grocery list with milk, eggs and bread", "summarize pages 1 to 3",
+                        "rename the variable from foo to bar", "what is the difference between login, signup and sso?",
+                        "build a function that sums from 1 to 10"):
+            with self.subTest(message=message):
+                self.assertFalse(names_several_features(message))
 
     def test_each_hard_exclude_alone_keeps_a_change_off_the_graph(self) -> None:
         # Each row is a change the router would dispatch on but for one hard exclude: a skill or engine named first
