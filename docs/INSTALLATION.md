@@ -3727,15 +3727,17 @@ marker stand, the model decides instead, in any language and any wording:
 - `[SHUTUP]` mutes the thread with the 🫡 reaction and no text, the same as a
   quiet word. OMH hands Hermes `[SILENT]` in its place. A reply counts as a
   marker only when it is the token and nothing else, also in code ticks or a
-  fence, or the exact token with a brief acknowledgement on one short line
-  (`[SHUTUP] okay, going quiet`). A `[SILENT]` reply is dropped by Hermes; it
-  stays in the transcript. Each marker leaves a
+  fence, or the exact `[SHUTUP]` opening a brief acknowledgement on one short
+  line (`[SHUTUP] okay, going quiet`). A `[SILENT]` reply is dropped by Hermes;
+  it stays in the transcript. Each marker leaves a
   `omh_messenger_judged_silent` line in the skip log, so a wrong silence can
   be found.
-- A real answer is delivered. An exact token alone on the first or last line
-  of a longer reply is removed from it, with no mute, unless that line sits in
-  a code fence or a list or follows a colon. A token inside a sentence, a code
-  block or a list stays as written.
+- A real answer is delivered, with no mute. An exact token closing it is
+  removed, on its own last line or after a finished sentence
+  (`Deployed at 10:30. [SILENT]`), and so is an exact `[SHUTUP]` alone on the
+  first line. A `[SHUTUP]` in a code fence or a list or after a colon stays, as
+  does any token inside a sentence. Hermes itself removes a `[SILENT]` alone on
+  a reply's last line, wherever it is.
 - The quiet words and calls by other names (`messenger_other_names`) are off
   there. A message that opens with someone else's mention is still skipped
   before a turn opens, a muted thread stays skipped, and a mention, reply or
@@ -3827,10 +3829,11 @@ message. A profile switched to the Codex app-server runtime keeps any agent it
 already built until the gateway restarts, and a session `/model` override
 pinned to that runtime before the setting changed is not seen; there a raw
 token can reach the chat. A token mid-sentence (`Fine [SHUTUP] I'll stop now.`)
-also shows as written, and the thread is not muted. A short answer that opens
-with the exact token (`[SILENT] is the marker.`) reads as an acknowledgement
-and is not delivered. Discord messages Hermes batches into one event are
-judged as one
+or a `[SILENT]` opening a sentence (`[SILENT] not for me`) shows as written, and
+the thread is not muted. A `[SHUTUP]` at the edge of real text delivers the text
+with no mute. A short answer that opens with the exact `[SHUTUP]`
+(`[SHUTUP] is the token.`) reads as an acknowledgement: it mutes and posts
+nothing. Discord messages Hermes batches into one event are judged as one
 message, so a quiet word batched with other text does not mute. The 🫡 goes
 through the adapter's private reaction method and follows its reactions
 setting.

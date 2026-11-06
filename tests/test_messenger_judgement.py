@@ -104,11 +104,11 @@ class TokenTests(unittest.TestCase):
         for text in ("[SHUTUP]", "  [shutup]\n", "*[SHUTUP]*", "[SHUTUP].", "[Shut Up]", "[SHUT_UP]", "`[SHUTUP]`",
                      "```\n[SHUTUP]\n```", "```text\n[SHUTUP]\n```", "~~[SHUTUP]~~", "［SHUTUP］", "[ SHUTUP ]",
                      "\U0001fae1 [SHUTUP]", zero_width + "[SHUTUP]", bom + "[SHUTUP]",
-                     "[SHUTUP] okay, going quiet", "fine. [SHUTUP]"):
+                     "[SHUTUP] okay, going quiet", "[SHUTUP] 넵"):
             with self.subTest(text=text):
                 self.assertEqual(judge.reply_marker(text), judge.SHUTUP_TOKEN)
         with hermes_modules():
-            for text in ("[SILENT]", "`[SILENT]`", "```\n[SILENT]\n```", "[SILENT] not for me", "okay. [SILENT]", "`SILENT`"):
+            for text in ("[SILENT]", "`[SILENT]`", "```\n[SILENT]\n```", "`SILENT`"):
                 with self.subTest(text=text):
                     self.assertEqual(judge.reply_marker(text), judge.SILENT_TOKEN)
 
@@ -116,7 +116,8 @@ class TokenTests(unittest.TestCase):
         for text in ("Fine [SHUTUP] I'll stop now.", "use `[SHUTUP]` here", "SHUTUP", "shut up", "[SHUTUP", "", None,
                      "[SHUTUP]" + " " * 80 + "x", "one\nI said [SHUTUP] to it\ntwo", "[SHUTUP]\n\nOK", "OK.\n\n[SHUTUP]",
                      "[shutup] okay, going quiet", "[Shut Up] is a 2003 single", "The token is [SILENT]",
-                     "x = [SILENT]", "[SILENT] = True"):
+                     "x = [SILENT]", "[SILENT] = True", "fine. [SHUTUP]", "okay. [SILENT]", "[SILENT] not for me",
+                     "[SILENT] is the marker."):
             with self.subTest(text=text):
                 self.assertIsNone(judge.reply_marker(text))
 
@@ -157,6 +158,7 @@ class RoomTests(StoreReset):
             ({}, False),
             ({"model": {"provider": "mine"}, "providers": {"mine": {"api_mode": "codex_app_server"}}}, False),
             ({"model": {"provider": "other"}, "providers": {"mine": {"api_mode": "codex_app_server"}}}, True),
+            ({"model": {"provider": ["mine"]}, "providers": {"mine": {"api_mode": "codex_app_server"}}}, True),
             ({"model": {"openai_runtime": "auto"}}, True),
             ({"model": "gpt-x"}, True),
             ({"streaming": {"enabled": False}}, True),
@@ -339,7 +341,7 @@ class ReplyTests(StoreReset):
         self.assertEqual([s["marker"] for s in gate.read_skips(self.home / "omh")], [judge.SILENT_TOKEN])
 
     def test_wrapped_silent_comes_back_clean(self) -> None:
-        for text in ("`[SILENT]`", "```\n[SILENT]\n```", "~~[SILENT]~~", "`SILENT`", "[SILENT] not for me"):
+        for text in ("`[SILENT]`", "```\n[SILENT]\n```", "~~[SILENT]~~", "`SILENT`"):
             with self.subTest(text=text):
                 asyncio.run(self.keep_turn()())
                 self.assertEqual(judge.judged_reply("t1", text), (True, judge.SILENT_TOKEN))
@@ -359,7 +361,12 @@ class ReplyTests(StoreReset):
             (long_answer + "\n\n[SILENT]", long_answer),
             (long_answer + "\n\n[SHUTUP]", long_answer),
             ("[SHUTUP]\n\n" + answer, answer),
-            ("[SILENT]\n\n" + answer, answer),
+            ("Yes, the tests pass. [SHUTUP]", "Yes, the tests pass."),
+            ("네, 테스트 통과했어요. [SHUTUP]", "네, 테스트 통과했어요."),
+            ("Deployed to prod at 10:30. [SILENT]", "Deployed to prod at 10:30."),
+            ("배포 끝났습니다. [SILENT]", "배포 끝났습니다."),
+            ("First line.\nDeployed at 10:30. [SILENT]", "First line.\nDeployed at 10:30."),
+            ("fine. [SHUTUP]", "fine."),
         ):
             with self.subTest(text=text[:40]):
                 asyncio.run(self.keep_turn()())
@@ -391,6 +398,22 @@ class ReplyTests(StoreReset):
             "exactly `[SILENT]`, and the plugin turns `[SHUTUP]` into it.",
             "Replying with [SILENT] tells Hermes to drop it.",
             "Fine [SHUTUP] I'll stop now.",
+            "Use this one: [SHUTUP]",
+            "조용히 할 땐 이걸 씁니다: [SHUTUP]",
+            "The token is: [SILENT]",
+            "Answer: [SILENT]",
+            "토큰은 이겁니다: [SILENT]",
+            "토큰은 이겁니다：[SILENT]",
+            "토큰은 이겁니다： [SILENT]",
+            "토큰은 이겁니다：\n\n[SHUTUP]",
+            "The token is [SILENT]",
+            "- done. [SILENT]",
+            "Run this:\nDone. [SHUTUP]",
+            "[SILENT] is the marker.",
+            "[SILENT] tells Hermes to drop a reply.",
+            "[SILENT] 은 마커입니다.",
+            "[SILENT] not for me",
+            "[SILENT]\nThis token drops a reply.",
         ):
             with self.subTest(text=text):
                 asyncio.run(self.keep_turn()())
@@ -402,7 +425,7 @@ class ReplyTests(StoreReset):
 
     def test_two_token_lines_and_nothing_else_stay_silent(self) -> None:
         asyncio.run(self.keep_turn()())
-        self.assertEqual(judge.judged_reply("t1", "[SILENT]\n\n[SHUTUP]"), (True, judge.SILENT_TOKEN))
+        self.assertEqual(judge.judged_reply("t1", "[SHUTUP]\n\n[SILENT]"), (True, judge.SILENT_TOKEN))
         self.assertEqual(gate.read_mutes(self.home / "omh"), {})
 
     def test_a_round_end_restore_cannot_bring_back_a_marker(self) -> None:

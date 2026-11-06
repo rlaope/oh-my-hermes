@@ -274,8 +274,8 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
             "or the skip, written back to the ledger; and, on a turn given the "
             "group-chat marker instruction, a [SHUTUP] reply replaced by "
             "[SILENT] with that thread muted and a saluting-face reaction, a "
-            "wrapped silence marker cleaned, a marker line closing or opening "
-            "a longer answer removed, and one skip-log line per marker "
+            "wrapped silence marker cleaned, a marker at the edge of a real "
+            "answer removed with no mute, and one skip-log line per marker "
             "(every other response passes through untouched)"
         ),
     },
