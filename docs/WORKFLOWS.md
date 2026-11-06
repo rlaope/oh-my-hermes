@@ -4853,7 +4853,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - acceptance criteria
   - verification strategy
 - Artifact expectations:
-  - plan artifact when durable execution will follow, recorded with `omh hermes plan --record --plan-file <reviewed-plan.md>` and accepted with `omh hermes plan-accept <path>` only after the user's answer
+  - plan artifact when durable execution will follow, via `omh hermes plan --record --plan-file <file>`
 - Safety rules:
   - Do not imply hidden Hermes runtime behavior.
   - Use the smallest verification that can prove the claim.

@@ -112,7 +112,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- plan artifact when durable execution will follow, recorded with `omh hermes plan --record --plan-file <reviewed-plan.md>` and accepted with `omh hermes plan-accept <path>` only after the user's answer
+- plan artifact when durable execution will follow, via `omh hermes plan --record --plan-file <file>`
 
 Safety rules:
 

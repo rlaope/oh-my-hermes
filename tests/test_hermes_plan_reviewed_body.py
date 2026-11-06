@@ -91,5 +91,27 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             self.assertIn("empty", stderr)
 
 
+    def test_the_skills_quote_the_options_the_parser_has(self) -> None:
+        import argparse
+
+        from omh.commands.main import build_parser
+        from omh.skills.packaging import builtin_skill_templates
+
+        parser = build_parser()
+        for name in ("hermes", "plan"):
+            action = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
+            parser = action.choices[name]
+        options = {option for action in parser._actions for option in action.option_strings}
+        skills = {t.name: t for t in builtin_skill_templates()}
+        for skill, flags in {
+            "plan": ("--record", "--plan-file"),
+            "ralplan": ("--record", "--plan-file"),
+            "adversarial-consensus": ("--record", "--plan-file", "--input-bundle"),
+        }.items():
+            for flag in flags:
+                self.assertIn(flag, options)
+                self.assertIn(flag, skills[skill].content, f"{skill} does not quote {flag}")
+
+
 if __name__ == "__main__":
     unittest.main()
