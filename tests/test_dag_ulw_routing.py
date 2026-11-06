@@ -279,16 +279,16 @@ class RouterTests(unittest.TestCase):
         # Several features or stages, named or counted, as a build verb's object: the hint offers dag-ulw first (ask
         # once), ahead of a rule one item's word matched ("검색" for web-research), and nothing starts.
         for message in ("메일 가져오기, 파일 업로드, 검색 기능 개발해줘", "검색, 필터, 정렬 기능을 붙여줘",
-                        "목록, 상세, 저장 기능 전부만들어", "로그인, 목록, 알림 다 해줘", "댓글, 좋아요, 신고 기능 추가해줘",
+                        "목록, 상세, 저장 기능 전부만들어", "로그인, 목록, 알림 개발해줘", "댓글, 좋아요, 신고 기능 추가해줘",
                         "장바구니랑 주문이랑 배송조회 기능 구현해", "알림 설정과 이메일 발송과 푸시 기능 만들어",
                         "로그인하고 대시보드하고 리포트 기능까지 개발해", "온보딩, 홈, 마이페이지 화면 다 구현하자",
                         "회원가입 로그인부터 일반채팅, 판단질문, 지식그래프, 온톨로지 과정을 설계에 맞게 개발해줘",
-                        "회원가입부터 결제까지 개발해줘", "데이터 수집부터 리포트 생성까지 만들어줘", "가입부터 탈퇴까지 전부 개발해",
+                        "회원가입부터 결제까지 개발해줘", "가입부터 탈퇴까지 전부 개발해",
                         "여러 기능 나눠서 다 해줘", "기능 여러 개 한꺼번에 개발해줘", "3개 기능 구현해줘",
                         "add sign-in, billing and export features", "build the upload, preview and download screens",
                         "build search, filters and sorting", "build login, list and notifications",
                         "implement everything from onboarding to checkout",
-                        "develop it from sign-up to the knowledge graph", "implement several features",
+                        "implement several features",
                         # The neighbours of an obligation stated and of a range that names no stage, below.
                         "로그인, 회원가입, 검색 기능 만들어줘", "회원가입부터 결제까지 만들어줘", "build it from signup to billing"):
             with self.subTest(message=message):
@@ -332,6 +332,12 @@ class RouterTests(unittest.TestCase):
             "다음 문장을 교정해줘: 로그인, 회원가입, 검색 기능 만들어줘",
             # What has to happen, stated rather than asked; a range from a to z names no stage.
             "로그인, 회원가입, 검색 기능 만들어야 해", "회원가입부터 결제까지 만들어야 해", "build it from a to z",
+            # An intent stated; product features on a bare 해; a range whose ends are not both product features.
+            "로그인, 회원가입, 검색 기능 만들까 해", "로그인, 회원가입, 검색 기능 만들려고 해", "회원가입부터 결제까지 만들려고 해",
+            "검색, 요약, 공유 다 해줘", "로그인, 목록, 알림 다 해줘", "회원가입부터 결제까지 다 해줘",
+            "가을부터 겨울까지 만들어줘", "입문부터 심화까지 만들어줘", "데이터 수집부터 리포트 생성까지 만들어줘",
+            "build it from dawn to dusk", "implement it from python to rust", "develop it from sign-up to the knowledge graph",
+            "build research, borders and dashboards",
         ):
             with self.subTest(message=message):
                 self.assertFalse(names_several_features(message))

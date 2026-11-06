@@ -2180,9 +2180,10 @@ def big_work_for_dag_ulw(text: str) -> bool:
 # under a verb that builds software and nothing else, or when its items, the last among them, are common product
 # features (`_KOREAN_PRODUCT_FEATURE`, `_EN_PRODUCT_FEATURE`). "빨강, 파랑, 초록 버튼 만들어줘", "김철수, 이영희, 박민수 명단
 # 만들어줘", "add alice, bob and carol" and "build api, web and worker" show none of them. A verb that changes what exists
-# is no build ("빨강, 파랑, 초록으로 버튼 색만 바꿔줘"). Nor is a range of numbers, pages, dates or positions ("1부터 10까지 더하는
-# 함수 만들어줘", "처음부터 끝까지 만들어줘"), a comparison or a question. Like work over many targets, it is offered, not
-# started: the person names the parts, not how each is run.
+# is no build ("빨강, 파랑, 초록으로 버튼 색만 바꿔줘"). A range counts only when both its ends are product features, so "처음부터
+# 끝까지 만들어줘" and "build it from dawn to dusk" stay off it, and the product features carry no bare 해 ("검색, 요약, 공유 다
+# 해줘"). Nor is a comparison or a question read. Like work over many targets, it is offered, not started: the person
+# names the parts, not how each is run.
 _FEATURE_NOUN: Final = r"(?:기능|화면|모듈|탭)"
 _SOFT_FEATURE_NOUN: Final = r"(?:페이지|단계|과정|흐름|플로우|플로|api|메뉴|부분)"
 _EN_FEATURE_NOUN: Final = r"(?:features?|screens?|modules?|endpoints?|tabs?|views?)"
@@ -2192,7 +2193,7 @@ _KOREAN_PRODUCT_FEATURE: Final = re.compile(
     r"|주문|환불|배송|쿠폰|포인트|정산|채팅|쪽지|즐겨찾기|북마크|리뷰|팔로우|신고|리포트)$"
 )
 _EN_PRODUCT_FEATURE: Final = re.compile(
-    r"(?:log-?in|log-?out|sign-?in|sign-?up|sign-?out|registration|onboarding|password\s+reset|profiles?|dashboards?|search"
+    r"(?<![\w-])(?:log-?in|log-?out|sign-?in|sign-?up|sign-?out|registration|onboarding|password\s+reset|profiles?|dashboards?|search"
     r"|filters?|sorting|notifications?|comments?|likes?|sharing|uploads?|downloads?|previews?|checkout|cart|payments?"
     r"|billing|refunds?|invoices?|orders?|bookmarks?|favorites?|tagging|exports?|imports?|reports?|mentions?|reactions?"
     r"|subscriptions?|coupons?|messaging|chat)$"
@@ -2219,8 +2220,6 @@ _ONE_THING_NOUN: Final = re.compile(r"(?:^|\s)(?:목록|리스트|표|문서|메
 _NUMBER_OR_TIME: Final = re.compile(
     r"\d|요일|^(?:오늘|내일|어제|모레|이번|다음|지난)|^[일이삼사오육칠팔구십백천]+(?:페이지|쪽|번|장|줄|시|일)?$"
 )
-# An end of a range that names a place in the work rather than a stage ("처음부터 끝까지", "위부터 아래까지").
-_KOREAN_POSITION: Final = re.compile(r"처음|시작|끝|마지막|맨\S*|위|아래|왼쪽|오른쪽|앞|뒤|여기|거기|저기")
 _KOREAN_RANGE: Final = re.compile(
     rf"(?P<start>[^\s,]+)부터\s+(?:[^\s,]+\s+){{0,3}}?(?P<end>[^\s,]+?)까지(?P<tail>(?:\s*(?:도|{_KOREAN_EXTENT}))*)\s*$"
 )
@@ -2254,15 +2253,6 @@ _EN_RANGE: Final = re.compile(
     r"from\s+(?:the\s+)?(?P<start>[a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s+(?:to|through|until)\s+(?:the\s+)?"
     rf"(?P<end>[a-z][\w-]*(?:\s+[a-z][\w-]*)?){_EN_EXTENT}\s*[.!]*$"
 )
-# An end of a range that names a place or a date rather than a stage ("from start to finish", "from a to z", "from monday
-# to friday").
-_EN_NOT_A_STAGE: Final = re.compile(
-    r"\d|^(?:a|z|start|finish|beginning|end|top|bottom|left|right|front|back|scratch|here|there|today|tomorrow|yesterday"
-    r"|(?:mon|tues|wednes|thurs|fri|satur|sun)day|january|february|march|april|may|june|july|august|september|october"
-    r"|november|december)$"
-)
-
-
 # Past this a message is a brief or a pasted log, not one sentence naming features: it reads as on main, and this reader,
 # run on every turn, adds nothing to what the long input already costs the others.
 _SEVERAL_FEATURES_MAX_CHARS: Final = 1000
@@ -2274,8 +2264,9 @@ def _names_product_features(items: list[str], pattern: re.Pattern[str]) -> bool:
     return ended[-1] and sum(ended) >= 2
 
 
-def _korean_feature_list(head: str, software_verb: bool) -> bool:
-    """Whether ``head``, the request before its verb, ends in a list of three or more features as the verb's object."""
+def _korean_feature_list(head: str, verb: str) -> bool:
+    """Whether ``head``, the request before its verb, ends in a list of three or more features as the verb's object;
+    ``verb`` is empty for a bare 해, which product features alone do not carry."""
     tail = _KOREAN_LIST_TAIL.search(head)
     if not tail:
         return False
@@ -2288,14 +2279,14 @@ def _korean_feature_list(head: str, software_verb: bool) -> bool:
         return False
     if any(len(item.split()) > 2 or _NUMBER_OR_TIME.search(item) for item in items[1:]):
         return False
-    if not tail.group("noun") and not tail.group("soft") and _names_product_features(items, _KOREAN_PRODUCT_FEATURE):
+    if verb and not tail.group("noun") and not tail.group("soft") and _names_product_features(items, _KOREAN_PRODUCT_FEATURE):
         return True
     # One-word items and a last one of two ("아이디, 비밀번호, 이메일 가입 화면", "상품명, 가격, 재고 표시 화면"): the last word
     # describes the one screen the list fills, unless the items are product features themselves.
     describes_one_thing = len(items[-1].split()) == 2 and all(len(item.split()) == 1 for item in items[:-1])
     if tail.group("noun"):
-        return not describes_one_thing or sum(bool(_KOREAN_PRODUCT_FEATURE.search(item)) for item in items) >= 2
-    if not software_verb or describes_one_thing:
+        return not describes_one_thing or (bool(verb) and sum(bool(_KOREAN_PRODUCT_FEATURE.search(item)) for item in items) >= 2)
+    if not re.match(_KOREAN_SOFTWARE_VERB, verb) or describes_one_thing:
         return False
     if tail.group("soft") or all(len(item.split()) == 2 for item in items):
         return not _ONE_THING_NOUN.search(items[-1]) and not items[-1].endswith("만")
@@ -2321,8 +2312,9 @@ def _korean_build_request(folded: str) -> tuple[str, str] | None:
     """The request's head and its build verb, when a Korean request ends on a verb that builds something new; the verb
     is empty for a bare 해 after an adverb of extent or order ("여러 기능 나눠서 다 해줘", "결제, 쿠폰, 환불 기능을 순서대로해")."""
     verb, bare = _korean_request_verb(folded)
-    # "만들어야 해" states what has to happen and asks for nothing, as `work_over_many_targets` reads it too.
-    if not verb or verb.endswith("야"):
+    # "만들어야 해" states what has to happen and asks for nothing, as `work_over_many_targets` reads it too; "만들까 해" and
+    # "만들려고 해" state an intent.
+    if not verb or verb.endswith(("야", "까", "려고")):
         return None
     head = folded[: folded.rfind(verb)].rstrip()
     build = re.search(_KOREAN_NEW_VERB, verb)
@@ -2337,19 +2329,16 @@ def _korean_build_request(folded: str) -> tuple[str, str] | None:
 
 
 def _korean_stage_range(head: str, verb: str) -> bool:
-    """Whether ``head`` ends in a range from one stage to another under a verb that makes the whole of it."""
+    """Whether ``head`` ends in a range from one product feature to another under a verb that makes the whole of it."""
     if not re.match(_KOREAN_RANGE_VERB, verb):
         return False
     span = _KOREAN_RANGE.search(head)
-    return bool(span) and not any(
-        _NUMBER_OR_TIME.search(end) or re.fullmatch(_TIME_WORD, end) or _KOREAN_POSITION.fullmatch(end)
-        for end in (span.group("start"), span.group("end"))
-    )
+    return bool(span) and all(_KOREAN_PRODUCT_FEATURE.search(span.group(end)) for end in ("start", "end"))
 
 
 def names_several_features(text: str, links: tuple[str, ...] = ()) -> bool:
-    """Whether ``text`` asks to build several named features or stages: a list of three or more, a range from one stage
-    to another, or several counted, as the build verb's object (`_korean_feature_list`, `_korean_stage_range`,
+    """Whether ``text`` asks to build several named features or stages: a list of three or more, a range from one
+    product feature to another, or several counted, as the build verb's object (`_korean_feature_list`, `_korean_stage_range`,
     `_KOREAN_COUNTED_FEATURES`, `_en_feature_list`, `_EN_RANGE`, `_EN_COUNTED_FEATURES`). Nothing hard-excluded qualifies,
     and neither does a question, a request to be told, or one fault to fix. The router asks once with dag-ulw as the
     candidate, and the route hint offers it; neither starts a run."""
@@ -2366,7 +2355,7 @@ def names_several_features(text: str, links: tuple[str, ...] = ()) -> bool:
             return False
         head, verb = found
         return (
-            _korean_feature_list(head, bool(re.match(_KOREAN_SOFTWARE_VERB, verb)))
+            _korean_feature_list(head, verb)
             or bool(_KOREAN_COUNTED_FEATURES.search(head))
             or _korean_stage_range(head, verb)
         )
@@ -2374,4 +2363,4 @@ def names_several_features(text: str, links: tuple[str, ...] = ()) -> bool:
     if _en_feature_list(words) or _EN_COUNTED_FEATURES.match(words):
         return True
     span = _EN_RANGE.match(words)
-    return bool(span) and not any(_EN_NOT_A_STAGE.search(span.group(end)) for end in ("start", "end"))
+    return bool(span) and all(_EN_PRODUCT_FEATURE.search(span.group(end)) for end in ("start", "end"))

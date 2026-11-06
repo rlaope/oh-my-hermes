@@ -372,18 +372,19 @@ All notable changes will be documented here.
   graph, in Korean as in English.** A request that names three or more
   features as one build verb's object ("메일 가져오기, 파일 업로드, 검색
   기능 개발해줘", "build the upload, preview and download screens", "build
-  login, list and notifications"), a range from one stage to another
-  ("회원가입부터 결제까지 개발해줘", "implement everything from onboarding to
-  checkout") or several counted features ("여러 기능 나눠서 다 해줘",
+  login, list and notifications"), a range from one product feature to
+  another ("회원가입부터 결제까지 개발해줘", "implement everything from
+  onboarding to checkout") or several counted features ("여러 기능 나눠서 다 해줘",
   "implement several features") got no route hint, or a hint for a rule one
   item's word matched ("검색" for web-research), so the agent ran the parts
   one subagent at a time. `names_several_features` reads that shape on
   positive evidence: a feature noun on the list, a verb that builds software
-  with items that name product features, or a stage range. The route hint
+  with items that name product features, or a range between two of them.
+  The route hint
   offers dag-ulw first (ask once) and the router asks with dag-ulw as its
   candidate where it would ask anyway; nothing starts a run on it. A list
   with none of that evidence ("빨강, 파랑, 초록 버튼 만들어줘", "build api,
-  web and worker"), a range of numbers, pages, dates or positions, a
+  web and worker"), a range with any other end, a stated intent, a
   comparison, a question, one fix and every hard exclude of the many-targets
   reading stay as they were. Carried from #2611 by @dhddldid.
 
