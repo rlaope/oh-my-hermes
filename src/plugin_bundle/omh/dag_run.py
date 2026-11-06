@@ -123,7 +123,8 @@ SERIAL_GRAPH_SHARE: Final = 0.8
 CHILD_FAILURE_STOPS: Final = frozenset({"failed", "error", "timeout", "interrupted"})
 # What every view says for a node accepted while its handoff could not be read where the child wrote it.
 HANDOFF_NOT_CHECKED: Final = "handoff not checked"
-NODE_FIELDS: Final = frozenset({"id", "label", "category", "prompt", "depends_on", "write_scope", "role"})
+EXTERNAL_OWNERS: Final = ("claude-code", "codex")
+NODE_FIELDS: Final = frozenset({"id", "label", "category", "prompt", "depends_on", "write_scope", "role", "owner"})
 # What a node is for, as the parent declares it (``build`` when it names none). A ``build`` node with a write scope is a
 # producer; baseline, verify and review nodes stay native whoever builds, and only a ``verify`` node verifies the goal.
 ROLES: Final = ("build", "baseline", "verify", "review")
@@ -251,6 +252,8 @@ def _record_shape_ok(raw: object) -> bool:
             return False
         if "role" in node and node["role"] not in ROLES:
             return False
+        if "owner" in node and (node["owner"] not in EXTERNAL_OWNERS or not is_coding(node)):
+            return False
     if dag_core.layers(ids, {node["id"]: node["depends_on"] for node in nodes}) is None:
         return False
     repairs = raw.get("repairs")
@@ -341,7 +344,7 @@ def valid_id(value: object, reason: str, say: str) -> str:
 def _validated_node(raw: object) -> dict[str, Any]:
     if not isinstance(raw, Mapping) or set(raw) - NODE_FIELDS:
         raise DagRefusal("invalid_node",
-                         "Each node takes only id, label, category, prompt, depends_on, write_scope and role.")
+                         "Each node takes only id, label, category, prompt, depends_on, write_scope, role and owner.")
     node_id = valid_id(raw.get("id"), "invalid_node_id", "Each node needs a short lowercase id (a-z, 0-9, -).")
     label = _plain(raw.get("label"), MAX_LABEL_CHARS, "invalid_label", f"Node {node_id} needs a short label.")
     # Either lane's reader also takes a marker that opens a goal (one handed out before an update), so a label holding
@@ -389,6 +392,11 @@ def _validated_node(raw: object) -> dict[str, Any]:
         # The node runs as a build node and stays a producer; the lint names the role its label reads like, and the
         # guess keeps it native (`is_coding`). Not in the digest (`NODE_FIELDS`).
         validated["role_guess"] = guess
+    if "owner" in raw:
+        if raw["owner"] not in EXTERNAL_OWNERS or not is_coding(validated):
+            raise DagRefusal("invalid_owner",
+                             f"Node {node_id}: owner is one of {', '.join(EXTERNAL_OWNERS)} and only a coding node may name it.")
+        validated["owner"] = raw["owner"]
     return validated
 
 
@@ -669,7 +677,8 @@ def topology(nodes: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
 def definition_digest(nodes: Sequence[Mapping[str, Any]]) -> str:
     # A build role is left out, so a run stored before nodes carried a role, defined again unchanged, is the same run.
-    shape = [{key: node[key] for key in sorted(NODE_FIELDS) if key != "role" or node[key] != DEFAULT_ROLE}
+    shape = [{key: node[key] for key in sorted(NODE_FIELDS)
+              if key in node and (key != "role" or node[key] != DEFAULT_ROLE)}
              for node in nodes]
     return hashlib.sha256(json.dumps(shape, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 

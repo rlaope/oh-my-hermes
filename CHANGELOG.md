@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Codex and Claude Code units dispatched by OMH now come back accepted,
+  and one dag-ulw run can send different coding nodes to both owners.**
+  Untracked executor plugin state under `.omx/` and `.omc/` no longer fails
+  committed-result intake; tracked changes and unrelated untracked files
+  still do. Claude Code's temp directory stays inside the fence, and its
+  result-file directory is explicitly allowed. A readiness decision stale
+  only because it came from another checkout is re-observed at dispatch.
+  Naming Codex or Claude Code in a dag-ulw request in Hermes chat records
+  each owner's one-day choice; coding nodes can name their `owner`, and
+  each owner's batch exports separately while cross-owner dependencies wait.
 - **In Slack and Discord group chats, telling the bot to be quiet now mutes
   it in that thread, and a message meant for someone else no longer opens a
   turn.** OMH registers Hermes' `pre_gateway_dispatch` hook. A whole-message

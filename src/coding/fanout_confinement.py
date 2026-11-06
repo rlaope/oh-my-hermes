@@ -286,11 +286,12 @@ class FanoutFilesystemConfinement:
 
         TMPDIR covers most tools. zsh writes heredoc temp files under
         TMPPREFIX (default `/tmp/zsh`) and uv locks its cache (default
-        `~/.cache/uv`); both defaults are outside every write root, so
-        `zsh -c "... <<EOF"` and `uv run` fail inside the fence. They are
-        pointed into the same scratch directory, which preparation creates
-        (`_write_scratch_ignore`); a caller value already inside a write root
-        is kept. The fence itself is unchanged.
+        `~/.cache/uv`); Claude Code keeps Bash project temp and sockets under
+        CLAUDE_CODE_TMPDIR (default `/tmp`). Those defaults are outside every
+        write root, so each is pointed into the same scratch directory, which
+        preparation creates (`_write_scratch_ignore`). Their subdirectories
+        are creatable inside the fence; a caller value already inside a write
+        root is kept. The fence itself is unchanged.
         """
         selected_environment = self.environment if environment is None else environment
         if (
@@ -306,6 +307,7 @@ class FanoutFilesystemConfinement:
         for key, default, as_prefix in (
             ("TMPPREFIX", scratch / "zsh", True),
             ("UV_CACHE_DIR", scratch / "uv-cache", False),
+            ("CLAUDE_CODE_TMPDIR", scratch / "claude-code", False),
         ):
             if not self._within_write_roots(selected_environment.get(key, ""), as_prefix=as_prefix):
                 result[key] = str(default)
