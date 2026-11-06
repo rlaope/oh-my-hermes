@@ -755,7 +755,7 @@ INTERRUPTED_WHY = "Interrupted"
 # notice asks the person for, as typed. At most AUTO_CONTINUE_LIMIT times between two prompts of the person's own.
 AUTO_CONTINUE_TEXT = "continue"
 AUTO_CONTINUE_SECONDS = 3.0
-# A turn end that leaves the queue to a redirect Hermes queued (`_turn_ended`) waits this long for that turn's
+# A turn end that leaves the queue to what Hermes runs next (`_turn_ended`) waits this long for that turn's
 # `message.start`; without one the queue goes on (`_drain_when_hermes_next_missed`).
 HERMES_NEXT_TURN_SECONDS = 5.0
 AUTO_CONTINUE_LIMIT = 2
@@ -2205,7 +2205,8 @@ class App(ModesMixin, AgentViewMixin):
         # Redirects Hermes answered `queued`: its own next prompt, read only after the turn and cleared by a stop, so
         # no tool finishing settles them (`_track_sent_now`); the line, for a sent-now one.
         self.hermes_queued: list[tuple[SteerBlock, QueuedLine | None]] = []
-        self.hermes_next_due: float | None = None  # the queue waits for Hermes' queued redirect until then
+        self.steer_left_unread = False  # the turn ending left a steer unread (`_settle_steers_at_turn_end`)
+        self.hermes_next_due: float | None = None  # the queue waits for the turn Hermes runs next until then
         self.turns_ended = 0  # turns of this TUI that ended: a steer remembers which turn it was meant for
         self.queue_held = False  # the queue waits for the person after an interrupt (`_hold_queue`)
         self.interrupting = False  # the person interrupted the running turn and Hermes has not ended it yet
@@ -2900,7 +2901,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.exit_code is not None:
             return
         self._auto_continue_when_due()  # after the gateway's news: a turn started meanwhile drops it
-        self._drain_when_hermes_next_missed()  # likewise: Hermes' queued turn starting drops the wait
+        self._drain_when_hermes_next_missed()  # likewise: the turn Hermes runs next starting drops the wait
         self._expire_calls()
         self._expire_notification()
         self._expire_escape()
@@ -3631,8 +3632,8 @@ class App(ModesMixin, AgentViewMixin):
         switch that may move the id the restart resumes is out, or the person reads a pager or picks from a list);
         None when it can go now.
 
-        A turn counts from before it starts: the `continue` the TUI is about to send (`auto_continue`), Hermes' queued
-        redirect (`hermes_next_due`), and a `/compress` that may rotate the session. What runs between turns counts
+        A turn counts from before it starts: the `continue` the TUI is about to send (`auto_continue`), Hermes' next
+        prompt (`hermes_next_due`), and a `/compress` that may rotate the session. What runs between turns counts
         too: what the session waits on, which wakes it (`_pending_wait`), and a `!` line or a slash command whose
         answer is out. A `/bg` or `/btw` task does not: it may never answer (`_side_answers_lost`)."""
         if self._busy() or self.auto_continue is not None or self.hermes_next_due is not None \
@@ -4058,7 +4059,7 @@ class App(ModesMixin, AgentViewMixin):
                 self.bg_done = None  # the session is awake: the row's offer was for an idle one
                 # A turn started (this TUI's prompt, another client's): a `continue` that waited is not sent into it.
                 self.auto_continue, self.auto_continue_out = None, False
-                self.hermes_next_due = None  # Hermes' queued redirect, or any turn: the queue goes at its end
+                self.hermes_next_due = None  # Hermes' next prompt, or any turn: the queue goes at its end
                 self.turn_ours = self.turn_pending
                 self._note_turn(TURN_OPEN)  # its end, once seen, says how it ended (`turn_ends`)
                 if not self.turn_pending:  # a turn this TUI did not start (a resumed one, a server queue)
@@ -6058,17 +6059,20 @@ class App(ModesMixin, AgentViewMixin):
 
     def _turn_ended(self, failed: bool = False) -> None:
         """The turn is over: the next queued line goes, unless the person interrupted it (`_hold_queue`) or Hermes
-        runs a redirect it queued next (`hermes_queued`), after whose turn it goes.
+        runs something next: a redirect it queued (`hermes_queued`) or a steer the turn left unread
+        (`steer_left_unread`). The line goes after that turn.
 
-        Hermes runs its queued redirect only after a turn that did not fail: one that `failed` (an `error`
-        `message.complete`, a bare `error`) can end before the agent was ready, with nothing drained, so the
-        queue goes on as after any turn. A held queue waits HERMES_NEXT_TURN_SECONDS for that turn to start.
+        Only a turn that did not fail holds the queue: one that `failed` (an `error` `message.complete`, a bare
+        `error`) can end before the agent was ready, with nothing drained, so the queue goes on as after any turn.
+        A held queue waits HERMES_NEXT_TURN_SECONDS for that turn to start. The wait also runs out when the turn's
+        last model call read the steer (`turn_iteration_prep.py`, no tool finishing to say so): nothing starts.
 
         Then whether Hermes' default model moved (`_check_default`); a queued
         prompt that goes waits for that check before its turn starts (`_start_turn`).
         """
         self.tell_turn_runs = False  # an open tell field now says what to do after this turn, not in it
         self.stop_asked = False  # whichever way the turn ended, a stop asked for it is spent
+        steer_left, self.steer_left_unread = self.steer_left_unread, False
         self.turns_ended += 1
         # A turn ended before Hermes admitted it (refused, cancelled while the agent built) left what was staged for
         # it: detached. After `message.start` nothing is left (`_claimed` emptied `staged`).
@@ -6080,10 +6084,11 @@ class App(ModesMixin, AgentViewMixin):
         else:
             self.sent_now = []  # the turn ended on its own: Hermes passes a steer it held on as the next turn
             self._settle_unread_steers(STEER_TAKEN)
-            hermes_runs_next = bool(self.hermes_queued) and not failed
+            hermes_runs_next = (bool(self.hermes_queued) or steer_left) and not failed
             self._settle_hermes_queued()
-            # A redirect Hermes queued is its own next prompt, which it starts as this turn ends: a queued line sent
-            # now could start ahead of it. The queue goes on when that turn ends (a turn this TUI did not start).
+            # A redirect Hermes queued or a steer left unread is its own next prompt, which it starts as this turn
+            # ends: a queued line sent now could start ahead of it. The queue goes on when that turn ends (a turn this
+            # TUI did not start).
             if hermes_runs_next:
                 self.hermes_next_due = self.clock() + HERMES_NEXT_TURN_SECONDS
             else:
@@ -6179,8 +6184,9 @@ class App(ModesMixin, AgentViewMixin):
         self.auto_continue_out = True
 
     def _drain_when_hermes_next_missed(self) -> None:
-        """The queue held for Hermes' queued redirect goes on when that turn did not start in time (a drain Hermes
-        cancelled says nothing); a turn started meanwhile (`message.start`) or another session cleared the wait."""
+        """The queue held for what Hermes runs next goes on when that turn did not start in time (a drain Hermes
+        cancelled says nothing, a steer the last model call read starts none); a turn started meanwhile
+        (`message.start`) or another session cleared the wait."""
         if self.hermes_next_due is None or self.clock() < self.hermes_next_due:
             return
         self.hermes_next_due = None
@@ -6553,11 +6559,13 @@ class App(ModesMixin, AgentViewMixin):
 
     def _settle_steers_at_turn_end(self) -> None:
         """The turn ends: a `queued` steer it stopped before reading was dropped (`_requeue_unread_steers`); one still
-        unread when it ended on its own Hermes took, read before a later model call or sent as the next prompt. A
-        `redirected` one was never unread."""
+        unread when it ended on its own Hermes took, read before a later model call or sent as the next prompt, so
+        `_turn_ended`, which comes after the reply closes, is told (`steer_left_unread`). A `redirected` one was never
+        unread."""
         if self.interrupting:
             self._requeue_unread_steers()
         else:
+            self.steer_left_unread = bool(self.unread_steers)
             self._settle_unread_steers(STEER_TAKEN)
 
     def _settle_unread_steers(self, state: str, outcome: str = "") -> None:

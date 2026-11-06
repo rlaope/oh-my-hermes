@@ -156,6 +156,12 @@ All notable changes will be documented here.
   to it. A token leaves the end of an answer only after sentence-ending
   punctuation, so `The marker - [SILENT]` stays as written.
 
+- **A queued line in the OMH TUI no longer starts ahead of a steer Hermes
+  passes on as its next prompt.** When a turn ends on its own with a steer
+  unread, the queue waits for the turn that runs it. If none starts, because
+  the turn's last model call read the steer, the queue goes on within a few
+  seconds. A stopped or failed turn is unchanged.
+
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
   choice sent the question at once: with nothing ticked it answered with
