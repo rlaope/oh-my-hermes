@@ -343,19 +343,19 @@ class OfferTests(unittest.TestCase):
         for name, value in (("auto_continue", ("20261106_120000_abcdef", 1e9)), ("hermes_next_due", 1e9)):
             with self.subTest(state=name), tempfile.TemporaryDirectory() as tmp:
                 app, pointer, now = update_app(tmp)
-                setattr(app, name, value)
+                vars(app)[name] = value
                 pointer.move(NEW)
                 tick(app, now)
                 self.assertIsNone(app.slot)  # not asked in the gap before that turn
-                setattr(app, name, None)
+                vars(app)[name] = None
                 tick(app, now, 0.0)
                 arm(now)
                 pick(app, UPDATE_RESTART_CHOICE)
-                setattr(app, name, value)  # came up after the answer: the restart waits for it
+                vars(app)[name] = value  # came up after the answer: the restart waits for it
                 tick(app, now)
                 self.assertIn(RELAUNCH_AFTER_TURN.format(label=label), notices(app))
                 self.assertIsNone(app.exit_code)
-                setattr(app, name, None)
+                vars(app)[name] = None
                 tick(app, now)
                 self.assertEqual(app.exit_code, launch.RELAUNCH_EXIT)
         with tempfile.TemporaryDirectory() as tmp, patch.object(App, "_compressing_since", return_value=1.0):
@@ -431,11 +431,11 @@ class OfferTests(unittest.TestCase):
         for name in ("pager", "picker", "model_picker", "launch_picker", "rewind_picker", "chains_open"):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
                 app, pointer, now = update_app(tmp)
-                setattr(app, name, True if name == "chains_open" else object())
+                vars(app)[name] = True if name == "chains_open" else object()
                 pointer.move(NEW)
                 tick(app, now)
                 self.assertIsNone(app.slot)
-                setattr(app, name, False if name == "chains_open" else None)
+                vars(app)[name] = False if name == "chains_open" else None
                 tick(app, now, 0.0)
                 self.assertIsNotNone(app.slot)
 
