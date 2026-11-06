@@ -40,6 +40,7 @@ Contract: `references/full-contract.md`. Preset: `references/preset.md`.
 ## Recovery Notes
 
 - Tool missing, `consent_not_observed`, or refused: follow the rail's recovery section; never simulate an answer.
+- A diff refused as `credential_like_content` is a finding, not text to strip: report it as an OMH security flag on that file.
 
 ## Workflow Lane
 

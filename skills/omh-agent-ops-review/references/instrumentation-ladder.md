@@ -24,8 +24,8 @@ the tier.
 ## The audit, in priority order
 
 - **P0** - telemetry init, model-call capture, tool-call capture, error
-  capture. A gap here fails the audit regardless of what else exists. The
-  priorities order the remediation list; they do not grade, the tiers do.
+  capture. These come first in the remediation list. The verdict follows the
+  tier rule above: the tiers grade, the priorities only order the fixes.
 - **P1** - token tracking, cost attribution, agent identity, multi-agent
   links.
 - **P2** - memory/RAG spans, human-in-the-loop, evaluation-run tracking,

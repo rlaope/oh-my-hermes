@@ -483,7 +483,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `jit-learn`, `learn next`, `learn now`, `blocker-specific learning target`, `highest-leverage learning target`, `immediate learning payoff`, `immediately applicable learning brief`, `source-backed learning brief`, `학습 주제`, `도움 되는 학습 주제`, `당장 적용할 학습 목표`, `책 팟캐스트 크리에이터 강의 학습 브리프`, `объясни с нуля`, `разжуй тему`, `выучи и расскажи`
 - Good example:
   - Prompt: What should I learn next to solve my current onboarding blocker? Recommend books, podcasts, creators, and courses I can apply this week.
-  - Expected behavior: Ask one confirmation question, confirm the immediate target, then prepare a source-backed four-section learning brief ranked by fit and time-to-first-value.
+  - Expected behavior: Ask one confirmation question, confirm the immediate target, then prepare a source-backed learning brief ranked by fit and time-to-first-value.
   - Why: The user needs target selection and immediate transfer, not a generic curriculum or popularity-ranked resource list.
 - Bad example:
   - Prompt: Design a six-week Python syllabus with weekly assessments.
@@ -9666,7 +9666,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expected behavior: Route to `code-review`: the PR is about Jev, and nobody asked Jev anything.
   - Why: Talking about Jev is not addressing it.
 - Quality bar:
-  - Each ask carries one file's diff; the union of flags is reported per file.
+  - Each ask carries one file's diff with its matching test diff when one exists; the union of flags is reported per file.
   - A non-answer is `not_observed`, never `no_flags`.
 - Completion checklist:
   - Every file sent was named to the user first.
@@ -9674,9 +9674,9 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If `omh_jev_ask` is not in the tool list, say Jev is unavailable, point at the `plugin_jev_sidekick` line of `omh doctor`, and continue as main_model through the partner workflow.
   - If the tool returns `consent_not_observed`, nothing was sent; offer the ask in one line naming what would be sent and wait for the user to reply `ask jev`.
-  - If the tool refuses `credential_like_content`, remove the secret-looking text from `state` rather than redacting it silently, and tell the user what was removed.
+  - If the tool refuses a diff as `credential_like_content`, the diff adds credential-like text: report that as an OMH security flag on the file, and do not send a stripped diff as if it were the file.
 - Required inputs:
-  - the diff, one file per ask
+  - the diff, one file per ask with its matching test diff
   - the review the flags feed
 - Expected outputs:
   - `review_flags/v1` flags per file
@@ -9727,7 +9727,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The outcome was one of hold, refuse_recommended, or no_extra_hold, with its rule.
   - Nothing was run on the strength of `no_extra_hold` alone.
 - Recovery notes:
-  - If `omh_jev_ask` is not in the tool list, say Jev is unavailable and the screen did not run (a `hold`, rule `tool_unavailable`), point at the `plugin_jev_sidekick` line of `omh doctor`, and run the command only if the user says so after that.
+  - If `omh_jev_ask` is not in the tool list, say Jev is unavailable and the screen did not run (a `hold`, rule `not_answered:tool_unavailable`), point at the `plugin_jev_sidekick` line of `omh doctor`, and run the command only if the user says so after that.
   - If the tool returns `consent_not_observed`, nothing was sent; offer the ask in one line naming what would be sent and wait for the user to reply `ask jev`.
   - If the tool refuses `credential_like_content` because the command itself carries a credential, report a `hold` (the command carries a credential) first; screen a version with the value replaced by a placeholder only if the user asks, and say the screen did not see the real command.
 - Required inputs:
@@ -9930,7 +9930,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### memory-new
 
-[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, for an approved past decision recall it with omh_memory, and for a rejected alternative use decision-recall.
+[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, and for a past decision use omh_memory recall or decision-recall.
 
 - Category: `memory`
 - Phase: `candidate-capture`
@@ -9992,7 +9992,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### memory-sync
 
-[omh] Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use decision-recall.
+[omh] Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use omh_memory recall or decision-recall.
 
 - Category: `memory`
 - Phase: `curation-review`
@@ -11775,7 +11775,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
   - Classify a lesson before any write: `omh learning route-signal "<one-line lesson>"` names the destination (memory, skill, wiki, failure-retrospective, or automation review); add `--record` only after the user agrees to keep the route. Show the destination and why, list pending routes with `omh learning store-routes`, and leave `omh learning review-route` to the person. A fact goes to `memory-new` and a skill change stays a `skill_update_candidate`; this skill writes none of those stores.
-  - Read Hermes' skill audit ledger read-only (`skills/.curator_ledger.jsonl` under the active profile's Hermes home, or `hermes curator ledger --limit <n>`, which lists only the 20 newest entries by default) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. An empty ledger is unknown, not clean, because `skills.ledger: false` turns it off. A trimmed ledger is incomplete too: Hermes drops the oldest entries past `skills.ledger_max_bytes`, so report the window you read (entry count, oldest timestamp) and treat an older write as not_observed, not clean.
+  - Read Hermes' skill audit ledger read-only (`skills/.curator_ledger.jsonl` under the active profile's Hermes home, or `hermes curator ledger --limit <n>`, which lists only the 20 newest entries by default) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. An empty ledger is unknown, not clean, because `skills.ledger: false` turns it off. A trimmed ledger is incomplete too: from Hermes v2026.9.24 the oldest entries are dropped past `skills.ledger_max_bytes`, so report the window you read (entry count, oldest timestamp) and treat an older write as not_observed, not clean.
   - Mark an approved `skill_update_candidate` landed only from a `skill_manage` result for that skill that succeeded without `staged: true`, or from a ledger entry that is dated after the approval, has `actor` `agent` or `user` and `action` `create`, `edit`, `patch`, or `write_file`, and lists the approved target file in its `after` manifest. An entry by `curator`, or one that deletes, archives, rolls back, or purges, never marks it landed, and a staged result waits in `/skills pending` for the person and has not landed.
   - The ledger records skill writes only: a memory write by Hermes' background review is visible only when Hermes staged it under `pending/memory/` with `origin: background_review`, and is `not_observed` otherwise.
   - Point the user to `/journey` in the Hermes CLI for Hermes' own view of what it learned; reading the ledger or the journey changes nothing, and undoing an entry (`hermes curator rollback <id>`) is the person's own step, never OMH's.
@@ -11833,13 +11833,14 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
-  - The query, scope, tags, stale policy, and match limit are explicit.
+  - The query and scope are explicit, and any tags, stale policy, or match limit that were set are stated.
   - Only reviewed rejected candidates are returned; expired candidates stay excluded.
   - Recall output is not presented as approved memory, source freshness, or execution evidence.
 - Recovery notes:
   - Run `omh memory rejected-recall --scope-kind project --scope-ref <id> [--tag <tag>] [--include-stale] [--limit <n>] <query words>`; `--scope-kind` and `--scope-ref` are required. Get the `prj:` id yourself from `omh memory project-identity show`, and ask the user only for a missing query, never for the scope.
-  - An empty result on a default install is expected: memory is approved on capture, so rejected decisions exist only after a person rejected a staged candidate. Say "no reviewed rejection is on record for this project", not "nothing was rejected", and offer `omh_memory` recall for alternatives that were only discussed or captured as ordinary memory.
-  - If the query, scope, tags, stale policy, or match limit is unspecified, no rejected-decision match stands yet; mark recall unresolved and hand back one question fixing the missing filter.
+  - An empty result on a default install is expected: memory is approved on capture, so rejected decisions exist only after a person rejected a staged candidate. Say "no reviewed rejection is on record for this project", not "nothing was rejected", and offer to recall alternatives that were only discussed or captured as ordinary memory.
+  - If `omh memory project-identity show` reports `state: unresolved` (no project identity exists, for example a git repository with no remote that was never initialised), no rejection can be on record: say so and do not run the recall with an empty scope ref.
+  - If the query is missing, no rejected-decision match stands yet; mark recall unresolved and hand back one question for the query. The scope comes from the project identity, and tags, stale policy, and match limit default when unset.
   - If a candidate's reviewed-rejected status or expiry cannot be checked, retain only matches that passed those checks, mark remaining recall unresolved, and hand back rejected_decision_recall/v1 with the claim boundary and missing checks.
 - Required inputs:
   - user request

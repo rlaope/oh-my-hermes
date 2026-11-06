@@ -35,7 +35,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If `omh_jev_ask` is not in the tool list, say Jev is unavailable and the screen did not run (a `hold`, rule `tool_unavailable`), point at the `plugin_jev_sidekick` line of `omh doctor`, and run the command only if the user says so after that.
+- If `omh_jev_ask` is not in the tool list, say Jev is unavailable and the screen did not run (a `hold`, rule `not_answered:tool_unavailable`), point at the `plugin_jev_sidekick` line of `omh doctor`, and run the command only if the user says so after that.
 - If the tool returns `consent_not_observed`, nothing was sent; offer the ask in one line naming what would be sent and wait for the user to reply `ask jev`.
 - If the tool refuses `credential_like_content` because the command itself carries a credential, report a `hold` (the command carries a credential) first; screen a version with the value replaced by a placeholder only if the user asks, and say the screen did not see the real command.
 

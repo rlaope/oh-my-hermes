@@ -313,10 +313,11 @@ All notable changes will be documented here.
 - **Memory, learning, agent and Jev skills now give steps that run.** A
   fact with a relative date ("next Friday") is captured again with an absolute
   date in the same turn instead of waiting for a review nobody does, and the
-  memory tool no longer points the model at a review command. Recovering from
+  memory tool names the right next step for each reason it holds a capture
+  (protected content says there is nothing to approve). Recovering from
   one wrong memory source archives live records with `omh memory attention
   --tier archive` or the `omh_memory` retire action (the old `omh memory
-  retire` step moved nothing for a live record), and says that hard delete
+  retire` step refuses a live record), and says that hard delete
   accepts only an expired volatile record. `decision-recall` names its command
   and required flags and says an empty result is normal on a default install;
   "what was decided" now goes to `omh_memory` recall, not to the rejected-only

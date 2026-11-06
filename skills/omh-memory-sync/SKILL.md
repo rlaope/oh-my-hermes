@@ -1,6 +1,6 @@
 ---
 name: "omh-memory-sync"
-description: "[omh] Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use decision-recall. Use when the user says: memory-sync, memory curation, memory review, memory inspect, memory check, memory update, context cleanup, curate memory."
+description: "[omh] Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use omh_memory recall or decision-recall. Use when the user says: memory-sync, memory curation, memory review, memory inspect, memory check, memory update, context cleanup, curate memory."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:
@@ -89,7 +89,7 @@ When the user asks to tidy, review, or clean up memory, list open records first,
 - **Still open** - `omh memory keep-open <record-id>` resets only the reminder's ask clock; the record, its state, and its deadline do not change.
 - **Drop it** - `omh memory retire <record-id>` prepares the retirement; `--apply` archives it. Nothing is deleted.
 
-Without a shell that runs `omh`: `confirm` and `retire` (reason `user_asked`) exist as `omh_memory` actions and apply at once, so call them only after the person's answer; the open-record listing and `keep-open` have no tool form, so say they need a terminal and stop.
+Without a shell that runs `omh`: `confirm` and `retire` (reason `user_asked`) exist as `omh_memory` actions and apply at once, so call them only after the person's answer (recall the record first: a record not served this session is refused as `record_not_seen_this_session`); the open-record listing and `keep-open` have no tool form, so say they need a terminal and stop.
 
 The person answers per record; never resolve, keep open, or retire on your own judgment. A record with no answer stays open: say so, and do not default it to keep-open. Between reviews the provider prefetch asks on its own, with at most one `omh reminder: "<summary>" (<record_id>) has been unresolved for N days — resolved, still open, or drop it?` line per turn: once when the review deadline passes, then at most every `open_ask_days` (default 14) per record, and "still open" resets that clock. The reminder only asks and writes no record, so an answer given in chat still goes through one of the three commands above.
 

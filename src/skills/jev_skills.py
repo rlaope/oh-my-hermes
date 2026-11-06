@@ -46,9 +46,13 @@ _ACTION_CHECK_SAFETY = (
     "A non-answer status is never an answer: report it as a `hold`, tell the user the screen did not run, and run the command only if they say so after that.",
 )
 _ACTION_CHECK_RECOVERY = (
-    "If `omh_jev_ask` is not in the tool list, say Jev is unavailable and the screen did not run (a `hold`, rule `tool_unavailable`), point at the `plugin_jev_sidekick` line of `omh doctor`, and run the command only if the user says so after that.",
+    "If `omh_jev_ask` is not in the tool list, say Jev is unavailable and the screen did not run (a `hold`, rule `not_answered:tool_unavailable`), point at the `plugin_jev_sidekick` line of `omh doctor`, and run the command only if the user says so after that.",
     _COMMON_RECOVERY[1],
     "If the tool refuses `credential_like_content` because the command itself carries a credential, report a `hold` (the command carries a credential) first; screen a version with the value replaced by a placeholder only if the user asks, and say the screen did not see the real command.",
+)
+_REVIEW_GATE_RECOVERY = (
+    *_COMMON_RECOVERY[:2],
+    "If the tool refuses a diff as `credential_like_content`, the diff adds credential-like text: report that as an OMH security flag on the file, and do not send a stripped diff as if it were the file.",
 )
 
 
@@ -95,7 +99,16 @@ def _definition(
         good_example=good,
         bad_example=bad,
         final_checklist=final_checklist,
-        recovery_notes=(*(_ACTION_CHECK_RECOVERY if name == "jev-action-check" else _COMMON_RECOVERY), *recovery_notes),
+        recovery_notes=(
+            *(
+                _ACTION_CHECK_RECOVERY
+                if name == "jev-action-check"
+                else _REVIEW_GATE_RECOVERY
+                if name == "jev-review-gate"
+                else _COMMON_RECOVERY
+            ),
+            *recovery_notes,
+        ),
         host_requires_tools=(JEV_REQUIRED_TOOL,),
         progressive_disclosure=True,
         situations=situations,
@@ -251,14 +264,14 @@ JEV_REVIEW_GATE_DEFINITION = _definition(
     "Use when a diff is under review and the user asks Jev for typed flags as an extra reviewer signal.",
     category="review",
     hermes_role="hybrid-review",
-    required_inputs=("the diff, one file per ask", "the review the flags feed"),
+    required_inputs=("the diff, one file per ask with its matching test diff", "the review the flags feed"),
     expected_outputs=("`review_flags/v1` flags per file", "the union of flags and the highest severity across files"),
     safety_rules=(
         "Send at most 8 files per review and state the cost before the first ask; source code leaves the machine.",
         "Flags are advisory evidence: `no_flags` never approves a merge and never satisfies a review item.",
     ),
     quality_bar=(
-        "Each ask carries one file's diff; the union of flags is reported per file.",
+        "Each ask carries one file's diff with its matching test diff when one exists; the union of flags is reported per file.",
         "A non-answer is `not_observed`, never `no_flags`.",
     ),
     why="`jev-review-gate` exists so a reviewer can add Jev's typed flags to a review without handing it any authority to approve.",
@@ -458,11 +471,16 @@ def jev_skill_body(definition: SkillDefinition, name: str) -> str:
     preset = JEV_PRESET_BY_SKILL.get(name)
     preset_line = f" Preset: `{JEV_PRESET_REFERENCE_PATH}`." if preset else ""
     non_answer_line = _non_answer_checklist_line(preset)
-    recovery_extra = (
-        "\n- Here a missing tool or a non-answer is a `hold`, not permission to continue without the screen: tell the user it did not run."
-        if name == "jev-action-check"
-        else ""
-    )
+    recovery_extra = {
+        "jev-action-check": (
+            "\n- Here a missing tool, a non-answer, or a command refused as credential-like is a `hold`, not permission "
+            "to continue without the screen: tell the user it did not run."
+        ),
+        "jev-review-gate": (
+            "\n- A diff refused as `credential_like_content` is a finding, not text to strip: report it as an OMH "
+            "security flag on that file."
+        ),
+    }.get(name, "")
     return f"""# {title}
 
 {_COMPACT_CONTRACTS[name]}
@@ -628,7 +646,8 @@ non-generative: it answers typed questions about a `state` with probabilities an
 - `consent_not_observed`: nothing was sent; offer the ask in one line naming what would be sent
   and wait for the user to reply `ask jev`.
 - `credential_like_content`: remove the secret-looking text from `state` and tell the user what
-  was removed; the tool refuses rather than redacts.
+  was removed; the tool refuses rather than redacts. A skill's own procedure or recovery line wins
+  over this one: a diff or a command that carries a credential is a finding, not text to strip.
 
 ## Relation to the route-question answerer opt-in (#1816)
 

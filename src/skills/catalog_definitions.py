@@ -1114,7 +1114,7 @@ _DEFINITIONS = [
         ),
         good_example=SkillExample(
             prompt="What should I learn next to solve my current onboarding blocker? Recommend books, podcasts, creators, and courses I can apply this week.",
-            expected="Ask one confirmation question, confirm the immediate target, then prepare a source-backed four-section learning brief ranked by fit and time-to-first-value.",
+            expected="Ask one confirmation question, confirm the immediate target, then prepare a source-backed learning brief ranked by fit and time-to-first-value.",
             why="The user needs target selection and immediate transfer, not a generic curriculum or popularity-ranked resource list.",
         ),
         bad_example=SkillExample(

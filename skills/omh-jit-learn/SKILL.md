@@ -34,7 +34,7 @@ This is a Hermes-native `jit-learn` workflow skill.
 Good example:
 
 - Prompt: What should I learn next to solve my current onboarding blocker? Recommend books, podcasts, creators, and courses I can apply this week.
-- Expected behavior: Ask one confirmation question, confirm the immediate target, then prepare a source-backed four-section learning brief ranked by fit and time-to-first-value.
+- Expected behavior: Ask one confirmation question, confirm the immediate target, then prepare a source-backed learning brief ranked by fit and time-to-first-value.
 - Why: The user needs target selection and immediate transfer, not a generic curriculum or popularity-ranked resource list.
 
 Bad example:

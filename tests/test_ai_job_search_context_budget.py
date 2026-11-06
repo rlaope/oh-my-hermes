@@ -143,13 +143,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            # 533907 -> 534091 and the digest re-derived: the memory-new description names omh_memory
-            # recall for an approved decision (+64), the decision-recall row gains its Do Not Use
-            # lines (+95) and the jev-action-check row's third safety rule reads as a hold (+25),
-            # itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT; no other row moved, and the pin
-            # before it was d6dfefff...fc71.
-            (skill_capabilities, 534091, FULL_ROW_DELTA_CAP,
-             '0cdc241a6df4189edfdb56440f59e8eda7d2617d4e9f348fa07b3e4bb452a6eb',
+            # 533907 -> 534141 and the digest re-derived: the memory-new and memory-sync descriptions
+            # name omh_memory recall, the decision-recall row gains its Do Not Use lines, the
+            # jev-action-check row's third safety rule reads as a hold and the jev-review-gate row
+            # names the matching test diff, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT; no
+            # other row moved, and the pin before it was d6dfefff...fc71.
+            (skill_capabilities, 534141, FULL_ROW_DELTA_CAP,
+             '9bad4bf0d1606107248022209c28bb0930c9eb01fa3b49418b9d7f5c4d585700',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -385,7 +385,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # decision-recall, instinct-ledger, jit-learn, workflow-learning, rules-distill,
         # agent-evaluation, agent-ops-review and four jev-* bodies move; nothing else, and the
         # pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '382c408171264679cdbabf231a695bd13426d8fd19d87a9ea5472527b149e4d6')
+        self.assertEqual(_digest(legacy_hashes), 'dd4535be31fb32d7221ee1524c2e30ecba1786578216f6c9618a7f1f880b3f2c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -402,7 +402,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
         # 124814 -> 124355: agent-ops-review's own Completion Checklist replaces the operator
         # default it repeated (-459); swapping only that body back to main's restores 124814.
-        self.assertEqual(legacy['repeated']['bytes'], 124355)
+        # 124355 -> 124221: the memory, decision and Jev fixes' own Recovery Notes replace default text
+        # other bodies repeat (-134); swapping those bodies back to main's restores 124355.
+        self.assertEqual(legacy['repeated']['bytes'], 124221)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

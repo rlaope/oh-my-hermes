@@ -966,11 +966,12 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # 536969 -> 536979: the `dag-ulw` row only. Its handoff policy names the third
 # way an external coding owner is chosen (naming it in a dag-ulw request) and
 # the per-owner `exports` list (+10). Measured from the producer; no headroom.
-# 536979 -> 537163: three rows grow. memory-new's description names omh_memory recall for an
-# approved decision (+64); decision-recall gains two Do Not Use lines (+95); jev-action-check's
-# third safety rule reads as a hold instead of "continue without Jev" (+25). Measured from the
-# producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 537163
+# 536979 -> 537213: five rows grow. memory-new's and memory-sync's descriptions name omh_memory
+# recall beside decision-recall for a past decision; decision-recall gains two Do Not Use lines;
+# jev-action-check's third safety rule reads as a hold instead of "continue without Jev";
+# jev-review-gate's required input and quality bar name the matching test diff. Measured from
+# the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 537213
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -2161,12 +2162,12 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # body (+11,249), merged over the Vietnamese pack. Its own measurement on
 # 32878e25d (1,332,345) and this pack's (1,325,671) each raised the ceiling to
 # 1,500,000; together they read 1,336,920, whose 10% still rounds to it.
-# 1336920 -> 1476492 (measured; the ceiling 1500000 -> 1650000): the pack had grown to
+# 1336920 -> 1477386 (measured; the ceiling 1500000 -> 1650000): the pack had grown to
 # 1,471,273 across merges that each left the stale measurement alone, so the largest
 # lane-mate copy (`ultrawork`, +26,456) fit by 2,727 chars. The memory, learning, agent and
-# Jev skill fixes (+5,219) take it to 1,476,492, where `ultrawork` no longer fits.
-# 1,476,492 plus 10%, rounded up to the next 50,000, is 1,650,000.
-FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1476492
+# Jev skill fixes (+6,113) take it to 1,477,386, where `ultrawork` no longer fits.
+# 1,477,386 plus 10%, rounded up to the next 50,000, is 1,650,000.
+FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1477386
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
 FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1650000

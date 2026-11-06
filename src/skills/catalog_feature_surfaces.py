@@ -192,7 +192,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "memory-new",
-        "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, for an approved past decision recall it with omh_memory, and for a rejected alternative use decision-recall.",
+        "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, and for a past decision use omh_memory recall or decision-recall.",
         (
             "memory-new",
             "new memory",
@@ -242,7 +242,7 @@ _FEATURE_SURFACE_SKILLS = (
         portable_overrides={
             # `omh-memory-sync` ships only on Hermes.
             "description": (
-                "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a rejected alternative use decision-recall.",
+                "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a past decision use omh_memory recall or decision-recall.",
             ),
             "safety_rules": (
                 "An OMH project-memory candidate is prepared local context only, not an approved record or native host-memory mutation. External provider/vector and host context is not_omh_reviewed and can nominate a candidate only.",
@@ -252,7 +252,7 @@ _FEATURE_SURFACE_SKILLS = (
             ),
         },
         portable_override_shadows={
-            "description": "700f390dfa6b969e2e9d4fa4577f2e5d681340bf73d63f15a5801057cabddac7",
+            "description": "7dd7346a78a06ab1a85764704af10b9b2be4f890a3eb7099310e84d865d2bddb",
             "safety_rules": "1339e73ae4df4feb34e2bfe93e42f0e6945e8a83176c0602b6778b2842ffc354",
         },
         recovery_notes=(
@@ -263,7 +263,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "memory-sync",
-        "Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use decision-recall.",
+        "Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use omh_memory recall or decision-recall.",
         (
             "memory-sync",
             "memory curation",
@@ -2378,7 +2378,7 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         final_checklist=(
             "Classify a lesson before any write: `omh learning route-signal \"<one-line lesson>\"` names the destination (memory, skill, wiki, failure-retrospective, or automation review); add `--record` only after the user agrees to keep the route. Show the destination and why, list pending routes with `omh learning store-routes`, and leave `omh learning review-route` to the person. A fact goes to `memory-new` and a skill change stays a `skill_update_candidate`; this skill writes none of those stores.",
-            f"Read Hermes' skill audit ledger read-only ({_CURATOR_LEDGER_FILE}, or `hermes curator ledger --limit <n>`, {_CURATOR_LEDGER_LIMIT}) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. {_CURATOR_LEDGER_EMPTY} A trimmed ledger is incomplete too: Hermes drops the oldest entries past `skills.ledger_max_bytes`, so report the window you read (entry count, oldest timestamp) and treat an older write as not_observed, not clean.",
+            f"Read Hermes' skill audit ledger read-only ({_CURATOR_LEDGER_FILE}, or `hermes curator ledger --limit <n>`, {_CURATOR_LEDGER_LIMIT}) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. {_CURATOR_LEDGER_EMPTY} A trimmed ledger is incomplete too: from Hermes v2026.9.24 the oldest entries are dropped past `skills.ledger_max_bytes`, so report the window you read (entry count, oldest timestamp) and treat an older write as not_observed, not clean.",
             "Mark an approved `skill_update_candidate` landed only from a `skill_manage` result for that skill that succeeded without `staged: true`, or from a ledger entry that is dated after the approval, has `actor` `agent` or `user` and `action` `create`, `edit`, `patch`, or `write_file`, and lists the approved target file in its `after` manifest. An entry by `curator`, or one that deletes, archives, rolls back, or purges, never marks it landed, and a staged result waits in `/skills pending` for the person and has not landed.",
             "The ledger records skill writes only: a memory write by Hermes' background review is visible only when Hermes staged it under `pending/memory/` with `origin: background_review`, and is `not_observed` otherwise.",
             "Point the user to `/journey` in the Hermes CLI for Hermes' own view of what it learned; reading the ledger or the journey changes nothing, and undoing an entry (`hermes curator rollback <id>`) is the person's own step, never OMH's.",
