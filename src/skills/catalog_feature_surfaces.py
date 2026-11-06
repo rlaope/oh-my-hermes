@@ -374,9 +374,9 @@ _FEATURE_SURFACE_SKILLS = (
             "The origin platform, thread/session boundary, delivery target, and update policy are named.",
             "Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.",
             "The next wrapper action is explicit and platform-safe.",
-            "The delivery target is written as `origin`, a bare platform name (its home channel), or `platform:chat_id:thread_id`; a target without the thread segment is channel-level, not thread-level.",
+            "For `send_message` the delivery target is a bare platform name (its home channel), `platform:chat_id` (channel-level) or `platform:chat_id:thread_id` (thread-level); `origin` is only a cron job's `deliver` value and `send_message` refuses it, and a reply to the same chat is just the reply.",
             "An attachment is a `MEDIA:/absolute/path` line in the reply, and the platform adapter that cannot send it is named instead of promising the file.",
-            "A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat drops it only for a message that expected no reply or in a room with `allow_silence: true`, and otherwise delivers it as text.",
+            "A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat stays silent for an internal or heartbeat turn, a message known to expect no reply, or a healthy completed turn in a room with `allow_silence: true` (Hermes 0.22.6 and later); on any other human message Hermes replaces the marker with a visible warning asking them to retry, and cron and webhook runs follow a looser rule.",
         ),
         extra_do_not_use_when=(
             "The request names a cadence or a recurring job (every morning, a daily digest, a cron job); use `automation-blueprint`.",
@@ -1738,9 +1738,9 @@ _FEATURE_SURFACE_SKILLS = (
         recovery_notes=(
             "If config sources are unavailable, report only the discovered surfaces and mark the missing hosts not_observed.",
             "If cleanup, host load, connector execution, or session progress is requested, route to the owning workflow instead of folding it into inventory.",
-            "To recover a previous coding session, list candidates read-only by metadata only (file name, modified time, size, first user line): Codex `~/.codex/sessions/`, Claude Code `~/.claude/projects/<project-slug>/`, Hermes `hermes sessions list`; mark an unreadable source not_observed, and read a transcript body only when the person asks for that next step.",
-            "For `omh harness mcp-tool-name-compatibility`, each snapshot is a `mcp_tool_name_compatibility_snapshot/v1` JSON file with `target_harness`, `adapter`, `required_tools` and `advertised_tools`, one `--snapshot` per distinct target harness (1 to 20 files).",
-            "Write each of the other inventory artifacts as a table with columns entry, source path, and state in {observed, prepared, missing, stale, drifted}, so completion can be checked row by row.",
+            "To recover a previous coding session, list candidates read-only by metadata only (file name, modified time, size): Codex `~/.codex/sessions/`, Claude Code `~/.claude/projects/<project-slug>/`, Hermes `hermes sessions list`; mark an unreadable source not_observed, and read a transcript body only when the person asks for that next step.",
+            "For `omh harness mcp-tool-name-compatibility`, each snapshot is a JSON file with exactly `schema_version` (`mcp_tool_name_compatibility_snapshot/v1`), `target_harness`, `adapter` (an object of `id` and `version`), `required_tools` (entries of `logical_name` and `evidence_refs`) and `advertised_tools` (entries of `name`, `observation` of `registered` or `config_only`, and `evidence_refs`); one `--snapshot` per distinct target harness (1 to 20 files), and a malformed file is refused with no field named.",
+            "Write each of the other inventory artifacts as a table with columns entry, source path, and state in {observed, prepared, missing, stale, drifted, not_observed}, so completion can be checked row by row.",
         ),
         extra_do_not_use_when=(
             "The request is one repository's own skill, prompt, plugin, or config surfaces and gaps with no cross-harness comparison; use `workspace-audit`.",

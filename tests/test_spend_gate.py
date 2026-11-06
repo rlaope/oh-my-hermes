@@ -259,16 +259,26 @@ class SpendGateContractTests(unittest.TestCase):
         )
         self.assertInBoth("An `unknown` row counts against the cap until it is reconciled.", _references())
 
-    def test_an_mppx_call_is_the_spend_and_only_link_asks(self) -> None:
+    def test_only_a_pay_plugin_or_link_asks_and_mppx_is_the_spend(self) -> None:
         self.assertInBoth(
-            "`stripe-link-cli` with `--request-approval` asks the person in their Link app, which is additional "
-            "evidence beside the typed confirmation. A 402 client such as `mppx` pays the challenge as it runs and "
-            "asks no one, so running it is the spend and comes only after the typed confirmation.",
+            "`stripe-link-cli` with `--request-approval` asks the person in their Link app, and `pay` and `pay-cli` "
+            "confirm each payment through an MCP elicitation and decline when nobody can answer; those answers are "
+            "additional evidence recorded beside the typed confirmation, never in place of it. `mppx` pays the 402 "
+            "challenge as it runs and asks no one, so running it is the spend and comes only after the typed "
+            "confirmation.",
             _references(),
         )
         self.assertInBoth(
-            "The optional Hermes skill `stripe-link-cli`, and an HTTP 402 payment client (the `mppx` CLI, a Hermes Pay "
-            "plugin, or `mpp-agent` on a Hermes that still ships it), only when the person installed them.",
+            "The `hermes-mpp` plugin, with no `MPP_ALLOWED_ORIGINS` allow list set, auto-pays any supported 402 that "
+            "ordinary HTTP traffic meets, with no cap or confirmation: stop and tell the person before any HTTP call.",
+            _references(),
+        )
+
+    def test_an_unknown_amount_already_spent_is_never_zero(self) -> None:
+        self.assertInBoth(
+            "If they cannot say, what is already spent is unknown: never assume zero and never show the full cap as "
+            "remaining. The card says the cap cannot be checked, and the spend goes ahead only against a cap the "
+            "person sets for this spend alone, with the total checked against it.",
             _references(),
         )
 

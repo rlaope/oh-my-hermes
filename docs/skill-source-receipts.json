@@ -881,6 +881,17 @@
       "reviewed_on": "2026-11-02",
       "rationale": "Adopted the deletion test in place of inlining every single-use helper; a module that hides complexity stays whatever its caller count.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-07-spend-gate-hermes-pay-plugins",
+      "candidate_key": "spend-gate@github.com/nousresearch/hermes-agent",
+      "prior_checkpoint": "63d0b94120027d487c9a5235b9ec64b696af1b26",
+      "next_checkpoint": "2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19",
+      "disposition": "adopted",
+      "decision_ref": "#2628",
+      "reviewed_on": "2026-11-07",
+      "rationale": "Adopted the pay and pay-cli plugins as confirming 402 clients beside the typed yes, and the hermes-mpp stop; mpp-agent kept only for a Hermes that still ships it.",
+      "supersedes": null
     }
   ]
 }

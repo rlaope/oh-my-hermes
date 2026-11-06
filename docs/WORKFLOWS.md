@@ -5715,7 +5715,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Clear OMH state with its own commands: `omh state clear --workflow <name>` (`--session-ref` when session-bound), on Hermes `omh_todo action=clear`, and `omh goal cancel --goal <id>`; an OMH loop stops through its linked goal, and one without a goal has no cancel record.
   - Hand host work to the person's own stop command; on Hermes `/stop` (in a CLI or TUI session it ends every background process, and the classic CLI its background delegations too; on a messaging platform it interrupts the running turn rather than ending every background process), `/loop stop`, `/goal pause` or `/goal clear`, `/heartbeat clear`, `/pause` (all new work on a gateway).
   - Report an OMH clear as done only from its command result, and a host stop as requested until the host's own reply to it is seen.
-  - List what exists before clearing: `omh state status` (workflow state) and `omh goal board` (goals); on Hermes a scheduled job's stop is also the person's command: `hermes cron cancel <job_id>` stops its live run and leaves the schedule, `hermes cron pause <job_id>` stops later runs, and `hermes cron runs <job_id>` shows whether the run ended.
+  - List what exists before clearing: `omh state status` (workflow state) and `omh goal board` (goals); on Hermes a scheduled job's stop is also the person's command: `hermes cron pause <job_id>` stops later runs and `hermes cron runs <job_id>` shows whether the run ended; where `hermes cron --help` lists `cancel` (Hermes 0.22.6 and later), `hermes cron cancel <job_id>` stops the live run and leaves the schedule, and on an older Hermes there is no per-job live stop, so report the live run as still going.
 - Completion checklist:
   - Every stopped item is named with its owner: OMH state or host work.
   - Each OMH clear cites its command result; each host stop stays requested until the host's reply is seen.
@@ -10105,9 +10105,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The origin platform, thread/session boundary, delivery target, and update policy are named.
   - Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.
   - The next wrapper action is explicit and platform-safe.
-  - The delivery target is written as `origin`, a bare platform name (its home channel), or `platform:chat_id:thread_id`; a target without the thread segment is channel-level, not thread-level.
+  - For `send_message` the delivery target is a bare platform name (its home channel), `platform:chat_id` (channel-level) or `platform:chat_id:thread_id` (thread-level); `origin` is only a cron job's `deliver` value and `send_message` refuses it, and a reply to the same chat is just the reply.
   - An attachment is a `MEDIA:/absolute/path` line in the reply, and the platform adapter that cannot send it is named instead of promising the file.
-  - A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat drops it only for a message that expected no reply or in a room with `allow_silence: true`, and otherwise delivers it as text.
+  - A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat stays silent for an internal or heartbeat turn, a message known to expect no reply, or a healthy completed turn in a room with `allow_silence: true` (Hermes 0.22.6 and later); on any other human message Hermes replaces the marker with a visible warning asking them to retry, and cron and webhook runs follow a looser rule.
 - Recovery notes:
   - If silent update conflicts with a status notice, keep the thread; hand back the silent-or-notify choice.
   - If an action would touch a thread other than the named one, mark it unresolved; hand back the target.
@@ -11201,9 +11201,9 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If config sources are unavailable, report only the discovered surfaces and mark the missing hosts not_observed.
   - If cleanup, host load, connector execution, or session progress is requested, route to the owning workflow instead of folding it into inventory.
-  - To recover a previous coding session, list candidates read-only by metadata only (file name, modified time, size, first user line): Codex `~/.codex/sessions/`, Claude Code `~/.claude/projects/<project-slug>/`, Hermes `hermes sessions list`; mark an unreadable source not_observed, and read a transcript body only when the person asks for that next step.
-  - For `omh harness mcp-tool-name-compatibility`, each snapshot is a `mcp_tool_name_compatibility_snapshot/v1` JSON file with `target_harness`, `adapter`, `required_tools` and `advertised_tools`, one `--snapshot` per distinct target harness (1 to 20 files).
-  - Write each of the other inventory artifacts as a table with columns entry, source path, and state in {observed, prepared, missing, stale, drifted}, so completion can be checked row by row.
+  - To recover a previous coding session, list candidates read-only by metadata only (file name, modified time, size): Codex `~/.codex/sessions/`, Claude Code `~/.claude/projects/<project-slug>/`, Hermes `hermes sessions list`; mark an unreadable source not_observed, and read a transcript body only when the person asks for that next step.
+  - For `omh harness mcp-tool-name-compatibility`, each snapshot is a JSON file with exactly `schema_version` (`mcp_tool_name_compatibility_snapshot/v1`), `target_harness`, `adapter` (an object of `id` and `version`), `required_tools` (entries of `logical_name` and `evidence_refs`) and `advertised_tools` (entries of `name`, `observation` of `registered` or `config_only`, and `evidence_refs`); one `--snapshot` per distinct target harness (1 to 20 files), and a malformed file is refused with no field named.
+  - Write each of the other inventory artifacts as a table with columns entry, source path, and state in {observed, prepared, missing, stale, drifted, not_observed}, so completion can be checked row by row.
 - Required inputs:
   - user request
   - target context
@@ -11925,7 +11925,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - host_usage: Hermes' recorded usage for a named session, or not_observed
   - not_observed provider and billing gaps
 - Artifact expectations:
-  - run_efficiency_report/v1 metadata-only report, built with `omh runtime efficiency-report --input <run_efficiency_input/v1 file> [--hermes-session <id>] [--write]`; the input carries the supplied run id, context budget, surfaces and tool durations, and with no input file you ask for the timings and never write estimates into it
+  - run_efficiency_report/v1 metadata-only report, built with `omh runtime efficiency-report --input <run_efficiency_input/v1 file> [--hermes-session <id>] [--write]`; the input is JSON with exactly `schema_version` (`run_efficiency_input/v1`), `run_id`, `context_budget` (`schema_version` `omh_run_context_budget/v1`, `run_id`, `budget_bytes`, `emitted_bytes`, `remaining_bytes` equal to the difference, and `surfaces` mapping a surface name to a count) and `observations` (at most 20 entries of `metric`, one of `wall_clock_duration_ms`, `tool_duration_ms`, `context_bytes`, an integer `value` and a `source_ref`); with no input file you ask for the timings and never write estimates into it
   - supplied `session_activity_receipt/v1` when available; unavailable metrics stay unavailable, never zero
   - `host_usage` from the Hermes-accounted part of the cost receipt `omh_run_summary` returns (the session, its delegated children, and its kanban workers; `--hermes-session`, and a local Hermes terminal holds the id in `$HERMES_SESSION_ID`): observed only when Hermes recorded tokens for it; no session row or no tokens stays not_observed, never zero
 - Safety rules:

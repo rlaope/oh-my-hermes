@@ -8745,9 +8745,10 @@ _DEFINITIONS = [
             "Report an OMH clear as done only from its command result, and a host stop as requested until the "
             "host's own reply to it is seen.",
             "List what exists before clearing: `omh state status` (workflow state) and `omh goal board` (goals); on "
-            "Hermes a scheduled job's stop is also the person's command: `hermes cron cancel <job_id>` stops its live run and "
-            "leaves the schedule, `hermes cron pause <job_id>` stops later runs, and `hermes cron runs <job_id>` "
-            "shows whether the run ended.",
+            "Hermes a scheduled job's stop is also the person's command: `hermes cron pause <job_id>` stops later runs and "
+            "`hermes cron runs <job_id>` shows whether the run ended; where `hermes cron --help` lists `cancel` (Hermes "
+            "0.22.6 and later), `hermes cron cancel <job_id>` stops the live run and leaves the schedule, and on an older "
+            "Hermes there is no per-job live stop, so report the live run as still going.",
         ),
         why_this_exists=(
             "`cancel` exists so a request to stop ends the right thing: OMH clears the state this session owns, and "

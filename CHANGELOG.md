@@ -312,7 +312,8 @@ All notable changes will be documented here.
 
 - **The operations and board skills now name the commands and Hermes
   surfaces they depend on.** `cancel` lists what exists before clearing and
-  hands a running scheduled job to `hermes cron cancel`, `pause` and `runs`;
+  hands a running scheduled job to `hermes cron pause` and `runs`, and to
+  `hermes cron cancel` where Hermes has it;
   `running-work-board` names `omh coding status-board`; `run-efficiency` names
   `omh runtime efficiency-report` and its input; `agent-board` ships a
   reference with the `prepare` fields, the supported operations and the
@@ -326,8 +327,9 @@ All notable changes will be documented here.
   category default that did not fit them, the must-keep file in
   `context-budget-review` now carries `item_classes` so the class comparison
   can run, `feedback-triage` ranks by distinct customers and masks personal
-  data in quotes, and `spend-gate` stops treating an absent ledger as zero
-  spend and no longer presents the removed `mpp-agent` skill as current.
+  data in quotes, and `spend-gate` stops treating an unknown amount already
+  spent as zero and names the `pay`, `pay-cli` and `hermes-mpp` plugins instead of
+  presenting the removed `mpp-agent` skill as current.
   `gateway-intent-card` and `automation-blueprint`, `harness-session-inventory`
   and `workspace-audit`, `agent-board` and `running-work-board` each name the
   other for the requests that belong to it.

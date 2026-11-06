@@ -78,7 +78,7 @@ Quality bar:
 - Clear OMH state with its own commands: `omh state clear --workflow <name>` (`--session-ref` when session-bound), on Hermes `omh_todo action=clear`, and `omh goal cancel --goal <id>`; an OMH loop stops through its linked goal, and one without a goal has no cancel record.
 - Hand host work to the person's own stop command; on Hermes `/stop` (in a CLI or TUI session it ends every background process, and the classic CLI its background delegations too; on a messaging platform it interrupts the running turn rather than ending every background process), `/loop stop`, `/goal pause` or `/goal clear`, `/heartbeat clear`, `/pause` (all new work on a gateway).
 - Report an OMH clear as done only from its command result, and a host stop as requested until the host's own reply to it is seen.
-- List what exists before clearing: `omh state status` (workflow state) and `omh goal board` (goals); on Hermes a scheduled job's stop is also the person's command: `hermes cron cancel <job_id>` stops its live run and leaves the schedule, `hermes cron pause <job_id>` stops later runs, and `hermes cron runs <job_id>` shows whether the run ended.
+- List what exists before clearing: `omh state status` (workflow state) and `omh goal board` (goals); on Hermes a scheduled job's stop is also the person's command: `hermes cron pause <job_id>` stops later runs and `hermes cron runs <job_id>` shows whether the run ended; where `hermes cron --help` lists `cancel` (Hermes 0.22.6 and later), `hermes cron cancel <job_id>` stops the live run and leaves the schedule, and on an older Hermes there is no per-job live stop, so report the live run as still going.
 
 Handoff policy:
 

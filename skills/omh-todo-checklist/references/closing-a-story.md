@@ -159,7 +159,7 @@ all, which is `plan_record_absent` and never "nothing was blocked".
   before this phase rather than inside it. A close report restating one of its
   verdicts has not re-proved it.
 - **Do not let the deep guide, the ELI5 pass, or the quiz stand in for the
-  close.** Those are `wiki`'s three handover artifacts and they are retained
+  close.** Those are the `omh-wiki` skill's three handover artifacts and they are retained
   knowledge, not a report of what the plan says.
 
 ## Boundary

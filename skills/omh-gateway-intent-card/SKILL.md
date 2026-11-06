@@ -47,9 +47,9 @@ Bad example:
 - The origin platform, thread/session boundary, delivery target, and update policy are named.
 - Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.
 - The next wrapper action is explicit and platform-safe.
-- The delivery target is written as `origin`, a bare platform name (its home channel), or `platform:chat_id:thread_id`; a target without the thread segment is channel-level, not thread-level.
+- For `send_message` the delivery target is a bare platform name (its home channel), `platform:chat_id` (channel-level) or `platform:chat_id:thread_id` (thread-level); `origin` is only a cron job's `deliver` value and `send_message` refuses it, and a reply to the same chat is just the reply.
 - An attachment is a `MEDIA:/absolute/path` line in the reply, and the platform adapter that cannot send it is named instead of promising the file.
-- A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat drops it only for a message that expected no reply or in a room with `allow_silence: true`, and otherwise delivers it as text.
+- A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat stays silent for an internal or heartbeat turn, a message known to expect no reply, or a healthy completed turn in a room with `allow_silence: true` (Hermes 0.22.6 and later); on any other human message Hermes replaces the marker with a visible warning asking them to retry, and cron and webhook runs follow a looser rule.
 
 ## Recovery Notes
 

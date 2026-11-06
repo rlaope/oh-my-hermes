@@ -3910,7 +3910,7 @@ all, which is `plan_record_absent` and never "nothing was blocked".
   before this phase rather than inside it. A close report restating one of its
   verdicts has not re-proved it.
 - **Do not let the deep guide, the ELI5 pass, or the quiz stand in for the
-  close.** Those are `wiki`'s three handover artifacts and they are retained
+  close.** Those are the `wiki` skill's three handover artifacts and they are retained
   knowledge, not a report of what the plan says.
 
 ## Boundary
@@ -4616,32 +4616,52 @@ def agent_board_reference_templates() -> list[SkillReferenceTemplate]:
 
 
 def _agent_board_reference() -> str:
-    """What `omh_agent_board prepare` needs, for a model that cannot open the repository's operator docs."""
-    return """# Agent Board: Preparing a Request
+    """What `omh_agent_board prepare` needs, read from the engine's own tables so the page cannot drift from it."""
+    from ..workflows.agent_board import _OPERATIONS, _REFERENCE
 
-The repository's operator page is not part of an installed skill, so the fields a `prepare` call needs are here. OMH prepares; Hermes invokes the returned `native_action` through its normal tool loop.
+    rows = "\n".join(
+        f"| `{operation}` | {', '.join(f'`{name}`' for name in required.split()) or 'none'} | "
+        f"{', '.join(f'`{name}`' for name in optional.split()) or 'none'} |"
+        for operation, (required, optional, _) in _OPERATIONS.items()
+    )
+    return f"""# Agent Board: Preparing a Request
+
+The repository's operator page is not part of an installed skill, so the fields a `prepare` call needs are here, read from the board engine. OMH prepares; Hermes invokes the returned `native_action` through its normal tool loop.
 
 ## 1. The two calls
 
-- `prepare`: `request_id`, `coordination`, `operation`, `board`, `profile`, `arguments`; optional `task_id` and `expected_observation_ref`. A call missing a required field is refused with `invalid_prepare_input` and the missing names in `fields`.
+- `prepare`: `request_id`, `coordination`, `operation`, `board`, `profile`, `arguments`; optional top-level `task_id` and `expected_observation_ref`. A call with no `board` is refused as `board_required`; one missing another field is refused as `invalid_prepare_input` with the missing names in `fields`.
 - `status`: only `action` and `request_id`; anything more is `invalid_status_input`. It returns the bounded receipt and no action text or native output.
 
 ## 2. Fields
 
 | Field | Value |
 | --- | --- |
-| `request_id` | a new unique string per request; repeating a `create` with the same `request_id` returns the task already observed, so reuse an id only to repeat the same create |
-| `coordination` | `durable` for work that must survive a restart or be picked up across profiles (a `kanban_<operation>` action); `bounded_research` for one short `delegate_task` child |
-| `operation` | one of `create`, `link`, `comment`, `heartbeat`, `request_review`, `request_changes`, `block`, `unblock`, `complete`, `show`, `list`, `attachments` |
-| `board` | the named board; a `board` that is not the one bound to this host is a foreign board and is refused |
+| `request_id` | a string matching `{_REFERENCE.pattern.removesuffix(chr(92) + "Z")}`: letters, digits, `_ . : -`, no spaces, at most 128 characters; repeating a `create` with the same `request_id` returns the task already observed |
+| `coordination` | `durable` for a `kanban_<operation>` action that survives a restart or crosses profiles; `bounded_research` for one `delegate_task` |
+| `operation` | with `durable`, one of the operations in section 3; with `bounded_research`, only `research` |
+| `board` | the named board; a board other than the one bound to this host is refused |
 | `profile` | the host profile being coordinated |
-| `arguments` | closed per operation: an unknown key is refused |
+| `arguments` | closed per operation, section 3; an unknown key is refused |
+| `task_id` | top level, not inside `arguments`: required for every durable operation except `create`, `link` and `list`, and refused (`unexpected_task_id`) on those three |
 
-Refusals that name no reason beyond `invalid_request_or_board_store` mean the engine rejected the request: an unknown key, a foreign board, a `task_id` that differs from the request, a self-link, a `complete` without summary or result, an unknown block kind, an `idempotency_key` that differs from the `request_id`, or a `status` for a `request_id` that was never prepared. Correct the field and prepare again; do not retry the same call.
+## 3. Durable operations and their arguments
+
+| Operation | Required arguments | Optional arguments |
+| --- | --- | --- |
+{rows}
+
+A required `task_id` is satisfied by the top-level `task_id`; if `arguments` repeats it, the two must match.
+
+`bounded_research`, operation `research`: `arguments` is exactly `{{"tasks": [{{"goal": "...", "context": "..."}}]}}`, one or more tasks, each with exactly `goal` and `context`, and no top-level `task_id`.
 
 A durable `create` may state `lane_role` (`builder`, `verifier`, `reviewer`, `docs` or `qa`): OMH fills that lane's skills and workspace kind, refuses a verifier or reviewer that declares no parents, and removes the role before the native action.
 
-## 3. What must exist on the host
+## 4. Refusals
+
+The tool answers `invalid_request_or_board_store` for every engine refusal and does not say which. The usual causes are an unknown key (`unsupported_argument`), a missing required argument (`missing_argument`), a `request_id` or `task_id` outside the pattern (`invalid_reference`), a `bounded_research` call with any other operation or shape (`invalid_bounded_research`), a foreign board or task, a self-link, an `idempotency_key` that differs from the `request_id`, or a `status` for a `request_id` that was never prepared. Correct the field and prepare again; do not retry the same call.
+
+## 5. What must exist on the host
 
 OMH checks none of these; it reports the gap it can see as `unavailable` with `missing_capabilities`.
 
@@ -4650,7 +4670,7 @@ OMH checks none of these; it reports the gap it can see as `unavailable` with `m
 - A gateway running with `kanban.dispatch_in_gateway` enabled; only that dispatcher turns a `ready` row into a worker.
 - An `assignee` that names an existing Hermes profile, with every `skills` entry installed in that profile.
 
-## 4. States
+## 6. States
 
 `prepared` (validated, not invoked), `unavailable` (a capability is missing; zero native calls), `denied`, `observed` (the paired post callback returned a bound result), `failed`. A prepared or unavailable record is a card, not a task. After `failed` or `requires_reconciliation`, run an observed `show` on the same task before the next mutation.
 
@@ -4763,7 +4783,7 @@ Each surface below is used only when it is present, and none replaces the person
 - `clarify`: when {clarify}, ask for the confirmation with the card in the question; otherwise ask in a plain reply and end the turn.
 - Browser tools (`browser_navigate`, `browser_snapshot`, `browser_click`): read the quote and the receipt with them. A snapshot of the confirmation page with its order number is an observed receipt; a snapshot of the cart is a quote.
 - The approval prompt Hermes shows for a flagged command: when the paying command raises it, record its answer beside the typed confirmation. An auto-approval (`/yolo`, `approvals.mode: off`, or a call the default `smart` mode judged low-risk and approved itself) or a command the check did not flag is no confirmation at all.
-- The optional Hermes skill `stripe-link-cli`, and an HTTP 402 payment client (the `mppx` CLI, a Hermes Pay plugin, or `mpp-agent` on a Hermes that still ships it), only when the person installed them. `stripe-link-cli` with `--request-approval` asks the person in their Link app, which is additional evidence beside the typed confirmation. A 402 client such as `mppx` pays the challenge as it runs and asks no one, so running it is the spend and comes only after the typed confirmation. The receipt either one returns fills `spend_receipt/v1`.
+- The optional Hermes skill `stripe-link-cli`, the Hermes Pay plugins `pay` (hosted) and `pay-cli` (local), and the `mppx` CLI (`mpp-agent` on a Hermes that still ships it), only when the person installed them. `stripe-link-cli` with `--request-approval` asks the person in their Link app, and `pay` and `pay-cli` confirm each payment through an MCP elicitation and decline when nobody can answer; those answers are additional evidence recorded beside the typed confirmation, never in place of it. `mppx` pays the 402 challenge as it runs and asks no one, so running it is the spend and comes only after the typed confirmation. The `hermes-mpp` plugin, with no `MPP_ALLOWED_ORIGINS` allow list set, auto-pays any supported 402 that ordinary HTTP traffic meets, with no cap or confirmation: stop and tell the person before any HTTP call. The receipt any of them returns fills `spend_receipt/v1`.
 
 ## 3. Unknown outcomes
 
@@ -4777,7 +4797,7 @@ An outcome nobody saw -- a timeout, a dropped connection, a page that reloaded, 
 
 ## 4. Cap ledger
 
-`spend_cap_ledger/v1` is a list of rows the person can read: date, payee, amount, currency, rail, state, and receipt reference, with the running total against the cap. It never holds a card number, security code, wallet key, password, one-time code, or a whole receipt body. An `unknown` row counts against the cap until it is reconciled. The ledger lives where the person keeps it; OMH writes no ledger file of its own. When no ledger is supplied, ask the person for what they already spent against this cap in the period and put it on the card; if they cannot say, the remaining cap is `unknown` on the card, never zero. Show the new row for the person to store.
+`spend_cap_ledger/v1` is a list of rows the person can read: date, payee, amount, currency, rail, state, and receipt reference, with the running total against the cap. It never holds a card number, security code, wallet key, password, one-time code, or a whole receipt body. An `unknown` row counts against the cap until it is reconciled. The ledger lives where the person keeps it; OMH writes no ledger file of its own. When no ledger is supplied, ask the person for what they already spent against this cap in the period and put it on the card. If they cannot say, what is already spent is unknown: never assume zero and never show the full cap as remaining. The card says the cap cannot be checked, and the spend goes ahead only against a cap the person sets for this spend alone, with the total checked against it. Show the new row for the person to store.
 """
 
 
