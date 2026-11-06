@@ -195,14 +195,15 @@ composer, `/rewind`) cuts the session's history before the prompt the person
 picked, and only when they send the prompt that replaces it (`prompt.submit`
 with `truncate_before_row_id` and `confirm_truncate`). Mouse reporting (clicks,
 the wheel and a held button's motion, modes 1000, 1002 and 1006, never 1003)
-is on wherever the TUI can tell which screen row a report lands on, and off
-while the window is resized and on every exit. On the main screen a drag, a
+is on only while the agent list or the `/theme` picker takes clicks (clicks and
+the wheel, without 1002) and in a pager, and off while the window is resized
+and on every exit. With `OMH_TUI_MOUSE=1` it is on wherever the TUI can tell
+which screen row a report lands on: on the main screen a drag, a
 double click or a triple click selects rows the live region printed, by their
 place in what it printed (`LiveRegion.doc_row`), shows them reversed and
 copies them; a row it cannot map for certain is never guessed at, and the
-wheel up opens the transcript view. `OMH_TUI_MOUSE=0` turns this off: then
-reporting is on only while the agent list or the `/theme` picker takes clicks
-(clicks and the wheel, without 1002) and in a pager. A plain left click on an
+wheel up opens the transcript view. Without it the wheel and a drag on the
+main screen are the terminal's. A plain left click on an
 agent opens its log, one on the list's `main` row leaves the list. In a pager
 the wheel scrolls, and in a pager and on the main screen a drag, a double
 click or a triple click copies what it
