@@ -12,7 +12,7 @@ Load this while planning a store release. OMH prepares; the operator or CI build
 | rollout | phased release of automatic updates over seven days, pausable; a manual download still gets the new build | staged rollout by percentage, raised step by step, haltable |
 | no rollback | a released build stays installed; ship a higher build number, optionally with an expedited review request | a released `versionCode` stays installed; ship a higher `versionCode`, even when it is the old code rebuilt |
 
-Toolchain minimum, checked at upload: iOS builds use the Xcode and SDK version Apple currently requires (Xcode 26 and the OS 26 SDKs since 2026-04-28); Android builds target the API level Play currently requires and ship as an app bundle. Read the current numbers from the two upcoming-requirements pages and record the date read.
+Toolchain minimum, checked at upload: iOS builds use the Xcode and SDK version Apple currently requires (Xcode 26 and the OS 26 SDKs since 2026-04-28); Android builds target the API level Play currently requires and ship as an app bundle. Read the current numbers from Apple's upcoming-requirements page (https://developer.apple.com/news/upcoming-requirements/) and Play's target API level page (https://developer.android.com/google/play/requirements/target-sdk), and record the date read.
 
 ## 2. Before submitting
 

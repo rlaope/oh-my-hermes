@@ -4,7 +4,7 @@ Load this while planning a fine-tune. OMH prepares; the operator trains, evaluat
 
 ## 1. Decide whether to fine-tune at all
 
-Climb the ladder in order and stop at the first rung that closes the measured gap on the held-out eval:
+Climb the ladder in order, measuring each rung on the development split, and stop at the first rung that closes the measured gap:
 
 | Rung | Try | Stop here when |
 | --- | --- | --- |
@@ -26,13 +26,15 @@ Tune prompts and retrieval on a development split. The held-out set is touched o
 | DPO | preference pairs: a chosen and a rejected output for the same input | good and bad are easier to rank than to write | drifts from the reference model when pairs are noisy or one-sided |
 | RLVR | inputs whose answers a program can check: tests, exact answers, a validator | correctness is verifiable and demonstrations are scarce | reward hacking: passes the checker without solving the task |
 
-SFT first and DPO after is the common order when both kinds of data exist. A LoRA or other adapter trains a small set of extra weights: cheaper, swappable, and easy to roll back; train full weights only when an adapter measured short of the gap.
+SFT first and DPO after is the common order when both kinds of data exist.
+
+Distillation, training a smaller model on a larger model's outputs, is SFT on teacher outputs. The data plan names the teacher and whether its terms allow training on its outputs, and the comparison runs the teacher, the distilled student, and the untuned student on the same held-out eval. Pruning and quantization change existing weights and are not fine-tuning; OMH has no pruning workflow. A LoRA or other adapter trains a small set of extra weights: cheaper, swappable, and easy to roll back; train full weights only when an adapter measured short of the gap.
 
 ## 3. Training data checklist
 
 1. Every source has a license or consent that permits training on it.
 2. Deduplicate, and drop examples that contradict each other.
-3. Draw the held-out split before training, from the same distribution as real traffic.
+3. Draw a development split for the prompt, retrieval, and training trials and a held-out split that is touched only to report, both before training and from the same distribution as real traffic.
 4. Check that no held-out example, or a near duplicate of one, is in the training set.
 5. Record the counts per source and per split.
 6. Scan the examples for personal data and credentials and remove or mask them: trained weights can emit what they saw, and consent to a file is not consent to a model that reproduces it.

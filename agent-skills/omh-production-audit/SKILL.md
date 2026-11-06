@@ -41,9 +41,8 @@ Bad example:
 
 ## Completion Checklist
 
-- Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
-- Open questions, residual risk, and missing verification are named.
-- Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+- Each of the nine matrix rows reads observed, failed, or missing, with its evidence id, and the verdict follows the GO, BLOCK, HOLD rule.
+- The rollback plan names signals, owner, threshold, and recovery path; OMH deployed and scanned nothing.
 
 ## Recovery Notes
 
@@ -72,7 +71,7 @@ Quality bar:
 - Return GO, HOLD, or BLOCK only with evidence IDs and missing evidence.
 - Convert remediation into explicit follow-up workflows instead of silently patching.
 - Verdict: GO only when all nine rows are observed, BLOCK when any row failed an observed check, else HOLD naming the rows lacking evidence.
-- Evidence floor: rollback = command exercised, restore tested, RPO/RTO; performance = load result at peak; observability = alerts to a named on-call with a runbook; security_privacy = secrets store, least privilege, cert expiry.
+- Evidence floor: rollback = command exercised, restore tested; performance = load result at peak; observability = alerts to a named on-call; security_privacy = secrets store, least privilege.
 
 Required inputs:
 

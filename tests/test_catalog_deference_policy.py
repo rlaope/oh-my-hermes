@@ -326,8 +326,10 @@ NON_SKILL_BACKTICKS = frozenset(
 # `model-optimization` defers weight-level optimization to `inference-serving`
 # (serving format and quantization) and `model-finetuning` (distillation); no
 # sibling gains a statement pointing back. Two cases, two pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 412
-EXPECTED_DEFERENCE_PAIRS = 428
+# `reliability-review` defers a go or hold verdict before launch to
+# `production-audit`; one case, one pair, no new owner.
+EXPECTED_DEFERENCE_CASES = 413
+EXPECTED_DEFERENCE_PAIRS = 429
 EXPECTED_DEFERRING_OWNERS = 121
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,

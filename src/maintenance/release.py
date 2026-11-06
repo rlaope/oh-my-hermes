@@ -967,7 +967,7 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # way an external coding owner is chosen (naming it in a dag-ulw request) and
 # the per-owner `exports` list (+10). Measured from the producer; no headroom.
 # 536979 -> 536975: the `application-threat-model` asset-register output line
-# drops a word (-4); no other row moved.
+# drops a word (-4); the `inference-serving` row changes in content at the same length.
 FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536975
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone

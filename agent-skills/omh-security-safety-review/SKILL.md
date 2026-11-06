@@ -46,8 +46,7 @@ Bad example:
 
 - Findings are grounded in concrete file, command, or source evidence.
 - The verdict is PASS, HOLD, or BLOCK with the missing evidence and confirmation required.
-- Residual risk and missing verification are named; fixes are separate handoffs.
-- A credential replacement states its case: compromised revokes first, planned keeps an overlap window.
+- Residual risk is named; fixes are separate handoffs; a credential replacement states compromised (revoke first) or planned.
 
 ## Recovery Notes
 
@@ -78,7 +77,7 @@ Quality bar:
 - Order a credential replacement issue-new, deploy-new, verify-new, revoke-old, verify-revoked, and name what breaks if the order changes; revocation is proven by a call that fails with the old credential, never by the revoke command's exit status, which reports that the request was accepted. Load `references/credential-rotation.md` for the overlap window and the per-credential-type steps.
 - Project every blocked terminal-command row into a proposed `approvals.deny` glob list the user applies; a blocked action that is not a terminal command (a file write, an MCP or HTTP call) stays a guidance-only row, because the deny list never sees it.
 - Return PASS, HOLD, or BLOCK with missing evidence and confirmation requirements.
-- A downloaded script is read in full, never piped to a shell, and run in a disposable VM without credentials.
+- A downloaded script is read in full, never piped to a shell, and run only in a disposable VM.
 
 Required inputs:
 

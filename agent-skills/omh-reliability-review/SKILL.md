@@ -25,6 +25,7 @@ This is an OMH `reliability-review` workflow skill, projected for Agent Skills h
 - No service, incident, SLO, metric, or reliability source boundary is available.
 - The request is implementation of remediation rather than review of reliability evidence.
 - The incident is still open and the user needs severity declared, a commander assigned, a running timeline, and recovery verified; use `omh-live-incident-response` and review it once it is closed.
+- The ask is a go or hold verdict before launch; use `omh-production-audit`.
 
 ## Examples
 
@@ -44,8 +45,7 @@ Bad example:
 
 - An SLO conclusion states the SLI (good over valid events), window, target, budget consumed, and burn rate, or reads unresolved.
 - A postmortem draft names impact, detection and resolution times, trigger, contributing factors (systems, not people), and action items with owner and due date.
-- A pre-launch review names, per dependency, the slow, down, and wrong-answer behavior and the SLOs and runbooks that exist.
-- Every remediation item reads open or closed with the observed evidence.
+- A pre-launch review names, per dependency, its slow, down, and wrong-answer behavior; remediation items read open or closed with evidence.
 
 ## Recovery Notes
 
@@ -89,6 +89,7 @@ Expected outputs:
 Artifact expectations:
 
 - omh_operation_artifact/v1 reliability-review artifact when a wrapper or CLI records it
+- a postmortem draft when one is asked for
 
 Artifact contracts:
 

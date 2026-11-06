@@ -5893,7 +5893,11 @@ _DEFINITIONS = [
             "Return GO, HOLD, or BLOCK only with evidence IDs and missing evidence.",
             "Convert remediation into explicit follow-up workflows instead of silently patching.",
             "Verdict: GO only when all nine rows are observed, BLOCK when any row failed an observed check, else HOLD naming the rows lacking evidence.",
-            "Evidence floor: rollback = command exercised, restore tested, RPO/RTO; performance = load result at peak; observability = alerts to a named on-call with a runbook; security_privacy = secrets store, least privilege, cert expiry.",
+            "Evidence floor: rollback = command exercised, restore tested; performance = load result at peak; observability = alerts to a named on-call; security_privacy = secrets store, least privilege.",
+        ),
+        final_checklist=(
+            "Each of the nine matrix rows reads observed, failed, or missing, with its evidence id, and the verdict follows the GO, BLOCK, HOLD rule.",
+            "The rollback plan names signals, owner, threshold, and recovery path; OMH deployed and scanned nothing.",
         ),
         why_this_exists=(
             "`production-audit` gives OMH a preflight release surface so operators can see production risks before launch "
@@ -6741,13 +6745,12 @@ _DEFINITIONS = [
             "Order a credential replacement issue-new, deploy-new, verify-new, revoke-old, verify-revoked, and name what breaks if the order changes; revocation is proven by a call that fails with the old credential, never by the revoke command's exit status, which reports that the request was accepted. Load `references/credential-rotation.md` for the overlap window and the per-credential-type steps.",
             "Project every blocked terminal-command row into a proposed `approvals.deny` glob list the user applies; a blocked action that is not a terminal command (a file write, an MCP or HTTP call) stays a guidance-only row, because the deny list never sees it.",
             "Return PASS, HOLD, or BLOCK with missing evidence and confirmation requirements.",
-            "A downloaded script is read in full, never piped to a shell, and run in a disposable VM without credentials.",
+            "A downloaded script is read in full, never piped to a shell, and run only in a disposable VM.",
         ),
         final_checklist=(
             "Findings are grounded in concrete file, command, or source evidence.",
             "The verdict is PASS, HOLD, or BLOCK with the missing evidence and confirmation required.",
-            "Residual risk and missing verification are named; fixes are separate handoffs.",
-            "A credential replacement states its case: compromised revokes first, planned keeps an overlap window.",
+            "Residual risk is named; fixes are separate handoffs; a credential replacement states compromised (revoke first) or planned.",
         ),
         why_this_exists=(
             "`security-safety-review` adapts ECC's AgentShield and safety-review posture into OMH as a review-first gate "
@@ -6935,7 +6938,7 @@ _DEFINITIONS = [
         handoff_policy="Keep incident/SLO/error-budget review in Hermes; prepare remediation handoffs only after an accepted fix direction exists and record closure only from observed evidence.",
         required_inputs=("service or incident scope", "time window", "metric/source references", "known remediation items or gaps"),
         expected_outputs=("reliability review", "evidence and missing-evidence list", "remediation follow-up boundary"),
-        artifact_expectations=("omh_operation_artifact/v1 reliability-review artifact when a wrapper or CLI records it",),
+        artifact_expectations=("omh_operation_artifact/v1 reliability-review artifact when a wrapper or CLI records it", "a postmortem draft when one is asked for"),
         safety_rules=(
             "Do not claim SLO pass, healthy error budget, incident closure, or remediation completion without source, metric, or reference evidence.",
             "Do not treat a reliability narrative as verification, review, CI, merge, or deploy evidence.",
@@ -6954,14 +6957,14 @@ _DEFINITIONS = [
         final_checklist=(
             "An SLO conclusion states the SLI (good over valid events), window, target, budget consumed, and burn rate, or reads unresolved.",
             "A postmortem draft names impact, detection and resolution times, trigger, contributing factors (systems, not people), and action items with owner and due date.",
-            "A pre-launch review names, per dependency, the slow, down, and wrong-answer behavior and the SLOs and runbooks that exist.",
-            "Every remediation item reads open or closed with the observed evidence.",
+            "A pre-launch review names, per dependency, its slow, down, and wrong-answer behavior; remediation items read open or closed with evidence.",
         ),
         do_not_use_when=(
             "The user only needs a generic status report or leadership deck.",
             "No service, incident, SLO, metric, or reliability source boundary is available.",
             "The request is implementation of remediation rather than review of reliability evidence.",
             "The incident is still open and the user needs severity declared, a commander assigned, a running timeline, and recovery verified; use `live-incident-response` and review it once it is closed.",
+            "The ask is a go or hold verdict before launch; use `production-audit`.",
         ),
         good_example=SkillExample(
             prompt="reliability-review 장애 포스트모템과 SLO 에러버짓 상태를 검토해줘.",
@@ -7041,9 +7044,8 @@ _DEFINITIONS = [
             why="An unscoped build has no acceptance test and no rollback.",
         ),
         final_checklist=(
-            "The idea, user, success metric, and non-goals are written down.",
-            "Each stage has an owner and the skill that runs it; plan acceptance and executor choice precede any coding handoff.",
-            "Where it runs, how secrets are provided, and the first environment are decided before deploy; deploy evidence is observed.",
+            "The idea, user, success metric, and non-goals are written down; each stage has an owner and the skill that runs it.",
+            "Plan acceptance and executor choice precede any handoff; where it runs and how secrets are provided are decided before deploy.",
         ),
         do_not_use_when=(
             "The task is already a concrete repo change whose stopping point is one PR-ready cycle, not product or release operations; use `ultrawork`.",
@@ -7303,9 +7305,9 @@ _DEFINITIONS = [
             why="Healthy with no baseline is whatever the dashboard shows after the fact.",
         ),
         final_checklist=(
-            "Each health signal has a pre-deploy baseline, a threshold, a window, and the action it triggers.",
-            "The rollback owner and trigger are named, and the gate says whether the old version runs on the new schema.",
-            "A bake time is stated; post-deploy status cites observed values or reads not_observed.",
+            "Each health signal has a pre-deploy baseline, a threshold, a window, and an action.",
+            "The rollback owner and trigger are named, with a bake time and schema compatibility.",
+            "Post-deploy status cites observed values or reads not_observed.",
         ),
         do_not_use_when=(
             "An incident has already been declared and the work is commanding it -- severity, commander, running timeline, recovery verification -- rather than watching a release; use `live-incident-response`.",
@@ -8419,8 +8421,8 @@ _DEFINITIONS = [
         do_not_use_when=(
             "The user wants their own machine's model routing configured or providers connected; use `model-setup`.",
             "The goal is measurable performance of an application or system, not model handling; use `ultraperf`.",
-            "The user wants benchmark-superiority or provider-readiness claims without measurements; decline and offer the measurement plan.",
-            "Making a model's weights smaller or faster (quantizing, pruning, distilling); use `inference-serving` for serving format and quantization, `model-finetuning` for distillation.",
+            "The user wants benchmark-superiority or provider-readiness claims without measurements.",
+            "Making a model's weights smaller or faster: quantizing is `inference-serving` (serving format and quantization), distilling is `model-finetuning`; OMH has no pruning workflow.",
         ),
         good_example=SkillExample(
             prompt="GLM 5.3 and 5.3 Flash just shipped; check what we should optimize for them.",
@@ -10081,7 +10083,7 @@ _DEFINITIONS.append(
             "For each trust boundary, state what crosses it, what authenticates the crossing, and what the receiver assumes without checking.",
             "Run all six STRIDE prompts from `omh-application-threat-model/references/threat-model-method.md` per boundary; drop an unreachable scenario with its reason instead of carrying it.",
             "Resolve every scenario to one decision (mitigate, transfer, accept, eliminate) with an owner, and give every mitigating control a test whose observable fails when the control is removed.",
-            "Rank scenarios by likelihood times impact; accept only below the owner's threshold.",
+            "Rank scenarios by likelihood times impact; accept only below the owner's limit.",
         ),
         why_this_exists=(
             "`application-threat-model` exists because the nearest neighbour does not merely miss this request. `security-safety-review` "
@@ -10265,7 +10267,7 @@ _DEFINITIONS.append(
         ),
         final_checklist=(
             "Severity is declared, carries the observation that set it, and every change appended rather than overwrote the previous level.",
-            "One commander is named; operations, communications, and scribe each name a person or read unfilled.",
+            "One commander is named; operations, communications, and scribe each name a person (the assistant, when one human holds the rest) or read unfilled.",
             "Every timeline entry is timestamped, attributed, and typed, and no earlier entry was edited.",
             "Each mitigation reads temporary or permanent, and a temporary one names what removes it.",
             "Recovery cites the named signal, its healthy value, the observed value, and the observer, never the mitigation alone.",
@@ -10778,6 +10780,7 @@ _DEFINITIONS.append(
             "Build indexes on live tables with the engine's non-blocking method (`CREATE INDEX CONCURRENTLY`, online DDL `LOCK=NONE`), and state what that method cannot do.",
             "OMH never connects to a database, and does not claim a plan, a row count, a lock wait, or an applied migration it did not observe.",
             "Never put connection strings, credentials, or customer rows into the plan or the handoff.",
+            "`EXPLAIN ANALYZE` runs the statement: never on a primary for a write.",
         ),
         quality_tier="db-lock-and-rollback-gated",
         quality_bar=(
@@ -10895,6 +10898,7 @@ _DEFINITIONS.append(
             "for a CVE: the advisory id, the affected package and version range, and the installed version from the lockfile",
             "for a leaked secret: the credential type and scope, where it was pushed, whether the repository is public, and when",
             "for a license: the package, its declared license, and how the product is distributed",
+            "for unauthorized access: the identity or host, the first anomaly, and what it could reach",
             "observed evidence for any containment or closure claim",
         ),
         expected_outputs=(
@@ -10909,10 +10913,10 @@ _DEFINITIONS.append(
             "reachability_analysis/v1 names the vulnerable function or path, the repository call sites that reach it or the observed absence of any, and a severity call from the advisory score adjusted by that reachability",
             "containment_plan/v1 orders every step; for a leaked secret the rotation and the observed rejection of the old credential come before any history rewrite, because a rewrite does not un-publish a secret already cloned",
             "license_fit_verdict/v1 gives the SPDX id, the obligation it triggers for this distribution model, and fits, conflicts, or needs counsel",
-            "event_closure_verdict/v1 reads closed only when the rotation or the fixed version is recorded observed; a prepared step keeps the event open and is named",
+            "event_closure_verdict/v1 reads closed only when the rotation with an empty persistence list, the fixed version, or the ended access is recorded observed; a prepared step keeps the event open and is named",
         ),
         safety_rules=(
-            "A leaked-secret event cannot close while its rotation is prepared rather than observed; `event_closure_verdict/v1` names the missing observation instead.",
+            "A leaked-secret event cannot close while its rotation is prepared rather than observed or attacker persistence remains; `event_closure_verdict/v1` names the missing observation instead.",
             "Order rotation before history rewriting: revoke and replace the credential, observe the old one rejected, then rewrite history if at all.",
             "Never print the secret value, and never paste it into the plan, the handoff, or a search.",
             "OMH never runs a scanner, contacts a registry, or rotates a credential; reachability and license facts come from observed output or are marked unverified.",
@@ -10925,7 +10929,7 @@ _DEFINITIONS.append(
             "Adjust severity by reachability: a critical advisory on a function nothing calls is not the same event as one on the request path.",
             "Keep prepared, observed, and closed as separate states for every containment step.",
             "Hand a fix that needs a planned version jump to its own upgrade plan, and keep this event open until that fix is observed.",
-            "For a leaked secret, decide the case with evidence first: a public push or any sign of use revokes first; otherwise keep the overlap order. Suspected unauthorized access: reference section 4.",
+            "Leaked secret: revoke first unless every planned-rotation condition is shown by evidence. Unauthorized access: reference section 4.",
         ),
         why_this_exists=(
             "`security-event-response` exists because an event had no owner: `security-safety-review` and "

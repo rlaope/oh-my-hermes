@@ -4,15 +4,15 @@ Load this while responding to a security event. OMH never scans, never contacts 
 
 ## 1. Leaked secret
 
-Decide the case first, and write down the evidence for it. **Compromised:** the secret was pushed to a public repository or log, or the issuer's access log shows a call nobody made. The exposure outranks availability, so revoke first (step 3 before step 2), accept the outage, then issue and deploy the replacement. **Planned or contained:** a private repository, no sign of use, a short window. Use the order in the table, which keeps the service up through an overlap window. The case rule is the same one `omh-security-safety-review/references/credential-rotation.md` states for any rotation.
+Decide the case first, and write down the evidence for it. **Compromised:** the secret was pushed to a public repository or log, or the issuer's access log shows a call nobody made. The exposure outranks availability, so revoke first (step 3 before step 2), accept the outage, then issue and deploy the replacement. **Planned:** only when all of these are shown by evidence: the repository is private, the issuer's access log (read it first, before changing anything) shows no call you cannot attribute across the window, and the window is short. **If any of them cannot be shown, treat the case as compromised.** Use the order in the table for a planned case; it keeps the service up through an overlap window. The case rule is the same one `omh-security-safety-review/references/credential-rotation.md` states for any rotation.
 
 | Order | Step | Observed when |
 | --- | --- | --- |
-| 1 | Record the credential type, its scope, where it was pushed, whether the repository or log is public, and the first push time | the push is located in the history or the log |
+| 1 | Record the credential type, its scope, where it was pushed, whether the repository or log is public, and the first push time; read the issuer's access log now if one exists | the push is located in the history or the log |
 | 2 | Issue the replacement and deploy it to every consumer | the service runs on the new credential |
 | 3 | Revoke the leaked credential at its issuer | a call with the old credential is rejected; the revoke command's exit status only says the request was accepted |
 | 4 | Audit the issuer's access log for the exposure window | the window's calls are listed and attributed |
-| 4a | Remove persistence: list the identities, keys, roles, grants, and automations created in the window and remove or revoke them; treat tokens and sessions derived from the credential as live until they expire or the identity's permissions are removed, and record the longest lifetime | every created item is removed and the longest derived-token lifetime has passed |
+| 4a | Remove persistence: list the identities, keys, roles, grants, and automations created in the window and remove or revoke them; treat tokens and sessions derived from the credential as live until they expire or the identity's permissions are removed, and record the longest lifetime | every created item is removed, and derived tokens have either passed their longest lifetime or a call with the identity, with its permissions removed, is refused |
 | 5 | Rewrite history (`git filter-repo`, BFG) and coordinate every clone, only if the value must also leave the repository | the rewritten refs are pushed and forks and caches are named |
 | 6 | Add prevention: push protection, a pre-commit secret scan, the ignore rule | the guard rejects a planted test secret |
 
@@ -44,8 +44,8 @@ Read the declared license from the package metadata and the repository `LICENSE`
 
 ## 4. Suspected unauthorized access
 
-An unfamiliar admin login, a possible account takeover, or data leaving that nobody sent is an event with no code to patch. In order: (1) preserve evidence before cleaning, by exporting the relevant logs and snapshotting the affected host or account state; (2) contain, by disabling the account, revoking its sessions and tokens, and isolating the host; (3) scope from the logs what the identity touched and when; (4) remove persistence as in section 1; (5) check the notification obligations and their clocks with the owner and counsel; (6) when the access is ongoing or the service is affected, hand command to `omh-live-incident-response` with this record as input.
+An unfamiliar admin login, a possible account takeover, or data leaving that nobody sent is an event with no code to patch. In order: (1) take the quick evidence first (export the relevant logs, note the account state) without delaying containment of an exfiltration in progress, and snapshot the host when that costs no time; (2) contain, by disabling the account, revoking its sessions and tokens, and isolating the host; (3) scope from the logs what the identity touched and when; (4) remove persistence as in section 1; (5) check the notification obligations and their clocks with the owner and counsel; (6) when the access is ongoing or the service is affected, hand command to `omh-live-incident-response` with this record as input.
 
 ## 5. Closure
 
-`event_closure_verdict/v1` is closed only when every closing step is observed: the rotation and the old credential's rejection for a secret, the fixed version in the shipped build for a CVE, the recorded decision for a license, and the observed refusal of the identity's sessions with an empty persistence list for unauthorized access. Name each step that is still prepared.
+`event_closure_verdict/v1` is closed only when every closing step is observed: the rotation, the old credential's rejection and an empty persistence list for a secret, the fixed version in the shipped build for a CVE, the recorded decision for a license, and the observed refusal of the identity's sessions with an empty persistence list for unauthorized access. Name each step that is still prepared.

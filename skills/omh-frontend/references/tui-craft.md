@@ -68,8 +68,8 @@ A terminal is a grid of cells, and text is not one cell per character.
   terminal. Verify one render with Korean (or another wide script) and one
   with emoji-bearing content at 80 columns, because a column that lines up in
   Latin text drifts the box-drawing borders in CJK.
-- Honor `NO_COLOR` and a non-TTY stdout: drop color and cursor control, and
-  keep the hierarchy through spacing and weight.
+- Honor `NO_COLOR` by dropping color only; on a non-TTY stdout drop color and
+  cursor control too. Either way keep the hierarchy through spacing and weight.
 - Redraw on resize (SIGWINCH) and say what the layout does below the minimum
   width.
 

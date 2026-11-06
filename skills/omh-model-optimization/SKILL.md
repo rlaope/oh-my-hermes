@@ -25,8 +25,8 @@ This is a Hermes-native `model-optimization` workflow skill.
 
 - The user wants their own machine's model routing configured or providers connected; use `omh-model-setup`.
 - The goal is measurable performance of an application or system, not model handling; use `ulw-perf`.
-- The user wants benchmark-superiority or provider-readiness claims without measurements; decline and offer the measurement plan.
-- Making a model's weights smaller or faster (quantizing, pruning, distilling); use `omh-inference-serving` for serving format and quantization, `omh-model-finetuning` for distillation.
+- The user wants benchmark-superiority or provider-readiness claims without measurements.
+- Making a model's weights smaller or faster: quantizing is `omh-inference-serving` (serving format and quantization), distilling is `omh-model-finetuning`; OMH has no pruning workflow.
 
 ## Examples
 

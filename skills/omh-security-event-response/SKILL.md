@@ -88,7 +88,7 @@ Quality bar:
 - Adjust severity by reachability: a critical advisory on a function nothing calls is not the same event as one on the request path.
 - Keep prepared, observed, and closed as separate states for every containment step.
 - Hand a fix that needs a planned version jump to its own upgrade plan, and keep this event open until that fix is observed.
-- For a leaked secret, decide the case with evidence first: a public push or any sign of use revokes first; otherwise keep the overlap order. Suspected unauthorized access: reference section 4.
+- Leaked secret: revoke first unless every planned-rotation condition is shown by evidence. Unauthorized access: reference section 4.
 
 Handoff policy:
 
@@ -100,6 +100,7 @@ Required inputs:
 - for a CVE: the advisory id, the affected package and version range, and the installed version from the lockfile
 - for a leaked secret: the credential type and scope, where it was pushed, whether the repository is public, and when
 - for a license: the package, its declared license, and how the product is distributed
+- for unauthorized access: the identity or host, the first anomaly, and what it could reach
 - observed evidence for any containment or closure claim
 
 Expected outputs:
@@ -116,11 +117,11 @@ Artifact expectations:
 - reachability_analysis/v1 names the vulnerable function or path, the repository call sites that reach it or the observed absence of any, and a severity call from the advisory score adjusted by that reachability
 - containment_plan/v1 orders every step; for a leaked secret the rotation and the observed rejection of the old credential come before any history rewrite, because a rewrite does not un-publish a secret already cloned
 - license_fit_verdict/v1 gives the SPDX id, the obligation it triggers for this distribution model, and fits, conflicts, or needs counsel
-- event_closure_verdict/v1 reads closed only when the rotation or the fixed version is recorded observed; a prepared step keeps the event open and is named
+- event_closure_verdict/v1 reads closed only when the rotation with an empty persistence list, the fixed version, or the ended access is recorded observed; a prepared step keeps the event open and is named
 
 Safety rules:
 
-- A leaked-secret event cannot close while its rotation is prepared rather than observed; `event_closure_verdict/v1` names the missing observation instead.
+- A leaked-secret event cannot close while its rotation is prepared rather than observed or attacker persistence remains; `event_closure_verdict/v1` names the missing observation instead.
 - Order rotation before history rewriting: revoke and replace the credential, observe the old one rejected, then rewrite history if at all.
 - Never print the secret value, and never paste it into the plan, the handoff, or a search.
 - OMH never runs a scanner, contacts a registry, or rotates a credential; reachability and license facts come from observed output or are marked unverified.

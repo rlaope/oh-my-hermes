@@ -85,7 +85,7 @@ Quality bar:
 - For each trust boundary, state what crosses it, what authenticates the crossing, and what the receiver assumes without checking.
 - Run all six STRIDE prompts from `omh-application-threat-model/references/threat-model-method.md` per boundary; drop an unreachable scenario with its reason instead of carrying it.
 - Resolve every scenario to one decision (mitigate, transfer, accept, eliminate) with an owner, and give every mitigating control a test whose observable fails when the control is removed.
-- Rank scenarios by likelihood times impact; accept only below the owner's threshold.
+- Rank scenarios by likelihood times impact; accept only below the owner's limit.
 
 Handoff policy:
 

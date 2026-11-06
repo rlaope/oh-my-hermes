@@ -42,9 +42,8 @@ Bad example:
 
 ## Completion Checklist
 
-- The idea, user, success metric, and non-goals are written down.
-- Each stage has an owner and the skill that runs it; plan acceptance and executor choice precede any coding handoff.
-- Where it runs, how secrets are provided, and the first environment are decided before deploy; deploy evidence is observed.
+- The idea, user, success metric, and non-goals are written down; each stage has an owner and the skill that runs it.
+- Plan acceptance and executor choice precede any handoff; where it runs and how secrets are provided are decided before deploy.
 
 ## Recovery Notes
 

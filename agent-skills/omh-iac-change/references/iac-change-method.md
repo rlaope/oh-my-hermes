@@ -25,7 +25,7 @@ What the listed rollbacks cannot undo: Helm CRDs and hook-created resources, Per
 
 ## 3. Drift before the change
 
-Resolve drift first, one resource at a time: import it, move it, re-declare it, or revert the manual change. Record which. Before any state operation take a state snapshot (`terraform state pull > backup`), confirm the backend lock is held by this operator only, and prefer a `moved` or `import` block in code (reviewable, and part of the saved plan) over `state mv`. An apply over unresolved drift silently reverts someone's hotfix or re-creates something deliberately removed.
+Resolve drift first, one resource at a time: import it, move it, re-declare it, or revert the manual change. Record which. Before any state operation take a state snapshot (`terraform state pull > backup`, stored where the state is kept, since it is as sensitive as the state), confirm no other run is in progress (the backend lock is taken per command, not held across a session), and prefer a `moved` or `import` block in code (reviewable, and part of the saved plan) over `state mv`. An apply over unresolved drift silently reverts someone's hotfix or re-creates something deliberately removed.
 
 ## 4. Cost delta
 

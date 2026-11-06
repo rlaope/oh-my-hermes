@@ -46,7 +46,7 @@ Bad example:
 ## Completion Checklist
 
 - Severity is declared, carries the observation that set it, and every change appended rather than overwrote the previous level.
-- One commander is named; operations, communications, and scribe each name a person or read unfilled.
+- One commander is named; operations, communications, and scribe each name a person (the assistant, when one human holds the rest) or read unfilled.
 - Every timeline entry is timestamped, attributed, and typed, and no earlier entry was edited.
 - Each mitigation reads temporary or permanent, and a temporary one names what removes it.
 - Recovery cites the named signal, its healthy value, the observed value, and the observer, never the mitigation alone.

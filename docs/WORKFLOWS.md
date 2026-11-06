@@ -3691,11 +3691,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Return GO, HOLD, or BLOCK only with evidence IDs and missing evidence.
   - Convert remediation into explicit follow-up workflows instead of silently patching.
   - Verdict: GO only when all nine rows are observed, BLOCK when any row failed an observed check, else HOLD naming the rows lacking evidence.
-  - Evidence floor: rollback = command exercised, restore tested, RPO/RTO; performance = load result at peak; observability = alerts to a named on-call with a runbook; security_privacy = secrets store, least privilege, cert expiry.
+  - Evidence floor: rollback = command exercised, restore tested; performance = load result at peak; observability = alerts to a named on-call; security_privacy = secrets store, least privilege.
 - Completion checklist:
-  - Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
-  - Open questions, residual risk, and missing verification are named.
-  - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+  - Each of the nine matrix rows reads observed, failed, or missing, with its evidence id, and the verdict follows the GO, BLOCK, HOLD rule.
+  - The rollback plan names signals, owner, threshold, and recovery path; OMH deployed and scanned nothing.
 - Recovery notes:
   - If build or CI evidence is missing for the target release, retain the evidenced readiness_matrix/v1 rows, mark readiness unresolved, and hand back release_gate_verdict/v1 on HOLD with the missing evidence list.
   - If rollback owner, health thresholds, or recovery path is missing, retain the evidenced readiness_matrix/v1 rows, mark rollback readiness unresolved, and hand back rollback_and_monitoring_plan/v1 with the exact gaps.
@@ -4262,12 +4261,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Order a credential replacement issue-new, deploy-new, verify-new, revoke-old, verify-revoked, and name what breaks if the order changes; revocation is proven by a call that fails with the old credential, never by the revoke command's exit status, which reports that the request was accepted. Load `references/credential-rotation.md` for the overlap window and the per-credential-type steps.
   - Project every blocked terminal-command row into a proposed `approvals.deny` glob list the user applies; a blocked action that is not a terminal command (a file write, an MCP or HTTP call) stays a guidance-only row, because the deny list never sees it.
   - Return PASS, HOLD, or BLOCK with missing evidence and confirmation requirements.
-  - A downloaded script is read in full, never piped to a shell, and run in a disposable VM without credentials.
+  - A downloaded script is read in full, never piped to a shell, and run only in a disposable VM.
 - Completion checklist:
   - Findings are grounded in concrete file, command, or source evidence.
   - The verdict is PASS, HOLD, or BLOCK with the missing evidence and confirmation required.
-  - Residual risk and missing verification are named; fixes are separate handoffs.
-  - A credential replacement states its case: compromised revokes first, planned keeps an overlap window.
+  - Residual risk is named; fixes are separate handoffs; a credential replacement states compromised (revoke first) or planned.
 - Recovery notes:
   - If verify-new lacks an observed credential check, retain the redacted risk matrix and credential_rotation_sequence/v1, mark replacement unresolved, and hand back the verify-new evidence requirement before the operator revokes the old credential.
   - If no single local plugin directory is explicitly named, no plugin audit finding stands; mark plugin_risk_audit/v1 not_observed and hand back the directory question without importing, registering, or activating any plugin.
@@ -4407,6 +4405,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - No service, incident, SLO, metric, or reliability source boundary is available.
   - The request is implementation of remediation rather than review of reliability evidence.
   - The incident is still open and the user needs severity declared, a commander assigned, a running timeline, and recovery verified; use `live-incident-response` and review it once it is closed.
+  - The ask is a go or hold verdict before launch; use `production-audit`.
 - Strong routing signals: `reliability-review`, `reliability review`, `incident review`, `incident postmortem`, `postmortem`, `post-mortem`, `slo review`, `slo`, `sla`, `error budget`, `service reliability`, `reliability followup`, `remediation tracking`, `sre review`, `장애 리뷰`, `장애 회고`, `포스트모템`, `사후 분석`, `에러버짓`, `에러 버짓`, `서비스 신뢰성`, `신뢰성 검증`, `재발 방지`, `ревью надёжности`, `постмортем`, `разбор инцидента`, `почему падал сервис`, `стабильность стека`
 - Good example:
   - Prompt: reliability-review 장애 포스트모템과 SLO 에러버짓 상태를 검토해줘.
@@ -4423,8 +4422,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - An SLO conclusion states the SLI (good over valid events), window, target, budget consumed, and burn rate, or reads unresolved.
   - A postmortem draft names impact, detection and resolution times, trigger, contributing factors (systems, not people), and action items with owner and due date.
-  - A pre-launch review names, per dependency, the slow, down, and wrong-answer behavior and the SLOs and runbooks that exist.
-  - Every remediation item reads open or closed with the observed evidence.
+  - A pre-launch review names, per dependency, its slow, down, and wrong-answer behavior; remediation items read open or closed with evidence.
 - Recovery notes:
   - If metrics do not cover the named service and time window, retain the cited incident notes, mark SLO and error-budget conclusions unresolved, and hand back the evidence and missing-evidence list with the uncovered window.
   - If remediation closure has no supporting reference, retain the source-backed reliability review, mark closure not_observed, and hand back the remediation follow-ups and missing closure evidence without claiming the fix completed.
@@ -4439,6 +4437,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - remediation follow-up boundary
 - Artifact expectations:
   - omh_operation_artifact/v1 reliability-review artifact when a wrapper or CLI records it
+  - a postmortem draft when one is asked for
 - Artifact contract enforcement:
   - This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
   - contract_id: `omh_operation_artifact/v1`; enforcement_level: `shared_operation_validated`; consumer_id: `validate_operation_artifact`
@@ -4485,9 +4484,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - For a fresh, empty, or newly `git init`-ed target that is expected to outlive the session, run the greenfield bootstrap pass before or alongside delivery planning - load `references/project-bootstrap.md` for the six-step order (git and .gitignore, LICENSE, README, agent context file, CI skeleton, docs/ seed) and its per-file verify line; explicitly skip it for throwaway or scratch work instead of silently running it.
   - Name the skill per stage: `backend`, `relational-db`, `frontend`, `application-threat-model`, `iac-change`, `production-audit`, `release-cut`, `deploy-and-monitor`. Settle where it runs, how secrets are provided, and the first environment before deploy.
 - Completion checklist:
-  - The idea, user, success metric, and non-goals are written down.
-  - Each stage has an owner and the skill that runs it; plan acceptance and executor choice precede any coding handoff.
-  - Where it runs, how secrets are provided, and the first environment are decided before deploy; deploy evidence is observed.
+  - The idea, user, success metric, and non-goals are written down; each stage has an owner and the skill that runs it.
+  - Plan acceptance and executor choice precede any handoff; where it runs and how secrets are provided are decided before deploy.
 - Recovery notes:
   - If the success metric or release scope is missing, retain the supplied idea and user value, mark delivery planning unresolved, and hand back the stage rail with the missing decision before an executor handoff.
   - If plan acceptance or executor choice is absent, retain the prepared decision gates and stage rail, mark the coding handoff unresolved, and hand back the acceptance or runtime-choice question.
@@ -4697,9 +4695,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Name an error, a latency, and a saturation signal per service and record each pre-deploy value over the same window; healthy is a comparison to that baseline.
   - Set a bake time, and list migrations and flags in the decision gate with whether the old version still runs on the new schema.
 - Completion checklist:
-  - Each health signal has a pre-deploy baseline, a threshold, a window, and the action it triggers.
-  - The rollback owner and trigger are named, and the gate says whether the old version runs on the new schema.
-  - A bake time is stated; post-deploy status cites observed values or reads not_observed.
+  - Each health signal has a pre-deploy baseline, a threshold, a window, and an action.
+  - The rollback owner and trigger are named, with a bake time and schema compatibility.
+  - Post-deploy status cites observed values or reads not_observed.
 - Recovery notes:
   - If a monitor has only its first baseline tick or a silent tick, retain the checklist and watchlist, mark release health not_observed, and hand back the recorded cron runs and open incidents needed to assess health.
   - If the rollback owner is missing, retain the release scope and health signals, mark the deploy decision gate unresolved, and hand back the rollback criteria with the owner question before advancing.
@@ -5439,8 +5437,8 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The user wants their own machine's model routing configured or providers connected; use `model-setup`.
   - The goal is measurable performance of an application or system, not model handling; use `ultraperf`.
-  - The user wants benchmark-superiority or provider-readiness claims without measurements; decline and offer the measurement plan.
-  - Making a model's weights smaller or faster (quantizing, pruning, distilling); use `inference-serving` for serving format and quantization, `model-finetuning` for distillation.
+  - The user wants benchmark-superiority or provider-readiness claims without measurements.
+  - Making a model's weights smaller or faster: quantizing is `inference-serving` (serving format and quantization), distilling is `model-finetuning`; OMH has no pruning workflow.
 - Strong routing signals: `model-optimization`, `model optimization`, `optimize for model`, `onboard new model`, `calibrate new model`, `new model calibration`, `model calibration`
 - Good example:
   - Prompt: GLM 5.3 and 5.3 Flash just shipped; check what we should optimize for them.
@@ -6629,7 +6627,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - For each trust boundary, state what crosses it, what authenticates the crossing, and what the receiver assumes without checking.
   - Run all six STRIDE prompts from `omh-application-threat-model/references/threat-model-method.md` per boundary; drop an unreachable scenario with its reason instead of carrying it.
   - Resolve every scenario to one decision (mitigate, transfer, accept, eliminate) with an owner, and give every mitigating control a test whose observable fails when the control is removed.
-  - Rank scenarios by likelihood times impact; accept only below the owner's threshold.
+  - Rank scenarios by likelihood times impact; accept only below the owner's limit.
 - Completion checklist:
   - Every asset carries a data class and one named loss; every boundary names what crosses it and what authenticates the crossing.
   - Every scenario resolves to mitigate, transfer, accept, or eliminate, with an owner.
@@ -6713,7 +6711,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Keep paging, status-page updates, and customer sends listed as prepared until a connector result is observed.
 - Completion checklist:
   - Severity is declared, carries the observation that set it, and every change appended rather than overwrote the previous level.
-  - One commander is named; operations, communications, and scribe each name a person or read unfilled.
+  - One commander is named; operations, communications, and scribe each name a person (the assistant, when one human holds the rest) or read unfilled.
   - Every timeline entry is timestamped, attributed, and typed, and no earlier entry was edited.
   - Each mitigation reads temporary or permanent, and a temporary one names what removes it.
   - Recovery cites the named signal, its healthy value, the observed value, and the observer, never the mitigation alone.
@@ -7068,6 +7066,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Build indexes on live tables with the engine's non-blocking method (`CREATE INDEX CONCURRENTLY`, online DDL `LOCK=NONE`), and state what that method cannot do.
   - OMH never connects to a database, and does not claim a plan, a row count, a lock wait, or an applied migration it did not observe.
   - Never put connection strings, credentials, or customer rows into the plan or the handoff.
+  - `EXPLAIN ANALYZE` runs the statement: never on a primary for a write.
 
 ### security-event-response
 
@@ -7111,7 +7110,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Adjust severity by reachability: a critical advisory on a function nothing calls is not the same event as one on the request path.
   - Keep prepared, observed, and closed as separate states for every containment step.
   - Hand a fix that needs a planned version jump to its own upgrade plan, and keep this event open until that fix is observed.
-  - For a leaked secret, decide the case with evidence first: a public push or any sign of use revokes first; otherwise keep the overlap order. Suspected unauthorized access: reference section 4.
+  - Leaked secret: revoke first unless every planned-rotation condition is shown by evidence. Unauthorized access: reference section 4.
 - Completion checklist:
   - The event kind, source, and exposure window are stated.
   - Every severity call cites the reachable path or its observed absence.
@@ -7126,6 +7125,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - for a CVE: the advisory id, the affected package and version range, and the installed version from the lockfile
   - for a leaked secret: the credential type and scope, where it was pushed, whether the repository is public, and when
   - for a license: the package, its declared license, and how the product is distributed
+  - for unauthorized access: the identity or host, the first anomaly, and what it could reach
   - observed evidence for any containment or closure claim
 - Expected outputs:
   - security_event_record/v1
@@ -7138,9 +7138,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - reachability_analysis/v1 names the vulnerable function or path, the repository call sites that reach it or the observed absence of any, and a severity call from the advisory score adjusted by that reachability
   - containment_plan/v1 orders every step; for a leaked secret the rotation and the observed rejection of the old credential come before any history rewrite, because a rewrite does not un-publish a secret already cloned
   - license_fit_verdict/v1 gives the SPDX id, the obligation it triggers for this distribution model, and fits, conflicts, or needs counsel
-  - event_closure_verdict/v1 reads closed only when the rotation or the fixed version is recorded observed; a prepared step keeps the event open and is named
+  - event_closure_verdict/v1 reads closed only when the rotation with an empty persistence list, the fixed version, or the ended access is recorded observed; a prepared step keeps the event open and is named
 - Safety rules:
-  - A leaked-secret event cannot close while its rotation is prepared rather than observed; `event_closure_verdict/v1` names the missing observation instead.
+  - A leaked-secret event cannot close while its rotation is prepared rather than observed or attacker persistence remains; `event_closure_verdict/v1` names the missing observation instead.
   - Order rotation before history rewriting: revoke and replace the credential, observe the old one rejected, then rewrite history if at all.
   - Never print the secret value, and never paste it into the plan, the handoff, or a search.
   - OMH never runs a scanner, contacts a registry, or rotates a credential; reachability and license facts come from observed output or are marked unverified.

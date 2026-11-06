@@ -57,7 +57,7 @@ One decision per scenario, from a closed vocabulary, each with a named owner:
 
 A scenario with two decisions has not been decided.
 
-Rank before deciding. Rate each scenario's likelihood and impact (low, medium, high, each defined in one sentence for this system) and order the list by the product. Accept is allowed only below the threshold the owner states; above it the decision is mitigate, transfer, or eliminate.
+Rank before deciding. Rate each scenario's likelihood and impact (low = 1, medium = 2, high = 3, each defined in one sentence for this system) and order the list by likelihood times impact, ties by impact. Accept is allowed only below the threshold the owner states; above it the decision is mitigate, transfer, or eliminate.
 
 ## 5. Control state
 

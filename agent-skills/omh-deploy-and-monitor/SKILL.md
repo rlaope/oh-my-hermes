@@ -41,9 +41,9 @@ Bad example:
 
 ## Completion Checklist
 
-- Each health signal has a pre-deploy baseline, a threshold, a window, and the action it triggers.
-- The rollback owner and trigger are named, and the gate says whether the old version runs on the new schema.
-- A bake time is stated; post-deploy status cites observed values or reads not_observed.
+- Each health signal has a pre-deploy baseline, a threshold, a window, and an action.
+- The rollback owner and trigger are named, with a bake time and schema compatibility.
+- Post-deploy status cites observed values or reads not_observed.
 
 ## Recovery Notes
 

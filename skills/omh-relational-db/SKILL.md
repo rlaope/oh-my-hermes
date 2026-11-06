@@ -127,6 +127,7 @@ Safety rules:
 - Build indexes on live tables with the engine's non-blocking method (`CREATE INDEX CONCURRENTLY`, online DDL `LOCK=NONE`), and state what that method cannot do.
 - OMH never connects to a database, and does not claim a plan, a row count, a lock wait, or an applied migration it did not observe.
 - Never put connection strings, credentials, or customer rows into the plan or the handoff.
+- `EXPLAIN ANALYZE` runs the statement: never on a primary for a write.
 
 ## Runtime Evidence
 

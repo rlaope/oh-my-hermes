@@ -3607,7 +3607,7 @@ One decision per scenario, from a closed vocabulary, each with a named owner:
 
 A scenario with two decisions has not been decided.
 
-Rank before deciding. Rate each scenario's likelihood and impact (low, medium, high, each defined in one sentence for this system) and order the list by the product. Accept is allowed only below the threshold the owner states; above it the decision is mitigate, transfer, or eliminate.
+Rank before deciding. Rate each scenario's likelihood and impact (low = 1, medium = 2, high = 3, each defined in one sentence for this system) and order the list by likelihood times impact, ties by impact. Accept is allowed only below the threshold the owner states; above it the decision is mitigate, transfer, or eliminate.
 
 ## 5. Control state
 
@@ -4212,7 +4212,7 @@ Load this while planning database work. OMH never connects to a database: every 
 | `ALTER TABLE ... ADD FOREIGN KEY` | `SHARE ROW EXCLUSIVE` on both tables + scan | writes | `ADD CONSTRAINT ... NOT VALID`, then `VALIDATE CONSTRAINT` |
 | `ALTER TABLE ... ALTER COLUMN TYPE` | `ACCESS EXCLUSIVE` + rewrite (most types) | everything | new column, dual write, backfill, switch, drop |
 | `VACUUM FULL`, `CLUSTER` | `ACCESS EXCLUSIVE` + rewrite | everything | `pg_repack` or plain `VACUUM` |
-| `REINDEX` of a bloated index | `SHARE` on the table | writes, and reads that need the index | `REINDEX INDEX CONCURRENTLY` (12+; `SHARE UPDATE EXCLUSIVE`, about twice the index size in free disk, an invalid index is left on failure and must be dropped) |
+| `REINDEX` of a bloated index | `SHARE` on the table | writes, and reads that need the index | `REINDEX INDEX CONCURRENTLY` (12+; `SHARE UPDATE EXCLUSIVE`, room for a second copy of the index plus its WAL, an invalid index is left on failure and must be dropped) |
 
 Every DDL statement on a live table runs under `SET lock_timeout = '2s'` (or the service's tolerance) with a retry. Without it, a statement queued behind one long transaction blocks every query that arrives after it, which is how a sub-second `ALTER` becomes an outage.
 
@@ -4226,7 +4226,7 @@ Every DDL statement on a live table runs under `SET lock_timeout = '2s'` (or the
 | Change a column type | `COPY` | `SHARED` | blocks writes; use `gh-ost` or `pt-online-schema-change` |
 | Drop the primary key | `COPY` | `SHARED` | blocks writes |
 
-State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refuses instead of silently falling back to a blocking copy. Every DDL still waits for a metadata lock; a long transaction holds it up and queues everything behind it, so bound it with `lock_wait_timeout`. A bloated InnoDB table is rebuilt with `ALTER TABLE ... ENGINE=InnoDB, ALGORITHM=INPLACE, LOCK=NONE`; `OPTIMIZE TABLE` runs the same rebuild.
+State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refuses instead of silently falling back to a blocking copy. Every DDL still waits for a metadata lock; a long transaction holds it up and queues everything behind it, so bound it with `lock_wait_timeout`. A bloated InnoDB table is rebuilt with `ALTER TABLE ... ENGINE=InnoDB, ALGORITHM=INPLACE, LOCK=NONE`; `OPTIMIZE TABLE` runs the same rebuild, except on a table with a FULLTEXT index, where it copies the table.
 
 ## 3. Online migration order
 
@@ -4237,7 +4237,7 @@ State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refus
 
 Every step carries its statement, the lock it takes and for how long, its timeout, and its rollback. A plan with any step missing lock behaviour or rollback is not ready.
 
-- **Non-transactional DDL gets its own migration.** Most migration tools wrap each migration in a transaction, and `CREATE INDEX CONCURRENTLY` (and `DROP INDEX CONCURRENTLY`) refuses to run inside one. Mark that migration non-transactional in the project's tool and keep the statement alone in it. Removing `CONCURRENTLY` to get past the error turns an online build into a write lock.
+- **Non-transactional DDL gets its own migration.** Most migration tools wrap each migration in a transaction, and `CREATE INDEX CONCURRENTLY` (and `DROP INDEX CONCURRENTLY` and `REINDEX ... CONCURRENTLY`) refuses to run inside one. Mark that migration non-transactional in the project's tool and keep the statement alone in it. Removing `CONCURRENTLY` to get past the error turns an online build into a write lock.
 - **Each backfill batch runs under a `statement_timeout`** sized to the batch, beside the `lock_timeout`, so a batch that hits a slow plan fails fast and resumes instead of holding locks. Check replica lag between batches and pause above a stated bound, so a fast backfill does not push replicas behind.
 - **Read the SQL that will run.** When an ORM or migration tool generates the statement, plan against the SQL it emits (its statement log or its to-SQL output), not against the call that produced it.
 
@@ -4253,7 +4253,7 @@ Every step carries its statement, the lock it takes and for how long, its timeou
 | Query reads few columns | covering index (`INCLUDE`) for an index-only scan |
 | Keyset (cursor) pagination: `WHERE (sort_col, id) > ($1, $2) ORDER BY sort_col, id LIMIT n` | B-tree on the equality-filter columns first, then the sort columns in sort direction, then the unique tie-breaker; the plan shows an index scan with no sort step. Mixed sort directions need the index to match them and the predicate written as `OR` terms, because a row comparison assumes one direction. On MySQL write the expanded `OR` form even for a single direction, because an equality prefix followed by a row comparison uses only the prefix columns of the index; check that the plan's `key_len` and range cover the sort columns, not only that there is no filesort |
 
-Size before proposing: rows times (key width plus about 20 bytes of per-entry overhead), plus fill-factor slack. Every index adds a write per insert and per update of its columns; name that cost next to the read it saves. Cite the observed plan the index changes (`EXPLAIN (ANALYZE, BUFFERS)`), and re-read the plan after the build. `ANALYZE` executes the statement: for a read, run it on a replica or a restored copy when one exists; for an `INSERT`, `UPDATE` or `DELETE`, use plain `EXPLAIN`, or wrap `EXPLAIN ANALYZE` in `BEGIN; ... ROLLBACK;` on a copy, never on the primary.
+Size before proposing: rows times (key width plus about 20 bytes of per-entry overhead), plus fill-factor slack. Every index adds a write per insert and per update of its columns; name that cost next to the read it saves. Cite the observed plan the index changes (`EXPLAIN (ANALYZE, BUFFERS)`), and re-read the plan after the build. `ANALYZE` executes the statement: for a read, run it on a replica or a restored copy when one exists; for an `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE TABLE AS` or an `EXECUTE` of one, use plain `EXPLAIN` (MySQL's `EXPLAIN ANALYZE` takes `SELECT`, multi-table `UPDATE`/`DELETE` and `TABLE`, and executes them too), or wrap `EXPLAIN ANALYZE` in `BEGIN; ... ROLLBACK;` on a copy, never on the primary.
 
 ## 5. N+1 queries
 
@@ -4449,7 +4449,7 @@ Load this while planning a fine-tune. OMH prepares; the operator trains, evaluat
 
 ## 1. Decide whether to fine-tune at all
 
-Climb the ladder in order and stop at the first rung that closes the measured gap on the held-out eval:
+Climb the ladder in order, measuring each rung on the development split, and stop at the first rung that closes the measured gap:
 
 | Rung | Try | Stop here when |
 | --- | --- | --- |
@@ -4471,13 +4471,15 @@ Tune prompts and retrieval on a development split. The held-out set is touched o
 | DPO | preference pairs: a chosen and a rejected output for the same input | good and bad are easier to rank than to write | drifts from the reference model when pairs are noisy or one-sided |
 | RLVR | inputs whose answers a program can check: tests, exact answers, a validator | correctness is verifiable and demonstrations are scarce | reward hacking: passes the checker without solving the task |
 
-SFT first and DPO after is the common order when both kinds of data exist. A LoRA or other adapter trains a small set of extra weights: cheaper, swappable, and easy to roll back; train full weights only when an adapter measured short of the gap.
+SFT first and DPO after is the common order when both kinds of data exist.
+
+Distillation, training a smaller model on a larger model's outputs, is SFT on teacher outputs. The data plan names the teacher and whether its terms allow training on its outputs, and the comparison runs the teacher, the distilled student, and the untuned student on the same held-out eval. Pruning and quantization change existing weights and are not fine-tuning; OMH has no pruning workflow. A LoRA or other adapter trains a small set of extra weights: cheaper, swappable, and easy to roll back; train full weights only when an adapter measured short of the gap.
 
 ## 3. Training data checklist
 
 1. Every source has a license or consent that permits training on it.
 2. Deduplicate, and drop examples that contradict each other.
-3. Draw the held-out split before training, from the same distribution as real traffic.
+3. Draw a development split for the prompt, retrieval, and training trials and a held-out split that is touched only to report, both before training and from the same distribution as real traffic.
 4. Check that no held-out example, or a near duplicate of one, is in the training set.
 5. Record the counts per source and per split.
 6. Scan the examples for personal data and credentials and remove or mask them: trained weights can emit what they saw, and consent to a file is not consent to a model that reproduces it.
@@ -4521,7 +4523,7 @@ Load this while planning a store release. OMH prepares; the operator or CI build
 | rollout | phased release of automatic updates over seven days, pausable; a manual download still gets the new build | staged rollout by percentage, raised step by step, haltable |
 | no rollback | a released build stays installed; ship a higher build number, optionally with an expedited review request | a released `versionCode` stays installed; ship a higher `versionCode`, even when it is the old code rebuilt |
 
-Toolchain minimum, checked at upload: iOS builds use the Xcode and SDK version Apple currently requires (Xcode 26 and the OS 26 SDKs since 2026-04-28); Android builds target the API level Play currently requires and ship as an app bundle. Read the current numbers from the two upcoming-requirements pages and record the date read.
+Toolchain minimum, checked at upload: iOS builds use the Xcode and SDK version Apple currently requires (Xcode 26 and the OS 26 SDKs since 2026-04-28); Android builds target the API level Play currently requires and ship as an app bundle. Read the current numbers from Apple's upcoming-requirements page (https://developer.apple.com/news/upcoming-requirements/) and Play's target API level page (https://developer.android.com/google/play/requirements/target-sdk), and record the date read.
 
 ## 2. Before submitting
 
@@ -4800,7 +4802,7 @@ What the listed rollbacks cannot undo: Helm CRDs and hook-created resources, Per
 
 ## 3. Drift before the change
 
-Resolve drift first, one resource at a time: import it, move it, re-declare it, or revert the manual change. Record which. Before any state operation take a state snapshot (`terraform state pull > backup`), confirm the backend lock is held by this operator only, and prefer a `moved` or `import` block in code (reviewable, and part of the saved plan) over `state mv`. An apply over unresolved drift silently reverts someone's hotfix or re-creates something deliberately removed.
+Resolve drift first, one resource at a time: import it, move it, re-declare it, or revert the manual change. Record which. Before any state operation take a state snapshot (`terraform state pull > backup`, stored where the state is kept, since it is as sensitive as the state), confirm no other run is in progress (the backend lock is taken per command, not held across a session), and prefer a `moved` or `import` block in code (reviewable, and part of the saved plan) over `state mv`. An apply over unresolved drift silently reverts someone's hotfix or re-creates something deliberately removed.
 
 ## 4. Cost delta
 
@@ -4911,15 +4913,15 @@ Load this while responding to a security event. OMH never scans, never contacts 
 
 ## 1. Leaked secret
 
-Decide the case first, and write down the evidence for it. **Compromised:** the secret was pushed to a public repository or log, or the issuer's access log shows a call nobody made. The exposure outranks availability, so revoke first (step 3 before step 2), accept the outage, then issue and deploy the replacement. **Planned or contained:** a private repository, no sign of use, a short window. Use the order in the table, which keeps the service up through an overlap window. The case rule is the same one `omh-security-safety-review/references/credential-rotation.md` states for any rotation.
+Decide the case first, and write down the evidence for it. **Compromised:** the secret was pushed to a public repository or log, or the issuer's access log shows a call nobody made. The exposure outranks availability, so revoke first (step 3 before step 2), accept the outage, then issue and deploy the replacement. **Planned:** only when all of these are shown by evidence: the repository is private, the issuer's access log (read it first, before changing anything) shows no call you cannot attribute across the window, and the window is short. **If any of them cannot be shown, treat the case as compromised.** Use the order in the table for a planned case; it keeps the service up through an overlap window. The case rule is the same one `omh-security-safety-review/references/credential-rotation.md` states for any rotation.
 
 | Order | Step | Observed when |
 | --- | --- | --- |
-| 1 | Record the credential type, its scope, where it was pushed, whether the repository or log is public, and the first push time | the push is located in the history or the log |
+| 1 | Record the credential type, its scope, where it was pushed, whether the repository or log is public, and the first push time; read the issuer's access log now if one exists | the push is located in the history or the log |
 | 2 | Issue the replacement and deploy it to every consumer | the service runs on the new credential |
 | 3 | Revoke the leaked credential at its issuer | a call with the old credential is rejected; the revoke command's exit status only says the request was accepted |
 | 4 | Audit the issuer's access log for the exposure window | the window's calls are listed and attributed |
-| 4a | Remove persistence: list the identities, keys, roles, grants, and automations created in the window and remove or revoke them; treat tokens and sessions derived from the credential as live until they expire or the identity's permissions are removed, and record the longest lifetime | every created item is removed and the longest derived-token lifetime has passed |
+| 4a | Remove persistence: list the identities, keys, roles, grants, and automations created in the window and remove or revoke them; treat tokens and sessions derived from the credential as live until they expire or the identity's permissions are removed, and record the longest lifetime | every created item is removed, and derived tokens have either passed their longest lifetime or a call with the identity, with its permissions removed, is refused |
 | 5 | Rewrite history (`git filter-repo`, BFG) and coordinate every clone, only if the value must also leave the repository | the rewritten refs are pushed and forks and caches are named |
 | 6 | Add prevention: push protection, a pre-commit secret scan, the ignore rule | the guard rejects a planted test secret |
 
@@ -4951,11 +4953,11 @@ Read the declared license from the package metadata and the repository `LICENSE`
 
 ## 4. Suspected unauthorized access
 
-An unfamiliar admin login, a possible account takeover, or data leaving that nobody sent is an event with no code to patch. In order: (1) preserve evidence before cleaning, by exporting the relevant logs and snapshotting the affected host or account state; (2) contain, by disabling the account, revoking its sessions and tokens, and isolating the host; (3) scope from the logs what the identity touched and when; (4) remove persistence as in section 1; (5) check the notification obligations and their clocks with the owner and counsel; (6) when the access is ongoing or the service is affected, hand command to `omh-live-incident-response` with this record as input.
+An unfamiliar admin login, a possible account takeover, or data leaving that nobody sent is an event with no code to patch. In order: (1) take the quick evidence first (export the relevant logs, note the account state) without delaying containment of an exfiltration in progress, and snapshot the host when that costs no time; (2) contain, by disabling the account, revoking its sessions and tokens, and isolating the host; (3) scope from the logs what the identity touched and when; (4) remove persistence as in section 1; (5) check the notification obligations and their clocks with the owner and counsel; (6) when the access is ongoing or the service is affected, hand command to `omh-live-incident-response` with this record as input.
 
 ## 5. Closure
 
-`event_closure_verdict/v1` is closed only when every closing step is observed: the rotation and the old credential's rejection for a secret, the fixed version in the shipped build for a CVE, the recorded decision for a license, and the observed refusal of the identity's sessions with an empty persistence list for unauthorized access. Name each step that is still prepared.
+`event_closure_verdict/v1` is closed only when every closing step is observed: the rotation, the old credential's rejection and an empty persistence list for a secret, the fixed version in the shipped build for a CVE, the recorded decision for a license, and the observed refusal of the identity's sessions with an empty persistence list for unauthorized access. Name each step that is still prepared.
 """
 
 
@@ -5152,11 +5154,11 @@ Severity is a value somebody set at a time, from an observed fact. Record the le
 | SEV2 | A core flow is degraded, or one flow is unavailable for a bounded set of tenants or regions | page the owning team, commander required, customer notice prepared |
 | SEV3 | A non-core flow is degraded, or a core flow has a working workaround | owning team handles in hours, commander required (it may also be the scribe), no customer notice unless asked |
 
-Two rules the ladder cannot state for you. Severity is set from observed blast radius, never from how alarming the alert text reads. And an unknown blast radius is declared at the higher level until measured, then lowered by an appended entry that names the measurement.
+Two rules the ladder cannot state for you. Severity is set from observed blast radius, never from how alarming the alert text reads. And an unknown blast radius is declared at the higher level until measured, then lowered by an appended entry that names the measurement. An intrusion with no outage is declared by the data it can reach: exposed customer data or lost integrity reads SEV1 or SEV2 by the same blast-radius rule.
 
 ## 2. Roles
 
-One person per role, and one role per person while the incident is small.
+One person per role, and one role per person while the incident is small, except for the combinations allowed below.
 
 - **Commander** — owns decisions and the severity level. Does not debug. When the commander starts debugging, the incident has no commander.
 - **Operations** — the only person changing production during the incident. Every change is announced to the commander before it is made and appended afterwards.
@@ -5181,7 +5183,7 @@ Record the reason at the time it was believed, not the reason that turned out to
 
 ## 4. Mitigation is not a fix
 
-First mitigation: ask what changed in the last hour -- a deploy, a flag, a configuration change, a migration, a dependency, traffic. When a change precedes the onset, reverting it is the default first mitigation, verified against the recovery signal; diagnose after the impact stops. Record each hypothesis and its disproof as timeline entries with an owner, and hand code-level causes to `omh-app-debugging`.
+First mitigation: ask what changed in the last hour -- a deploy, a flag, a configuration change, a migration, a dependency, traffic. When a change precedes the onset, reverting it is the default first mitigation, verified against the recovery signal (a database migration is the exception: it may have changed data a revert cannot restore, so stop and decide that case on its own); diagnose after the impact stops. Record each hypothesis and its disproof as timeline entries with an owner, and hand code-level causes to `omh-app-debugging`. For a suspected intrusion, take the quick evidence first (logs, account state), do not delay containing an exfiltration in progress, and let `omh-security-event-response` order the containment.
 
 A mitigation stops the damage; a fix removes the cause. Record every mitigation with four fields: what changed, where, `temporary` or `permanent`, and what removes it.
 
@@ -5891,19 +5893,19 @@ Run the steps in this order; each carries its own verify line, and a step whose 
 
 1. **Git and .gitignore.** Initialize version control before anything else touches the tree.
    - `git init` if no repository exists yet.
-   - Build `.gitignore` from the toolchain actually observed in the project (language, package manager, editor artifacts) - never paste in an unrelated kitchen-sink template. Always include the local-only files: `.env*` (with a committed `.env.example` holding names only), key and certificate files, and OS and editor files. Turn on secret scanning or push protection on the remote before the first push.
+   - Build `.gitignore` from the toolchain actually observed in the project (language, package manager, editor artifacts) - never paste in an unrelated kitchen-sink template. Always include the local-only files: `.env` and `.env.*` followed by `!.env.example` (so the committed `.env.example` holding names only is not ignored), key and certificate files, and OS and editor files. Turn on secret scanning or push protection on the remote before the first push.
    - Commit the empty or near-empty tree as the first commit so later history has a clean root.
-   - Wrong: a Python project ignoring `node_modules/` it will never create. Right: a `.gitignore` whose every line maps to a file this project's own build actually produces.
-   - Self-test: does every line in `.gitignore` correspond to a byproduct this project's own toolchain generates or to a local-only file (`.env*`, keys, OS and editor files), with no line unrelated to either?
+   - Wrong: a Python project ignoring `node_modules/` it will never create. Right: a `.gitignore` whose every line maps to a file this project's build or local setup actually produces.
+   - Self-test: does every line in `.gitignore` correspond to a byproduct this project's own toolchain generates or to a local-only file (`.env`, `.env.*`, keys, OS and editor files), with no line unrelated to either?
    - Verify: `git status --short` shows no generated or vendor noise after a build runs.
 
 2. **LICENSE.** One canonical file, one declared identifier, everywhere that identifier appears.
    - Ask the owner which license applies; the choice is theirs. With one stated, write the matching `LICENSE` file at the repository root and use its single SPDX identifier. With none stated, add no open-source license: write no `LICENSE` (or a proprietary notice), set the metadata license field to the `UNLICENSED` value, and record the open question.
    - Match that identifier everywhere a license gets declared: package metadata, README license line, plugin or extension manifests.
-   - Never declare a license in metadata without committing the file it names - license-declared-but-no-file is a named drift class, not a cosmetic gap, because it leaves a legal claim with nothing backing it.
+   - Never declare a license identifier in metadata without committing the file it names - license-declared-but-no-file is a named drift class, not a cosmetic gap, because it leaves a legal claim with nothing backing it.
    - Treat a license change as a decision requiring the same review as any other file it touches; do not silently swap identifiers between files.
    - Self-test: does grep for the SPDX identifier return a hit in the LICENSE file itself and every metadata site that names it, with none disagreeing?
-   - Verify: the LICENSE file exists AND every declared SPDX identifier in the project matches it byte-for-byte.
+   - Verify: with a license chosen, the LICENSE file exists AND every declared SPDX identifier in the project matches it byte-for-byte; with none chosen, no LICENSE file exists, no SPDX identifier is declared anywhere, the metadata field reads `UNLICENSED` (an npm convention, not an SPDX identifier), and the README license line says the license is undecided instead of linking a file.
 
 3. **README.md.** Sections in a fixed order, and every command in it has actually been run.
    - What it is: one paragraph, plain description, no marketing language.
@@ -7483,9 +7485,9 @@ The rails, in the order a late decision gets expensive: {rails}.
 
 One module owns the provider client. It holds the model ID, the credential lookup, the timeout, the retry policy, and the rate-limit backoff, and every feature calls through it.
 
-- **Model ID is exact.** A snapshot ID in the form the provider documents (`<model>-<snapshot-date>`), not an alias the provider re-points. A floating alias silently re-points under a benchmark, and the run that "regressed" was measuring a different model. Keep the ID in one named constant or config value, and record it beside any result meant to be compared with another result. Record the provider's retirement date beside the pin, and schedule a golden-set run on the named successor before that date; a call that fails with a model-not-found error is classified apart from an invalid request.
+- **Model ID is exact.** An ID the provider's model page states is a pinned snapshot, not an alias the provider re-points. Judge by that page, not by whether the ID carries a date: current Claude IDs are pinned and some are dateless. A floating alias silently re-points under a benchmark, and the run that "regressed" was measuring a different model. Keep the ID in one named constant or config value, and record it beside any result meant to be compared with another result. Record the provider's retirement date beside the pin, and schedule a golden-set run on the named successor before that date; a call that fails with a model-not-found error is classified apart from an invalid request.
 - **Credentials come from the environment or a secret store.** Never a literal in source, a prompt file, a test fixture, or an example. A key committed once is a key rotated forever.
-- **Failures are classified, not swallowed.** Timeout, rate limit, transient 5xx, invalid request, content refusal, and truncation at the output cap are six different outcomes, and only the first three are safe to retry as sent. A single broad `except` around the call turns a schema bug into an infinite retry loop and a quota exhaustion into a silent empty answer.
+- **Failures are classified, not swallowed.** Timeout, rate limit, transient 5xx, invalid request, content refusal, truncation at the output cap, and model-not-found are seven different outcomes, and only the first three are safe to retry as sent. A single broad `except` around the call turns a schema bug into an infinite retry loop and a quota exhaustion into a silent empty answer.
 - **Retries are bounded and idempotent.** Cap the attempts, back off exponentially with jitter, honor the provider's retry-after header when it sends one, and never retry a request the caller cannot afford to have executed twice. When the production adapter wraps a provider SDK, turn the SDK's own retries off, because most SDKs retry by default and those retries stack under the boundary's policy; the boundary owns retry.
 - **Timeouts are explicit at both levels.** A per-request timeout and a total budget for the operation; a streaming call that stalls mid-response is not covered by a connect timeout alone.
 - **A stream has a cancel path.** When the client disconnects or the user stops, the boundary cancels the upstream request instead of letting the generation run, and bill, to the end; the call is recorded as `cancelled`, neither a failure nor a success. The record keeps the usage the stream reported up to the cancel; tokens it never reported stay null, never zero, and a cancelled call still counts against the token and cost budgets. Structured output is validated once, on the complete stream. Partial text is shown only as a provisional preview, under the provisional-render rule in `{LLM_APP_DEV_STATEFUL_CONTRACTS_REFERENCE_PATH}`.
@@ -7646,7 +7648,7 @@ Run the regression **before** the swap, not after it.
 - **Capture tokens and cost per run.** Prompt tokens, completion tokens, and cost belong in the record, because a candidate that is two points better and four times more expensive is a decision, not a win.
 - **Cost is per successful task.** When comparing models or effort settings, divide total cost including failed attempts by tasks that passed; a cheaper call that fails more often is not cheaper. Report time to first useful rendered output and full-task latency separately, with tail percentiles beside the median, and report difficult-task failures on their own line instead of averaging them away.
 - **Configuration first, then calibrated prompts.** Hold the harness and prompt fixed to isolate a model or effort change; only afterward allow comparable prompt tuning per candidate on separate tuning cases, and report the held-out result with each prompt version. Keeping the two comparisons distinct stops a prompt fitted to one model from settling the selection.
-- **Account for run-to-run variance.** A model call is not deterministic. Record the decoding settings on both sides, run each case at least three times (or at temperature 0 where the provider supports it, and say so), and report pass counts per case. A change smaller than the baseline's own run-to-run spread is reported as no difference, and the case count is stated beside every pass rate.
+- **Account for run-to-run variance.** A model call is not deterministic. Record the decoding settings on both sides, run each case at least three times, setting temperature to 0 where the provider supports it and saying so (temperature 0 narrows the spread but does not remove it), and report pass counts per case. A change smaller than the baseline's own run-to-run spread is reported as no difference, and the case count is stated beside every pass rate.
 - **Report per-case movement.** Which cases newly pass, which newly fail. A net-positive run that broke a case someone reported last month is not an improvement. A failing case names its class -- validation failure, truncation at the output cap, refusal, timeout -- so a candidate that only truncates more is not read as one that reasons worse.
 - **Missing telemetry stays null.** If the harness did not report tokens, latency, or cost, the field is null and the report says the harness did not report it. Never reconstruct a token count from a pricing table or a character count; an estimate presented beside observed numbers reads as observed.
 
@@ -9910,7 +9912,7 @@ A deprecation with no date is a warning nobody acts on:
 - **What happens after** - the removed surface returns 410 Gone with an
   error body naming the replacement, rather than a generic 404, so a late caller
   gets a diagnosis. While the window is open, every response from the old
-  surface carries the `Sunset` header (RFC 8594) and a `Deprecation` header, so
+  surface carries the `Sunset` header (RFC 8594, an HTTP-date) and a `Deprecation` header (RFC 9745, a structured-field date such as `@1688169599`, not an HTTP-date), so
   clients that log headers see the date without reading a changelog.
 
 An open consumer set does not block the deprecation; it changes the window and
@@ -11047,7 +11049,8 @@ not yet a verdict: run the user's held-out eval on the unquantized model and
 on the quantized one and report the delta first, and name the calibration data
 for AWQ and GPTQ. FP8 weights and activations need Hopper- or Ada-class
 hardware; on A100 use a weight-only format. Tensor parallel size must divide
-the model's attention and KV head counts and cannot exceed the GPUs that
+the model's attention head count and either divide its KV head count or be a
+multiple of it (8 KV heads at TP 16 is valid), and cannot exceed the GPUs that
 exist; use pipeline parallelism when the GPU count does not fit.
 
 ## Docker runbook (vLLM)
@@ -11059,11 +11062,11 @@ and `HF_TOKEN` for gated models.
 ```sh
 docker run --rm --gpus all \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
-  --env HF_TOKEN --ipc=host -p 8000:8000 \
+  --env HF_TOKEN --env VLLM_API_KEY --ipc=host -p 127.0.0.1:8000:8000 \
   vllm/vllm-openai:<pinned-tag> --model <model-id>
 ```
 
-Failure ladder, in order: nvidia-container-toolkit installed and configured;
+The port is published on localhost only and the key is read from `VLLM_API_KEY`, so it never appears in argv (see the endpoint section below). Failure ladder, in order: nvidia-container-toolkit installed and configured;
 shared-memory OOM (raise shm); docker group permissions; token/proxy failures
 on the weight download.
 
@@ -11071,7 +11074,7 @@ on the weight download.
 
 Five steps, idempotent, in order - each step is a gate, not a suggestion:
 
-1. **Secret gate** - does the `hf-token` secret exist? Create it only if not.
+1. **Secret gate** - do the `hf-token` secret and the API-key secret exist? Create each only if not.
 2. **Existing-deployment gate** - is a vllm Deployment already present?
    Applying over a live one is an update decision, not a bootstrap.
 3. **Apply** the Service and Deployment.
@@ -11079,21 +11082,26 @@ Five steps, idempotent, in order - each step is a gate, not a suggestion:
    only completion evidence.
 5. **Summarize**: table of what exists, then a port-forward, a `/v1/models` check, and one `chat/completions`
    request with `max_tokens: 8` whose latency is recorded as the first sample.
+   With the key set, both requests send `Authorization: Bearer <key>`;
+   without it they answer 401.
 
 Sane defaults until measured otherwise: `--gpu-memory-utilization 0.85`,
 tensor parallel 1, a large dshm volume, readiness and liveness probes on `/health`,
 plus a `startupProbe` whose failureThreshold times periodSeconds exceeds the
 measured cold-cache load time of the weights (liveness starts only after it
-passes; a pod restarting while it loads is the first thing to check when
-rollout status never completes). **The port invariant**: changing the serving port touches four
+passes). Set the Deployment's `progressDeadlineSeconds` (default 600) above the
+startup budget and pass `kubectl rollout status --timeout` at least as long:
+rollout status exits non-zero once the progress deadline passes, so a slow but
+healthy load would otherwise fail step 4. A pod restarting while it loads is
+the first thing to check when readiness never arrives. **The port invariant**: changing the serving port touches four
 places - containerPort, Service port/targetPort, all health probes, and
 `--port` in args; a runbook that changes fewer has not changed the port.
 Cleanup mirrors setup and ends at an explicit keep-or-delete decision for the
-secret.
+secrets.
 
 ## Who may reach the endpoint
 
-State who may reach the server before exposing it. Bind to localhost or a ClusterIP Service unless exposure is the goal, and set `--api-key` from a named secret. The key only authenticates the OpenAI-compatible paths (`/v1`, `/v2`, `/inference`, `/cohere`); other paths such as `/metrics` stay behind the network boundary. The image tag is pinned and recorded with the benchmark metadata, so two runs are comparable.
+State who may reach the server before exposing it. Bind to localhost or a ClusterIP Service, and never publish the server port itself to a network you do not control. Set the key through `VLLM_API_KEY` from a named secret, not argv. `--api-key` authenticates only the `/v1`, `/v2`, `/inference` and `/cohere` prefixes. vLLM's own warning: other endpoints, including `/invocations`, which exposes the same inference as `/v1`, remain unauthenticated, and so do `/generative_scoring`, `/pooling`, `/classify`, `/score`, `/rerank` and control paths such as `/pause`, `/abort_requests` and `/update_weights`; do not rely on the key alone. To expose the service, put a proxy with a path allowlist in front of it. The image tag is pinned and recorded with the benchmark metadata, so two runs are comparable.
 
 ## Symptom -> flag
 
@@ -13937,8 +13945,8 @@ A terminal is a grid of cells, and text is not one cell per character.
   terminal. Verify one render with Korean (or another wide script) and one
   with emoji-bearing content at 80 columns, because a column that lines up in
   Latin text drifts the box-drawing borders in CJK.
-- Honor `NO_COLOR` and a non-TTY stdout: drop color and cursor control, and
-  keep the hierarchy through spacing and weight.
+- Honor `NO_COLOR` by dropping color only; on a non-TTY stdout drop color and
+  cursor control too. Either way keep the hierarchy through spacing and weight.
 - Redraw on resize (SIGWINCH) and say what the layout does below the minimum
   width.
 
