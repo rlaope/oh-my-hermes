@@ -68,9 +68,11 @@ class ParityTests(unittest.TestCase):
         "claude-mythos-5-1": ("ccapi", "anthropic", "openrouter"),
         # Onboarded 2026-10-27 ahead of any chain placement.
         "gpt-6.1-terra": ("openai-codex", "openai", "openrouter"),
-        # Onboarded 2026-11-06, access-gated (Daybreak Red), so never chained:
-        # GPT-6 Cyber follows Mythos 5.1.
+        # Onboarded 2026-11-06, access-gated (Daybreak Red, Rosalind
+        # Research), so never chained: the GPT-6 Cyber line follows Mythos 5.1.
         "gpt-6-cyber": ("openai-codex", "openai"),
+        "gpt-5.6-cyber": ("openai",),
+        "gpt-6-rosalind": ("openai",),
         # Onboarded 2026-11-06; a legal specialist, in no shipped chain.
         "glm-5.3-flashx-legal": ("zai",),
         # Onboarded 2026-10-24; no shipped chain names the Highspeed tier.

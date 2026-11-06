@@ -324,10 +324,8 @@ All notable changes will be documented here.
   to approved Daybreak Red organizations, so like Mythos 5.1 it is
   recognized and priced for someone who asks for it by name. GPT-5.6 Cyber
   (12.5/75, Daybreak Red) and GPT-6 Rosalind (15/75, approved Rosalind
-  Research organizations) are access-gated too. They get a price and a label,
-  and they use the `gpt` family calibration. They get no provider check,
-  because no vendor page says whether Codex serves them and OMH does not
-  refuse an approved account on a guess. Cost
+  Research organizations) are access-gated too. They get a price, a provider
+  check, and a label, and they use the `gpt` family calibration. Cost
   estimates now cover GLM-5.3-FlashX-Legal, Mistral Large
   4 (`mistral-large-4`, `mistral-large-4-0`) and Solar Mini 4, at each
   vendor's list price. `deepseek-v4.1-flash-1017`, the version

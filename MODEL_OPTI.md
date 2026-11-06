@@ -762,23 +762,22 @@ pairing so a benchmark claim can never mix in other prompt changes.
   model is not supported when using Codex with a ChatGPT account"), the
   same wording a made-up id gets, so it cannot tell gated from absent. The
   `openai-codex` family in its provider row rests on the system card's
-  "when accessing GPT-6 Cyber through the Codex app"; the Codex models page
-  (learn.chatgpt.com/docs/models, read 2026-11-06) does not list it.
-  Measurement waits for an approved
+  "when accessing GPT-6 Cyber through the Codex app" alone; the Codex models
+  page (learn.chatgpt.com/docs/models; a text search of the served HTML on
+  2026-11-06, not a rendered view) does not name it. Measurement waits for an approved
   route, which this repo does not have.
 - **Siblings on the same terms, without a contract:** GPT-5.6 Cyber
   (`gpt-5.6-cyber`, 2026-08-07, "an alias for purpose-trained cybersecurity
   models", 400K context, Responses only, 12.5 / 75) and GPT-6 Rosalind
   (`gpt-6-rosalind`, 2026-10-30, life-sciences research for approved
   organizations, 15 / 75 short-context; its model page returns 404) carry a
-  price row and a display label, and get the `gpt` family block. GPT-5.6
-  Cyber's page documents no effort ladder and no base model to inherit one
-  from, and GPT-6 Rosalind has no page to read one from. Neither has a
-  provider row: a row answers False for every family it omits, no vendor page
-  says whether Codex serves them, and Daybreak access depends on the "allowed
-  product surface" (learn.chatgpt.com/codex/cyber-safety, read 2026-11-06).
-  Every provider answers unknown, so no approved account is refused on a
-  guess.
+  price row, a provider row, and a display label, and get the `gpt` family
+  block. GPT-5.6 Cyber's page documents no effort ladder and no base model to
+  inherit one from, and GPT-6 Rosalind has no page to read one from. Their
+  provider rows name `openai` only, so both answer False on `openai-codex`:
+  a row lists families, so one provider cannot be unknown inside it, and the
+  same text search of the Codex models page names neither. No page denies
+  Codex either, so a vendor statement naming it moves that row.
 - **Source:** official (developers.openai.com model pages, pricing page,
   and changelog; deploymentsafety.openai.com system card, read
   2026-11-06); observed (the Codex probe, and the Hermes source: no
@@ -1986,7 +1985,7 @@ choose models by, not a guarantee for another persona or skill.
 | `gpt-6-luna`, `claude-opus-5-5` (exact contracts, no exact calibration) | yes → `gpt` / `claude` | yes, through the family block | exact documented contracts (Luna's `none`-to-`max` ladder; Opus 5.5's always-on thinking, forced-`tool_choice` 400, and 0.05x cache reads); no exact counter because neither shipped placement reaches the high-effort tier on the subagent side and the Opus composer block is kept byte-stable per the vendor's Opus 5.5 prompting guide; the old-vs-new generation pairs are the named follow-up |
 | `gpt-6.1-terra` (exact contract, no exact calibration) | yes → `gpt` | yes, through the family block | exact documented contract (Luna's `none`-to-`max` ladder, `-pro` projection, 5% cache reads); recognized, priced, and provider-mapped but in no shipped chain; Hermes' Codex route clamps its `max` to `xhigh` until Hermes adds the id to its GPT-6 tier tables |
 | `gpt-6-cyber` (exact-model override, access-gated) | yes → `gpt` | yes, both override tables (Astra's wording, byte for byte), resolved before the family block | exact documented contract (its own limits, endpoints, and price; Astra's `low`-floor ladder inherited and labeled `effort_ladder_source`); Daybreak Red only, in no shipped chain; editorial and unmeasured, because no route this repo can reach serves it |
-| `gpt-5.6-cyber`, `gpt-6-rosalind` (no contract, access-gated) | yes → `gpt` | yes, through the family block | priced and labeled, but neither documents a ladder, so an effort passes through as for any contract-less `gpt` id; no provider row, so every provider answers unknown; in no shipped chain |
+| `gpt-5.6-cyber`, `gpt-6-rosalind` (no contract, access-gated) | yes → `gpt` | yes, through the family block | priced, provider-mapped, and labeled, but neither documents a ladder, so an effort passes through as for any contract-less `gpt` id; in no shipped chain |
 | `deepseek-v4.1-flash-1017` (declared alias, relay spelling) | yes → `deepseek` | yes, inherited from canonical `deepseek-v4.1-flash` | the snapshot `deepseek-flash` has served since 2026-10-17, under a spelling DeepSeek itself does not accept; keeps the pointer's category label, not its display label, and the portfolio report reads it as `unmeasured` because it has no chain placement of its own |
 | `openai-gpt-`, `anthropic-claude-` (design-qualified aliases) | yes → `gpt` / `claude` | yes, through the design family | concrete models.dev/OpenCode serving ids carry these sub-prefixes; their catalog `base_model` fields establish the underlying design family |
 | other `openai-`, `anthropic-` vendor-qualified ids | recognized as model targets, family `unknown` | no → `generic` | vendor qualification alone does not establish a design; O-series, image, and emerging ids remain uncalibrated |
