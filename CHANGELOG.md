@@ -485,11 +485,12 @@ All notable changes will be documented here.
   from the installer-managed environment reads the `current` generation
   pointer at most every 5 s, with no network call. Once an update has finished
   moving it, it shows `restart to update` on the info line and asks once, between turns:
-  `OMH updated to 4.0.6 main@1a2b3c4d. Restart the TUI now to use it?`. Not
+  `OMH moved to 4.0.6 main@1a2b3c4d. Restart the TUI now to use it?`. Not
   now comes first. Restart the TUI waits for the running turn, for a turn
   about to start, for what the session waits on or still has out, and for what
-  you typed, then exits for `omh` to open the new generation's `omh --resume <id>` on the same
-  session. If the shared gateway still runs
+  you typed (a `/bg` or `/btw` answer still out does not hold it: the question
+  says that answer will not show), then exits for `omh` to open the new
+  generation's `omh --resume <id>` on the same session. If the shared gateway still runs
   the old OMH plugin code, that TUI then offers the existing
   `/gateway restart` once, with Cancel first. At the end of an activated
   update on a terminal, `omh update` names what each stale running gateway's

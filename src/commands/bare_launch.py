@@ -491,7 +491,7 @@ def _relaunch_installed(args: argparse.Namespace, generation: Path, closed: tupl
     this `omh`, and Ctrl+C, which the new one reads itself, does not end the wait. This `omh` waits for a whole session
     on its own generation's files, so it goes on holding that one, by path: its `sys.prefix` may now resolve to the new
     one. `updated` is the value `UPDATED_ENV` carries (`relaunch_updated_value`). A new OMH that ended in failure
-    leaves the person the way back to the session, since it may be a generation that cannot run."""
+    with a session to go back to names it, since it may be a generation that cannot run."""
     from ..install.generation_hold import hold_running_generation
     from ..install.self_update import current_omh_cli
     from ..tui.launch import UPDATED_ENV, exit_on_signals
@@ -510,7 +510,7 @@ def _relaunch_installed(args: argparse.Namespace, generation: Path, closed: tupl
     except OSError as error:
         print(f"omh: could not start the installed OMH ({error}); run `{again}`.", file=sys.stderr)
         return 1
-    if code not in (0, 130):
+    if code and closed[0]:
         print(f"omh: the installed OMH exited {code}; run `{again}` to open the session again.", file=sys.stderr)
     return code
 

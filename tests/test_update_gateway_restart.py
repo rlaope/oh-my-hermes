@@ -27,6 +27,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from _module_patch import patch_modules
 from test_hermes_gateway_health import INSTALLED_AT, NOW, STARTED, state_record, write_home
 from omh.commands import bare_launch, update_gateway
 from omh.commands.bare_launch import bare_launch_args
@@ -357,6 +358,22 @@ class CommandWiringTests(unittest.TestCase):
         for call in (GatewayClient.__init__, RestartRun.__init__, read_status):
             self.assertIsNone(inspect.signature(call).parameters["popen"].default)
 
+    def test_an_import_that_fails_after_the_update_offers_nothing_and_keeps_its_code(self) -> None:
+        from omh.commands import setup
+
+        args = build_parser().parse_args(["update"])
+        with patch_modules({"omh.commands.update_gateway": None}), \
+                patch.object(setup, "_ask_yes_no", side_effect=AssertionError("asked")):
+            for code in (0, self_update.PROFILE_REPAIR_EXIT_CODE):
+                self.assertEqual(setup._offer_gateway_restart(args, code), code)
+
+    def test_the_re_entry_argv_needs_no_import_after_the_package_manager_ran(self) -> None:
+        from omh.commands import setup
+
+        with patch.object(sys, "argv", ["omh", "update", "--restart-gateway"]), \
+                patch_modules({"omh.commands.update_gateway": None, "omh.install.self_update": None}):
+            self.assertEqual(setup._reentry_argv_with_command_package_updated(), ["update", "--command-package-updated"])
+
     def test_ctrl_c_at_the_question_is_a_no_and_keeps_the_updates_code(self) -> None:
         from omh.commands import setup
 
@@ -517,7 +534,7 @@ class RelaunchTests(unittest.TestCase):
         self.assertIn("run `omh --resume s-1`", stderr.getvalue())
 
     def test_a_new_omh_that_ended_in_failure_leaves_the_way_back(self) -> None:
-        for code, said in ((1, True), (0, False), (130, False)):
+        for code, said in ((1, True), (0, False), (130, True)):
             with self.subTest(code=code), tempfile.TemporaryDirectory() as tmp:
                 stderr = io.StringIO()
                 generation = Path(tmp) / "generations" / "old"
@@ -528,6 +545,16 @@ class RelaunchTests(unittest.TestCase):
                     self.assertEqual(
                         bare_launch._relaunch_installed(bare_launch_args([]), generation, ("s-1", "/h", ())), code)
                 self.assertEqual("run `omh --resume s-1`" in stderr.getvalue(), said)
+
+    def test_with_no_session_to_go_back_to_a_failure_names_none(self) -> None:
+        stderr = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(bare_launch.subprocess, "Popen") as popen, \
+                patch("sys.stderr", stderr):
+            generation = Path(tmp) / "generations" / "old"
+            (generation / "venv").mkdir(parents=True)
+            popen.return_value.wait.return_value = 1
+            self.assertEqual(bare_launch._relaunch_installed(bare_launch_args([]), generation, ("", "", ())), 1)
+        self.assertEqual(stderr.getvalue(), "")
 
     def test_the_relaunch_argv_is_a_bare_launch_the_new_omh_reads_back(self) -> None:
         args = bare_launch_args(["--omh-home", "/o", "--hermes-home", "/h", "--scope", "user", "-p", "kami"])
