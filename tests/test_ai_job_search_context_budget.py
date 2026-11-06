@@ -381,7 +381,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
         # Host-readiness skills: thirteen bodies name the command or probe behind their evidence; the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '56263bcd05dbfd469c3972b90a812a36af72725201ef636da49c7a96c8fc33c3')
+        self.assertEqual(_digest(legacy_hashes), '96d390a8ff97abded64060538e233b6d6266f0e20365837c147e493858b4c8e7')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -396,7 +396,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
         # 122431 -> 124814: the render rail writes each sibling under its loadable label
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
-        # 124814 -> 123267: host-readiness skills replace the repeated hollow `Why:` example line and generic Do-Not-Use and checklist lines with skill-specific ones.
+        # 124814 -> 123267: host-readiness skills drop generic repeated Do-Not-Use and checklist lines.
         self.assertEqual(legacy['repeated']['bytes'], 123267)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))

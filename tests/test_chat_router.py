@@ -5401,6 +5401,27 @@ class MaintenanceUninstallCardTests(unittest.TestCase):
         for command in ("update", "setup", "doctor", "install", "list"):
             self.assertNotIn("--dry-run", _maintenance_command_card(command)["command_argv"])
 
+    def test_uninstall_card_carries_a_typed_keep_command_flag(self) -> None:
+        from omh.routing.task_cards import classify_task
+
+        self.assertEqual(classify_task("omh uninstall")["command_argv"], ["omh", "uninstall", "--dry-run"])
+        self.assertEqual(
+            classify_task("omh uninstall --keep-command")["command_argv"],
+            ["omh", "uninstall", "--dry-run", "--keep-command"],
+        )
+        self.assertIn("already shown", classify_task("omh uninstall")["first_safe_action"])
+
+    def test_wrapper_button_and_explanation_preview_instead_of_running_uninstall(self) -> None:
+        from omh.wrapper.contract import build_chat_interaction_payload
+
+        payload = build_chat_interaction_payload("omh uninstall", source="discord")
+        action = payload["chat_response"]["actions"][0]
+        self.assertEqual(action["id"], "run_omh_uninstall")
+        self.assertEqual(action["label"], "Preview omh uninstall")
+        explanation = payload["chat_response"]["state"]["workflow_explanation"]
+        self.assertIn("omh uninstall --dry-run", explanation["primary_action_hint"])
+        self.assertIn("omh uninstall --dry-run", explanation["recommended_reply"])
+
 
 if __name__ == "__main__":
     unittest.main()

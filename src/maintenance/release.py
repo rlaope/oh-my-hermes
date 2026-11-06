@@ -967,7 +967,7 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # way an external coding owner is chosen (naming it in a dag-ulw request) and
 # the per-owner `exports` list (+10). Measured from the producer; no headroom.
 # 536979 -> 536962: `executor-runtime-readiness` (-16) and `provider-profile-posture` (-14)
-# shorten their first Do-Not-Use line, and `capability-toggle`'s handoff policy (+13) names
+# shorten their first Do-Not-Use line, and `capability-toggle`'s handoff policy (+12) and expected outputs (+1) name
 # `omh capability-policy`; no other row moved. Measured from the producer; no headroom.
 FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536962
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000

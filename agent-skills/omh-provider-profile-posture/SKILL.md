@@ -41,7 +41,7 @@ Bad example:
 
 ## Completion Checklist
 
-- Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret-presence metadata are explicit, and `omh ops provider-profile-posture --input <file>` produced the record from JSON with `provider_profile_posture_input/v1`, `provider_id`, `profile_id`, `requested_capabilities`, `secret_requirements` as `{name, present}`, optional `host_observations`.
+- Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret presence are explicit, and `omh ops provider-profile-posture --input <file>` made the record from JSON with `schema_version` `provider_profile_posture_input/v1`, `provider_id`, `profile_id`, `requested_capabilities`, `secret_requirements` as `{name, present: true|false|"unknown"}`, optional `host_observations`.
 - No secret value, credential validation, provider call, model route, wallet, or payment action is claimed.
 - Any host observation reference remains supplied metadata, not a live connector check.
 

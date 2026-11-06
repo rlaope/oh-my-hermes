@@ -1632,7 +1632,7 @@ They outrank stale coding context, router-design feedback, runtime portability, 
 
 ## Wrapper Copy
 
-Say: "I will run the OMH maintenance update path; code changes require a separate request." Adapt `update` to the requested command.
+Say: "I will run the OMH maintenance update path; code changes require a separate request." Adapt `update` to the requested command; for `uninstall` say "I will preview the OMH uninstall with `--dry-run` first".
 
 ## Evidence Boundary
 

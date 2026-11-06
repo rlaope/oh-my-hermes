@@ -32,7 +32,7 @@ Good example:
 
 - Prompt: skill-health show the OMH skill portfolio dashboard with stale surfaces, failure patterns, pending amendments, and top improvement actions.
 - Expected behavior: Produce `prepare_skill_health` with required context, wrapper actions, and not-evidence boundaries.
-- Why: Drift comes from the curator ledger and `lint_warnings`, not use counts.
+- Why: Drift comes from `lint_warnings` and, on Hermes, the curator ledger, not use counts.
 
 Bad example:
 

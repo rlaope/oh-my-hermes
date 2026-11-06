@@ -166,10 +166,11 @@ class ProviderProfilePostureSkillTextTests(unittest.TestCase):
         )
 
         for key in _INPUT_REQUIRED_KEYS:
-            if key != "schema_version":
-                self.assertIn(f"`{key}`", body)
+            self.assertIn(f"`{key}`", body)
         self.assertIn(PROVIDER_PROFILE_POSTURE_INPUT_SCHEMA_VERSION, body)
-        self.assertIn("{" + ", ".join(sorted(_SECRET_REQUIREMENT_KEYS)) + "}", body)
+        for key in _SECRET_REQUIREMENT_KEYS:
+            self.assertIn(key, body)
+        self.assertIn('true|false|"unknown"', body)
 
 
 if __name__ == "__main__":

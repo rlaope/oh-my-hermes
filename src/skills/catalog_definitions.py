@@ -8949,8 +8949,8 @@ _DEFINITIONS = [
         final_checklist=(
             "The affected family is named by its canonical id, not guessed from a partial word.",
             "Withheld workflows and retained core skills are listed separately.",
-            "The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capability-policy status` shows it), routing is unchanged, and no workflow is called removed.",
-            "The change is made with `omh capability-policy disable|enable <family>` (`--dry-run` previews, `status` lists), never by editing setup-profile.json, and the printed reversing command is stated so it never reads as permanent.",
+            "The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capability-policy status`), routing is unchanged.",
+            "The change uses `omh capability-policy disable|enable <family>` (`--dry-run` previews, `status` lists), never a hand edit, and the printed reversing command is stated.",
         ),
         recovery_notes=(
             "If the family id is ambiguous, list all six and ask rather than picking the closest match.",
@@ -9433,10 +9433,10 @@ _DEFINITIONS = [
         + (
             "The provider API key write and the `web` backend or tier change were verified as two separate, independently-approved changes, each read back from the key Hermes consumes.",
             "Nothing was written to `auxiliary.web_extract`, and a leftover block there was reported as ignored rather than counted as configuration.",
-            "Verified means every keyed backend or `paid` tier in the merged `web` section has its key present; else report not verified.",
+            "Verified needs every keyed backend or `paid` tier in the merged `web` section to have its key present.",
         ),
         recovery_notes=(
-            "If no provider account or key is available, mark the key step \"not applicable\" and continue with the backend and tier step alone, never set a keyed backend or `web.provider_tier.<name>: paid` while its key is absent.",
+            "If no provider account or key is available, mark the key step \"not applicable\" and continue with the backend and tier step alone, pick a keyless backend or a `provider_tier.<name>: free` tier, never a keyed or `paid` one without its key; offer to reverse an approved keyed backend as its own diff.",
             "If nothing is named yet, run the read-only diagnosis first, then ask which paid provider, if any.",
             "If either diff is rejected, keep the other step's state independent and do not roll both back together.",
             "If the config still holds an `auxiliary.web_extract` block, report it as a leftover Hermes ignores and leave it in place unless the user asks to remove it as its own diff.",

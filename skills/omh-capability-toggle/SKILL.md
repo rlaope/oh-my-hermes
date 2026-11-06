@@ -45,8 +45,8 @@ Bad example:
 
 - The affected family is named by its canonical id, not guessed from a partial word.
 - Withheld workflows and retained core skills are listed separately.
-- The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capability-policy status` shows it), routing is unchanged, and no workflow is called removed.
-- The change is made with `omh capability-policy disable|enable <family>` (`--dry-run` previews, `status` lists), never by editing setup-profile.json, and the printed reversing command is stated so it never reads as permanent.
+- The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capability-policy status`), routing is unchanged.
+- The change uses `omh capability-policy disable|enable <family>` (`--dry-run` previews, `status` lists), never a hand edit, and the printed reversing command is stated.
 
 ## Recovery Notes
 

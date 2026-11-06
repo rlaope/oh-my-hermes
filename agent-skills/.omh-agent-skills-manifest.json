@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "015c2c98ec3bcb198d1730aeeb07201b1c66dc74a7b5bd76849baf175de8ffeb",
+  "catalog_revision": "8ee11b970d50c93b3c1e6bf61713be015690a742db8668cd7773ca2ddd133aaf",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -191,7 +191,7 @@
     "omh-product-discovery-validation/SKILL.md": "a0391713000412465dc8864db422a062356134d73047320a45099fabc8370b25",
     "omh-product-discovery-validation/references/procedure.md": "46cbabf516f1b320e312e366b6d3728136ad41b80ec88365d7f6dfd04fc20c01",
     "omh-production-audit/SKILL.md": "730dc6a654567016a92fb085b65e578a5ef0309bef72578402fac3d6fead7ae2",
-    "omh-provider-profile-posture/SKILL.md": "f0b399af998a213a324f33aecb40fa30d02349a2ca02b404f659519d8730382c",
+    "omh-provider-profile-posture/SKILL.md": "18bc9ae86cb63e5e6dbed87829e59756ab5e3c27ab7c7838f21b0294be184dd8",
     "omh-refactor-plan/SKILL.md": "e77101ca39c259fffda940ed98968b48702f040118733f8d21f75271bbc56914",
     "omh-refactor-plan/references/dependency-upgrade.md": "97e9b74b117a66171386a0015a0ad60954def8dcf59b1d6c180037919c61bfbf",
     "omh-refactor-plan/references/interface-shaping.md": "963046fe286045594b39947eeb0e75ac8f7ea7d12183fc176ac4443abb9fcfde",
@@ -271,7 +271,7 @@
     "omh-show-reel/toolkit/scripts/timeline.py": "595ba11069d52668c04ca17e85c7a5aa1e80b9d0c338aa7c58896ac1ab667313",
     "omh-show-reel/toolkit/scripts/tools/cutout.swift": "7050d5764aa724691c9982c51dc73fc10cc0b70483c9df77092614b195bda837",
     "omh-show-reel/toolkit/upstream-manifest.json": "1c065b16d8080872e418fec80e32dd4e81b8c5cf56bf4773e4ed16b57d9b2dff",
-    "omh-skill-health/SKILL.md": "a1d104020bd655cd4e4dc78f807b2a25caa799c9a35737c86efa560da99efd61",
+    "omh-skill-health/SKILL.md": "def96d05aa58781ff63a67cfcb7f3a9b883ce9401a9a69e42ca89cfc6531badb",
     "omh-skill-scout/SKILL.md": "653156c710f022f4ec27f1ed890322c2d88c01ebbb56a435c6e4667de9510f5b",
     "omh-source-finder/SKILL.md": "1f16e2929917b845a7cb6f3ba6b5f0c30db3b17afc54bfdcba4d499b55d87f34",
     "omh-source-finder/references/search-examples.md": "2dd2c4cb91f0388a3fcf5ba6fb13094bbc6234edab6dce28ac036334d3718821",
