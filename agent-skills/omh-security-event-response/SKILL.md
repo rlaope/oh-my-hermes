@@ -17,7 +17,7 @@ This is an OMH `security-event-response` workflow skill, projected for Agent Ski
 
 ## Why This Exists
 
-`security-event-response` exists because an event had no owner: `security-safety-review` and `application-threat-model` review a design before it ships, and a CVE, a committed secret, or a license question was answered by onboarding, review, or an achievements lane with no containment order at all.
+`security-event-response` exists because an event had no owner: `omh-security-safety-review` and `omh-application-threat-model` review a design before it ships, and a CVE, a committed secret, or a license question was answered by onboarding, review, or an achievements lane with no containment order at all.
 
 ## First Steps
 

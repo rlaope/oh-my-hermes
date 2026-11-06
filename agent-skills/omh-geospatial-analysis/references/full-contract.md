@@ -22,7 +22,7 @@ Good example:
 Bad example:
 
 - Prompt: Explain the map metaphor in this essay and plot the existing CSV totals.
-- Expected behavior: Answer the writing question or use `data-analysis` for the table; do not run a spatial backend.
+- Expected behavior: Answer the writing question or use `omh-data-analysis` for the table; do not run a spatial backend.
 - Why: Map vocabulary alone does not establish a coordinate computation.
 
 ## When to Use

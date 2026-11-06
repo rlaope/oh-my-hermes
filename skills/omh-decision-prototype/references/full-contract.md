@@ -32,7 +32,7 @@ Good example:
 Bad example:
 
 - Prompt: decision-prototype build the whole notifications feature as a prototype and merge it if it works.
-- Expected behavior: Refuse the multi-feature scope, ask for the one decision the prototype should settle, and route accepted implementation to `ralplan` then `ultrawork`.
+- Expected behavior: Refuse the multi-feature scope, ask for the one decision the prototype should settle, and route accepted implementation to `ulw-plan` then `ultrawork`.
 - Why: A general feature build is not a bounded experiment, and a successful prototype is never promoted without a separate accepted plan.
 
 ## Completion Checklist

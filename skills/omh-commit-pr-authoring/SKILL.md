@@ -19,7 +19,7 @@ This is a Hermes-native `commit-pr-authoring` workflow skill.
 
 ## Why This Exists
 
-`commit-pr-authoring` exists because nothing in the catalog authored the commit or the PR body. `code-review` reads a commit message as a thing to review and `github-event-ops` routes PR events, so the text an engineer writes several times a day had no owner, and nothing applied the observed-versus-prepared split to it.
+`commit-pr-authoring` exists because nothing in the catalog authored the commit or the PR body. `omh-code-review` reads a commit message as a thing to review and `omh-github-event-ops` routes PR events, so the text an engineer writes several times a day had no owner, and nothing applied the observed-versus-prepared split to it.
 
 ## First Steps
 
@@ -63,7 +63,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

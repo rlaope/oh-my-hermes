@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: Design a six-week Python syllabus with weekly assessments.
-- Expected behavior: Route to `curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.
+- Expected behavior: Route to `omh-curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.
 - Why: Just-in-time target selection should not displace an explicit curriculum-design request.
 
 ## Completion Checklist

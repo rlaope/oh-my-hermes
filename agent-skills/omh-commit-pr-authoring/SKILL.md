@@ -17,7 +17,7 @@ This is an OMH `commit-pr-authoring` workflow skill, projected for Agent Skills 
 
 ## Why This Exists
 
-`commit-pr-authoring` exists because nothing in the catalog authored the commit or the PR body. `code-review` reads a commit message as a thing to review and `github-event-ops` routes PR events, so the text an engineer writes several times a day had no owner, and nothing applied the observed-versus-prepared split to it.
+`commit-pr-authoring` exists because nothing in the catalog authored the commit or the PR body. `omh-code-review` reads a commit message as a thing to review and `omh-github-event-ops` routes PR events, so the text an engineer writes several times a day had no owner, and nothing applied the observed-versus-prepared split to it.
 
 ## First Steps
 

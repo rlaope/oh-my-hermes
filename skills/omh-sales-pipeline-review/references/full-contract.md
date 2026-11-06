@@ -29,7 +29,7 @@ Good example:
 Bad example:
 
 - Prompt: Write discovery questions for the Northwind opportunity and draft the follow-up email.
-- Expected behavior: Route to `sales-development`, not `sales-pipeline-review`.
+- Expected behavior: Route to `omh-sales-development`, not `sales-pipeline-review`.
 - Why: A single account's discovery, qualification, and outreach draft has no portfolio, aging, or forecast-calibration objective.
 
 ## Completion Checklist

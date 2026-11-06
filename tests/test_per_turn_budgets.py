@@ -134,7 +134,10 @@ class PerRequestBudgetRegistryTests(unittest.TestCase):
 
         templates = context_cost.builtin_skill_templates()
         source = templates[0]
-        clone = dataclasses.replace(source, name=f"{source.name}-clone")
+        # `replace` would render the copy again under its new name; this test is about
+        # bytes, so copy the finished template instead.
+        clone = copy.copy(source)
+        object.__setattr__(clone, "name", f"{source.name}-clone")
         metrics = {metric.name: metric for metric in budget_metrics()}
         before = {
             name: metrics[name].live()

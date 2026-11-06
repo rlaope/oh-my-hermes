@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: This module is a mess, rewrite it properly.
-- Expected behavior: Refuse the rewrite framing: audit the module into ledger findings with bounded fixes, or route a decided restructure to `refactor-plan`.
+- Expected behavior: Refuse the rewrite framing: audit the module into ledger findings with bounded fixes, or route a decided restructure to `omh-refactor-plan`.
 - Why: A rewrite recommendation is the failure mode the ledger exists to replace with bounded, ranked fixes.
 
 ## Completion Checklist

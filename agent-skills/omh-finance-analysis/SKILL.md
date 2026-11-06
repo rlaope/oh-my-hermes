@@ -39,7 +39,7 @@ Good example:
 Bad example:
 
 - Prompt: What is the USD/KRW exchange rate right now?
-- Expected behavior: Route to `live-info-operator`, not `finance-analysis`.
+- Expected behavior: Route to `omh-live-info`, not `finance-analysis`.
 - Why: A live exchange rate needs observed provider data rather than a finance analysis brief.
 
 ## Completion Checklist

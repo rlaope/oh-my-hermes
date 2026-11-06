@@ -54,7 +54,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -101,7 +101,7 @@ Artifact expectations:
 Safety rules:
 
 - Trigger only on a leading `/omh` or `./omh` command token with a task remainder; bare `/omh`, `./omh`, or `omh` without a slash is a picker/other-lane signal, not meta-routing.
-- Shortlist candidates from the installed `references/catalog-index.md` (name plus one-line description per skill) when it is available, then confirm with `omh recommend "<remainder>" --json --limit 3` — the recommend output stays authoritative for the selection and its policy metadata; when the remainder spans multiple stages or the top recommendation is low-confidence, re-query `omh recommend` once per stage with a rephrased stage description instead of dumping the full catalog. Never run `omh docs workflows --json` or `omh list --json` in chat context — their full-catalog output does not fit a chat budget — and never rely on a memorized or embedded skill list; the catalog changes after `omh update`.
+- Shortlist candidates from the installed `skill_view(name='omh-routing', file_path='references/catalog-index.md')` (name plus one-line description per skill) when it is available, then confirm with `omh recommend "<remainder>" --json --limit 3` — the recommend output stays authoritative for the selection and its policy metadata; when the remainder spans multiple stages or the top recommendation is low-confidence, re-query `omh recommend` once per stage with a rephrased stage description instead of dumping the full catalog. Never run `omh docs workflows --json` or `omh list --json` in chat context — their full-catalog output does not fit a chat budget — and never rely on a memorized or embedded skill list; the catalog changes after `omh update`.
 - Never select `meta-router` itself from the recommendation output; exclude it and route to the next best concrete workflow or chain.
 - Report the selected workflow(s), why, and the observed-vs-prepared evidence boundary; a routing decision is not execution, review, CI, or merge evidence.
 - If no shell/CLI surface is available, ask the wrapper to run the bounded `omh recommend` queries or use the plugin tool surface; never guess the catalog from memory — say the catalog is unavailable and offer the workflow picker instead.

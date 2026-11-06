@@ -437,6 +437,8 @@ def jev_skill_body(definition: SkillDefinition, name: str) -> str:
     # Imported here: `render` imports the catalog, which imports this module.
     from .render import SHARED_RAIL_SKILL_VIEW
 
+    from .render import workflow_lane_section
+
     title = "Jev " + name.removeprefix("jev-").replace("-", " ").title()
     steps = "\n".join(f"{index}. {step}" for index, step in enumerate(_PROCEDURES[name], start=1))
     preset = JEV_PRESET_BY_SKILL.get(name)
@@ -460,14 +462,13 @@ Contract: `references/full-contract.md`.{preset_line}
 - Reply in the user's own words and the host's own voice: its SOUL.md persona owns reply language, tone, speech level, and sentence endings, progress updates included (where it sets no language, use the one the user wrote in), and OMH shapes structure and content only; OMH's record terms (surface, lane, wrapper, handoff, evidence boundary, not_observed) stay in records and tool calls, never in the sentence the user reads unless they ask about one; and when a real unresolved user decision or a useful briefing discussion remains, offer one specific, content-linked question. Completed work needs no question; omit unrelated non-action footers and generic offers to continue.
 - Report the tool's status, ask_id, served model, and cost source; {non_answer_line}
 - Record observed delegation results; use Hermes-native subagent/delegation features when available: native subagents -> Hermes delegation when available, otherwise sequential lanes.
+- Treat wrapper memory/context summaries as advisory local context, not proof of opaque Hermes memory reads or changes.
 
 ## Recovery Notes
 
 - Tool missing, `consent_not_observed`, or refused: follow the rail's recovery section; never simulate an answer.
 
-## Workflow Lane
-
-advisory local context
+{workflow_lane_section(name, shared_rail_stated=True)}
 """
 
 

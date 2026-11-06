@@ -19,7 +19,7 @@ This is a Hermes-native `iac-change` workflow skill.
 
 ## Why This Exists
 
-`iac-change` exists because infrastructure changes had no owner: `deploy-and-monitor` watches an application release, `release-cut` decides one, and `inference-serving` deploys a model server, while a Terraform plan with drift, a Helm chart change, or a manifest edit reached a generic planner with no blast radius, cost delta, or staged apply at all.
+`iac-change` exists because infrastructure changes had no owner: `omh-deploy-and-monitor` watches an application release, `omh-release-cut` decides one, and `omh-inference-serving` deploys a model server, while a Terraform plan with drift, a Helm chart change, or a manifest edit reached a generic planner with no blast radius, cost delta, or staged apply at all.
 
 ## First Steps
 
@@ -63,7 +63,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: Cluster last quarter's support feedback into roadmap opportunities.
-- Expected behavior: Route to `feedback-triage`, not `support-operations`.
+- Expected behavior: Route to `omh-feedback-triage`, not `support-operations`.
 - Why: A historical signal backlog needs product-pattern triage rather than case-level support guidance.
 
 ## Completion Checklist

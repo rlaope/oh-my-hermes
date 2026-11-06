@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: paper-learning 이 PDF를 PPT로 변환해서 공유용 파일 만들어줘.
-- Expected behavior: Route to `materials-package` because the user wants file conversion/export, not conceptual paper explanation.
+- Expected behavior: Route to `omh-materials-package` because the user wants file conversion/export, not conceptual paper explanation.
 - Why: PDF file output and render QA are material packaging work, not paper learning evidence.
 
 ## Completion Checklist

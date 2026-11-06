@@ -7,7 +7,7 @@ holds the workflow-specific detail without copying those shared rails.
 
 ## Why This Exists
 
-`product-discovery-validation` gives an early idea a bounded, evidence-typed path to a kill, pivot, persevere, or inconclusive decision so `product-brief` consumes validated inputs instead of judging raw discovery itself.
+`product-discovery-validation` gives an early idea a bounded, evidence-typed path to a kill, pivot, persevere, or inconclusive decision so `omh-product-brief` consumes validated inputs instead of judging raw discovery itself.
 
 ## Do Not Use When
 
@@ -29,7 +29,7 @@ Good example:
 Bad example:
 
 - Prompt: Write the PRD for our invoice-chasing feature; the interviews already confirmed the problem.
-- Expected behavior: Route to `product-brief` and ask for the accepted discovery receipt or evidence rather than rerunning discovery.
+- Expected behavior: Route to `omh-product-brief` and ask for the accepted discovery receipt or evidence rather than rerunning discovery.
 - Why: Validated, accepted evidence with a PRD request belongs to the PRD owner, not to discovery.
 
 ## Completion Checklist
@@ -37,7 +37,7 @@ Bad example:
 - The problem gate state is recorded as validated, refuted, or inconclusive with the external-human or behavioral-data refs that decided it, all observed in the framed target segment.
 - The target segment is explicit enough to recruit or tied to observed behavioral data before any solution, PRD, prototype, or coding output leaves this workflow.
 - Every assumption test in the portfolio carries its precommitted success, failure, inconclusive, segment, deadline, cost, owner, and evidence re-entry fields.
-- The receipt names kill, pivot, persevere, or inconclusive, preserves rejected paths, and routes to `product-brief` only from an accepted persevere.
+- The receipt names kill, pivot, persevere, or inconclusive, preserves rejected paths, and routes to `omh-product-brief` only from an accepted persevere.
 - Every artifact is reported as prepared; interviews, tests, and prototypes stay not_observed until re-entered evidence exists.
 
 ## Recovery Notes

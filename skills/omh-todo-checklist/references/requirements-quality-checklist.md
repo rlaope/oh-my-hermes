@@ -8,7 +8,7 @@ fit to be built from, before anyone starts building.
 Think of the requirement text as a program written in English. This checklist is
 its test suite. Every item asks whether the requirements are written well enough
 to build and accept against - never whether the code works. The code has its own
-tests and `verification-gate` owns them.
+tests and `omh-verification-gate` owns them.
 
 ## The line an item may not cross
 

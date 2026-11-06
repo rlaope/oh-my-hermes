@@ -139,8 +139,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 533897 -> 533907 and the digest re-derived: the dag-ulw row's handoff policy
             # names choosing an owner by naming it in a dag-ulw request and the per-owner
             # `exports` list (+10); no other row moved, and the pin before it was e6484100...d8b.
+            # Digest re-derived, length unchanged: meta-router's shortlist line names the
+            # catalog index as a `skill_view` call into omh-routing (the file is not its
+            # own), which moves that row past the preview cut; no other row moved, and the
+            # pin before it was ad1e9c0a...4aa5.
             (skill_capabilities, 533907, FULL_ROW_DELTA_CAP,
-             'ad1e9c0afd37432e32738b2eb0b6c5439f812df47f9c78f1e12e32c9c59c4aa5',
+             'd6dfefff9df440fda6bdeb7fa17b920ad28c1fcfe2676e049210c6df7751fc71',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -198,7 +202,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         feature = [t for t in templates if t.name == FEATURE]
         self.assertEqual(len(feature), 1)
         sections = dict(_split_sections(feature[0].content))
-        self.assertEqual(len(sections['Workflow Lane']), 497)
+        # 497 -> 496: the hand-back line names the router by its loadable label,
+        # `omh-routing`, one character shorter than `oh-my-hermes`.
+        self.assertEqual(len(sections['Workflow Lane']), 496)
         self.assertEqual(len(sections['Runtime Evidence']), 1446)
         self.assertLessEqual(len(feature[0].content.encode()), 5735)
         legacy_templates = [t for t in templates if t.name != FEATURE]
@@ -367,7 +373,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # only ulw-research moves, and the pin before it was 5404bf98...ca32229.
         # dag-ulw's external-owner policy (per-owner choices named in a dag-ulw request, the node
         # `owner` field, `exports`); only dag-ulw moves, and the pin before it was 8ea92d7d...58d7.
-        self.assertEqual(_digest(legacy_hashes), '4f552dc5d28ff70b26b21c1dc4d93c8a66d5b28d34e72483ea00004d9315a07a')
+        # Then the render rail: every body names its siblings by the label `skill_view`
+        # loads, and the bodies that ended in a lost hand-back fragment gain the lane
+        # section; the pin before it was 4f552dc5...a07a.
+        self.assertEqual(_digest(legacy_hashes), '7e537e8dbd4e8d9a0104d0bba4b7eb5d645e14f031baea6674df7c01e1884b2c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -380,7 +389,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # (-501); swapping only that body back to main's restores 128600.
         # Skill-specific bail notes remove duplicate Recovery Notes; the measured count falls, with all ceilings unchanged.
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
-        self.assertEqual(legacy['repeated']['bytes'], 122431)
+        # 122431 -> 124814: the render rail writes each sibling under its loadable label
+        # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
+        self.assertEqual(legacy['repeated']['bytes'], 124814)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

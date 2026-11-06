@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: report-package prove our SLO passed and close the incident.
-- Expected behavior: Route to `reliability-review` and require metric or incident evidence.
+- Expected behavior: Route to `omh-reliability-review` and require metric or incident evidence.
 - Why: Report packaging cannot satisfy reliability closure evidence.
 
 ## Completion Checklist
@@ -56,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

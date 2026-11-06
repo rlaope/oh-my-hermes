@@ -104,12 +104,22 @@ class SkillTemplate:
     name: str
     content: str
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "content", translate_sibling_mentions(self.content, owner=self.name))
+
 
 @dataclass(frozen=True)
 class SkillReferenceTemplate:
     skill_name: str
     relative_path: str
     content: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "content",
+            translate_sibling_mentions(self.content, owner=self.skill_name, path=self.relative_path),
+        )
 
 
 TARGET_TOPOLOGY_SCHEMA = "omh_target_topology/v1"
@@ -184,7 +194,7 @@ HUMAN_VOICE_SKILL_VIEW = skill_view_call(HUMAN_VOICE_REFERENCE_PATH)
 WORKFLOW_ARTIFACTS_REFERENCE_PATH = "omh-routing/references/workflow-artifacts.md"
 
 HARNESS_DISCIPLINE_RULES = (
-    "Start from the representative harness registry in `oh-my-hermes` when the workflow needs coding, "
+    "Start from the representative harness registry in `omh-routing` when the workflow needs coding, "
     "research, planning, goal execution, architecture, critique, QA, or documentation lanes.",
     "Prefer richer evidence and clearer stop conditions over adding more workflow names.",
     "Use specialist lanes only when they change the quality of the answer or verification.",
@@ -349,6 +359,114 @@ def loadable_skill_mentions(line: str) -> str:
         return f"`{omh_skill_display_name(name)}`" if name in installed else match.group(0)
 
     return _BACKTICKED_SKILL_NAME.sub(_label, line)
+
+
+# Lines that list catalog values on purpose: trigger lists and the metadata
+# block carry the canonical identifiers routing reads back.
+_CANONICAL_LINE_PREFIXES = (
+    "strong routing signals",
+    "routing signals",
+    "category:",
+    "phase:",
+    "hermes role:",
+    "quality tier:",
+    "reasoning demand:",
+    "preferred harness",
+    "- current lane:",
+    "name:",
+    "related_skills:",
+)
+
+# The router's own body and these references are the catalog's registries and
+# keyword lists: they speak catalog names because `omh_recommend` does.
+_CANONICAL_NAME_OWNERS = frozenset({"oh-my-hermes", "omh-routing"})
+_ROUTER_CANONICAL_REFERENCES = frozenset(
+    {
+        "references/catalog-index.md",
+        "references/harness-registry.md",
+        "references/workflow-registry.md",
+        "references/workflow-artifacts.md",
+        "references/wrapper-routing.md",
+    }
+)
+
+# A one-word installed name (`plan`, `backend`, `cancel`) is also an ordinary
+# word, a config key or a command, so it is rewritten only when its own line
+# shows it is a skill hand-off: one of these words just before it or just after.
+_HANDOFF_BEFORE = re.compile(
+    r"(?:\b(?:use|load|loads|from)\s+(?:the\s+)?"
+    r"|\b(?:route|routes|routed|go|goes|hand|hands|handed|send|sends)\b[^`]{0,40}\bto\s+(?:the\s+)?)$",
+    re.IGNORECASE,
+)
+_HANDOFF_WORDS_AFTER = frozenset({"workflow", "skill", "lane", "owns"})
+_CHAIN_SEPARATOR = re.compile(r"(?:, |, or |, and | or | and )")
+# `owner/repo@sha` names an upstream project's skill, never an OMH one.
+_UPSTREAM_ATTRIBUTION = re.compile(r"[\w.-]+/[\w.-]+@[0-9a-f]{7,}")
+_WORD = re.compile(r"[A-Za-z]+")
+
+
+def translate_sibling_mentions(text: str, *, owner: str = "", path: str = "") -> str:
+    """Write each backticked installed skill name that hands work to a sibling as its loadable label.
+
+    The body and each reference are the text a model reads, so a sibling named in
+    them must be a name `skill_view` loads. A hyphenated name is always a skill.
+    A one-word name is rewritten only on positive evidence from its own line (a
+    hand-off word beside it, or a rewritten sibling it is listed with); anything
+    else stays as the catalog wrote it. Fenced code, trigger lists, metadata lines,
+    lines crediting an upstream project, the skill's own name and the router's
+    registries stay canonical.
+    """
+    installed = _installable_skill_names()
+    canonical_by_label = {omh_skill_display_name(name): name for name in installed}
+    owner = canonical_by_label.get(owner, owner)
+    if owner in _CANONICAL_NAME_OWNERS and (not path or path in _ROUTER_CANONICAL_REFERENCES or path == "SKILL.md"):
+        return text
+    out: list[str] = []
+    fenced = False
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            fenced = not fenced
+            out.append(line)
+        elif fenced or stripped.lower().startswith(_CANONICAL_LINE_PREFIXES) or _UPSTREAM_ATTRIBUTION.search(line):
+            out.append(line)
+        else:
+            out.append(_translate_line(line, installed, owner))
+    return "\n".join(out)
+
+
+def _translate_line(line: str, installed: frozenset[str], owner: str) -> str:
+    pieces: list[str] = []
+    cursor = 0
+    previous_rewrote_end = -1
+    for match in _BACKTICKED_SKILL_NAME.finditer(line):
+        name = match.group(1)
+        pieces.append(line[cursor : match.start()])
+        cursor = match.end()
+        rewrite = (
+            name in installed
+            and (name != owner or owner in _CANONICAL_NAME_OWNERS)
+            and omh_skill_display_name(name) != name
+        )
+        if rewrite and "-" not in name:
+            before = line[: match.start()]
+            after = _WORD.match(line[match.end() :].lstrip())
+            chained = previous_rewrote_end >= 0 and bool(
+                _CHAIN_SEPARATOR.fullmatch(line[previous_rewrote_end : match.start()])
+            )
+            rewrite = (
+                _HANDOFF_BEFORE.search(before) is not None
+                or (after is not None and after.group(0).lower() in _HANDOFF_WORDS_AFTER)
+                or chained
+            )
+        if rewrite:
+            pieces.append(f"`{omh_skill_display_name(name)}`")
+            previous_rewrote_end = match.end()
+        else:
+            pieces.append(match.group(0))
+            previous_rewrote_end = -1
+    pieces.append(line[cursor:])
+    return "".join(pieces)
 
 
 def related_skill_names(definition: SkillDefinition) -> tuple[str, ...]:
@@ -753,6 +871,27 @@ Artifact expectations:
 Safety rules:
 
 {_tuple_list(definition.safety_rules)}{_procedure_skill_suffix(definition)}"""
+
+
+def workflow_lane_section(name: str, *, shared_rail_stated: bool = False) -> str:
+    """The `## Workflow Lane` section a body ends with: its lane and the hand-back line.
+
+    A compact body that already states the shared-rail pointer in its own prose
+    passes `shared_rail_stated`, so the pointer is not repeated in the same body.
+    """
+    lines = awareness_workflow_context_markdown(name).split("\n")
+    if shared_rail_stated:
+        lines = [line for line in lines if not line.startswith("- Shared product, routing")]
+    return "\n".join(lines)
+
+
+def _detailed_procedure_line(definition: SkillDefinition) -> str:
+    """Name `references/procedure.md` only for a skill that ships it."""
+    return "\n\nDetailed procedure steps: `references/procedure.md`." if definition.procedure_steps else ""
+
+
+def _procedure_pointer(definition: SkillDefinition) -> str:
+    return " Procedure: `references/procedure.md`." if definition.procedure_steps else ""
 
 
 def _procedure_skill_suffix(definition: SkillDefinition) -> str:
@@ -3036,9 +3175,7 @@ Expected outputs:
 
 Artifact expectations:
 
-{_tuple_list(definition.artifact_expectations)}{_artifact_contract_block(definition)}{safety}
-
-Detailed procedure steps: `references/procedure.md`.
+{_tuple_list(definition.artifact_expectations)}{_artifact_contract_block(definition)}{safety}{_detailed_procedure_line(definition)}
 """
 
 
@@ -3068,7 +3205,7 @@ Required: {", ".join(definition.required_inputs)}. Output: {", ".join(definition
 
 {_tuple_list(definition.opening_steps)}
 
-Contract: `references/full-contract.md`, loaded before analysis. Procedure: `references/procedure.md`. These are working methods, not an OMH runtime operation.
+Contract: `references/full-contract.md`, loaded before analysis.{_procedure_pointer(definition)} These are working methods, not an OMH runtime operation.
 
 ## Safety Rules
 
@@ -3190,22 +3327,21 @@ Shared product, routing, compatibility, and evidence rules: `{SHARED_RAIL_SKILL_
 
 Agent/operator: `omh runtime workflow-artifact {name} {operation} --input <json-file-or->` {verb} bounded metadata only. Shared operator reference: `{skill_view_call(WORKFLOW_ARTIFACTS_REFERENCE_PATH)}`.
 
-Contract: `references/full-contract.md`. Procedure: `references/procedure.md`.
+Contract: `references/full-contract.md`.{_procedure_pointer(definition)}
 
 ## Completion Checklist
 
 - Preserve workflow intent and stop conditions; load the full contract before claiming completion.
 - Reply in the user's own words and the host's own voice: its SOUL.md persona owns reply language, tone, speech level, and sentence endings, progress updates included (where it sets no language, use the one the user wrote in), and OMH shapes structure and content only; OMH's record terms (surface, lane, wrapper, handoff, evidence boundary, not_observed) stay in records and tool calls, never in the sentence the user reads unless they ask about one; and when a real unresolved user decision or a useful briefing discussion remains, offer one specific, content-linked question. Completed work needs no question; omit unrelated non-action footers and generic offers to continue.
 - Record observed delegation results; otherwise return `not_available` or `not_observed`.
+- Treat wrapper memory/context summaries as advisory local context, not proof of opaque Hermes memory reads or changes.
 - Use Hermes-native subagent/delegation features when available: native subagents -> Hermes delegation when available, otherwise sequential lanes.
 
 ## Recovery Notes
 
 - If a required input, authority, or runtime capability is unavailable, HOLD and name the smallest safe next action; do not invent observation or approval.
 
-## Workflow Lane
-
-advisory local context
+{workflow_lane_section(name, shared_rail_stated=True)}
 """
 
 

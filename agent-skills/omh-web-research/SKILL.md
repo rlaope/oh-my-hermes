@@ -1,6 +1,6 @@
 ---
 name: "omh-web-research"
-description: "[omh] Current technical or business fact to cite from web: web lookup lane - settle a current-facts question in one cited retrieval round with retrieval dates and source-quality notes; for pre-spec grounding across reference implementations use `research`. Use when the user says: web-research, web research, web search, search the web, internet search, look up, look up sources, latest sources."
+description: "[omh] Current technical or business fact to cite from web: web lookup lane - settle a current-facts question in one cited retrieval round with retrieval dates and source-quality notes; for pre-spec grounding across reference implementations use `ulw-research`. Use when the user says: web-research, web research, web search, search the web, internet search, look up, look up sources, latest sources."
 license: MIT
 metadata:
   hermes:
@@ -43,7 +43,7 @@ Good example:
 Bad example:
 
 - Prompt: 스펙 잡기 전에 오픈소스 구현들 깊게 보고 근거 만들어줘.
-- Expected behavior: Route to `research`, which declares a depth budget and studies reference implementations with pinned refs.
+- Expected behavior: Route to `ulw-research`, which declares a depth budget and studies reference implementations with pinned refs.
 - Why: Pre-spec grounding needs the engine's dossier rather than a single lookup.
 
 ## Completion Checklist

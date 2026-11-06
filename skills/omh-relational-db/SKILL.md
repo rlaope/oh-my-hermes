@@ -19,7 +19,7 @@ This is a Hermes-native `relational-db` workflow skill.
 
 ## Why This Exists
 
-`relational-db` exists because the database work itself had no owner: `backend` owns `schema_migration_plan/v1` for a service change, and an index question, a lock taken during deploy, or an N+1 finding was answered by a data, deploy, or interview lane with no lock model at all.
+`relational-db` exists because the database work itself had no owner: `omh-backend` owns `schema_migration_plan/v1` for a service change, and an index question, a lock taken during deploy, or an N+1 finding was answered by a data, deploy, or interview lane with no lock model at all.
 
 ## First Steps
 
@@ -63,7 +63,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

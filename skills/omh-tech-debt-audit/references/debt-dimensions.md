@@ -43,10 +43,10 @@ orientation; they stay prepared_not_observed until run through the operator.
   (costs every change in the area), `medium` (costs some changes), `low`
   (cosmetic or contained).
 - **Effort**: `S` (one bounded change), `M` (a few files, one review),
-  `L` (needs `refactor-plan` phases).
+  `L` (needs `omh-refactor-plan` phases).
 - **Top fixes** rank by severity first; **quick wins** are the
   severity-at-least-medium, effort-S rows - payoff per unit of effort.
-- A `critical`/`L` finding routes to `refactor-plan`; the ledger never
+- A `critical`/`L` finding routes to `omh-refactor-plan`; the ledger never
   recommends a rewrite.
 
 ## The ledger (`tech_debt_ledger/v1`)

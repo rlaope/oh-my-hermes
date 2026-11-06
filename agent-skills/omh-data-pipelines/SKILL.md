@@ -17,7 +17,7 @@ This is an OMH `data-pipelines` workflow skill, projected for Agent Skills hosts
 
 ## Why This Exists
 
-`data-pipelines` exists because pipeline work had no owner: `backend` owns a service's schema migration, `data-analysis` analyzes data it is handed, and `relational-db` owns a database's locks and indexes, while a backfill that duplicated events or a schema change with unknown readers reached memory and event lanes with no idempotency contract or replay bound at all.
+`data-pipelines` exists because pipeline work had no owner: `omh-backend` owns a service's schema migration, `omh-data-analysis` analyzes data it is handed, and `omh-relational-db` owns a database's locks and indexes, while a backfill that duplicated events or a schema change with unknown readers reached memory and event lanes with no idempotency contract or replay bound at all.
 
 ## First Steps
 

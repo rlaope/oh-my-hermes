@@ -44,7 +44,7 @@ Good example:
 Bad example:
 
 - Prompt: source-finder find current citations and summarize what the sources say.
-- Expected behavior: Route to `research` because the user asks for current evidence and synthesis, not candidate acquisition status.
+- Expected behavior: Route to `ulw-research` because the user asks for current evidence and synthesis, not candidate acquisition status.
 - Why: Source-finder prepares acquisition lifecycle metadata; research owns current evidence synthesis.
 
 ## Completion Checklist
@@ -110,7 +110,7 @@ Safety rules:
 
 - Do not claim web search, download, repository clone, file extraction, file hash verification, license verification, or source correctness from a prepared candidate.
 - Do not define a source inbox; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.
-- Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `paper-learning`, file export to `materials-package`, and image cards to `img-summary`.
+- Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `omh-paper-learning`, file export to `omh-materials-package`, and image cards to `omh-image-cards`.
 
 ## Runtime Evidence
 

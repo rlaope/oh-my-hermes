@@ -17,7 +17,7 @@ This is an OMH `relational-db` workflow skill, projected for Agent Skills hosts 
 
 ## Why This Exists
 
-`relational-db` exists because the database work itself had no owner: `backend` owns `schema_migration_plan/v1` for a service change, and an index question, a lock taken during deploy, or an N+1 finding was answered by a data, deploy, or interview lane with no lock model at all.
+`relational-db` exists because the database work itself had no owner: `omh-backend` owns `schema_migration_plan/v1` for a service change, and an index question, a lock taken during deploy, or an N+1 finding was answered by a data, deploy, or interview lane with no lock model at all.
 
 ## First Steps
 

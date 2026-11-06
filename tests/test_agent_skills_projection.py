@@ -424,7 +424,7 @@ class AgentSkillsProjectionTests(unittest.TestCase):
         from dataclasses import fields
         from omh.skills.catalog import installable_skill_definitions, omh_skill_display_name
         from omh.skills.catalog_types import SkillDefinition
-        from omh.skills.render import agent_skill_template, loadable_skill_mentions
+        from omh.skills.render import agent_skill_template, translate_sibling_mentions
         from omh.skills.catalog_portable import portable_skill_names
 
         sections = {field.name for field in fields(SkillDefinition)} - {"portable_overrides"}
@@ -442,14 +442,13 @@ class AgentSkillsProjectionTests(unittest.TestCase):
                 problems.append(f"{name} (overrides a skill with no Agent Skills projection)")
                 continue
             body = agent_skill_template(definition).content
-            # Do Not Use When and Recovery Notes lines render their siblings
-            # under loadable labels (`loadable_skill_mentions`), so that is the
-            # line to find.
+            # Every rendered line names its siblings under loadable labels
+            # (`translate_sibling_mentions`), so that is the line to find.
             problems.extend(
                 f"{name}::{section} (replacement line absent from the portable body)"
                 for section, lines in definition.portable_overrides.items()
                 if any(
-                    (loadable_skill_mentions(line) if section in {"do_not_use_when", "recovery_notes"} else line) not in body
+                    translate_sibling_mentions(line, owner=definition.name) not in body
                     for line in lines
                 )
             )

@@ -23,8 +23,8 @@ Some of the reasons were written down while they were still true.
 | Source | Held where | Read these | What it supplies |
 | --- | --- | --- | --- |
 | Plan record (`omh_todo/v1` item) | durable record, read with `omh runtime todo show` | `state`, `phase`, `blocked_reason` | what was done, which stage it belonged to, and what was skipped with its reason |
-| Verification gate (`verification-gate`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `observed_check_results/v1`, `claim_verdict/v1` | command, source, exit status, summary, scope, freshness, and origin for each check that ran (`origin` on a failing check only), plus which checks are missing or failed |
-| Review (`code-review`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `ranked findings per axis` | what a reader misses unless someone tells them |
+| Verification gate (`omh-verification-gate`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `observed_check_results/v1`, `claim_verdict/v1` | command, source, exit status, summary, scope, freshness, and origin for each check that ran (`origin` on a failing check only), plus which checks are missing or failed |
+| Review (`omh-code-review`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `ranked findings per axis` | what a reader misses unless someone tells them |
 | QA (`ultraqa`) | optional durable model declaration, read with `omh_todo action=recall`; absent unless recorded | `pass/fail evidence` | what nobody thought of the first time |
 
 **Read the "held where" column before planning the work.** The live plan is at
@@ -90,7 +90,7 @@ and that is all the deep guide carries.
 
 ## ELI5 pass
 
-Level `very_easy`, the word `paper-learning` uses for the same idea, so one
+Level `very_easy`, the word `omh-paper-learning` uses for the same idea, so one
 level keeps one name. Nothing records the level - there is no handover store
 to record it in - so it is shared vocabulary for saying what you wrote, not a
 field anything reads back. The ELI5 pass is the deep guide at that level: not
@@ -102,7 +102,7 @@ a second document and not a second source.
   per sentence, and the reason before the mechanism.
 - `very_easy` never means dropping a boundary, a refusal, or a `blocked_reason`.
   Simplification removes vocabulary; it never removes a claim. That is the
-  coverage-preserving constraint `paper-learning` already holds, applied to a
+  coverage-preserving constraint `omh-paper-learning` already holds, applied to a
   change instead of a paper.
 - No deep guide, no ELI5 pass. An easy explanation with nothing behind it is a
   guess that reads as an authority.
@@ -154,7 +154,7 @@ says "nothing went wrong". Report the basis instead, one of:
 - `plan_record_absent`
 - `unknown_or_missing`
 
-That is the distinction `paper-learning` draws with its own source states,
+That is the distinction `omh-paper-learning` draws with its own source states,
 where "not observed" and "observed and absent" are different answers. Only
 `sources_read_no_entries` is a statement about the change; the rest are
 statements about what could be read.

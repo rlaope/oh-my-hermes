@@ -39,7 +39,7 @@ Good example:
 Bad example:
 
 - Prompt: Implement the accepted onboarding PRD and open a PR.
-- Expected behavior: Route to `ultrawork` or `ralplan`, not `product-brief`.
+- Expected behavior: Route to `ulw-work` or `ulw-plan`, not `product-brief`.
 - Why: Accepted implementation work should move into planning or delivery rather than recreate a PRD.
 
 ## Completion Checklist

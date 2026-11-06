@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: reliability-review make a monthly PPT report for leadership.
-- Expected behavior: Use `report-package` unless the report specifically asks for reliability evidence review.
+- Expected behavior: Use `omh-report-package` unless the report specifically asks for reliability evidence review.
 - Why: Report packaging and reliability validation are independent operations surfaces.
 
 ## Completion Checklist

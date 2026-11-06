@@ -19,7 +19,7 @@ This is a Hermes-native `application-threat-model` workflow skill.
 
 ## Why This Exists
 
-`application-threat-model` exists because the nearest neighbour does not merely miss this request. `security-safety-review` maps the agent's own prompt, tool, credential, and dependency surface, so an application threat-model request came back as an agent tool inventory under a near-identical name — a confident wrong artifact rather than a miss, in the one domain where that costs most.
+`application-threat-model` exists because the nearest neighbour does not merely miss this request. `omh-security-safety-review` maps the agent's own prompt, tool, credential, and dependency surface, so an application threat-model request came back as an agent tool inventory under a near-identical name — a confident wrong artifact rather than a miss, in the one domain where that costs most.
 
 ## Do Not Use When
 
@@ -40,7 +40,7 @@ Good example:
 Bad example:
 
 - Prompt: application-threat-model check whether this agent can be prompt-injected through its file tool
-- Expected behavior: Route to `security-safety-review`: prompts, tools, and credentials are the agent's runtime surface, not an application this workflow models.
+- Expected behavior: Route to `omh-security-safety-review`: prompts, tools, and credentials are the agent's runtime surface, not an application this workflow models.
 - Why: The two surfaces share vocabulary and nothing else; modeling the agent's runtime here is how the artifacts get confused.
 
 ## Completion Checklist
@@ -61,7 +61,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -124,7 +124,7 @@ Safety rules:
 
 - Never write working exploit code, a payload, or a runnable attack script; a scenario names the entry point, the path, and the precondition, not the weapon.
 - Do not record a control as deployed because the architecture describes it; an unobserved control is `unverified` until configuration or a passing test says otherwise.
-- Do not model the agent's own prompts, tools, credentials, or dependencies here; that surface belongs to `security-safety-review`.
+- Do not model the agent's own prompts, tools, credentials, or dependencies here; that surface belongs to `omh-security-safety-review`.
 - Never print secrets, tokens, keys, connection strings, or live customer records pulled in as examples.
 - A model is not a penetration test, a scan, or a compliance attestation; name which of the three the user still needs.
 

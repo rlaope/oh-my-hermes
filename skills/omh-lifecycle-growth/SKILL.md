@@ -30,6 +30,7 @@ Contract: `references/full-contract.md`. Procedure: `references/procedure.md`.
 - Preserve workflow intent and stop conditions; load the full contract before claiming completion.
 - Reply in the user's own words and the host's own voice: its SOUL.md persona owns reply language, tone, speech level, and sentence endings, progress updates included (where it sets no language, use the one the user wrote in), and OMH shapes structure and content only; OMH's record terms (surface, lane, wrapper, handoff, evidence boundary, not_observed) stay in records and tool calls, never in the sentence the user reads unless they ask about one; and when a real unresolved user decision or a useful briefing discussion remains, offer one specific, content-linked question. Completed work needs no question; omit unrelated non-action footers and generic offers to continue.
 - Record observed delegation results; otherwise return `not_available` or `not_observed`.
+- Treat wrapper memory/context summaries as advisory local context, not proof of opaque Hermes memory reads or changes.
 - Use Hermes-native subagent/delegation features when available: native subagents -> Hermes delegation when available, otherwise sequential lanes.
 
 ## Recovery Notes
@@ -38,4 +39,5 @@ Contract: `references/full-contract.md`. Procedure: `references/procedure.md`.
 
 ## Workflow Lane
 
-advisory local context
+- Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.

@@ -48,7 +48,7 @@ The two rows that are always argued about and always matter: **not-found versus 
 - Pagination is one style for the whole surface -- cursor or offset, not both -- and the contract names the ordering key. The key ends in a unique tie-breaker, such as `(created_at, id)` rather than `created_at` alone: a key with ties drops or repeats rows at page boundaries, and nobody sees it happen.
 - A cursor is opaque to the client and encodes the whole ordering tuple plus the filter and sort it was issued for. A cursor sent back with a different filter or sort is rejected as bad input, never reinterpreted.
 - The page size has a server-side maximum, and the contract says whether a larger request is clamped or rejected. A total count is optional and named as its own cost, not computed for every page by default.
-- An offset page reads and discards every row before it, so a surface that pages deep or grows without bound uses a cursor. The index that serves the cursor is a `relational-db` question; name it in the handoff.
+- An offset page reads and discards every row before it, so a surface that pages deep or grows without bound uses a cursor. The index that serves the cursor is a `omh-relational-db` question; name it in the handoff.
 - Time is one representation. Nullability is explicit. An optional field that is sometimes absent and sometimes `null` is two shapes.
 - Versioning: name how a breaking change reaches clients before the first breaking change, not during it.
 
@@ -60,7 +60,7 @@ Every write two requests can reach at the same time names its guard in the contr
 - **An idempotency key is stored, not just accepted.** Keep the key, scoped to the caller, under a unique constraint, together with a fingerprint of the request and the response it produced. The key record and its stored response commit in the same transaction as the effect; otherwise a crash between the two re-executes the effect when the request is replayed. The same key with the same request replays the stored response. The same key with a different request is rejected, with one status chosen for the surface. A second request that arrives while the first is still running gets a defined answer, not a second execution. The contract also says how long keys are kept.
 - **Every update that can race names its lost-update guard.** That is a version column checked in the `WHERE` clause (no row updated means 409), an update computed in SQL (`SET stock = stock - $1 WHERE stock >= $1`), or a row lock taken before the read. A read-modify-write in application code with none of these silently loses one of two concurrent writes.
 - **Side effects leave after the commit.** An email, an outbound event, or a webhook to another system is never sent before the transaction that records it commits; a rollback after the send tells the world about a state that does not exist. Either write the effect to an outbox table in the same transaction and deliver it from there, or send it after commit and accept that a crash in between drops it. The contract names which one. Outbox delivery repeats on retry, so its receiver deduplicates.
-- **Name the transaction and its isolation.** Each write path states its transaction boundary, the isolation level it relies on, and any row lock. The engine rules (default isolation per engine, `FOR UPDATE`, `SKIP LOCKED`, upsert, lock order, and which errors to retry) belong to the `relational-db` workflow and its engine lock tables.
+- **Name the transaction and its isolation.** Each write path states its transaction boundary, the isolation level it relies on, and any row lock. The engine rules (default isolation per engine, `FOR UPDATE`, `SKIP LOCKED`, upsert, lock order, and which errors to retry) belong to the `omh-relational-db` workflow and its engine lock tables.
 
 ## 6. Budgets, timeouts, and caches
 
@@ -77,7 +77,7 @@ The stack is a routing input. Name it in the contract and tell the executor whic
 | Python service | the framework's own routing, dependency-injection, and validation docs; the project's typed-settings and migration tooling |
 | Node / TypeScript service | the framework's routing and middleware docs; the project's schema-validation library and its query builder or ORM |
 | Go service | the router and middleware docs in use; the project's query-generation and migration tooling |
-| Rust service | the framework's extractor and error-handling docs, plus the `rust` workflow for the ownership and error contract |
+| Rust service | the framework's extractor and error-handling docs, plus the `omh-rust` workflow for the ownership and error contract |
 | Any stack | this repository's existing handlers -- the nearest sibling endpoint is a stronger convention source than any framework guide |
 
 If the stack is unknown, prepare the contract stack-neutral and name the stack as the one blocking input. A stack-neutral contract is useful; a contract written for the wrong stack is not.

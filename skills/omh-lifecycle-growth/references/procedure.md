@@ -90,7 +90,7 @@ Lay out eligible, assigned, attempted, delivered, displayed, acted, and outcome 
 
 ### `lifecycle_validate_handoff` (validation)
 
-Propose connector, content, analytics, product, or implementation actions with owner, approver, evidence refs, timing, and stop conditions; prepare any cancellation or status-reconciliation request against the exact named run and leave it `prepared_not_observed` until a provider result is observed; return HOLD readiness while any check holds, approval is missing, or the latest analysis run is still in flight, route validated product changes to `product-brief`, and never report a send, display, action, outcome, cancellation, or causal effect that was not observed.
+Propose connector, content, analytics, product, or implementation actions with owner, approver, evidence refs, timing, and stop conditions; prepare any cancellation or status-reconciliation request against the exact named run and leave it `prepared_not_observed` until a provider result is observed; return HOLD readiness while any check holds, approval is missing, or the latest analysis run is still in flight, route validated product changes to `omh-product-brief`, and never report a send, display, action, outcome, cancellation, or causal effect that was not observed.
 
 - Input refs: `lifecycle objective and stage`, `target segment`, `event schema and baseline`, `channels or product surfaces`, `consent and policy constraints`, `experiment budget`, `decision owner`
 - Output refs: `growth_handoff_disposition/v1`

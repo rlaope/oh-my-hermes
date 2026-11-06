@@ -32,13 +32,13 @@ This is an OMH `adversarial-consensus` workflow skill, projected for Agent Skill
 Good example:
 
 - Prompt: $adversarial-consensus we plan to move session state into Redis before the launch — attack it from every angle before I write the plan.
-- Expected behavior: Name the roster and their distinct angles, take blind findings from each, run one attack-only round, resolve each objection to defend/refine/concede, distill only into the four buckets, and hand the bundle to `ralplan` as planning input.
+- Expected behavior: Name the roster and their distinct angles, take blind findings from each, run one attack-only round, resolve each objection to defend/refine/concede, distill only into the four buckets, and hand the bundle to `ulw-plan` as planning input.
 - Why: The decision is contested and pre-plan, which is exactly where independent objections are worth more than one planner's confidence.
 
 Bad example:
 
 - Prompt: $adversarial-consensus give me the migration plan with the steps and the rollout order.
-- Expected behavior: Produce the distilled bundle and hand it to `ralplan`; the steps and rollout order are the planner's output, not this workflow's.
+- Expected behavior: Produce the distilled bundle and hand it to `ulw-plan`; the steps and rollout order are the planner's output, not this workflow's.
 - Why: The bundle is INPUT to planning. Emitting a plan here skips the reviewed-plan gate and turns the buckets into a task list.
 
 ## Completion Checklist

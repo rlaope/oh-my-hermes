@@ -77,12 +77,12 @@ remains at which severity.
 This loop is the builder's inner iteration, not the QA verdict. The
 enumeration of what to capture — every route, viewport, scroll
 position, modal/tab state, and CJK-heavy region — is owned by
-`visual-qa`'s viewport_state_capture_matrix/v1; when the surface has
+`omh-visual-qa`'s viewport_state_capture_matrix/v1; when the surface has
 more than the pages just touched, capture from that matrix instead of
 re-deriving a private list, and read 1440/768/375 as this loop's
 minimum widths inside the matrix's viewport axis. An empty difference
 list ends the loop; it is not PASS. PASS, REVISE, or BLOCK stays with
-`visual-qa`, judged on observed captures whose source lineage matches
+`omh-visual-qa`, judged on observed captures whose source lineage matches
 the target.
 
 ## Boundary

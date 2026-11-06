@@ -45,7 +45,7 @@ Good example:
 Bad example:
 
 - Prompt: 이 레포 코드 구조만 파악해줘.
-- Expected behavior: Route to `codebase-onboarding` because the study target is this repository, not external sources or reference implementations.
+- Expected behavior: Route to `omh-codebase-onboarding` because the study target is this repository, not external sources or reference implementations.
 - Why: Local repo orientation needs no external evidence gathering or claim verification.
 
 ## Completion Checklist

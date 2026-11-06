@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: Translate 'Your trial ends tomorrow' into Korean.
-- Expected behavior: Answer directly or route to `content-operator`, not `localization-review`.
+- Expected behavior: Answer directly or route to `omh-content-operator`, not `localization-review`.
 - Why: A one-off sentence has no product locale QA or release-review objective.
 
 ## Completion Checklist

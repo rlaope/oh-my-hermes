@@ -585,8 +585,8 @@ PORTABLE_SUPPORT_PATHS = frozenset({
 PORTABLE_REFERENCE_REWRITES: dict[str, tuple[tuple[str, str], ...]] = {
     'wiki/references/wiki-blueprint.md': (
         (
-            "Route existing `USER.md`/`MEMORY.md` cleanup to `memory-sync`, new durable project facts to `memory-new`,",
-            "Keep existing `USER.md`/`MEMORY.md` cleanup out of the wiki; route new durable project facts to `memory-new`,",
+            "Route existing `USER.md`/`MEMORY.md` cleanup to `omh-memory-sync`, new durable project facts to `omh-memory-new`,",
+            "Keep existing `USER.md`/`MEMORY.md` cleanup out of the wiki; route new durable project facts to `omh-memory-new`,",
         ),
     ),
     # `ulw-work` ships portably, but its TDD reference ships only in the Hermes projection.

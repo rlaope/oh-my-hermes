@@ -34,13 +34,13 @@ This is a Hermes-native `adversarial-consensus` workflow skill.
 Good example:
 
 - Prompt: $adversarial-consensus we plan to move session state into Redis before the launch — attack it from every angle before I write the plan.
-- Expected behavior: Name the roster and their distinct angles, take blind findings from each, run one attack-only round, resolve each objection to defend/refine/concede, distill only into the four buckets, and hand the bundle to `ralplan` as planning input.
+- Expected behavior: Name the roster and their distinct angles, take blind findings from each, run one attack-only round, resolve each objection to defend/refine/concede, distill only into the four buckets, and hand the bundle to `ulw-plan` as planning input.
 - Why: The decision is contested and pre-plan, which is exactly where independent objections are worth more than one planner's confidence.
 
 Bad example:
 
 - Prompt: $adversarial-consensus give me the migration plan with the steps and the rollout order.
-- Expected behavior: Produce the distilled bundle and hand it to `ralplan`; the steps and rollout order are the planner's output, not this workflow's.
+- Expected behavior: Produce the distilled bundle and hand it to `ulw-plan`; the steps and rollout order are the planner's output, not this workflow's.
 - Why: The bundle is INPUT to planning. Emitting a plan here skips the reviewed-plan gate and turns the buckets into a task list.
 
 ## Completion Checklist
@@ -62,7 +62,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

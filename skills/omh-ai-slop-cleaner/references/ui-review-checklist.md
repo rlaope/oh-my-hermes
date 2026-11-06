@@ -27,7 +27,7 @@ the last three are findings it hands on.
 
 Deletion-first still holds. Removing a shadow, a label, or a gradient is a
 cleanup. Picking a new palette or a new layout is a redesign, and a redesign
-goes to `frontend`, or to `frontend-refactor` when component behavior must stay
+goes to `omh-frontend`, or to `omh-frontend-refactor` when component behavior must stay
 identical.
 
 ## Evidence

@@ -44,7 +44,7 @@ Bad example:
 - Each instinct is atomic: one trigger, one action, one scope, confidence, evidence refs, and review state.
 - Project-specific conventions, global practices, project/global promotion candidates, imports, and exports are separated.
 - No hooks, memory writes, skill edits, global promotion, import/export, or behavior-change claims are made without observed approval and implementation evidence.
-- A promoted instinct leaves as a store route, `memory_candidate` for `memory-new` or a `skill_update_candidate`, never as a parallel store of its own.
+- A promoted instinct leaves as a store route, `memory_candidate` for `omh-memory-new` or a `skill_update_candidate`, never as a parallel store of its own.
 - On Hermes, the skill audit ledger (`skills/.curator_ledger.jsonl` under the active profile's Hermes home) is observed evidence of what the agent or its background review already wrote; an instinct that matches a ledger entry no store route accounts for is reported as `unreviewed_native_write` (OMH holds no record of that write, which is not to say nobody reviewed it), never counted as repeated evidence for the instinct.
 
 ## Recovery Notes

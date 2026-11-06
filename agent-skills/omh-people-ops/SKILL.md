@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: Send calendar invitations to every candidate for next Tuesday.
-- Expected behavior: Route to `connector-operator`, not `people-ops`.
+- Expected behavior: Route to `omh-apps`, not `people-ops`.
 - Why: Sending invitations is an explicit external calendar action.
 
 ## Completion Checklist

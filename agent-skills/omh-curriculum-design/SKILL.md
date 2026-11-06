@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: Explain the attached machine-learning paper for a beginner.
-- Expected behavior: Route to `paper-learning`, not `curriculum-design`.
+- Expected behavior: Route to `omh-paper-learning`, not `curriculum-design`.
 - Why: A supplied paper explanation is not a curriculum-design request.
 
 ## Completion Checklist

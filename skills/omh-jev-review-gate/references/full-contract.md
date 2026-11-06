@@ -26,13 +26,13 @@ Good example:
 Bad example:
 
 - Prompt: review the jev plugin PR before merge
-- Expected behavior: Route to `code-review`: the PR is about Jev, and nobody asked Jev anything.
+- Expected behavior: Route to `omh-code-review`: the PR is about Jev, and nobody asked Jev anything.
 - Why: Talking about Jev is not addressing it.
 
 ## Completion Checklist
 
 - Every file sent was named to the user first.
-- `code-review` still owns the verdict.
+- `omh-code-review` still owns the verdict.
 
 ## Recovery Notes
 
@@ -84,5 +84,3 @@ Safety rules:
 - A non-answer status is never an answer: report it and continue without Jev.
 - Send at most 8 files per review and state the cost before the first ask; source code leaves the machine.
 - Flags are advisory evidence: `no_flags` never approves a merge and never satisfies a review item.
-
-Detailed procedure steps: `references/procedure.md`.

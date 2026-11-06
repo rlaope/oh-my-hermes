@@ -3,7 +3,7 @@
 Upstream `0xNyk/awesome-hermes-agent` entries whose OMH coverage names the `wiki` surface, derived from the
 catalog snapshot retrieved 2026-07-27 at commit `27389ad544f9`.
 
-Check this list before designing a bespoke structure. Route a promising candidate to `skill-scout` for
+Check this list before designing a bespoke structure. Route a promising candidate to `omh-skill-scout` for
 evaluation; adopting one is a separate decision with its own evidence.
 
 ## hermes-agent-docs

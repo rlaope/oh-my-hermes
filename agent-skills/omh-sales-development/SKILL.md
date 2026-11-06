@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: Write a LinkedIn launch post for our new feature.
-- Expected behavior: Route to `content-operator`, not `sales-development`.
+- Expected behavior: Route to `omh-content-operator`, not `sales-development`.
 - Why: A one-off social post has no account qualification or discovery objective.
 
 ## Completion Checklist

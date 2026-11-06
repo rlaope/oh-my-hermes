@@ -47,7 +47,7 @@ Bad example:
 - The preview plan was emitted before any file changed, and the apply step was an explicit second decision.
 - Behavior evidence exists on both sides of apply, and unsafe-in-isolation changes are listed as notes, not half-applied.
 - Pass order was impact-first and each finding names its category and safety reason.
-- Out-of-scope smells were routed: generic slop to `ai-slop-cleaner`, new UI to `frontend`, verdict-only review to `code-review`.
+- Out-of-scope smells were routed: generic slop to `omh-ai-slop-cleaner`, new UI to `frontend`, verdict-only review to `omh-code-review`.
 
 ## Recovery Notes
 
@@ -58,7 +58,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

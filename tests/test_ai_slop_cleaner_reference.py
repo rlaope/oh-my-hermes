@@ -129,8 +129,8 @@ class AiSlopUiReviewChecklistTests(unittest.TestCase):
     def test_it_defers_reasoning_to_frontend_and_redesign_to_its_owners(self) -> None:
         content = _flat(self._content())
         self.assertIn("omh-frontend/references/taste-foundations.md", content)
-        self.assertIn("a redesign goes to `frontend`", content)
-        self.assertIn("`frontend-refactor`", content)
+        self.assertIn("a redesign goes to `omh-frontend`", content)
+        self.assertIn("`omh-frontend-refactor`", content)
         self.assertIn("needs the rendered page", content)
 
 

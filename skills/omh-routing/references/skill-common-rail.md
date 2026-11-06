@@ -38,7 +38,7 @@ multi-agent target topology, or the generic execution checklist is in play.
 
 ## Harness Discipline
 
-- Start from the representative harness registry in `oh-my-hermes` when the workflow needs coding, research, planning, goal execution, architecture, critique, QA, or documentation lanes.
+- Start from the representative harness registry in `omh-routing` when the workflow needs coding, research, planning, goal execution, architecture, critique, QA, or documentation lanes.
 - Prefer richer evidence and clearer stop conditions over adding more workflow names.
 - Use specialist lanes only when they change the quality of the answer or verification.
 

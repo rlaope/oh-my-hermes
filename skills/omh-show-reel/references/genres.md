@@ -82,6 +82,6 @@ attached, sent or published.
   when the host has it.
 - Existing footage converted to ASCII art: Hermes' `ascii-video` skill.
 - Summarizing, transcribing, captioning or trimming a recording that exists:
-  `media-input-operator`.
+  `omh-media-input`.
 - An animation inside an app's own UI (a button, modal, page transition or
   loading state): `frontend`.

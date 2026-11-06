@@ -17,7 +17,7 @@ This is an OMH `internal-audit` workflow skill, projected for Agent Skills hosts
 
 ## Why This Exists
 
-`internal-audit` exists because control-testing methodology had no owner: `finance-analysis` reports figures and names control exceptions, `tech-debt-audit` audits code, and `production-audit` audits a release, while population, sampling, re-performance, and deficiency severity had nothing that derived a grade from criteria.
+`internal-audit` exists because control-testing methodology had no owner: `omh-finance-analysis` reports figures and names control exceptions, `omh-tech-debt-audit` audits code, and `omh-production-audit` audits a release, while population, sampling, re-performance, and deficiency severity had nothing that derived a grade from criteria.
 
 ## First Steps
 

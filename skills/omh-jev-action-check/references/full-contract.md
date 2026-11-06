@@ -25,7 +25,7 @@ Good example:
 Bad example:
 
 - Prompt: is this command risky to run?
-- Expected behavior: Route to `command-operator`; the user did not ask for Jev.
+- Expected behavior: Route to `omh-terminal`; the user did not ask for Jev.
 - Why: A risk question without Jev is the ordinary command lane.
 
 ## Completion Checklist
@@ -84,5 +84,3 @@ Safety rules:
 - A non-answer status is never an answer: report it and continue without Jev.
 - The check can only add a hold: `no_extra_hold` means the host's normal approval still applies, never that the command is approved.
 - Every non-answer is a hold labelled `not_answered:<status>`, so the user can see it came from a failure and not from Jev.
-
-Detailed procedure steps: `references/procedure.md`.

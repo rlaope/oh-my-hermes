@@ -36,7 +36,7 @@ Good example:
 Bad example:
 
 - Prompt: report-package prove our SLO passed and close the incident.
-- Expected behavior: Route to `reliability-review` and require metric or incident evidence.
+- Expected behavior: Route to `omh-reliability-review` and require metric or incident evidence.
 - Why: Report packaging cannot satisfy reliability closure evidence.
 
 ## Completion Checklist

@@ -19,7 +19,7 @@ This is a Hermes-native `internal-audit` workflow skill.
 
 ## Why This Exists
 
-`internal-audit` exists because control-testing methodology had no owner: `finance-analysis` reports figures and names control exceptions, `tech-debt-audit` audits code, and `production-audit` audits a release, while population, sampling, re-performance, and deficiency severity had nothing that derived a grade from criteria.
+`internal-audit` exists because control-testing methodology had no owner: `omh-finance-analysis` reports figures and names control exceptions, `omh-tech-debt-audit` audits code, and `omh-production-audit` audits a release, while population, sampling, re-performance, and deficiency severity had nothing that derived a grade from criteria.
 
 ## First Steps
 
@@ -63,7 +63,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

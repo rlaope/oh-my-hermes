@@ -384,6 +384,18 @@ All notable changes will be documented here.
   or any other key cancels it, and on a terminal that reports Shift with the
   key (kitty, modifyOtherKeys) `fX` and `f(` find as they do elsewhere.
   Contributed by @DanRioDev in #2576.
+- **A skill now sends the model to siblings it can load, and ends with its
+  hand-back line.** A hyphenated sibling a rendered skill names in
+  backticks, anywhere in the body or a reference, is written as the label
+  `skill_view` loads; a one-word one (`research`, `plan`) only when its line
+  hands work to it (`use`, `route to`, `hand back to`, `from`, `workflow`),
+  so a config key, a command or a DOM event that shares a skill's name stays
+  as written. Trigger lists, metadata lines, fenced recipes, lines crediting an
+  upstream project and the router's registries keep the catalog names. The workflow-artifact and `omh-jev-*` bodies, which
+  ended on a stray fragment, carry the same lane section as every other skill,
+  and a full contract names `references/procedure.md` only for a skill that
+  ships it. `omh-meta-router` points at the catalog index through
+  `skill_view`, because the file belongs to `omh-routing`.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check

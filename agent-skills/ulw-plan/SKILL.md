@@ -44,7 +44,7 @@ Good example:
 Bad example:
 
 - Prompt: $ralplan implement the refactor now and open the PR.
-- Expected behavior: Stop at the reviewed plan or route the full delivery cycle to `ultrawork` after plan acceptance.
+- Expected behavior: Stop at the reviewed plan or route the full delivery cycle to `ulw-work` after plan acceptance.
 - Why: Ralplan is a planning gate, not implementation, review, CI, or PR evidence.
 
 ## Completion Checklist
@@ -95,7 +95,7 @@ Quality bar:
 - When the plan describes code changes, name the raw material the work starts from instead of a digest of it - the failing log, trace, or data rather than the issue summary - and the methods and tools a leading practitioner of the field would use on it. Every verification step names an outside judge - a test, CI, a measurement, a human reviewer, or an external tool - never the planning model's or the executor's own reading of the result; a step with no outside judge is recorded as an evidence gap.
 - When the plan describes code changes, restate the deliverable once as the verbs it must accomplish rather than the noun it produces; when that brings in another field, write what a practitioner of that field does as a task (fuzz the parser, audit each completion claim against its evidence), never an instruction to write or speak like one.
 - Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.
-- When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.
+- When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `ulw-research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.
 - Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.
 - Take plan acceptance only from the answer the user gave — the response status and value the question tool returns, or the user's own reply — never from the wording of the question you asked: when the acceptance question times out, is dismissed, or returns with no answer, the plan stays unaccepted, so record no acceptance, prepare no handoff, and start nothing; a missing answer is not a refusal either, so ask again later or report the plan as awaiting acceptance.
 - End with a selected executor/runtime handoff shape only after the plan is accepted.

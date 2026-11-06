@@ -40,7 +40,7 @@ Good example:
 Bad example:
 
 - Prompt: turn this 300-page pdf into a slide deck
-- Expected behavior: Route to `materials-package`: the user wants a produced file, not a page-anchored reading of the document; the page count alone does not make it a reading request.
+- Expected behavior: Route to `omh-materials-package`: the user wants a produced file, not a page-anchored reading of the document; the page count alone does not make it a reading request.
 - Why: Reading and producing are different lanes; a deck request is file output work.
 
 ## Completion Checklist
@@ -62,7 +62,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -128,7 +128,7 @@ Safety rules:
 - Scanned or image-only ranges are missing until a per-page `vision_analyze` pass or hosted OCR is observed; declining an unneeded scanned range is a recorded decision, not silent loss.
 - Delegated range children read and note; the parent merges and answers. A child's note is not proof its range was fully readable until its own missing-page list is empty.
 - Page anchors come from `pdf_read.py` or `extract_pymupdf.py --pages`, never from guessing a page off a `read_file` line offset; the ledger records the estimate as an estimate.
-- Never export, convert, or package the document as a side effect of reading it; that is `materials-package` work the user asks for separately.
+- Never export, convert, or package the document as a side effect of reading it; that is `omh-materials-package` work the user asks for separately.
 
 ## Long Document Reading Protocol
 

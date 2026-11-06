@@ -12,7 +12,7 @@ one mistake reverts all three.
 | Duplication | The same decision encoded twice; near-identical helpers with drifted edges. | Keep one owner, delete the copies; lookalikes encoding different decisions stay. |
 | Dead code | Unused symbols and imports; unreachable branches; commented-out blocks (version control preserves history); feature flags nothing reads. | Delete outright; no deprecation shims for code with zero callers. |
 | Needless abstraction | Layers and wrappers that only forward, rename, or re-wrap; single-implementation interfaces; config for values that never vary. | Run the deletion test first: inline only when deleting the module makes its complexity vanish. When the same complexity would reappear at the call sites, the module stays, whatever its caller count. A single-implementation interface stays only when the tests use a second adapter. |
-| Boundary violation | Reaching into another module's internals; circular imports; logic in the wrong layer. | Repair the boundary with the existing surface; a boundary-CHANGING fix routes to `ralplan` first. |
+| Boundary violation | Reaching into another module's internals; circular imports; logic in the wrong layer. | Repair the boundary with the existing surface; a boundary-CHANGING fix routes to `ulw-plan` first. |
 | Missing tests | Behavior with no lock; tests asserting implementation details or nothing at all. | Add the behavior lock in the test-reinforcement pass; delete assert-nothing tests as dead code. |
 | Templated defaults | Boilerplate comments restating the code, placeholder docstrings, copy-pasted config blocks nothing uses. | Delete; a comment survives only when it states what the code cannot. |
 
@@ -78,7 +78,7 @@ per taxonomy category:
 Then one more question that belongs to no category: does any hunk change
 behavior the plan did not say it would? That finding outranks every other.
 
-Findings use the `code-review` shape: each carries `priority` (`P0`-`P3`),
+Findings use the `omh-code-review` shape: each carries `priority` (`P0`-`P3`),
 `confidence`, `evidence`, `path`, and `line_range`, and the review closes with
 one `ship` or `no_ship` verdict. No new verdict vocabulary is invented here, so
 a reader who knows one review knows this one.

@@ -60,6 +60,7 @@ from omh.skills.expert_question_rendering import (
 from omh.skills.render import (
     frontmatter_description,
     loadable_skill_mentions,
+    translate_sibling_mentions,
     workflow_reference_markdown,
     workflow_reference_payload,
     workflow_skill,
@@ -3328,7 +3329,7 @@ class RouterContentTests(unittest.TestCase):
                     )
                     if renderer is builtin_skill_templates:
                         for step in definition.opening_steps:
-                            self.assertIn(step, content)
+                            self.assertIn(translate_sibling_mentions(step, owner=definition.name), content)
 
     def test_catalog_marks_retained_and_codex_handoff_skills(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
@@ -3540,8 +3541,8 @@ class RouterContentTests(unittest.TestCase):
         # #954 stage 5: the retired reference contract no longer belongs to a
         # primer lane roster; its rendered reference falls back to the router
         # guidance line.
-        self.assertIn("Use `omh_recommend` or the `oh-my-hermes` router", skills["ultragoal"].content)
-        self.assertIn("hand back to `oh-my-hermes`", skills["ultragoal"].content)
+        self.assertIn("Use `omh_recommend` or the `omh-routing` router", skills["ultragoal"].content)
+        self.assertIn("hand back to `omh-routing`", skills["ultragoal"].content)
         self.assertIn("Prepared OMH routing", skills["ultragoal"].content)
         self.assertIn("OMH Context Rail", common_rail)
         self.assertIn("not a standalone executor", common_rail)

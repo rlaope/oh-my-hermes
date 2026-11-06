@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: Audit this OAuth integration for secret and permission risks.
-- Expected behavior: Route to `security-safety-review`, not `legal-compliance-review`.
+- Expected behavior: Route to `omh-security-safety-review`, not `legal-compliance-review`.
 - Why: The target is technical security risk rather than contract or compliance analysis.
 
 ## Completion Checklist
