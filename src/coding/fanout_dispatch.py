@@ -1436,17 +1436,34 @@ def declared_verification_commands(unit: Mapping[str, Any]) -> list[str]:
 _VERIFICATION_SINGLE_FLIGHT = SingleFlight()
 
 
-def _verification_worktree_revision(runner: Callable[..., Any], worktree: Path) -> str | None:
-    """Return a reusable tree revision only when the worktree is clean.
+# Untracked runtime state that Codex and Claude Code workflow plugins keep in a worktree (.omx/, .omc/).
+_EXECUTOR_RUNTIME_STATE_ROOTS = (".omx/", ".omc/")
 
-    `HEAD^{tree}` cannot describe tracked edits or untracked files. Reuse is
-    therefore disabled rather than guessed whenever git cannot prove the exact
-    worktree is clean.
+
+def _verification_worktree_revision(
+    runner: Callable[..., Any], worktree: Path, *, producer_head: bool = False
+) -> str | None:
+    """Return a tree revision only when the relevant worktree state is clean.
+
+    Verification reuse and integration require an exactly clean worktree:
+    `HEAD^{tree}` cannot describe tracked edits or untracked files. Only producer
+    HEAD intake may disregard untracked executor runtime state, which is not
+    part of the committed producer result. Tracked changes are never exempt.
     """
     status = _git_text(
         runner, worktree, ["git", "status", "--porcelain=v1", "--untracked-files=all"]
     )
-    if status is None or status.strip():
+    if status is None:
+        return None
+    for line in status.splitlines():
+        if not line:
+            continue
+        # Porcelain quotes paths with special characters. The literal ASCII
+        # root remains unchanged inside those quotes; do not decode the suffix
+        # or broaden this to prefix-only names such as .omxfoo/.
+        if (producer_head and line[:3] in {"?? ", "!! "}
+                and line[3:].removeprefix('"').startswith(_EXECUTOR_RUNTIME_STATE_ROOTS)):
+            continue
         return None
     revision = _git_text(runner, worktree, ["git", "rev-parse", "HEAD^{tree}"])
     return revision.strip() if revision else None
@@ -1454,7 +1471,7 @@ def _verification_worktree_revision(runner: Callable[..., Any], worktree: Path) 
 
 def _observed_clean_producer_head(runner: Callable[..., Any], worktree: Path) -> str | None:
     """Return the canonical full producer commit only after proving its worktree clean."""
-    if _verification_worktree_revision(runner, worktree) is None:
+    if _verification_worktree_revision(runner, worktree, producer_head=True) is None:
         return None
     head_sha = _git_text(runner, worktree, ["git", "rev-parse", "HEAD"])
     if head_sha is None:
@@ -4642,6 +4659,16 @@ def _dispatch_unit(
                 "repair_card": cooldown["repair_card"],
             }
     probe = readiness(paths, owner)
+    readiness_observation: dict[str, str] = {}
+    pre_handoff = probe.get("pre_handoff_readiness")
+    if (probe.get("status") == "stale" and isinstance(pre_handoff, Mapping)
+            and pre_handoff.get("changed_axes") == ["workspace"]):
+        # The cached observation is binary_version_only: it never vouched for
+        # a workspace. Dispatch runs workspace_preflight in the unit's own
+        # isolation before spawning, so reobserve only this moved-workspace
+        # decision once; every other invalidation still needs its repair card.
+        probe = readiness(paths, owner, force=True)
+        readiness_observation["readiness_reobserved"] = "workspace"
     if str(probe.get("status", "")) != "ready":
         # The pre-handoff recheck (#837) can turn a once-ready owner into
         # `stale` right here. Carrying its repair card through means the unit
@@ -4653,6 +4680,7 @@ def _dispatch_unit(
             "owner": owner,
             "status": "executor_not_ready",
             "readiness_status": str(probe.get("status", "unknown")),
+            **readiness_observation,
             **_dispatch_status_ladder(),
         }
         # The unit never spawned, so a live dispatch carries the failure
@@ -4717,7 +4745,20 @@ def _dispatch_unit(
     # `-c windows.sandbox=<backend>` for codex when the operator stored one;
     # without it native-Windows Codex runs read-only (#2471).
     codex_sandbox_backend = stored_codex_windows_sandbox(paths.omh_home) if owner == "codex" else ""
-    argv = with_codex_windows_sandbox(build_dispatch_argv(owner, prompt, effective_model_route), owner, codex_sandbox_backend)
+
+    def dispatch_argv() -> list[str] | None:
+        command = with_codex_windows_sandbox(
+            build_dispatch_argv(owner, prompt, effective_model_route), owner, codex_sandbox_backend
+        )
+        # acceptEdits covers the cwd, not the dispatcher-owned intake directory.
+        # Only the real Claude template receives CLI flags, never patched script
+        # fixtures. Apply before session_argv resolves the template executable.
+        if (owner == "claude-code" and sidecar_path is not None and command
+                and Path(command[0]).name == "claude"):
+            command = [*command, "--add-dir", str(sidecar_path.parent)]
+        return command
+
+    argv = dispatch_argv()
     child_environment = fanout_child_environment(
         os.environ if base_env is None else base_env,
         depth=dispatch_depth,
@@ -4766,6 +4807,7 @@ def _dispatch_unit(
             "owner": owner,
             "model": routed_model,
             "status": "dry_run_planned",
+            **readiness_observation,
             "planned_argv": [part if part != prompt else "<unit prompt>" for part in argv],
             "unit_prompt": _unit_prompt_record(assembled),
             "worktree_path": str(worktree),
@@ -4913,7 +4955,7 @@ def _dispatch_unit(
         # The early read is not authority: serialize only the atomically validated claim.
         assembled = _assemble_prompt(sidecar_path, clarification)
         prompt = assembled.text
-        argv = with_codex_windows_sandbox(build_dispatch_argv(owner, prompt, effective_model_route), owner, codex_sandbox_backend)
+        argv = dispatch_argv()
     known_secrets = (goal_text, prompt, *tuple(
         value for key, value in child_env.items()
         if any(marker in key.upper() for marker in ('TOKEN', 'SECRET', 'PASSWORD', 'API_KEY'))
@@ -5231,7 +5273,7 @@ def _dispatch_unit(
                 if previous_path is not None and sidecar_path is not None:
                     assembled = _assemble_prompt(sidecar_path, clarification)
                     prompt = assembled.text
-                    argv = with_codex_windows_sandbox(build_dispatch_argv(owner, prompt, effective_model_route), owner, codex_sandbox_backend)
+                    argv = dispatch_argv()
                     assert argv is not None  # Same previously admitted owner and route.
                     argv = session_argv(argv)
                     if confinement is not None:
@@ -5711,6 +5753,7 @@ def _dispatch_unit(
         "model": routed_model,
         "reasoning_effort": routed_effort,
         "status": "input_required" if input_required else "completed" if exit_code == 0 else "failed",
+        **readiness_observation,
         "exit_code": exit_code,
         "unit_state": unit_state,
         "unit_state_reason": unit_state_reason,
