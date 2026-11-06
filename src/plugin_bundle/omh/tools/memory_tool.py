@@ -833,8 +833,9 @@ def _held_next_action(reason: str, *, verb: str = "remembered") -> str:
         )
     if reason == "unsafe_content":
         return (
-            "Not kept: it holds protected content. Restate the fact without it and send it again; there is "
-            "nothing to approve."
+            "Not kept: the safety check held it (a credential-like value, instruction-shaped text, or a word "
+            "such as 'temp' or 'hack' read as temporary progress). Restate it without those and send it again; "
+            "there is nothing to approve."
         )
     return (
         f"Held back by memory policy and not {verb} yet; tell the user which review_reason held it. "
@@ -1034,11 +1035,14 @@ def _demote_entry(wanted: str, omh_home: Path, hermes_home: Path) -> dict[str, o
 def _demote_held_next_action(reason: str) -> str:
     if reason == "relative_time_phrase":
         return (
-            "Not moved: the entry holds a relative-time phrase, and demote copies the entry exactly. Keep the "
-            "Hermes entry; restate it with an absolute date through Hermes' memory tool, then demote again."
+            "Not moved: the entry holds a relative-time phrase, and nothing records when it was written. Keep the "
+            "Hermes entry; restate it only if the person gives the date."
         )
     if reason == "unsafe_content":
-        return "Not moved: the entry holds protected content that OMH will not keep. Keep the Hermes entry."
+        return (
+            "Not moved: the safety check held the entry (a credential-like value, instruction-shaped text, or a "
+            "word such as 'temp' or 'hack' read as temporary progress). Keep the Hermes entry."
+        )
     return "Held for review under memory policy; keep the Hermes entry until `omh memory approve` releases it."
 
 

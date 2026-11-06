@@ -118,7 +118,13 @@ class InProcessCaptureTests(unittest.TestCase):
         self.assertEqual(result["review_reason"], "unsafe_content")
         # Protected content cannot be approved, so no approval is offered (it would exit 2).
         self.assertIn("there is nothing to approve", result["next_action"])
+        self.assertIn("the safety check held it", result["next_action"])
+        self.assertNotIn("protected content", result["next_action"])
         self.assertNotIn("omh memory", result["next_action"])
+        # needs_review words (not a secret) get the same cause, not "protected content".
+        temp = self.call(summary="Uploads stay in the temp directory until the nightly job runs.")
+        self.assertEqual(temp["review_reason"], "unsafe_content", temp)
+        self.assertIn("'temp' or 'hack'", temp["next_action"])
         self.assertEqual(result["receipt_state"], "candidate_persisted")
         self.assertIsNone(result["record_id"])
         self.assertEqual(scan_project_memory_records(self.paths), ([], []))

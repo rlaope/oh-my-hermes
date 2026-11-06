@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "861cd9ae20d4b9bca52657a8442e39db47b5b27dd44329ed1a0715712d3e9175",
+  "catalog_revision": "1d597257a9bdb5e6920c330bfc74aae741cd705f0780cce6f30f0b920ab7cfe5",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -7,7 +7,7 @@
     "omh-adversarial-consensus/references/consensus-protocol.md": "e2337062d98214abc440d3909d7c076db284c817dc45c9b67a292003a6b51a89",
     "omh-agent-debug/SKILL.md": "bcf8fc9ae02c454ae24da359642e1c73b44f1a52f5ea31c5d59b9b5b6e144de9",
     "omh-agent-instructions/SKILL.md": "7bc51d92f2e559ce45904a2fc234650cceaa6ec76d42f36ce7a524804aec85d7",
-    "omh-agent-instructions/references/instruction-file-method.md": "8aa72783cd4b0db6a282da3eb8426ad267cbc21f81db8469e0e83beee15a0d3c",
+    "omh-agent-instructions/references/instruction-file-method.md": "4537a6ded1565fc790f60eb6dd7c9405cfadaf369da75efc189abad9064b0c7e",
     "omh-agent-ops-review/SKILL.md": "23cc35dc1bc63f30db565e19ac0542e7c1fccceead59759c28d5156ec913470e",
     "omh-agent-ops-review/references/instrumentation-ladder.md": "6419b1de3f7f579babd93d1019392dde17395e2faaba8d28565d411ff358f98d",
     "omh-ai-job-search/SKILL.md": "639ddd02942192646262a2f841589dfd8b3266d705e6b946596338752ffb3b2d",
@@ -84,7 +84,7 @@
     "omh-decision-prototype/SKILL.md": "a327a7e1f2c13e90a78aa6331b134ffcb6697a19740588ff8838179675a5fbd9",
     "omh-decision-prototype/references/artifact-shapes.md": "3f2f21c55eb796298d4b12991140f8787364527859314e02c5952b2f7a854c68",
     "omh-decision-prototype/references/procedure.md": "f5ef79a803ae2d7390d60d7ea79a722498d4245ae45c9c856b26143ff1497efb",
-    "omh-decision-recall/SKILL.md": "781488e9b61d0c643a584d1aed54a834fcc4ed31aa2c6b4391530ced8131af59",
+    "omh-decision-recall/SKILL.md": "855c8e68680d4e1668a6a341f3e1d7cc52e0c387501d7442ad928ccc986d9b9c",
     "omh-deliverable-package/SKILL.md": "f77a793b99a57aed49a9430a0a2afa6d5c28205a66e62d1d3ca4de7d7be1c857",
     "omh-deploy-and-monitor/SKILL.md": "dcd86d2b54c60dd81774b00b1f9dc517536cf58c588f3b55ebffd8d99ee0289a",
     "omh-design-orchestration/SKILL.md": "5da8331163d2485a4810014218595a428c5003c8d530fbdf6c42d2f076080fe4",
@@ -163,7 +163,7 @@
     "omh-materials-package/SKILL.md": "44cf046bc29702fa8b6610da4b936fb29523696acc1c0f44efe6a2f2f51fb2ee",
     "omh-media-input/SKILL.md": "ffb7b6a3717b73bf4b2382fa1a8d250c69825409b672979b89f5faa8f3cb306d",
     "omh-meeting-brief/SKILL.md": "22f8df2abf8de20de398b7415615a78e93b525b9f71613c4a201e2045bb7dcd9",
-    "omh-memory-new/SKILL.md": "d897ba47a4c636e979ec85979e9442d509f39e67ff699424451685b3953257f3",
+    "omh-memory-new/SKILL.md": "9ab359fe7c421858c12785004da5bd78d17b440fa79a328a16c2af656b84c068",
     "omh-mobile-release/SKILL.md": "de2625b0d225e1178feb2fd84496ffca79e72675e4fff1db8987499515a4272a",
     "omh-mobile-release/references/mobile-release-method.md": "c28b6bec1569b8971c42b412e054daa8d9efa23a4fad698cd72ce2acc349de82",
     "omh-model-finetuning/SKILL.md": "84df7bec879838285888b02c076ff86606dba05ecae76f5fb42d35bc3db6638b",

@@ -242,7 +242,7 @@ _FEATURE_SURFACE_SKILLS = (
         portable_overrides={
             # `omh-memory-sync` ships only on Hermes.
             "description": (
-                "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a past decision use omh_memory recall or decision-recall.",
+                "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a past decision use omh memory recall or decision-recall.",
             ),
             "safety_rules": (
                 "An OMH project-memory candidate is prepared local context only, not an approved record or native host-memory mutation. External provider/vector and host context is not_omh_reviewed and can nominate a candidate only.",

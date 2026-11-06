@@ -385,7 +385,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # decision-recall, instinct-ledger, jit-learn, workflow-learning, rules-distill,
         # agent-evaluation, agent-ops-review and four jev-* bodies move; nothing else, and the
         # pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), 'dd4535be31fb32d7221ee1524c2e30ecba1786578216f6c9618a7f1f880b3f2c')
+        self.assertEqual(_digest(legacy_hashes), 'bc62e34fbbb6cab2cdb27ef8abc89bcba6da072e8f7da8bc564c62e6848c3ac1')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
