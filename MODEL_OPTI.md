@@ -749,9 +749,9 @@ pairing so a benchmark claim can never mix in other prompt changes.
 - **What OMH injects:** Astra's two blocks, byte for byte
   (`MODEL_HIGH_EFFORT_CALIBRATIONS["gpt-6-cyber"]` and
   `MODEL_COMPOSITION_CALIBRATIONS["gpt-6-cyber"]` equal the `gpt-6-astra`
-  entries; a test pins the equality). OpenAI publishes no prompting guidance
-  for this model, and Astra's documented traits are the nearest record for a
-  variant of Astra. Editorial and unmeasured.
+  entries; a test pins the equality). Its model page, changelog entry, and
+  system card give no prompting guidance, and Astra's documented traits are
+  the nearest record for a variant of Astra. Editorial and unmeasured.
 - **Placement:** none, and none proposed, and no executor option row (as
   for GPT-6.1 Terra; Mythos 5.1 keeps one). Like Mythos 5.1, most accounts
   cannot call it, and its scope is authorized security work, so naming it
@@ -760,16 +760,19 @@ pairing so a benchmark claim can never mix in other prompt changes.
 - **Served:** not on this maintainer host. One probe through the Codex
   subscription route on 2026-11-06 returned HTTP 400 ("The 'gpt-6-cyber'
   model is not supported when using Codex with a ChatGPT account"), the
-  same wording a made-up id gets, so it cannot tell gated from absent.
-  Measurement waits for an approved route, which this repo does not have.
+  same wording a made-up id gets, so it cannot tell gated from absent. The
+  `openai-codex` family in its provider row rests on the system card's
+  "when accessing GPT-6 Cyber through the Codex app"; the Codex models page
+  did not list it when read 2026-11-06. Measurement waits for an approved
+  route, which this repo does not have.
 - **Siblings on the same terms, without a contract:** GPT-5.6 Cyber
   (`gpt-5.6-cyber`, 2026-08-07, "an alias for purpose-trained cybersecurity
   models", 400K context, Responses only, 12.5 / 75) and GPT-6 Rosalind
   (`gpt-6-rosalind`, 2026-10-30, life-sciences research for approved
   organizations, 15 / 75 short-context; its model page returns 404) carry a
   price row, a provider row, and a display label, and get the `gpt` family
-  block. Neither model page documents an effort ladder or a base model to
-  inherit one from.
+  block. GPT-5.6 Cyber's page documents no effort ladder and no base model to
+  inherit one from, and GPT-6 Rosalind has no page to read one from.
 - **Source:** official (developers.openai.com model pages, pricing page,
   and changelog; deploymentsafety.openai.com system card, read
   2026-11-06); observed (the Codex probe, and the Hermes source: no
@@ -1976,6 +1979,9 @@ choose models by, not a guarantee for another persona or skill.
 | `gpt-6-sol` (exact contract, no exact calibration; retired from the shipped chains 2026-10-01) | yes → `gpt` | yes, through the family block | exact documented contract (the API `none`-to-`max` ladder; the Codex client's ladder recorded beside it without `none` and without the Codex-only `ultra`); no exact counter: while it held `deep@high` and `main` (until 2026-10-01) those slots reached the calibrated tiers, and none was added because the Codex Sol prompt's keep-working sentence is not importable and no `family` vs `optimized` pair has run; the three generation pairs are the named follow-up |
 | `gpt-6-luna`, `claude-opus-5-5` (exact contracts, no exact calibration) | yes → `gpt` / `claude` | yes, through the family block | exact documented contracts (Luna's `none`-to-`max` ladder; Opus 5.5's always-on thinking, forced-`tool_choice` 400, and 0.05x cache reads); no exact counter because neither shipped placement reaches the high-effort tier on the subagent side and the Opus composer block is kept byte-stable per the vendor's Opus 5.5 prompting guide; the old-vs-new generation pairs are the named follow-up |
 | `gpt-6.1-terra` (exact contract, no exact calibration) | yes → `gpt` | yes, through the family block | exact documented contract (Luna's `none`-to-`max` ladder, `-pro` projection, 5% cache reads); recognized, priced, and provider-mapped but in no shipped chain; Hermes' Codex route clamps its `max` to `xhigh` until Hermes adds the id to its GPT-6 tier tables |
+| `gpt-6-cyber` (exact-model override, access-gated) | yes → `gpt` | yes, both override tables (Astra's wording, byte for byte), resolved before the family block | exact documented contract (its own limits, endpoints, and price; Astra's `low`-floor ladder inherited and labeled `effort_ladder_source`); Daybreak Red only, in no shipped chain; editorial and unmeasured, because no route this repo can reach serves it |
+| `gpt-5.6-cyber`, `gpt-6-rosalind` (no contract, access-gated) | yes → `gpt` | yes, through the family block | priced, provider-mapped, and labeled, but neither documents a ladder, so an effort passes through as for any contract-less `gpt` id; in no shipped chain |
+| `deepseek-v4.1-flash-1017` (declared alias, relay spelling) | yes → `deepseek` | yes, inherited from canonical `deepseek-v4.1-flash` | the snapshot `deepseek-flash` has served since 2026-10-17, under a spelling DeepSeek itself does not accept; keeps the pointer's category label, not its display label, and the portfolio report reads it as `unmeasured` because it has no chain placement of its own |
 | `openai-gpt-`, `anthropic-claude-` (design-qualified aliases) | yes → `gpt` / `claude` | yes, through the design family | concrete models.dev/OpenCode serving ids carry these sub-prefixes; their catalog `base_model` fields establish the underlying design family |
 | other `openai-`, `anthropic-` vendor-qualified ids | recognized as model targets, family `unknown` | no → `generic` | vendor qualification alone does not establish a design; O-series, image, and emerging ids remain uncalibrated |
 | `kimi-k3.1-pro`, `kimi-k3.1-pro-highspeed` (exact contracts, no exact calibration) | yes → `kimi` | yes, through the family block | exact documented contracts (three-rung `low`/`high`/`max` ladder with `max` as default, every other rung raised on record; Highspeed has its own rate card); K3.1 Pro holds every former Kimi K3 slot since 2026-10-24, Highspeed is recognition-only; the K3-vs-K3.1 pair is the named follow-up, blocked on a served route |

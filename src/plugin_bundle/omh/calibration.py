@@ -221,10 +221,11 @@ MODEL_HIGH_EFFORT_CALIBRATIONS: Final[dict[str, str]] = {
         "its implementation needs no new test, and a green check is re-run only when its inputs changed."
     ),
     # GPT-6 Cyber: Astra's wording, byte for byte. The system card calls it
-    # "a cyber-specialized variant of GPT-6 Astra" and OpenAI publishes no
-    # prompting guidance of its own for it, so the nearest documented traits
-    # are Astra's. Editorial and unmeasured: no route this repo can reach
-    # serves the id (Daybreak Red only), and it is in no shipped chain.
+    # "a cyber-specialized variant of GPT-6 Astra", and its model page,
+    # changelog entry, and system card give no prompting guidance, so the
+    # nearest documented traits are Astra's. Editorial and unmeasured: no
+    # route this repo can reach serves the id (Daybreak Red only), and it is
+    # in no shipped chain.
     "gpt-6-cyber": (
         "High-effort calibration: the user's instructions outrank any skill or guideline text, and "
         "the numbered criteria are the complete task — nothing outside them is owed. Ask one focused "

@@ -456,10 +456,14 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     # Recognition-only, access-gated, never chained (onboarded 2026-11-06).
     # Families are the vendor's statement, not an observation: OpenAI serves
     # GPT-6 Cyber through the API and the Codex app to approved Daybreak Red
-    # organizations (model page, system card), GPT-5.6 Cyber through the
-    # API's Responses endpoint to the same group (model page), and GPT-6
-    # Rosalind through the API to approved Rosalind Research organizations
-    # (pricing page, changelog). The Codex subscription route on this
+    # organizations (model page; the system card says "when accessing GPT-6
+    # Cyber through the Codex app", though the Codex models page did not list
+    # it when read 2026-11-06), GPT-5.6 Cyber through the API's Responses
+    # endpoint to the same group (model page), and GPT-6 Rosalind through the
+    # API to approved Rosalind Research organizations (pricing page,
+    # changelog). No page names Codex for the last two, so they answer False
+    # there on the table's usual reading; no page denies it either, so a
+    # vendor statement moves that. The Codex subscription route on this
     # maintainer host refused both Cyber ids with HTTP 400 on 2026-11-06, in
     # the same wording a made-up id gets, so that probe says nothing about
     # gating or about this row. No relay is claimed for any of them.
@@ -495,8 +499,8 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     # OpenCode serving was observed.
     "glm-5.3-flashx": ("zai", "openrouter"),
     # Recognition-only, in no shipped chain (onboarded 2026-11-06): Z.ai's
-    # pricing page lists the legal-domain sibling. No relay was observed
-    # serving it.
+    # pricing page lists the legal-domain sibling. A third party reports an
+    # OpenRouter listing from 2026-11-02; not checked, so no relay family.
     "glm-5.3-flashx-legal": ("zai",),
     "grok-build-0.1": ("xai", "openrouter"),
     # Retired on 2026-10-01: xAI lists it as an alias of grok-build-0.1.
@@ -1718,9 +1722,10 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # version reached end of service on 2026-10-30 KST, and Upstage
     # recommends Solar Pro 4 (upstage.ai/pricing and
     # console.upstage.ai/docs/models/solar-pro-2, read 2026-10-28;
-    # console.upstage.ai/docs/models/history lists `solar-pro2-251215` as
-    # retired, read 2026-11-06). The row stays because a machine-level
-    # override may still name the id.
+    # console.upstage.ai/docs/models/history marks `solar-pro2-251215`
+    # deprecated on 2026-10-30 and says to upgrade to `solar-pro4`, read
+    # 2026-11-06). The row stays because a machine-level override may still
+    # name the id.
     "solar-pro2": (0.15, 0.60),
     # Upstage list price (upstage.ai/pricing and
     # console.upstage.ai/docs/models/solar-pro-4, read 2026-10-28): 0.30/1.20,
@@ -1737,15 +1742,15 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # 0.10/0.40, cached input 0.01 (the default tenth), excluding VAT.
     # `solar-mini4` is the alias of `solar-mini4-260922` (released
     # 2026-09-22, console.upstage.ai/docs/models/history): 512K context, 128K
-    # output, reasoning and tool calling. Upstage retired `solar-mini-250422`
-    # on 2026-10-30 and points it here. No provider row, on the `solar-pro4`
+    # output, reasoning and tool calling. Upstage marks `solar-mini-250422`
+    # deprecated on 2026-10-30 and says to upgrade to `solar-mini4`. No provider row, on the `solar-pro4`
     # terms. Recognition-only, in no shipped chain.
     "solar-mini4": (0.10, 0.40),
     # Mistral list price (docs.mistral.ai/models/mistral-large-4-0, read
     # 2026-11-06): Mistral Large 4 0.70/2.10, cached input 0.07 (the default
     # tenth). The card carries no promotion mark; the 2026-10-06 changelog's
-    # "Launch pricing: 50% off for 2 weeks" names no figures and ended by its
-    # own terms. Released in Public Preview on 2026-10-06 as
+    # "Launch pricing: 50% off for 2 weeks" names no figures, and two weeks
+    # have passed, though no dated page says the card is the full rate. Released in Public Preview on 2026-10-06 as
     # `mistral-large-4` and `mistral-large-4-0` (both spellings in the
     # reasoning guide), 1M context, max output not published. Its
     # `reasoning_effort` takes `low`, `medium`, and `high` only: "Mistral

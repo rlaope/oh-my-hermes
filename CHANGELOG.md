@@ -294,7 +294,7 @@ All notable changes will be documented here.
   4 (`mistral-large-4`, `mistral-large-4-0`) and Solar Mini 4, at each
   vendor's list price. `deepseek-v4.1-flash-1017`, the version
   `deepseek-flash` has served since 2026-10-17, uses the V4.1 Flash contract,
-  price and calibration, and its runs are labeled like the pointer's.
+  price and calibration, and its runs keep the pointer's category.
 - **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
   `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
   or Enter opens sessions or bots, folds the plan, searches history, cycles

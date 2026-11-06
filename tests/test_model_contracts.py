@@ -1515,6 +1515,7 @@ class Gpt6CyberContractTests(unittest.TestCase):
             (pricing["input"], pricing["cached_input"], pricing["cache_write"], pricing["output"]),
             (20.0, 2.0, 25.0, 100.0),
         )
+        self.assertEqual(pricing["cache_write_12h"], 50.0)
         self.assertEqual(pricing["long_context_over_272k_input"], "not published")
         self.assertEqual(contract["sources_read"], "2026-11-06")
         self.assertIn("https://deploymentsafety.openai.com/gpt-6-cyber", contract["sources"])
@@ -1531,6 +1532,8 @@ class Gpt6CyberContractTests(unittest.TestCase):
         self.assertEqual(APPROX_PRICE_PER_MTOK["gpt-5.6-cyber"], (12.5, 75.0))
         self.assertEqual(APPROX_PRICE_PER_MTOK["gpt-6-rosalind"], (15.0, 75.0))
         # Every cached rate is a tenth of input, so none needs a ratio row.
+        for model in _GATED_OPENAI_IDS:
+            self.assertNotIn(model, APPROX_CACHE_READ_RATIO)
         for model, (input_rate, output_rate) in (
             ("gpt-6-cyber", (20.0, 100.0)),
             ("openai/gpt-6-cyber-2026-11-05", (20.0, 100.0)),
@@ -1538,7 +1541,6 @@ class Gpt6CyberContractTests(unittest.TestCase):
             ("gpt-6-rosalind", (15.0, 75.0)),
         ):
             with self.subTest(model=model):
-                self.assertNotIn(model, APPROX_CACHE_READ_RATIO)
                 self.assertAlmostEqual(
                     _approximate_cost_usd(model, 1e6, 1e6, 1e6), input_rate + output_rate + input_rate / 10
                 )
@@ -1585,6 +1587,19 @@ class Gpt6CyberContractTests(unittest.TestCase):
         for model_id in _GATED_OPENAI_IDS:
             self.assertNotIn(f'"{model_id}"', flattened, model_id)
 
+    def test_every_gated_model_has_its_display_label_in_both_tables(self) -> None:
+        from omh.catalogs.model_chain_table import MODEL_DISPLAY_LABELS
+        from omh.plugin_bundle.omh.orchestration_say import model_label
+
+        for model_id, label in (
+            ("gpt-6-cyber", "GPT-6 Cyber"),
+            ("gpt-5.6-cyber", "GPT-5.6 Cyber"),
+            ("gpt-6-rosalind", "GPT-6 Rosalind"),
+        ):
+            with self.subTest(model_id=model_id):
+                self.assertEqual(MODEL_DISPLAY_LABELS[model_id], label)
+                self.assertEqual(model_label(model_id), label)
+
     def test_the_cli_prints_the_inherited_ladder(self) -> None:
         status, stdout, _stderr = run_cli(["coding", "model-contract", "--model", "gpt-6-cyber"], output_json=False)
         self.assertEqual(status, 0)
@@ -1614,6 +1629,7 @@ class DeepSeekV41Flash1017Tests(unittest.TestCase):
                 self.assertEqual(calibration_for_route(route), MODEL_HIGH_EFFORT_CALIBRATIONS["deepseek-v4.1-flash"])
         self.assertNotIn("deepseek-v4.1-flash-1017", APPROX_PRICE_PER_MTOK)
         self.assertIn("DeepSeek-V4.1-Flash-1017", base["rollout"])
+        self.assertEqual(base["served_ids"]["openrouter_snapshot_1017"], "deepseek/deepseek-v4.1-flash-1017")
         # Only the declared spelling projects: another MMDD suffix stays
         # uncontracted until it gets its own row.
         for model_id in ("deepseek-v4.1-flash-1118", "deepseek-v4-pro-0813", "deepseek-flash-1017"):

@@ -674,7 +674,9 @@ _GPT_6_CYBER: Final[dict[str, object]] = {
     "released": "2026-11-05",
     "rollout": (
         "only for organizations with Daybreak Red access and approval (model page), through the "
-        "API and the Codex app (system card); the OpenAI Codex subscription route on this "
+        "API and the Codex app (the system card recommends Codex's sandboxing \"when accessing "
+        "GPT-6 Cyber through the Codex app\"), though the Codex models page did not list it when "
+        "read 2026-11-06; the OpenAI Codex subscription route on this "
         "maintainer host returned HTTP 400 on 2026-11-06 with the same wording an unknown id gets, "
         "so the probe cannot tell gated from absent; a released id is not account-level readiness "
         "evidence"
@@ -732,8 +734,8 @@ _GPT_6_CYBER: Final[dict[str, object]] = {
         "including vulnerability discovery, exploit development, and web pentesting",
         "the changelog: investigates vulnerabilities, reproduces them in an authorized test "
         "environment, and verifies fixes",
-        "OpenAI documents no prompting guidance of its own for it; GPT-6 Astra's documented traits "
-        "are the nearest record",
+        "its model page, changelog entry, and system card give no prompting guidance; GPT-6 Astra's "
+        "documented traits are the nearest record",
     ),
     # OpenAI list price (developers.openai.com model page and pricing page,
     # "Cyber models" table, read 2026-11-06). Only a short-context rate is
