@@ -28,6 +28,26 @@ All notable changes will be documented here.
   `mute_only` turns it down per profile. DMs, slash commands and other
   platforms are untouched.
 
+- **Several features or stages asked to be built are offered as a dag-ulw
+  graph, in Korean as in English.** A request that names three or more
+  features as one build verb's object, with a feature noun after the list
+  or a verb that builds software on its own ("메일 가져오기, 파일 업로드, 검색
+  기능 개발해줘", "장바구니랑 주문이랑 배송조회 기능 구현해", "build the
+  upload, preview and download screens"), a range from one stage to
+  another ("회원가입부터 결제까지 개발해줘", "implement everything from
+  onboarding to checkout") or several counted features ("여러 기능 나눠서
+  다 해줘") got no route hint, or a hint for a rule one item's word matched
+  ("검색" for web-research), so the agent ran the parts one subagent at a
+  time. `names_several_features` reads that shape; the route hint offers
+  dag-ulw first (ask once) and the router asks with dag-ulw as its
+  candidate where it would ask anyway. Nothing starts a run on it. A list
+  that fills one thing ("우유, 계란, 빵 장보기 목록 만들어줘"), three plain
+  nouns and a make verb ("make pancakes, waffles and toast"), a range of
+  numbers, pages or dates, a range from the start to the end of the work at
+  hand, a comparison, a question, one fix and every hard exclude of the
+  many-targets reading stay off it. (Reported and first fixed by @dhddldid
+  in #2610 and #2611.)
+
 - **Ctrl+Enter in the OMH TUI sends now into the running turn, not after
   it.** Ctrl+Enter, Ctrl+J on an empty composer and the text typed after a
   denied approval went as Hermes' `session.steer`, which only holds the
