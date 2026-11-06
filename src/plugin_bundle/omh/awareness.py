@@ -6017,12 +6017,14 @@ def _awareness_route_hint_cached(
             and not direct_hint
             and getattr(intent, "intent_class", "") not in {"meta_discussion", "feedback_signal"}
             and not any(hint.get("workflow") in {"dag-ulw", "ultrawork"} for hint in hints)
+            and len(hints) < hint_limit
             and names_several_features(matching_message, links)
         ):
             # Several features or stages named and asked to be built ("메일 가져오기, 파일 업로드, 검색 기능 개발해줘", "build
             # the upload, preview and download screens"): offered first, ahead of a rule one item's word matched
-            # ("검색" for web-research); the person names the parts, not how each is run, so nothing starts.
-            hints = [_dag_ulw_offer_hint(), *hints][:hint_limit]
+            # ("검색" for web-research); the person names the parts, not how each is run, so nothing starts. Only with room
+            # for it: the offer never pushes out a hint already there.
+            hints = [_dag_ulw_offer_hint(), *hints]
         elif (
             not hints
             and hint_limit
