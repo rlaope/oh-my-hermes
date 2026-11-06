@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import shlex
 import time
 import unittest
 
@@ -168,7 +169,7 @@ class OwnerLaneRoutingTests(unittest.TestCase):
         self.assertEqual(single["fanout"]["commands"], [
             # write_scope is stored sorted, so the scopes come out in that order.
             f"omh coding run --owner codex --unit-id api --file-scope 'src/api test.py' --file-scope src/api.py "
-            f"--goal-file {goal_file} --repo-root ."])
+            f"--goal-file {shlex.quote(goal_file)} --repo-root ."])  # quoted: a Windows temp path has backslashes
         self.assertEqual([command.split()[:4] for command in pair["fanout"]["commands"]],
                          [["omh", "coding", "fanout", "prepare"], ["omh", "coding", "fanout", "dispatch"]])
         self.assertIn(pair["fanout"]["fanout_id"], pair["fanout"]["commands"][1])
