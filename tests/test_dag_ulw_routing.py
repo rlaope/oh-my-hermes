@@ -278,7 +278,8 @@ class RouterTests(unittest.TestCase):
         # Several features or stages, named or counted, as a build verb's object: the hint offers dag-ulw first (ask
         # once), ahead of a rule one item's word matched ("검색" for web-research), and nothing starts.
         for message in ("메일 가져오기, 파일 업로드, 검색 기능 개발해줘", "검색, 필터, 정렬 기능을 붙여줘",
-                        "목록, 상세, 저장 기능 전부만들어", "로그인, 목록, 알림 다 해줘", "댓글, 좋아요, 신고 기능 추가해줘",
+                        "목록, 상세, 저장 기능 전부만들어", "로그인, 목록, 알림 기능 다 해줘", "댓글, 좋아요, 신고 기능 추가해줘",
+                        "로그인, 결제, 알림 구현해줘",
                         "장바구니랑 주문이랑 배송조회 기능 구현해", "알림 설정과 이메일 발송과 푸시 기능 만들어",
                         "로그인하고 대시보드하고 리포트 기능까지 개발해", "온보딩, 홈, 마이페이지 화면 다 구현하자",
                         "회원가입 로그인부터 일반채팅, 판단질문, 지식그래프, 온톨로지 과정을 설계에 맞게 개발해줘",
@@ -308,9 +309,19 @@ class RouterTests(unittest.TestCase):
                         "로그인 버그 고쳐줘", "로그인, 목록, 알림 다 하지 마", "검색, 필터, 정렬 기능 나중에 붙여줘",
                         "make a grocery list with milk, eggs and bread", "summarize pages 1 to 3",
                         "rename the variable from foo to bar", "what is the difference between login, signup and sso?",
-                        "build a function that sums from 1 to 10"):
+                        "build a function that sums from 1 to 10",
+                        # Three plain nouns and a make verb name content, not features: a list counts only with a
+                        # feature noun after it or a verb that builds software on its own; a range from the start to
+                        # the end of the work at hand names no stages.
+                        "김치, 된장, 고추장 레시피 만들어줘", "엄마, 아빠, 동생 생일카드 만들어줘", "월, 화, 수 알림 만들어줘",
+                        "빨강, 파랑, 초록 버튼 만들어줘", "PPT, PDF, 엑셀 다 만들어줘", "README, CHANGELOG, docs 다 고쳐줘",
+                        "로그인, 목록, 알림 다 해줘", "처음부터 끝까지 다 해줘", "이 코드 처음부터 끝까지 다 고쳐줘",
+                        "make pancakes, waffles and toast", "add milk, eggs and bread", "make tea, coffee and juice",
+                        "create logos, banners and posters", "build it from start to finish"):
             with self.subTest(message=message):
                 self.assertFalse(names_several_features(message))
+        # A specialist hint that read the whole request keeps its place: no offer is put ahead of it.
+        self.assertEqual(awareness_route_hint("PPT, PDF, 엑셀 다 만들어줘")["selected_workflow"], "materials-package")
 
     def test_each_hard_exclude_alone_keeps_a_change_off_the_graph(self) -> None:
         # Each row is a change the router would dispatch on but for one hard exclude: a skill or engine named first
