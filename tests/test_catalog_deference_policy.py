@@ -323,8 +323,11 @@ NON_SKILL_BACKTICKS = frozenset(
 # `systematic-review` defers topic discovery to `source-finder`, one supplied
 # paper to `paper-learning` and a HellaSwag log check to `repro-audit`; no
 # sibling gains a statement pointing back. Three cases, three pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 410
-EXPECTED_DEFERENCE_PAIRS = 426
+# The business-operations skill audit adds three cases and four pairs: boundaries between
+# cto-loop and production-audit, report-package and materials-package, and operating-rhythm
+# and its report and reliability siblings; re-derived from the catalog.
+EXPECTED_DEFERENCE_CASES = 413
+EXPECTED_DEFERENCE_PAIRS = 430
 EXPECTED_DEFERRING_OWNERS = 121
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,

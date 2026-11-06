@@ -56,13 +56,13 @@ DOCUMENT_QA_RULE = (
 # and at upstream main 63d0b94120, and a one-word drift (`--meta` to `--text`)
 # would point the model at a result that cannot show the rung.
 DOCUMENT_RUNGS_RULE = (
-    "On Hermes, the bundled skills give these rungs when available: `powerpoint` gives `slide_count` "
-    "(`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count "
+    "On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; "
+    "`microsoft-office` from v0.23; same scripts): PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count "
     "matching `slide_count`, since it lists every image already in that directory); `pdf` gives `page_count` "
-    "(`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); `xlsx` gives `sheet_schema` (`xlsx_read.py "
+    "(`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); Excel gives `sheet_schema` (`xlsx_read.py "
     "--sheets`) and `formula_recalculation` (`xlsx_recalc.py --out <copy>`, since without `--out` it replaces the "
     "input and rungs or approvals already recorded were for other bytes, then the cached results read back with "
-    "`xlsx_read.py --formulas`, where an error value or a formula with no cached value is a finding); `docx` gives "
+    "`xlsx_read.py --formulas`, where an error value or a formula with no cached value is a finding); Word gives "
     "`section_structure` and `required_clause_check` (`docx_read.py --structure` and `--text`) but no "
     "`page_count` or appearance until a converted PDF is rendered, and `docx_validate.py` checks package health, "
     "never rendering. Images that exist are not a render pass until each one has been inspected, and a "
@@ -88,12 +88,13 @@ NATIVE_CLAUSES = {
         "the file.",
     ),
     "report-package": (
-        "On Hermes, that tool can be the bundled `powerpoint` skill, and a deck it builds counts as generated from "
+        "On Hermes, that tool can be the bundled PowerPoint skill (`powerpoint`; `microsoft-office` from v0.23), "
+        "and a deck it builds counts as generated from "
         "its read-back (`pptx_read.py --outline`).",
         # The shared document rule and the `powerpoint` half of the rungs rule,
         # composed from the same strings `materials-package` states.
         DOCUMENT_QA_RULE,
-        "On Hermes, `powerpoint` gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` "
+        "On Hermes, PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` "
         "(`pptx_render.py` into a fresh directory, its image count matching `slide_count`, since it lists every "
         "image already in that directory). Images that exist are not a render pass until each one has been "
         "inspected.",

@@ -22,7 +22,7 @@ Hermes already owns the Buzz transport, but users need one discoverable OMH entr
 
 ## Do Not Use When
 
-- The user wants a Buzz-managed ACP runtime rather than Hermes' native Buzz gateway.
+- The user wants a Buzz-managed ACP runtime rather than Hermes' native Buzz gateway; say it is outside this skill.
 - The request is general media editing with no Buzz delivery target.
 - The request is generic Docker or Nostr advice unrelated to a Buzz relay.
 - The user is only asking whether OMH supports Buzz, with no request to run the workflow.

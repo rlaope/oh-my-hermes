@@ -17,11 +17,12 @@ This is an OMH `cto-loop` workflow skill, projected for Agent Skills hosts (Clau
 
 ## Why This Exists
 
-`cto-loop` exists to keep `leadership` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`cto-loop` exists because roadmap, architecture and release decisions made in chat lose their owners and evidence; it keeps priority, tradeoff, risk and owner separate.
 
 ## Do Not Use When
 
 - The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly or use `omh-decide` for a decision brief instead of starting a leadership operating loop.
+- A launch-readiness audit of one service; use `omh-production-audit`.
 
 ## Examples
 
@@ -33,15 +34,14 @@ Good example:
 
 Bad example:
 
-- Prompt: cto-loop: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `cto-loop`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: Tell me whether we should rewrite the billing service in Rust.
+- Expected behavior: Route to `omh-decide`, not `cto-loop`: one decision between options is a decision brief.
+- Why: A single decision with options does not need a multi-function leadership operating loop.
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- Priority, tradeoff, delivery and release risk are separate rows.
+- Each risk has an owner and source or is marked assumption; accepted decisions and drafts are separate lists.
 
 ## Recovery Notes
 
@@ -69,6 +69,7 @@ Quality bar:
 - Tie recommendations to observed signals or mark assumptions.
 - Record accepted decisions separately from draft recommendations.
 - Prepare executor handoffs only for accepted implementation follow-ups.
+- A release decision lists, with evidence or not_observed: tested rollback, staged rollout, alerts and an on-call owner, security review outcome, open severity-1/2 defects, and for billing a ledger reconciliation; each residual risk has a named accepter.
 
 Required inputs:
 

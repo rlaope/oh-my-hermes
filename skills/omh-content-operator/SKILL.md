@@ -32,13 +32,13 @@ This is a Hermes-native `content-operator` workflow skill.
 
 Good example:
 
-- Prompt: content-operator draft publish-ready release notes with audience, tone, source scope, review gates, and hallucination checks.
+- Prompt: content-operator write customer release notes for 4.2 from the attached changelog; legal reviews them first.
 - Expected behavior: Produce `prepare_content_operator_card` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: content-operator invent missing facts and claim the customer announcement was sent.
+- Prompt: content-operator send the 4.2 announcement to the customer list.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
@@ -52,9 +52,9 @@ Bad example:
 
 ## Recovery Notes
 
-- If the request asks for citations, current facts, or source-backed evidence gathering, route to research or source-finder before drafting.
-- If the request asks to send, post, invite, ticket, or mutate an external app, route to connector-operator before claiming delivery.
-- If the request asks for PDF, PPT, DOCX, HWP, spreadsheet, or attachment packaging, route to materials-package or deliverable-package.
+- If the request asks for citations, current facts, or source-backed evidence gathering, route to `ulw-research` or `omh-source-finder` before drafting.
+- If the request asks to send, post, invite, ticket, or mutate an external app, route to `omh-apps` before claiming delivery.
+- If the request asks for PDF, PPT, DOCX, HWP, spreadsheet, or attachment packaging, route to `omh-materials-package` or `omh-deliverable-package`.
 - If the request is a simple one-off sentence or paragraph transformation, answer directly instead of opening a workflow.
 
 ## Workflow Lane

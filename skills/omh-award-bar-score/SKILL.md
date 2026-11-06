@@ -90,7 +90,7 @@ Keep axis scoring, the weighted total, the binding-constraint call, and the trad
 Required inputs:
 
 - the target URL, route, or rendered capture being judged
-- the award model and its published axes, weights, and threshold
+- the award body (CSSDA or Awwwards) and its published axes, weights, and threshold
 - the surface's own accessibility and performance budgets
 - audience and primary user task
 

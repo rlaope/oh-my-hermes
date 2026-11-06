@@ -22,9 +22,9 @@ Good example:
 
 Bad example:
 
-- Prompt: Debug a failed cron job in the application server.
-- Expected behavior: Use the debugging owner; do not collect career facts.
-- Why: Generic task vocabulary does not establish a career request.
+- Prompt: Screen these 40 resumes for our backend opening and rank them.
+- Expected behavior: Route to `omh-people-ops`; this skill serves the candidate, not the employer.
+- Why: Hiring vocabulary appears in both, but only the candidate side is a career request here.
 
 ## When to Use
 

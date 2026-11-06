@@ -23,7 +23,7 @@ This is an OMH `operating-rhythm` workflow skill, projected for Agent Skills hos
 
 - The user only needs a one-off meeting agenda before the meeting; use `omh-meeting-brief`.
 - The request is a weekly status/risk summary rather than cadence history; use `omh-ops-review`.
-- The user asks for report packaging, PPT outline, or reliability evidence review.
+- Report packaging or reliability evidence review; use `omh-report-package` or `omh-reliability-review`.
 
 ## Examples
 
@@ -41,9 +41,8 @@ Bad example:
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- Each decision names who decided and its source; an undecided proposal stays out of the log.
+- Each action item has outcome, owner, due date and source, unknown where the notes are silent; last meeting's actions carry their status.
 
 ## Recovery Notes
 

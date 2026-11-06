@@ -12,6 +12,7 @@ A field's class comes from its content, not its name: a `notes` column holds ema
 | quasi-identifier | birth date, postcode, age, gender, job title, employer, exact timestamps, a rare value | generalize (year, region, band) or drop |
 | secret | API key, token, password, session cookie, private key, connection string with credentials | drop; a secret found in the data is also a leak to rotate |
 | free text | notes, comments, ticket bodies, transcript excerpts, log messages, URLs with query strings | drop, or keep only after the scan counts it clean |
+| sensitive category | health, biometric, genetic, political, union, religion, sexual orientation, criminal record | drop or aggregate; count groups smaller than k within these fields |
 | not personal | product id, count, price, status code | keep when the destination needs it |
 
 ## 2. Minimization order
@@ -33,18 +34,21 @@ Run it on the exact file that leaves, after the last transform, and print counts
 
 | Class | What to count |
 | --- | --- |
-| direct identifier | email shapes; phone number shapes; card numbers that pass the Luhn check; IP addresses; and each original value of a dropped or pseudonymized identifier column, matched exactly in the output |
+| direct identifier | email shapes; phone number shapes; card numbers that pass the Luhn check; IP addresses; national-id shapes for the countries in scope, each with its check digit where one exists (Korean resident registration number: 6 digits, optional hyphen, 7 digits; US SSN shape; passport shapes the user names); bank account shapes and mobile formats for the countries in scope (for Korea `01[016789]` with or without hyphens); and each original value of a dropped or pseudonymized identifier column, matched exactly in the output |
 | secret | vendor key prefixes, bearer tokens, private key headers, password assignments, connection strings with credentials |
 | quasi-identifier | rows whose combination of kept quasi-identifiers is shared by fewer than k rows; k comes from the team, and 5 is a common starting point |
-| free text | the direct-identifier shapes above and the original identifier values, inside each free-text field |
+| sensitive category | groups of rows smaller than k within the kept sensitive fields |
+| free text | the direct-identifier shapes above and the original identifier values, inside each free-text field; names only against a supplied list of known names (customers, staff), exact and case-folded |
 
 The original-value check is the one a pattern scan cannot replace: a pseudonymized email column passes every email pattern while a notes field quotes the same address. Run it as a script that reads the source column and the output file and prints one count; never type a value into a search pattern, which puts it into the session.
 
-Verdict: `redacted` when every class counts zero, or each remaining hit is named and accepted by the user; `not_observed` when no scan ran; otherwise not redacted, with the counts.
+A name-recognition tool may add candidates; its hits are leads for the user to accept, and a clean name result reads `checked against N known names`, never `no names`. Confirm the countries in scope before the scan.
+
+Verdict: `redacted` when every class counts zero, or each remaining hit is named and accepted by the user; `not_observed` when no scan ran or the digest of the scanned bytes differs from the share record's; otherwise not redacted, with the counts. `redacted` means the scan counted zero in each class, not that the data is anonymous: a file with pseudonymized identifiers or kept quasi-identifiers is `pseudonymized`, still personal data, and the lawful-basis question stays with `omh-legal-compliance-review`.
 
 ## 5. Share record
 
-Destination, date, fields shipped, row count, the sha256 digest of the shipped file, and the scan reference. No value from the file, no mapping, no key.
+Destination, date, fields shipped, row count, the sha256 digest of the shipped file (the scan record carries the same digest), and the scan reference. No value from the file, no mapping, no key.
 
 ## 6. What Hermes redacts on its own
 

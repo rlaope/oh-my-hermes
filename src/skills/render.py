@@ -2821,7 +2821,7 @@ second transport in OMH.
 - The target Hermes home/profile.
 - The Buzz community relay URL.
 - A dedicated agent identity that is already admitted to the community.
-- The intended access policy: owner-only, allowlist, or open.
+- The intended access policy: private (`allowed_users` listed, `allow_all_users` false) or community (`allow_all_users` true).
 - An observable verification target: inbound message, outbound message, or
   both.
 
@@ -2830,8 +2830,10 @@ the target Hermes `.env`; non-secret gateway settings belong in Hermes config.
 
 ## Safe Setup
 
-1. Read the current official Hermes Buzz guide and the stable Buzz release
-   notes when they conflict with this reference.
+1. Read the current official Hermes Buzz guide (the Buzz page under the messaging
+   user guide of the Hermes docs) and the stable Buzz release notes when they
+   conflict with this reference. If neither can be opened, mark the read
+   `not_observed` instead of recalling it.
 2. Check whether `hermes` and the configured Buzz CLI executable exist.
    Presence is installation evidence, not relay readiness.
 3. Confirm that the agent identity is separate from the human owner identity
@@ -2841,7 +2843,7 @@ the target Hermes `.env`; non-secret gateway settings belong in Hermes config.
 5. Keep `BUZZ_PRIVATE_KEY` in the Hermes `.env`. Never put it in argv, logs,
    diagnostic output, workflow artifacts, or version-control.
 6. Configure the relay URL, agent display name, optional channel/DM scope,
-   transport mode, and access policy. Do not silently broaden `allow_from`.
+   transport mode, and access policy. Do not silently add to `allowed_users` or set `allow_all_users` true; either widens who can drive the agent and needs the user's explicit answer.
 7. Start or restart the Hermes gateway only when the user asked for execution.
 
 ## Read-only Diagnosis
@@ -2894,8 +2896,10 @@ conversation. General media editing belongs to the media workflows.
 
 Prefer Hermes' normal `MEDIA:/absolute/path` delivery. If the native response
 path cannot deliver the file and the user still wants direct Buzz delivery,
-use the documented Buzz CLI attachment command against the observed active
-channel.
+run the Buzz CLI as Hermes does: `buzz messages send --channel <observed
+channel id> --file <absolute path> --content -`, with `BUZZ_RELAY_URL` and
+`BUZZ_PRIVATE_KEY` in the subprocess environment only. Confirm the flags with
+`buzz messages send --help` first and stop if they differ.
 
 Treat the receipt as valid delivery evidence only when it parses as an object,
 contains `accepted=true`, and includes a non-empty event id. Empty stdout,
@@ -4550,6 +4554,10 @@ def _internal_audit_reference() -> str:
 
 Load this while planning a control test. OMH prepares; the auditor or control owner pulls the population, the evidence and the results, and each item stays `prepared` until its evidence is observed. Where the firm's or regulator's methodology differs from this page, the methodology governs; say which one was used.
 
+## 0. Design first
+
+Walk one item from initiation to evidence and record whether the control would prevent or detect the stated risk. If it would not, stop with a design deficiency before testing operation.
+
 ## 1. Population first
 
 1. Name the population the control operates over: the period, the source system, and the unit (a journal entry, an access review, a change ticket).
@@ -4571,6 +4579,12 @@ A commonly used starting point for a control expected to operate without deviati
 
 Raise the size for a higher reliance, a lower tolerable deviation rate, or a control with a history of exceptions. An automated control tested once, with its change management tested, is the usual exception to frequency sizing.
 
+When the firm gives a confidence level and a tolerable deviation rate and expects no deviations, the attribute-sampling size is ln(1 - confidence) / ln(1 - tolerable rate), rounded up (95% and 5% gives 59; 90% and 10% gives 22). Otherwise the table is a rule of thumb; say so.
+
+## 2b. Deviations
+
+For a control sampled at 25 items or fewer, one unexplained deviation means the control did not operate effectively for that population unless the firm's methodology allows a stated extended sample; record which rule applied. For a larger statistical sample compare the deviation rate with the tolerable rate. Evaluate compensating controls only after the deviation is recorded as a deviation.
+
 ## 3. Evidence, strongest first
 
 | Procedure | What it shows | Enough on its own |
@@ -4579,6 +4593,8 @@ Raise the size for a higher reliance, a lower tolerable deviation rate, or a con
 | inspection | a signed, dated document or system log shows the control happened | usually |
 | observation | the tester watched it happen once | only for that moment |
 | inquiry | someone said it happens | never |
+
+A report, query or spreadsheet used to perform the control is tested for completeness and accuracy (source, parameters, a re-run) before items from it count as evidence. The sample covers the whole period of reliance; a control remediated during the period is tested for a stated minimum operating period afterwards, and earlier failures stay in the record.
 
 ## 4. Severity from stated criteria
 
@@ -4589,6 +4605,7 @@ Grade each deficiency from three stated inputs; show all three beside the grade:
 | yes | material | no | material weakness |
 | yes | below material, but merits the attention of those charged with governance | no | significant deficiency |
 | yes | material or significant | yes, and tested | re-grade at the magnitude the compensating control leaves |
+| yes | inconsequential (not material and not worth the attention of those charged with governance) | any | control deficiency |
 | no, or remote | any | any | control deficiency |
 
 A restatement, fraud by senior management, or ineffective oversight by the audit committee are indicators of a material weakness whatever the table says. With any input missing, withhold the grade and name the missing input.
@@ -4638,6 +4655,7 @@ A field's class comes from its content, not its name: a `notes` column holds ema
 | quasi-identifier | birth date, postcode, age, gender, job title, employer, exact timestamps, a rare value | generalize (year, region, band) or drop |
 | secret | API key, token, password, session cookie, private key, connection string with credentials | drop; a secret found in the data is also a leak to rotate |
 | free text | notes, comments, ticket bodies, transcript excerpts, log messages, URLs with query strings | drop, or keep only after the scan counts it clean |
+| sensitive category | health, biometric, genetic, political, union, religion, sexual orientation, criminal record | drop or aggregate; count groups smaller than k within these fields |
 | not personal | product id, count, price, status code | keep when the destination needs it |
 
 ## 2. Minimization order
@@ -4659,18 +4677,21 @@ Run it on the exact file that leaves, after the last transform, and print counts
 
 | Class | What to count |
 | --- | --- |
-| direct identifier | email shapes; phone number shapes; card numbers that pass the Luhn check; IP addresses; and each original value of a dropped or pseudonymized identifier column, matched exactly in the output |
+| direct identifier | email shapes; phone number shapes; card numbers that pass the Luhn check; IP addresses; national-id shapes for the countries in scope, each with its check digit where one exists (Korean resident registration number: 6 digits, optional hyphen, 7 digits; US SSN shape; passport shapes the user names); bank account shapes and mobile formats for the countries in scope (for Korea `01[016789]` with or without hyphens); and each original value of a dropped or pseudonymized identifier column, matched exactly in the output |
 | secret | vendor key prefixes, bearer tokens, private key headers, password assignments, connection strings with credentials |
 | quasi-identifier | rows whose combination of kept quasi-identifiers is shared by fewer than k rows; k comes from the team, and 5 is a common starting point |
-| free text | the direct-identifier shapes above and the original identifier values, inside each free-text field |
+| sensitive category | groups of rows smaller than k within the kept sensitive fields |
+| free text | the direct-identifier shapes above and the original identifier values, inside each free-text field; names only against a supplied list of known names (customers, staff), exact and case-folded |
 
 The original-value check is the one a pattern scan cannot replace: a pseudonymized email column passes every email pattern while a notes field quotes the same address. Run it as a script that reads the source column and the output file and prints one count; never type a value into a search pattern, which puts it into the session.
 
-Verdict: `redacted` when every class counts zero, or each remaining hit is named and accepted by the user; `not_observed` when no scan ran; otherwise not redacted, with the counts.
+A name-recognition tool may add candidates; its hits are leads for the user to accept, and a clean name result reads `checked against N known names`, never `no names`. Confirm the countries in scope before the scan.
+
+Verdict: `redacted` when every class counts zero, or each remaining hit is named and accepted by the user; `not_observed` when no scan ran or the digest of the scanned bytes differs from the share record's; otherwise not redacted, with the counts. `redacted` means the scan counted zero in each class, not that the data is anonymous: a file with pseudonymized identifiers or kept quasi-identifiers is `pseudonymized`, still personal data, and the lawful-basis question stays with `legal-compliance-review`.
 
 ## 5. Share record
 
-Destination, date, fields shipped, row count, the sha256 digest of the shipped file, and the scan reference. No value from the file, no mapping, no key.
+Destination, date, fields shipped, row count, the sha256 digest of the shipped file (the scan record carries the same digest), and the scan reference. No value from the file, no mapping, no key.
 
 ## 6. What Hermes redacts on its own
 
@@ -9960,9 +9981,9 @@ row.
 Preparation is against the organization's OWN positions. Without a playbook -
 standard terms, approved deviations, and what needs escalation - a proposal is
 an invented position, and inventing a position is the failure this whole
-workflow exists to prevent. If none is supplied, ask for it, or say that rows
-are being prepared against the counterparty's draft alone and carry no approved
-position behind them.
+workflow exists to prevent. If none is supplied, write no replacement language:
+produce one counsel question per contested clause (what the draft does, why it
+matters, the position the organization needs to choose) and ask for the playbook.
 
 ## The row
 
@@ -13458,9 +13479,11 @@ CSSDA scores an entry on three axes:
 | Innovation | 30% | New development and design ideas |
 
 A jury panel scores each entry, and an entry page exposes the per-judge scores
-alongside the public per-axis vote averages. Award tiers: **8.0 and above**
-takes Website of the Day, **6.0 and above** takes Special Kudos, and the
-public awards need a 6.0 judge average plus at least 20 votes. The 40/30/30
+alongside the public per-axis vote averages. Award tiers
+(cssdesignawards.com/about, read 2026-11-07): Website of the Day needs a judge
+average **above 8.00**, a figure CSSDA says varies with the quality of the
+entries submitted; Special Kudos needs an average **above 6**; the public
+awards need **more than 20 votes** and a judge average above 6. The 40/30/30
 split is reported rather than stated in the jury rules, so when the artifact
 depends on the ratio, mark it reported and score the axes separately too.
 
@@ -13469,8 +13492,8 @@ depends on the ratio, mark it reported and score the axes separately too.
 Daily winners cluster immediately above the cutoff: most sit between 8.0 and
 8.5, and a score above 8.6 is the exception. The distribution is a spike at the
 threshold because 8.0 is where the award starts. "Award-winning" therefore
-means *cleared 8.0*, not exceptional, and a brief that treats it as exceptional
-overbuilds.
+means *cleared the published floor of 8.0*, not exceptional, and a brief that
+treats it as exceptional overbuilds. The day's cut can sit higher than 8.0.
 
 ## The three axes move together
 
@@ -13494,9 +13517,10 @@ of site spread**, so judges rate a site, not three independent properties.
 
 Two rules follow, and they bound how this skill reports:
 
-- Never model a lopsided profile. A UI 8.5 / INN 6.5 site is not in the data;
-  a two-point axis gap does not occur. Scoring one axis two points below
-  another means the scoring is wrong, not that a rare site was found.
+- Treat a lopsided profile as a reason to re-read the evidence. In the nine
+  sampled entries the largest gap between a site's own axes was 0.50, so a gap
+  above 1.0 in a self-assessment means re-check the evidence for both axes
+  before reporting it; it is not proof the scoring is wrong.
 - A weak axis is worth naming only near the threshold. MECHA is the case:
   Innovation 0.50 below UX drags a would-be 8.2 to 8.05. Below 8.0 the axis
   gap is not the problem, because **the whole site is the problem** and moving
@@ -13552,6 +13576,15 @@ The budgets stay authoritative. When an innovation move breaks one:
   `prefers-reduced-motion`, a native control styled rather than rebuilt, a
   scene that degrades to a static poster. `omh-accessibility-audit` and
   `omh-frontend/references/web-vitals-budgets.md` own those budgets.
+
+## Awwwards
+
+Awwwards publishes four criteria instead (awwwards.com/about-evaluation, read
+2026-11-07): Design 40%, Usability 30%, Creativity 20%, Content 10%, with
+honorable mentions at 6.5 or more from the jury. Score those four axes against
+rendered evidence the same way, and never mix them with the CSSDA axes or
+thresholds above. For any other body, ask for its published rules URL and score
+only the axes it publishes.
 
 ## Boundary
 

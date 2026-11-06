@@ -150,8 +150,8 @@ DEFINITION = SkillDefinition(
         ),
         ExpertQuestion(
             _INPUT_BUDGET,
-            "How much traffic, runtime, holdout share, and risk can the experiment spend, and which guardrail breach must pause or roll it back?",
-            "실험에 쓸 수 있는 트래픽, 실행 기간, 홀드아웃 비율, 위험 한도는 얼마이며 어떤 가드레일 위반 시 중단하거나 롤백해야 하나요?",
+            "How much traffic, runtime, holdout share, and risk can the experiment spend, what is the smallest effect worth detecting, and which guardrail breach must pause or roll it back?",
+            "실험에 쓸 수 있는 트래픽, 실행 기간, 홀드아웃 비율, 위험 한도는 얼마이고, 감지할 가치가 있는 최소 효과는 얼마이며 어떤 가드레일 위반 시 중단하거나 롤백해야 하나요?",
         ),
         ExpertQuestion(
             _INPUT_OWNER,
@@ -178,8 +178,8 @@ DEFINITION = SkillDefinition(
         ),
         ProcedureCheck(
             _CHECK_EXPERIMENT,
-            ("treatment_control", "assignment_unit", "assignment_stickiness", "exposure_unit", "exposure_definition", "primary_metric", "guardrail_metrics", "holdout_rationale", "minimum_runtime", "data_health_checks", "pause_rollback_conditions", "approval_state"),
-            "Require sticky assignment, exposure defined as actual treatment display or receipt rather than send or eligibility, exactly one primary metric, at least one guardrail, a holdout rationale, a minimum runtime, data-health checks, and pause/rollback conditions; approval_state stays unapproved until a named human approves.",
+            ("treatment_control", "assignment_unit", "assignment_stickiness", "exposure_unit", "exposure_definition", "primary_metric", "guardrail_metrics", "holdout_rationale", "minimum_runtime", "baseline_rate", "minimum_detectable_effect", "required_sample_per_arm", "expected_eligible_in_window", "data_health_checks", "pause_rollback_conditions", "approval_state"),
+            "Require sticky assignment, exposure defined as actual treatment display or receipt rather than send or eligibility, exactly one primary metric, at least one guardrail, a holdout rationale, a minimum runtime, data-health checks, and pause/rollback conditions; when expected eligible users in the minimum runtime fall below the required sample per arm for the minimum detectable effect, return HOLD with the smallest feasible change (longer runtime, larger segment, larger effect, or a pre/post comparison labelled non-causal) instead of approving a test that cannot reach a readable result; approval_state stays unapproved until a named human approves.",
         ),
         ProcedureCheck(
             _CHECK_READOUT,

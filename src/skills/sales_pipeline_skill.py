@@ -32,7 +32,7 @@ SALES_PIPELINE_HANDOFF = "sales_pipeline_handoff/v1"
 _INPUT_SNAPSHOT = "pipeline snapshot"
 _INPUT_AS_OF = "as-of time and review horizon"
 _INPUT_DEFINITIONS = "currency, amount, stage, and forecast definitions"
-_INPUT_PRIOR = "prior forecast and actuals"
+_INPUT_PRIOR = "prior forecast, actuals, and quota or target"
 _INPUT_OWNER = "decision owner"
 
 
@@ -84,8 +84,8 @@ DEFINITION = SkillDefinition(
         ),
         ExpertQuestion(
             _INPUT_PRIOR,
-            "Which prior forecast snapshots and observed won, lost, slipped, or renewal outcomes are supplied for calibration or learning, or is calibration not requested this cycle?",
-            "보정이나 학습을 위해 어떤 이전 예측 스냅샷과 관찰된 수주, 실주, 지연, 갱신 결과가 제공되나요, 아니면 이번 주기에는 보정을 요청하지 않나요?",
+            "Which prior forecast snapshots and observed won, lost, slipped, or renewal outcomes are supplied for calibration or learning, or is calibration not requested this cycle, and which quota or target applies to this horizon?",
+            "보정이나 학습을 위해 어떤 이전 예측 스냅샷과 관찰된 수주, 실주, 지연, 갱신 결과와 이 기간의 할당량이나 목표가 제공되나요, 아니면 이번 주기에는 보정을 요청하지 않나요?",
         ),
         ExpertQuestion(
             _INPUT_OWNER,
@@ -135,7 +135,7 @@ DEFINITION = SkillDefinition(
                 "deal_exceptions",
                 "record_evidence_refs",
             ),
-            "Derive movement, aging, stalls, slips, exit-criteria gaps, next-step quality, and concentration from supplied records only, citing the record reference behind every exception; never infer buyer activity or stage progress from silence, and never rank deals a HOLD scope excluded.",
+            "Derive movement, aging, stalls, slips, exit-criteria gaps, next-step quality, and concentration from supplied records only, citing the record reference behind every exception; never infer buyer activity or stage progress from silence, and never rank deals a HOLD scope excluded; stage_movement and slipped_close_dates need a prior snapshot or stage and close-date history fields, so with one snapshot and neither mark both `unavailable` and still report records whose close date is before the as-of time.",
         ),
         ProcedureCheck(
             "sales_forecast_state_check",
@@ -148,8 +148,10 @@ DEFINITION = SkillDefinition(
                 "prior_forecast_actual_comparison",
                 "calibration_status",
                 "confidence",
+                "target_source",
+                "coverage_ratio",
             ),
-            "Keep stage, supplied seller category or probability, model-derived scenario range, and observed buyer commitment as separate states: stage alone never creates a probability or commitment, a probability-weighted total is a scenario and not a promise, and calibration_status is `unavailable` unless matching prior snapshots and observed outcomes were supplied.",
+            "Keep stage, supplied seller category or probability, model-derived scenario range, and observed buyer commitment as separate states: stage alone never creates a probability or commitment, a probability-weighted total is a scenario and not a promise, and calibration_status is `unavailable` unless matching prior snapshots and observed outcomes were supplied; coverage_ratio is pipeline over the supplied target and is `unavailable` when no target was supplied, never a benchmark multiple.",
         ),
         ProcedureCheck(
             "sales_outcome_learning_check",
@@ -304,7 +306,7 @@ DEFINITION = SkillDefinition(
     ),
     recovery_notes=(
         "If the snapshot fails scope validation, return `HOLD` naming the exact missing definition, conversion basis, owner, or duplicate set and ask for it; do not rank or total partial data.",
-        "If prior forecasts or outcomes are absent, keep calibration `unavailable`; if an annex has no supporting evidence, emit it as `unsupported` with the gap named rather than omitting it.",
+        "If only one snapshot with no history fields is supplied, keep stage movement and slipped close dates `unavailable`; if prior forecasts or outcomes are absent, keep calibration `unavailable`; if an annex has no supporting evidence, emit it as `unsupported` with the gap named rather than omitting it.",
         "If a connector is unavailable, keep every CRM correction proposed and every alert or message unsent, and name the connector boundary as the next observable step.",
     ),
     progressive_disclosure=True,

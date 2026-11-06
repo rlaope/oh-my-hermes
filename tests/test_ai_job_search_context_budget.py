@@ -143,8 +143,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            (skill_capabilities, 533907, FULL_ROW_DELTA_CAP,
-             'd6dfefff9df440fda6bdeb7fa17b920ad28c1fcfe2676e049210c6df7751fc71',
+            # 533907 -> 534217 and the digest re-derived: the business-operations skill audit
+            # adds required-input words and a redline rule to ten rows (+310, itemized at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was d6dfefff...fc71.
+            (skill_capabilities, 534217, FULL_ROW_DELTA_CAP,
+             '9fd9a9273a46e0b342a4e6bcdf77519464b9340354ab6d43027c1817cdaae3f8',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -376,7 +379,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then the render rail: every body names its siblings by the label `skill_view`
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
-        self.assertEqual(_digest(legacy_hashes), '7e537e8dbd4e8d9a0104d0bba4b7eb5d645e14f031baea6674df7c01e1884b2c')
+        # The business-operations skill audit rewrites sixteen bodies (checklists, boundaries and
+        # practitioner checks); the pin before it was 7e537e8d...4b2c.
+        self.assertEqual(_digest(legacy_hashes), 'e301d9b343bb961341cf832dc6e37cc1050ef690580823c60538edf03e6f5209')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -391,7 +396,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
         # 122431 -> 124814: the render rail writes each sibling under its loadable label
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
-        self.assertEqual(legacy['repeated']['bytes'], 124814)
+        # 124814 -> 123214: the business-operations skill audit replaces repeated default
+        # checklists and generic Why lines with each skill's own (-1600).
+        self.assertEqual(legacy['repeated']['bytes'], 123214)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -403,7 +410,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         feature_refs = [t for t in refs if t.skill_name == FEATURE]
         self.assertEqual(len(feature_refs), 6)
         self.assertLessEqual(sum(len(t.content.encode()) for t in feature_refs), 19397)
-        self.assertLessEqual(max(len(t.content.encode()) for t in feature_refs), 4039)
+        # 4039 -> 4164: procedure.md's Korean clarification questions were English text; real Korean
+        # is three bytes a character (+125).
+        self.assertLessEqual(max(len(t.content.encode()) for t in feature_refs), 4164)
 
     def test_hard_per_item_schema_and_injection_limits_do_not_move(self) -> None:
         # Career growth moves only the three catalog-total ratchets. Later

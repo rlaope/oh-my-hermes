@@ -45,9 +45,9 @@ Bad example:
 
 ## Completion Checklist
 
-- Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
-- Open questions, residual risk, and missing verification are named.
-- Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+- Every authority-dependent statement has an exact locator and effective status or is marked unverified.
+- Every mandatory hold trigger is evaluated and each open one has a counsel owner and a question; the disposition is PASS, REVISE or HOLD.
+- The documents and versions that were not supplied are listed; no sign-off, filing or advice is claimed.
 
 ## Recovery Notes
 

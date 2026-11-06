@@ -2661,7 +2661,7 @@ _DEFINITIONS = [
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
         handoff_policy="Run meeting preparation in Hermes; only create follow-up coding handoff from observed decisions or accepted plans.",
-        required_inputs=("meeting goal", "audience", "known context", "decision topics"),
+        required_inputs=("meeting goal, date and length", "audience", "known context", "decision topics and who decides"),
         expected_outputs=("agenda", "discussion prompts", "decisions needed", "action-item template"),
         artifact_expectations=("meeting brief or record template when the wrapper captures it",),
         safety_rules=(
@@ -2674,6 +2674,7 @@ _DEFINITIONS = [
             "Turn context into agenda topics, prompts, decisions needed, and a record template.",
             "Keep prep distinct from actual meeting minutes or accepted decisions.",
             "Identify missing context that would change the meeting structure.",
+            "Give each agenda item a time box that sums to the meeting length, an owner and an intended outcome (decide, discuss, inform); name pre-reads and who reads them; for a decision item name the decider and what each option costs; say so when a message would meet the goal.",
             "Give the record template's action-item rows outcome, owner, due date, dependency, acceptance condition, and source columns, each marked unknown until the meeting record fills it.",
         ),
         why_this_exists="`meeting-brief` exists to turn scattered context into a focused agenda, discussion prompts, decision points, and a record template without pretending the meeting already happened.",
@@ -2705,7 +2706,6 @@ _DEFINITIONS = [
         ),
         recovery_notes=(
             "If decision topics lack known context, retain the supplied meeting goal and audience, mark the agenda tentative, and hand back discussion prompts and the decisions-needed list with its open questions.",
-            "If action owners, due dates, or acceptance conditions are absent from a meeting record, retain the prepared agenda and prompts, mark action ownership not_observed, and hand back the action-item template with those columns marked unknown.",
             "If follow-up coding lacks observed decisions or an accepted plan, retain the meeting brief, mark the coding handoff unresolved, and hand back the decisions needed rather than an implementation claim.",
         ),
     ),
@@ -2965,8 +2965,13 @@ _DEFINITIONS = [
         safety_rules=(
             "Keep protected characteristics and missing interview evidence out of unsupported candidate recommendations.",
             "Do not claim HRIS, ATS, outreach, interview, or employment-status actions occurred.",
+            "Draft no questions on protected traits or their proxies (age, family status, health).",
         ),
         quality_tier="evidence-gated",
+        final_checklist=(
+            "Outcomes, must-haves and trainable skills are separate; every criterion has anchors and states the outcome it predicts; interviewers score before the debrief; no candidate recommendation without interview evidence; no ATS, calendar or HRIS action is claimed.",
+            "A scored screen gets a job-relatedness and adverse-impact check (e.g. the four-fifths rule); jurisdiction questions go to `legal-compliance-review`.",
+        ),
         quality_bar=(
             "Distinguish role outcomes from proxy criteria and missing evidence.",
             "Keep inclusion, privacy, policy, and decision-owner gaps visible.",
@@ -3069,12 +3074,12 @@ _DEFINITIONS = [
             ProcedureCheck(
                 "legal_issue_matrix_check",
                 ("applicability_facts", "obligation_position", "definitions_dependencies", "exceptions_carveouts_conflicts", "evidence_status", "risk_uncertainty", "action_owner", "recommended_disposition", "counsel_question", "issue_family_applicability"),
-                "Map facts to operative text, dependencies, exceptions and conflicts; when triggered cover warranty, disclaimer, indemnity and liability interactions or privacy roles, basis, transfers, security, breach, retention, rights and DPIA, marking other families not applicable.",
+                "Map facts to operative text, dependencies, exceptions and conflicts; inventory the families and mark each reviewed, not applicable with the reason, or not in the supplied documents: parties and authority to sign; term, renewal, termination and notice deadlines; payment; scope and deliverables; IP and licence; confidentiality (definition, exclusions, term, permitted recipients, compelled disclosure, return or destruction); warranty and disclaimer; indemnity and liability caps; data protection roles, basis, transfers, security, breach, retention, rights and DPIA; assignment and change of control; governing law and forum; boilerplate that changes risk such as entire agreement, amendment and order of precedence.",
             ),
             ProcedureCheck(
                 "legal_counsel_hold_check",
                 ("trigger_ids", "impact", "likelihood_applicability", "urgency", "evidence_confidence", "reversibility", "hold_status", "counsel_owner"),
-                "Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, and sensitive, high-risk or cross-border privacy or DPIA uncertainty.",
+                "Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, contractual notice or auto-renewal deadlines inside the review horizon, and sensitive, high-risk or cross-border privacy or DPIA uncertainty.",
             ),
             ProcedureCheck(
                 "legal_negotiation_preparation_check",
@@ -3151,6 +3156,11 @@ _DEFINITIONS = [
             "Proposed clause language is preparation material for the person who will negotiate, never advice about whether to accept it; a row whose playbook position cannot be cited is a counsel question, not a proposal.",
         ),
         quality_tier="review-gated",
+        final_checklist=(
+            "Every authority-dependent statement has an exact locator and effective status or is marked unverified.",
+            "Every mandatory hold trigger is evaluated and each open one has a counsel owner and a question; the disposition is PASS, REVISE or HOLD.",
+            "The documents and versions that were not supplied are listed; no sign-off, filing or advice is claimed.",
+        ),
         quality_bar=(
             "Name jurisdiction, authority, document version, and unresolved questions.",
             "Rank issues and preserve the counsel-escalation boundary.",
@@ -3202,7 +3212,7 @@ _DEFINITIONS = [
             SPECIALIST_DOMAIN_HANDOFF_BOUNDARY
             + " Reply text is a draft, escalation is a recommendation, and no ticket state, message send, refund, account action, or customer outcome is claimed."
         ),
-        required_inputs=("support case", "known facts", "customer impact", "available ownership or escalation path"),
+        required_inputs=("support case", "known facts", "customer impact, support tier or SLA, and arrival time", "available ownership or escalation path"),
         expert_questions=(
             ExpertQuestion(
                 required_input="support case",
@@ -3222,6 +3232,10 @@ _DEFINITIONS = [
             "Do not claim ticket mutation, message send, refund, account action, or case outcome.",
         ),
         quality_tier="triage-gated",
+        final_checklist=(
+            "The reply states only case facts and unknowns and promises no timing, refund or fix the user did not authorize.",
+            "Severity and priority are separate, with SLA time left when supplied; account takeover, exposed personal data, legal or regulator contact, payment disputes and safety go to their owner, not a product escalation.",
+        ),
         quality_bar=(
             "State issue, severity, impact, evidence gaps, owner, and next route.",
             "Draft a reply without treating it as a sent customer communication.",
@@ -3589,6 +3603,10 @@ _DEFINITIONS = [
             "Do not claim prospect contact, CRM mutation, meeting booking, opportunity creation, revenue, or progress.",
         ),
         quality_tier="decision-gated",
+        final_checklist=(
+            "Each claim is tagged observed, asserted, hypothesis or unknown, with a source for observed ones; sequence rows are unsent drafts and exist only with supplied consent, suppression and channel eligibility.",
+            "The disposition is ADVANCE, HOLD or DISQUALIFY with its deciding evidence; a next step is confirmed only from an observed buyer response; CRM changes stay proposals.",
+        ),
         quality_bar=(
             "Separate account evidence, buyer hypotheses, qualification questions, and next-step ownership.",
             "Keep outreach drafts and CRM actions explicitly non-executing.",
@@ -3637,7 +3655,7 @@ _DEFINITIONS = [
             SPECIALIST_DOMAIN_HANDOFF_BOUNDARY
             + " A PRD or roadmap is prepared planning, not stakeholder acceptance, Jira or Linear mutation, implementation, test evidence, delivery, or a market commitment."
         ),
-        required_inputs=("product evidence", "problem and user", "goal and non-goals", "decision owner"),
+        required_inputs=("product evidence", "problem and user", "goal, non-goals, and success metric with baseline", "decision owner"),
         expert_questions=(
             ExpertQuestion(
                 required_input="product evidence",
@@ -3649,7 +3667,7 @@ _DEFINITIONS = [
             "problem, user, evidence, metric, goal, and non-goal brief",
             "PRD with requirements, open questions, risks, dependencies, and acceptance shape",
             "prioritization/roadmap options with tradeoffs and decision owner",
-            "explicit downstream route to ralplan, strategy-brief, or ultrawork only when its prerequisite is satisfied",
+            "explicit downstream route to `ralplan`, `strategy-brief`, or `ultrawork` only when its prerequisite is satisfied",
         ),
         artifact_expectations=("prepared product brief or PRD when a wrapper captures it",),
         safety_rules=(
@@ -3664,7 +3682,7 @@ _DEFINITIONS = [
         why_this_exists="`product-brief` turns product evidence into a reviewable PRD and prioritization frame before delivery planning without treating a draft as an accepted roadmap commitment.",
         do_not_use_when=(
             "The input is unprocessed feedback, bug reports, or feature asks that first need clustering and evidence boundaries; use `feedback-triage`.",
-            "The product evidence is unvalidated, synthetic, or a founder belief and the problem gate has not returned validated; use `product-discovery-validation` before a PRD.",
+            "The product evidence is unvalidated, synthetic, or a founder belief rather than external-human or behavioral-data evidence from the target segment (usage data, support contacts and interviews count); use `product-discovery-validation` before a PRD.",
             "The input is a growth hypothesis that still needs an experiment and readout before it becomes a product requirement; use `lifecycle-growth`.",
             "The user needs a company or product strategy decision across high-level options rather than a requirements or roadmap artifact; use `strategy-brief`.",
             "The request is an accepted, code-ready change with repository constraints and verification needs; use `ralplan` or `ultrawork` rather than recreating a PRD.",
@@ -3689,7 +3707,7 @@ _DEFINITIONS = [
             "RICE scoring for features",
         ),
         recovery_notes=(
-            "If the problem gate has not returned validated, retain supplied product evidence as unvalidated, mark PRD readiness unresolved, and hand back the problem and user context to `product-discovery-validation`.",
+            "If the evidence is not external-human or behavioral-data evidence from the target segment, retain it as unvalidated, mark PRD readiness unresolved, and hand back the problem and user context to `product-discovery-validation`.",
             "If the decision owner has not resolved prioritization tradeoffs, retain the drafted PRD and roadmap options, mark roadmap commitment unresolved, and hand back the tradeoffs and open questions for that owner.",
             "If Jira or Linear updates lack an explicit target and approval, retain the prepared PRD, mark roadmap-system mutation not_observed, and hand back the target and approval questions for `connector-operator`.",
         ),
@@ -3777,6 +3795,10 @@ _DEFINITIONS = [
             "Keep implementation follow-ups separate from operating history.",
         ),
         quality_tier="operations-gated",
+        final_checklist=(
+            "Each decision names who decided and its source; an undecided proposal stays out of the log.",
+            "Each action item has outcome, owner, due date and source, unknown where the notes are silent; last meeting's actions carry their status.",
+        ),
         quality_bar=(
             "Name cadence, audience, time window, known notes, and missing evidence before producing a record.",
             "Separate agenda/templates from observed minutes, decisions, and action items.",
@@ -3788,7 +3810,7 @@ _DEFINITIONS = [
         do_not_use_when=(
             "The user only needs a one-off meeting agenda before the meeting; use `meeting-brief`.",
             "The request is a weekly status/risk summary rather than cadence history; use `ops-review`.",
-            "The user asks for report packaging, PPT outline, or reliability evidence review.",
+            "Report packaging or reliability evidence review; use `report-package` or `reliability-review`.",
         ),
         good_example=SkillExample(
             prompt="operating-rhythm 회의록 히스토리 관리하고 스크럼 스프린트 회고를 정리해줘.",
@@ -3837,7 +3859,7 @@ _DEFINITIONS = [
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
         handoff_policy="Keep report narrative, sectioning, and Markdown/JSON outline packaging in Hermes; do not require reliability evidence unless the user asks for a reliability review.",
-        required_inputs=("audience", "reporting period or scope", "supplied facts", "missing data or assumptions"),
+        required_inputs=("audience", "reporting period or scope", "supplied facts with targets or prior-period figures", "missing data or assumptions"),
         expected_outputs=(
             "report package",
             "PPT-ready Markdown or JSON outline",
@@ -3854,8 +3876,9 @@ _DEFINITIONS = [
         quality_bar=(
             "Name audience, reporting period, sections, supplied facts, assumptions, and missing data.",
             "Keep report packaging independent from reliability review unless explicitly requested.",
+            "Open with the conclusion and any decision requested; show each metric against target or prior value or mark it no baseline.",
             "Export only Markdown/JSON outlines unless a separate presentation tool produces a binary deck.",
-            "On Hermes, that tool can be the bundled `powerpoint` skill, and a deck it builds counts as generated from its read-back (`pptx_read.py --outline`).",
+            "On Hermes, that tool can be the bundled PowerPoint skill (`powerpoint`; `microsoft-office` from v0.23), and a deck it builds counts as generated from its read-back (`pptx_read.py --outline`).",
             # The shared document QA rule, whose field list also names xlsx's
             # `"recalculated": false`, and the `powerpoint` rungs alone, not
             # the other producers': a deck is this skill's one binary.
@@ -3865,7 +3888,7 @@ _DEFINITIONS = [
         why_this_exists="`report-package` exists to make reporting a first-class operations surface: Hermes can produce clean report and slide outlines while keeping approvals, delivery, and binary deck export as separate evidence.",
         do_not_use_when=(
             "The user needs SLO, incident, or error-budget review; use `reliability-review`.",
-            "The user asks for a live `.pptx` deck file rather than a PPT-ready outline.",
+            "The user asks only for a designed `.pptx` file; use `materials-package`.",
             "The request is meeting minutes, scrum history, or action-item tracking.",
         ),
         good_example=SkillExample(
@@ -3963,6 +3986,7 @@ _DEFINITIONS = [
             "Record binary export, render QA, formula checks, approvals, and delivery only from observed evidence.",
             DOCUMENT_PRODUCER_QA_RULE,
             DOCUMENT_PRODUCER_RUNGS_RULE,
+            "No bundled reader covers HWP or Keynote: without a tool, every rung for that file is not_observed; check a PDF export instead.",
         ),
         why_this_exists=(
             "`materials-package` exists so Hermes can handle document, deck, spreadsheet, PDF, Word, Keynote, HWP, and Markdown "
@@ -3973,8 +3997,8 @@ _DEFINITIONS = [
             "The user asks for recurring meeting minutes or scrum history; use `operating-rhythm`.",
             "The request is code documentation, README, or project wiki maintenance; use the docs/wiki workflow.",
             HermesSkillLine(
-                "The user wants an operation done on one existing file - fill a PDF form, merge or split PDFs, or edit the text of a Word document, the slides of a deck, or the cells of a workbook - rather than a material plan with an export and QA ladder; load Hermes' bundled `pdf`, `docx`, `powerpoint`, or `xlsx` skill for that file instead of this one.",
-                ("pdf", "docx", "powerpoint", "xlsx"),
+                "The user wants an operation done on one existing file - fill a PDF form, merge or split PDFs, or edit the text of a Word document, the slides of a deck, or the cells of a workbook - rather than a material plan with an export and QA ladder; load Hermes' bundled `pdf`, `docx`, `powerpoint`, or `xlsx` skill (`microsoft-office` from v0.23) for that file instead of this one.",
+                ("pdf", "docx", "powerpoint", "xlsx", "microsoft-office"),
             ),
         ),
         good_example=SkillExample(
@@ -4508,7 +4532,7 @@ _DEFINITIONS = [
         ),
         required_inputs=(
             "the target URL, route, or rendered capture being judged",
-            "the award model and its published axes, weights, and threshold",
+            "the award body (CSSDA or Awwwards) and its published axes, weights, and threshold",
             "the surface's own accessibility and performance budgets",
             "audience and primary user task",
         ),
@@ -7188,14 +7212,20 @@ _DEFINITIONS = [
             "Separate strategy decisions from implementation handoffs and release evidence.",
         ),
         quality_tier="decision-gated",
+        final_checklist=(
+            "Priority, tradeoff, delivery and release risk are separate rows.",
+            "Each risk has an owner and source or is marked assumption; accepted decisions and drafts are separate lists.",
+        ),
         quality_bar=(
             "Separate product priority, architecture tradeoff, delivery risk, release risk, and follow-up owner.",
             "Tie recommendations to observed signals or mark assumptions.",
             "Record accepted decisions separately from draft recommendations.",
             "Prepare executor handoffs only for accepted implementation follow-ups.",
+            "A release decision lists, with evidence or not_observed: tested rollback, staged rollout, alerts and an on-call owner, security review outcome, open severity-1/2 defects, and for billing a ledger reconciliation; each residual risk has a named accepter.",
         ),
         do_not_use_when=(
             "The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly or use `strategy-brief` for a decision brief instead of starting a leadership operating loop.",
+            "A launch-readiness audit of one service; use `production-audit`.",
         ),
         situations=(
             "act as our cto for this launch",
@@ -7203,6 +7233,12 @@ _DEFINITIONS = [
             "decisions a tech lead would make",
             "tech roadmap and shipping risks",
             "risky launch across several teams",
+        ),
+        why_this_exists="`cto-loop` exists because roadmap, architecture and release decisions made in chat lose their owners and evidence; it keeps priority, tradeoff, risk and owner separate.",
+        bad_example=SkillExample(
+            prompt="Tell me whether we should rewrite the billing service in Rust.",
+            expected="Route to `strategy-brief`, not `cto-loop`: one decision between options is a decision brief.",
+            why="A single decision with options does not need a multi-function leadership operating loop.",
         ),
         recovery_notes=(
             "If operating signals do not support an architecture tradeoff, retain the cited signals, mark that tradeoff tentative, and hand back the decision note with assumptions and delivery risks.",
@@ -9480,13 +9516,13 @@ _DEFINITIONS = [
         expected_outputs=(
             "read-only diagnosis of the current mail/calendar MCP connection state",
             "diff-approved MCP config write scoped to read and draft-only access",
-            "an on-demand morning brief once connection is verified",
         ),
         artifact_expectations=("connection verification note when the wrapper captures it",),
         safety_rules=(
             "Configure mail and calendar MCP access as read and draft only; never enable Send permission, even if the user asks — drafts stay for the user to send themselves.",
             "Use Hermes-native secure entry or user-side OAuth/app-password setup, never chat; disclose authorized storage without exposing secrets.",
             "Do not treat a prepared connection as an observed brief; only report a brief after the connection is verified.",
+            "Gmail cannot enforce draft-only by OAuth scope (every scope that creates drafts also sends); enforce it with the MCP server's tool allow-list: expose only read and create-draft tools and take their names as evidence, else request `gmail.readonly` alone. Microsoft 365: no `Mail.Send`.",
             "The bundled `google-workspace` OAuth setup requests `gmail.send` and `gmail.modify` on every run, and its setup script accepts no `--services` flag to narrow the request, though that skill's own instructions show one; Google's consent screen lets the user untick a permission and the script then keeps only what was granted. Never apply that path as this skill's connection, and when the user connects it themselves, report `gmail.send` and `gmail.modify` as granted unless the setup script's `--check` lists them among the missing scopes, never as read-and-draft-only on the strength of the request.",
         ),
         quality_tier="hermes-setup-gated",
@@ -9498,7 +9534,7 @@ _DEFINITIONS = [
         why_this_exists="`morning-brief` exists to connect mail and calendar access for an on-demand brief while keeping the connection strictly read and draft-only and credential entry outside chat, with explicit storage authorization.",
         do_not_use_when=(
             "The user wants Hermes to check their email or calendar right now rather than set up the connection.",
-            "The connection is already configured and the user only wants today's brief, not a setup walkthrough.",
+            "The connection is already configured and the user only wants today's brief, not a setup walkthrough; read and summarise it instead.",
             "The request needs a repository code change rather than a local MCP config edit.",
         ),
         good_example=SkillExample(
@@ -9512,7 +9548,10 @@ _DEFINITIONS = [
             why="A one-off email check is a task request, not an integration setup request.",
         ),
         final_checklist=_HERMES_SETUP_SKIP_SEMANTICS
-        + ("The connection is confirmed read and draft-only, with Send permission never enabled, before the brief is reported ready.",),
+        + (
+            "The connection is confirmed read and draft-only before the brief is reported ready: the exposed tool list holds no send operation (observed), else the check stays not_observed.",
+            "With neither mail nor calendar connected the status is blocked, not complete.",
+        ),
         recovery_notes=(
             "If the mail or calendar prerequisite is unmet, mark that surface \"not applicable\" and offer the brief scoped to whichever surface is connected.",
             "If authentication fails, guide reauthorization or reissuance through secure entry or user-side setup; do not request the failed credential in chat or silently retry it.",
@@ -9641,7 +9680,7 @@ _DEFINITIONS.append(
             "selects setup, attachment, or self-host operations and reports only the evidence actually observed."
         ),
         do_not_use_when=(
-            "The user wants a Buzz-managed ACP runtime rather than Hermes' native Buzz gateway.",
+            "The user wants a Buzz-managed ACP runtime rather than Hermes' native Buzz gateway; say it is outside this skill.",
             "The request is general media editing with no Buzz delivery target.",
             "The request is generic Docker or Nostr advice unrelated to a Buzz relay.",
             "The user is only asking whether OMH supports Buzz, with no request to run the workflow.",
@@ -11793,7 +11832,7 @@ _DEFINITIONS.append(
         artifact_expectations=(
             "field_inventory/v1 lists every column, key, and free-text field with its class -- direct identifier, quasi-identifier, secret, free text, or not personal -- and the evidence for the class",
             "minimization_plan/v1 gives each field one action -- drop, generalize, mask, or pseudonymize -- with the destination's need for the fields it keeps, and names the local path that holds any pseudonym mapping outside the shipped file",
-            "residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran",
+            "residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran or its digest differs from the share record's",
             "share_record/v1 is metadata only -- destination, date, fields shipped, row count, and the sha256 digest of the shipped file -- and holds no value from it",
         ),
         safety_rules=(
@@ -11836,8 +11875,8 @@ _DEFINITIONS.append(
             prompt="the analytics vendor wants last month's ticket export, take the customer details out first",
             expected=(
                 "Ask what the vendor needs, inventory the columns from the header and per-column shape counts, drop the ones it does "
-                "not need, pseudonymize the customer id with the mapping kept in a local folder, count emails, phone "
-                "numbers, names, and secrets in the output with a scan that prints counts only, and write the share record."
+                "not need, pseudonymize the customer id with the mapping kept in a local folder, count email shapes, "
+                "phone shapes, secret shapes and every original identifier value in the output with a scan that prints counts only, and write the share record."
             ),
             why="A masking step that was never followed by a scan of the shipped file has not shown that anything came out.",
         ),

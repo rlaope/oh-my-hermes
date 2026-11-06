@@ -9,7 +9,7 @@ second transport in OMH.
 - The target Hermes home/profile.
 - The Buzz community relay URL.
 - A dedicated agent identity that is already admitted to the community.
-- The intended access policy: owner-only, allowlist, or open.
+- The intended access policy: private (`allowed_users` listed, `allow_all_users` false) or community (`allow_all_users` true).
 - An observable verification target: inbound message, outbound message, or
   both.
 
@@ -18,8 +18,10 @@ the target Hermes `.env`; non-secret gateway settings belong in Hermes config.
 
 ## Safe Setup
 
-1. Read the current official Hermes Buzz guide and the stable Buzz release
-   notes when they conflict with this reference.
+1. Read the current official Hermes Buzz guide (the Buzz page under the messaging
+   user guide of the Hermes docs) and the stable Buzz release notes when they
+   conflict with this reference. If neither can be opened, mark the read
+   `not_observed` instead of recalling it.
 2. Check whether `hermes` and the configured Buzz CLI executable exist.
    Presence is installation evidence, not relay readiness.
 3. Confirm that the agent identity is separate from the human owner identity
@@ -29,7 +31,7 @@ the target Hermes `.env`; non-secret gateway settings belong in Hermes config.
 5. Keep `BUZZ_PRIVATE_KEY` in the Hermes `.env`. Never put it in argv, logs,
    diagnostic output, workflow artifacts, or version-control.
 6. Configure the relay URL, agent display name, optional channel/DM scope,
-   transport mode, and access policy. Do not silently broaden `allow_from`.
+   transport mode, and access policy. Do not silently add to `allowed_users` or set `allow_all_users` true; either widens who can drive the agent and needs the user's explicit answer.
 7. Start or restart the Hermes gateway only when the user asked for execution.
 
 ## Read-only Diagnosis

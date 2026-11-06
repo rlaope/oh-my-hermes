@@ -42,9 +42,8 @@ Bad example:
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- Outcomes, must-haves and trainable skills are separate; every criterion has anchors and states the outcome it predicts; interviewers score before the debrief; no candidate recommendation without interview evidence; no ATS, calendar or HRIS action is claimed.
+- A scored screen gets a job-relatedness and adverse-impact check (e.g. the four-fifths rule); jurisdiction questions go to `omh-legal-compliance-review`.
 
 ## Recovery Notes
 
@@ -98,6 +97,7 @@ Safety rules:
 
 - Keep protected characteristics and missing interview evidence out of unsupported candidate recommendations.
 - Do not claim HRIS, ATS, outreach, interview, or employment-status actions occurred.
+- Draft no questions on protected traits or their proxies (age, family status, health).
 
 ## Runtime Evidence
 

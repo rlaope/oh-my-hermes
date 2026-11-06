@@ -16,9 +16,9 @@ row.
 Preparation is against the organization's OWN positions. Without a playbook -
 standard terms, approved deviations, and what needs escalation - a proposal is
 an invented position, and inventing a position is the failure this whole
-workflow exists to prevent. If none is supplied, ask for it, or say that rows
-are being prepared against the counterparty's draft alone and carry no approved
-position behind them.
+workflow exists to prevent. If none is supplied, write no replacement language:
+produce one counsel question per contested clause (what the draft does, why it
+matters, the position the organization needs to choose) and ask for the playbook.
 
 ## The row
 

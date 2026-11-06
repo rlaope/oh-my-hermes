@@ -10,9 +10,9 @@ Expert clarification questions:
 - `currency, amount, stage, and forecast definitions`
   - English: Which currency and conversion basis, amount meaning, close-date meaning, stage definitions with exit criteria, and forecast-category or probability definitions does your organization use for these records?
   - Korean: 이 레코드에 적용되는 통화와 환산 기준, 금액의 의미, 마감일의 의미, 종료 기준을 포함한 단계 정의, 예측 카테고리 또는 확률 정의는 무엇인가요?
-- `prior forecast and actuals`
-  - English: Which prior forecast snapshots and observed won, lost, slipped, or renewal outcomes are supplied for calibration or learning, or is calibration not requested this cycle?
-  - Korean: 보정이나 학습을 위해 어떤 이전 예측 스냅샷과 관찰된 수주, 실주, 지연, 갱신 결과가 제공되나요, 아니면 이번 주기에는 보정을 요청하지 않나요?
+- `prior forecast, actuals, and quota or target`
+  - English: Which prior forecast snapshots and observed won, lost, slipped, or renewal outcomes are supplied for calibration or learning, or is calibration not requested this cycle, and which quota or target applies to this horizon?
+  - Korean: 보정이나 학습을 위해 어떤 이전 예측 스냅샷과 관찰된 수주, 실주, 지연, 갱신 결과와 이 기간의 할당량이나 목표가 제공되나요, 아니면 이번 주기에는 보정을 요청하지 않나요?
 - `decision owner`
   - English: Who owns the review decision, who may approve proposed CRM corrections, and which follow-up owners and due-date conventions apply?
   - Korean: 검토 결정의 책임자는 누구이고, 제안된 CRM 수정을 승인할 수 있는 사람은 누구이며, 후속 조치 담당자와 기한 규칙은 무엇인가요?
@@ -25,10 +25,10 @@ Declared checks:
   - Criterion: HOLD before any calculation or ranking when the as-of time is missing or stale for the horizon, stage or forecast-category semantics are undefined, currencies are mixed without an observed conversion basis, amount meaning is unknown, or duplicate records and missing owners are unresolved; every field is supplied or observed, never assumed.
 - `sales_pipeline_health_check`
   - Required result fields: `stage_movement`, `aging_stalls`, `slipped_close_dates`, `exit_criteria_evidence`, `next_step_quality`, `concentration`, `duplicates`, `missing_ownership`, `deal_exceptions`, `record_evidence_refs`
-  - Criterion: Derive movement, aging, stalls, slips, exit-criteria gaps, next-step quality, and concentration from supplied records only, citing the record reference behind every exception; never infer buyer activity or stage progress from silence, and never rank deals a HOLD scope excluded.
+  - Criterion: Derive movement, aging, stalls, slips, exit-criteria gaps, next-step quality, and concentration from supplied records only, citing the record reference behind every exception; never infer buyer activity or stage progress from silence, and never rank deals a HOLD scope excluded; stage_movement and slipped_close_dates need a prior snapshot or stage and close-date history fields, so with one snapshot and neither mark both `unavailable` and still report records whose close date is before the as-of time.
 - `sales_forecast_state_check`
-  - Required result fields: `supplied_seller_category`, `supplied_probability`, `scenario_range`, `observed_buyer_commitment`, `evidence_limits`, `prior_forecast_actual_comparison`, `calibration_status`, `confidence`
-  - Criterion: Keep stage, supplied seller category or probability, model-derived scenario range, and observed buyer commitment as separate states: stage alone never creates a probability or commitment, a probability-weighted total is a scenario and not a promise, and calibration_status is `unavailable` unless matching prior snapshots and observed outcomes were supplied.
+  - Required result fields: `supplied_seller_category`, `supplied_probability`, `scenario_range`, `observed_buyer_commitment`, `evidence_limits`, `prior_forecast_actual_comparison`, `calibration_status`, `confidence`, `target_source`, `coverage_ratio`
+  - Criterion: Keep stage, supplied seller category or probability, model-derived scenario range, and observed buyer commitment as separate states: stage alone never creates a probability or commitment, a probability-weighted total is a scenario and not a promise, and calibration_status is `unavailable` unless matching prior snapshots and observed outcomes were supplied; coverage_ratio is pipeline over the supplied target and is `unavailable` when no target was supplied, never a benchmark multiple.
 - `sales_outcome_learning_check`
   - Required result fields: `cohort_bounds`, `observed_won_reasons`, `observed_lost_reasons`, `unqualified_reasons`, `contradictions`, `missing_evidence`, `research_followups`, `annex_status`
   - Criterion: Emit the learning annex only when supplied won, lost, or unqualified evidence covers a bounded cohort; keep reasons observed rather than causal, record contradictions and missing evidence, and set annex_status to `unsupported` when the cohort is empty.
@@ -60,7 +60,7 @@ From the validated records identify stage movement, aging and stalls against the
 
 Report supplied seller categories and probabilities as supplied, build scenario ranges with their evidence limits, list observed buyer commitments separately, compare prior forecasts with observed outcomes only when matching snapshots and actuals exist, and state confidence; otherwise mark calibration `unavailable`.
 
-- Input refs: `pipeline snapshot`, `currency, amount, stage, and forecast definitions`, `prior forecast and actuals`
+- Input refs: `pipeline snapshot`, `currency, amount, stage, and forecast definitions`, `prior forecast, actuals, and quota or target`
 - Output refs: `sales_forecast_assessment/v1`
 - Check IDs: `sales_forecast_state_check`
 
@@ -68,7 +68,7 @@ Report supplied seller categories and probabilities as supplied, build scenario 
 
 When supplied evidence supports it, prepare the won/lost/unqualified learning annex by bounded cohort with contradictions and research follow-ups, and the renewal-risk annex with horizon, health, utilization, support, budget, and staffing signals, open risks, expansion hypotheses, and owner; otherwise emit each annex as `unsupported` with the missing evidence named.
 
-- Input refs: `pipeline snapshot`, `as-of time and review horizon`, `prior forecast and actuals`
+- Input refs: `pipeline snapshot`, `as-of time and review horizon`, `prior forecast, actuals, and quota or target`
 - Output refs: `sales_outcome_learning_annex/v1`, `sales_renewal_risk_annex/v1`
 - Check IDs: `sales_outcome_learning_check`, `sales_renewal_risk_check`
 - If this step fails: tentative; still stands: `sales_pipeline_scope/v1`, `sales_pipeline_health/v1`, `sales_forecast_assessment/v1`; hand back: Return tentative sales_outcome_learning_annex/v1 and sales_renewal_risk_annex/v1 drafts with their cohort, source, contradiction, and owner gaps; mark unsupported annexes unsupported.
@@ -77,7 +77,7 @@ When supplied evidence supports it, prepare the won/lost/unqualified learning an
 
 Select account follow-ups with owner, due date, exit criterion, and evidence reference, list proposed CRM object/field/value corrections with evidence, owner, and approval state, name the sibling route for discovery, feedback, calculation, or finance work, and return the review disposition with mutation, storage, sync, alert, and communication left to the connector boundary.
 
-- Input refs: `pipeline snapshot`, `as-of time and review horizon`, `currency, amount, stage, and forecast definitions`, `prior forecast and actuals`, `decision owner`
+- Input refs: `pipeline snapshot`, `as-of time and review horizon`, `currency, amount, stage, and forecast definitions`, `prior forecast, actuals, and quota or target`, `decision owner`
 - Output refs: `sales_pipeline_handoff/v1`
 - Check IDs: `sales_pipeline_scope_check`, `sales_pipeline_health_check`, `sales_forecast_state_check`, `sales_pipeline_handoff_check`
 - If this step fails: unresolved; still stands: `sales_pipeline_scope/v1`, `sales_pipeline_health/v1`, `sales_forecast_assessment/v1`, `sales_outcome_learning_annex/v1`, `sales_renewal_risk_annex/v1`; hand back: Return the unresolved sales_pipeline_handoff/v1 with missing follow-up owners, due dates, exit criteria, evidence, or CRM approvals named; keep CRM changes proposed and mutation not_observed.
