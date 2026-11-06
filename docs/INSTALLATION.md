@@ -3750,6 +3750,79 @@ message through.
 
 Only senders Hermes authorizes are gated; everyone else is left to Hermes.
 
+#### Rooms where the model judges
+
+The word lists above are the fallback. In a room where Hermes lets a silence
+marker stand, the model decides instead, in any language and any wording:
+
+- Each turn there carries one short instruction. The model answers exactly
+  `[SHUTUP]` when the latest message asks it to be quiet or stop replying in
+  the thread, exactly `[SILENT]` when the message is clearly meant for
+  someone else, and otherwise answers as it normally would. The instruction
+  asks only for a marker; it never changes the bot's voice.
+- A message known to be addressed to the bot (its mention, a reply to it, a
+  call by its name) is not offered `[SILENT]`, also when an aside follows it
+  before the turn starts. It can still be told to be quiet. A plain follow-up
+  in a thread is not known to be addressed, so the model decides there.
+- `[SHUTUP]` mutes the thread with the 🫡 reaction and no text, the same as a
+  quiet word. OMH hands Hermes `[SILENT]` in its place. A reply counts as a
+  marker only when it is the token and nothing else, also in code ticks or a
+  fence, or the exact `[SHUTUP]` opening a brief acknowledgement on one short
+  line (`[SHUTUP] okay, going quiet`). A `[SILENT]` reply is dropped by Hermes;
+  it stays in the transcript. Each marker leaves a
+  `omh_messenger_judged_silent` line in the skip log, so a wrong silence can
+  be found.
+- A real answer is delivered, with no mute. An exact token closing it is
+  removed, on its own last line or after a finished sentence
+  (`Deployed at 10:30. [SILENT]`), and so is an exact `[SHUTUP]` alone on the
+  first line. A `[SHUTUP]` in a code fence or a list or after a colon stays, as
+  does any token inside a sentence. Hermes itself removes a `[SILENT]` alone on
+  a reply's last line, wherever it is.
+- The quiet words and calls by other names (`messenger_other_names`) are off
+  there. A message that opens with someone else's mention is still skipped
+  before a turn opens, a muted thread stays skipped, and a mention, reply or
+  call by name unmutes it. In `mute_only`, the instruction asks for
+  `[SHUTUP]` only; `messenger_gate: off` turns this off too.
+
+A room is judged when all of these hold:
+
+- Hermes is 0.22.6 or later. OMH checks for Hermes' per-room silence lookup,
+  not a version number.
+- The serving profile's `config.yaml` sets `allow_silence: true` for the
+  channel (a Slack channel covers its threads; a Discord thread inherits its
+  parent channel).
+- Streaming (`streaming.enabled`) is off, so a raw `[SHUTUP]` can never
+  stream into the chat before OMH replaces it. A multiplexed gateway reads
+  this from the launch profile for every route, as Hermes does.
+- The serving profile does not set `model.openai_runtime`, `model.api_mode`
+  or its provider's `api_mode` to `codex_app_server`. That runtime posts each
+  finished message before OMH
+  sees it, so such a profile stays on the word-list gate, whatever its display
+  settings, and so does a config OMH cannot read.
+
+To turn it on for a channel, add this to that profile's `config.yaml` and
+restart the gateway. OMH never writes Hermes' config.
+
+```yaml
+platforms:
+  slack:            # or discord
+    channel_overrides:
+      "C0123456789":   # the channel id
+        allow_silence: true
+```
+
+Each channel needs its own entry: the keys are exact ids, with no wildcard. A
+Slack thread is covered by its channel's entry. A Discord thread inherits its
+parent channel only when it has no entry of its own: an entry that sets only
+`model:` stops the lookup, so repeat `allow_silence` there. A top-level
+`slack:` or `discord:` block's `channel_overrides` shadows the
+`platforms.<platform>` form, and `display.platforms` is not read at all. A
+channel id is in the channel's link (Slack: Copy link, the part starting with
+`C`; Discord: Developer Mode, Copy Channel ID). Any other room keeps the
+word-list gate and gets no instruction, because there Hermes answers a bare
+`[SILENT]` with its "returned only a silence marker" notice. A mute the model
+set is recorded with `"judged": true` in `runtime/messenger_gate.json`.
+
 How this relates to Hermes' own Slack options:
 
 - `ignore_other_user_mentions` already skips a message that opens with
@@ -3789,7 +3862,18 @@ characters of each skipped message, on this machine only, so a wrong skip can
 be found.
 
 Limits: the gate runs only where Hermes loads OMH's plugin in the gateway
-process. Discord messages Hermes batches into one event are judged as one
+process. A gateway in proxy mode runs its turns elsewhere, so a judged room
+there gets no instruction. A message that waits in a busy session's queue for
+more than 15 minutes also gets none, and a 🫡 lands on the thread's newest
+message. A profile switched to the Codex app-server runtime keeps any agent it
+already built until the gateway restarts, and a session `/model` override
+pinned to that runtime before the setting changed is not seen; there a raw
+token can reach the chat. A token mid-sentence (`Fine [SHUTUP] I'll stop now.`)
+or a `[SILENT]` opening a sentence (`[SILENT] not for me`) shows as written, and
+the thread is not muted. A `[SHUTUP]` at the edge of real text delivers the text
+with no mute. A short answer that opens with the exact `[SHUTUP]`
+(`[SHUTUP] is the token.`) reads as an acknowledgement: it mutes and posts
+nothing. Discord messages Hermes batches into one event are judged as one
 message, so a quiet word batched with other text does not mute. The 🫡 goes
 through the adapter's private reaction method and follows its reactions
 setting.

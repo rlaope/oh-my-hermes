@@ -24,6 +24,13 @@ Order, per message in a Slack or Discord group, channel or thread chat:
    end after punctuation, and nothing in it names the bot or says "you".
    Skipped; never mutes.
 
+In a judged room (`messenger_judgement`: Hermes lets a silence marker stand
+there, streaming is off and the profile does not run Codex's app-server) the
+model is the judge instead: steps 1 and R2 are off, the message opens a turn,
+and the turn is told to answer ``[SHUTUP]`` to be quiet or, on a message not
+known to be addressed to the bot, ``[SILENT]`` when it is not for the bot.
+Steps 2, 3 and R1 stand.
+
 Only senders Hermes authorizes are gated. Every skip is appended to a bounded
 log so a wrong skip can be found. Mutes have no expiry. Records live in the
 owning profile's OMH home: ``runtime/messenger_gate.json`` (mutes) and
@@ -48,6 +55,7 @@ from typing import Any, NamedTuple
 from . import runtime_paths
 from .awareness_delivery import _awareness_delivery_lock, _write_delivery_record
 from .messenger_gate_words import LANGUAGES
+from .messenger_judgement import Room, gateway_loop, judged_room, note_room
 
 GATE_SETTING = "messenger_gate"
 SELF_NAMES_SETTING = "messenger_self_names"
@@ -72,12 +80,14 @@ REASON_QUIET = "omh_messenger_quiet"
 REASON_MUTED = "omh_messenger_muted_thread"
 REASON_OTHER_MENTION = "omh_messenger_addressed_to_other_mention"
 REASON_OTHER_NAME = "omh_messenger_addressed_to_other_name"
+REASON_JUDGED_SILENT = "omh_messenger_judged_silent"
 
 _MENTION = re.compile(r"<@!?([A-Za-z0-9]+)(?:\|[^>]*)?>")
 _QUOTE_OPENERS = frozenset("\"'“”‘’「『«„>")
 # After NFKC folding (`？` is `?`): the marks that make a closing run a question.
 _QUESTION_MARKS = frozenset("?‽¿")
 _OFF_SPELLINGS = frozenset({"off", "false", "no"})
+_GROUP_CHAT_TYPES = frozenset({"group", "channel", "thread"})
 
 
 class Message(NamedTuple):
@@ -222,8 +232,12 @@ class Decision(NamedTuple):
     reason: str = ""
 
 
-def decide(message: Message, *, muted: bool, mode: str = DEFAULT_GATE_MODE) -> Decision:
-    """The gate's answer for one group message. Pure: no I/O."""
+def decide(message: Message, *, muted: bool, mode: str = DEFAULT_GATE_MODE, judged: bool = False) -> Decision:
+    """The gate's answer for one group message. Pure: no I/O.
+
+    `judged`: the model judges this room, so the quiet words and calls by
+    other names (R2) are left to it.
+    """
     folded = _fold(message.text)
     mention_ids = _MENTION.findall(message.raw_text)
     self_names = tuple(n for n in (_fold(n).strip() for n in message.self_names) if n)
@@ -243,7 +257,8 @@ def decide(message: Message, *, muted: bool, mode: str = DEFAULT_GATE_MODE) -> D
     )
     word = compact(body)
     if (
-        word in _QUIET
+        not judged
+        and word in _QUIET
         and body[0] not in _QUOTE_OPENERS
         and not body.startswith("&gt;")
         # a question mark anywhere in the closing punctuation run (`?!`, `!?`, folded `？`, `‽`, `¿`) asks, not orders.
@@ -264,7 +279,7 @@ def decide(message: Message, *, muted: bool, mode: str = DEFAULT_GATE_MODE) -> D
         return Decision("skip", REASON_OTHER_MENTION)
     if any(name in folded for name in self_names) or _says_you(folded):
         return Decision("allow")
-    if other_names and (leading_call(folded, other_names) or trailing_call(folded, other_names) >= 0):
+    if not judged and other_names and (leading_call(folded, other_names) or trailing_call(folded, other_names) >= 0):
         return Decision("skip", REASON_OTHER_NAME)
     return Decision("allow")
 
@@ -408,6 +423,30 @@ def read_skips(omh_home: Path) -> list[dict[str, Any]]:
 
 def thread_key(profile: str, platform: str, chat_id: str, thread_id: str) -> str:
     return "/".join((profile or "default", platform, chat_id, thread_id))
+
+
+_SESSION_ROOM_VARS = ("_SESSION_PROFILE", "_SESSION_PLATFORM", "_SESSION_CHAT_ID", "_SESSION_THREAD_ID",
+                      "_SESSION_CHAT_TYPE")
+
+
+def session_room_key() -> str:
+    """`thread_key` of the gated room the current turn serves, from Hermes' session ContextVars; "" for none.
+
+    The gateway binds these from the turn's source before the agent runs, so
+    they name the same profile, chat and thread `gate_event` keyed at ingress.
+    Never `get_session_env`: its environment fallback can alias another turn.
+    """
+    try:
+        from gateway import session_context
+
+        values = [getattr(session_context, name).get() for name in _SESSION_ROOM_VARS]
+    except (ImportError, AttributeError, LookupError):
+        return ""
+    profile, platform, chat_id, thread_id, chat_type = (v if isinstance(v, str) else "" for v in values)
+    platform = platform.lower()
+    if platform not in GATED_PLATFORMS or chat_type not in _GROUP_CHAT_TYPES or not chat_id:
+        return ""
+    return thread_key(profile, platform, chat_id, thread_id)
 
 
 # --- homes ----------------------------------------------------------------------------
@@ -580,7 +619,7 @@ def gated(event: object) -> bool:
         return False
     if _platform(source) not in GATED_PLATFORMS:
         return False
-    if getattr(source, "chat_type", "dm") not in {"group", "channel", "thread"}:
+    if getattr(source, "chat_type", "dm") not in _GROUP_CHAT_TYPES:
         return False
     return not _text(getattr(event, "text", None)).lstrip().startswith("/")
 
@@ -619,6 +658,27 @@ def ack_call(adapter: object, event: object, platform: str) -> object | None:
 # --- the hook body -------------------------------------------------------------------
 
 
+def _judged_room_record(omh_home: Path, key: str, adapter: object, event: object, platform: str, mode: str,
+                        tick: float, loop: object, *, addressed: bool) -> Room:
+    """What a turn in a judged room needs if it answers ``[SHUTUP]``: the same mute and 🫡 a quiet word gets.
+
+    Both markers leave one line in the skip log, so a wrong silence can be found.
+    """
+    by = str(getattr(getattr(event, "source", None), "user_id", "") or "")
+    text = _text(getattr(event, "text", None))[:SKIP_TEXT_CHARS]
+    return Room(
+        noted=tick,
+        mode=mode,
+        mute=lambda muted_ts: write_mute(omh_home, key, {"muted_ts": muted_ts, "by": by, "judged": True}),
+        react=lambda: ack_call(adapter, event, platform),
+        loop=loop,
+        addressed=addressed,
+        log=lambda marker, ts: append_skip(omh_home, {
+            "ts": ts, "reason": REASON_JUDGED_SILENT, "marker": marker, "key": key, "text": text, "user_id": by,
+        }),
+    )
+
+
 def gate_event(event: object, gateway: object, *, hermes_home: Path | None = None, omh_home: Path | None = None,
                now: float | None = None) -> tuple[dict[str, str] | None, object | None]:
     """The `pre_gateway_dispatch` answer for `event` and the 🫡 reaction to await, if any.
@@ -646,13 +706,15 @@ def gate_event(event: object, gateway: object, *, hermes_home: Path | None = Non
         str(getattr(source, "chat_id", "") or ""), str(getattr(source, "thread_id", "") or ""),
     )
     mutes = read_mutes(omh_home)
-    decision = decide(message, muted=key in mutes, mode=settings["mode"])
+    judged = judged_room(gateway, source, hermes_home)
+    decision = decide(message, muted=key in mutes, mode=settings["mode"], judged=judged)
     tick = float(now if now is not None else time.time())
-    if decision.action == "allow":
-        return None, None
-    if decision.action == "unmute":
-        if key in mutes:
+    if decision.action in ("allow", "unmute"):
+        if decision.action == "unmute" and key in mutes:
             write_mute(omh_home, key, None)
+        if judged:
+            note_room(key, _judged_room_record(omh_home, key, adapter, event, platform, settings["mode"], tick,
+                                               gateway_loop(gateway), addressed=decision.action == "unmute"))
         return None, None
     entry = {
         "ts": tick, "reason": decision.reason, "key": key,

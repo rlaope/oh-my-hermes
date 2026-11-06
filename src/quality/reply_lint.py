@@ -301,6 +301,7 @@ _AWARENESS_TAGS: tuple[str, ...] = (
     "[OMH Degraded]",
     "[OMH delegation]",
     "[OMH failed wait]",
+    "[OMH group chat]",
     "[OMH Identity Warning]",
     "[OMH Plan Follow-on]",
     "[OMH plan todo]",

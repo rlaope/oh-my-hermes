@@ -15,6 +15,7 @@ from .dag_ulw_cues import (
     dispatches_dag_ulw,
     sized_without_evidence,
     invokes_dag_ulw,
+    names_several_features,
     reports_or_asks_after_the_name,
     work_is_split,
     work_over_many_targets,
@@ -6011,6 +6012,17 @@ def _awareness_route_hint_cached(
             # hint starts it first; a start is never the hint's alone. A workflow invoked by name keeps the request, as
             # the router's explicit invocation does ("use git-workflow: 열린 PR들 전부 리베이스해줘").
             hints = [_dag_ulw_by_size_hint(), *(hint for hint in hints if hint.get("workflow") != "dag-ulw")][:hint_limit]
+        elif (
+            hint_limit
+            and not direct_hint
+            and getattr(intent, "intent_class", "") not in {"meta_discussion", "feedback_signal"}
+            and not any(hint.get("workflow") in {"dag-ulw", "ultrawork"} for hint in hints)
+            and names_several_features(matching_message, links)
+        ):
+            # Several features or stages named and asked to be built ("메일 가져오기, 파일 업로드, 검색 기능 개발해줘", "build
+            # the upload, preview and download screens"): offered first, ahead of a rule one item's word matched
+            # ("검색" for web-research); the person names the parts, not how each is run, so nothing starts.
+            hints = [_dag_ulw_offer_hint(), *hints][:hint_limit]
         elif (
             not hints
             and hint_limit
