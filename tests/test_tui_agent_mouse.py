@@ -1212,8 +1212,10 @@ class DocumentedMouseTests(unittest.TestCase):
     def test_the_boundary_says_what_each_click_does_and_when_a_report_can_still_type(self) -> None:
         text = self.prose("docs/OMH-TUI-BOUNDARY.md")
         self.assertIn("A plain left click on an agent opens its log, one on the list's `main` row leaves the list.", text)
-        self.assertIn("`OMH_TUI_MOUSE=0` turns this off: then reporting is on only while the agent list or the "
-                      "`/theme` picker takes clicks (clicks and the wheel, without 1002) and in a pager.", text)
+        self.assertIn("is on only while the agent list or the `/theme` picker takes clicks (clicks and the wheel, "
+                      "without 1002) and in a pager", text)
+        self.assertIn("With `OMH_TUI_MOUSE=1` it is on wherever the TUI can tell which screen row a report lands on",
+                      text)
         self.assertIn("modes 1000, 1002 and 1006, never 1003", text)
         self.assertIn("One that starts later and is split right after its first or second byte is read as keys.", text)
         for name in ("docs/OMH-TUI-BOUNDARY.md", "AGENTS.md"):

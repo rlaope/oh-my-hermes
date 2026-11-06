@@ -194,8 +194,8 @@ All notable changes will be documented here.
   a run. It is not shown when Hermes' `model_map` backend offers no option
   for `review` but does for `unspecified-high`. Verify nodes are not linted,
   and neither are nodes whose label only reads like a review.
-- **A drag in the OMH TUI copies the transcript without the rail.** The main
-  screen now takes the mouse: a drag over the transcript or the live rows
+- **With `OMH_TUI_MOUSE=1`, a drag in the OMH TUI copies the transcript
+  without the rail.** The main screen then takes the mouse: a drag over the transcript or the live rows
   selects the text (shown reversed) and copies it without the thin `┃` rail
   or a reply's margin, which stay drawn as before; the row above the composer
   says `copied N chars`, and a double click copies a word, a triple click a
@@ -206,10 +206,11 @@ All notable changes will be documented here.
   live rows change under it is dropped and copies nothing, Ctrl+C right after
   a drag only drops the selection, and the
   terminal's own selection is still there with its bypass modifier (Shift,
-  Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
-  terminal's own wheel and selection on the main screen, as before.
-- **Scrolling the wheel back down in the OMH TUI returns to the chat.** The
-  transcript view the wheel opens closes once the wheel brings it back to its
+  Option in iTerm2, Fn in Terminal.app). It is off by default: without it
+  the terminal keeps its own wheel scrolling and selection on the main
+  screen, and the wheel never opens the transcript view.
+- **With `OMH_TUI_MOUSE=1`, scrolling the wheel back down in the OMH TUI
+  returns to the chat.** The transcript view the wheel opens closes once the wheel brings it back to its
   end, so the composer is back without Esc or `q`. A view opened by Ctrl+O or
   `/history` still stays open at its end.
 - **The round-end check continues a turn less often.** A changed function's

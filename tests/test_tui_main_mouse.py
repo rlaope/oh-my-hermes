@@ -241,6 +241,17 @@ class DragTests(unittest.TestCase):
 
 
 class WheelTests(unittest.TestCase):
+    def test_by_default_the_terminal_keeps_the_wheel_and_nothing_opens(self) -> None:
+        app = main_app()
+        app.environ = {key: value for key, value in app.environ.items() if key != "OMH_TUI_MOUSE"}
+        self.assertFalse(app._takes_mouse())
+        for index in range(12):
+            app.transcript.add_notice(f"notice {index}")
+        drawn(app)
+        app._on_input(Mouse(WHEEL_UP, 5, 3))
+        self.assertIsNone(app.pager)  # the owner's decision of 2026-11-06: the wheel scrolls the terminal
+        self.assertTrue(main_app()._takes_mouse())  # OMH_TUI_MOUSE=1 still takes it
+
     def test_the_wheel_up_opens_ctrl_os_view_one_notch_up_from_its_end_and_types_nothing(self) -> None:
         app = main_app(rows=8)
         for index in range(12):

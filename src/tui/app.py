@@ -998,11 +998,11 @@ BELL_OFF = "0"
 # the OMH home) or OMH_TUI_WALLPAPER=0 turns it off, and the terminal's own background comes back at once.
 WALLPAPER_ENV = "OMH_TUI_WALLPAPER"
 WALLPAPER_OFF = "0"
-# The main screen takes the mouse (`_screen_mouse`): a drag selects and copies without the rail, the wheel opens the
-# transcript view. OMH_TUI_MOUSE=0 leaves the wheel and selection to the terminal there, as before 2026-11-05: reports
-# are asked for only while the agent list or the /theme picker takes clicks.
+# The main screen leaves the wheel and selection to the terminal (the owner's decision of 2026-11-06): reports are
+# asked for only while the agent list or the /theme picker takes clicks. OMH_TUI_MOUSE=1 takes the mouse there
+# (`_screen_mouse`): a drag selects and copies without the rail, the wheel opens the transcript view.
 MOUSE_ENV = "OMH_TUI_MOUSE"
-MOUSE_NATIVE = "0"
+MOUSE_TAKEN = "1"
 # A turn that ran this long ends with the terminal's attention signal (`attention_sequence`).
 TURN_ALERT_SECONDS = 10.0
 TURN_ALERT_TEXT = "Hermes finished a turn ({elapsed})"
@@ -2998,9 +2998,9 @@ class App(ModesMixin, AgentViewMixin):
         """Whether a lone ESC the decoder holds may be the start of a mouse report, so it waits
         `keys.REPORTING_ESCAPE_SECONDS` for the rest before it is Esc.
 
-        With `OMH_TUI_MOUSE=0`, whenever reporting is on (the agent list, the
-        /theme picker, a pager), as before. Where the main screen takes the
-        mouse, reporting is on nearly all the time, and a wait on every Esc
+        By default, whenever reporting is on (the agent list, the /theme
+        picker, a pager). Where the main screen takes the mouse
+        (`OMH_TUI_MOUSE=1`), reporting is on nearly all the time, and a wait on every Esc
         would slow interrupting a turn and leaving vim's INSERT on every
         terminal that sends Esc as one byte. There it waits only where a report
         can come split: over SSH or WSL (`remote`), while a button is held (a
@@ -7514,9 +7514,9 @@ class App(ModesMixin, AgentViewMixin):
         return {doc: span for doc in range(held[0], held[1] + 1) if (span := self.selection.span_on(doc)) is not None}
 
     def _takes_mouse(self) -> bool:
-        """Whether the main screen takes the mouse (a drag selects, the wheel opens the transcript view): unless
-        OMH_TUI_MOUSE=0 leaves it to the terminal."""
-        return self.environ.get(MOUSE_ENV) != MOUSE_NATIVE
+        """Whether the main screen takes the mouse (a drag selects, the wheel opens the transcript view): only with
+        OMH_TUI_MOUSE=1; by default the terminal keeps its wheel and selection there."""
+        return self.environ.get(MOUSE_ENV) == MOUSE_TAKEN
 
     def _take_main_mouse(self, clicks: bool) -> None:
         """Mouse reports on the main screen after a frame: with a held button's motion wherever the TUI takes the mouse
