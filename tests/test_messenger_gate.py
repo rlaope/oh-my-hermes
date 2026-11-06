@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from _module_patch import patch_modules
 from omh.plugin_bundle.omh import messenger_gate as gate
 from omh.plugin_bundle.omh.hooks import gateway_hooks
 from omh.plugin_bundle.omh.messenger_gate import Message, decide
@@ -241,7 +242,7 @@ class ReviewFollowUpTests(unittest.TestCase):
         constants = SimpleNamespace(get_hermes_home=lambda: str(launch))
         unscoped = gate.runtime_paths.UnattributableSessionError("no scope")
         with mock.patch.object(gate.runtime_paths, "default_hermes_home", side_effect=unscoped), \
-                mock.patch.dict("sys.modules", {"hermes_constants": constants}):
+                patch_modules({"hermes_constants": constants}):
             result, _ack = gate.gate_event(self.event("민수야 봐줘"), None)
         self.assertEqual(result["reason"], gate.REASON_OTHER_NAME)
         self.assertEqual(len(gate.read_skips(home / "store")), 1)
