@@ -433,7 +433,11 @@ Rules that have held across every onboarding so far:
   ladder for the sibling, inherit the base's ladder and calibration and say
   so in the record (`effort_ladder_source`). Price it only from a published
   list price; GPT-5.6 Cyber and GPT-6 Rosalind publish one but no ladder,
-  so they get a price row and the family block, without a contract. A probe
+  so they get a price row and the family block, without a contract. A
+  provider row answers False for every family it omits, so when no vendor
+  page says whether a surface serves a gated model, leave the row out rather
+  than refuse an approved account on a guess; GPT-5.6 Cyber and GPT-6 Rosalind
+  have none for that reason. A probe
   refusal from a subscription route proves nothing about gating when an
   unknown id gets the same wording; probe a made-up id beside it.
 - The Claude vendor order inside any chain is Opus 5.5 → Fable 5.1 (owner
