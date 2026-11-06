@@ -6120,6 +6120,7 @@ _DEFINITIONS = [
             "agent bake-off on real tasks",
         ),
         recovery_notes=(
+            "Receipts: `omh coding paired-run dispatch --decision <paired_run_decision/v1 file> --dry-run` prints the plan; the built-in receipt-capable adapter runs only `hermes` arms and refuses Codex, Claude Code, and generic arms before any child starts. For those arms the comparison can be designed and the runs supplied as observed artifacts, but the result stays ungrounded until a caller adapter returns the authenticated receipt: give a per-scenario recommendation labelled ungrounded, never a ranking.",
             "If observed_at lacks receipt-authenticated provenance, retain the task set, rubric, and input digests, mark the comparison not_observed, and hand back paired_run_decision/v1 with the provenance gap rather than a pass or fail.",
             "If candidate inputs or success criteria differ outside the variable under test, retain the observed runs, mark executor selection tentative, and hand back the mismatched digests or criteria and a matched rerun budget.",
             "If a judge has no measured agreement against human labels, retain the prewritten rubric and observed executable checks, mark judgment unresolved and unqualified, and hand back the missing agreement measurements instead of a correctness claim.",
@@ -6186,14 +6187,16 @@ _DEFINITIONS = [
             "On Hermes, read a curator run report (`logs/curator/<run>/REPORT.md` and `run.json` under the active profile's Hermes home) as a source like a review or a trace: it records which skills the curator consolidated, archived, or created in that run, and one report is one observation, never repeated evidence by itself.",
         ),
         final_checklist=(
-            "Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on; a candidate resting on one observation stays needs-evidence in review_queue/v1.",
+            "Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on, counted as independent runs, sessions, or sources (one session counts once); a candidate resting on one observation stays needs-evidence in review_queue/v1, and two is tentative.",
             "Every candidate is classed mechanical or judgement before it is worded. A mechanical candidate is a miss a machine can find from the text alone (a forbidden call, a disallowed import, a file in the wrong place), and its destination is a check (a linter rule, test, hook, or CI step); when the repository already has a check for it that never runs or no longer fails, the candidate is repairing that check, not adding another. Its approved_patch_handoff/v1 names the check and where it is wired, and sets as an acceptance criterion the run the implementer must observe: the check fails with the violation injected and passes once it is reverted. A mechanical candidate outside the chosen destination boundary is reported as a check proposal outside the boundary, never reworded as prose. Only judgement candidates, which need a reader (consistency across files, fit with the code around them), are worded as prose.",
             "duplication_conflict_report/v1 names the existing rule or check each candidate repeats or contradicts, or says none was found and where it looked.",
             "Nothing reached a destination without an approval recorded in review_queue/v1.",
         ),
         why_this_exists=(
-            "`rules-distill` gives OMH a disciplined way to learn from large skill ecosystems like ECC without wholesale copying: "
-            "extract principles, review them, then patch OMH only through explicit verified work."
+            "`rules-distill` exists because a repeated lesson buried in traces, reviews, and skill text changes behaviour only once it is "
+            "written down as a rule, and a rule written from one anecdote does the opposite: it extracts candidate rules from a corpus the "
+            "user names, checks them against what is already written, and hands approved ones to the destination the user chose; the "
+            "method is adapted from ECC's rules-distill without wholesale copying."
         ),
         do_not_use_when=(
             "The user wants a single workflow route regression; use `workflow-learning`.",

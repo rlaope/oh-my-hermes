@@ -39,7 +39,12 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
                 "options we decided against",
                 "why an approach was dismissed",
             ),
+            do_not_use_when=(
+                "The user asks what was decided or why an approved decision was made; recall it with the omh_memory tool's recall action, because only decisions a person rejected are stored here.",
+            ),
             recovery_notes=(
+                "Run `omh memory rejected-recall --scope-kind project --scope-ref <id> [--tag <tag>] [--include-stale] [--limit <n>] <query words>`; `--scope-kind` and `--scope-ref` are required. Get the `prj:` id yourself from `omh memory project-identity show`, and ask the user only for a missing query, never for the scope.",
+                "An empty result on a default install is expected: memory is approved on capture, so rejected decisions exist only after a person rejected a staged candidate. Say \"no reviewed rejection is on record for this project\", not \"nothing was rejected\", and offer `omh_memory` recall for alternatives that were only discussed or captured as ordinary memory.",
                 "If the query, scope, tags, stale policy, or match limit is unspecified, no rejected-decision match stands yet; mark recall unresolved and hand back one question fixing the missing filter.",
                 "If a candidate's reviewed-rejected status or expiry cannot be checked, retain only matches that passed those checks, mark remaining recall unresolved, and hand back rejected_decision_recall/v1 with the claim boundary and missing checks.",
             ),

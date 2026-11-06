@@ -1377,7 +1377,8 @@ class HintLensTests(_Home):
         result = self.call("capture", summary="kiwi plum pear lime yesterday")
         self.assertEqual(result["status"], "pending_review", result)
         self.assertEqual(result["similar_record_id"], held)
-        self.assertIn("omh memory review", result["next_action"])
+        self.assertIn("absolute date", result["next_action"])
+        self.assertNotIn("omh memory review", result["next_action"])
 
     def test_the_subject_sentence_reports_who_recall_actually_serves(self) -> None:
         held = self.capture("Deploys go from the release branch", subject="deploy-branch")

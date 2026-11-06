@@ -24,7 +24,8 @@ This is a Hermes-native `memory-sync` workflow skill.
 ## Do Not Use When
 
 - The user states a new fact to remember; capture it with `omh-memory-new`.
-- The user asks what was decided or rejected before; use `omh-decision-recall`.
+- The user asks what was decided before; recall it with the omh_memory tool's recall action.
+- The user asks what was rejected before; use `omh-decision-recall`.
 - The user wants a memory provider enabled, switched, paused, or removed; use `omh-external-connector-readiness`, which owns the provider slot.
 
 ## Examples
@@ -87,6 +88,8 @@ When the user asks to tidy, review, or clean up memory, list open records first,
 - **Resolved** - `omh memory confirm <record-id>` writes `resolution: resolved` and resets the review deadline. A correction (`omh memory correct`) also resolves, by superseding.
 - **Still open** - `omh memory keep-open <record-id>` resets only the reminder's ask clock; the record, its state, and its deadline do not change.
 - **Drop it** - `omh memory retire <record-id>` prepares the retirement; `--apply` archives it. Nothing is deleted.
+
+Without a shell that runs `omh`: `confirm` and `retire` (reason `user_asked`) exist as `omh_memory` actions and apply at once, so call them only after the person's answer; the open-record listing and `keep-open` have no tool form, so say they need a terminal and stop.
 
 The person answers per record; never resolve, keep open, or retire on your own judgment. A record with no answer stays open: say so, and do not default it to keep-open. Between reviews the provider prefetch asks on its own, with at most one `omh reminder: "<summary>" (<record_id>) has been unresolved for N days — resolved, still open, or drop it?` line per turn: once when the review deadline passes, then at most every `open_ask_days` (default 14) per record, and "still open" resets that clock. The reminder only asks and writes no record, so an answer given in chat still goes through one of the three commands above.
 

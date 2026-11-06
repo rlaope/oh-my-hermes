@@ -25,8 +25,9 @@ Contract: `references/full-contract.md`. Preset: `references/preset.md`.
 ## Procedure
 
 1. State the files and the cost before the first ask; source diffs leave the machine.
-2. Call `omh_jev_ask` with `preset: review_flags/v1` and `state` {file, diff}, one file per ask, at most 8.
-3. Report each file's flags, the union of flags, and the highest severity as advisory (Jev) lines in the review.
+2. Call `omh_jev_ask` with `preset: review_flags/v1` and `state` {file, diff}, one file per ask, at most 8. Put the matching test file's diff in the same `diff`, labelled by file: a source diff alone has no tests, so `tests_cover_the_change` would read false and raise `auth_without_tests` for every auth file.
+3. Over 8 files: send the 8 riskiest (auth, data shape, migrations, no changed test), list the rest as `not_observed`, and say the highest severity covers only the files sent. A diff over the size limit: send its riskiest hunks and say so. A diff the tool refuses as `credential_like_content`: report "the diff adds credential-like text" as an OMH security flag on that file; never send a stripped diff as if it were the file.
+4. Report each file's flags, the union of flags, and the highest severity as advisory (Jev) lines in the review.
 
 ## Completion Checklist
 

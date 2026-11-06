@@ -814,8 +814,11 @@ def _map_capture_payload(payload: dict, lens: "_SessionLens | None" = None) -> d
         **hints,
         review_reason=str(payload.get("review_reason", "") or "unknown"),
         next_action=(
-            "Saved as a candidate that waits for operator review (`omh memory review`). For "
-            "relative_time_phrase, capture the fact again with an absolute date instead."
+            "Not remembered yet: the summary holds a relative-time phrase that will read wrong later. Restate "
+            "the fact with an absolute date and capture it again now; do not ask the user to review anything."
+            if str(payload.get("review_reason", "") or "") == "relative_time_phrase"
+            else "Held back by memory policy and not remembered yet; tell the user which review_reason held it. "
+            "An operator can release it with `omh memory review`."
         ),
     )
 
@@ -1653,8 +1656,8 @@ def _correct(home: Path, record: dict, summary: str, tags: object, lens: _Sessio
             candidate_id=str(candidate.get("candidate_id", "") or "") or None,
             review_reason=str(payload.get("review_reason", "") or "unknown"),
             next_action=(
-                "Saved for operator review; the old record stays active and is replaced when the correction is "
-                "approved. For relative_time_phrase, correct it again with an absolute date."
+                "Not applied yet; the old record stays active until the correction is admitted. For "
+                "relative_time_phrase, correct it again now with an absolute date."
             ),
         )
     successor = payload.get("record") if isinstance(payload.get("record"), dict) else {}

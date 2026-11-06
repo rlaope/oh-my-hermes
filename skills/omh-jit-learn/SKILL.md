@@ -143,6 +143,8 @@ Start with the confirmed target statement and a short source-boundary note. Then
 - `## Creators`
 - `## Courses`
 
+When the target names a tool, API, or library, add `## Docs and References` ahead of them (official documentation, API reference, changelog, source repository), since for a technical blocker that is usually the fastest source; it follows the same source gate and fields.
+
 Under every heading, list only candidates that passed the source gate. If none passed, say why - for example, insufficient authority, stale or unavailable evidence, poor immediate fit, or an unresolved retrieval gap - rather than padding the section.
 
 For every recommendation include:

@@ -16,13 +16,16 @@ telemetry, uptime, cost truth, or incident evidence.
 | T4 | Evaluation | automated quality scores on runs; human feedback captured; evaluation runs tracked over time |
 | T5 | Advanced | retrieval-quality spans, memory operations, human-in-the-loop tracking, error classification (transient vs permanent, retryable), cost-optimization signals |
 
-A tier is claimed only when every row below it holds; a setup with cost
-tracking but no error capture is T0 with extras, not T2.
+A tier is claimed only when every row below it holds, and every row of its own.
+A setup that misses any T0 row (for example it has cost tracking but no error
+capture) is below T0: the audit verdict is FAIL and the extras do not raise
+the tier.
 
 ## The audit, in priority order
 
 - **P0** - telemetry init, model-call capture, tool-call capture, error
-  capture. A gap here fails the audit regardless of what else exists.
+  capture. A gap here fails the audit regardless of what else exists. The
+  priorities order the remediation list; they do not grade, the tiers do.
 - **P1** - token tracking, cost attribution, agent identity, multi-agent
   links.
 - **P2** - memory/RAG spans, human-in-the-loop, evaluation-run tracking,
@@ -47,7 +50,7 @@ Each entry is a finding with a location and a fix, never a style remark:
 | No token tracking | medium | record tokens in/out per call |
 | Missing error context | medium | record error type, message, and transient-vs-permanent class |
 | Unbounded tool arguments in spans | medium | log argument counts, keys, and sizes; truncate safe fields |
-| Missing agent identity | low | name and type on every span |
+| Missing agent identity | medium (a T0 row) | name and type on every span |
 
 ## Per-call vocabulary
 

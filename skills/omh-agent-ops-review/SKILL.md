@@ -42,9 +42,10 @@ Bad example:
 
 ## Completion Checklist
 
-- The local command, managed path, config surface, and state artifact inspected are named.
-- Blocking issues, warnings, and optional surfaces are separated.
-- The next repair action is explicit and does not claim a reload or runtime observation.
+- Each run is listed as prepared, observed, or not_observed, with the evidence behind observed.
+- Blockers and failed quality gates carry an owner or next action.
+- Throughput claims cite a measurement or say none exists.
+- An instrumentation audit gives every ladder row PASS, FAIL, or PARTIAL with its location.
 
 ## Recovery Notes
 

@@ -310,6 +310,26 @@ All notable changes will be documented here.
   pushes out a hint already there, and a message over 1000 characters is not
   read. Hint text and routes are unchanged.
 
+- **Memory, learning, agent and Jev skills now give steps that run.** A
+  fact with a relative date ("next Friday") is captured again with an absolute
+  date in the same turn instead of waiting for a review nobody does, and the
+  memory tool no longer points the model at a review command. Recovering from
+  one wrong memory source archives live records with `omh memory attention
+  --tier archive` or the `omh_memory` retire action (the old `omh memory
+  retire` step moved nothing for a live record), and says that hard delete
+  accepts only an expired volatile record. `decision-recall` names its command
+  and required flags and says an empty result is normal on a default install;
+  "what was decided" now goes to `omh_memory` recall, not to the rejected-only
+  store. `jev-action-check` treats a missing tool or a non-answer as a hold,
+  `jev-review-gate` sends the matching test diff with each file and says what
+  to do past eight files or an over-size diff, and `jev-done-check` and
+  `jev-route` cover the over-limit and no-route-question cases. The
+  instrumentation ladder grades one way, `workflow-learning` names
+  `omh learning route-signal`, `instinct-ledger` and `rules-distill` count
+  observations the same way, and `agent-instructions` gains a size rule for
+  Hermes' context-file cap. The full-profile skill-body ceiling is re-derived
+  by its written policy.
+
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`
