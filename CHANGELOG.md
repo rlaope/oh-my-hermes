@@ -93,10 +93,12 @@ All notable changes will be documented here.
 
 - **Follow-ups to the messenger quiet gate, the Ctrl+Enter redirect and
   `/gateway restart`.** A quiet word that ends in a question in any order of
-  marks (`shut up?!`, `shut up!?`, `닥쳐？!`) no longer mutes the thread;
-  `shut up!` still does. When a turn ends with a redirect Hermes queued as its
-  own next prompt, the OMH TUI's queue waits for that turn instead of sending
-  its next line beside it. A redirect that cuts reasoning while it streams
+  marks (`shut up?!`, `shut up!?`, `닥쳐？!`, `‽`, `¿`) no longer mutes the
+  thread; `shut up!` still does. When a turn ends cleanly with a redirect
+  Hermes queued as its own next prompt, the OMH TUI's queue waits for that
+  turn instead of sending its next line beside it; a turn that fails, or a
+  queued turn that does not start within a few seconds, lets the queue go on.
+  A redirect that cuts reasoning while it streams
   seals that reasoning, so the retry's reasoning reads as its own block. A
   stopped gateway is now said plainly, as a state, with
   `hermes gateway start` to start it again, and the restart wait reads

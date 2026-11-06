@@ -253,25 +253,29 @@ def after_turn_seconds(home: Path, environ: Mapping[str, str] | None = None) -> 
     """How long a draining restart lets running work finish, as Hermes reads it (a number of seconds, at least 0).
 
     `AFTER_TURN_ENV` in `environ` when it is set and not blank (the
-    environment the restart command this TUI runs gets), else
-    `agent.restart_after_turn_timeout` from the gateway home's `config.yaml`;
-    Hermes' default when the file, the key or the number is missing, and for
-    a value that is not a number, the variable's included, as Hermes falls
-    back.
+    environment the restart command this TUI runs gets), read as Hermes'
+    `float()` reads it (quotes are not stripped), else
+    `agent.restart_after_turn_timeout` from the gateway home's `config.yaml`,
+    whose YAML quotes are. Hermes' default when the file, the key or the
+    number is missing, and for a value that is not a number, the variable's
+    included, as Hermes falls back; a negative number and `nan` are 0, as
+    Hermes' `max(0.0, value)` makes them. One divergence: Hermes takes `inf`
+    as no cap, and this keeps the default, so the reattach wait stays bounded.
     """
     from .bot_board import CONFIG_BYTES, _bounded_text, _config_text
 
     raw = (environ or {}).get(AFTER_TURN_ENV, "")
     if not raw.strip():
         text, _problem = _bounded_text(home / CONFIG_FILE, CONFIG_BYTES)
-        raw = _config_text(text, ("agent", "restart_after_turn_timeout")) if text is not None else None
-    if raw is None:
-        return DEFAULT_AFTER_TURN_SECONDS
+        config = _config_text(text, ("agent", "restart_after_turn_timeout")) if text is not None else None
+        if config is None:
+            return DEFAULT_AFTER_TURN_SECONDS
+        raw = config.strip().strip("'\"")
     try:
-        seconds = float(raw.strip().strip("'\""))
+        seconds = float(raw)
     except ValueError:
         return DEFAULT_AFTER_TURN_SECONDS
-    return max(seconds, 0.0) if seconds == seconds and seconds != float("inf") else DEFAULT_AFTER_TURN_SECONDS
+    return DEFAULT_AFTER_TURN_SECONDS if seconds == float("inf") else max(0.0, seconds)
 
 
 def _names(names: tuple[str, ...]) -> str:

@@ -914,14 +914,20 @@ class ImpactTests(unittest.TestCase):
         self.assertEqual(gateway_restart.after_turn_seconds(home), 120.0)
         (home / "config.yaml").write_bytes(b"agent:\n  restart_after_turn_timeout: soon\n")  # LF on every OS
         self.assertEqual(gateway_restart.after_turn_seconds(home), gateway_restart.DEFAULT_AFTER_TURN_SECONDS)
+        (home / "config.yaml").write_bytes(b"agent:\n  restart_after_turn_timeout: '90'\n")  # YAML quotes a string
+        self.assertEqual(gateway_restart.after_turn_seconds(home), 90.0)
+        (home / "config.yaml").write_bytes(b"agent:\n  restart_after_turn_timeout: nan\n")  # Hermes' max(0.0, nan)
+        self.assertEqual(gateway_restart.after_turn_seconds(home), 0.0)
 
-    def test_hermes_after_turn_variable_wins_over_the_config_when_set_and_a_bad_one_is_hermes_default(self) -> None:
-        # Hermes' gateway and its restart command read `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key.
+    def test_hermes_after_turn_variable_wins_over_the_config_and_is_read_as_hermes_reads_it(self) -> None:
+        # Hermes' gateway and its restart command read `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, with
+        # `float()` (no quote stripping) and `max(0.0, value)`; a value that does not parse is Hermes' default.
         home = self.top / "env"
         home.mkdir()
         (home / "config.yaml").write_bytes(b"agent:\n  restart_after_turn_timeout: 120\n")  # LF on every OS
-        cases = {"300": 300.0, " 45.5 ": 45.5, "0": 0.0, "-5": 0.0, "soon": gateway_restart.DEFAULT_AFTER_TURN_SECONDS,
-                 "nan": gateway_restart.DEFAULT_AFTER_TURN_SECONDS, "inf": gateway_restart.DEFAULT_AFTER_TURN_SECONDS,
+        default = gateway_restart.DEFAULT_AFTER_TURN_SECONDS
+        cases = {"300": 300.0, " 45.5 ": 45.5, "0": 0.0, "-5": 0.0, "nan": 0.0, "soon": default, "'300'": default,
+                 "inf": default,  # Hermes: no cap; the TUI keeps its reattach wait bounded (documented divergence)
                  "": 120.0, "  ": 120.0}
         for value, seconds in cases.items():
             with self.subTest(value=value):

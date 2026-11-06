@@ -53,7 +53,8 @@ class QuietWordTests(unittest.TestCase):
                 self.assertNotEqual(action(text, in_thread=True, reply_to_own=True), "mute")
 
     def test_a_question_mark_anywhere_in_the_closing_run_never_mutes(self) -> None:
-        for text in ("shut up?!", "shut up!?", "shut up?!!", "닥쳐？!", "lumi, shut up?!", "shut up ?!"):
+        for text in ("shut up?!", "shut up!?", "shut up?!!", "닥쳐？!", "lumi, shut up?!", "shut up ?!", "shut up‽",
+                     "shut up!‽", "cállate!¿", "cállate ¿"):
             with self.subTest(text=text):
                 self.assertNotEqual(action(text, in_thread=True, reply_to_own=True), "mute")
         for text in ("shut up!", "shut up!!", "닥쳐!!"):
