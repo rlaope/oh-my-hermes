@@ -2682,6 +2682,7 @@ _DEFINITIONS = [
             "The user needs observed meeting minutes, decisions, or action items but has not provided notes.",
             "The request is strategy synthesis without a meeting audience, agenda, or decision ceremony.",
             "The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.",
+            "The user wants minutes, scrum history or a decision log for a recurring meeting; use `operating-rhythm`.",
             HermesSkillLine(
                 "The meeting already happened, its notes or transcript are in hand, and the user wants decisions, owners, follow-ups, or tickets drawn from them; load Hermes' bundled `meeting-action-items` skill instead of this one.",
                 ("meeting-action-items",),
@@ -2981,6 +2982,7 @@ _DEFINITIONS = [
             "The request asks for a jurisdiction-specific employment-law conclusion, policy compliance ruling, or contract interpretation; use `legal-compliance-review`.",
             "The user only needs a one-off job-ad, rejection, or interview-email rewrite; use `content-operator`.",
             "The user asks to create ATS records, send invitations, book interviews, change employment status, or modify HRIS settings; use `connector-operator` with explicit authorization and observed results.",
+            "The user is the candidate: tailoring a resume, preparing for their own interview or tracking applications; use `ai-job-search`.",
             "The prompt asks the workflow to make an unsupported candidate decision from protected characteristics or missing interview evidence; retain the process and evidence gap instead.",
         ),
         good_example=SkillExample(
@@ -3655,7 +3657,7 @@ _DEFINITIONS = [
             SPECIALIST_DOMAIN_HANDOFF_BOUNDARY
             + " A PRD or roadmap is prepared planning, not stakeholder acceptance, Jira or Linear mutation, implementation, test evidence, delivery, or a market commitment."
         ),
-        required_inputs=("product evidence", "problem and user", "goal, non-goals, and success metric with baseline", "decision owner"),
+        required_inputs=("product evidence", "problem and user", "goal, non-goals, and success metric with baseline", "decision owner", "capacity or effort constraints"),
         expert_questions=(
             ExpertQuestion(
                 required_input="product evidence",
@@ -3803,6 +3805,8 @@ _DEFINITIONS = [
             "Name cadence, audience, time window, known notes, and missing evidence before producing a record.",
             "Separate agenda/templates from observed minutes, decisions, and action items.",
             "Record follow-up ownership only when supplied or explicitly mark it unknown.",
+            "Give each decision row a status (proposed, accepted, superseded) and what it supersedes, and open each retro record with the previous retro's actions and their outcome.",
+            "This skill records an existing cadence; when the user wants a new cadence designed, propose it with owner, frequency, inputs and decision rights, then record minutes here.",
             "Record each action item with its outcome, owner, due date, dependency, acceptance condition, and source reference, marking an owner or date the notes do not state as unknown, and keep a proposal that was discussed but not decided out of the decision log.",
             "On Hermes, when the bundled `meeting-action-items` skill is available, it may pull decisions, owners, and actions out of the supplied notes; its list is a reading of those notes, so every item keeps its source reference and stays unaccepted until the notes or the owner confirm it, and a ticket or message it drafts is reported as published only after the user approved it and it was read back.",
         ),
@@ -3810,7 +3814,7 @@ _DEFINITIONS = [
         do_not_use_when=(
             "The user only needs a one-off meeting agenda before the meeting; use `meeting-brief`.",
             "The request is a weekly status/risk summary rather than cadence history; use `ops-review`.",
-            "Report packaging or reliability evidence review; use `report-package` or `reliability-review`.",
+            "The user asks for report packaging or a PPT outline; use `report-package`. The user asks for reliability evidence review; use `reliability-review`.",
         ),
         good_example=SkillExample(
             prompt="operating-rhythm 회의록 히스토리 관리하고 스크럼 스프린트 회고를 정리해줘.",
@@ -3986,7 +3990,7 @@ _DEFINITIONS = [
             "Record binary export, render QA, formula checks, approvals, and delivery only from observed evidence.",
             DOCUMENT_PRODUCER_QA_RULE,
             DOCUMENT_PRODUCER_RUNGS_RULE,
-            "No bundled reader covers HWP or Keynote: without a tool, every rung for that file is not_observed; check a PDF export instead.",
+            "No bundled reader covers HWP or Keynote: ask which tool the session has (Hancom Office or a converter for HWP, Keynote export for Keynote). With none, the plan ends at the outline, every QA rung for that file is not_observed, and a PDF export reviewed with the `pdf` rungs is the checkable substitute; say the layout of the HWP or Keynote file itself was not checked.",
         ),
         why_this_exists=(
             "`materials-package` exists so Hermes can handle document, deck, spreadsheet, PDF, Word, Keynote, HWP, and Markdown "
@@ -4593,6 +4597,7 @@ _DEFINITIONS = [
         ),
         recovery_notes=(
             "If no rendered evidence exists, keep every axis not_observed and route the capture to visual-qa before scoring.",
+            "If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.",
             "If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.",
         ),
         situations=(
@@ -7225,7 +7230,8 @@ _DEFINITIONS = [
         ),
         do_not_use_when=(
             "The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly or use `strategy-brief` for a decision brief instead of starting a leadership operating loop.",
-            "A launch-readiness audit of one service; use `production-audit`.",
+            "A launch-readiness audit of one named service or release with deploy, security, observability and rollback evidence; use `production-audit`. Prioritisation and risk ranking across workstreams stays here.",
+            "An accepted plan is ready for build; use `ralplan` or `idea-to-deploy`.",
         ),
         situations=(
             "act as our cto for this launch",
@@ -11759,6 +11765,7 @@ _DEFINITIONS.append(
             "The ask is reading a contract or a regulation for legal risk; use `legal-compliance-review`.",
             "The ask is whether a service is ready to launch; use `production-audit`.",
             "The ask is ranking a codebase's debt; use `tech-debt-audit`.",
+            "The ask is an internal audit engagement plan, a risk-based audit universe or a findings report with condition, criteria, cause and effect rather than testing one control; say it is outside this skill (no sibling covers it) and offer the control-test steps for any control the engagement selects.",
         ),
         good_example=SkillExample(
             prompt="we need to test the quarterly access review control for sox and grade what we find",

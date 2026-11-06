@@ -10,7 +10,7 @@ metadata:
     phase: people-operations
     role: operator
     quality_tier: evidence-gated
-    related_skills: [omh-legal-compliance-review, omh-content-operator, omh-apps]
+    related_skills: [omh-legal-compliance-review, omh-content-operator, omh-apps, omh-ai-job-search]
 ---
 
 # People Ops
@@ -26,6 +26,7 @@ This is a Hermes-native `people-ops` workflow skill.
 - The request asks for a jurisdiction-specific employment-law conclusion, policy compliance ruling, or contract interpretation; use `omh-legal-compliance-review`.
 - The user only needs a one-off job-ad, rejection, or interview-email rewrite; use `omh-content-operator`.
 - The user asks to create ATS records, send invitations, book interviews, change employment status, or modify HRIS settings; use `omh-apps` with explicit authorization and observed results.
+- The user is the candidate: tailoring a resume, preparing for their own interview or tracking applications; use `omh-ai-job-search`.
 - The prompt asks the workflow to make an unsupported candidate decision from protected characteristics or missing interview evidence; retain the process and evidence gap instead.
 
 ## Examples

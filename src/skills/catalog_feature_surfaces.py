@@ -441,7 +441,7 @@ _FEATURE_SURFACE_SKILLS = (
         phase="package-status",
         next_action="prepare_deliverable_package",
         boundary="A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.",
-        good_prompt="deliverable-package the deck and PDF are generated; get my approval of v2 and confirm the PDF was attached.",
+        good_prompt="deliverable-package the deck and PDF are generated; check they were rendered, get my approval of v2, and tell me whether the PDF was attached to the thread.",
         bad_prompt="deliverable-package tell the client the PDF is attached.",
         extra_quality_bar=(
             DOCUMENT_PRODUCER_QA_RULE,
@@ -1393,6 +1393,7 @@ _FEATURE_SURFACE_SKILLS = (
         final_checklist=(
             "Audience, channel, language, tone, style guide, length, source scope, fact-risk, review owner, and stop condition are explicit.",
             "Missing facts, source gaps, claims needing citations, legal/compliance needs, approval, publish/send authority, and file-export needs are gated or marked missing.",
+            "Comparative or superlative claims, quoted numbers, named customers or testimonials, price or availability promises and paid or affiliate relationships each carry a source or a legal-review flag before the copy is called publish-ready.",
             "Published, sent, exported, approved, and fact-verified claims are reported only from observed evidence.",
             "Every product fact in the copy (install command, command and flag names, package name, URL, version, count) is copied byte-for-byte from its canonical source, such as the README install block, `--help` output, or the producer of the count, and cited by path; a fact written from memory or an earlier draft is a fact-risk, not a fact.",
             "Every count the copy generates agrees with its noun in each plural category of the content locale (0, 1, and 2 for English: `0 agents`, `1 agent`, `2 agents`) before it ships.",

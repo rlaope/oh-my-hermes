@@ -54,6 +54,7 @@ Bad example:
 ## Recovery Notes
 
 - If no rendered evidence exists, keep every axis not_observed and route the capture to visual-qa before scoring.
+- If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.
 - If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.
 
 ## Workflow Lane

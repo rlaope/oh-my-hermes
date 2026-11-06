@@ -24,6 +24,7 @@ This is an OMH `meeting-brief` workflow skill, projected for Agent Skills hosts 
 - The user needs observed meeting minutes, decisions, or action items but has not provided notes.
 - The request is strategy synthesis without a meeting audience, agenda, or decision ceremony.
 - The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.
+- The user wants minutes, scrum history or a decision log for a recurring meeting; use `omh-operating-rhythm`.
 
 ## Examples
 

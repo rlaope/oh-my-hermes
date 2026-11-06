@@ -1392,6 +1392,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user needs observed meeting minutes, decisions, or action items but has not provided notes.
   - The request is strategy synthesis without a meeting audience, agenda, or decision ceremony.
   - The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.
+  - The user wants minutes, scrum history or a decision log for a recurring meeting; use `operating-rhythm`.
   - The meeting already happened, its notes or transcript are in hand, and the user wants decisions, owners, follow-ups, or tickets drawn from them; load Hermes' bundled `meeting-action-items` skill instead of this one.
 - Strong routing signals: `meeting-brief`, `meeting brief`, `meeting agenda`, `agenda`, `discussion prompts`, `decisions needed`, `record template`, `meeting topics`, `회의 주제`, `회의 아젠다`, `아젠다`, `회의 준비`, `논의 질문`, `결정할 것`, `기록 템플릿`
 - Good example:
@@ -1634,6 +1635,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request asks for a jurisdiction-specific employment-law conclusion, policy compliance ruling, or contract interpretation; use `legal-compliance-review`.
   - The user only needs a one-off job-ad, rejection, or interview-email rewrite; use `content-operator`.
   - The user asks to create ATS records, send invitations, book interviews, change employment status, or modify HRIS settings; use `connector-operator` with explicit authorization and observed results.
+  - The user is the candidate: tailoring a resume, preparing for their own interview or tracking applications; use `ai-job-search`.
   - The prompt asks the workflow to make an unsupported candidate decision from protected characteristics or missing interview evidence; retain the process and evidence gap instead.
 - Strong routing signals: `recruiting plan`, `hiring scorecard`, `interview scorecard`, `candidate debrief`, `채용 계획`, `면접 평가표`, `후보자 비교`
 - Good example:
@@ -2210,6 +2212,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - problem and user
   - goal, non-goals, and success metric with baseline
   - decision owner
+  - capacity or effort constraints
 - Expert clarification questions:
   - `product evidence`
     - English: What product evidence should anchor this brief?
@@ -2308,7 +2311,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The user only needs a one-off meeting agenda before the meeting; use `meeting-brief`.
   - The request is a weekly status/risk summary rather than cadence history; use `ops-review`.
-  - Report packaging or reliability evidence review; use `report-package` or `reliability-review`.
+  - The user asks for report packaging or a PPT outline; use `report-package`. The user asks for reliability evidence review; use `reliability-review`.
 - Strong routing signals: `operating-rhythm`, `operating rhythm`, `meeting minutes`, `meeting history`, `scrum record`, `sprint planning`, `sprint review`, `sprint retrospective`, `retro history`, `decision log`, `action item history`, `회의록 관리`, `회의 히스토리`, `운영 리듬`, `스크럼`, `스프린트 회고`, `결정 기록`, `액션 아이템`
 - Good example:
   - Prompt: operating-rhythm 회의록 히스토리 관리하고 스크럼 스프린트 회고를 정리해줘.
@@ -2322,6 +2325,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Name cadence, audience, time window, known notes, and missing evidence before producing a record.
   - Separate agenda/templates from observed minutes, decisions, and action items.
   - Record follow-up ownership only when supplied or explicitly mark it unknown.
+  - Give each decision row a status (proposed, accepted, superseded) and what it supersedes, and open each retro record with the previous retro's actions and their outcome.
+  - This skill records an existing cadence; when the user wants a new cadence designed, propose it with owner, frequency, inputs and decision rights, then record minutes here.
   - Record each action item with its outcome, owner, due date, dependency, acceptance condition, and source reference, marking an owner or date the notes do not state as unknown, and keep a proposal that was discussed but not decided out of the decision log.
   - On Hermes, when the bundled `meeting-action-items` skill is available, it may pull decisions, owners, and actions out of the supplied notes; its list is a reading of those notes, so every item keeps its source reference and stays unaccepted until the notes or the owner confirm it, and a ticket or message it drafts is reported as published only after the user approved it and it was read back.
 - Completion checklist:
@@ -2450,7 +2455,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Record binary export, render QA, formula checks, approvals, and delivery only from observed evidence.
   - On Hermes, a rung taken from a bundled document skill is observed only from that skill's result for that exact file, judged by its field, not its exit code: `"rendered": false` or `"recalculated": false` exits 0 yet leaves that rung not observed, blocked on the missing tools it names; other observed evidence for a rung still counts.
   - On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; `microsoft-office` from v0.23; same scripts): PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count matching `slide_count`, since it lists every image already in that directory); `pdf` gives `page_count` (`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); Excel gives `sheet_schema` (`xlsx_read.py --sheets`) and `formula_recalculation` (`xlsx_recalc.py --out <copy>`, since without `--out` it replaces the input and rungs or approvals already recorded were for other bytes, then the cached results read back with `xlsx_read.py --formulas`, where an error value or a formula with no cached value is a finding); Word gives `section_structure` and `required_clause_check` (`docx_read.py --structure` and `--text`) but no `page_count` or appearance until a converted PDF is rendered, and `docx_validate.py` checks package health, never rendering. Images that exist are not a render pass until each one has been inspected, and a producer's `"ok": true` is never the QA verdict.
-  - No bundled reader covers HWP or Keynote: without a tool, every rung for that file is not_observed; check a PDF export instead.
+  - No bundled reader covers HWP or Keynote: ask which tool the session has (Hancom Office or a converter for HWP, Keynote export for Keynote). With none, the plan ends at the outline, every QA rung for that file is not_observed, and a PDF export reviewed with the `pdf` rungs is the checkable substitute; say the layout of the HWP or Keynote file itself was not checked.
 - Completion checklist:
   - The material source, target format, audience, structure, and QA expectation are named.
   - Binary export, rendering, formula recalculation, attachment, and delivery stay observed-only.
@@ -2841,6 +2846,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - No award, jury, placement, or selection outcome is claimed.
 - Recovery notes:
   - If no rendered evidence exists, keep every axis not_observed and route the capture to visual-qa before scoring.
+  - If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.
   - If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.
 - Required inputs:
   - the target URL, route, or rendered capture being judged
@@ -4610,7 +4616,8 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Use when: Use when Hermes should run a leadership-style operating loop that turns signals into roadmap decisions, technical tradeoffs, delivery risk, release readiness, and explicit follow-up handoffs.
 - Do not use when:
   - The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly or use `strategy-brief` for a decision brief instead of starting a leadership operating loop.
-  - A launch-readiness audit of one service; use `production-audit`.
+  - A launch-readiness audit of one named service or release with deploy, security, observability and rollback evidence; use `production-audit`. Prioritisation and risk ranking across workstreams stays here.
+  - An accepted plan is ready for build; use `ralplan` or `idea-to-deploy`.
 - Strong routing signals: `cto-loop`, `cto loop`, `cto`, `cto pm`, `pm dev qa security ops`, `roadmap technical tradeoffs`, `technical tradeoff`, `delivery risk`, `release readiness`, `technical leadership loop`, `leadership operating loop`, `engineering leadership`, `CTO 구조`, `PM 구조`, `로드맵`, `아키텍처 트레이드오프`, `기술 리더십`, `출시 준비`
 - Good example:
   - Prompt: cto-loop: run the PM, dev, QA, security, and ops loop for this risky billing launch.
@@ -7536,6 +7543,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The ask is reading a contract or a regulation for legal risk; use `legal-compliance-review`.
   - The ask is whether a service is ready to launch; use `production-audit`.
   - The ask is ranking a codebase's debt; use `tech-debt-audit`.
+  - The ask is an internal audit engagement plan, a risk-based audit universe or a findings report with condition, criteria, cause and effect rather than testing one control; say it is outside this skill (no sibling covers it) and offer the control-test steps for any control the engagement selects.
 - Strong routing signals: `internal-audit`, `internal audit`, `internal control`, `internal controls`, `internal control audit`, `control testing`, `test of controls`, `tests of controls`, `sox`, `sox 404`, `sox testing`, `sox control`, `icfr`, `itgc`, `itgcs`, `material weakness`, `significant deficiency`, `control deficiency`, `deficiency severity`, `re-performance`, `reperformance`, `reperform`, `reperform the control`, `audit sampling`, `attribute sampling`, `control population`, `audit evidence`, `audit workpaper`, `segregation of duties`
 - Good example:
   - Prompt: we need to test the quarterly access review control for sox and grade what we find
@@ -10193,7 +10201,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - A text-only report, executive brief, or slide outline with no file to produce; use `report-package`.
 - Strong routing signals: `deliverable-package`, `deliverable mode`, `file attachment`, `attach file`, `attachment status`, `file delivery`, `file deliverable status`, `generated file`, `첨부`, `첨부 상태`, `전달 상태`
 - Good example:
-  - Prompt: deliverable-package the deck and PDF are generated; get my approval of v2 and confirm the PDF was attached.
+  - Prompt: deliverable-package the deck and PDF are generated; check they were rendered, get my approval of v2, and tell me whether the PDF was attached to the thread.
   - Expected behavior: Produce `prepare_deliverable_package` with required context, wrapper actions, and not-evidence boundaries.
   - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 - Bad example:
@@ -10917,6 +10925,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - Audience, channel, language, tone, style guide, length, source scope, fact-risk, review owner, and stop condition are explicit.
   - Missing facts, source gaps, claims needing citations, legal/compliance needs, approval, publish/send authority, and file-export needs are gated or marked missing.
+  - Comparative or superlative claims, quoted numbers, named customers or testimonials, price or availability promises and paid or affiliate relationships each carry a source or a legal-review flag before the copy is called publish-ready.
   - Published, sent, exported, approved, and fact-verified claims are reported only from observed evidence.
   - Every product fact in the copy (install command, command and flag names, package name, URL, version, count) is copied byte-for-byte from its canonical source, such as the README install block, `--help` output, or the producer of the count, and cited by path; a fact written from memory or an earlier draft is a fact-risk, not a fact.
   - Every count the copy generates agrees with its noun in each plural category of the content locale (0, 1, and 2 for English: `0 agents`, `1 agent`, `2 agents`) before it ships.

@@ -25,7 +25,7 @@ This is a Hermes-native `operating-rhythm` workflow skill.
 
 - The user only needs a one-off meeting agenda before the meeting; use `omh-meeting-brief`.
 - The request is a weekly status/risk summary rather than cadence history; use `omh-ops-review`.
-- Report packaging or reliability evidence review; use `omh-report-package` or `omh-reliability-review`.
+- The user asks for report packaging or a PPT outline; use `omh-report-package`. The user asks for reliability evidence review; use `omh-reliability-review`.
 
 ## Examples
 
@@ -77,6 +77,8 @@ Quality bar:
 - Name cadence, audience, time window, known notes, and missing evidence before producing a record.
 - Separate agenda/templates from observed minutes, decisions, and action items.
 - Record follow-up ownership only when supplied or explicitly mark it unknown.
+- Give each decision row a status (proposed, accepted, superseded) and what it supersedes, and open each retro record with the previous retro's actions and their outcome.
+- This skill records an existing cadence; when the user wants a new cadence designed, propose it with owner, frequency, inputs and decision rights, then record minutes here.
 - Record each action item with its outcome, owner, due date, dependency, acceptance condition, and source reference, marking an owner or date the notes do not state as unknown, and keep a proposal that was discussed but not decided out of the decision log.
 - On Hermes, when the bundled `meeting-action-items` skill is available, it may pull decisions, owners, and actions out of the supplied notes; its list is a reading of those notes, so every item keeps its source reference and stays unaccepted until the notes or the owner confirm it, and a ticket or message it drafts is reported as published only after the user approved it and it was read back.
 

@@ -143,11 +143,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            # 533907 -> 534217 and the digest re-derived: the business-operations skill audit
-            # adds required-input words and a redline rule to ten rows (+310, itemized at
+            # 533907 -> 534131 and the digest re-derived: the business-operations skill audit
+            # adds required-input words and a redline rule to ten rows (+224, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was d6dfefff...fc71.
-            (skill_capabilities, 534217, FULL_ROW_DELTA_CAP,
-             '9fd9a9273a46e0b342a4e6bcdf77519464b9340354ab6d43027c1817cdaae3f8',
+            (skill_capabilities, 534131, FULL_ROW_DELTA_CAP,
+             'f4a7c820aa4de94814bc2320644c1b8f85f1b75ee66543af5e3dc7e0aa13b9bf',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -381,7 +381,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # section; the pin before it was 4f552dc5...a07a.
         # The business-operations skill audit rewrites sixteen bodies (checklists, boundaries and
         # practitioner checks); the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), 'e301d9b343bb961341cf832dc6e37cc1050ef690580823c60538edf03e6f5209')
+        self.assertEqual(_digest(legacy_hashes), '3481195f172d8da5e871ba72eb965d89f418164043d7296be999813e4730dabf')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -409,7 +409,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         self.assertLess(current['repeated']['bytes'] - REPEATED_DELTA_CAP, 131_893)
         feature_refs = [t for t in refs if t.skill_name == FEATURE]
         self.assertEqual(len(feature_refs), 6)
-        self.assertLessEqual(sum(len(t.content.encode()) for t in feature_refs), 19397)
+        self.assertLessEqual(sum(len(t.content.encode()) for t in feature_refs), 19800)
         # 4039 -> 4164: procedure.md's Korean clarification questions were English text; real Korean
         # is three bytes a character (+125).
         self.assertLessEqual(max(len(t.content.encode()) for t in feature_refs), 4164)
@@ -430,7 +430,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1500000,
+            'full_profile_skill_body_chars': 1650000,  # Re-derived with the business-operations skill audit: measured plus 10%, rounded up to 50,000.
             'full_profile_skill_body_repeated_chars': 140000,
             'skill_density_filler_hits': 0,
         }

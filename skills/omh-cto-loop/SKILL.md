@@ -10,7 +10,7 @@ metadata:
     phase: operating-loop
     role: operator
     quality_tier: decision-gated
-    related_skills: [omh-decide, omh-production-audit]
+    related_skills: [omh-decide, omh-production-audit, ulw-plan, omh-idea-to-deploy]
 ---
 
 # Cto Loop
@@ -24,7 +24,8 @@ This is a Hermes-native `cto-loop` workflow skill.
 ## Do Not Use When
 
 - The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly or use `omh-decide` for a decision brief instead of starting a leadership operating loop.
-- A launch-readiness audit of one service; use `omh-production-audit`.
+- A launch-readiness audit of one named service or release with deploy, security, observability and rollback evidence; use `omh-production-audit`. Prioritisation and risk ranking across workstreams stays here.
+- An accepted plan is ready for build; use `ulw-plan` or `omh-idea-to-deploy`.
 
 ## Examples
 

@@ -28,7 +28,7 @@ This is an OMH `deliverable-package` workflow skill, projected for Agent Skills 
 
 Good example:
 
-- Prompt: deliverable-package the deck and PDF are generated; get my approval of v2 and confirm the PDF was attached.
+- Prompt: deliverable-package the deck and PDF are generated; check they were rendered, get my approval of v2, and tell me whether the PDF was attached to the thread.
 - Expected behavior: Produce `prepare_deliverable_package` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 

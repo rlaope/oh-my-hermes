@@ -137,6 +137,7 @@ Default maximum: 8 search queries, 20 posting-detail reads, 40 seconds per retri
 one attempt per source URL, no automatic retries. Record unenforceable tool timeout
 limits honestly. Respect access controls; no login/anti-bot bypass. Stop at bounds;
 a broader run needs approval. Search snippets are leads, not live-status evidence.
+Mark a posting `suspect` when it asks for payment, moves to a private messenger, shows no match on the company's own site, or offers pay far above the role norm; send no personal documents to a suspect source.
 Verify shortlisted postings at the employer/original source; retrieval time is not
 source update time or proof a vacancy remains open. Cached and user-provided text
 stay unverified unless separately checked. Missing dates remain null, never guessed.
@@ -209,7 +210,9 @@ it does not establish submission. Follow-up messages are drafts, not sends.
 ## Preparation tied to evidence
 Write `interview-prep.md` from the exact posting capture and selected application
 version, recording both references. Include role-specific questions, real STAR examples
-with profile evidence refs, missing evidence and honest bridge answers. Distinguish
+with profile evidence refs, missing evidence and honest bridge answers, three to five
+questions for the interviewer tied to the posting, and a compensation answer built from
+the user's stated range or `ask for the range first`, never a guessed number. Distinguish
 practice answers from achievements. Include sourced company facts with retrieval dates;
 no invented interviewer biography. Optional `skill-gaps.md` prioritizes learnable gaps,
 bounded exercises and a checkable next artifact; no hiring guarantee or unnecessary

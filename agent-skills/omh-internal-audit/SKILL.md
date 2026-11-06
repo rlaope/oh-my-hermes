@@ -30,6 +30,7 @@ This is an OMH `internal-audit` workflow skill, projected for Agent Skills hosts
 - The ask is reading a contract or a regulation for legal risk; use `omh-legal-compliance-review`.
 - The ask is whether a service is ready to launch; use `omh-production-audit`.
 - The ask is ranking a codebase's debt; use `omh-tech-debt-audit`.
+- The ask is an internal audit engagement plan, a risk-based audit universe or a findings report with condition, criteria, cause and effect rather than testing one control; say it is outside this skill (no sibling covers it) and offer the control-test steps for any control the engagement selects.
 
 ## Examples
 

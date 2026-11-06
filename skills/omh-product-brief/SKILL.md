@@ -91,6 +91,7 @@ Required inputs:
 - problem and user
 - goal, non-goals, and success metric with baseline
 - decision owner
+- capacity or effort constraints
 
 Expert clarification questions:
 - `product evidence`
