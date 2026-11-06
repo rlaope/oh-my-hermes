@@ -1717,13 +1717,15 @@ class Transcript:
         event between the two (one `message.start` per turn): left live, the
         retry's deltas would join the cut reply and the steer row would go
         under both. Sealed here, the row is written under the cut reply and
-        the retry streams into a reply of its own. A running tool is left as
-        it is (Hermes holds the steer for that batch's results), and the row
-        waits under it for the next boundary as any steer does.
+        the retry streams into a reply of its own. Reasoning streaming when
+        the request was cut is sealed the same way, as a step's end seals it:
+        its `thought for` stops counting, and the retry's reasoning opens a
+        block of its own. A running tool is left as it is (Hermes holds the
+        steer for that batch's results), and the row waits under it for the
+        next boundary as any steer does.
         """
-        live = self._live(AssistantBlock)
-        if live is not None:
-            live.done = True
+        if self._live(AssistantBlock) is not None or self._live(ThinkingBlock) is not None:
+            self._close_live()
         self.steer_answered(block, STEER_TAKEN)
 
     def add_notice(self, text: str, level: str = NOTICE_INFO) -> None:

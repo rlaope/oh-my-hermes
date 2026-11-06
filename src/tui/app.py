@@ -5871,7 +5871,8 @@ class App(ModesMixin, AgentViewMixin):
         return False
 
     def _turn_ended(self) -> None:
-        """The turn is over: the next queued line goes, unless the person interrupted it (`_hold_queue`).
+        """The turn is over: the next queued line goes, unless the person interrupted it (`_hold_queue`) or Hermes
+        runs a redirect it queued next (`hermes_queued`), after whose turn it goes.
 
         Then whether Hermes' default model moved (`_check_default`); a queued
         prompt that goes waits for that check before its turn starts (`_start_turn`).
@@ -5889,8 +5890,12 @@ class App(ModesMixin, AgentViewMixin):
         else:
             self.sent_now = []  # the turn ended on its own: Hermes passes a steer it held on as the next turn
             self._settle_unread_steers(STEER_TAKEN)
+            hermes_runs_next = bool(self.hermes_queued)
             self._settle_hermes_queued()
-            self._drain_queue()
+            # A redirect Hermes queued is its own next prompt, which it starts as this turn ends: a queued line sent
+            # now could start ahead of it. The queue goes on when that turn ends (a turn this TUI did not start).
+            if not hermes_runs_next:
+                self._drain_queue()
         self._check_default()
 
     def _hold_queue(self, why: str) -> None:
