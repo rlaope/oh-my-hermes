@@ -157,8 +157,10 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   `<omh_home>/setup-profile.json`, written by `omh update-check set` or
   confirmed in `omh setup`; a home that never stored a mode keeps it on), and
   nothing is asked without an OMH home. `src/tui/update_notice.py`
-  is the other in-process network client in `src/`, and only `tui/app.py` may
-  import it.
+  is the other in-process network client in `src/`. Only `tui/app.py` and
+  `commands/setup.py` may import it; the latter calls `fetch_latest` once in
+  an explicit `omh update` on an installer-managed stable install, to pick the
+  release wheel it is about to download, and never moves on a failed read.
 - **Show-reel provider scripts**: `src/skills/show_reel_toolkit/scripts/eleven.py`
   and `narrate.py` (ElevenLabs TTS/STT/SFX/music by spawning `curl`, key from
   `ELEVENLABS_API_KEY` only, passed on curl's stdin) and `codex_ref_image.sh`
