@@ -230,7 +230,8 @@ def transform_llm_output(**kwargs: Any) -> str | None:
     gave the marker instruction, ``[SHUTUP]`` becomes Hermes' ``[SILENT]`` (the
     thread muted, the 🫡 scheduled), and a silence marker comes back clean.
     Nothing is appended to either, or the marker would stop being one and reach
-    the chat. A token inside that turn's prose is removed from it.
+    the chat. A token alone on the first or last line of that turn's longer
+    answer is removed; every other answer passes unchanged.
     """
     restored = restore_round_end_answer(session_id=kwargs.get("session_id"), response_text=kwargs.get("response_text"))
     handled, replacement = judged_reply(

@@ -19,8 +19,9 @@ Three seams, all in the gateway process:
    kept turn into Hermes' ``[SILENT]``, mutes the thread, and schedules the 🫡
    reaction on the gateway's event loop through Hermes' own
    ``agent.async_utils.safe_schedule_threadsafe``. A ``[SILENT]`` the model wrote
-   itself goes to Hermes, clean. A token inside a sentence stays prose with the
-   token removed, so a raw token never shows.
+   itself goes to Hermes, clean. A real answer is never dropped or altered: a
+   token alone on the first or last line of a longer reply is removed, and one
+   inside a sentence, a code block or a list stays, so it can show.
 
 Everywhere else (no `allow_silence`, an older Hermes, streaming on, a DM)
 nothing is noted and no instruction is sent, so the model is never asked for a
@@ -61,12 +62,12 @@ ROOM_TTL_SECONDS = 15 * 60
 TURN_LIMIT = 256
 TURN_TTL_SECONDS = 60 * 60
 _TOKEN_LENGTH_CAP = 64
-_SHUTUP_LINE = re.compile(r"\[\s*SHUT[\s_-]*UP\s*\]", re.IGNORECASE)
-_SILENT_LINE = re.compile(r"\[\s*SILENT\s*\]", re.IGNORECASE)
-# A token inside prose: either bracket width, with the code ticks or marks around it.
-_TOKEN_IN_PROSE = re.compile(
-    r"[ \t]*[`~*_]*[\[［]\s*(?:SHUT[\s_-]*UP|SILENT)\s*[\]］][`~*_]*", re.IGNORECASE,
-)
+_ACKNOWLEDGEMENT_CHARS = 60
+_NOT_AN_ACKNOWLEDGEMENT = frozenset('=`"[]()<>{}')
+_SHUTUP_WHOLE = re.compile(r"\[\s*SHUT[\s_-]*UP\s*\]", re.IGNORECASE)
+_SILENT_WHOLE = re.compile(r"\[\s*SILENT\s*\]", re.IGNORECASE)
+_EXACT_TOKENS = frozenset({SHUTUP_TOKEN, SILENT_TOKEN})
+_LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")
 _CODEX_APP_SERVER = "codex_app_server"
 
 
@@ -138,7 +139,11 @@ def posts_before_output_hook(hermes_home: Path | None) -> bool:
     model = config.get("model")
     if not isinstance(model, dict):
         return False
-    return any(str(model.get(key) or "").strip().lower() == _CODEX_APP_SERVER for key in ("openai_runtime", "api_mode"))
+    providers = config.get("providers")
+    provider = providers.get(model.get("provider")) if isinstance(providers, dict) else None
+    named = (model.get("openai_runtime"), model.get("api_mode"),
+             provider.get("api_mode") if isinstance(provider, dict) else None)
+    return any(str(value or "").strip().lower() == _CODEX_APP_SERVER for value in named)
 
 
 def judged_room(gateway: object, source: object, hermes_home: Path | None) -> bool:
@@ -169,9 +174,14 @@ def _put(store: OrderedDict, key: Any, value: Room, limit: int) -> None:
 
 
 def note_room(key: str, room: Room) -> None:
-    """Remember the newest message a judged room let through."""
+    """Remember the newest message a judged room let through.
+
+    An addressed message stays addressed until a turn takes it: a later aside must not offer
+    ``[SILENT]`` to the turn that answers the request.
+    """
     with _lock:
-        _put(_rooms, key, room, ROOM_LIMIT)
+        held = _rooms.get(key)
+        _put(_rooms, key, room._replace(addressed=room.addressed or bool(held and held.addressed)), ROOM_LIMIT)
 
 
 # --- the turn -----------------------------------------------------------------------
@@ -198,6 +208,7 @@ def turn_instruction(turn_id: object, room_key: str, *, now: float | None = None
             return ""
         # The turn's own age starts here: a long queue wait must not shorten it.
         _put(_turns, turn_id, room._replace(noted=tick), TURN_LIMIT)
+        _rooms[room_key] = room._replace(addressed=False)
     return instruction(room.mode, room.addressed)
 
 
@@ -233,30 +244,75 @@ def _unwrapped(line: str) -> str:
     return line[start:end]
 
 
-def _edge_lines(text: str) -> tuple[str, ...]:
-    """The first and last lines that hold anything but wrapping (a code fence's ticks hold nothing)."""
-    lines = [core for core in (_unwrapped(line) for line in text.splitlines()) if core]
-    return (lines[0], lines[-1]) if lines else ()
+def _whole_reply(text: str) -> str:
+    """The reply with light wrapping gone: code ticks, ``~~``, edge marks, a fence that is all of it."""
+    stripped = _normalized(text).strip()
+    lines = stripped.splitlines()
+    if len(lines) >= 3 and lines[0].startswith("```") and lines[-1].strip() == "```":
+        stripped = "\n".join(lines[1:-1]).strip()
+    return _unwrapped(stripped)
 
 
-def _line_is(text: object, token: re.Pattern[str]) -> bool:
-    if not isinstance(text, str):
-        return False
-    return any(len(line) <= _TOKEN_LENGTH_CAP and token.fullmatch(line) for line in _edge_lines(_normalized(text)))
+def _acknowledged(text: str, token: str) -> bool:
+    """One short line: the exact token, then a brief acknowledgement, or one closed by the token.
 
-
-def is_shutup(text: object) -> bool:
-    """True when the reply's first or last line is the ``[SHUTUP]`` token, however it is wrapped."""
-    return _line_is(text, _SHUTUP_LINE)
-
-
-def _is_silent(text: str) -> bool:
-    """A ``[SILENT]`` line at either edge, or a whole reply that is any Hermes marker once unwrapped.
-
-    A bare marker (``SILENT``, ``NO REPLY``) counts only as the whole reply: as one line of an
-    answer it can be an ordinary word.
+    A closing token must follow punctuation: ``The token is [SILENT]`` is an answer. Text with code
+    or link marks around it is not an acknowledgement either.
     """
-    return _line_is(text, _SILENT_LINE) or _hermes_silence(_unwrapped(_normalized(text)))
+    stripped = _normalized(text).strip()
+    if len(stripped) > _ACKNOWLEDGEMENT_CHARS or "\n" in stripped:
+        return False
+    if stripped.startswith(token + " "):
+        rest = stripped[len(token) + 1:]
+    elif stripped.endswith(" " + token) and unicodedata.category(stripped[-len(token) - 2])[0] == "P":
+        rest = stripped[:-len(token) - 1]
+    else:
+        return False
+    return not any(mark in rest for mark in _NOT_AN_ACKNOWLEDGEMENT)
+
+
+def reply_marker(text: object) -> str | None:
+    """The marker this whole reply is, or None: a real answer is never read as one.
+
+    The whole reply is the token once lightly unwrapped, in any case, or it is the exact token with a
+    brief acknowledgement on one short line. A bare Hermes marker (``SILENT``, ``NO REPLY``) counts
+    only as the whole reply. A token inside a sentence, a code block or a list is the answer's own text.
+    """
+    if not isinstance(text, str):
+        return None
+    core = _whole_reply(text)
+    if len(core) > _TOKEN_LENGTH_CAP:
+        return None
+    if _SHUTUP_WHOLE.fullmatch(core) or _acknowledged(text, SHUTUP_TOKEN):
+        return SHUTUP_TOKEN
+    if _SILENT_WHOLE.fullmatch(core) or _acknowledged(text, SILENT_TOKEN) or _hermes_silence(core):
+        return SILENT_TOKEN
+    return None
+
+
+def _quoted_at(lines: list[str], index: int) -> bool:
+    """Whether the line at `index` is shown, not said: in a fence, in a list, or introduced by a colon."""
+    if sum(line.lstrip().startswith("```") for line in lines[:index]) % 2:
+        return True
+    if index and _LIST_ITEM.match(lines[index - 1]):
+        return True
+    return any(line.strip() for line in lines[:index]) and next(
+        line for line in reversed(lines[:index]) if line.strip()).rstrip().endswith(":")
+
+
+def without_edge_tokens(text: str) -> str:
+    """`text` with an exact token alone on its first or last line removed, as Hermes does for a
+    closing marker: the model answered, and the token is not meant for the reader."""
+    lines = text.split("\n")
+    filled = [index for index, line in enumerate(lines) if line.strip()]
+    if len(filled) < 2:
+        return text
+    first, last = filled[0], filled[-1]
+    drop = {index for index in (first, last)
+            if lines[index].strip() in _EXACT_TOKENS and not (index == last and _quoted_at(lines, index))}
+    if not drop:
+        return text
+    return "\n".join(line for index, line in enumerate(lines) if index not in drop).strip("\n")
 
 
 def _hermes_silence(text: str) -> bool:
@@ -296,24 +352,24 @@ def judged_reply(turn_id: object, response_text: object, *, now: float | None = 
     caller then adds nothing to it. ``[SHUTUP]`` becomes ``[SILENT]`` (the
     thread muted, the 🫡 scheduled once the mute is written). A silence marker
     is logged and comes back clean: no replacement when Hermes already reads it
-    exactly, ``[SILENT]`` when it was wrapped. A kept turn's prose with a token
-    inside is not handled and comes back with the token removed. Every other
-    reply is ``(False, None)``.
+    exactly, ``[SILENT]`` when it was wrapped or acknowledged. An answer with a
+    token alone on its first or last line is not handled and comes back without
+    that line. Every other reply is ``(False, None)``.
     """
     tick = time.time() if now is None else now
     room = _take_turn(turn_id, tick)
     if room is None or not isinstance(response_text, str):
         return False, None
-    shutup = is_shutup(response_text)
-    scrubbed = _TOKEN_IN_PROSE.sub("", response_text)
-    # Tokens with nothing else around them (`[SILENT] [SILENT]`) leave no prose to deliver.
-    if not shutup and not _is_silent(response_text) and _unwrapped(_normalized(scrubbed)):
-        return False, (scrubbed if scrubbed != response_text else None)
+    marker = reply_marker(response_text)
+    answer = without_edge_tokens(response_text)
+    if marker is None and answer.strip():
+        return False, (answer if answer != response_text else None)
+    shutup = marker == SHUTUP_TOKEN
     try:
-        if room.log is not None:
-            room.log(SHUTUP_TOKEN if shutup else SILENT_TOKEN, tick)
         if shutup and room.mute(tick):
             _schedule(room.react, room.loop)
+        if room.log is not None:
+            room.log(marker or SILENT_TOKEN, tick)
     except Exception as exc:  # health: allow BLE001 -- the room allows silence; a failed log, mute or reaction must not send the raw token
         _LOG.info("omh messenger judgement side effect failed: %s", type(exc).__name__)
     if not shutup and _hermes_silence(response_text):

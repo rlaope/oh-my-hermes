@@ -99,19 +99,26 @@ class StoreReset(unittest.TestCase):
 
 
 class TokenTests(unittest.TestCase):
-    def test_token_variants(self) -> None:
+    def test_a_whole_reply_token_is_the_marker(self) -> None:
         zero_width, bom = chr(0x200b), chr(0xfeff)
         for text in ("[SHUTUP]", "  [shutup]\n", "*[SHUTUP]*", "[SHUTUP].", "[Shut Up]", "[SHUT_UP]", "`[SHUTUP]`",
-                     "```\n[SHUTUP]\n```", "```text\n[SHUTUP]\n```", "~~[SHUTUP]~~", "[SHUTUP]\n\nOK", "OK.\n\n[SHUTUP]",
-                     "［SHUTUP］", "[ SHUTUP ]", "\U0001fae1 [SHUTUP]", zero_width + "[SHUTUP]", bom + "[SHUTUP]"):
+                     "```\n[SHUTUP]\n```", "```text\n[SHUTUP]\n```", "~~[SHUTUP]~~", "［SHUTUP］", "[ SHUTUP ]",
+                     "\U0001fae1 [SHUTUP]", zero_width + "[SHUTUP]", bom + "[SHUTUP]",
+                     "[SHUTUP] okay, going quiet", "fine. [SHUTUP]"):
             with self.subTest(text=text):
-                self.assertTrue(judge.is_shutup(text))
+                self.assertEqual(judge.reply_marker(text), judge.SHUTUP_TOKEN)
+        with hermes_modules():
+            for text in ("[SILENT]", "`[SILENT]`", "```\n[SILENT]\n```", "[SILENT] not for me", "okay. [SILENT]", "`SILENT`"):
+                with self.subTest(text=text):
+                    self.assertEqual(judge.reply_marker(text), judge.SILENT_TOKEN)
 
-    def test_a_token_inside_a_sentence_is_not_a_token(self) -> None:
-        for text in ("[SHUTUP] okay, going quiet", "fine. [SHUTUP]", "use `[SHUTUP]` here", "SHUTUP", "shut up",
-                     "[SHUTUP", "", None, "[SHUTUP]" + " " * 80 + "x", "one\nI said [SHUTUP] to it\ntwo"):
+    def test_anything_else_is_not_a_marker(self) -> None:
+        for text in ("Fine [SHUTUP] I'll stop now.", "use `[SHUTUP]` here", "SHUTUP", "shut up", "[SHUTUP", "", None,
+                     "[SHUTUP]" + " " * 80 + "x", "one\nI said [SHUTUP] to it\ntwo", "[SHUTUP]\n\nOK", "OK.\n\n[SHUTUP]",
+                     "[shutup] okay, going quiet", "[Shut Up] is a 2003 single", "The token is [SILENT]",
+                     "x = [SILENT]", "[SILENT] = True"):
             with self.subTest(text=text):
-                self.assertFalse(judge.is_shutup(text))
+                self.assertIsNone(judge.reply_marker(text))
 
     def test_instruction_by_mode_and_address(self) -> None:
         on = judge.instruction("on")
@@ -148,6 +155,8 @@ class RoomTests(StoreReset):
             ({"model": {"openai_runtime": " Codex_App_Server "}}, False),
             ({"model": {"api_mode": "codex_app_server"}}, False),
             ({}, False),
+            ({"model": {"provider": "mine"}, "providers": {"mine": {"api_mode": "codex_app_server"}}}, False),
+            ({"model": {"provider": "other"}, "providers": {"mine": {"api_mode": "codex_app_server"}}}, True),
             ({"model": {"openai_runtime": "auto"}}, True),
             ({"model": "gpt-x"}, True),
             ({"streaming": {"enabled": False}}, True),
@@ -256,6 +265,13 @@ class InstructionTests(StoreReset):
         self.assertEqual(judge.judged_reply("c1", "[SHUTUP]"), (False, None))
         self.assertEqual(gate.read_mutes(self.home / "omh"), {})
 
+    def test_addressed_stays_until_a_turn_takes_it(self) -> None:
+        self.gate(event("hey", raw_text=f"<@{BOT}> hey"), judged_gateway(self.adapter))
+        self.gate(event("thanks all"), judged_gateway(self.adapter))
+        key = gate.thread_key("", "slack", "C1", "171.1")
+        self.assertNotIn(judge.SILENT_TOKEN, judge.turn_instruction("t5", key))
+        self.assertIn(judge.SILENT_TOKEN, judge.turn_instruction("t6", key))
+
     def test_a_message_addressed_to_the_bot_is_not_offered_silent(self) -> None:
         self.gate(event("hey", raw_text=f"<@{BOT}> hey"), judged_gateway(self.adapter))
         key = gate.thread_key("", "slack", "C1", "171.1")
@@ -323,32 +339,71 @@ class ReplyTests(StoreReset):
         self.assertEqual([s["marker"] for s in gate.read_skips(self.home / "omh")], [judge.SILENT_TOKEN])
 
     def test_wrapped_silent_comes_back_clean(self) -> None:
-        for text in ("`[SILENT]`", "```\n[SILENT]\n```", "~~[SILENT]~~", "[SILENT]\n\nnothing for me", "`SILENT`"):
+        for text in ("`[SILENT]`", "```\n[SILENT]\n```", "~~[SILENT]~~", "`SILENT`", "[SILENT] not for me"):
             with self.subTest(text=text):
                 asyncio.run(self.keep_turn()())
                 self.assertEqual(judge.judged_reply("t1", text), (True, judge.SILENT_TOKEN))
         self.assertEqual(gate.read_mutes(self.home / "omh"), {})
 
-    def test_a_bare_marker_word_in_an_answer_is_an_answer(self) -> None:
-        for text in ("Silent\n\nThat is the word you wanted.", "It is one word.\n\nSilent"):
+    def test_an_acknowledged_shutup_mutes_and_posts_nothing(self) -> None:
+        asyncio.run(self.keep_turn()())
+        self.assertEqual(judge.judged_reply("t1", "[SHUTUP] okay, going quiet"), (True, judge.SILENT_TOKEN))
+        self.assertEqual(len(gate.read_mutes(self.home / "omh")), 1)
+
+    def test_a_token_line_at_a_real_answers_edge_is_removed_with_no_mute(self) -> None:
+        answer = "Here is the answer. The deploy failed because the disk is full."
+        long_answer = "The deploy failed. " * 70 + "Done."
+        for text, delivered in (
+            (answer + "\n\n[SILENT]", answer),
+            (answer + "\n\n[SHUTUP]", answer),
+            (long_answer + "\n\n[SILENT]", long_answer),
+            (long_answer + "\n\n[SHUTUP]", long_answer),
+            ("[SHUTUP]\n\n" + answer, answer),
+            ("[SILENT]\n\n" + answer, answer),
+        ):
+            with self.subTest(text=text[:40]):
+                asyncio.run(self.keep_turn()())
+                self.assertEqual(judge.judged_reply("t1", text), (False, delivered))
+        self.assertEqual(gate.read_mutes(self.home / "omh"), {})
+        self.assertEqual(gate.read_skips(self.home / "omh"), [])
+        asyncio.run(self.keep_turn()())
+        self.assertEqual(result_transforms.transform_llm_output(response_text=answer + "\n\n[SHUTUP]", turn_id="t1"),
+                         answer)
+
+    def test_real_answers_come_out_byte_identical_with_no_mute(self) -> None:
+        for text in (
+            "The marker Hermes drops is this one:\n\n```\n[SILENT]\n```",
+            "To go quiet the bot replies:\n\n```\n[SHUTUP]\n```",
+            "I use two markers:\n- [SILENT]\n- [SHUTUP]",
+            "The token is:\n`[SILENT]`",
+            "The token is:\n\n[SHUTUP]",
+            "- first\n- second\n[SILENT]",
+            "```\nunclosed\n[SILENT]",
+            "[Silent]\nThe film came out in 1927 and ran for two hours.",
+            "[Shut Up]\nA 2003 single that charted in several countries.",
+            "Silent\n\nThat is the word you wanted.",
+            "It is one word.\n\nSilent",
+            'if reply == "[SILENT]":',
+            'markers = ["[SILENT]", "[SHUTUP]"]',
+            "flags[SILENT] = True",
+            "value = options[silent]",
+            "See [silent](https://example.com/silent-mode) for the details.",
+            "exactly `[SILENT]`, and the plugin turns `[SHUTUP]` into it.",
+            "Replying with [SILENT] tells Hermes to drop it.",
+            "Fine [SHUTUP] I'll stop now.",
+        ):
             with self.subTest(text=text):
                 asyncio.run(self.keep_turn()())
                 self.assertEqual(judge.judged_reply("t1", text), (False, None))
-
-    def test_a_token_in_prose_is_scrubbed(self) -> None:
-        asyncio.run(self.keep_turn()())
-        self.assertEqual(judge.judged_reply("t1", "Fine, I said `[SHUTUP]` to it and [ SILENT ] too."),
-                         (False, "Fine, I said to it and too."))
-        asyncio.run(self.keep_turn()())
-        self.assertEqual(result_transforms.transform_llm_output(response_text="use ［SHUTUP］ here", turn_id="t1"),
-                         "use here")
-        self.assertEqual(gate.read_mutes(self.home / "omh"), {})
-
-    def test_tokens_with_no_prose_around_them_stay_silent(self) -> None:
-        for text in ("[SILENT] [SILENT]", "** [SHUTUP] [SILENT] **"):
-            with self.subTest(text=text):
                 asyncio.run(self.keep_turn()())
-                self.assertEqual(judge.judged_reply("t1", text), (True, judge.SILENT_TOKEN))
+                self.assertIsNone(result_transforms.transform_llm_output(response_text=text, turn_id="t1"))
+        self.assertEqual(gate.read_mutes(self.home / "omh"), {})
+        self.assertEqual(gate.read_skips(self.home / "omh"), [])
+
+    def test_two_token_lines_and_nothing_else_stay_silent(self) -> None:
+        asyncio.run(self.keep_turn()())
+        self.assertEqual(judge.judged_reply("t1", "[SILENT]\n\n[SHUTUP]"), (True, judge.SILENT_TOKEN))
+        self.assertEqual(gate.read_mutes(self.home / "omh"), {})
 
     def test_a_round_end_restore_cannot_bring_back_a_marker(self) -> None:
         asyncio.run(self.keep_turn()())

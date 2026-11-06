@@ -3721,16 +3721,21 @@ marker stand, the model decides instead, in any language and any wording:
   someone else, and otherwise answers as it normally would. The instruction
   asks only for a marker; it never changes the bot's voice.
 - A message known to be addressed to the bot (its mention, a reply to it, a
-  call by its name) is not offered `[SILENT]`, so a real request is never
-  dropped. It can still be told to be quiet.
+  call by its name) is not offered `[SILENT]`, also when an aside follows it
+  before the turn starts. It can still be told to be quiet. A plain follow-up
+  in a thread is not known to be addressed, so the model decides there.
 - `[SHUTUP]` mutes the thread with the 🫡 reaction and no text, the same as a
-  quiet word. OMH hands Hermes `[SILENT]` in its place, so the token never
-  reaches the chat, also when the model wraps it in code ticks or puts it on
-  the first or last line of a reply. A `[SILENT]` reply is dropped by Hermes;
-  it stays in the transcript. A token inside a sentence is removed from the
-  sentence, and the sentence is delivered. Each marker leaves a
+  quiet word. OMH hands Hermes `[SILENT]` in its place. A reply counts as a
+  marker only when it is the token and nothing else, also in code ticks or a
+  fence, or the exact token with a brief acknowledgement on one short line
+  (`[SHUTUP] okay, going quiet`). A `[SILENT]` reply is dropped by Hermes; it
+  stays in the transcript. Each marker leaves a
   `omh_messenger_judged_silent` line in the skip log, so a wrong silence can
   be found.
+- A real answer is delivered. An exact token alone on the first or last line
+  of a longer reply is removed from it, with no mute, unless that line sits in
+  a code fence or a list or follows a colon. A token inside a sentence, a code
+  block or a list stays as written.
 - The quiet words and calls by other names (`messenger_other_names`) are off
   there. A message that opens with someone else's mention is still skipped
   before a turn opens, a muted thread stays skipped, and a mention, reply or
@@ -3747,8 +3752,9 @@ A room is judged when all of these hold:
 - Streaming (`streaming.enabled`) is off, so a raw `[SHUTUP]` can never
   stream into the chat before OMH replaces it. A multiplexed gateway reads
   this from the launch profile for every route, as Hermes does.
-- The serving profile does not set `model.openai_runtime` or `model.api_mode`
-  to `codex_app_server`. That runtime posts each finished message before OMH
+- The serving profile does not set `model.openai_runtime`, `model.api_mode`
+  or its provider's `api_mode` to `codex_app_server`. That runtime posts each
+  finished message before OMH
   sees it, so such a profile stays on the word-list gate, whatever its display
   settings, and so does a config OMH cannot read.
 
@@ -3818,7 +3824,13 @@ process. A gateway in proxy mode runs its turns elsewhere, so a judged room
 there gets no instruction. A message that waits in a busy session's queue for
 more than 15 minutes also gets none, and a 🫡 lands on the thread's newest
 message. A profile switched to the Codex app-server runtime keeps any agent it
-already built until the gateway restarts. Discord messages Hermes batches into one event are judged as one
+already built until the gateway restarts, and a session `/model` override
+pinned to that runtime before the setting changed is not seen; there a raw
+token can reach the chat. A token mid-sentence (`Fine [SHUTUP] I'll stop now.`)
+also shows as written, and the thread is not muted. A short answer that opens
+with the exact token (`[SILENT] is the marker.`) reads as an acknowledgement
+and is not delivered. Discord messages Hermes batches into one event are
+judged as one
 message, so a quiet word batched with other text does not mute. The 🫡 goes
 through the adapter's private reaction method and follows its reactions
 setting.

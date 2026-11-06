@@ -73,8 +73,9 @@ All notable changes will be documented here.
   quiet-word list and calls by other names are off; a leading mention of
   someone else, muted threads and the unmute on a mention, reply or name
   stay. Every other room, an older Hermes, streaming on, or a profile on
-  Codex's app-server runtime keeps the word-list gate and gets no instruction, so Hermes' "returned only a silence
-  marker" notice never appears.
+  Codex's app-server runtime keeps the word-list gate and gets no
+  instruction, so Hermes' "returned only a silence marker" notice never
+  appears.
 - **`omh coding model-routing status` names each discovered model once.**
   Session history yields one observation per session, so the human line
   repeated one model id hundreds of times. It now reads
