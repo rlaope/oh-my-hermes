@@ -117,7 +117,7 @@ class FoldKeyTests(unittest.TestCase):
                 self.assertEqual(app.composer.text, "half")  # nothing reached the composer
                 app._on_input(Key(CHAR, "p", ctrl=True))
                 self.assertGreater(len(self.plan(app)), 1)
-                self.assertFalse([call for call in client.calls if call[0] in ("prompt.submit", "session.steer")])
+                self.assertFalse([call for call in client.calls if call[0] in ("prompt.submit", "session.redirect")])
 
     def test_a_menu_over_the_plan_leaves_the_key_alone(self) -> None:
         # #2349 review, LOW: with `/` typed the menu stands where the plan was, and Ctrl+P flipped a fold nobody saw.

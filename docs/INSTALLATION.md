@@ -794,7 +794,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   whole, in order, at the boundary. Briefings are the TUI's own rows, not
   part of the session Hermes stores: a resumed or rewound session is drawn
   again without them. The messenger's replies are unchanged.
-- The OMH TUI takes the mouse on the main screen once it can tell which row
+- With `OMH_TUI_MOUSE=1` the OMH TUI takes the mouse on the main screen once it can tell which row
   a report lands on (once the session's output has reached the bottom of the
   screen, or after Ctrl+L). A drag over the transcript or the rows under it
   selects the text (shown reversed) and copies it when you let go, without
@@ -851,12 +851,12 @@ run and approval decision stays Hermes'; the screen is OMH's.
   `terminal.integrated.macOptionClickForcesSelection` is on. That selection
   copies the rail, as it always has. Inside tmux the reports reach the OMH
   TUI with `set -g mouse` on or off, and with it on tmux hands the OMH TUI
-  the wheel and the drag instead of starting copy mode. `OMH_TUI_MOUSE=0`
-  leaves the main screen's mouse to the terminal as before: the wheel
-  scrolls its scrollback and a drag selects natively, rail included, and
-  click reports are on only while the agent list or the `/theme` picker is
-  open, as the next item says.
-- With `OMH_TUI_MOUSE=0` the OMH TUI asks the terminal for click reports only while the agent list
+  the wheel and the drag instead of starting copy mode. Without
+  `OMH_TUI_MOUSE=1` (the default) the main screen's mouse is the terminal's:
+  the wheel scrolls its scrollback and a drag selects natively, rail
+  included, and click reports are on only while the agent list or the
+  `/theme` picker is open, as the next item says.
+- By default the OMH TUI asks the terminal for click reports only while the agent list
   is open, so during a turn the wheel scrolls and a drag selects as in any
   shell, and the agent view is reached with Down; nothing in it, and
   nothing on the info line, is clickable while the list is closed. While the list is open a plain drag no longer selects text in
@@ -866,7 +866,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   the window is being resized. While click reports are on there, and for 0.5 s after they go off, an Esc pressed on
   its own acts after 0.3 s, the time a click report split by a slow
   connection has to arrive whole. Where the main screen takes the mouse
-  (without `OMH_TUI_MOUSE=0`) the Esc waits only where a report can still
+  (with `OMH_TUI_MOUSE=1`) the Esc waits only where a report can still
   come split: over SSH or WSL, while a mouse button is held, and for 0.5 s
   after the last report (a wheel turn, a click); otherwise it acts at the
   first silence, as with reports off. Another key typed within that time ends
@@ -903,8 +903,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   SSH. Elsewhere it
   goes out as OSC 52 with nothing to confirm it, and the footer says `⚠ copy
   sent (terminal may not support OSC 52)` (under tmux, that tmux passes it on
-  only with `set-clipboard on`). The terminal's own selection (its bypass
-  modifier, or everywhere with `OMH_TUI_MOUSE=0`) copies what the screen
+  only with `set-clipboard on`). The terminal's own selection (everywhere by
+  default, or its bypass modifier with `OMH_TUI_MOUSE=1`) copies what the screen
   shows, so it keeps each row's rail (`┃ ` in front of each row, and a
   reply's margin after it), and the terminal shows no copy notice of its
   own.
@@ -3681,6 +3681,78 @@ when possible. If that directory is not on `PATH`, add the printed directory to
 non-blocking command availability warning for this case, so source checkouts,
 wrapper runtimes, and absolute-path installs can still verify Hermes
 registration without pretending the shell alias is ready.
+
+### Quiet and addressee gate in Slack and Discord group chats
+
+In a Slack or Discord group, channel or thread chat, OMH's
+`pre_gateway_dispatch` hook decides whether a message opens a turn at all. It
+never writes a reply and never changes the bot's voice. DMs, slash commands,
+internal events and other platforms pass untouched, and any error lets the
+message through.
+
+- **Quiet.** A message whose whole text is a quiet word (`shut up`,
+  `조용히 해`, `黙って`, `闭嘴`, `cállate`, `tais-toi`, `sei still`,
+  `cala a boca`, `замолчи`, `im đi` and a few more), aimed at the bot (its
+  mention, a reply to it, a call by its name, or a reply inside a thread),
+  mutes that thread. The bot reacts with 🫡 and sends no text. Words that are
+  also ordinary single words (`quiet`, `silence`, `うるさい`, `빠져`) need the
+  mention, reply or name. A quiet word inside a longer sentence, quoted,
+  formatted, or asked as a question does nothing. A Slack top-level message
+  is not inside a thread; a mute it sets covers only the thread it opens.
+- **Unmute.** A real mention of the bot, a reply to one of its messages, or
+  a call by its name at the start or end of a message. Mutes do not expire.
+- **Not for the bot.** A message that opens with a real mention of someone
+  else, or calls a configured other name at its start, or at its end after
+  punctuation (`민수야 …`, `alex, …`, `田中さん、…`, `…, alex`), is skipped,
+  unless it also names the bot or says "you" (`니가`, `you`, `あなた`, `你`,
+  `tú`, `du`, …). A mention at the end (`summarize this for @alex`) and a
+  sentence ending in a name (`범인은 민수야`) are not calls. It never mutes.
+
+Only senders Hermes authorizes are gated; everyone else is left to Hermes.
+
+How this relates to Hermes' own Slack options:
+
+- `ignore_other_user_mentions` already skips a message that opens with
+  someone else's @mention, which is the same as R1 above. If that is all you
+  want, turning it on is enough.
+- `thread_require_mention` and `strict_mention` make the bot wait for a
+  mention, so they also silence the bot on your own follow-ups that do not
+  mention it.
+- `thread_followup_silence` only lets a `[SILENT]` reply the model chose
+  stand.
+
+Hermes has no quiet-word mute and does not notice a message that calls
+someone else by name; those are what this gate adds. Name calls (R2) are
+checked only when `messenger_other_names` is set.
+
+The word lists cover English, Korean, Japanese, Simplified and Traditional
+Chinese, Spanish, French, German, Portuguese, Russian and Vietnamese, and are
+all checked whatever language the profile uses. They are closed data in
+`src/plugin_bundle/omh/messenger_gate_words.py`; adding a language is one row
+there.
+
+Settings, per profile under `plugins.entries.omh.settings`:
+
+| Setting | Values | Default |
+| --- | --- | --- |
+| `messenger_gate` | `on`, `mute_only` (quiet and mutes only), `off` | `on` |
+| `messenger_self_names` | extra names the bot answers to, comma-separated or a YAML flow list | the bot's platform names |
+| `messenger_other_names` | names of other people or bots in the chats, same format | none (calls by name are not checked) |
+
+The gate reads the settings of the profile that owns the message, also at a
+multiplexed gateway's ingress. Mutes (the newest 1,000) are kept in
+`runtime/messenger_gate.json` and the last 200 skips in
+`runtime/messenger_gate_skips.jsonl` under that profile's OMH home: its
+`omh_home` setting, else the home it is bound to, else `~/.omh`. Deleting a
+key under `mutes` unmutes that thread. The skip log holds the first 120
+characters of each skipped message, on this machine only, so a wrong skip can
+be found.
+
+Limits: the gate runs only where Hermes loads OMH's plugin in the gateway
+process. Discord messages Hermes batches into one event are judged as one
+message, so a quiet word batched with other text does not mute. The 🫡 goes
+through the adapter's private reaction method and follows its reactions
+setting.
 
 ### Build identity
 

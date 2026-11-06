@@ -223,6 +223,7 @@ def register(ctx: _PluginContext) -> None:
         pre_llm_call,
         start_import_warmup,
     )
+    from .hooks.gateway_hooks import pre_gateway_dispatch
     from .hooks.result_transforms import transform_llm_output, transform_tool_result
     from .hooks.session_hooks import on_session_end, on_session_start, subagent_start, subagent_stop
     from .hooks.tool_hooks import post_tool_call, pre_tool_call
@@ -532,6 +533,7 @@ def register(ctx: _PluginContext) -> None:
     _register_optional_hook(ctx, "subagent_stop", subagent_stop)
     _register_optional_hook(ctx, "transform_tool_result", transform_tool_result)
     _register_optional_hook(ctx, "transform_llm_output", transform_llm_output)
+    _register_optional_hook(ctx, "pre_gateway_dispatch", pre_gateway_dispatch)
     get_config = getattr(ctx, "get_config", None)
     browser_config = get_config("browser_adapter", {}) if callable(get_config) else {}
     if isinstance(browser_config, dict) and browser_config.get("enabled") is True:

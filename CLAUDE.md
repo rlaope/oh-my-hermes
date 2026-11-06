@@ -35,7 +35,9 @@ held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
   person sent. Off with `OMH_TUI_UPDATE_CHECK=0`, `omh theme update-check
   off`, or an explicit `omh update-check` `off` (a stored mode, not the
   default). `src/tui/update_notice.py` is the other client in
-  `NETWORK_CLIENT_BRIDGES`, and only `src/tui/app.py` may import it.
+  `NETWORK_CLIENT_BRIDGES`. Only `src/tui/app.py` and `src/commands/setup.py`
+  may import it; the latter reads `latest` once in an explicit `omh update` on
+  an installer-managed stable install to pick the release wheel to download.
 - The `show-reel` toolkit scripts `toolkit/scripts/eleven.py`, `narrate.py`
   (ElevenLabs, by spawning `curl` with the key on stdin) and
   `codex_ref_image.sh` (the user's codex CLI): package data the user runs with

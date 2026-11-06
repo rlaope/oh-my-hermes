@@ -38,6 +38,7 @@ OPTIONAL_HOOKS = (
     "on_session_start",
     "post_api_request",
     "post_tool_call",
+    "pre_gateway_dispatch",
     "pre_verify",
     "subagent_start",
     "subagent_stop",

@@ -46,7 +46,7 @@ the stdio entry's in a closed set of places. `Adapter` translates those, after
   Hermes' message for a guarded target; the owner's one-time token for that
   target is kept and rides the same switch sent again with
   `confirm_expensive_model`. Every other `config.set` passes.
-* `session.steer` gets the execution generation of the turn it steers,
+* `session.steer` and `session.redirect` get the execution generation of the turn they steer,
   `shell.exec` the session it runs in, and `session.list` is the owner's live
   listing followed by its stored one.
 * `session.interrupt` gets the execution generation of the turn it stops, as
@@ -563,6 +563,7 @@ class Adapter:
             "session.close": self._close,
             "prompt.submit": self._submit,
             "session.steer": self._steer,
+            "session.redirect": self._redirect,
             "session.interrupt": self._interrupt,
             "config.set": self._config_set,
             "shell.exec": self._shell,
@@ -690,12 +691,15 @@ class Adapter:
 
         return [self._call("session.mutate", mutate, on_rewound)]
 
-    def _steer(self, request_id: object, params: dict[str, Any]) -> list[Action]:
+    def _steer(self, request_id: object, params: dict[str, Any], method: str = "session.steer") -> list[Action]:
         state = self._state(params)
         if state is None or not _whole(state.generation):
             return [_reply(request_id, {"status": "rejected"})]  # no turn known to steer: the TUI queues the text
         params["execution_generation"] = state.generation
-        return [self._forward(request_id, "session.steer", params, translated=False)]
+        return [self._forward(request_id, method, params, translated=False)]
+
+    def _redirect(self, request_id: object, params: dict[str, Any]) -> list[Action]:
+        return self._steer(request_id, params, "session.redirect")
 
     def _interrupt(self, request_id: object, params: dict[str, Any]) -> list[Action]:
         state = self._state(params)

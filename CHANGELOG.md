@@ -4,6 +4,68 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Codex and Claude Code units dispatched by OMH now come back accepted,
+  and one dag-ulw run can send different coding nodes to both owners.**
+  Untracked executor plugin state under `.omx/` and `.omc/` no longer fails
+  committed-result intake; tracked changes and unrelated untracked files
+  still do. Claude Code's temp directory stays inside the fence, and its
+  result-file directory is explicitly allowed. A readiness decision stale
+  only because it came from another checkout is re-observed at dispatch.
+  Naming Codex or Claude Code in a dag-ulw request in Hermes chat records
+  each owner's one-day choice; coding nodes can name their `owner`, and
+  each owner's batch exports separately while cross-owner dependencies wait.
+- **In Slack and Discord group chats, telling the bot to be quiet now mutes
+  it in that thread, and a message meant for someone else no longer opens a
+  turn.** OMH registers Hermes' `pre_gateway_dispatch` hook. A whole-message
+  quiet word aimed at the bot (`shut up`, `조용히 해`, `黙って`, `闭嘴`,
+  `cállate` and the rest of eleven languages' closed lists) mutes the thread
+  with a 🫡 reaction and no text; a mention of the bot, a reply to it, or a
+  call by its name unmutes it. A message that opens with a real mention of
+  someone else, or calls a configured other name at its start or end without
+  naming the bot or saying "you", is skipped. Only senders Hermes authorizes
+  are gated, and every skip is logged under the owning profile's OMH home;
+  `messenger_gate: off` or
+  `mute_only` turns it down per profile. DMs, slash commands and other
+  platforms are untouched.
+
+- **Ctrl+Enter in the OMH TUI sends now into the running turn, not after
+  it.** Ctrl+Enter, Ctrl+J on an empty composer and the text typed after a
+  denied approval went as Hermes' `session.steer`, which only holds the
+  text until a tool batch ends or the next model call. When the model was
+  already writing its final answer neither came, and Hermes sent the text
+  as the next prompt once the turn had ended. They now go as
+  `session.redirect`, as Hermes' own TUI sends busy input: a model request
+  under way is cut where it was, its reply sealed, and retried with the
+  text as a user message, so the retried reply streams under the steer
+  row; a tool batch running gets the text with its results, and a
+  foreground terminal command moves to the background so the batch can
+  end. The row reads as a sent prompt at once, and stopping the turn
+  afterwards no longer puts it back in the queue. A redirect Hermes queues
+  as its own next prompt (the turn still starting, or compressing) comes
+  back to the queue on a stop, which clears Hermes' queue. An agent
+  without redirect, or a redirect refused between a tool batch and the
+  next model call, gets `session.steer`. `/steer <text>` stays Hermes'
+  steer, read after the next tool call without interrupting.
+- **`omh update` keeps a stable install on stable releases, and
+  `--dry-run` says when a real run would update the command package.** The
+  installer-managed self-update still defaulted to `--channel preview`, so a
+  plain `omh update` after the documented stable install downloaded the
+  `main` archive, while `omh update --dry-run` printed "Command package:
+  unchanged (preview only)". With no `--channel`, `--version`, or
+  `--package-url`, the self-update now reads the installed package's PEP 610
+  record, as `omh setup` has since #2294: a stable install moves to the
+  newest published release and is left alone when it is already on it, when
+  it is newer than npm's `latest` (the GitHub release is created before
+  `npm publish`, so `latest` can trail it for a while), or when the newest
+  release cannot be read; a `main` install, or one that records
+  nothing, keeps tracking `main`. A dry run now plans like a real run and
+  its card reads "Command package: a real run would update it to v4.0.6".
+- **`omh coding model-routing status` names each discovered model once.**
+  Session history yields one observation per session, so the human line
+  repeated one model id hundreds of times. It now reads
+  `claude-opus-5-5 (x412), claude-sonnet-5-5 (x61)`; `--json` keeps every
+  observation.
+
 - **A reply that opens with a code block keeps its `⚚ Hermes` header in
   the OMH TUI's scrollback, and a table after a released one keeps its own
   box whatever spaces its divider holds.** When a reply's first line was a
@@ -38,6 +100,19 @@ All notable changes will be documented here.
   comes back ends after the budget with the same resume hint.
   `/gateway restart`'s own reattach shares the pauses, the drain wait and
   the status row.
+
+- **Follow-ups to the messenger quiet gate, the Ctrl+Enter redirect and
+  `/gateway restart`.** A quiet word that ends in a question in any order of
+  marks (`shut up?!`, `shut up!?`, `닥쳐？!`, `‽`, `¿`) no longer mutes the
+  thread; `shut up!` still does. When a turn ends cleanly with a redirect
+  Hermes queued as its own next prompt, the OMH TUI's queue waits for that
+  turn instead of sending its next line beside it; a turn that fails, or a
+  queued turn that does not start within a few seconds, lets the queue go on.
+  A redirect that cuts reasoning while it streams
+  seals that reasoning, so the retry's reasoning reads as its own block. A
+  stopped gateway is now said plainly, as a state, with
+  `hermes gateway start` to start it again, and the restart wait reads
+  `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, as Hermes does.
 
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
@@ -181,8 +256,8 @@ All notable changes will be documented here.
   a run. It is not shown when Hermes' `model_map` backend offers no option
   for `review` but does for `unspecified-high`. Verify nodes are not linted,
   and neither are nodes whose label only reads like a review.
-- **A drag in the OMH TUI copies the transcript without the rail.** The main
-  screen now takes the mouse: a drag over the transcript or the live rows
+- **With `OMH_TUI_MOUSE=1`, a drag in the OMH TUI copies the transcript
+  without the rail.** The main screen then takes the mouse: a drag over the transcript or the live rows
   selects the text (shown reversed) and copies it without the thin `┃` rail
   or a reply's margin, which stay drawn as before; the row above the composer
   says `copied N chars`, and a double click copies a word, a triple click a
@@ -193,10 +268,11 @@ All notable changes will be documented here.
   live rows change under it is dropped and copies nothing, Ctrl+C right after
   a drag only drops the selection, and the
   terminal's own selection is still there with its bypass modifier (Shift,
-  Option in iTerm2, Fn in Terminal.app). `OMH_TUI_MOUSE=0` keeps the
-  terminal's own wheel and selection on the main screen, as before.
-- **Scrolling the wheel back down in the OMH TUI returns to the chat.** The
-  transcript view the wheel opens closes once the wheel brings it back to its
+  Option in iTerm2, Fn in Terminal.app). It is off by default: without it
+  the terminal keeps its own wheel scrolling and selection on the main
+  screen, and the wheel never opens the transcript view.
+- **With `OMH_TUI_MOUSE=1`, scrolling the wheel back down in the OMH TUI
+  returns to the chat.** The transcript view the wheel opens closes once the wheel brings it back to its
   end, so the composer is back without Esc or `q`. A view opened by Ctrl+O or
   `/history` still stays open at its end.
 - **The round-end check continues a turn less often.** A changed function's
