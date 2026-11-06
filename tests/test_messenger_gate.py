@@ -52,6 +52,15 @@ class QuietWordTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertNotEqual(action(text, in_thread=True, reply_to_own=True), "mute")
 
+    def test_a_question_mark_anywhere_in_the_closing_run_never_mutes(self) -> None:
+        for text in ("shut up?!", "shut up!?", "shut up?!!", "닥쳐？!", "lumi, shut up?!", "shut up ?!", "shut up‽",
+                     "shut up!‽", "cállate!¿", "cállate ¿"):
+            with self.subTest(text=text):
+                self.assertNotEqual(action(text, in_thread=True, reply_to_own=True), "mute")
+        for text in ("shut up!", "shut up!!", "닥쳐!!"):
+            with self.subTest(text=text):
+                self.assertEqual(action(text, in_thread=True, reply_to_own=True), "mute")
+
     def test_quiet_aimed_at_the_bot_by_mention_or_name(self) -> None:
         self.assertEqual(action("shut up", raw_text=f"<@{BOT}> shut up"), "mute")
         self.assertEqual(action("루미야 조용히 해"), "mute")
@@ -325,11 +334,21 @@ class AckTests(unittest.TestCase):
 class StateTests(unittest.TestCase):
     def test_concurrent_writers_keep_every_mute_and_bound_the_log(self) -> None:
         home = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        # `append_skip` keeps the product's short best-effort lock wait, which a loaded runner can
+        # exceed; this test pins the trim and the line integrity, so the skip wait is widened here.
+        # `write_mute` passes its own wait explicitly, which overrides this default.
+        lock = gate._awareness_delivery_lock
+
+        def patient_lock(path: Path, *, timeout_seconds: float = 30.0):
+            return lock(path, timeout_seconds=timeout_seconds)
+
+        self.enterContext(mock.patch.object(gate, "_awareness_delivery_lock", patient_lock))
+        appended: list[bool] = []
 
         def write(n: int) -> None:
             for i in range(30):
                 gate.write_mute(home, f"k{n}-{i}", {"muted_ts": i})
-                gate.append_skip(home, {"reason": "x", "n": n, "pad": "p" * 1000})
+                appended.append(gate.append_skip(home, {"reason": "x", "n": n, "pad": "p" * 1000}))
 
         threads = [threading.Thread(target=write, args=(n,)) for n in range(8)]
         for thread in threads:
@@ -337,6 +356,7 @@ class StateTests(unittest.TestCase):
         for thread in threads:
             thread.join()
         self.assertEqual(len(gate.read_mutes(home)), 240)
+        self.assertEqual(appended.count(False), 0)
         self.assertEqual(len(gate.read_skips(home)), gate.SKIP_LOG_LIMIT)
         self.assertLess(gate.skip_log_path(home).stat().st_size, gate.SKIP_LOG_TRIM_BYTES + 3000)
 

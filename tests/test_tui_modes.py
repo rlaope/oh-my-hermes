@@ -64,6 +64,7 @@ from omh.tui.transcript import (
     CommandBlock,
     NoticeBlock,
     SteerBlock,
+    ThinkingBlock,
     UserBlock,
     block_rows,
 )
@@ -588,14 +589,89 @@ class SteerTests(unittest.TestCase):
 
     def test_a_send_now_hermes_queued_as_its_next_prompt_is_never_sent_again(self) -> None:
         # A redirect while the turn is still being built, or while Hermes compresses the context, is `queued` as
-        # Hermes' own next prompt: the turn ending on its own sends it, so the TUI sends nothing for it.
+        # Hermes' own next prompt: the turn ending on its own sends it, so the TUI sends nothing for it, and the
+        # rest of the queue waits for that turn: sent at this turn's end, a queued line could start ahead of it.
         app, client = make_app(busy=True)
         queue(app, "first queued", "second queued")
         app._on_input(CTRL_ENTER)
         answer(app, client, {"status": "queued", "text": "first queued"})
         app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(client.named("prompt.submit"), [])
+        self.assertEqual([line.text for line in app.queued], ["second queued"])
+        app._on_event(Event("message.start", SID, {}))  # Hermes runs the redirect it queued
+        app._on_event(Event("message.complete", SID, {"text": "redirected answer"}))
         self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "second queued", "queued": True}])
         self.assertEqual(client.named("session.redirect"), [{"session_id": SID, "text": "first queued"}])
+
+    def test_a_failed_turn_end_sends_the_queue_on_even_with_a_redirect_hermes_queued(self) -> None:
+        # Hermes answers `queued` mostly while the turn is still being built; a build that fails ends the turn with an
+        # error `message.complete` (agent_init_failed) or a bare `error`, and Hermes drains nothing after either.
+        ends = {
+            "error complete": Event("message.complete", SID, {"status": "error", "text": "", "error": "init failed"}),
+            "bare error": Event("error", SID, {"message": "Session no longer running before the agent was ready"}),
+        }
+        for name, end in ends.items():
+            with self.subTest(end=name):
+                app, client = make_app(busy=True)
+                queue(app, "first queued", "second queued")
+                app._on_input(CTRL_ENTER)
+                answer(app, client, {"status": "queued", "text": "first queued"})
+                app._on_event(end)
+                self.assertEqual(client.named("prompt.submit"),
+                                 [{"session_id": SID, "text": "second queued", "queued": True}])
+                self.assertIsNone(app.hermes_next_due)
+
+    def test_a_held_queue_goes_on_when_hermes_queued_turn_never_starts(self) -> None:
+        # A drain Hermes cancels says nothing: after HERMES_NEXT_TURN_SECONDS without a `message.start` the queue goes.
+        now = [100.0]
+        app, client = make_app(busy=True, clock=lambda: now[0])
+        queue(app, "first queued", "second queued")
+        app._on_input(CTRL_ENTER)
+        answer(app, client, {"status": "queued", "text": "first queued"})
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(app.hermes_next_due, 100.0 + app_module.HERMES_NEXT_TURN_SECONDS)
+        now[0] += app_module.HERMES_NEXT_TURN_SECONDS - 0.5
+        app._drain_when_hermes_next_missed()
+        self.assertEqual(client.named("prompt.submit"), [])
+        now[0] += 1.0
+        app._drain_when_hermes_next_missed()
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "second queued", "queued": True}])
+        self.assertIsNone(app.hermes_next_due)
+        # Started in time, Hermes' turn clears the wait: nothing goes until that turn ends.
+        now[0] = 200.0
+        app, client = make_app(busy=True, clock=lambda: now[0])
+        queue(app, "first queued", "second queued")
+        app._on_input(CTRL_ENTER)
+        answer(app, client, {"status": "queued", "text": "first queued"})
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        app._on_event(Event("message.start", SID, {}))
+        now[0] += 60.0
+        app._drain_when_hermes_next_missed()
+        self.assertEqual(client.named("prompt.submit"), [])
+
+    def test_a_queued_answer_after_its_turn_ended_does_not_hold_the_next_turns_queue(self) -> None:
+        # `message.complete` came before the redirect's answer: the queue went on, and the late `queued` belongs to the
+        # turn that ended, not to the one the TUI started since.
+        app, client = make_app(busy=True)
+        queue(app, "first queued", "second queued", "third queued")
+        app._on_input(CTRL_ENTER)
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "second queued", "queued": True}])
+        app._on_response(Response(1, {"status": "queued", "text": "first queued"}, None))  # the redirect's answer
+        self.assertEqual(app.hermes_queued, [])
+        self.assertIn("┃ ❯ first queued", steers(app))
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("message.complete", SID, {"text": "second done"}))
+        self.assertEqual(client.named("prompt.submit")[-1], {"session_id": SID, "text": "third queued", "queued": True})
+
+    def test_a_turn_end_without_a_redirect_hermes_queued_still_sends_the_next_queued_line(self) -> None:
+        # The negative case: a redirect Hermes took into the turn (`redirected`) leaves Hermes nothing to run next.
+        app, client = make_app(busy=True)
+        queue(app, "first queued", "second queued")
+        app._on_input(CTRL_ENTER)
+        answer(app, client, {"status": "redirected", "text": "first queued"})
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "second queued", "queued": True}])
 
     def test_an_agent_without_redirect_gets_the_send_now_as_a_steer(self) -> None:
         # 4010 on `session.redirect`: the agent has no active-turn redirect, and may still take a steer.
@@ -670,6 +746,25 @@ class SteerTests(unittest.TestCase):
                  if isinstance(block, (AssistantBlock, SteerBlock))]
         self.assertEqual(shown, [("AssistantBlock", "partial"), ("SteerBlock", "use the other file"),
                                  ("AssistantBlock", "retried")])
+
+    def test_a_redirect_seals_the_reasoning_streaming_and_the_retry_reasons_in_a_block_of_its_own(self) -> None:
+        # As a step's end seals it: the cut reasoning stops counting, and the retry's reasoning does not join it.
+        app, client = make_app(busy=True)
+        now = [10.0]
+        app.transcript._clock = lambda: now[0]
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("reasoning.delta", SID, {"text": "thinking about it"}))
+        type_text(app, "use the other file")
+        app._on_input(CTRL_ENTER)
+        now[0] = 14.0
+        answer(app, client, {"status": "redirected", "text": "use the other file"})
+        (cut,) = [block for block in app.transcript.blocks if isinstance(block, ThinkingBlock)]
+        self.assertEqual((cut.done, cut.ended_at), (True, 14.0))
+        app._on_event(Event("reasoning.delta", SID, {"text": "the other file"}))
+        shown = [(type(block).__name__, getattr(block, "text", "")) for block in app.transcript.blocks
+                 if isinstance(block, (ThinkingBlock, SteerBlock))]
+        self.assertEqual(shown, [("ThinkingBlock", "thinking about it"), ("SteerBlock", "use the other file"),
+                                 ("ThinkingBlock", "the other file")])
 
     def typed_steer(self, *events: str) -> tuple[App, SteerBlock]:
         """A turn running, a steer typed and taken by Hermes, then `events`: the App and the steer's block."""
