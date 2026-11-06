@@ -1709,6 +1709,23 @@ class Transcript:
         self._write_held()
         self._version += 1
 
+    def steer_redirected(self, block: SteerBlock) -> None:
+        """Hermes redirected the turn with the steer: taken now, and a reply streaming is sealed where it was cut.
+
+        A redirect during a model request cancels that request and retries
+        it with the steer as a user message, and Hermes sends no boundary
+        event between the two (one `message.start` per turn): left live, the
+        retry's deltas would join the cut reply and the steer row would go
+        under both. Sealed here, the row is written under the cut reply and
+        the retry streams into a reply of its own. A running tool is left as
+        it is (Hermes holds the steer for that batch's results), and the row
+        waits under it for the next boundary as any steer does.
+        """
+        live = self._live(AssistantBlock)
+        if live is not None:
+            live.done = True
+        self.steer_answered(block, STEER_TAKEN)
+
     def add_notice(self, text: str, level: str = NOTICE_INFO) -> None:
         """A notice; while `command` is set, that command's output instead: under its echo while the echo is open,
         else under a repeat of the echo, held like any aside (as `add_output` with `command`)."""
