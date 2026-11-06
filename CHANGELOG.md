@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Codex and Claude Code units dispatched by OMH now come back accepted,
+  and one dag-ulw run can send different coding nodes to both owners.**
+  Untracked executor plugin state under `.omx/` and `.omc/` no longer fails
+  committed-result intake; tracked changes and unrelated untracked files
+  still do. Claude Code's temp directory stays inside the fence, and its
+  result-file directory is explicitly allowed. A readiness decision stale
+  only because it came from another checkout is re-observed at dispatch.
+  Naming Codex or Claude Code in a dag-ulw request in Hermes chat records
+  each owner's one-day choice; coding nodes can name their `owner`, and
+  each owner's batch exports separately while cross-owner dependencies wait.
 - **In Slack and Discord group chats, telling the bot to be quiet now mutes
   it in that thread, and a message meant for someone else no longer opens a
   turn.** OMH registers Hermes' `pre_gateway_dispatch` hook. A whole-message
@@ -104,6 +114,19 @@ All notable changes will be documented here.
   comes back ends after the budget with the same resume hint.
   `/gateway restart`'s own reattach shares the pauses, the drain wait and
   the status row.
+
+- **Follow-ups to the messenger quiet gate, the Ctrl+Enter redirect and
+  `/gateway restart`.** A quiet word that ends in a question in any order of
+  marks (`shut up?!`, `shut up!?`, `닥쳐？!`, `‽`, `¿`) no longer mutes the
+  thread; `shut up!` still does. When a turn ends cleanly with a redirect
+  Hermes queued as its own next prompt, the OMH TUI's queue waits for that
+  turn instead of sending its next line beside it; a turn that fails, or a
+  queued turn that does not start within a few seconds, lets the queue go on.
+  A redirect that cuts reasoning while it streams
+  seals that reasoning, so the retry's reasoning reads as its own block. A
+  stopped gateway is now said plainly, as a state, with
+  `hermes gateway start` to start it again, and the restart wait reads
+  `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, as Hermes does.
 
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a

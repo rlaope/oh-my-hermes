@@ -70,6 +70,9 @@ CUSTOM_PROFILE = "custom"
 GATEWAY_MARKERS = ("_HERMES_GATEWAY", "HERMES_GATEWAY", "HERMES_GATEWAY_MODE")
 # Hermes' default `agent.restart_after_turn_timeout` (`hermes_cli/config_defaults.py`), in seconds.
 DEFAULT_AFTER_TURN_SECONDS = 1800.0
+# Set and not blank, it wins over that key for Hermes' gateway and its restart command (`gateway/run_config_loaders.py`
+# `_load_env_or_agent_cfg_timeout`, `hermes_cli/gateway.py` `_agent_timeout_setting`).
+AFTER_TURN_ENV = "HERMES_RESTART_AFTER_TURN_TIMEOUT"
 CONFIG_FILE = "config.yaml"
 OUTPUT_TAIL_BYTES = 8 << 10
 OUTPUT_TAIL_LINES = 6
@@ -205,13 +208,13 @@ def read_impact(environ: Mapping[str, str], profile: str) -> RestartImpact:
     if named:
         own = read_gateway(current)
         if own.live and not own.elsewhere:
-            return RestartImpact(current, own, wait_seconds=after_turn_seconds(current))
+            return RestartImpact(current, own, wait_seconds=after_turn_seconds(current, environ))
     host = read_gateway(root)
     if not host.live or host.elsewhere:
         return RestartImpact(None, None)
     if named and current.name not in host.served:
         return RestartImpact(None, None)
-    return RestartImpact(root, host, current.name if named else "", after_turn_seconds(root))
+    return RestartImpact(root, host, current.name if named else "", after_turn_seconds(root, environ))
 
 
 def _profile_home(environ: Mapping[str, str]) -> Path | None:
@@ -246,20 +249,33 @@ def read_record(environ: Mapping[str, str], profile: str) -> Gateway | None:
     return max(kept, key=lambda record: record.updated or 0.0, default=None)
 
 
-def after_turn_seconds(home: Path) -> float:
-    """`agent.restart_after_turn_timeout` from the gateway home's `config.yaml`, as Hermes reads it (a number of
-    seconds, at least 0); Hermes' default when the file, the key or the number is missing."""
+def after_turn_seconds(home: Path, environ: Mapping[str, str] | None = None) -> float:
+    """How long a draining restart lets running work finish, as Hermes reads it (a number of seconds, at least 0).
+
+    `AFTER_TURN_ENV` in `environ` when it is set and not blank (the
+    environment the restart command this TUI runs gets), read as Hermes'
+    `float()` reads it (quotes are not stripped), else
+    `agent.restart_after_turn_timeout` from the gateway home's `config.yaml`,
+    whose YAML quotes are. Hermes' default when the file, the key or the
+    number is missing, and for a value that is not a number, the variable's
+    included, as Hermes falls back; a negative number and `nan` are 0, as
+    Hermes' `max(0.0, value)` makes them. One divergence: Hermes takes `inf`
+    as no cap, and this keeps the default, so the reattach wait stays bounded.
+    """
     from .bot_board import CONFIG_BYTES, _bounded_text, _config_text
 
-    text, _problem = _bounded_text(home / CONFIG_FILE, CONFIG_BYTES)
-    raw = _config_text(text, ("agent", "restart_after_turn_timeout")) if text is not None else None
-    if raw is None:
-        return DEFAULT_AFTER_TURN_SECONDS
+    raw = (environ or {}).get(AFTER_TURN_ENV, "")
+    if not raw.strip():
+        text, _problem = _bounded_text(home / CONFIG_FILE, CONFIG_BYTES)
+        config = _config_text(text, ("agent", "restart_after_turn_timeout")) if text is not None else None
+        if config is None:
+            return DEFAULT_AFTER_TURN_SECONDS
+        raw = config.strip().strip("'\"")
     try:
-        seconds = float(raw.strip().strip("'\""))
+        seconds = float(raw)
     except ValueError:
         return DEFAULT_AFTER_TURN_SECONDS
-    return max(seconds, 0.0) if seconds == seconds and seconds != float("inf") else DEFAULT_AFTER_TURN_SECONDS
+    return DEFAULT_AFTER_TURN_SECONDS if seconds == float("inf") else max(0.0, seconds)
 
 
 def _names(names: tuple[str, ...]) -> str:

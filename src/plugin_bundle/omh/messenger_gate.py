@@ -82,6 +82,8 @@ REASON_OTHER_NAME = "omh_messenger_addressed_to_other_name"
 
 _MENTION = re.compile(r"<@!?([A-Za-z0-9]+)(?:\|[^>]*)?>")
 _QUOTE_OPENERS = frozenset("\"'“”‘’「『«„>")
+# After NFKC folding (`？` is `?`): the marks that make a closing run a question.
+_QUESTION_MARKS = frozenset("?‽¿")
 _OFF_SPELLINGS = frozenset({"off", "false", "no"})
 _GROUP_CHAT_TYPES = frozenset({"group", "channel", "thread"})
 
@@ -257,7 +259,8 @@ def decide(message: Message, *, muted: bool, mode: str = DEFAULT_GATE_MODE, judg
         and word in _QUIET
         and body[0] not in _QUOTE_OPENERS
         and not body.startswith("&gt;")
-        and not region.endswith("?")
+        # a question mark anywhere in the closing punctuation run (`?!`, `!?`, folded `？`, `‽`, `¿`) asks, not orders.
+        and not any(mark in _QUESTION_MARKS for mark in region[len(body):])
         and not region.startswith(("~", "`"))
         and (addressed or (message.in_thread and word not in _QUIET_NEEDS_ADDRESS))
     ):

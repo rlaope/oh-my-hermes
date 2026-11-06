@@ -591,6 +591,14 @@ class ExternalRestartTests(unittest.TestCase):
                     self.assertIn(GATEWAY_STOPPED_REASON, app.farewell)
                     self.assertIn("Resume the session in Hermes' own terminal", app.farewell)
 
+    def test_a_stopped_gateway_is_said_plainly_with_how_to_start_it(self) -> None:
+        # A state and the command that starts it again: not a crash, and nothing the person did wrong.
+        app, old, _spawner, _now, _spawned = self.external(record=lambda at: Gateway("stopped", False, 4242, updated=50.0))
+        old.inbox.append(GatewayExited(1))
+        app._step()
+        self.assertTrue(app.farewell.startswith(
+            "omh: Hermes' gateway is stopped; `hermes gateway start` starts it again. Resume the session"), app.farewell)
+
     def test_a_stop_during_the_wait_ends_it(self) -> None:
         def record(at: float) -> Gateway:
             return self.DRAINING if at < 120.0 else Gateway("stopped", False, 4242, updated=119.0)
@@ -906,6 +914,31 @@ class ImpactTests(unittest.TestCase):
         self.assertEqual(gateway_restart.after_turn_seconds(home), 120.0)
         (home / "config.yaml").write_bytes(b"agent:\n  restart_after_turn_timeout: soon\n")  # LF on every OS
         self.assertEqual(gateway_restart.after_turn_seconds(home), gateway_restart.DEFAULT_AFTER_TURN_SECONDS)
+        (home / "config.yaml").write_bytes(b"agent:\n  restart_after_turn_timeout: '90'\n")  # YAML quotes a string
+        self.assertEqual(gateway_restart.after_turn_seconds(home), 90.0)
+        (home / "config.yaml").write_bytes(b"agent:\n  restart_after_turn_timeout: nan\n")  # Hermes' max(0.0, nan)
+        self.assertEqual(gateway_restart.after_turn_seconds(home), 0.0)
+
+    def test_hermes_after_turn_variable_wins_over_the_config_and_is_read_as_hermes_reads_it(self) -> None:
+        # Hermes' gateway and its restart command read `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, with
+        # `float()` (no quote stripping) and `max(0.0, value)`; a value that does not parse is Hermes' default.
+        home = self.top / "env"
+        home.mkdir()
+        (home / "config.yaml").write_bytes(b"agent:\n  restart_after_turn_timeout: 120\n")  # LF on every OS
+        default = gateway_restart.DEFAULT_AFTER_TURN_SECONDS
+        cases = {"300": 300.0, " 45.5 ": 45.5, "0": 0.0, "-5": 0.0, "nan": 0.0, "soon": default, "'300'": default,
+                 "inf": default,  # Hermes: no cap; the TUI keeps its reattach wait bounded (documented divergence)
+                 "": 120.0, "  ": 120.0}
+        for value, seconds in cases.items():
+            with self.subTest(value=value):
+                environ = {gateway_restart.AFTER_TURN_ENV: value}
+                self.assertEqual(gateway_restart.after_turn_seconds(home, environ), seconds)
+        self.assertEqual(gateway_restart.after_turn_seconds(home, {}), 120.0)
+        own = Gateway("running", True, 99)
+        with patch.object(bot_board, "read_gateway", lambda _home: own):
+            impact = gateway_restart.read_impact(
+                {"HERMES_HOME": str(home), gateway_restart.AFTER_TURN_ENV: "600"}, "default")
+        self.assertEqual(impact.wait_seconds, 600.0)
 
     def test_the_board_reads_a_service_run_gateway_from_its_argv(self) -> None:
         home = self.top / "svc"
