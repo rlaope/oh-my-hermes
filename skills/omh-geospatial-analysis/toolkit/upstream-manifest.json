@@ -14,10 +14,10 @@
       "classification": "original_omh",
       "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
       "license": "MIT",
-      "local_sha256": "fe1530ee6bf2c7534deec126bc83b91cac3c31d340dae7820382938c2120fae3",
+      "local_sha256": "eccd7acd2d35007d6465cba2d4651e4e0f24a89264e689bd1da50b7fafaebdfd",
       "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
       "source_path": "src/skills/geospatial_analysis_toolkit/README.md",
-      "source_sha256": "fe1530ee6bf2c7534deec126bc83b91cac3c31d340dae7820382938c2120fae3",
+      "source_sha256": "eccd7acd2d35007d6465cba2d4651e4e0f24a89264e689bd1da50b7fafaebdfd",
       "upstream": []
     },
     "examples/input.json": {
@@ -44,10 +44,10 @@
       "classification": "original_omh",
       "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
       "license": "MIT",
-      "local_sha256": "0212918ae577876d61577f206ccdddc6b19e13a35f2c6deadb0f9776e1839ef4",
+      "local_sha256": "16c3a88688a0d23436fd97a3a73db8e1b187b3a1c9f119530e198bb6b24084de",
       "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
       "source_path": "src/skills/geospatial_analysis_toolkit/scripts/analyze.py",
-      "source_sha256": "0212918ae577876d61577f206ccdddc6b19e13a35f2c6deadb0f9776e1839ef4",
+      "source_sha256": "16c3a88688a0d23436fd97a3a73db8e1b187b3a1c9f119530e198bb6b24084de",
       "upstream": []
     }
   },

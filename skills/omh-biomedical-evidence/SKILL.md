@@ -10,7 +10,7 @@ metadata:
     phase: biomedical-evidence
     role: operator
     quality_tier: evidence-gated
-    related_skills: [omh-paper-learning, ulw-research, grounded-citations]
+    related_skills: [omh-paper-learning, ulw-research, omh-web-research, grounded-citations]
 ---
 
 # Biomedical Evidence
@@ -42,7 +42,7 @@ Contract: `references/full-contract.md`, loaded before analysis. Procedure: `ref
 
 ## When to Use
 
-Use when public gene/variant and disease assertions must be cross-checked against ClinVar and trial registry records, preserving source failures and disagreements rather than inferring a clinical conclusion.
+Use when public gene/variant and disease assertions must be cross-checked against ClinVar and trial registry records, preserving source failures and disagreements rather than inferring a clinical conclusion. It covers ClinVar and ClinicalTrials.gov records only: a general clinical-evidence or literature question with no named gene or variant goes to `omh-web-research` or `ulw-research`, and a patient's diagnosis, care or trial eligibility is outside it.
 
 Strong routing signals: `biomedical-evidence`, `biomedical evidence reconciliation`, `ClinVar cross-check`, `variant evidence matrix`, `BioMCP capture reconciliation`
 

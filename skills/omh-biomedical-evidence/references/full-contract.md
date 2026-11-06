@@ -7,7 +7,7 @@ holds the workflow-specific detail without copying those shared rails.
 
 ## Do Not Use When
 
-- For explaining one supplied paper, use `omh-paper-learning`; for broad literature discovery, use `ulw-research`.
+- For explaining one supplied paper, use `omh-paper-learning`; for broad literature discovery, use `ulw-research`, and for a cited answer to one clinical-evidence question use `omh-web-research`.
 - For generic server configuration and connection diagnostics, load the host's MCP setup guidance instead.
 - For sequence analysis or omics pipelines, select an available computational biology specialist instead; this method does not implement those analyses.
 - For citation verification and source attribution alone, load Hermes' bundled `grounded-citations` skill.

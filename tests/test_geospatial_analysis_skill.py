@@ -269,8 +269,36 @@ print('inert resources: PASS')
             self.assertEqual(entry["upstream"], [])
 
 
+class MercatorGuardTests(unittest.TestCase):
+    """The area guard needs no spatial library: it reads the CRS's projection method."""
+
+    @staticmethod
+    def crs(method):
+        from types import SimpleNamespace
+        return SimpleNamespace(coordinate_operation=SimpleNamespace(method_name=method))
+
+    def test_mercator_family_is_recognised_and_equal_area_or_utm_is_not(self):
+        api = helper_api()
+        for method in ("Popular Visualisation Pseudo Mercator", "Mercator (variant A)", "Mercator (auxiliary sphere)"):
+            self.assertTrue(api.mercator_family(self.crs(method)), method)
+        for method in ("Transverse Mercator", "Lambert Cylindrical Equal Area", "Albers Equal Area", "Hotine Oblique Mercator (variant B)"):
+            self.assertFalse(api.mercator_family(self.crs(method)), method)
+        self.assertFalse(api.mercator_family(self.crs("")))
+
+
 @unittest.skipUnless(os.environ.get("OMH_GIS_RUN_REAL") == "1", "optional spatial backend")
 class GeospatialRealBackendTests(CliFixture):
+    def test_web_mercator_is_refused_for_user_supplied_layers_and_an_equal_area_crs_is_not(self):
+        geographic = {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {
+            "type": "Polygon", "coordinates": [[[126.9, 37.5], [127.0, 37.5], [127.0, 37.6], [126.9, 37.6], [126.9, 37.5]]]}}]}
+        self.left.write_text(json.dumps(geographic))
+        self.right.write_text(json.dumps(geographic))
+        geo = {"input-crs": "EPSG:4326", "overlay-crs": "EPSG:4326"}
+        self.refused(self.run_cli(real=True, **geo), "distort area")
+        result = self.run_cli(real=True, **geo, **{"target-crs": "EPSG:6933"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertGreater(json.loads((self.output / "summary.json").read_text())["pair_area_sum_m2"], 0)
+
     def test_real_overlay_known_rectangles_and_output_hashes(self):
         result = self.run_cli(real=True)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -373,7 +401,7 @@ class GeospatialRealBackendTests(CliFixture):
         data = json.loads(self.left.read_text())
         data["data_class"] = {"nested": "\U0001f30d" * 30_000}
         self.left.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        self.refused(self.run_cli(real=True), "output byte budget")
+        self.refused(self.run_cli(real=True, **{"target-crs": "EPSG:6933"}), "output byte budget")
 
     def test_geographic_degree_measurements_rejected(self):
         self.refused(self.run_cli(real=True, **{"target-crs": "EPSG:4326"}), "geographic degree")

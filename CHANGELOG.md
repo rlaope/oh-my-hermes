@@ -292,6 +292,21 @@ All notable changes will be documented here.
   never writes the setting. On a Docker or SSH terminal, where Hermes skips
   isolation, nothing changes; a config that cannot be read counts as off, as
   before.
+- **The research and knowledge skills say what an expert needs and stop pointing
+  at dead ends.** `omh-long-document-reading` runs the Hermes pdf skill's own
+  environment instead of telling the model to `pip install`, keeps its range
+  ledger in `omh_document_plan` so it survives compaction, gives delegated
+  children the path and command they need, and names the encrypted-file,
+  printed-page and lookup cases. `analyze.py` in `omh-geospatial-analysis`
+  refuses Web Mercator as the measurement CRS for real layers, since it
+  inflates area by about 1.6x at 38 degrees; the synthetic fixture still runs.
+  `omh-data-analysis` computes with code and states n, effect size and an
+  interval; `omh-live-info` runs the lookup and checks provider time, units
+  and staleness; `omh-systematic-review` says its delegated reviewers share a
+  model and asks for deduplication first; `omh-molecular-docking` says what an
+  exhaustiveness-4 score cannot support and what to do with a SMILES;
+  `omh-wiki` hands to `llm-wiki` only when installed (it is optional on
+  current Hermes).
 - **The dag-ulw offer for several features reads what it can show, and a
   count with its list after the verb gets it.** "기능 네 개 개발해줘: 검색,
   필터, 정렬, 페이징", "다음 기능들 개발해줘: 로그인, 검색, 알림" and "build these

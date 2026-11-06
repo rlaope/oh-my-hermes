@@ -52,7 +52,7 @@ Tie totals and account mappings, normalize only approved basis and units, test c
 
 ### `finance_analyze_variances` (analysis)
 
-Recalculate comparable variances with supplied formulas and thresholds, separating facts, approved policy, proposed assumptions, and material decision effects.
+Recalculate comparable variances with supplied formulas and thresholds using a code or calculator tool and keep its output, state the sign convention (variance = actual - budget, each line labelled favourable or unfavourable by revenue versus cost) with absolute and percent variance against the stated base, and separate facts, approved policy, proposed assumptions, and material decision effects.
 
 - Input refs: `supplied finance source`, `calculation assumptions`, `decision question`
 - Output refs: `finance_reconciliation_analysis_schedule/v1`

@@ -27,7 +27,7 @@ Public sources can disagree about a variant while describing different alleles, 
 
 ## Do Not Use When
 
-- For explaining one supplied paper, use `omh-paper-learning`; for broad literature discovery, use `ulw-research`.
+- For explaining one supplied paper, use `omh-paper-learning`; for broad literature discovery, use `ulw-research`, and for a cited answer to one clinical-evidence question use `omh-web-research`.
 - For generic server configuration and connection diagnostics, load the host's MCP setup guidance instead.
 - For sequence analysis or omics pipelines, select an available computational biology specialist instead; this method does not implement those analyses.
 - For a patient's diagnosis, care, trial eligibility or treatment choice, stop and refer to an appropriately qualified professional; this toolkit cannot provide that decision.
@@ -62,7 +62,7 @@ Bad example:
 
 ## When to Use
 
-Use when public gene/variant and disease assertions must be cross-checked against ClinVar and trial registry records, preserving source failures and disagreements rather than inferring a clinical conclusion.
+Use when public gene/variant and disease assertions must be cross-checked against ClinVar and trial registry records, preserving source failures and disagreements rather than inferring a clinical conclusion. It covers ClinVar and ClinicalTrials.gov records only: a general clinical-evidence or literature question with no named gene or variant goes to `omh-web-research` or `ulw-research`, and a patient's diagnosis, care or trial eligibility is outside it.
 
     Strong routing signals: `biomedical-evidence`, `biomedical evidence reconciliation`, `ClinVar cross-check`, `variant evidence matrix`, `BioMCP capture reconciliation`
 

@@ -795,6 +795,9 @@ class HermesReferenceLine(str):
 # with a catalog skill or its display label, which a test holds. A name
 # outside this set is refused, so a typo or an upstream rename fails when the
 # catalog loads instead of shipping a line naming a skill Hermes cannot load.
+# `llm-wiki` moved to `optional-skills/` on upstream main on 2026-10-28 (commit
+# 183b5ddd5f); it stays bundled at the floor tag, so its handoff line is conditional
+# on the skill being installed.
 HERMES_BUNDLED_SKILL_NAMES = frozenset(
     {
         "architecture-diagram",

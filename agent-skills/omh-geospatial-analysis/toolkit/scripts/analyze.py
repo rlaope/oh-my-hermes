@@ -172,6 +172,13 @@ def bounded_json_size(value, limit, level=0):
     return used
 
 
+def mercator_family(crs):
+    """True for Web Mercator (EPSG:3857) and plain Mercator, whose planar areas are not ground areas."""
+    operation = getattr(crs, "coordinate_operation", None)
+    method = (operation.method_name if operation is not None else "").lower()
+    return method.startswith("mercator") or "pseudo mercator" in method or "auxiliary sphere" in method
+
+
 def compute(args, left, right, shapely, pyproj):
     """Do real polygon overlay. Imports remain inside explicit invocation only."""
     from shapely.geometry import shape, mapping
@@ -187,6 +194,10 @@ def compute(args, left, right, shapely, pyproj):
                 or any(axis.unit_conversion_factor != 1.0 or axis.unit_name.lower() not in ("metre", "meter")
                        for axis in target.axis_info)):
             raise ValueError("measurement CRS must be projected with metre axes; geographic degree area/distance is refused")
+        if mercator_family(target) and not all(layer[2].get("data_class") == "synthetic" for layer in (left, right)):
+            raise ValueError("Web Mercator and Mercator distort area (about 1.6x at 38 degrees latitude): "
+                             "use an equal-area or local projected metre CRS for real data; "
+                             "only layers declared data_class synthetic may be measured in them")
         crs_left, crs_right = pyproj.CRS(args.input_crs), pyproj.CRS(args.overlay_crs)
         def checked(geom, crs):
             if geom.is_empty or not geom.is_valid or geom.geom_type not in ("Polygon", "MultiPolygon"):
@@ -267,7 +278,7 @@ def compute(args, left, right, shapely, pyproj):
             "pair_area_sum_m2": math.fsum(float(g.area) for g in intersections),
             "pair_perimeter_sum_m": math.fsum(float(g.length) for g in intersections),
             "union_area_m2": float(unary_union(intersections).area) if intersections else 0.0,
-            "limitations": ["Planar measurements in the declared target CRS, not geodesic ground truth.",
+            "limitations": ["Planar measurements in the declared target CRS, not geodesic ground truth; check the CRS preserves area for the study extent.",
                 "Pair sums can double-count overlapping source features; union area removes duplicate coverage.",
                 "Synthetic fixtures are not public-world findings. No map, raster, buffer or nearest-distance result."]}
         return result, summary

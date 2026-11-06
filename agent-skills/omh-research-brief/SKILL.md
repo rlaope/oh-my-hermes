@@ -17,13 +17,14 @@ This is an OMH `research-brief` workflow skill, projected for Agent Skills hosts
 
 ## Why This Exists
 
-`research-brief` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`research-brief` exists because a decision brief goes wrong when a vendor claim, a source's date and the analyst's inference share one sentence: it keeps each evidence row typed observed, vendor-asserted or inferred, with its source date, so the decision owner can see what would change the answer.
 
 ## Do Not Use When
 
 - The user needs to decide whether a customer problem deserves product investment with evidence typing and customer re-entry; use `omh-product-discovery-validation`.
 - The request is only fresh links, citations, or current facts without a business question or decision audience; use `ulw-research`.
 - Sources have not yet been selected and the user wants source types, candidates, or acquisition state; use `omh-source-finder`.
+- The research is recurring and run by several roles.
 
 ## Examples
 
@@ -35,9 +36,9 @@ Good example:
 
 Bad example:
 
-- Prompt: research-brief: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `research-brief`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: research-brief: how big is the dental-clinic software market, TAM, SAM and SOM?
+- Expected behavior: Hand the sizing to `omh-market-research`; return here only for the audience synthesis.
+- Why: Sizing is a model with units and calculation receipts, not a brief.
 
 ## Completion Checklist
 

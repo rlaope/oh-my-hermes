@@ -2544,6 +2544,11 @@ def _wiki_ecosystem_reference() -> str:
         f"Upstream `{catalog.source.repo}` entries whose OMH coverage names the `wiki` surface, derived from the",
         f"catalog snapshot retrieved {catalog.source.retrieved_at} at commit `{catalog.source.commit[:12]}`.",
         "",
+        "Check Hermes' own skills first: the bundled `obsidian` skill (`skills/note-taking/obsidian`), and the optional",
+        "`llm-wiki` and `notion` skills (not installed by default on current Hermes main; `hermes skills install`).",
+        "The list below is a community snapshot, several entries are documentation about Hermes rather than wiki or",
+        "vault skills, and it ages: re-check an entry's repository before relying on it.",
+        "",
         "Check this list before designing a bespoke structure. Route a promising candidate to `skill-scout` for",
         "evaluation; adopting one is a separate decision with its own evidence.",
         "",
@@ -3507,12 +3512,14 @@ def long_document_reading_skill() -> SkillTemplate:
 
 Every command below runs through the `terminal` tool from Hermes' built-in `pdf` skill. On current Hermes main all four scripts sit in `skills/productivity/pdf/scripts/` (the `ocr-and-documents` skill was merged into it); on older Hermes trees `extract_pymupdf.py` and `extract_marker.py` live in `skills/productivity/ocr-and-documents/scripts/` instead. Locate the directory with `skills_list` or `search_files` before the first run. Outputs differ per script: `pdf_read.py`, `pdf_split.py`, and `pdf_page_image.py` print JSON; `extract_pymupdf.py` prints plain text with `--- Page N/M ---` separators (JSON only with `--metadata`); and `pdf_page_image.py` exits 0 with `{{"rendered": false, "missing": [...]}}` when no rasterizer is installed, so read `rendered` before trusting a render. Measured Hermes limits are in `{LONG_DOCUMENT_LIMITS_REFERENCE_PATH}`.
 
-1. **Scope.** Confirm the path and the reading goal (full summary, clauses or sections, obligations and dates, or one question). If the goal is one lookup, search the extracted text for it instead of reading every range.
-2. **Probe.** Run `python pdf_read.py <file> --meta` for the page count, encrypted flag, and scanned flag. Each script names its own missing dependency (`pdfplumber` here, `pypdf` for `pdf_split.py`, `pymupdf` for `extract_pymupdf.py`, `pypdfium2` or poppler `pdftoppm` for `pdf_page_image.py`); install the one named with `pip install` once, rerun, and say you installed it. For an encrypted file ask for the password (`--password`) or stop.
-3. **Plan.** At about {DEFAULT_CHARS_PER_PAGE:,} characters per page one `read_file` call ({HERMES_READ_FILE_CHAR_BUDGET:,} characters) holds about {DEFAULT_PAGES_PER_RANGE} pages, so split the page count into ranges of {DEFAULT_PAGES_PER_RANGE} pages. A document under {DEFAULT_PAGES_PER_RANGE} pages of prose is one read; answer directly. Record the plan as the chunk ledger: one row per range with `pages`, `offset`, `chars`, and `state` (`covered`, `next`, `missing`).
-4. **Extract with page anchors.** For each range run `python extract_pymupdf.py <file> --pages <start0>-<end0>` (0-indexed; plain text with a `--- Page N/M ---` line before each page, which is the page anchor to keep) or `python pdf_split.py <file> --pages <start>-<end> -o <range>.pdf` (1-based, JSON) followed by `read_file` on the split file. Never read the whole file with `read_file` and paginate by `offset`: every call re-converts the entire document, and the extraction has no page numbers. If a range read truncates, halve the range, record the observed characters per page, and re-plan the remaining rows.
-5. **Delegate above {DELEGATION_RANGE_THRESHOLD} ranges.** Send each range to a `delegate_task` child with this brief, unchanged except for the page numbers, then merge the notes in page order keeping every page anchor: `{brief}` A child that returns no missing-page list has not proven its range was readable.
-6. **Close every range.** After each range write covered / next / missing into the ledger before moving on, so a compacted or resumed session rereads the ledger and continues from `next` instead of page 1. Say done only when every row is covered and every scanned range is read or declined.
+**Environment.** Run every script with `"$PY"`, the interpreter the `pdf` skill's Prerequisites block selects (its documents environment); run `extract_pymupdf.py` with the `pdf-pymupdf` environment block in that skill's `references/ocr-extraction.md`. Never `pip install` into the interpreter that runs Hermes or into a `hermes pm environment` one: Hermes owns both. If neither environment can be built, name the missing extractor and stop.
+
+1. **Scope.** Confirm the path and the reading goal (full summary, clauses or sections, obligations and dates, or one question). If the goal is one lookup, dump the text layer once (`extract_pymupdf.py <file>` into a file in the task directory), `search_files` that file, and read the pages around each hit; report an absence only as "not found in the text layer of pages X; pages Y are image-only and unsearched".
+2. **Probe.** Run `python pdf_read.py <file> --meta` for the page count, encrypted flag, and scanned flag. Each script names its own missing dependency (`pdfplumber` and, for `--meta`, `pypdf` here; `pypdf` for `pdf_split.py`; `pymupdf` for `extract_pymupdf.py`; `pypdfium2` or poppler `pdftoppm` for `pdf_page_image.py`); take it from the environment above and say which one you used. For an encrypted file ask for the password (`--password`) or stop.
+3. **Plan.** At about {DEFAULT_CHARS_PER_PAGE:,} characters per page one `read_file` call ({HERMES_READ_FILE_CHAR_BUDGET:,} characters) holds about {DEFAULT_PAGES_PER_RANGE} pages, so split the page count into ranges of {DEFAULT_PAGES_PER_RANGE} pages. A document under {DEFAULT_PAGES_PER_RANGE} pages of prose is one read; answer directly. Record the plan as the chunk ledger: call `omh_document_plan` with `action=plan`, the path as `source`, the `pages` count and an `outline` of `{{title, page}}` anchors when the front matter shows one; it writes the plan under the OMH home, so a compacted or resumed session calls `action=show` and resumes at the next range. If that tool is absent, keep the ledger in a file in the task directory, one row per range with `pages`, `offset`, `chars`, and `state` (`covered`, `next`, `missing`), and reread it after compaction. For Korean or other CJK text a character costs more context than English: measure one probe range and size the ranges from its observed characters per page and the model's window, passing `budget_chars` lower when the window is small.
+4. **Extract with page anchors.** For each range run `python extract_pymupdf.py <file> --pages <start0>-<end0>` (0-indexed; plain text with a `--- Page N/M ---` line before each page, which is the page anchor to keep; that number is the PDF page index, so when the printed page numbers differ (roman front matter) record the offset and give both) or `python pdf_split.py <file> --pages <start>-<end> -o <range>.pdf` (1-based, JSON) followed by `read_file` on the split file (for an encrypted file use `pdf_split.py --password` or `pdf_read.py --text --password`; `extract_pymupdf.py` has no `--password` and cannot open it). Never read the whole file with `read_file` and paginate by `offset`: every call re-converts the entire document, and the extraction has no page numbers. If a range read truncates, halve the range, record the observed characters per page, and re-plan the remaining rows.
+5. **Delegate above {DELEGATION_RANGE_THRESHOLD} ranges.** Send each range to a `delegate_task` child with this brief, unchanged except for the page numbers, then merge the notes in page order keeping every page anchor: `{brief}` A child sees only its goal and context, so put the file path, the `"$PY"` interpreter, the exact `extract_pymupdf.py <file> --pages <start0>-<end0>` command (0-indexed) and the password handling in its `context`. A child that returns no missing-page list has not proven its range was readable.
+6. **Close every range.** After each range mark it (`omh_document_plan action=mark`, `plan_id`, `chunk`, `state=covered`) or write covered / next / missing into the ledger file before moving on, so a compacted or resumed session rereads the ledger and continues from `next` instead of page 1. Say done only when every row is covered and every scanned range is read or declined.
 7. **Scanned ranges.** The `read_file` coverage warning names page ranges that yielded no text. For the few pages the goal needs, run `python pdf_page_image.py <file> --pages <n> --out-dir <dir>` and `vision_analyze` one page per call; the script exits 0 either way, so a result with `"rendered": false` means no rasterizer (`pypdfium2` or poppler `pdftoppm`) is installed and nothing was rendered. Hosted OCR is not a knob to turn on: `read_file` uses it by itself when `FIRECRAWL_API_KEY` is set (`file_tools.hosted_ocr: false` turns it off), and its NEEDS OCR notice says whether it was attempted. For bulk OCR of a large range the coverage warning points at marker-pdf, `extract_marker.py` from the same skill, a multi-gigabyte install that needs its own approval. Decline ranges the goal does not need and record the decision: a 300-page scan at one vision call per page is a separate approved job, not a side effect of a summary.
 
 """
@@ -5230,7 +5237,7 @@ Find the directory with `skills_list` or `search_files` before the first run ins
 
 | Script | Dependency (from its imports) | Output |
 | --- | --- | --- |
-| `pdf_read.py` | `pdfplumber` | JSON |
+| `pdf_read.py` | `pdfplumber`; `--meta` also `pypdf` | JSON |
 | `pdf_split.py` | `pypdf` | JSON |
 | `pdf_page_image.py` | `pypdfium2`, or poppler `pdftoppm` on PATH | JSON; exits 0 with `"rendered": false` and a `missing` list when neither is installed |
 | `extract_pymupdf.py` | `pymupdf` (`pymupdf4llm` for `--markdown`) | plain text with `--- Page N/M ---` separators; JSON only for `--metadata` |
@@ -8024,18 +8031,16 @@ them.
 
 ## Product Identity
 
-Ground the summary in the live repository description and current README. The
-identity to verify is a Hermes-native coding harness and engineering-
-intelligence layer: natural-language intake in Hermes, optimized coding
-packages and subagents, broad workflow skills, model-routing settings, local
-state, and a long-term memory system. Do not freeze those claims into a
-permanent marketing paragraph; retrieve the current wording and qualify any
-interpretation.
+Ground the summary in the live repository description and current README: quote
+the opening lines of `README.md` and `docs/DIRECTION.md` at the disclosed ref and
+do not paraphrase the product from memory or from an earlier tagline. Do not
+freeze those claims into a permanent marketing paragraph; retrieve the current
+wording and qualify any interpretation.
 
 Keep user-facing emphasis on what the product helps people do. Validation
 contracts and status evidence boundaries matter when a question asks about
-them, but they must not displace the coding-harness, engineering-intelligence,
-model-routing, local-state, and memory identity.
+them, but they must not displace what the current README and direction page
+say the product is.
 
 ## Disclosure
 
@@ -8092,14 +8097,14 @@ Use the current projection, whose public families are:
 5. Delegate coding and ship.
 6. Operate and observe.
 
-Representative exact public skills across the engineering-intelligence catalog:
+Representative exact public skills across the catalog:
 
 | Area | Public skill examples |
 | --- | --- |
 | Operations | `omh-support-operations`, `omh-deploy-and-monitor` |
 | Design | `omh-design-orchestration`, `omh-design-quality-gate` |
 | Frontend | `omh-frontend`, `omh-frontend-refactor` |
-| Finance and financial statements | `omh-finance-analysis` |
+| Budget variance, cash and close risk | `omh-finance-analysis` |
 | Planning | `ulw-plan`, `ulw-interview`, `ulw-context` |
 | Research | `ulw-research`, `omh-web-research`, `omh-source-finder` |
 | Inference serving | `omh-inference-serving` |

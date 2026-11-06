@@ -1,0 +1,61 @@
+"""The research-lane skills say what their findings required, in the text a model reads."""
+
+from __future__ import annotations
+
+import unittest
+
+from omh.skills.packaging import builtin_skill_reference_templates
+from omh.skills.render import builtin_skill_templates
+
+
+class ResearchLaneSkillTextTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bodies = {t.name: t.content for t in builtin_skill_templates()}
+        self.refs = {(r.skill_name, r.relative_path): r.content for r in builtin_skill_reference_templates()}
+
+    def test_long_document_reading_uses_hermes_environment_rule_and_a_durable_ledger(self) -> None:
+        body = self.bodies["long-document-reading"]
+        self.assertNotIn("with `pip install` once", body)
+        self.assertNotIn("install the one it names once with `pip install`", body)
+        self.assertIn("Never `pip install` into the interpreter that runs Hermes", body)
+        self.assertIn('"$PY"', body)
+        self.assertIn("omh_document_plan", body)
+        self.assertIn("`extract_pymupdf.py` has no `--password`", body)
+        self.assertIn("PDF page index", body)
+        limits = self.refs[("long-document-reading", "references/hermes-pdf-limits.md")]
+        self.assertIn("`pdfplumber`; `--meta` also `pypdf`", limits)
+
+    def test_data_analysis_computes_with_code_and_guards_statistics(self) -> None:
+        body = self.bodies["data-analysis"]
+        self.assertIn("loaded with code", body)
+        self.assertIn("n per group", body)
+        self.assertIn("report association as association", body)
+
+    def test_geospatial_refuses_web_mercator_in_the_text_and_names_the_input_format(self) -> None:
+        body = self.bodies["geospatial-analysis"]
+        self.assertIn("refuses them for real layers", body)
+        self.assertIn("reads GeoJSON only", body)
+
+    def test_systematic_review_states_the_same_model_limit_and_deduplication(self) -> None:
+        body = self.bodies["systematic-review"]
+        self.assertIn("`delegate_task` has no per-child model", body)
+        self.assertIn("deduplicated across databases", body)
+
+    def test_wiki_hands_to_llm_wiki_only_when_installed(self) -> None:
+        text = self.bodies["wiki"] + "".join(c for (s, _), c in self.refs.items() if s == "wiki")
+        self.assertIn("when it is installed", text)
+        self.assertNotIn("Hermes' bundled `llm-wiki`", text)
+
+    def test_live_info_runs_the_lookup_and_names_loadable_recovery_skills(self) -> None:
+        body = self.bodies["live-info-operator"]
+        self.assertIn("The lookup was run with an available tool", body)
+        self.assertIn("`omh-toolbelt-readiness`", body)
+        self.assertIn("`omh-apps`", body)
+
+    def test_docs_do_not_pre_write_the_product_identity(self) -> None:
+        text = "".join(c for (s, _), c in self.refs.items() if s == "product-docs")
+        self.assertNotIn("engineering-intelligence", text)
+
+
+if __name__ == "__main__":
+    unittest.main()

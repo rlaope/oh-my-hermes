@@ -21,7 +21,6 @@ from ..evidence.observed_check_results import (
 from ..paper_learning import (
     PAPER_LEARNING_CARD_SCHEMA_VERSION,
     PAPER_LEARNING_COVERAGE_POLICY,
-    PAPER_LEARNING_LEVELS,
     PAPER_LEARNING_NOT_OBSERVED,
     PAPER_LEARNING_SOURCE_STATES,
 )
@@ -1951,7 +1950,7 @@ _DEFINITIONS = [
             "Keep historical-capture evidence and live-page evidence as two typed surfaces for a point-in-time or then-versus-now question; capture time, publication time, and retrieval time are independent clocks and none substitutes for another.",
             f"{_GROUNDED_CITATIONS_REGISTER_RULE}, before any prose is written; cite a source only by the id the ledger gave it, written `[n]`. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} Mark background that rests on model knowledge `[unverified]` instead of citing it: the marker is for background the answer does not rest on and never carries the answer, and a contested claim with a single source keeps its citation and is stated as uncorroborated. The ledger id sits beside the source class and the retrieval date and replaces neither. Without the skill, list each source when it is retrieved and cite it at the claim it supports.",
             f"When that ledger is in use, report the citation check from a run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}, and so is an answer given only in chat: `verify` reads a draft file and exits `2` without one, so write the answer to a file first when the check matters. The run compares cited ids and the Sources block with the ledger; it does not test whether a claim is true, so a passing citation check is never reported as fact verification. {_GROUNDED_CITATIONS_RECEIPTS_RULE}. Without the ledger the citation check is `not_observed`.",
-            "Stop at the answer: one retrieval round settles a lookup, and an expanding lead list means the request belongs to `research`.",
+            "Stop at the answer: one retrieval round settles a lookup, plus at most the one follow-up the plan issues; a follow-up that still leaves required conditions unsupported, or an expanding lead list, means the request belongs to `research`.",
             "Report what retrieval did not yield rather than closing the gap from recall.",
         ),
         why_this_exists="`web-research` exists so a current-facts question returns a cited answer in one retrieval round, without the declared depth budget, reference-implementation study, and dossier that `research` requires.",
@@ -1992,7 +1991,7 @@ _DEFINITIONS = [
             "If the web is unreachable, name the retrieval gap and stop rather than substituting recalled facts.",
             "If no archive access exists or the capture provider's paid authority is exhausted, record a temporal retrieval gap with no network action and keep the as-of claim in the annex; never substitute the current page for it.",
             "If sources conflict, present both with their retrieval dates and say which one is primary.",
-            "If leads keep expanding past one round, hand the question to `research` with the sources already gathered.",
+            "If the follow-up round the plan issues still leaves required conditions unsupported, or leads keep expanding, hand the question to `research` with the sources already gathered.",
         ),
         situations=(
             "what is the latest version of this library",
@@ -2011,11 +2010,11 @@ _DEFINITIONS = [
                 "If the web is unreachable, name the retrieval gap and stop rather than substituting recalled facts.",
                 "If no archive access exists or the capture provider's paid authority is exhausted, record a temporal retrieval gap with no network action and keep the as-of claim in the annex; never substitute the current page for it.",
                 "If sources conflict, present both with their retrieval dates and say which one is primary.",
-                "If leads keep expanding past one round, hand the question to `research` with the sources already gathered.",
+                "If the follow-up round the plan issues still leaves required conditions unsupported, or leads keep expanding, hand the question to `research` with the sources already gathered.",
             ),
         },
         portable_override_shadows={
-            "recovery_notes": "26e4130f2bc39b787c5af93ce57bd767057ad33d387fea2464857edf64259cdd",
+            "recovery_notes": "3defb5d730c0c5dfda16542cc34b5d70ebc00b81bc48c6cf6dbec03549f35ca2",
         },
     ),
     SkillDefinition(
@@ -2196,7 +2195,7 @@ _DEFINITIONS = [
             "Separate candidate preparation, observed link, observed download, file hash, text extraction, license check, verification, and downstream selection.",
             "Attach observation provenance before treating any acquisition state as evidence.",
             "For `paper` candidates, when Hermes' bundled `arxiv` skill is available, search through it - by topic, author, category, or paper id - and record each entry it returns as `link_observed` with `hermes_tool` provenance. A search result is an observed link and nothing more: download, text extraction, and verification stay unclaimed until their own run is observed. Without the skill, a paper candidate stays `candidate_prepared` until a link is observed another way.",
-            "Vary search angles across official docs, academic work, implementations, datasets, and criticism until each requested source kind has candidates or another angle change adds nothing new.",
+            "Vary search angles across official docs, academic work, implementations, datasets, and criticism within the plan's budget (3 queries, 10 external attempts and one follow-up for an explore search), and name the source kinds still without candidates when the budget ends.",
             "Recommend the next downstream workflow without pretending that downstream work already ran.",
         ),
         why_this_exists=(
@@ -2206,7 +2205,7 @@ _DEFINITIONS = [
         do_not_use_when=(
             "The requested output is factual findings, comparison, or a summary rather than a typed candidate inventory and acquisition status; use `research`.",
             "The user needs a business decision brief with evidence-versus-inference treatment; use `research-brief`.",
-            "The user asks for current citations, fact-finding, or source-backed synthesis; use `research`.",
+            "The user asks for a cited answer to a current-facts question; use `web-research`, and for a reference-implementation study with a depth budget use `research`.",
             "The user supplies a paper/PDF/arXiv/DOI/excerpt and wants explanation; use `paper-learning`.",
             "The user asks for recurring monitoring, source inbox, or Scout/Analyst/Briefer operations; use `research-department`.",
             "The user asks to export, convert, render, package, or attach a file; use `materials-package` or `deliverable-package`.",
@@ -2300,6 +2299,17 @@ _DEFINITIONS = [
             "The user needs to decide whether a customer problem deserves product investment with evidence typing and customer re-entry; use `product-discovery-validation`.",
             "The request is only fresh links, citations, or current facts without a business question or decision audience; use `research`.",
             "Sources have not yet been selected and the user wants source types, candidates, or acquisition state; use `source-finder`.",
+            "The research is recurring and run by several roles; use `research-department`.",
+        ),
+        why_this_exists=(
+            "`research-brief` exists because a decision brief goes wrong when a vendor claim, a source's date and the analyst's "
+            "inference share one sentence: it keeps each evidence row typed observed, vendor-asserted or inferred, with its source "
+            "date, so the decision owner can see what would change the answer."
+        ),
+        bad_example=SkillExample(
+            prompt="research-brief: how big is the dental-clinic software market, TAM, SAM and SOM?",
+            expected="Hand the sizing to `market-research`; return here only for the audience synthesis.",
+            why="Sizing is a model with units and calculation receipts, not a brief.",
         ),
         final_checklist=_CATEGORY_FINAL_CHECKLISTS["research"]
         + ("Each evidence row that cites a ledger source carries the id as `[n]` and its quote, and the citation check is reported from an observed ledger verify run that cited at least one source, or as `not_observed`.",),
@@ -2403,7 +2413,7 @@ _DEFINITIONS = [
             "profiles, cron, knowledge storage, synthesis tooling, and delivery glue, while OMH keeps every runtime claim observed-only."
         ),
         do_not_use_when=(
-            "The user only needs a one-off current-source lookup; use `research`.",
+            "The user only needs a one-off current-source lookup; use `web-research` for one cited round, or `research` for a reference-implementation study with a depth budget.",
             "The user only needs a one-off business synthesis; use `research-brief`.",
             "The request is pure scheduling with no source collection or synthesis; use `automation-blueprint`.",
             "The user asks for coding implementation; prepare a selected executor/runtime handoff after the research plan is accepted.",
@@ -2427,6 +2437,12 @@ _DEFINITIONS = [
             prompt="research-department prove the synthesis tool queried the knowledge base and posted the Slack brief.",
             expected="Ask for observed synthesis-tool and gateway delivery evidence or mark those states as not_observed.",
             why="The workflow pack can prepare the operating pattern, but it cannot prove external tool execution or delivery.",
+        ),
+        final_checklist=(
+            "research_department_plan/v1 names topic, cadence, delivery target, knowledge store and synthesis-tool readiness, each as supplied or missing.",
+            "Scout, Analyst and Briefer each map to a loadable skill; source_inbox/v1 has separate raw, processed, brief, conflict and verification buckets.",
+            "The watchlist, the materiality threshold and one cutoff per source are written down before the first run.",
+            "Any schedule is `not_observed` unless a `cronjob_manage` result or a cron listing was read.",
         ),
         situations=(
             "daily competitor monitoring",
@@ -2497,7 +2513,7 @@ _DEFINITIONS = [
         # no command wrote there, so a long paper restarted from the abstract
         # every session. `omh paper` is that command.
         artifact_expectations=(
-            "record the card with `omh paper plan --title <title> --source <path or url> --level <level> --source-state <state>`, which writes paper_learning_card/v1 to `$OMH_HOME/paper-learning/<paper_id>/card.json` and hashes a local source file without parsing it",
+            "record the card with `omh paper plan --title <title> --source <path or url> --level <level> --source-state <state>` (add `--section` once per section, in reading order, when the paper is not shaped like the ten default sections - a proof-based, systems or survey paper), which writes paper_learning_card/v1 to `$OMH_HOME/paper-learning/<paper_id>/card.json` and hashes a local source file without parsing it",
             "record each explained chunk with `omh paper progress <paper_id> --covered <section> --next <section> [--missing <section>] [--note <text>]`, which updates the coverage ledger and appends one line to `ledger.jsonl`; `omh paper validate` checks the store",
         ),
         safety_rules=(
@@ -2514,7 +2530,7 @@ _DEFINITIONS = [
             "Explain by chunks when the source is long; keep each chunk linked to coverage_ledger status.",
             "Set source_state from how the paper was acquired, not from the request. An entry that Hermes' bundled `arxiv` skill returned (search or id lookup) is `metadata_only` until paper text is read. Text that the bundled `pdf` skill's `pdf_read.py <file> --text` run returned is `file_text_extraction_observed` for the pages that came back with text, and a page that came back empty is listed as missing. Without those skills, the state is whatever the supplied text supports.",
             PortableLine(
-                "For a paper past one read budget, when the `long-document-reading` skill is available, take the chunks from its page ranges - its page-count probe and page-anchored extraction - instead of a second chunking scheme, and map each covered range onto the coverage ledger's sections; without it, plan numbered page ranges before reading.",
+                "For a paper past one read budget, when the `long-document-reading` skill is available, take the chunks from its page ranges - its page-count probe and page-anchored extraction - instead of a second chunking scheme, and map each covered range onto the coverage ledger's sections; without it, plan numbered page ranges before reading. Record the plan once with `omh_document_plan` (see Recovery Notes) so one ledger holds the ranges.",
                 "For a paper past one read budget, plan numbered page ranges before reading, and map each covered range onto the coverage ledger's sections.",
             ),
             "List missing sections and not-observed claims before presenting the explanation as complete.",
@@ -2541,7 +2557,7 @@ _DEFINITIONS = [
             why="PDF file output and render QA are material packaging work, not paper learning evidence.",
         ),
         final_checklist=(
-            "The selected explanation level is one of: " + ", ".join(PAPER_LEARNING_LEVELS) + ".",
+            "The explanation level is very_easy, moderate or expert, asked or stated before the first chunk; `choose` is only the unanswered state.",
             "The source_state is recorded and scoped to observed text or extraction evidence.",
             "The coverage ledger lists observed, missing, or prepared sections before claiming completion.",
             "The explanation is section-aware and does not compress away claims, equations, figures, limitations, or reproducibility notes.",
@@ -2872,7 +2888,7 @@ _DEFINITIONS = [
             ProcedureStep(
                 "finance_analyze_variances", "analysis", ("supplied finance source", "calculation assumptions", "decision question"),
                 ("finance_reconciliation_analysis_schedule/v1",), ("finance_policy_assumption_check",),
-                "Recalculate comparable variances with supplied formulas and thresholds, separating facts, approved policy, proposed assumptions, and material decision effects.",
+                "Recalculate comparable variances with supplied formulas and thresholds using a code or calculator tool and keep its output, state the sign convention (variance = actual - budget, each line labelled favourable or unfavourable by revenue versus cost) with absolute and percent variance against the stated base, and separate facts, approved policy, proposed assumptions, and material decision effects.",
             ),
             ProcedureStep(
                 "finance_interpret_conditionally", "analysis", ("supplied finance source", "calculation assumptions", "decision question"),
@@ -2909,6 +2925,7 @@ _DEFINITIONS = [
             "The user wants pipeline coverage, deal health, or a seller forecast scenario rather than authoritative revenue or close reporting; use `sales-pipeline-review`.",
             "The user needs an enterprise or product direction decision after analysis; route that decision to `strategy-brief`.",
             "The ask is testing whether an internal control operated -- a SOX or ICFR sample, re-performance, or a deficiency's severity; use `internal-audit`.",
+            "The ask is a valuation, DCF, multiples or a stock comparison from published statements; this procedure does not cover it. Hermes' optional dcf-model and comps-analysis skills do when installed; otherwise compute ratios with code from the supplied statements, state the formulas, give no recommendation, and stop at facts.",
         ),
         good_example=SkillExample(
             prompt="Compare Q2 actuals against budget, explain the biggest expense variances, and flag cash risks for the CFO.",
@@ -2919,6 +2936,12 @@ _DEFINITIONS = [
             prompt="What is the USD/KRW exchange rate right now?",
             expected="Route to `live-info-operator`, not `finance-analysis`.",
             why="A live exchange rate needs observed provider data rather than a finance analysis brief.",
+        ),
+        final_checklist=(
+            "finance_scope_source_record/v1 names entity, period, cutoff, currency and units, accounting basis and comparator version.",
+            "Totals tie to the source, or the unreconciled gap is listed; the brief is not called reconciled otherwise.",
+            "Every formula and policy is supplied or marked an unapproved assumption.",
+            "Recalculation ran with a tool and its result is quoted; the disposition is PASS or HOLD with an escalation owner.",
         ),
         situations=(
             "why are we over budget",
@@ -3396,6 +3419,12 @@ _DEFINITIONS = [
             prompt="Explain the attached machine-learning paper for a beginner.",
             expected="Route to `paper-learning`, not `curriculum-design`.",
             why="A supplied paper explanation is not a curriculum-design request.",
+        ),
+        final_checklist=(
+            "Every outcome states performance, conditions and criterion; each has assessment evidence and rubric criteria, and the alignment map lists orphan outcomes and orphan assessments.",
+            "The sequence shows diagnosis, modeling, guided practice, feedback and independent transfer, with the hours per week totalled against the stated schedule.",
+            "Each accessibility adaptation names the learner barrier and an equivalent demonstration path.",
+            "Validation is PASS, REVISE or BLOCKED per criterion; learner review and pilot stay prepared until observed.",
         ),
         situations=(
             "design a six week course",
@@ -8593,6 +8622,11 @@ _DEFINITIONS = [
             "Never present prepared wiki guidance as an observed external write, store creation, or memory mutation.",
             "Mark stale or uncertain knowledge instead of presenting it as permanent truth.",
             "Extract separate coding tasks instead of burying them in notes.",
+            "Before writing a page to a shared or synced store, strip credentials and personal data from it, or ask: a note's destination decides who can read it.",
+        ),
+        why_this_exists=(
+            "`wiki` exists because a wiki fails by its audience and its upkeep, not its folder names: it sizes the structure to who reads "
+            "and who maintains it, and names what would break the chosen model before any page is written."
         ),
         final_checklist=(
             "Audience scale, destination, knowledge types, and maintenance owner are recorded or named as missing.",
@@ -8611,7 +8645,7 @@ _DEFINITIONS = [
         ),
         do_not_use_when=(
             HermesSkillLine(
-                "The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' bundled `llm-wiki` skill instead of this one.",
+                "The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' `llm-wiki` skill instead of this one when it is installed (bundled up to Hermes v2026.9.7, an optional skill on current main, installed with hermes skills install); when it is not installed, say so and offer to install it rather than imitating it.",
                 ("llm-wiki",),
             ),
         ),
@@ -9880,7 +9914,7 @@ _DEFINITIONS.append(
         ),
         quality_tier="long-document-gated",
         quality_bar=(
-            "Get the page count and scanned flags first with `pdf_read.py --meta`; each script names its own missing dependency (`pdfplumber` for `pdf_read.py`, `pypdf` for `pdf_split.py`, `pymupdf` for `extract_pymupdf.py`, `pypdfium2` or poppler `pdftoppm` for `pdf_page_image.py`); install it once, and say so.",
+            "Get the page count and scanned flags first with `pdf_read.py --meta`; each script names its own missing dependency (`pdfplumber` and, for `--meta`, `pypdf` for `pdf_read.py`; `pypdf` for `pdf_split.py`; `pymupdf` for `extract_pymupdf.py`; `pypdfium2` or poppler `pdftoppm` for `pdf_page_image.py`); run them with the `pdf` skill's `$PY` environment and never `pip install` into Hermes' own interpreter.",
             "Size ranges to the read budget: about " + str(DEFAULT_PAGES_PER_RANGE) + " pages per " + f"{HERMES_READ_FILE_CHAR_BUDGET:,}" + "-character call at typical density; halve the range when a probe read truncates.",
             "Extract each range with page selection (`extract_pymupdf.py --pages` or `read_file` on a `pdf_split.py` output) so every note carries a page anchor.",
             "Delegate ranges to `delegate_task` children with the fixed per-range brief when the plan has more than " + str(DELEGATION_RANGE_THRESHOLD) + " ranges; read sequentially otherwise.",
@@ -9918,10 +9952,10 @@ _DEFINITIONS.append(
             "Not-observed boundaries remain visible: " + ", ".join(LONG_DOCUMENT_NOT_OBSERVED) + ".",
         ),
         recovery_notes=(
-            "If a script reports a missing dependency, install the one it names once with `pip install` (`pdfplumber`, `pypdf`, `pymupdf`, or `pypdfium2`; poppler `pdftoppm` is the system alternative for rendering), rerun, and record the install.",
+            "If a script reports a missing dependency, rerun it with the `pdf` skill's documents interpreter `$PY` (or the `pdf-pymupdf` one for `extract_pymupdf.py`) instead of installing anything into Hermes' interpreter; poppler `pdftoppm` is the system alternative for rendering.",
             "If a range read truncates, halve the range, record the observed characters per page, and re-plan the remaining ranges from that measurement.",
-            "If the context was compacted or the session resumed, reread the ledger and continue from the `next` range; do not restart from page 1.",
-            "If the document is encrypted, ask for the password or stop; `pdf_read.py` and `pdf_split.py` accept `--password`.",
+            "If the context was compacted or the session resumed, call `omh_document_plan action=show` (or reread the ledger file) and continue from the `next` range; do not restart from page 1.",
+            "If the document is encrypted, ask for the password or stop; `pdf_read.py` and `pdf_split.py` accept `--password`, `extract_pymupdf.py` does not, so split the ranges with `pdf_split.py --password` first.",
             "If most pages are scanned and the goal needs them all, stop and get approval for the per-page OCR job before spending one vision call per page.",
         ),
         situations=(
