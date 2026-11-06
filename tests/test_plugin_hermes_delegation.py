@@ -607,11 +607,11 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
                 self.assertIsNone(provider_serves_alias(model_id, "qwen-oauth"))
                 self.assertIsNone(provider_serves_alias(model_id, "anthropic"))
 
-    def test_the_access_gated_openai_models_are_priced_and_provider_mapped_but_unchained(self):
+    def test_the_access_gated_openai_models_are_priced_but_unchained(self):
         # Onboarded 2026-11-06. OpenAI publishes a list price for each, so a
         # user who names one gets a cost; each borrows no category label from
-        # the chain its base sits in; and only the families OpenAI names get
-        # a provider verdict.
+        # the chain its base sits in; and only a family OpenAI names gets a
+        # verdict, and only GPT-6 Cyber has such a family.
         cost = hermes_delegation_module._approximate_cost_usd
         for spelling, total in (
             ("gpt-6-cyber", 120.0),
@@ -627,10 +627,17 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         self.assertIs(provider_serves_alias("gpt-6-cyber", "openai"), True)
         self.assertIs(provider_serves_alias("gpt-6-cyber", "openrouter"), None)
         self.assertIs(provider_serves_alias("gpt-6-cyber", "anthropic"), False)
+        # No vendor page says whether Codex serves these two, so no provider is
+        # given a verdict: an approved account on Codex is not refused or
+        # demoted on a guess.
+        codex_only = {"providers": {"openai-codex": "openai-codex"}}
         for model_id in ("gpt-5.6-cyber", "gpt-6-rosalind"):
             with self.subTest(model_id=model_id):
-                self.assertIs(provider_serves_alias(model_id, "openai"), True)
-                self.assertIs(provider_serves_alias(model_id, "openai-codex"), False)
+                self.assertNotIn(model_id, hermes_delegation_module.HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES)
+                for provider in ("openai-codex", "openai", "anthropic"):
+                    self.assertIsNone(provider_serves_alias(model_id, provider), provider)
+                self.assertIs(hermes_delegation_module.alias_is_served(model_id, codex_only), True)
+                self.assertEqual(hermes_delegation_module.providers_known_to_serve_alias(model_id, codex_only), ())
         # An operator chain that names one still labels it.
         chains = {"ultrabrain": (("gpt-6-cyber", "xhigh"),)}
         self.assertEqual(

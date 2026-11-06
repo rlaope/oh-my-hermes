@@ -457,19 +457,20 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     # Families are the vendor's statement, not an observation: OpenAI serves
     # GPT-6 Cyber through the API and the Codex app to approved Daybreak Red
     # organizations (model page; the system card says "when accessing GPT-6
-    # Cyber through the Codex app", though the Codex models page did not list
-    # it when read 2026-11-06), GPT-5.6 Cyber through the API's Responses
-    # endpoint to the same group (model page), and GPT-6 Rosalind through the
-    # API to approved Rosalind Research organizations (pricing page,
-    # changelog). No page names Codex for the last two, so they answer False
-    # there on the table's usual reading; no page denies it either, so a
-    # vendor statement moves that. The Codex subscription route on this
+    # Cyber through the Codex app", though learn.chatgpt.com/docs/models, read
+    # 2026-11-06, does not list it). The Codex subscription route on this
     # maintainer host refused both Cyber ids with HTTP 400 on 2026-11-06, in
     # the same wording a made-up id gets, so that probe says nothing about
-    # gating or about this row. No relay is claimed for any of them.
+    # gating or about this row. No relay is claimed.
     "gpt-6-cyber": ("openai-codex", "openai"),
-    "gpt-5.6-cyber": ("openai",),
-    "gpt-6-rosalind": ("openai",),
+    # GPT-5.6 Cyber and GPT-6 Rosalind have no row, so every provider answers
+    # unknown. A row answers False for each family it omits, and no vendor
+    # page says whether Codex serves them: the pages name the API, none denies
+    # Codex, and Daybreak access depends on the "allowed product surface"
+    # (learn.chatgpt.com/codex/cyber-safety, read 2026-11-06). An approved
+    # account on Codex must not be refused on a guess. The cost of having no
+    # row: `openai` is not offered as a known server, and a vendor provider
+    # that cannot serve them answers with its own rejection instead of ours.
     "deepseek-flash": ("deepseek", "openrouter", "opencode"),
     # Recognition-only: the versioned spelling of the Flash pointer above
     # (the gateway id `deepseek/deepseek-v4.1-flash` arrives this way).

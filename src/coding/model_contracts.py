@@ -675,8 +675,9 @@ _GPT_6_CYBER: Final[dict[str, object]] = {
     "rollout": (
         "only for organizations with Daybreak Red access and approval (model page), through the "
         "API and the Codex app (the system card recommends Codex's sandboxing \"when accessing "
-        "GPT-6 Cyber through the Codex app\"), though the Codex models page did not list it when "
-        "read 2026-11-06; the OpenAI Codex subscription route on this "
+        "GPT-6 Cyber through the Codex app\"), though the Codex models page "
+        "(learn.chatgpt.com/docs/models, read 2026-11-06) does not list it; the OpenAI Codex "
+        "subscription route on this "
         "maintainer host returned HTTP 400 on 2026-11-06 with the same wording an unknown id gets, "
         "so the probe cannot tell gated from absent; a released id is not account-level readiness "
         "evidence"
@@ -715,7 +716,8 @@ _GPT_6_CYBER: Final[dict[str, object]] = {
         "note": (
             "the model page lists Chat Completions and Responses as supported endpoints and every "
             "other endpoint, Batch included, as not supported; it states no tool-calling "
-            "restriction of its own (GPT-6 Astra's tool calling requires Responses)"
+            "restriction of its own (GPT-6 Astra's tool calling requires Responses), so `responses` "
+            "here is OMH's choice, not a vendor restriction"
         ),
     },
     "unsupported_parameters": (),
@@ -755,6 +757,7 @@ _GPT_6_CYBER: Final[dict[str, object]] = {
         "https://developers.openai.com/api/docs/pricing",
         "https://developers.openai.com/api/docs/changelog",
         "https://deploymentsafety.openai.com/gpt-6-cyber",
+        "https://learn.chatgpt.com/docs/models",
     ),
     "sources_read": "2026-11-06",
     "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
