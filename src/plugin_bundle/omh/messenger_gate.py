@@ -61,6 +61,9 @@ STATE_SCHEMA_VERSION = 1
 MUTE_LIMIT = 1000
 SKIP_LOG_LIMIT = 200
 SKIP_LOG_TRIM_BYTES = 256 * 1024
+# A mute must not be dropped because another writer held the lock for a moment;
+# the shared 0.1 s default lost mutes under contention. The skip log keeps it.
+MUTE_LOCK_SECONDS = 2.0
 SKIP_TEXT_CHARS = 120
 SLACK_ACK_EMOJI = "saluting_face"
 DISCORD_ACK_EMOJI = "\U0001fae1"
@@ -343,7 +346,7 @@ def write_mute(omh_home: Path, key: str, record: dict[str, Any] | None) -> bool:
     path = state_path(omh_home)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with _awareness_delivery_lock(path):
+        with _awareness_delivery_lock(path, timeout_seconds=MUTE_LOCK_SECONDS):
             mutes = read_mutes(omh_home)
             if record is None:
                 if key not in mutes:
