@@ -585,19 +585,19 @@ PORTABLE_SUPPORT_PATHS = frozenset({
 PORTABLE_REFERENCE_REWRITES: dict[str, tuple[tuple[str, str], ...]] = {
     'ultrawork/references/dependency-topology.md': (
         (
-            "When the accepted plan's tasks form an ordered graph with a separate verification task and the user did not name this skill themselves, recommend `dag-ulw` with a one-line reason (it validates the graph, settles each node from its handoff, and reports a verdict) rather than running the order here. Stay here for live coordinated lanes, a durable ledger, or a single owner.\n\n",
+            "When the accepted plan's tasks form an ordered graph with a separate verification task and the user did not name this skill themselves, and `omh_dag` is in your tool list, recommend `dag-ulw` with a one-line reason (it validates the graph, settles each node from its handoff, and reports a verdict) rather than running the order here. Stay here for live coordinated lanes, a durable ledger, or a single owner.\n\n",
             "",
         ),
     ),
     'research/references/briefing-format.md': (
         (
-            "Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints every error it finds, and writes the markdown, the print-ready page, or both. The payload's top-level fields are `schema_version`, `audience`, `output_formats` (human briefing only), `language`, `question`, `as_of`, `sections`, `figures`, `sources`, `role_labels`, `captions`, `export` and `claim_boundary`. ",
+            "Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints the first five errors it finds, and writes the markdown, the print-ready page, or both. `claim_boundary` must be the exact sentence below, `export` must map each format to `prepared`, `handoff_prepared` or `rendered_observed`, each section needs a lowercase `role` from the closed list, a `title` and at least one paragraph, and `figures`, `sources`, `role_labels` and `captions` are optional (`role_labels` and `captions` are required for a non-English `language`). The smallest payload that renders:\n\n```json\n{\n  \"schema_version\": \"research_briefing/v1\",\n  \"audience\": \"human_briefing\",\n  \"output_formats\": [\n    \"markdown\"\n  ],\n  \"language\": \"en\",\n  \"question\": \"Which cache fits?\",\n  \"as_of\": \"2026-11-07\",\n  \"sections\": [\n    {\n      \"role\": \"concept\",\n      \"title\": \"Cache eviction\",\n      \"paragraphs\": [\n        \"Eviction removes the least recently used entry first.\"\n      ]\n    }\n  ],\n  \"export\": {\n    \"markdown\": \"prepared\"\n  },\n  \"claim_boundary\": \"A research briefing is prepared decision context. It is not execution, review, CI, merge-readiness, or merge evidence, and a rendered page is not a rendered PDF without observed file evidence.\"\n}\n```\n\n",
             "",
         ),
     ),
     'context/references/project-terms.md': (
         (
-            "Once per project, `omh memory project-identity init` names the scope; without it the next command stops with `scope_unresolved`. Preview with `omh memory domain-capture --from-file PROJECT_TERMS.md` (read-only, `prepared_not_observed`). After the user confirms, add `--stage` to write pending candidates. Review and approval stay with `omh memory domain-review` and `omh memory domain-approve`, which this workflow never runs. When no shell tool is available, show the projection in prose and stop.",
+            "Once per project, `omh memory project-identity init` names the scope; without it the next command stops with `scope_unresolved`. Preview with `omh --scope project memory domain-capture --from-file PROJECT_TERMS.md` (read-only, `prepared_not_observed`). After the user confirms, add `--stage` to write pending candidates. Review and approval stay with `omh --scope project memory domain-review` and `domain-approve`, which this workflow never runs; without `--scope project` they look in another scope and find nothing. When no shell tool is available, show the projection in prose and stop.",
             "Show the machine-only projection in prose and stop for the user's confirmation. Staging, review and approval belong to the host's own terminology tooling, which this workflow never runs.",
         ),
     ),

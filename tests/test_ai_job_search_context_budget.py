@@ -143,12 +143,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            # 533907 -> 534862 and the digest re-derived: the coding-core skill audit round edits the
+            # 533907 -> 535043 and the digest re-derived: the coding-core skill audit round edits the
             # ultraperf, ultraqa, ask, strategy-brief, plan, ralplan, loop, ultrawork, maestro and research
-            # quality bars, safety rules and inputs (+955 net, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT);
+            # quality bars, safety rules and inputs (+1136 net, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT);
             # the pin before it was d6dfefff...fc71.
-            (skill_capabilities, 534862, FULL_ROW_DELTA_CAP,
-             '61ea00a7713cff96520ea7fe20a2da2ae939cd6b5651918475a927e79b681e22',
+            (skill_capabilities, 535043, FULL_ROW_DELTA_CAP,
+             '0f26dac882013000da9d63aea80d4a1a0f1466eb9d1867ac2b71f79122ff7f08',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -383,7 +383,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The coding-core audit round moves fourteen bodies (adversarial-consensus, ask, dag-ulw, deep-interview,
         # loop, maestro, plan, ralplan, research, research-brief, strategy-brief, ultraperf, ultraqa, ultrawork);
         # the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), 'f897d2c5687443fc3b8f35bf43aaecd9bb8672cf6d3dabbf6146fdcf36c4368c')
+        self.assertEqual(_digest(legacy_hashes), '9be83ccb1f60b2b43d3a1cd1b449e43db3748fb6b4e431e90d1c727bd04f975c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

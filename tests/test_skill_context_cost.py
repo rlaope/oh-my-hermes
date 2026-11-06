@@ -123,9 +123,9 @@ class SkillContextCostTests(unittest.TestCase):
         # bodies. Each pin moved by the body's measured growth against main
         # (research +3, web-research +7, source-finder +19), not by a figure chosen to
         # fit the cap; the increment above stays the feature's own.
-        # 20,520 -> 20,810: `research` takes defaults when no human can answer its opening questions
-        # (+290, not search guidance).
-        baseline = {'research': 20_810, 'web-research': 12_080, 'source-finder': 9_240}
+        # 20,520 -> 20,902: `research` takes defaults when no human can answer its opening questions
+        # (+382, not search guidance).
+        baseline = {'research': 20_902, 'web-research': 12_080, 'source-finder': 9_240}
         for name, before in baseline.items():
             record = skill_record(name)
             body = record.body().content

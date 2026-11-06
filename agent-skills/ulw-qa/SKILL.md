@@ -42,7 +42,7 @@ Bad example:
 
 - The scenario, expected behavior, observed result, and pass/fail basis are named.
 - Proposed fixes are separated from observed QA evidence.
-- A failed scenario gets at most two fix-and-rerun rounds; after the second failed rerun it is reported as an open finding with its evidence, and the scenario is not redefined to pass.
+- Missing or failed verification routes back to plan, fix, or a narrower test; a failed scenario gets at most two fix-and-rerun rounds, then it is reported as an open finding with its evidence and is not redefined to pass.
 - Everything the hostile scenarios created or changed (accounts, rows, files, processes, ports) was listed before the first one ran and removed or restored afterwards, with the command and its observed result as the cleanup receipt, or what remains is named.
 
 ## Recovery Notes

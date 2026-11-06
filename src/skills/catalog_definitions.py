@@ -553,7 +553,7 @@ _DEFINITIONS = [
         ),
         quality_tier="loop-gated",
         quality_bar=(
-            "Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path, unless a Do Not Use condition holds; then name that condition and the skill to use instead.",
+            "Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path, unless a Do Not Use condition holds; then name that condition and hand to the skill it names, or say none applies.",
             "Classify the goal as task, project, ambition, external-wait, or unclear inside the loop, then keep progressing until a real permission, evidence, verification, context, budget, or external-wait gate appears.",
             ENGINE_INTERJECTION_RESUME_RULE,
             ENGINE_FOLLOW_UP_AUTHORITY_RULE,
@@ -637,7 +637,7 @@ _DEFINITIONS = [
         ),
         portable_overrides={
             "quality_bar": (
-                "Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path, unless a Do Not Use condition holds; then name that condition and the skill to use instead.",
+                "Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path, unless a Do Not Use condition holds; then name that condition and hand to the skill it names, or say none applies.",
                 "Classify the goal as task, project, ambition, external-wait, or unclear inside the loop, then keep progressing until a real permission, evidence, verification, context, budget, or external-wait gate appears.",
                 "A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it. A mid-run message is the latest steering for the active task, not automatically a replacement objective: it replaces the objective when the user says so and steers the current one otherwise.",
                 "A follow-up that needs new authority, materially expands the scope, or changes external state not already authorized is described first and started only on the user's approval; persistence never broadens the authorized scope. A refused escalation gets a safer alternative inside the boundary, or the authorization the boundary asks for — never a workaround or an indirect execution.",
@@ -735,7 +735,7 @@ _DEFINITIONS = [
         portable_override_shadows={
             "do_not_use_when": "2ba0707196aad88775b85e179de7daf89d7d869c7ec67550ce4c233d88837318",
             # Re-plan rule added to both copies; shadow was 90edd0de before it.
-            "quality_bar": "e758354b0414ce5e51a3690835f0866fa2e33b8b254cfc3310a71c62a72aaa58",
+            "quality_bar": "05c421837f219879c36ad4d801b4fb0ff007c8530f9e17728498b732a4787658",
             "expected_outputs": "780eec788fe069700b05a39880a50a3813715f50fcd6401cb6fe486f1750616d",
             "artifact_expectations": "a0b60b9744a8ba2ea968e39cb84e90f2bc7125aaa4f40cee0996c658eeddc7ff",
             "final_checklist": "0e74ac3a35cd511b7db3310dc8040cfd5340bef69e367ee912228348616aa2c4",
@@ -1332,7 +1332,7 @@ _DEFINITIONS = [
         ),
         do_not_use_when=(
             "Avoid conflicting parallel writers; use single-owner or ordered execution.",
-            "Plan not accepted, lane boundaries unclear, or verification commands missing; use `ralplan` unless a delivery cycle was asked for.",
+            "Plan not accepted or verification missing; use `plan` (`ralplan` for a stated risk) unless a delivery cycle was asked for or this is one concrete change with its own acceptance criteria and verification command.",
             "The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.",
         "For a decision spike, use `decision-prototype`.",
             "[capability:coordinated_scope] The lanes are exploratory research or QA coordination without an accepted implementation plan; frame them with the `coordinated_scope` capability before parallel delivery.",
@@ -1779,7 +1779,7 @@ _DEFINITIONS = [
         ),
         quality_tier="source-gated",
         quality_bar=(
-            "Ask for the research question, source boundaries, freshness, jurisdiction, and version assumptions before retrieval. When another workflow or a lane that cannot ask called you, take audience = coding agent, skip the format and language questions, use the caller's stated question and depth, and record each defaulted input in the dossier `scope` as `defaulted: <why>`; ask only when a human is in the loop.",
+            "Ask for the research question, source boundaries, freshness, jurisdiction, and version assumptions before retrieval. When another workflow or a lane that cannot ask called you, take audience = coding agent, skip the format and language questions, use the caller's stated question and depth, take the open web and the caller's repository as source boundaries, current freshness, and no stated jurisdiction or version, and record each defaulted input in the dossier `scope` as `defaulted: <why>`; ask only when a human is in the loop.",
             "Ask who the output is for before retrieval and never infer it: a human reader gets a briefing document, a coding agent gets the dense handoff of findings, exact symbols, and file paths. The answer changes what the run records, not only how it is written up.",
             "On the human branch ask the output format (markdown, a print-ready page, or both) and the output language before writing, then hold the document to `references/briefing-format.md` - noun-phrase titles carrying a role label from its closed vocabulary, cause before effect, terms defined at first use, figures drawn in code blocks, and the fixed chapter-and-appendix structure.",
             "Keep the coding-agent branch dense: findings, exact symbols, file paths, and the plan-feed block, with no narrative framing and no briefing structure.",
@@ -7325,7 +7325,7 @@ _DEFINITIONS = [
         final_checklist=(
             "The scenario, expected behavior, observed result, and pass/fail basis are named.",
             "Proposed fixes are separated from observed QA evidence.",
-            "A failed scenario gets at most two fix-and-rerun rounds; after the second failed rerun it is reported as an open finding with its evidence, and the scenario is not redefined to pass.",
+            "Missing or failed verification routes back to plan, fix, or a narrower test; a failed scenario gets at most two fix-and-rerun rounds, then it is reported as an open finding with its evidence and is not redefined to pass.",
             "Everything the hostile scenarios created or changed (accounts, rows, files, processes, ports) was listed before the first one ran and removed or restored afterwards, with the command and its observed result as the cleanup receipt, or what remains is named.",
         ),
         bad_example=SkillExample(
@@ -8537,7 +8537,7 @@ _DEFINITIONS = [
             prompt="$ultraperf checkout feels slow and the worker memory keeps climbing - find where and fix it",
             expected=(
                 "Audit the baseline, name the evaluator command, rank hot-path hypotheses, hand the smallest "
-                "reversible fix to the selected executor, re-measure, and state the budget delta."
+                "reversible fix to its owner (the Hermes harness unless an external one was chosen), re-measure, and state the budget delta."
             ),
             why="The problem is real but unlocalized across more than one domain.",
         ),
@@ -8700,7 +8700,7 @@ _DEFINITIONS = [
             "Do not send secrets or private prompts without explicit opt-in.",
         ),
         quality_bar=(
-            "Before consulting, name the question, why an outside answer could change yours, and the advisor the user named or configured (named in this request, or already set up on this machine; if neither, ask once); with none, say so and answer without one.",
+            "Before consulting, name the question, why an outside answer could change yours, and the advisor the user named or configured (named in this request or earlier in this conversation, never inferred from an installed CLI; if none, ask once); with none, say so and answer without one.",
             "Report the advice as one input: which points you accept, which you reject and why, and none of it as a verdict, a review, or a verified fact.",
             HermesReferenceLine(
                 "When the advisor is a coding CLI the user named and Hermes' bundled skill for it (`claude-code`, `codex`, or `opencode`) is in your skill list, take only the invocation from that skill and keep the run to advice, with no edits; load `references/cli-advisors.md`. None of these CLIs is the default advisor.",

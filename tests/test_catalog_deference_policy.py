@@ -328,9 +328,9 @@ NON_SKILL_BACKTICKS = frozenset(
 # ordinary change to `plan`; `strategy-brief` defers technical choices to `decision-prototype`, `plan`
 # and `adversarial-consensus`; `ask` defers a multi-perspective attack to `adversarial-consensus`;
 # `ultrawork` defers an unplanned request to `ralplan`; `ultraperf` is rewritten to name `maestro`.
-# Eight cases, nine pairs, one new owner (`plan`).
+# Eight cases, ten pairs (`ultrawork` also defers to `plan`), one new owner (`plan`).
 EXPECTED_DEFERENCE_CASES = 418
-EXPECTED_DEFERENCE_PAIRS = 435
+EXPECTED_DEFERENCE_PAIRS = 436
 EXPECTED_DEFERRING_OWNERS = 122
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,

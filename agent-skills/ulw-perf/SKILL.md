@@ -30,7 +30,7 @@ This is an OMH `ultraperf` workflow skill, projected for Agent Skills hosts (Cla
 Good example:
 
 - Prompt: $ultraperf checkout feels slow and the worker memory keeps climbing - find where and fix it
-- Expected behavior: Audit the baseline, name the evaluator command, rank hot-path hypotheses, hand the smallest reversible fix to the selected executor, re-measure, and state the budget delta.
+- Expected behavior: Audit the baseline, name the evaluator command, rank hot-path hypotheses, hand the smallest reversible fix to its owner (the Hermes harness unless an external one was chosen), re-measure, and state the budget delta.
 - Why: The problem is real but unlocalized across more than one domain.
 
 Bad example:

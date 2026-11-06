@@ -37,8 +37,8 @@ categories onto them: Scope and behavior, Interaction flow, and Domain and data
 feed the outcome; Constraints and tradeoffs, Security and privacy, Quality
 attributes, Integration surface, and Edge cases feed constraints and non-goals;
 Completion signals feed success criteria; Terminology feeds whichever it
-affects. A dimension counts as resolved when none of its categories is
-`Missing` and no `Partial` one admits two incompatible builds.
+affects. A dimension counts as resolved when none of its categories holds a gap
+that earned a question (see below).
 
 ## Which gaps earn a question
 

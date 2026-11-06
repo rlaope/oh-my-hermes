@@ -69,7 +69,7 @@ Reasoning demand: `standard`
 
 Quality bar:
 
-- Before consulting, name the question, why an outside answer could change yours, and the advisor the user named or configured (named in this request, or already set up on this machine; if neither, ask once); with none, say so and answer without one.
+- Before consulting, name the question, why an outside answer could change yours, and the advisor the user named or configured (named in this request or earlier in this conversation, never inferred from an installed CLI; if none, ask once); with none, say so and answer without one.
 - Report the advice as one input: which points you accept, which you reject and why, and none of it as a verdict, a review, or a verified fact.
 
 Required inputs:

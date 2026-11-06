@@ -44,15 +44,18 @@ class CodingCoreSkillCommandTests(unittest.TestCase):
             self.assertIn(flag, text)
         self.assertIn("omh hermes briefing", text)
 
-    def test_briefing_reference_lists_the_payload_fields_the_validator_reads(self) -> None:
+    def test_briefing_reference_example_is_a_payload_the_validator_accepts(self) -> None:
+        import json
+
+        from omh.workflows.research_briefing import BRIEFING_CLAIM_BOUNDARY, research_briefing_errors
+
         text = _reference("research", "references/briefing-format.md")
-        sentence = re.search(r"top-level fields are (.*?)\. ", text, re.S)
-        self.assertIsNotNone(sentence)
-        fields = re.findall(r"`([a-z_]+)`", sentence.group(1))
-        self.assertGreaterEqual(len(fields), 10)
-        source = _BRIEFING_SOURCE.read_text(encoding="utf-8")
-        for field in fields:
-            self.assertRegex(source, rf'["\']{field}["\']', field)
+        block = re.search(r"```json\n(.*?)\n```", text, re.S)
+        self.assertIsNotNone(block)
+        payload = json.loads(block.group(1))
+        self.assertEqual(research_briefing_errors(payload), [])
+        self.assertEqual(payload["claim_boundary"], BRIEFING_CLAIM_BOUNDARY)
+        self.assertIn("first five errors", text)
 
     def test_project_terms_reference_quotes_the_capture_commands(self) -> None:
         text = _reference("context", "references/project-terms.md")
@@ -61,12 +64,26 @@ class CodingCoreSkillCommandTests(unittest.TestCase):
         for flag in ("--from-file", "--stage"):
             self.assertIn(flag, capture)
             self.assertIn(flag, text)
-        for command in ("domain-review", "domain-approve", "project-identity"):
-            self.assertIn(f"omh memory {command}", text)
+        self.assertIn("omh --scope project memory domain-review", text)
+        self.assertIn("omh memory project-identity init", text)
+        self.assertIn("--scope", _options(parser))
         _subparser(parser, "memory", "domain-review")
         _subparser(parser, "memory", "domain-approve")
         init = _subparser(parser, "memory", "project-identity")
         self.assertIn("init", next(a for a in init._actions if isinstance(a, argparse._SubParsersAction)).choices)
+
+    def test_search_budget_text_matches_what_omh_search_does(self) -> None:
+        guidance = _reference("research", "references/search-method.md")
+        self.assertNotIn("each wave is a new plan", guidance)
+        evidence = _reference("research", "references/evidence-records.md")
+        self.assertIn("accepts one `plan` per host request", evidence)
+        self.assertIn("research_progress/v1", evidence)
+
+    def test_advisor_reference_uses_flags_the_vendors_document(self) -> None:
+        text = _reference("ask", "references/cli-advisors.md")
+        for token in ("claude -p --tools Read,Grep,Glob", "codex exec --sandbox read-only --skip-git-repo-check"):
+            self.assertIn(token, text)
+        self.assertNotIn("--allowedTools Read", text)
 
 
 if __name__ == "__main__":

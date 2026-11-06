@@ -34,7 +34,7 @@ A TDD cycle is observed only when a non-zero (red) run precedes a zero (green) r
 
 Commit the failing test as a checkpoint before the first implementation edit. The red commit makes tampering diff-visible: any later change to the test files appears in `git diff <red-commit>.. -- <test paths>` and must be explained in the lane report. The `omh_gather_evidence` tool accepts `git diff` probes for exactly this check.
 
-The red commit lives on the lane's own branch or worktree. Record its SHA in the evidence ledger, then fold it into the green commit (`git commit --fixup` and autosquash) before the branch is offered for merge, unless the repository keeps red commits: otherwise the delivered history carries a commit whose tree fails its own test, CI on that commit is red, and `git bisect` lands on it.
+The red commit lives on the lane's own branch or worktree. Record its SHA in the evidence ledger, then after the tamper check above, fold it into the green commit (`git reset --soft <red-commit>~1`, then commit once) before the branch is offered for merge, unless the repository keeps red commits: otherwise the delivered history carries a commit whose tree fails its own test, CI on that commit is red, and `git bisect` lands on it.
 
 ## Forbidden Moves
 

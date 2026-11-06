@@ -6639,7 +6639,7 @@ A quiet, queued, or scheduled node is not stalled. A returned blocked response i
 
 On a graph-capable host, encode real edges and dispatch the dependency-ready frontier. OMH's `fanout_contract/v2` is the reference behavior: unknown or cyclic dependencies fail, overlapping files without an edge fail, and admission advances as dependencies complete.
 
-When the accepted plan's tasks form an ordered graph with a separate verification task and the user did not name this skill themselves, recommend `dag-ulw` with a one-line reason (it validates the graph, settles each node from its handoff, and reports a verdict) rather than running the order here. Stay here for live coordinated lanes, a durable ledger, or a single owner.
+When the accepted plan's tasks form an ordered graph with a separate verification task and the user did not name this skill themselves, and `omh_dag` is in your tool list, recommend `dag-ulw` with a one-line reason (it validates the graph, settles each node from its handoff, and reports a verdict) rather than running the order here. Stay here for live coordinated lanes, a durable ledger, or a single owner.
 
 On a host without native DAG support, run edge-free units as plain parallel native subagents and run ordered units sequentially in topological order. This is a fallback inside `ulw-work`, not a separate skill or hidden runtime.
 """
@@ -6682,7 +6682,7 @@ A TDD cycle is observed only when a non-zero (red) run precedes a zero (green) r
 
 Commit the failing test as a checkpoint before the first implementation edit. The red commit makes tampering diff-visible: any later change to the test files appears in `git diff <red-commit>.. -- <test paths>` and must be explained in the lane report. The `omh_gather_evidence` tool accepts `git diff` probes for exactly this check.
 
-The red commit lives on the lane's own branch or worktree. Record its SHA in the evidence ledger, then fold it into the green commit (`git commit --fixup` and autosquash) before the branch is offered for merge, unless the repository keeps red commits: otherwise the delivered history carries a commit whose tree fails its own test, CI on that commit is red, and `git bisect` lands on it.
+The red commit lives on the lane's own branch or worktree. Record its SHA in the evidence ledger, then after the tamper check above, fold it into the green commit (`git reset --soft <red-commit>~1`, then commit once) before the branch is offered for merge, unless the repository keeps red commits: otherwise the delivered history carries a commit whose tree fails its own test, CI on that commit is red, and `git bisect` lands on it.
 
 ## Forbidden Moves
 
@@ -7805,7 +7805,7 @@ Read only what the question needs. Report whether the answer came from repositor
 
 Normal users describe the intent in Hermes chat. Agent/operator control-plane work may preview repository-root `PROJECT_TERMS.md`; preview is `prepared_not_observed`, reports no predicted candidate ids, and writes nothing. Before staging, show the machine-only projection and ask for explicit confirmation. Staging is atomic and pending-only. Approval is a separate review action.
 
-Once per project, `omh memory project-identity init` names the scope; without it the next command stops with `scope_unresolved`. Preview with `omh memory domain-capture --from-file PROJECT_TERMS.md` (read-only, `prepared_not_observed`). After the user confirms, add `--stage` to write pending candidates. Review and approval stay with `omh memory domain-review` and `omh memory domain-approve`, which this workflow never runs. When no shell tool is available, show the projection in prose and stop.
+Once per project, `omh memory project-identity init` names the scope; without it the next command stops with `scope_unresolved`. Preview with `omh --scope project memory domain-capture --from-file PROJECT_TERMS.md` (read-only, `prepared_not_observed`). After the user confirms, add `--stage` to write pending candidates. Review and approval stay with `omh --scope project memory domain-review` and `domain-approve`, which this workflow never runs; without `--scope project` they look in another scope and find nothing. When no shell tool is available, show the projection in prose and stop.
 
 Never create, rewrite, synchronize, approve, retire, or commit the source automatically. Never infer execution, review, model use, CI, or merge from source bytes, candidate state, profile state, or freshness.
 
@@ -9252,6 +9252,15 @@ the contested gate even if contested is false. Unresolved may lack evidence;
 refuted requires refuting evidence. These are author-supplied statuses and
 provenance, not authenticated facts. The validator checks no quotation entailment.
 
+## Search budget across waves
+
+`omh_search` accepts one `plan` per host request, and a second one in the same session is refused, so
+replanning never raises the caps in `search-method.md`. A depth budget the user declared for exhaustive
+research (unit and limit in `research_progress/v1`) is the authority to run later waves directly through
+the host's search and read tools. Count every attempt against that limit in `research_progress/v1`; the
+declared limit, not an `omh_search` plan, bounds the run. Without a declared limit, the caps in
+`search-method.md` are the whole budget.
+
 ## Progress and reference study links
 
 `research_progress/v1` declares budget {unit, limit, spent}, status,
@@ -9416,7 +9425,35 @@ Confirm the current state by retrieval rather than recall. Separate durable prin
 
 The output language is declared by the requester and never inferred from the language of the request. Body prose, role labels, chapter headings, and appendix captions follow the declared language together -- a Korean briefing under English section captions is a half-translated document. Identifiers, schema ids, file paths, command names, and code stay as written. The language declaration is required; omission is refused.
 
-OMH holds no translation table for the scaffolding, because one would have to be maintained for every language the engine can write in. Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints every error it finds, and writes the markdown, the print-ready page, or both. The payload's top-level fields are `schema_version`, `audience`, `output_formats` (human briefing only), `language`, `question`, `as_of`, `sections`, `figures`, `sources`, `role_labels`, `captions`, `export` and `claim_boundary`. Supply the labels with the payload instead: `role_labels` maps a role to its label in the document's language, `captions` supplies headings, metadata labels and the displayed evidence boundary. Explicit `en` may use English defaults; non-English output requires caller-supplied translations for every role and caption actually rendered. Unused labels need no translation. Translating the body while leaving rendered captions unset is refused. Structured receipt values and schema boundaries stay unchanged; only display labels are translated.
+OMH holds no translation table for the scaffolding, because one would have to be maintained for every language the engine can write in. Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints the first five errors it finds, and writes the markdown, the print-ready page, or both. `claim_boundary` must be the exact sentence below, `export` must map each format to `prepared`, `handoff_prepared` or `rendered_observed`, each section needs a lowercase `role` from the closed list, a `title` and at least one paragraph, and `figures`, `sources`, `role_labels` and `captions` are optional (`role_labels` and `captions` are required for a non-English `language`). The smallest payload that renders:
+
+```json
+{
+  "schema_version": "research_briefing/v1",
+  "audience": "human_briefing",
+  "output_formats": [
+    "markdown"
+  ],
+  "language": "en",
+  "question": "Which cache fits?",
+  "as_of": "2026-11-07",
+  "sections": [
+    {
+      "role": "concept",
+      "title": "Cache eviction",
+      "paragraphs": [
+        "Eviction removes the least recently used entry first."
+      ]
+    }
+  ],
+  "export": {
+    "markdown": "prepared"
+  },
+  "claim_boundary": "A research briefing is prepared decision context. It is not execution, review, CI, merge-readiness, or merge evidence, and a rendered page is not a rendered PDF without observed file evidence."
+}
+```
+
+Supply the labels with the payload instead: `role_labels` maps a role to its label in the document's language, `captions` supplies headings, metadata labels and the displayed evidence boundary. Explicit `en` may use English defaults; non-English output requires caller-supplied translations for every role and caption actually rendered. Unused labels need no translation. Translating the body while leaving rendered captions unset is refused. Structured receipt values and schema boundaries stay unchanged; only display labels are translated.
 
 ## Evidence boundary
 
@@ -14530,8 +14567,8 @@ categories onto them: Scope and behavior, Interaction flow, and Domain and data
 feed the outcome; Constraints and tradeoffs, Security and privacy, Quality
 attributes, Integration surface, and Edge cases feed constraints and non-goals;
 Completion signals feed success criteria; Terminology feeds whichever it
-affects. A dimension counts as resolved when none of its categories is
-`Missing` and no `Partial` one admits two incompatible builds.
+affects. A dimension counts as resolved when none of its categories holds a gap
+that earned a question (see below).
 
 ## Which gaps earn a question
 
@@ -15200,12 +15237,12 @@ def _cli_advisors_reference() -> str:
 | Codex | `codex` |
 | OpenCode | `opencode` |
 
-Load the one for the advisor the user named, when it is in your skill list, and take only the invocation from it: a single non-interactive run. Start it in a scratch directory that holds only copies of the files the question needs, not in the live repository, unless the user opted in to repository access for this question: a coding CLI started in a repository can read every file in it, `.env` included, whatever the prompt says. Those skills are written for handing coding work to the CLI; here the CLI answers a question. A CLI with no bundled skill is run from its own help output, or reported as unavailable.
+Load the one for the advisor the user named, when it is in your skill list, and take only the invocation from it: a single non-interactive run. Start it in a scratch directory that holds only copies of the files the question needs, not in the live repository, unless the user opted in to repository access for this question: a coding CLI started in a repository can read every file in it, `.env` included, whatever the prompt says. A scratch directory is not a boundary against a CLI that can read outside it, so keep secrets out of what you copy. The copies carry no history or project instructions: say which files the advisor saw next to its answer, ask once for repository access when the question needs the whole repository, and delete the copies afterwards. Those skills are written for handing coding work to the CLI; here the CLI answers a question. A CLI with no bundled skill is run from its own help output, or reported as unavailable.
 
 What stays with `ask`:
 
 - The advisor is the one the user named or configured. None of these CLIs is the default, and this table recommends none of them.
-- An advisor answers; it does not edit. Run Claude Code as `claude -p --permission-mode plan` (or with `--allowedTools Read,Grep,Glob`), and any other CLI in its own read-only or sandbox mode (read its `--help`) or with its file-writing tools turned off. When it ran in the repository, read `git status` afterwards: a changed file means the run did more than advise, and you say so.
+- An advisor answers; it does not edit. Run Claude Code as `claude -p --tools Read,Grep,Glob` (`--tools` removes the shell and write tools; `--allowedTools` only skips prompts and does not restrict, and `--permission-mode plan` still runs read-only shell commands unprompted), and Codex as `codex exec --sandbox read-only --skip-git-repo-check` (Codex refuses to start outside a git repository without the last flag). For any other CLI, use its read-only mode from its `--help`. When it ran in the repository, read `git status` afterwards: a changed file means the run did more than advise, and you say so.
 - The question carries what the advisor needs to answer: the question, and the files or excerpts it concerns. Secrets, credentials, and private material stay out unless the user opted in for this question.
 - The answer is advice. Attribute it to the advisor, say which points you accept and which you reject and why, and record no review, verification, or approval from it.
 - A run that fails, times out, or stops for a sign-in is reported as that, with no advice written in its place.

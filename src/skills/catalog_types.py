@@ -265,8 +265,7 @@ DELEGATE_RESUMABLE_SESSION_RULE = (
     "non-interactive Claude Code pass `--output-format json` and read `session_id` from the result "
     "(resume with `claude -p --resume <session-id>`); for Codex pass `--json` and read `thread_id` "
     "(resume with `codex exec resume <thread-id>`, repeating `--skip-git-repo-check` outside a git "
-    "repo). Never leave a delegate run with no recorded way to resume or steer it — a plain-text "
-    "one-shot that hides its session id strands the work when the run stalls or times out."
+    "repo). Never leave a delegate run with no recorded way to resume or steer it."
 )
 # Words the Hermes install scanner (`tools/skills_guard.py`, rule `crypto_mining`,
 # severity critical) scores on sight, in any file of a skill. A trigger that
