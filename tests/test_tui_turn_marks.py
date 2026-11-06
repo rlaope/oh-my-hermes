@@ -345,7 +345,8 @@ class SteerPlacementTests(unittest.TestCase):
     def test_a_refused_steer_reads_in_amber_and_waits_in_the_queue(self) -> None:
         app, client = make_app(busy=True)
         self.steer(app, "keep this")
-        answer(app, client, error={"code": 4010, "message": "agent does not support steer"})
+        answer(app, client, error={"code": 4010, "message": "agent does not support active-turn redirect"})
+        answer(app, client, error={"code": 4010, "message": "agent does not support steer"})  # the steer it went as
         (block,) = [block for block in app.transcript.blocks if isinstance(block, SteerBlock)]
         (row,) = block_rows(block, 100, THEME)
         self.assertEqual(line_text(row), "⧗ queued — Hermes refused the steer (agent does not support steer) · keep this")
@@ -384,16 +385,16 @@ class UnansweredSteerTests(unittest.TestCase):
         taken = lines_text(app.transcript.take_stable_lines(100, THEME))  # what reaches scrollback
         self.assertNotIn("steer", " ".join(lines_text(app.transcript.live_lines(100, THEME))))  # nothing held back
         self.assertIn(self.BACK, taken)
-        self.assertEqual([method for method, _params in client.calls], ["session.steer"])  # nothing sent for it
+        self.assertEqual([method for method, _params in client.calls], ["session.redirect"])  # nothing sent for it
 
     def test_an_unanswered_steer_after_its_turn_ended_is_not_sent_as_a_prompt(self) -> None:
         app, client, steer = self.steered(Clock(), busy_after=False)
-        self.assertEqual([method for method, _params in client.calls], ["session.steer"])
+        self.assertEqual([method for method, _params in client.calls], ["session.redirect"])
         self.assertFalse(app._busy())
         self.assertEqual(app.composer.text, "an unrelated draft\nuse the other file")
         app._on_response(Response(steer, {"status": "queued"}, None))  # Hermes' late answer: it had taken it
         self.assertIn(steer, client.forgotten)
-        self.assertEqual([method for method, _params in client.calls], ["session.steer"])
+        self.assertEqual([method for method, _params in client.calls], ["session.redirect"])
         self.assertEqual(app.composer.text, "an unrelated draft\nuse the other file")  # given back once
         rows = [line_text(row) for block in app.transcript.blocks if isinstance(block, SteerBlock)
                 for row in block_rows(block, 100, THEME)]

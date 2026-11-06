@@ -290,7 +290,7 @@ class ShownLineDecidesTests(unittest.TestCase):
         app, client = make_app(busy=True)
         app._on_input(Paste(self.BANG_PASTE))
         app._on_input(Key(ENTER, ctrl=True))
-        self.assertEqual(client.calls, [("session.steer", {"session_id": SID, "text": self.BANG_PASTE})])
+        self.assertEqual(client.calls, [("session.redirect", {"session_id": SID, "text": self.BANG_PASTE})])
         self.assertFalse(app.queued)
 
     def test_a_typed_bang_runs_the_chip_after_it_and_the_echo_shows_the_chip(self) -> None:

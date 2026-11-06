@@ -213,7 +213,7 @@ class RosterClearTests(unittest.TestCase):
         for typed in ("/queue", "/steer look at the tests too"):
             type_text(app, typed)
             app._on_input(Key(ENTER))
-        self.assertEqual(client.named("session.steer"), [{"session_id": SID, "text": "look at the tests too"}])
+        self.assertEqual(client.named("session.redirect"), [{"session_id": SID, "text": "look at the tests too"}])
         self.assertEqual(len(app.roster.agents), 2)
 
     def test_a_new_session_empties_the_roster(self) -> None:

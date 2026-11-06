@@ -267,7 +267,7 @@ class CommandCaseTests(unittest.TestCase):
     def test_steer_in_capitals_steers_the_running_turn(self) -> None:
         app, client = make_app(busy=True)
         send(app, "/Steer use the other file")
-        self.assertEqual(client.calls, [("session.steer", {"session_id": SID, "text": "use the other file"})])
+        self.assertEqual(client.calls, [("session.redirect", {"session_id": SID, "text": "use the other file"})])
 
     def test_a_renamed_command_in_capitals_runs_its_hermes_name(self) -> None:
         app, client = make_app()

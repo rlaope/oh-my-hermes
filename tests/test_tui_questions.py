@@ -636,7 +636,7 @@ class TellRowTests(unittest.TestCase):
         self.assertIn(app_module.TELL_SAY[0], mode_row(app))
         self.assertNotIn("esc to interrupt", mode_row(app))  # Esc leaves the field, it interrupts nothing
         self.assertIn(f"❯ {app_module.TELL_PLACEHOLDER}", [composer_text(row) for row in drawn(app)])
-        self.assertEqual(client.named("session.steer"), [])  # nothing is sent until the person sends it
+        self.assertEqual(client.named("session.redirect"), [])  # nothing is sent until the person sends it
 
     def test_what_is_sent_goes_into_the_running_turn_as_a_steer_and_the_draft_comes_back(self) -> None:
         for key in (Key(ENTER), Key(ENTER, ctrl=True)):
@@ -644,7 +644,7 @@ class TellRowTests(unittest.TestCase):
                 app, client = self.told()
                 type_text(app, "use ./tmp instead")
                 press(app, key)
-                self.assertEqual(client.named("session.steer"), [{"session_id": SID, "text": "use ./tmp instead"}])
+                self.assertEqual(client.named("session.redirect"), [{"session_id": SID, "text": "use ./tmp instead"}])
                 self.assertEqual(client.named("prompt.submit"), [])
                 self.assertIsNone(app.tell_draft)
                 self.assertEqual(app.composer.text, "my draft")
@@ -666,14 +666,14 @@ class TellRowTests(unittest.TestCase):
         now[0] += app_module.CALL_ANSWER_SECONDS
         app._expire_calls()
         self.assertEqual(app.composer.text, "my draft\nuse ./tmp instead")  # given back, never sent again
-        self.assertEqual(len(client.named("session.steer")), 1)
+        self.assertEqual(len(client.named("session.redirect")), 1)
 
     def test_once_the_turn_has_ended_it_goes_as_an_ordinary_prompt(self) -> None:
         app, client = self.told()
         app.turn_pending = False
         type_text(app, "use ./tmp instead")
         press(app, Key(ENTER))
-        self.assertEqual(client.named("session.steer"), [])
+        self.assertEqual(client.named("session.redirect"), [])
         self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "use ./tmp instead"}])
 
     def test_after_the_denied_turn_ended_it_never_steers_the_queued_prompt_that_runs_now(self) -> None:
@@ -689,7 +689,7 @@ class TellRowTests(unittest.TestCase):
                 self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "queued P", "queued": True}])
                 type_text(app, "use ./tmp instead")
                 press(app, Key(ENTER))
-                self.assertEqual(client.named("session.steer"), [])
+                self.assertEqual(client.named("session.redirect"), [])
                 self.assertEqual([line.text for line in app.queued], ["use ./tmp instead"])  # behind P's turn
                 app._on_event(Event("message.complete", SID, {"text": "done"}))
                 self.assertEqual(client.named("prompt.submit")[-1],
@@ -729,7 +729,7 @@ class TellRowTests(unittest.TestCase):
         app, client = self.told()
         press(app, Key(ENTER))
         self.assertIsNotNone(app.tell_draft)
-        self.assertEqual(client.named("session.steer"), [])
+        self.assertEqual(client.named("session.redirect"), [])
 
     def test_a_question_that_arrives_meanwhile_takes_the_keys_and_gives_the_field_back(self) -> None:
         app, client = self.told()
@@ -741,7 +741,7 @@ class TellRowTests(unittest.TestCase):
         self.assertEqual(app.composer.text, "use ./tmp")
         self.assertIn(app_module.TELL_SAY[0], mode_row(app))
         press(app, Key(ENTER))
-        self.assertEqual(client.named("session.steer"), [{"session_id": SID, "text": "use ./tmp"}])
+        self.assertEqual(client.named("session.redirect"), [{"session_id": SID, "text": "use ./tmp"}])
 
     def test_a_second_tell_row_keeps_the_open_field_and_the_draft_behind_it(self) -> None:
         # The tell row lets the turn go on, so the next approval can come while its field is open.
@@ -756,7 +756,7 @@ class TellRowTests(unittest.TestCase):
         self.assertIn(app_module.TELL_SAY[0], mode_row(app))
         type_text(app, ", then this")
         press(app, Key(ENTER))
-        self.assertEqual(client.named("session.steer"), [{"session_id": SID, "text": "first tell, then this"}])
+        self.assertEqual(client.named("session.redirect"), [{"session_id": SID, "text": "first tell, then this"}])
         self.assertIsNone(app.tell_draft)
         self.assertEqual(app.composer.text, "my draft")
 
@@ -808,7 +808,7 @@ class TellRowTests(unittest.TestCase):
         app._enter_session({"session_id": "other", "info": {}})
         self.assertIsNone(app.tell_draft)
         self.assertEqual(app.composer.text, "my draft")
-        self.assertEqual(client.named("session.steer"), [])
+        self.assertEqual(client.named("session.redirect"), [])
 
 
 class WireClient(RecordingClient):
@@ -871,7 +871,7 @@ class DenyStopsTests(unittest.TestCase):
         self.assertEqual(client.wire, [DENY])
         type_text(app, "use ./tmp")
         press(app, Key(ENTER))
-        self.assertEqual(client.wire, [DENY, ("call", "session.steer")])
+        self.assertEqual(client.wire, [DENY, ("call", "session.redirect")])
 
     def test_allowing_stops_nothing(self) -> None:
         app, client = self.wired()

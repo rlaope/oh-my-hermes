@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Ctrl+Enter in the OMH TUI sends now into the running turn, not after
+  it.** Ctrl+Enter, Ctrl+J on an empty composer, `/steer <text>` and the
+  text typed after a denied approval went as Hermes' `session.steer`,
+  which only holds the text until a tool batch ends or the next model
+  call. When the model was already writing its final answer neither came,
+  and Hermes sent the text as the next prompt once the turn had ended. They
+  now go as `session.redirect`, as Hermes' own TUI sends busy input: a
+  model request under way is cut and retried with the text as a user
+  message, and a tool batch running gets it with its results. Its row reads
+  as a sent prompt at once, and stopping the turn afterwards no longer puts
+  it back in the queue. An agent without redirect gets the old
+  `session.steer`; one Hermes refuses still waits in the queue for the turn
+  to end.
 - **A reply that opens with a code block keeps its `⚚ Hermes` header in
   the OMH TUI's scrollback, and a table after a released one keeps its own
   box whatever spaces its divider holds.** When a reply's first line was a
