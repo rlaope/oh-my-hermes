@@ -21,7 +21,11 @@ class ResearchLaneSkillTextTests(unittest.TestCase):
         # Stated by presence: the floor pdf skill has no documents-environment block.
         self.assertIn("When the skill has no such block (Hermes before it, including the floor v2026.9.7)", body)
         self.assertIn("task-local virtual environment", body)
-        self.assertIn("`<PY_MUPDF> extract_pymupdf.py", body)
+        self.assertIn("`<PY_MUPDF> <scripts dir>/extract_pymupdf.py", body)
+        self.assertIn("the range's start page minus one", body)
+        self.assertIn("with no `--pages`", body)
+        self.assertIn("`command -v <name>`", body)
+        self.assertNotIn("re-plan the remaining", body)
         self.assertNotIn("`python pdf_read.py", body)
         self.assertNotIn('"$PY"', body)
         self.assertIn("`extract_pymupdf.py` has no `--password`", body)
@@ -52,6 +56,7 @@ class ResearchLaneSkillTextTests(unittest.TestCase):
         self.assertIn("loaded with code", body)
         self.assertIn("n per group", body)
         self.assertIn("report association as association", body)
+        self.assertIn("flagging that five per group makes the result fragile", body)
 
     def test_geospatial_refuses_web_mercator_in_the_text_and_names_the_input_format(self) -> None:
         body = self.bodies["geospatial-analysis"]

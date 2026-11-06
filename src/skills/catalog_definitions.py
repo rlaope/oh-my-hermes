@@ -9953,7 +9953,7 @@ _DEFINITIONS.append(
         ),
         recovery_notes=(
             "If a script reports a missing dependency, rerun it with the interpreter the protocol resolved (the `pdf` skill's documents or `pdf-pymupdf` environment where it gives one, else a task-local virtual environment) instead of installing anything into Hermes' interpreter; poppler `pdftoppm` is the system alternative for rendering.",
-            "If a range read truncates, halve the range, record the observed characters per page, and re-plan the remaining ranges from that measurement.",
+            "If a range read truncates, halve the range, record the observed characters per page in the range's ledger note, and read the range in two halves; do not plan again with new numbers, which creates a new plan with an empty ledger.",
             "If the context was compacted or the session resumed, call `omh_document_plan action=show` (or reread the ledger file) and continue from the `next` range; do not restart from page 1.",
             "If the document is encrypted, ask for the password or stop; `pdf_read.py` and `pdf_split.py` accept `--password`, `extract_pymupdf.py` does not, so split the ranges with `pdf_split.py --password` first.",
             "If most pages are scanned and the goal needs them all, stop and get approval for the per-page OCR job before spending one vision call per page.",

@@ -1571,7 +1571,7 @@ _FEATURE_SURFACE_SKILLS = (
         boundary="A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, hallucination-safe numeric evidence, association, or causality unless observed data and method evidence records it.",
         good_prompt="data-analysis analyze this CSV and summarize anomalies by segment.",
         bad_prompt="data-analysis is the Q3 lift significant? (two columns of five numbers each)",
-        bad_expected="Compute the test with code and state that n=5 per group cannot support the claim, instead of calling the gap significant or refusing for lack of data.",
+        bad_expected="Compute the comparison with code and report n per group, the effect size and an interval or test with its assumptions, flagging that five per group makes the result fragile, instead of calling the gap significant or refusing for lack of data.",
         bad_why="The data was supplied; the failure is a comparison reported without n, an effect size or an interval.",
         why_this_exists=(
             "`data-analysis` exists because a model that reads a table by eye returns means, trends and anomalies that look "

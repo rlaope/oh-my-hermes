@@ -36,7 +36,7 @@ Good example:
 Bad example:
 
 - Prompt: data-analysis is the Q3 lift significant? (two columns of five numbers each)
-- Expected behavior: Compute the test with code and state that n=5 per group cannot support the claim, instead of calling the gap significant or refusing for lack of data.
+- Expected behavior: Compute the comparison with code and report n per group, the effect size and an interval or test with its assumptions, flagging that five per group makes the result fragile, instead of calling the gap significant or refusing for lack of data.
 - Why: The data was supplied; the failure is a comparison reported without n, an effect size or an interval.
 
 ## Completion Checklist

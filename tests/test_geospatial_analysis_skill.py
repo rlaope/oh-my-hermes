@@ -51,8 +51,9 @@ class CliFixture(unittest.TestCase):
         self.right.write_text(json.dumps(layer(box(5,-5,25,15))))
 
     def run_cli(self, *, real=False, **changes):
-        values = {"input": self.left, "overlay": self.right, "input-crs": "EPSG:3857",
-                  "overlay-crs": "EPSG:3857", "target-crs": "EPSG:3857", "output-dir": self.output}
+        # UTM zone 31N, not Web Mercator: a Mercator target measures only the shipped example files.
+        values = {"input": self.left, "overlay": self.right, "input-crs": "EPSG:32631",
+                  "overlay-crs": "EPSG:32631", "target-crs": "EPSG:32631", "output-dir": self.output}
         values.update(changes)
         args = [arg for key, value in values.items() if value is not None for arg in ("--" + key, str(value))]
         return subprocess.run([sys.executable, "-I", *([] if real else ["-S"]), str(SCRIPT), *args],
@@ -289,18 +290,24 @@ class MercatorGuardTests(unittest.TestCase):
     def test_compute_consults_the_guard_before_any_projection(self):
         source = SCRIPT.read_text(encoding="utf-8")
         compute = source[source.index("def compute("):]
-        self.assertIn("area_guard_refusal(mercator_family(target), (left[2], right[2]))", compute)
-        self.assertLess(compute.index("area_guard_refusal("), compute.index("project_layer(left, crs_left)"))
+        self.assertIn("require_area_safe_target(mercator_family(target), (digest(left[1]), digest(right[1])))", compute)
+        self.assertLess(compute.index("require_area_safe_target("), compute.index("project_layer(left, crs_left)"))
 
-    def test_the_guard_decision_passes_only_the_shipped_fixture(self):
+    def test_the_guard_passes_only_the_shipped_example_files_by_digest(self):
         api = helper_api()
-        fixture = {"data_class": "synthetic", "fixture_id": "synthetic-rectangles-v1"}
-        self.assertIsNone(api.area_guard_refusal(False, ({}, {})))
-        self.assertIsNone(api.area_guard_refusal(True, (fixture, fixture)))
-        for layers in (({}, {}), (fixture, {}), ({"data_class": "synthetic"}, {"data_class": "synthetic"}),
-                       (fixture, {"data_class": "synthetic", "fixture_id": "mine"})):
-            with self.subTest(layers=layers):
-                message = api.area_guard_refusal(True, layers)
+        shipped = [hashlib.sha256((TOOLKIT / "examples" / name).read_bytes()).hexdigest()
+                   for name in ("input.json", "overlay.json")]
+        self.assertEqual(set(shipped), set(api.FIXTURE_DIGESTS))
+        api.require_area_safe_target(False, ("anything",))
+        api.require_area_safe_target(True, tuple(shipped))
+        # A copy that carries the fixture's labels but different bytes is a real layer.
+        labelled = json.dumps({"type": "FeatureCollection", "data_class": "synthetic",
+                               "fixture_id": "synthetic-rectangles-v1", "features": []}).encode()
+        for digests in (("unknown", shipped[0]), (hashlib.sha256(labelled).hexdigest(), shipped[1])):
+            with self.subTest(digests=digests):
+                with self.assertRaises(ValueError) as caught:
+                    api.require_area_safe_target(True, digests)
+                message = str(caught.exception)
                 self.assertIn("distort area", message)
                 self.assertNotIn("synthetic", message)
                 self.assertNotIn("data_class", message)
@@ -308,13 +315,29 @@ class MercatorGuardTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("OMH_GIS_RUN_REAL") == "1", "optional spatial backend")
 class GeospatialRealBackendTests(CliFixture):
+    def test_shipped_example_files_run_in_web_mercator_and_a_labelled_copy_does_not(self):
+        examples = TOOLKIT / "examples"
+        result = self.run_cli(real=True, input=examples / "input.json", overlay=examples / "overlay.json",
+                              **{"input-crs": "EPSG:3857", "overlay-crs": "EPSG:3857", "target-crs": "EPSG:3857"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertAlmostEqual(json.loads((self.output / "summary.json").read_text())["pair_area_sum_m2"], 100)
+        lat_lon = {"type": "FeatureCollection", "data_class": "synthetic", "fixture_id": "synthetic-rectangles-v1",
+                   "features": [{"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [
+                       [[126.9, 37.5], [127.0, 37.5], [127.0, 37.6], [126.9, 37.6], [126.9, 37.5]]]}}]}
+        self.left.write_text(json.dumps(lat_lon))
+        self.right.write_text(json.dumps(lat_lon))
+        import shutil
+        shutil.rmtree(self.output)
+        self.refused(self.run_cli(real=True, **{"input-crs": "EPSG:4326", "overlay-crs": "EPSG:4326",
+                                                "target-crs": "EPSG:3857"}), "distort area")
+
     def test_web_mercator_is_refused_for_user_supplied_layers_and_an_equal_area_crs_is_not(self):
         geographic = {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {
             "type": "Polygon", "coordinates": [[[126.9, 37.5], [127.0, 37.5], [127.0, 37.6], [126.9, 37.6], [126.9, 37.5]]]}}]}
         self.left.write_text(json.dumps(geographic))
         self.right.write_text(json.dumps(geographic))
         geo = {"input-crs": "EPSG:4326", "overlay-crs": "EPSG:4326"}
-        self.refused(self.run_cli(real=True, **geo), "distort area")
+        self.refused(self.run_cli(real=True, **geo, **{"target-crs": "EPSG:3857"}), "distort area")
         result = self.run_cli(real=True, **geo, **{"target-crs": "EPSG:6933"})
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertGreater(json.loads((self.output / "summary.json").read_text())["pair_area_sum_m2"], 0)
@@ -351,8 +374,8 @@ class GeospatialRealBackendTests(CliFixture):
         import shapely
         import pyproj
         args = api.parser().parse_args(["--input", str(self.left), "--overlay", str(self.right),
-            "--input-crs", "EPSG:3857", "--overlay-crs", "EPSG:3857",
-            "--target-crs", "EPSG:3857", "--output-dir", str(self.output)])
+            "--input-crs", "EPSG:32631", "--overlay-crs", "EPSG:32631",
+            "--target-crs", "EPSG:32631", "--output-dir", str(self.output)])
         left, right, _ = api.validate_args(args)
         return api.compute(args, left, right, shapely, pyproj)
 
@@ -446,9 +469,17 @@ class GeospatialRealBackendTests(CliFixture):
                 feature["geometry"]["coordinates"] = [[inverse(x, y) for x, y in ring]
                                                         for ring in feature["geometry"]["coordinates"]]
             path.write_text(json.dumps(data))
-        result = self.run_cli(real=True, **{"input-crs": "EPSG:4326", "overlay-crs": "EPSG:4326"})
-        self.assertEqual(result.returncode, 0, result.stderr)
-        summary = json.loads((self.output / "summary.json").read_text())
+        # Web Mercator measures only the shipped example files, so these re-projected copies are admitted
+        # for this one check by patching the digest set; the CLI refusal is covered above.
+        import shapely
+        import pyproj
+        api = helper_api()
+        args = api.parser().parse_args(["--input", str(self.left), "--overlay", str(self.right),
+            "--input-crs", "EPSG:4326", "--overlay-crs", "EPSG:4326",
+            "--target-crs", "EPSG:3857", "--output-dir", str(self.output)])
+        left, right, _ = api.validate_args(args)
+        with patch.object(api, "FIXTURE_DIGESTS", frozenset({api.digest(left[1]), api.digest(right[1])})):
+            _, summary = api.compute(args, left, right, shapely, pyproj)
         self.assertAlmostEqual(summary["union_area_m2"], 100, places=6)
 
     def test_conflicting_embedded_crs_refused(self):

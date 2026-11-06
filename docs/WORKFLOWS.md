@@ -6552,7 +6552,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Not-observed boundaries remain visible: page_count, text_extraction, scanned_page_ocr, range_delegation, hosted_ocr, cross_range_consistency.
 - Recovery notes:
   - If a script reports a missing dependency, rerun it with the interpreter the protocol resolved (the `pdf` skill's documents or `pdf-pymupdf` environment where it gives one, else a task-local virtual environment) instead of installing anything into Hermes' interpreter; poppler `pdftoppm` is the system alternative for rendering.
-  - If a range read truncates, halve the range, record the observed characters per page, and re-plan the remaining ranges from that measurement.
+  - If a range read truncates, halve the range, record the observed characters per page in the range's ledger note, and read the range in two halves; do not plan again with new numbers, which creates a new plan with an empty ledger.
   - If the context was compacted or the session resumed, call `omh_document_plan action=show` (or reread the ledger file) and continue from the `next` range; do not restart from page 1.
   - If the document is encrypted, ask for the password or stop; `pdf_read.py` and `pdf_split.py` accept `--password`, `extract_pymupdf.py` does not, so split the ranges with `pdf_split.py --password` first.
   - If most pages are scanned and the goal needs them all, stop and get approval for the per-page OCR job before spending one vision call per page.
@@ -11059,7 +11059,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 - Bad example:
   - Prompt: data-analysis is the Q3 lift significant? (two columns of five numbers each)
-  - Expected behavior: Compute the test with code and state that n=5 per group cannot support the claim, instead of calling the gap significant or refusing for lack of data.
+  - Expected behavior: Compute the comparison with code and report n per group, the effect size and an interval or test with its assumptions, flagging that five per group makes the result fragile, instead of calling the gap significant or refusing for lack of data.
   - Why: The data was supplied; the failure is a comparison reported without n, an effect size or an interval.
 - Quality bar:
   - Name the user-facing workflow objective, required context, next action, and stop condition.

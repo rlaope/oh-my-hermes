@@ -179,21 +179,22 @@ def mercator_family(crs):
     return method.startswith("mercator") or "pseudo mercator" in method or "auxiliary sphere" in method
 
 
-FIXTURE_ID = "synthetic-rectangles-v1"
+# The shipped synthetic fixture, by the digest of its two example files: a label a layer can carry is
+# not evidence that it is the fixture.
+FIXTURE_DIGESTS = frozenset({
+    "2fcda5f6bc3d34ac0c4df7ae75d7c62d1ebb0597833cf326ff89141a7234b492",
+    "fb712b2ca917bb0ec9431c6dd76b9660113fb48f65b6ca78c17af3a9cb841bd8",
+})
 
 
-def area_guard_refusal(target_is_mercator, layers):
-    """Why a Mercator-family target may not measure these layers, or None when it may.
+def require_area_safe_target(target_is_mercator, layer_digests):
+    """Raise unless the target CRS may measure these layers: Mercator-family targets measure only the shipped fixture.
 
-    Only the shipped synthetic fixture (both layers carry its data_class and fixture_id) is measured in
-    Web Mercator; the refusal does not say how to qualify, so a real layer is never relabelled to pass.
+    The message does not say how to qualify, so a real layer is never relabelled to pass.
     """
-    if not target_is_mercator:
-        return None
-    if all(layer.get("data_class") == "synthetic" and layer.get("fixture_id") == FIXTURE_ID for layer in layers):
-        return None
-    return ("Web Mercator and Mercator distort area (about 1.6x at 38 degrees latitude): "
-            "choose an equal-area or local projected metre CRS for the study extent")
+    if target_is_mercator and not all(item in FIXTURE_DIGESTS for item in layer_digests):
+        raise ValueError("Web Mercator and Mercator distort area (about 1.6x at 38 degrees latitude): "
+                         "choose an equal-area or local projected metre CRS for the study extent")
 
 
 def compute(args, left, right, shapely, pyproj):
@@ -211,9 +212,7 @@ def compute(args, left, right, shapely, pyproj):
                 or any(axis.unit_conversion_factor != 1.0 or axis.unit_name.lower() not in ("metre", "meter")
                        for axis in target.axis_info)):
             raise ValueError("measurement CRS must be projected with metre axes; geographic degree area/distance is refused")
-        refusal = area_guard_refusal(mercator_family(target), (left[2], right[2]))
-        if refusal:
-            raise ValueError(refusal)
+        require_area_safe_target(mercator_family(target), (digest(left[1]), digest(right[1])))
         crs_left, crs_right = pyproj.CRS(args.input_crs), pyproj.CRS(args.overlay_crs)
         def checked(geom, crs):
             if geom.is_empty or not geom.is_valid or geom.geom_type not in ("Polygon", "MultiPolygon"):
