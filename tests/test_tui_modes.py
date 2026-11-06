@@ -720,6 +720,69 @@ class SteerTests(unittest.TestCase):
                 app._on_event(Event("message.complete", SID, {"text": "steered answer"}))
                 self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "later line", "queued": True}])
 
+    def test_a_stopped_end_with_a_steer_unread_sends_the_queue_on_at_once(self) -> None:
+        # Only an end nobody stopped holds the queue. `/stop` asks without setting `interrupting`, and an `interrupted`
+        # status with no stop asked is Hermes' or another client's.
+        for name, stop, payload in (("/stop, interrupted", True, {"text": "stopped", "status": "interrupted"}),
+                                    ("/stop, complete", True, {"text": "done", "status": "complete"}),
+                                    ("not asked, interrupted", False, {"text": "x", "status": "interrupted"})):
+            with self.subTest(end=name):
+                app, client, _now = self.steer_left_unread("typed", "later line")
+                if stop:
+                    type_text(app, "/stop")
+                    app._on_input(Key(ENTER))
+                    self.assertEqual((app.stop_asked, app.interrupting), (True, False))
+                app._on_event(Event("message.complete", SID, payload))
+                self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "later line", "queued": True}])
+                self.assertIsNone(app.hermes_next_due)
+
+    def test_a_line_sent_during_the_wait_stays_behind_the_older_queued_lines(self) -> None:
+        def sent(client: RecordingClient) -> list[str]:
+            return [params["text"] for params in client.named("prompt.submit")]
+
+        for how in ("the turn Hermes runs next", "the wait running out"):
+            with self.subTest(goes_after=how):
+                app, client, now = self.steer_left_unread("typed", "older queued line")
+                app._on_event(Event("message.complete", SID, {"text": "done"}))
+                type_text(app, "new line")
+                app._on_input(Key(ENTER))
+                self.assertEqual(sent(client), [])
+                self.assertEqual([line.text for line in app.queued], ["older queued line", "new line"])
+                if how == "the wait running out":
+                    now[0] += app_module.HERMES_NEXT_TURN_SECONDS
+                    app._drain_when_hermes_next_missed()
+                else:
+                    app._on_event(Event("message.start", SID, {}))
+                    app._on_event(Event("message.complete", SID, {"text": "steered answer"}))
+                self.assertEqual(sent(client), ["older queued line"])
+                app._on_event(Event("message.start", SID, {}))
+                app._on_event(Event("message.complete", SID, {"text": "older answer"}))
+                self.assertEqual(sent(client), ["older queued line", "new line"])
+                self.assertEqual(list(app.queued), [])
+
+    def test_a_line_sent_during_the_wait_with_nothing_queued_goes_when_the_wait_runs_out(self) -> None:
+        app, client, now = self.steer_left_unread("typed")
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        type_text(app, "new line")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("prompt.submit"), [])
+        now[0] += app_module.HERMES_NEXT_TURN_SECONDS
+        app._drain_when_hermes_next_missed()
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "new line", "queued": True}])
+
+    def test_a_line_sent_during_the_wait_is_not_stranded_behind_a_held_queue(self) -> None:
+        # A held queue waits for the person's next prompt to start a turn, so that prompt cannot join it: the backstop
+        # would not send it, and nothing else would.
+        app, client, _now = self.steer_left_unread("typed", "held line")
+        app.queue_held = True
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertIsNotNone(app.hermes_next_due)
+        type_text(app, "new line")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "new line"}])
+        self.assertEqual([line.text for line in app.queued], ["held line"])
+        self.assertFalse(app.queue_held)
+
     def test_a_steer_the_last_model_call_read_starts_no_turn_so_the_queue_waits_out_the_backstop(self) -> None:
         # Hermes drains a steer into the request it is about to make, which no `tool.complete` says: the TUI cannot
         # tell this end from one with a next prompt coming. Nothing starts, and the queue goes when the wait is over.

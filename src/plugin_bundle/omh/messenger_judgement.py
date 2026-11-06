@@ -66,6 +66,7 @@ _ACKNOWLEDGEMENT_CHARS = 60
 _CODE_OR_LINK_MARKS = frozenset('=`"[]()<>{}')
 # What ends a sentence, read after `_normalized`: NFKC has made ``…`` into ``...`` and fullwidth ``！？`` into ASCII.
 _SENTENCE_ENDS = frozenset(".!?。؟।۔‽")
+_TOKEN_LINE_WRAP = "`*~_"  # all that may open a line of several token lines: any other mark shows the token
 _SHUTUP_WHOLE = re.compile(r"\[\s*SHUT[\s_-]*UP\s*\]", re.IGNORECASE)
 _SILENT_WHOLE = re.compile(r"\[\s*SILENT\s*\]", re.IGNORECASE)
 _EXACT_TOKENS = frozenset({SHUTUP_TOKEN, SILENT_TOKEN})
@@ -266,13 +267,16 @@ def _acknowledged(text: str) -> bool:
 def reply_marker(text: object) -> str | None:
     """The marker this whole reply is, or None: a real answer is never read as one.
 
-    The whole reply is the token once lightly unwrapped, in any case, or it opens with the exact
-    ``[SHUTUP]`` and a brief acknowledgement on one short line, or every line of it is a token (with
-    any ``[SHUTUP]`` among them, that is the marker). A bare Hermes marker (``SILENT``, ``NO REPLY``)
-    counts only as the whole reply. Any other token is the answer's own text.
+    Every line of it is a token (with any ``[SHUTUP]`` among them, that is the marker), however many
+    lines, or the whole reply is the token once lightly unwrapped, in any case, or it opens with the
+    exact ``[SHUTUP]`` and a brief acknowledgement on one short line. A bare Hermes marker (``SILENT``,
+    ``NO REPLY``) counts only as the whole reply. Any other token is the answer's own text.
     """
     if not isinstance(text, str):
         return None
+    lines_marker = _token_lines_marker(text)
+    if lines_marker is not None:
+        return lines_marker
     core = _whole_reply(text)
     if len(core) > _TOKEN_LENGTH_CAP:
         return None
@@ -280,16 +284,17 @@ def reply_marker(text: object) -> str | None:
         return SHUTUP_TOKEN
     if _SILENT_WHOLE.fullmatch(core) or _hermes_silence(core):
         return SILENT_TOKEN
-    return _token_lines_marker(core)
+    return None
 
 
-def _token_lines_marker(core: str) -> str | None:
-    """The marker a reply of nothing but token lines is, or None. A list of them is shown, not said."""
-    lines = [line for line in core.splitlines() if line.strip()]
-    if any(_LIST_ITEM.match(line) for line in lines):
+def _token_lines_marker(text: str) -> str | None:
+    """The marker a reply of nothing but token lines is, or None. Read before any unwrapping: tokens in a list, a
+    quote, a table or a fence are shown, not said, and no count of real token lines makes them an answer."""
+    lines = [line.strip() for line in _normalized(text).splitlines() if line.strip()]
+    if not lines or not all(line.lstrip(_TOKEN_LINE_WRAP).startswith("[") for line in lines):
         return None
     tokens = [_unwrapped(line) for line in lines]
-    if not tokens or not all(_SHUTUP_WHOLE.fullmatch(token) or _SILENT_WHOLE.fullmatch(token) for token in tokens):
+    if not all(_SHUTUP_WHOLE.fullmatch(token) or _SILENT_WHOLE.fullmatch(token) for token in tokens):
         return None
     return SHUTUP_TOKEN if any(_SHUTUP_WHOLE.fullmatch(token) for token in tokens) else SILENT_TOKEN
 
@@ -314,9 +319,8 @@ def _without_closing_token(line: str) -> str:
     for token in _EXACT_TOKENS:
         if stripped.endswith(" " + token):
             head = stripped[:-len(token)].rstrip()
-            folded = _normalized(head).rstrip()
-            closes = folded[-1:] in _SENTENCE_ENDS
-            shown = folded.endswith(":") or _LIST_ITEM.match(stripped) is not None
+            closes = _normalized(head).rstrip()[-1:] in _SENTENCE_ENDS
+            shown = _LIST_ITEM.match(_normalized(stripped)) is not None
             if closes and not shown and not any(mark in head for mark in _CODE_OR_LINK_MARKS):
                 return head
     return line
@@ -380,7 +384,9 @@ def judged_reply(turn_id: object, response_text: object, *, now: float | None = 
     thread muted, the 🫡 scheduled once the mute is written). A silence marker
     is logged and comes back clean: no replacement when Hermes already reads it
     exactly, ``[SILENT]`` when it was wrapped. An answer with a token at its edge
-    is not handled and comes back without it. Every other reply is
+    is not handled and comes back without it, unless what is left is itself a
+    marker: then it is handled as one, as ``[SHUTUP]`` when one came off the edge.
+    So the caller is never given a bare marker to add to. Every other reply is
     ``(False, None)``.
     """
     tick = time.time() if now is None else now
@@ -389,6 +395,10 @@ def judged_reply(turn_id: object, response_text: object, *, now: float | None = 
         return False, None
     marker = reply_marker(response_text)
     answer = without_edge_tokens(response_text)
+    if marker is None and answer != response_text:
+        marker = reply_marker(answer)
+        if marker is not None and response_text.count(SHUTUP_TOKEN) > answer.count(SHUTUP_TOKEN):
+            marker = SHUTUP_TOKEN
     if marker is None and answer.strip():
         return False, (answer if answer != response_text else None)
     shutup = marker == SHUTUP_TOKEN

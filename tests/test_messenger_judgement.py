@@ -38,7 +38,7 @@ def hermes_modules(*, platform="slack", chat_type="thread", chat_id="C1", thread
         var.set(value)
         vars(context)[name] = var
     filters = ModuleType("gateway.response_filters")
-    filters.is_intentional_silence_response = lambda text: text.strip().upper() in {"[SILENT]", "SILENT", "NO_REPLY"}
+    filters.is_intentional_silence_response = lambda text: text.strip().upper() in {"[SILENT]", "SILENT", "NO_REPLY", "[静默]"}
     run = ModuleType("gateway.run")
     run._load_gateway_config = lambda path: config if config is not None else {"model": {"default": "m"}}
     package = ModuleType("gateway")
@@ -98,6 +98,15 @@ class StoreReset(unittest.TestCase):
         return gate.gate_event(message, gateway, hermes_home=self.home / "hermes", omh_home=self.home / "omh")
 
 
+# Tokens in a list, a quote, a table or a fence are shown, not said: a real answer listing them.
+SHOWN_TOKEN_LINES = (
+    "- [SILENT]\n- [SHUTUP]", "• [SILENT]\n• [SHUTUP]", "– [SILENT]\n– [SHUTUP]", "· [SHUTUP]\n· [SILENT]",
+    "◦ [SILENT]\n◦ [SHUTUP]", "▪ [SILENT]\n▪ [SHUTUP]", "-[SILENT]\n-[SHUTUP]", "- [SILENT]\n[SHUTUP]",
+    "> [SILENT]\n> [SHUTUP]", "> - [SILENT]\n> - [SHUTUP]", "| [SILENT] |\n| [SHUTUP] |",
+    "```\n[SILENT]\n[SHUTUP]\n```", "```text\n[SILENT]\n[SHUTUP]\n```", "```\n[SILENT]\n[SILENT]\n```",
+)
+
+
 class TokenTests(unittest.TestCase):
     def test_a_whole_reply_token_is_the_marker(self) -> None:
         zero_width, bom = chr(0x200b), chr(0xfeff)
@@ -128,8 +137,11 @@ class TokenTests(unittest.TestCase):
             ("[SHUTUP]\n[SHUTUP]", judge.SHUTUP_TOKEN),
             ("[SHUTUP]\n[SILENT]", judge.SHUTUP_TOKEN),
             ("`[SILENT]`\n~~[Shut Up]~~", judge.SHUTUP_TOKEN),
-            ("```\n[SILENT]\n[SHUTUP]\n```", judge.SHUTUP_TOKEN),
             ("［SILENT］\r\n［SHUTUP］", judge.SHUTUP_TOKEN),
+            ("[SILENT]" + "\n" * 70 + "[SHUTUP]", judge.SHUTUP_TOKEN),
+            ("[SILENT]\n" + " " * 80 + "\n[SHUTUP]", judge.SHUTUP_TOKEN),
+            ("[SHUTUP]\n" * 8, judge.SHUTUP_TOKEN),
+            ("[SILENT]\n" * 8, judge.SILENT_TOKEN),
             (zero_width + "[SILENT]\n" + zero_width + "[SHUTUP]", judge.SHUTUP_TOKEN),
             ("[SILENT]\n[SILENT]", judge.SILENT_TOKEN),
             ("*[SILENT]*\n\n`[silent]`.", judge.SILENT_TOKEN),
@@ -139,8 +151,8 @@ class TokenTests(unittest.TestCase):
 
     def test_lines_that_are_not_all_tokens_are_not_a_marker(self) -> None:
         for text in ("[SILENT]\n\nHere is the answer", "[SHUTUP]\n\nreal answer", "Here is the answer\n\n[SILENT]",
-                     "[SILENT]\n" + " " * 80 + "\n[SHUTUP]", "- [SILENT]\n- [SHUTUP]", "* [SHUTUP]\n* [SHUTUP]",
-                     "[SILENT]\n```\n[SHUTUP]\n```", "SILENT\nSILENT", "[SILENT]\nSILENT", "[SHUTUP\n[SILENT]"):
+                     "* [SHUTUP]\n* [SHUTUP]", "[SILENT]\n```\n[SHUTUP]\n```", "SILENT\nSILENT", "[SILENT]\nSILENT",
+                     "[SHUTUP\n[SILENT]", *SHOWN_TOKEN_LINES):
             with self.subTest(text=text):
                 self.assertIsNone(judge.reply_marker(text))
 
@@ -451,13 +463,16 @@ class ReplyTests(StoreReset):
             "[SILENT] not for me",
             "[SILENT]\nThis token drops a reply.",
             "[SILENT]\n\nHere is the answer",
-            "- [SILENT]\n- [SHUTUP]",
+            *SHOWN_TOKEN_LINES,
             "The marker - [SILENT]",
             "One, [SILENT]",
             "Done; [SILENT]",
             "Done — [SILENT]",
             "Done» [SILENT]",
             "1. [SILENT]",
+            "１． [SILENT]",
+            "1． [SILENT]",
+            "⒈ [SILENT]",
         ):
             with self.subTest(text=text):
                 asyncio.run(self.keep_turn()())
@@ -480,6 +495,50 @@ class ReplyTests(StoreReset):
                 self.assertEqual(judge.judged_reply("t1", text, now=2.0), (True, judge.SILENT_TOKEN))
                 once = marker == judge.SHUTUP_TOKEN
                 self.assertEqual((muted, reacted, logged), ([2.0] if once else [], [1] if once else [], [marker]))
+
+    def outcome(self, text: str) -> tuple[tuple[bool, str | None], int, list[str]]:
+        """`judged_reply` for `text` in a kept turn: what it returned, the mutes written, and what it logged."""
+        muted: list[float] = []
+        logged: list[str] = []
+        judge._turns["t1"] = judge.Room(1.0, "on", lambda tick: muted.append(tick) or True, lambda: None, object(),
+                                        log=lambda said, tick: logged.append(said))
+        return judge.judged_reply("t1", text, now=2.0), len(muted), logged
+
+    def test_what_edge_removal_leaves_is_judged_once_so_no_bare_marker_reaches_the_caller(self) -> None:
+        for text, mutes in (
+            ("[SILENT]" + "\n" * 70 + "[SHUTUP]", 1),
+            ("[SILENT]\n" + " " * 80 + "\n[SHUTUP]", 1),
+            ("[SHUTUP]\nSILENT", 1),
+            ("[SHUTUP]\nNO_REPLY", 1),
+            ("NO_REPLY\n[SHUTUP]", 1),
+            ("SILENT\n[SILENT]", 0),
+            ("[静默]\n[SILENT]", 0),
+            ("[SHUTUP]\n[静默]", 1),
+            ("[SHUTUP] Okay\n[SILENT]", 1),
+            ("[SHUTUP] understood\n[SHUTUP]", 1),
+            ("[SHUTUP]\n" * 8, 1),
+            ("[SILENT]\n" * 8, 0),
+            ("[SHUTUP]\n- [SILENT]", 1),
+            ("[SHUTUP]\n- [SHUTUP]", 1),
+            ("[SILENT]\n🫡\n[SHUTUP]", 1),
+            ("[SILENT]\n---\n[SHUTUP]", 1),
+        ):
+            with self.subTest(text=text[:40]):
+                verdict, muted, logged = self.outcome(text)
+                self.assertEqual(verdict, (True, judge.SILENT_TOKEN))
+                self.assertEqual(muted, mutes)
+                self.assertEqual(logged, [judge.SHUTUP_TOKEN if mutes else judge.SILENT_TOKEN])
+
+    def test_an_unhandled_reply_never_comes_back_as_a_bare_marker(self) -> None:
+        # The caller may add to a reply it was not told to leave alone, and a marker with text after it is posted.
+        for head in ("", "- ", "• ", "> ", "1. ", "[SHUTUP] ", "[SILENT] ", "SILENT ", "```\n", "🫡 ", "Done. "):
+            for middle in ("", "\n", "\n\n", "\n🫡\n", "\n---\n", "\nSILENT\n", "\n[静默]\n", "\n" + " " * 80 + "\n", "\n" * 70):
+                for tail in ("[SILENT]", "[SHUTUP]", "SILENT", "- [SILENT]", "[SHUTUP] Okay", "Okay", "[SILENT]\n```"):
+                    for text in (head + "[SHUTUP]" + middle + tail, head + "[SILENT]" + middle + tail, head + tail):
+                        with self.subTest(text=text[:60]):
+                            handled, replacement = self.outcome(text)[0]
+                            self.assertFalse(not handled and replacement is not None
+                                             and judge.reply_marker(replacement) is not None, replacement)
 
     def test_token_lines_reach_the_real_mute_and_the_hook_sends_only_silent(self) -> None:
         asyncio.run(self.keep_turn()())

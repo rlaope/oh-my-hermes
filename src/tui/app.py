@@ -2205,7 +2205,6 @@ class App(ModesMixin, AgentViewMixin):
         # Redirects Hermes answered `queued`: its own next prompt, read only after the turn and cleared by a stop, so
         # no tool finishing settles them (`_track_sent_now`); the line, for a sent-now one.
         self.hermes_queued: list[tuple[SteerBlock, QueuedLine | None]] = []
-        self.steer_left_unread = False  # the turn ending left a steer unread (`_settle_steers_at_turn_end`)
         self.hermes_next_due: float | None = None  # the queue waits for the turn Hermes runs next until then
         self.turns_ended = 0  # turns of this TUI that ended: a steer remembers which turn it was meant for
         self.queue_held = False  # the queue waits for the person after an interrupt (`_hold_queue`)
@@ -4040,8 +4039,10 @@ class App(ModesMixin, AgentViewMixin):
         else:
             if event.type in ("message.start", "message.complete"):
                 self.lifecycle_seen += 1
+            steer_next = False
             if event.type == "message.complete":  # before the reply closes: a steer row goes where it went before
-                self._settle_steers_at_turn_end()
+                status = as_text(payload.get("status")) if isinstance(payload, Mapping) else ""
+                steer_next = self._settle_steers_at_turn_end() and not self.stop_asked and status != "interrupted"
                 # A stop the person asked for in no way (Esc, `/stop`, a prompt in busy mode `interrupt`) is Hermes' own.
                 self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)  # `_turn_ended` spends it
                 self._note_turn(self._turn_end(payload))
@@ -4075,7 +4076,8 @@ class App(ModesMixin, AgentViewMixin):
                 seconds = self.clock() - self.busy_since
                 self.transcript.add_turn_summary(seconds, self._turn_tokens(), self._turn_wait())
                 self._alert_turn_end(seconds)
-                self._turn_ended(failed=isinstance(payload, Mapping) and as_text(payload.get("status")) == "error")
+                self._turn_ended(failed=isinstance(payload, Mapping) and as_text(payload.get("status")) == "error",
+                                 steer_next=steer_next)
 
     def _dag_moment(self, payload: Mapping[str, Any]) -> None:
         """An `omh_dag` call that defined, repaired, extended or ended a run prints the run's graph (`dag_block`)."""
@@ -5748,14 +5750,17 @@ class App(ModesMixin, AgentViewMixin):
 
         `hold` queues it behind a running turn whatever the busy mode. `notice` goes under its row (`_submit_prompt`).
         One that starts a turn waits for Hermes' default model to be checked (`_start_turn`), and one sent while
-        that wait is on queues behind it. `images` go with it, queued too.
+        that wait is on queues behind it, as one sent while the queue waits for what Hermes runs next
+        (`hermes_next_due`) does; a queue the person holds (`queue_held`) waits for this very prompt to go on.
+        `images` go with it, queued too.
         """
         images = tuple(images)
         if not self.sid:
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
             self._keep_images(images, "A prompt with no session")
             return
-        if (self._busy() and (hold or self.busy_mode == BUSY_QUEUE)) or self.starting is not None:
+        if (self._busy() and (hold or self.busy_mode == BUSY_QUEUE)) or self.starting is not None \
+                or (self.hermes_next_due is not None and not self.queue_held):
             self.queued.append(QueuedLine(text, shown, typed, chips=chips, notice=notice, images=images))
             return
         if self._busy():  # the busy mode sends it into the running turn: no turn starts
@@ -6057,10 +6062,10 @@ class App(ModesMixin, AgentViewMixin):
         self._turn_ended()
         return False
 
-    def _turn_ended(self, failed: bool = False) -> None:
+    def _turn_ended(self, failed: bool = False, steer_next: bool = False) -> None:
         """The turn is over: the next queued line goes, unless the person interrupted it (`_hold_queue`) or Hermes
-        runs something next: a redirect it queued (`hermes_queued`) or a steer the turn left unread
-        (`steer_left_unread`). The line goes after that turn.
+        runs something next: a redirect it queued (`hermes_queued`) or a steer an end nobody stopped left unread
+        (`steer_next`). The line goes after that turn.
 
         Only a turn that did not fail holds the queue: one that `failed` (an `error` `message.complete`, a bare
         `error`) can end before the agent was ready, with nothing drained, so the queue goes on as after any turn.
@@ -6072,7 +6077,6 @@ class App(ModesMixin, AgentViewMixin):
         """
         self.tell_turn_runs = False  # an open tell field now says what to do after this turn, not in it
         self.stop_asked = False  # whichever way the turn ended, a stop asked for it is spent
-        steer_left, self.steer_left_unread = self.steer_left_unread, False
         self.turns_ended += 1
         # A turn ended before Hermes admitted it (refused, cancelled while the agent built) left what was staged for
         # it: detached. After `message.start` nothing is left (`_claimed` emptied `staged`).
@@ -6084,7 +6088,7 @@ class App(ModesMixin, AgentViewMixin):
         else:
             self.sent_now = []  # the turn ended on its own: Hermes passes a steer it held on as the next turn
             self._settle_unread_steers(STEER_TAKEN)
-            hermes_runs_next = (bool(self.hermes_queued) or steer_left) and not failed
+            hermes_runs_next = (bool(self.hermes_queued) or steer_next) and not failed
             self._settle_hermes_queued()
             # A redirect Hermes queued or a steer left unread is its own next prompt, which it starts as this turn
             # ends: a queued line sent now could start ahead of it. The queue goes on when that turn ends (a turn this
@@ -6557,16 +6561,16 @@ class App(ModesMixin, AgentViewMixin):
             self.sent_now = []
             self._settle_unread_steers(STEER_TAKEN)
 
-    def _settle_steers_at_turn_end(self) -> None:
+    def _settle_steers_at_turn_end(self) -> bool:
         """The turn ends: a `queued` steer it stopped before reading was dropped (`_requeue_unread_steers`); one still
-        unread when it ended on its own Hermes took, read before a later model call or sent as the next prompt, so
-        `_turn_ended`, which comes after the reply closes, is told (`steer_left_unread`). A `redirected` one was never
-        unread."""
+        unread when it ended on its own Hermes took, read before a later model call or sent as the next prompt, which
+        the answer says, as `_turn_ended` comes after the reply closes. A `redirected` one was never unread."""
         if self.interrupting:
             self._requeue_unread_steers()
-        else:
-            self.steer_left_unread = bool(self.unread_steers)
-            self._settle_unread_steers(STEER_TAKEN)
+            return False
+        left_unread = bool(self.unread_steers)
+        self._settle_unread_steers(STEER_TAKEN)
+        return left_unread
 
     def _settle_unread_steers(self, state: str, outcome: str = "") -> None:
         """The steers the turn had not read say what came of them, and leave the live region at the next boundary."""
