@@ -225,7 +225,55 @@ def build_hermes_plan_event_payload(
     )
 
 
-_HANDOFF_DELIMITER = re.compile(r"^(\s*)(-{5} (?:BEGIN|END) ACCEPTED HERMES PLAN -{5})", re.MULTILINE)
+_LINE_BREAKS = "\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029"
+_HANDOFF_DELIMITER = re.compile(
+    rf"(^|[{_LINE_BREAKS}])([^\S{_LINE_BREAKS}]*)(-{{5}} (?:BEGIN|END) ACCEPTED HERMES PLAN -{{5}})"
+)
+
+
+def _neutralise_handoff_delimiters(text: str) -> str:
+    """No line of caller text may read as the handoff's own BEGIN/END delimiter."""
+    return _HANDOFF_DELIMITER.sub(r"\1\2> \3", text)
+
+
+def _one_line(text: object) -> str:
+    """A title must stay on one line: a task with line breaks cannot start sections."""
+    return re.sub(f"[{_LINE_BREAKS}]+", " ", str(text)).strip()
+
+
+def _verbatim_task(plan: dict[str, object]) -> str:
+    return str(plan.get("task_statement", ""))
+
+
+def recorded_task_text(plan_text: str) -> str:
+    """The task exactly as recorded, or "" when it cannot be trusted.
+
+    `plan` stores the verbatim task as a JSON string beside its sha256 in the
+    front matter. Both must be present and agree; a missing key (an older plan),
+    a hand-edit that touched only one of them, or a body that moved the front
+    matter all return "" so the caller falls back to scanning the whole file.
+    """
+    lines = plan_text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return ""
+    digest = ""
+    raw = ""
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if line.startswith("task_sha256: "):
+            digest = line[len("task_sha256: ") :].strip()
+        elif line.startswith("task_json: "):
+            raw = line[len("task_json: ") :]
+    else:
+        return ""
+    try:
+        task = json.loads(raw)
+    except ValueError:
+        return ""
+    if not isinstance(task, str) or not task or hashlib.sha256(task.encode("utf-8")).hexdigest() != digest:
+        return ""
+    return task
 
 
 def read_plan_file(path: str) -> str:
@@ -238,6 +286,36 @@ def read_plan_file(path: str) -> str:
     return validate_reviewed_body(plan_path.read_text(encoding="utf-8"))
 
 
+def apply_reviewed_body_to_payload(payload: dict[str, object]) -> None:
+    """Make a payload agree with a file whose plan is the caller's reviewed text.
+
+    A short task statement makes the scaffold `blocked` and ask for a
+    clarification; with a reviewed body there is nothing left to ask. Applied to
+    the copy that is rendered and to the stdout payload, so the two say the same.
+    """
+    plan = payload.get("plan")
+    if not isinstance(plan, dict):
+        return
+    payload["plan"] = plan = dict(plan)
+    if plan.get("status") == "blocked":
+        plan["status"] = "draft"
+        gate = plan.get("quality_gate")
+        if isinstance(gate, dict):
+            plan["quality_gate"] = {**gate, "readiness": "ready_for_acceptance", "status_claim": "draft_plan_not_approval"}
+        contract = payload.get("wrapper_contract")
+        if isinstance(contract, dict):
+            contract["next_action"] = "forward_plan_to_selected_workflow"
+            contract["current_step"] = "present_plan"
+        payload["say"] = (
+            "The task statement alone was too short to classify, but the reviewed plan is recorded; "
+            "ignore the clarification fields in this output."
+        )
+    plan["execution_handoff"] = (
+        "Use the selected Hermes workflow only after the plan is accepted and the user confirms the recommended follow-on path."
+    )
+    plan["stop_condition"] = "The plan is accepted or a reviewer requests concrete changes."
+
+
 def mark_payload_as_planning_input(payload: dict[str, object]) -> None:
     """Make stdout of `--input-bundle` say what the file says: input, not a plan to accept."""
     plan = payload.get("plan")
@@ -247,14 +325,16 @@ def mark_payload_as_planning_input(payload: dict[str, object]) -> None:
         "status_claim": "planning_input_not_a_plan",
         "coding_handoff_ready": False,
     }
+    payload.pop("workflow_composition", None)
     if isinstance(plan, dict):
         plan["status"] = "input"
         plan["quality_gate"] = dict(gate)
+        plan["execution_handoff"] = "Hand this bundle to a planner as input; it is not a plan and has no executor handoff."
     contract = payload.get("wrapper_contract")
     if isinstance(contract, dict):
         contract["next_action"] = "hand_bundle_to_planner"
         contract["current_step"] = "planning_input_recorded"
-        contract.pop("coding_delegate", None)
+        contract["coding_delegate"] = {"available": False, "unavailable_reason": "planning input is not a plan"}
         contract.pop("decision_gate", None)
         contract["quality_gate"] = dict(gate)
     payload["say"] = (
@@ -266,7 +346,7 @@ def mark_payload_as_planning_input(payload: dict[str, object]) -> None:
 def validate_reviewed_body(body: str) -> str:
     """The reviewed plan text a caller wants recorded, or ValueError."""
     text = body.replace("\r\n", "\n").strip()
-    text = _HANDOFF_DELIMITER.sub(r"\1> \2", text)
+    text = _neutralise_handoff_delimiters(text)
     if not text:
         raise ValueError("--plan-file is empty: nothing reviewed to record")
     if len(text.encode("utf-8")) > REVIEWED_BODY_MAX_BYTES:
@@ -298,11 +378,9 @@ def write_hermes_plan(
         # workflow, the stock stop condition and a "blocked" verdict derived
         # from a short task statement all belong to the scaffold, and would sit
         # next to the reviewed lanes as if the executor should follow both.
-        plan = dict(plan)
-        if plan.get("status") == "blocked":
-            plan["status"] = "draft"
-        plan["stop_condition"] = "The plan is accepted or a reviewer requests concrete changes."
-        payload = {**payload, "plan": plan, "workflow_composition": None}
+        payload = {**payload, "workflow_composition": None}
+        apply_reviewed_body_to_payload(payload)
+        plan = payload["plan"]
     slug = _slugify(str(plan.get("task_statement", "plan")))
     plans_dir = project_artifact_dir(paths, "plans")
     ensure_project_store_ignored(plans_dir)
@@ -320,7 +398,7 @@ def write_hermes_plan(
         "status": "input" if input_bundle else plan.get("status", "draft"),
         "plan_body": "input" if input_bundle else ("reviewed" if reviewed_body is not None else "scaffold"),
     }
-    if plan.get("status") == "blocked":
+    if plan.get("status") == "blocked" and not input_bundle:
         context_path = _unique_artifact_path(
             project_artifact_dir(paths, "plan-context"), f"{slug}-context", ".md"
         )
@@ -456,7 +534,7 @@ def build_plan_handoff_message(artifact: dict[str, object]) -> str:
             "Preserve prepared-vs-observed boundaries: prepared handoff is not execution, review, CI, merge-readiness, or merge evidence.",
             "",
             "----- BEGIN ACCEPTED HERMES PLAN -----",
-            str(artifact.get("text", "")).strip(),
+            _neutralise_handoff_delimiters(str(artifact.get("text", "")).strip()),
             "----- END ACCEPTED HERMES PLAN -----",
         ]
     )
@@ -548,6 +626,8 @@ def render_plan_markdown(
         f"status: {plan.get('status', 'draft')}",
         f"source: {payload.get('source', 'generic')}",
         f"plan_body: {'scaffold' if reviewed_body is None else 'reviewed'}",
+        f"task_sha256: {hashlib.sha256(_verbatim_task(plan).encode('utf-8')).hexdigest()}",
+        f"task_json: {json.dumps(_verbatim_task(plan), ensure_ascii=True)}",
         "review_gate:",
         f"  architect: {review_gate.get('architect', 'not_observed')}",
         f"  critic: {review_gate.get('critic', 'not_observed')}",
@@ -562,7 +642,7 @@ def render_plan_markdown(
         [
             "---",
             "",
-            f"# Hermes Plan: {plan.get('task_statement', 'Untitled task')}",
+            f"# Hermes Plan: {_one_line(plan.get('task_statement', 'Untitled task'))}",
             "",
             f"Artifact: `{artifact_name}`",
             "",
@@ -665,7 +745,7 @@ def render_plan_input_markdown(payload: dict[str, object], body: str, artifact_n
             f"source: {payload.get('source', 'generic')}",
             "---",
             "",
-            f"# Planning Input: {plan.get('task_statement', 'Untitled task')}",
+            f"# Planning Input: {_one_line(plan.get('task_statement', 'Untitled task'))}",
             "",
             f"Artifact: `{artifact_name}`",
             "",
@@ -695,7 +775,7 @@ def render_context_markdown(payload: dict[str, object], artifact_name: str = "co
             f"source: {payload.get('source', 'generic')}",
             "---",
             "",
-            f"# Hermes Context: {plan.get('task_statement', 'Untitled task')}",
+            f"# Hermes Context: {_one_line(plan.get('task_statement', 'Untitled task'))}",
             "",
             f"Artifact: `{artifact_name}`",
             "",
@@ -803,7 +883,10 @@ def _replace_frontmatter_status(text: str, *, status: str, summary: str) -> str:
         frontmatter.append(f"{timestamp_key}: {utc_now()}")
     if summary and not note_written:
         frontmatter.extend(_status_note_lines(summary))
-    return "\n".join(["---", *frontmatter, "---", *lines[end_index + 1 :]]) + "\n"
+    tail = lines[end_index + 1 :]
+    if tail and tail[-1] == "":
+        tail.pop()
+    return "\n".join(["---", *frontmatter, "---", *tail]) + "\n"
 
 
 def _status_note_lines(summary: str) -> list[str]:

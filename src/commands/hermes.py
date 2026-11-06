@@ -11,6 +11,7 @@ from ..hermes_planning import (
     build_hermes_plan_payload,
     read_hermes_plan_artifact,
     update_hermes_plan_status,
+    apply_reviewed_body_to_payload,
     mark_payload_as_planning_input,
     read_plan_file,
     write_hermes_plan,
@@ -77,6 +78,8 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
         if input_bundle and plan_file is None:
             raise ValueError("--input-bundle needs --plan-file")
         reviewed_body = read_plan_file(plan_file) if plan_file is not None else None
+        if reviewed_body is not None and not input_bundle:
+            apply_reviewed_body_to_payload(payload)
         if args.record:
             artifact = write_hermes_plan(
                 _paths(args), payload, reviewed_body=reviewed_body, input_bundle=input_bundle

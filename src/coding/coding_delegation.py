@@ -1558,28 +1558,24 @@ def _is_preflight_filesystem_target(token: str) -> bool:
 
 
 def _plan_task_statement(plan_artifact: dict[str, object] | None) -> str:
-    """The Task Statement of a supplied plan, or "" when there is none to trust.
+    """The task a supplied plan recorded, or "" when it cannot be trusted.
 
     With `--from-plan` the handoff message carries the whole plan file, reviewed
-    body included. Target paths are what the *user* named, and the user's
-    statement is the Task Statement; a path inside the plan body (a results
-    file, a forbidden `~/.ssh`, an endpoint) is retrieved content, not a target.
-    The statement is read back from the file and kept only when it matches the
-    digest the artifact summary recorded, so an edited file falls back to
-    scanning the whole message.
+    body included. Target paths are what the *user* named, and the user's text is
+    the task, which `omh hermes plan --record` stores verbatim with its sha256 in
+    the front matter. The task is returned only when that digest is present and
+    matches. Anything else -- an older plan, a hand-edit, a missing key -- returns
+    "" and the caller scans the whole message, exactly as before this existed, so
+    the gate never allows what it denied for text the person wrote.
     """
     if not plan_artifact or not plan_artifact.get("path"):
         return ""
     try:
-        from ..workflows.hermes_planning import read_hermes_plan_artifact
+        from ..workflows.hermes_planning import recorded_task_text
 
-        artifact = read_hermes_plan_artifact(str(plan_artifact["path"]))
+        return recorded_task_text(Path(str(plan_artifact["path"])).read_text(encoding="utf-8"))
     except (OSError, ValueError, ImportError):
         return ""
-    statement = str(artifact.get("task_statement", ""))
-    if not statement or artifact.get("task_statement_sha256") != plan_artifact.get("task_statement_sha256"):
-        return ""
-    return statement
 
 
 def _safety_preflight_target_paths(message: str, *, excluded_path: str = "") -> list[str]:

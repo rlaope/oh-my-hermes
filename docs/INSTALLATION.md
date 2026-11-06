@@ -5269,8 +5269,9 @@ Before calling the bot integration ready, verify these points:
   `coding_delegation.json`; `.hermes/plans/` is a user-facing draft surface, not
   observed execution evidence.
 - If a wrapper needs machine-readable planning fields, use the stdout
-  `hermes_plan/v1` JSON payload as the contract and treat the Markdown file as
-  presentation.
+  `hermes_plan/v1` JSON payload as the contract for routing, quality gate and
+  wrapper fields; the Markdown file holds the plan text an executor is handed
+  (stdout `plan.goals` and `plan.options` stay generated).
 - For implementation-shaped draft plans, the stdout
   `wrapper_contract.coding_delegate.argv_template` is the handoff bridge to
   `omh coding delegate --executor codex --record --from-plan <accepted-plan.md>`;
