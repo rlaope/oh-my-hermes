@@ -220,6 +220,19 @@ MODEL_HIGH_EFFORT_CALIBRATIONS: Final[dict[str, str]] = {
         "assumption and proceed. Size tests to the change: a reversible, low-impact edit that mirrors "
         "its implementation needs no new test, and a green check is re-run only when its inputs changed."
     ),
+    # GPT-6 Cyber: Astra's wording, byte for byte. The system card calls it
+    # "a cyber-specialized variant of GPT-6 Astra", and its model page,
+    # changelog entry, and system card give no prompting guidance, so the
+    # nearest documented traits are Astra's. Editorial and unmeasured: no
+    # route this repo can reach serves the id (Daybreak Red only), and it is
+    # in no shipped chain.
+    "gpt-6-cyber": (
+        "High-effort calibration: the user's instructions outrank any skill or guideline text, and "
+        "the numbered criteria are the complete task — nothing outside them is owed. Ask one focused "
+        "question only when a missing input would materially change the result; otherwise state the "
+        "assumption and proceed. Size tests to the change: a reversible, low-impact edit that mirrors "
+        "its implementation needs no new test, and a green check is re-run only when its inputs changed."
+    ),
     # GPT-6.1 Sol: Astra's wording, byte for byte. The vendor's Codex client
     # gives 6.1 Sol GPT-6 Astra's base prompt (GPT-6 Sol keeps an older one),
     # and the latest-model guide states every countered trait for the GPT-6
@@ -262,6 +275,18 @@ MODEL_HIGH_EFFORT_CALIBRATIONS: Final[dict[str, str]] = {
 }
 MODEL_COMPOSITION_CALIBRATIONS: Final[dict[str, str]] = {
     "gpt-6-astra": (
+        "Composition calibration: write the user's intent into each unit prompt above any skill "
+        "text, so a delegate that meets conflicting guidance follows the unit contract rather than "
+        "pausing. Delegate every unit that is independent of the work you keep — this model "
+        "delegates less than a fanout expects, and an undelegated independent unit is latency you "
+        "chose. Set each unit's effort from its task state: the documented floor for routine "
+        "follow-ups, deeper only while a criterion holds unresolved hard reasoning or contradictory "
+        "evidence, and a change of effort lands on the next prepared unit rather than on a claimed "
+        "mid-conversation switch."
+    ),
+    # GPT-6 Cyber: Astra's composer wording, byte for byte, on the evidence
+    # above; its inherited floor is `low`, as Astra's is.
+    "gpt-6-cyber": (
         "Composition calibration: write the user's intent into each unit prompt above any skill "
         "text, so a delegate that meets conflicting guidance follows the unit contract rather than "
         "pausing. Delegate every unit that is independent of the work you keep — this model "

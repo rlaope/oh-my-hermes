@@ -59,7 +59,10 @@ the machine-readable `surface_efforts`. A ladder can also move between
 generations of one tier: GPT-6.1 Sol's API page drops the `none` rung GPT-6
 Sol documents, so 6.1 Sol takes Astra's shape (`low` floor, `off` and
 `minimal` raised on record) while GPT-6 Sol keeps sending `none`; copy the
-ladder from the new page, never from the predecessor's contract. Record the API ladder and limits as the contract and put each
+ladder from the new page, never from the predecessor's contract, unless the
+new page documents no ladder and the vendor names the model's base (GPT-6
+Cyber is a variant of GPT-6 Astra, §4): then inherit the base's ladder and
+record where it came from in `effort_ladder_source`. Record the API ladder and limits as the contract and put each
 other surface in `surface_notes`, labeled; do not average them and do not
 let the narrowest surface overwrite the API record.
 
@@ -414,13 +417,25 @@ Rules that have held across every onboarding so far:
   `EXACT_CONTRACT_POINTER_ALIASES` (source and plugin mirror) so the plugin's
   `mixture_category_for` projects in both directions and a child observed
   under either spelling keeps its category label; a mode or tier variant is
-  not a pointer and only projects forward. Read the Hermes provider
+  not a pointer and only projects forward. A declared second spelling
+  whose row equals a pointer's own row (`deepseek-v4.1-flash-1017`, the
+  snapshot the pointer serves) also labels the pointer's category; it is
+  not a pointer itself, so nothing reaches it in reverse. Read the Hermes provider
   profile for the family before choosing the alias — it is the one place
   that shows what the wire will carry.
 - An access-restricted sibling (Mythos 5.1 = Fable 5.1 under Project
   Glasswing) stays out of every shipped chain: naming a model most accounts
   cannot reach reads as a second model in the public tables. Keep it
   recognized, priced, and routable for a user who asks for it by name.
+  GPT-6 Cyber (2026-11-05, Daybreak Red only) is the second case, onboarded
+  as an exact contract because its price, access, and endpoints differ from
+  its base, GPT-6 Astra. When the vendor names the base but documents no
+  ladder for the sibling, inherit the base's ladder and calibration and say
+  so in the record (`effort_ladder_source`). Price it only from a published
+  list price; GPT-5.6 Cyber and GPT-6 Rosalind publish one but no ladder,
+  so they get a price row and the family block, without a contract. A probe
+  refusal from a subscription route proves nothing about gating when an
+  unknown id gets the same wording; probe a made-up id beside it.
 - The Claude vendor order inside any chain is Opus 5.5 → Fable 5.1 (owner
   decision, 2026-10-13), which reverses the 2026-09-06 Fable → Opus order.
   The Hermes lane and the Maestro lane are different surfaces and both

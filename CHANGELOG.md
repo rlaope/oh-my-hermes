@@ -279,6 +279,22 @@ All notable changes will be documented here.
   name in another file no longer continues the turn when every mention there
   is proven to need no change: another object's method of the same name, or
   an import whose calls bind the same way before and after the edit.
+- **OMH recognizes GPT-6 Cyber and the other models earlier rounds
+  missed, and puts none of them in a shipped chain.** GPT-6 Cyber
+  (2026-11-05) gets an exact contract from OpenAI's pages: a
+  1.05M context, 128K output, and OpenAI's 20/100 list price.
+  Its effort ladder and calibration come from GPT-6 Astra,
+  because the system card calls it a variant of Astra. OpenAI serves it only
+  to approved Daybreak Red organizations, so like Mythos 5.1 it is
+  recognized and priced for someone who asks for it by name. GPT-5.6 Cyber
+  (12.5/75, Daybreak Red) and GPT-6 Rosalind (15/75, approved Rosalind
+  Research organizations) are access-gated too. They get a price, a provider
+  check, and a label, and they use the `gpt` family calibration. Cost
+  estimates now cover GLM-5.3-FlashX-Legal, Mistral Large
+  4 (`mistral-large-4`, `mistral-large-4-0`) and Solar Mini 4, at each
+  vendor's list price. `deepseek-v4.1-flash-1017`, the version
+  `deepseek-flash` has served since 2026-10-17, uses the V4.1 Flash contract,
+  price and calibration, and its runs keep the pointer's category.
 - **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
   `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
   or Enter opens sessions or bots, folds the plan, searches history, cycles
