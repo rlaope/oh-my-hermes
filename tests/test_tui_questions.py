@@ -654,7 +654,9 @@ class TellRowTests(unittest.TestCase):
         app, client = self.told()
         type_text(app, "use ./tmp instead")
         press(app, Key(ENTER))
-        app._on_response(Response(len(client.calls), {"status": "rejected", "text": "use ./tmp instead"}, None))
+        for method in ("session.redirect", "session.steer"):  # a redirect rejected mid-turn goes again as a steer
+            self.assertEqual(client.calls[-1][0], method)
+            app._on_response(Response(len(client.calls), {"status": "rejected", "text": "use ./tmp instead"}, None))
         self.assertEqual([line.text for line in app.queued], ["use ./tmp instead"])
         self.assertEqual(client.named("prompt.submit"), [])
 

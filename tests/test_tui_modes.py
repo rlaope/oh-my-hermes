@@ -140,8 +140,13 @@ def type_text(app: App, text: str) -> None:
 
 
 def answer(app: App, client: RecordingClient, result: dict | None = None, error: dict | None = None) -> None:
-    """Answer the newest call."""
-    app._on_response(Response(len(client.calls), result, error))
+    """Answer the newest call. A redirect `rejected` while its turn runs goes again as a steer, answered the same
+    (`test_a_redirect_rejected_mid_turn_goes_again_as_a_steer` answers the two apart)."""
+    sent = len(client.calls)
+    app._on_response(Response(sent, result, error))
+    if ((result or {}).get("status") == "rejected" and client.calls[sent - 1][0] == "session.redirect"
+            and len(client.calls) > sent and client.calls[-1][0] == "session.steer"):
+        app._on_response(Response(len(client.calls), result, None))
 
 
 # An agent without active-turn redirect: the send-now key's `session.redirect` goes again as `session.steer`.
@@ -327,7 +332,7 @@ class SteerTests(unittest.TestCase):
         app, client = make_app(busy=True)
         type_text(app, "/steer check the tests too")
         app._on_input(Key(ENTER))
-        self.assertEqual(client.calls, [("session.redirect", {"session_id": SID, "text": "check the tests too"})])
+        self.assertEqual(client.calls, [("session.steer", {"session_id": SID, "text": "check the tests too"})])
         answer(app, client, {"status": "queued", "text": "check the tests too"})
         self.assertEqual(steers(app), ["┃ ❯ check the tests too"])
 
@@ -523,6 +528,7 @@ class SteerTests(unittest.TestCase):
         app, client = make_app(busy=True)
         queue(app, "first queued", "second queued")
         app._on_input(CTRL_ENTER)
+        answer(app, client, error=NO_REDIRECT)  # held as a steer: the agent takes no redirect
         answer(app, client, {"status": "queued", "text": "first queued"})
         for kind in events:
             app._on_event(Event(kind, SID, {"tool_id": "t1", "name": "terminal", "text": "x"}))
@@ -605,25 +611,72 @@ class SteerTests(unittest.TestCase):
         self.assertEqual([line.text for line in app.queued], ["second queued"])
 
     def test_a_redirect_refused_otherwise_is_not_sent_again_as_a_steer(self) -> None:
-        # `rejected` (the model's answer completed first) or another error: the line goes back to the head of the
-        # queue, as a refused steer's did; only 4010 sends it again as a steer.
-        for refusal in ({"error": {"code": 5000, "message": "redirect failed: boom"}},
-                        {"result": {"status": "rejected", "text": "first queued"}}):
-            with self.subTest(refusal=refusal):
+        # An error other than 4010: the line goes back to the head of the queue, as a refused steer's did.
+        app, client = make_app(busy=True)
+        queue(app, "first queued", "second queued")
+        app._on_input(CTRL_ENTER)
+        answer(app, client, error={"code": 5000, "message": "redirect failed: boom"})
+        self.assertEqual(client.named("session.steer"), [])
+        self.assertEqual([line.text for line in app.queued], ["first queued", "second queued"])
+        self.assertIn("back at the head of the queue", steers(app)[0])
+
+    def test_a_redirect_rejected_mid_turn_goes_again_as_a_steer(self) -> None:
+        # Between a tool batch and the next model call no request is under way to cut, so Hermes rejects the
+        # redirect while the turn runs; a steer is read before that next call. Same row, same turn.
+        for status, held in (("queued", ["first queued"]), ("rejected", [])):
+            with self.subTest(status=status):
                 app, client = make_app(busy=True)
                 queue(app, "first queued", "second queued")
                 app._on_input(CTRL_ENTER)
-                answer(app, client, refusal.get("result"), refusal.get("error"))
-                self.assertEqual(client.named("session.steer"), [])
-                self.assertEqual([line.text for line in app.queued], ["first queued", "second queued"])
-                self.assertIn("back at the head of the queue", steers(app)[0])
+                app._on_response(Response(1, {"status": "rejected", "text": "first queued"}, None))
+                self.assertEqual(client.calls[1:], [("session.steer", {"session_id": SID, "text": "first queued"})])
+                self.assertEqual(steers(app), [])  # one row, still waiting on the steer's answer
+                app._on_response(Response(2, {"status": status, "text": "first queued"}, None))
+                self.assertEqual([sent.line.text for sent in app.sent_now], held)
+                self.assertEqual(len(app.queued), 2 - len(held))
+        app, client = make_app(busy=True)  # idle by the answer: the turn it was meant for ended, nothing to steer
+        type_text(app, "too late")
+        app._on_input(CTRL_ENTER)
+        app.turn_pending = False
+        answer(app, client, {"status": "rejected", "text": "too late"})
+        self.assertEqual(client.calls[1:], [("prompt.submit", {"session_id": SID, "text": "too late"})])
+
+    def test_a_redirect_hermes_queued_comes_back_on_a_stop_even_after_a_tool_finished(self) -> None:
+        # Hermes' own next prompt is read only after the turn, and a stop clears it: no tool finishing settles it.
+        app, client = make_app(busy=True)
+        queue(app, "first queued", "second queued")
+        app._on_input(CTRL_ENTER)
+        answer(app, client, {"status": "queued", "text": "first queued"})
+        app._on_event(Event("tool.complete", SID, {"tool_id": "t1", "name": "terminal", "result": {"output": ""}}))
+        self.assertEqual(len(app.hermes_queued), 1)
+        app.interrupting = True
+        app._on_event(Event("message.complete", SID, {"text": "stopped"}))
+        self.assertEqual(app.composer.text, "first queued\nsecond queued")  # back at the head, ahead of the rest
+        self.assertIn(app_module.SENT_NOW_DROPPED_NOTICE.format(count=1, s=""), notices(app, NOTICE_WARN))
+        self.assertEqual(app.hermes_queued, [])
+
+    def test_a_redirect_cuts_the_streaming_reply_and_the_retry_streams_under_the_steer(self) -> None:
+        # Hermes sends no boundary between the cut request and its retry: sealed when the redirect is answered, the
+        # cut reply, the steer row and the retried reply read in that order instead of one glued reply.
+        app, client = make_app(busy=True)
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("message.delta", SID, {"text": "partial"}))
+        type_text(app, "use the other file")
+        app._on_input(CTRL_ENTER)
+        answer(app, client, {"status": "redirected", "text": "use the other file"})
+        app._on_event(Event("message.delta", SID, {"text": "retried"}))
+        app._on_event(Event("message.complete", SID, {"text": "retried"}))
+        shown = [(type(block).__name__, getattr(block, "text", "")) for block in app.transcript.blocks
+                 if isinstance(block, (AssistantBlock, SteerBlock))]
+        self.assertEqual(shown, [("AssistantBlock", "partial"), ("SteerBlock", "use the other file"),
+                                 ("AssistantBlock", "retried")])
 
     def typed_steer(self, *events: str) -> tuple[App, SteerBlock]:
         """A turn running, a steer typed and taken by Hermes, then `events`: the App and the steer's block."""
         app, client = make_app(busy=True)
         app._on_event(Event("message.start", SID, {}))
-        type_text(app, "use the other file")
-        app._on_input(CTRL_ENTER)
+        type_text(app, "/steer use the other file")  # Hermes' steer, held until a tool carries it
+        app._on_input(Key(ENTER))
         answer(app, client, {"status": "queued", "text": "use the other file"})
         for kind in events:
             app._on_event(Event(kind, SID, {"tool_id": "t1", "name": "terminal", "text": "x"}))
@@ -781,7 +834,7 @@ class SteerTests(unittest.TestCase):
 
     def test_only_ctrl_enter_and_the_steer_command_can_steer(self) -> None:
         # Steer text is what the person typed and sent, so the main turn's steer has one sender with three callers:
-        # `_steer` sends it as `session.redirect`, and only a refused redirect sends it again as `session.steer`.
+        # `_steer` sends it, and only a refused redirect sends it again as `session.steer`.
         tree = ast.parse(Path(app_module.__file__).read_text(encoding="utf-8"))
         callers: set[str] = set()
         senders: set[str] = set()
@@ -796,8 +849,9 @@ class SteerTests(unittest.TestCase):
                     callers.add(function.name)
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "_send_steer":
                     senders.add(function.name)
-        self.assertEqual(methods, {"_steer", "_on_steer_refused"})
-        self.assertEqual(senders, {"_steer", "_on_steer_refused"})
+        # `/steer` names Hermes' steer; a redirect refused (4010) or rejected mid-turn goes again as one.
+        self.assertEqual(methods, {"_steer", "_steer_command", "_on_steered", "_on_steer_refused"})
+        self.assertEqual(senders, {"_steer", "_on_steered", "_on_steer_refused"})
         self.assertEqual(callers, {"_steer_or_submit", "_steer_command", "_send_queued_now"})
 
 

@@ -60,8 +60,8 @@ CLIENT_METHODS: dict[str, frozenset[str]] = {
     "session.interrupt": frozenset({"session_id"}),
     # Typed text into the running turn, sent now; see STEER_STATUSES for the answer. A refusal (`rejected`, or an
     # error) puts the text in the TUI's queue while a turn runs, and sends it as a prompt only when the session is
-    # idle. `session.redirect` is what the send-now key sends; `session.steer` only where the agent answers
-    # REDIRECT_UNSUPPORTED.
+    # idle. `session.redirect` is what the send-now key sends; `session.steer` is `/steer`'s, and the send-now key's
+    # where the agent answers REDIRECT_UNSUPPORTED or a redirect is `rejected` while its turn still runs.
     "session.redirect": frozenset({"session_id", "text"}),
     "session.steer": frozenset({"session_id", "text"}),
     # See CONFIG_SET_VALUES: `scope` is deliberately not declared. `confirm_expensive_model` goes only with a model,

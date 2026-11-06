@@ -259,8 +259,9 @@ class FromQueueTests(unittest.TestCase):
 
 class SteerPlacementTests(unittest.TestCase):
     def steer(self, app: object, text: str) -> None:
-        type_text(app, text)  # type: ignore[arg-type]
-        app._on_input(CTRL_ENTER)  # type: ignore[attr-defined]
+        """`/steer`: Hermes' steer, held until the turn reads it (the send-now key's redirect is `RedirectTests`')."""
+        type_text(app, f"/steer {text}")  # type: ignore[arg-type]
+        app._on_input(Key(ENTER))  # type: ignore[attr-defined]
 
     def test_a_steer_during_a_running_tool_leaves_the_tool_running_and_lands_after_its_group(self) -> None:
         app, client = make_app(busy=True)
@@ -345,8 +346,7 @@ class SteerPlacementTests(unittest.TestCase):
     def test_a_refused_steer_reads_in_amber_and_waits_in_the_queue(self) -> None:
         app, client = make_app(busy=True)
         self.steer(app, "keep this")
-        answer(app, client, error={"code": 4010, "message": "agent does not support active-turn redirect"})
-        answer(app, client, error={"code": 4010, "message": "agent does not support steer"})  # the steer it went as
+        answer(app, client, error={"code": 4010, "message": "agent does not support steer"})
         (block,) = [block for block in app.transcript.blocks if isinstance(block, SteerBlock)]
         (row,) = block_rows(block, 100, THEME)
         self.assertEqual(line_text(row), "⧗ queued — Hermes refused the steer (agent does not support steer) · keep this")
