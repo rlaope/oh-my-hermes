@@ -2856,7 +2856,7 @@ class LeaderWorkflowTests(unittest.TestCase):
         from test_tui_modes import SID
         app, client = self.armed("use this", busy=True)
         app._on_input(Key(ENTER))
-        self.assertEqual(client.calls, [("session.steer", {"session_id": SID, "text": "use this"})])
+        self.assertEqual(client.calls, [("session.redirect", {"session_id": SID, "text": "use this"})])
         self.assertFalse(app.composer.leader)
         self.assertEqual(app.composer.text, "")
 
@@ -2865,7 +2865,7 @@ class LeaderWorkflowTests(unittest.TestCase):
         app, client = self.armed(busy=True)
         queue(app, "first", "second")
         app._on_input(Key(ENTER))
-        self.assertEqual(client.calls, [("session.steer", {"session_id": SID, "text": "first"})])
+        self.assertEqual(client.calls, [("session.redirect", {"session_id": SID, "text": "first"})])
         self.assertEqual([line.text for line in app.queued], ["second"])
         self.assertFalse(app.composer.leader)
 

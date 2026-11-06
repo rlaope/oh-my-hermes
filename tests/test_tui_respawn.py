@@ -223,7 +223,7 @@ class LostCallTests(unittest.TestCase):
         app, old, _spawner, now = crashing(busy=True, cols=120)
         type_text(app, "steer me")
         app._on_input(Key(ENTER, ctrl=True))
-        self.assertEqual(app.client.named("session.steer"), [{"session_id": SID, "text": "steer me"}])  # type: ignore[attr-defined]
+        self.assertEqual(app.client.named("session.redirect"), [{"session_id": SID, "text": "steer me"}])  # type: ignore[attr-defined]
         crash(app, old)
         self.assertEqual(app.composer.text, "steer me")  # never sent again: Hermes may have taken it
         self.assertEqual([call.method for call in app.pending.values()], ["config.get", "commands.catalog"])
@@ -295,7 +295,7 @@ class TellFieldAcrossARespawnTests(unittest.TestCase):
                 self.assertIsNone(app.tell_draft)
                 self.assertEqual(app.composer.text, f"my draft\n{typed}" if typed else "my draft")
                 self.assertEqual(TELL_LOST_NOTICE in notices(app), bool(typed))
-                self.assertEqual(app.client.named("session.steer"), [])  # type: ignore[attr-defined]  # never sent
+                self.assertEqual(app.client.named("session.redirect"), [])  # type: ignore[attr-defined]  # never sent
 
 
 class AgentsAcrossARespawnTests(unittest.TestCase):

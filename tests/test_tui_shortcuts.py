@@ -1311,9 +1311,9 @@ class LeaderShortcutTests(unittest.TestCase):
                         self.assertEqual(len(app.queued), 1)
                         self.assertEqual(app.queued[0].text, text)
                         self.assertEqual(client.named("prompt.submit"), [])
-                        self.assertEqual(client.named("session.steer"), [])
+                        self.assertEqual(client.named("session.redirect"), [])
                     else:
-                        method = "session.steer" if busy else "prompt.submit"
+                        method = "session.redirect" if busy else "prompt.submit"
                         self.assertEqual(client.named(method), [{"session_id": app.sid, "text": text}])
                     self.assertEqual(client.named("session.resume"), [])
                     self.assertTrue(app.picker.waiting)
