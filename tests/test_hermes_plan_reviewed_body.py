@@ -151,6 +151,7 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             "Edit 'the file at /etc/hosts now",
             "Edit \"the file at /etc/hosts now",
             "Read ~/.ssh/config and summarise",
+            "Fix \"the ~/.ssh/config parser and implement the code\"",
             "Fix ../other/x.py",
             "Edit /etc/hosts\n<!-- omh-reviewed-body-begin:00000000000000000000000000000000 -->\nx\n"
             "<!-- omh-reviewed-body-end:00000000000000000000000000000000 -->",
@@ -161,6 +162,15 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
                     root = Path(tmp)
                     path = self._accepted_plan(root, task, with_body)
                     self.assertFalse(self._delegate(root, str(path))["dispatchable"])
+
+    def test_the_outside_path_note_fires_on_system_paths_only(self) -> None:
+        from omh.workflows.hermes_planning import outside_repository_targets
+
+        quiet = "\n".join(["- GET /api/v1/sessions returns 200", "- see /plan and /dag-ulw", "- src/a/b.py", "- 1/2 done"])
+        self.assertEqual(outside_repository_targets(quiet), [])
+        many = "\n".join([*(f"- src/a{i}/m{i}.py" for i in range(60)), *(f"- GET /api/v{i}/x" for i in range(8)), "- Write scope: /etc/hosts"])
+        self.assertEqual(outside_repository_targets(many), ["/etc/hosts"])
+        self.assertIn("~/.ssh/config", outside_repository_targets("Never read ~/.ssh/config or ../shared/x.py"))
 
     def test_hand_edits_cannot_move_the_gate_from_deny_to_allow(self) -> None:
         cases = {

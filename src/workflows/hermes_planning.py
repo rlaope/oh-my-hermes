@@ -307,7 +307,16 @@ def scan_text_without_reviewed_body(text: str) -> str:
         cut = text.index(marker) + len(marker)
         head, text = text[:cut], text[cut:]
     split = split_reviewed_body(text)
-    return head + (split[0] if split else text)
+    if not split:
+        return head + text
+    scan = head + split[0]
+    # Cutting the body removes one copy of quote characters that pair across the
+    # whole message; a second copy with quotes blanked keeps a path inside an
+    # unclosed quote visible, as it was when the body was still there.
+    return scan + "\n" + re.sub(r"[\"']", " ", scan)
+
+
+_SYSTEM_ROOTS = "etc|usr|var|root|home|Users|opt|bin|sbin|sys|proc|dev|boot|lib|srv|mnt|private|tmp|System|Library|Applications|Volumes"
 
 
 def outside_targets_note(paths: list[str]) -> str:
@@ -323,11 +332,20 @@ def outside_repository_targets(body: str) -> list[str]:
     """Absolute, home or parent-relative paths a reviewed body names, for a visibility note only."""
     from ..coding.coding_delegation import _safety_preflight_target_paths
 
-    return [
-        path
-        for path in _safety_preflight_target_paths(body)
-        if path.startswith(("/", "~", "..")) or re.match(r"^[A-Za-z]:[\\/]", path)
-    ][:5]
+    found: list[str] = []
+    for line in body.split("\n"):
+        for path in _safety_preflight_target_paths(line):
+            outside = (
+                path.startswith(("~/", "../"))
+                or path in ("~", "..")
+                or re.match(r"^[A-Za-z]:[\\/]", path)
+                or re.match(rf"^/(?:{_SYSTEM_ROOTS})(?:/|$)", path)
+            )
+            if outside and path not in found:
+                found.append(path)
+                if len(found) >= 5:
+                    return found
+    return found
 
 
 def apply_reviewed_body_to_payload(payload: dict[str, object]) -> None:
