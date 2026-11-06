@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from collections.abc import Mapping
 import json
 import math
@@ -1454,6 +1455,16 @@ def cmd_coding_model_route(args: argparse.Namespace) -> int:
     return 0
 
 
+def _model_id_summary(entries: list[dict[str, object]]) -> str:
+    """Each model id once, in first-seen order, with how many observations named it.
+
+    Session history yields one observation per session, so a plain join repeated
+    one id hundreds of times. `--json` keeps every observation.
+    """
+    counts = Counter(str(entry["model_id"]) for entry in entries)
+    return ", ".join(name if count == 1 else f"{name} (x{count})" for name, count in counts.items()) or "none"
+
+
 def cmd_coding_model_routing_status(args: argparse.Namespace) -> int:
     from ..maintenance.advisory import build_model_routing_status
 
@@ -1468,8 +1479,8 @@ def cmd_coding_model_routing_status(args: argparse.Namespace) -> int:
     hermes = payload["hermes"]
     maestro = payload["maestro"]
     owner = payload["owner_learning"]
-    confirmed = ", ".join(str(entry["model_id"]) for entry in models["confirmed"]) or "none"
-    discovered = ", ".join(str(entry["model_id"]) for entry in models["discovered_only"]) or "none"
+    confirmed = _model_id_summary(models["confirmed"])
+    discovered = _model_id_summary(models["discovered_only"])
     aliases = ", ".join(f"{name}={target}" for name, target in hermes["aliases"].items()) or "none"
     print("Model routing status (local metadata only):")
     print(f"Confirmed active: {confirmed}")

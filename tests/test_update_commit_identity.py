@@ -291,6 +291,111 @@ class ChannelAliasTests(unittest.TestCase):
         self.assertEqual(plan["release"].package_url, "https://github.com/rlaope/oh-my-hermes/archive/refs/heads/main.zip")
 
 
+class InstalledChannelSelfUpdateTests(unittest.TestCase):
+    """A plain `omh update` keeps the channel the installer recorded instead of jumping to main."""
+
+    STABLE_WHEEL = {
+        "url": "https://github.com/rlaope/oh-my-hermes/releases/download/v4.0.5/oh_my_hermes-4.0.5-py3-none-any.whl",
+        "archive_info": {},
+    }
+    MAIN_ARCHIVE = {"url": "https://github.com/rlaope/oh-my-hermes/archive/refs/heads/main.zip", "archive_info": {}}
+
+    def _plan(self, record: dict[str, object] | None, *, latest: str | Exception = "9.9.9", dry_run: bool = False, **flags: str) -> dict[str, object]:
+        args = Namespace(
+            command_package_updated=False,
+            dry_run=dry_run,
+            from_skills_dir=None,
+            source=None,
+            channel=flags.get("channel"),
+            version=flags.get("version", ""),
+            package_url="",
+            source_ref="",
+        )
+        fetch = patch("omh.tui.update_notice.fetch_latest", side_effect=latest if isinstance(latest, Exception) else None, return_value=latest)
+        with (
+            patch.dict(os.environ, {setup_commands.COMMAND_PACKAGE_MANAGER_ENV: "", setup_commands.SELF_UPDATE_SKIP_ENV: ""}),
+            patch.object(setup_commands, "_command_package_update_guidance", return_value=("installer", "curl")),
+            patch.object(setup_commands, "_managed_command_runtime", return_value={"managed": True, "python": "python", "venv_dir": "venv"}),
+            patch.object(setup_commands, "_installed_direct_url", return_value=record),
+            fetch as fetched,
+        ):
+            plan = setup_commands._command_package_self_update_plan(args)
+        plan["fetched"] = fetched.called
+        return plan
+
+    def test_a_stable_install_moves_to_the_newest_release_wheel(self) -> None:
+        plan = self._plan(self.STABLE_WHEEL)
+        self.assertTrue(plan["should_update"])
+        self.assertEqual(plan["release"].channel, "stable")
+        self.assertEqual(
+            plan["release"].package_url,
+            "https://github.com/rlaope/oh-my-hermes/releases/download/v9.9.9/oh_my_hermes-9.9.9-py3-none-any.whl",
+        )
+
+    def test_a_stable_install_already_on_the_newest_release_is_left_alone(self) -> None:
+        plan = self._plan(self.STABLE_WHEEL, latest=setup_commands.__version__)
+        self.assertFalse(plan["should_update"])
+        self.assertIn("already on the newest stable release", plan["reason"])
+
+    def test_an_unreadable_newest_release_skips_the_command_package_instead_of_taking_main(self) -> None:
+        plan = self._plan(self.STABLE_WHEEL, latest=OSError("offline"))
+        self.assertFalse(plan["should_update"])
+        self.assertIn("could not read the newest stable release", plan["reason"])
+        self.assertNotIn("release", plan)
+
+    def test_a_prerelease_newest_version_is_not_installed_as_stable(self) -> None:
+        plan = self._plan(self.STABLE_WHEEL, latest="9.9.9-beta.1")
+        self.assertFalse(plan["should_update"])
+        self.assertIn("not a stable version", plan["reason"])
+
+    def test_a_main_install_and_an_unrecorded_install_keep_tracking_main(self) -> None:
+        for record in (self.MAIN_ARCHIVE, None):
+            with self.subTest(record=record):
+                plan = self._plan(record)
+                self.assertEqual(plan["release"].channel, "preview")
+                self.assertFalse(plan["fetched"])
+
+    def test_an_explicit_channel_still_wins_over_the_installed_record(self) -> None:
+        plan = self._plan(self.STABLE_WHEEL, channel="preview")
+        self.assertEqual(plan["release"].channel, "preview")
+        self.assertFalse(plan["fetched"])
+
+    def test_a_dry_run_plans_the_same_update_a_real_run_would_make(self) -> None:
+        plan = self._plan(self.STABLE_WHEEL, dry_run=True)
+        self.assertTrue(plan["should_update"])
+        self.assertEqual(setup_commands._self_update_target_label(plan), "v9.9.9")
+
+
+class DryRunCommandPackageCardTests(unittest.TestCase):
+    def test_a_dry_run_reports_the_update_a_real_run_would_make(self) -> None:
+        status = setup_commands._command_package_status_for_install(
+            operation="update", source="builtin", dry_run=True, would_update_to="v9.9.9"
+        )
+        self.assertEqual(status["status"], "would_update")
+        self.assertFalse(status["updated"])
+        self.assertEqual(status["would_update_to"], "v9.9.9")
+        for language in LANGUAGE_CODES:
+            with self.subTest(language=language):
+                self.assertIn("{target}", MESSAGES[language]["update_card_command_would_update"])
+
+    def test_a_dry_run_with_nothing_to_update_still_says_unchanged(self) -> None:
+        status = setup_commands._command_package_status_for_install(operation="update", source="builtin", dry_run=True)
+        self.assertEqual(status["status"], "would_remain_unchanged")
+        self.assertNotIn("would_update_to", status)
+
+    def test_cmd_update_dry_run_does_not_run_the_planned_self_update(self) -> None:
+        args = build_parser().parse_args(["update", "--dry-run"])
+        plan = {"should_update": True, "method": "installer", "release": setup_commands.package_url_for("stable", "9.9.9")}
+        with (
+            patch.object(setup_commands, "_command_package_self_update_plan", return_value=plan),
+            patch.object(setup_commands, "_run_command_package_self_update") as run,
+            patch.object(setup_commands, "cmd_install", return_value=1),
+        ):
+            setup_commands.cmd_update(args)
+        run.assert_not_called()
+        self.assertEqual(args.command_package_would_update, "v9.9.9")
+
+
 class PackageManagerMainRefusalTests(unittest.TestCase):
     def test_an_npm_install_refuses_to_claim_it_tracks_main(self) -> None:
         with TemporaryDirectory() as temporary:

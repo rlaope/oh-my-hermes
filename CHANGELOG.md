@@ -22,6 +22,24 @@ All notable changes will be documented here.
   without redirect, or a redirect refused between a tool batch and the
   next model call, gets `session.steer`. `/steer <text>` stays Hermes'
   steer, read after the next tool call without interrupting.
+- **`omh update` keeps a stable install on stable releases, and
+  `--dry-run` says when a real run would update the command package.** The
+  installer-managed self-update still defaulted to `--channel preview`, so a
+  plain `omh update` after the documented stable install downloaded the
+  `main` archive, while `omh update --dry-run` printed "Command package:
+  unchanged (preview only)". With no `--channel`, `--version`, or
+  `--package-url`, the self-update now reads the installed package's PEP 610
+  record, as `omh setup` has since #2294: a stable install moves to the
+  newest published release and is left alone when it is already on it or
+  the newest release cannot be read; a `main` install, or one that records
+  nothing, keeps tracking `main`. A dry run now plans like a real run and
+  its card reads "Command package: a real run would update it to v4.0.6".
+- **`omh coding model-routing status` names each discovered model once.**
+  Session history yields one observation per session, so the human line
+  repeated one model id hundreds of times. It now reads
+  `claude-opus-5-5 (x412), claude-sonnet-5-5 (x61)`; `--json` keeps every
+  observation.
+
 - **A reply that opens with a code block keeps its `⚚ Hermes` header in
   the OMH TUI's scrollback, and a table after a released one keeps its own
   box whatever spaces its divider holds.** When a reply's first line was a
