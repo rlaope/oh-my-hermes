@@ -27,6 +27,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from _module_patch import patch_modules
 from test_hermes_gateway_health import INSTALLED_AT, NOW, STARTED, state_record, write_home
 from omh.commands import bare_launch, update_gateway
 from omh.commands.bare_launch import bare_launch_args
@@ -361,7 +362,7 @@ class CommandWiringTests(unittest.TestCase):
         from omh.commands import setup
 
         args = build_parser().parse_args(["update"])
-        with patch.dict(sys.modules, {"omh.commands.update_gateway": None}), \
+        with patch_modules({"omh.commands.update_gateway": None}), \
                 patch.object(setup, "_ask_yes_no", side_effect=AssertionError("asked")):
             for code in (0, self_update.PROFILE_REPAIR_EXIT_CODE):
                 self.assertEqual(setup._offer_gateway_restart(args, code), code)
@@ -370,7 +371,7 @@ class CommandWiringTests(unittest.TestCase):
         from omh.commands import setup
 
         with patch.object(sys, "argv", ["omh", "update", "--restart-gateway"]), \
-                patch.dict(sys.modules, {"omh.commands.update_gateway": None, "omh.install.self_update": None}):
+                patch_modules({"omh.commands.update_gateway": None, "omh.install.self_update": None}):
             self.assertEqual(setup._reentry_argv_with_command_package_updated(), ["update", "--command-package-updated"])
 
     def test_ctrl_c_at_the_question_is_a_no_and_keeps_the_updates_code(self) -> None:
