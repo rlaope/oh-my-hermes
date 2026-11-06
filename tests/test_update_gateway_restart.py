@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import nullcontext, redirect_stdout
+import inspect
 import io
 import json
 import os
@@ -122,10 +123,8 @@ class Recorder:
 class StaleGatewayTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name) / "hermes"
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
 
     def test_a_running_gateway_that_started_before_the_bundle_install_is_stale(self) -> None:
         stale(self.root)
@@ -202,10 +201,8 @@ class ModeTests(unittest.TestCase):
 class RestartAfterUpdateTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name) / "hermes"
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
 
     def test_it_names_what_the_restart_interrupts_then_asks_and_no_restarts_nothing(self) -> None:
         stale(self.root)
@@ -349,6 +346,16 @@ class CommandWiringTests(unittest.TestCase):
         )
         run = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
         self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_a_module_the_update_imports_keeps_no_patched_popen_for_later(self) -> None:
+        # The update imports `update_gateway` first of all, which may be inside a test's patched `subprocess.Popen`:
+        # an import-time default would hand that mock to every later `GatewayClient` and restart in the process.
+        from omh.tui.gateway import GatewayClient
+        from omh.tui.gateway_restart import RestartRun
+        from omh.tui.git_status import read_status
+
+        for call in (GatewayClient.__init__, RestartRun.__init__, read_status):
+            self.assertIsNone(inspect.signature(call).parameters["popen"].default)
 
     def test_ctrl_c_at_the_question_is_a_no_and_keeps_the_updates_code(self) -> None:
         from omh.commands import setup
