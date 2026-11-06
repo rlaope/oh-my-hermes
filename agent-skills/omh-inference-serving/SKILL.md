@@ -13,11 +13,11 @@ metadata:
 
 # Inference Serving
 
-This is an OMH `omh-inference-serving` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `inference-serving` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-inference-serving` exists so serving an LLM runs as one decided, gated, measured process instead of scattered flag folklore: the engine choice is a table, the deployment is an idempotent runbook whose only completion evidence is the observed verification, and the benchmark speaks the standard metric vocabulary.
+`inference-serving` exists so serving an LLM runs as one decided, gated, measured process instead of scattered flag folklore: the engine choice is a table, the deployment is an idempotent runbook whose only completion evidence is the observed verification, and the benchmark speaks the standard metric vocabulary.
 
 ## Do Not Use When
 

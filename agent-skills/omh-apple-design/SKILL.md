@@ -13,11 +13,11 @@ metadata:
 
 # Apple Design
 
-This is an OMH `omh-apple-design` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `apple-design` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-apple-design` turns Apple UI design, review, and improvement requests into a platform-aware brief that respects native and web differences while preserving OMH's existing implementation and evidence owners.
+`apple-design` turns Apple UI design, review, and improvement requests into a platform-aware brief that respects native and web differences while preserving OMH's existing implementation and evidence owners.
 
 ## Do Not Use When
 
@@ -101,7 +101,7 @@ Safety rules:
 - Only call a result generated, rendered, or animated with matching actual evidence. Without an authorized execution path, prepare a handoff and name the missing boundary.
 - Load the web-library reference only for explicit Apple product work; confirm existing-project compatibility and license posture. Do not install, vendor, fetch, or call it native Apple; generic GSAP/logo work stays in its existing lane.
 - Review supplied evidence; prepared guidance is not implementation, accessibility/visual PASS, or certification.
-- Before output and before approval, classify native, web, or marketing intent; use `omh-apple-design` only for the explicit specialist request.
+- Before output and before approval, classify native, web, or marketing intent; use `apple-design` only for the explicit specialist request.
 - If current source guidance applies, keep its conditional 35% bright-background note; it is not universal. When no renderer is available, do not claim a result; while work is prepared, it is not observed.
 - Never treat web glass as native, never substitute a still for motion, and use only actual evidence after production; without it, the result is not PASS.
 - While evidence is missing, use only a prepared handoff; it is not execution and not a PASS.

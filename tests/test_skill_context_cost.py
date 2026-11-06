@@ -119,9 +119,11 @@ class SkillContextCostTests(unittest.TestCase):
         # (`omh research receipts verify`, 262 bytes) joins both bodies.
         # research's entity-match clause (answer only from a source on the exact
         # named entity; a different name is a different entity) adds 222 bytes.
-        # The render rail writes `research` as `ulw-research` and the like in these bodies:
-        # web-research +4 and source-finder +12 over their earlier baselines.
-        baseline = {'research': 20_517, 'web-research': 12_077, 'source-finder': 9_233}
+        # The render rail writes `research` as `ulw-research` and the like in these
+        # bodies. Each pin moved by the body's measured growth against main
+        # (research +3, web-research +7, source-finder +19), not by a figure chosen to
+        # fit the cap; the increment above stays the feature's own.
+        baseline = {'research': 20_520, 'web-research': 12_080, 'source-finder': 9_240}
         for name, before in baseline.items():
             record = skill_record(name)
             body = record.body().content

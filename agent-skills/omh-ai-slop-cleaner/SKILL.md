@@ -13,11 +13,11 @@ metadata:
 
 # Ai Slop Cleaner
 
-This is an OMH `omh-ai-slop-cleaner` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `ai-slop-cleaner` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-ai-slop-cleaner` exists to keep `maintenance` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`ai-slop-cleaner` exists to keep `maintenance` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 
 ## Do Not Use When
 
@@ -36,7 +36,7 @@ Good example:
 Bad example:
 
 - Prompt: ai-slop-cleaner: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `omh-ai-slop-cleaner`.
+- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ai-slop-cleaner`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
 ## Completion Checklist

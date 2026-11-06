@@ -20,4 +20,4 @@ When the user then asks to review, refine, accept, or hand off the plan, read th
 
 ## Two stores
 
-The file stays where `/plan` wrote it. A reviewed plan that `ulw-plan` records goes under `.omh/plans/`; when a task has both, the closing brief names the one the user accepted.
+The file stays where `/plan` wrote it. A reviewed plan that `ralplan` records goes under `.omh/plans/`; when a task has both, the closing brief names the one the user accepted.

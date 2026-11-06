@@ -13,11 +13,11 @@ metadata:
 
 # Llm App Dev
 
-This is an OMH `omh-llm-app-dev` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `llm-app-dev` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-llm-app-dev` exists because the failure modes of an LLM feature are not the failure modes of the code around it. A floating model alias, a prompt buried in a string literal, an output scraped out of prose with a regex, and a retrieval layer nobody measured all pass code review and all fail in production, and without a golden set nobody can tell whether the next prompt edit helped or hurt.
+`llm-app-dev` exists because the failure modes of an LLM feature are not the failure modes of the code around it. A floating model alias, a prompt buried in a string literal, an output scraped out of prose with a regex, and a retrieval layer nobody measured all pass code review and all fail in production, and without a golden set nobody can tell whether the next prompt edit helped or hurt.
 
 ## Do Not Use When
 

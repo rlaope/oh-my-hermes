@@ -1,6 +1,6 @@
 # Biomedical Evidence
 
-Load this on-demand contract after the compact `omh-biomedical-evidence` body identifies the
+Load this on-demand contract after the compact `biomedical-evidence` body identifies the
 workflow. The main body owns routing signals, shared rules, the runtime
 operation, delegation fallback, and completion/recovery pointers; this file
 holds the workflow-specific detail without copying those shared rails.

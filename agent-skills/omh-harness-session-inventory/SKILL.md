@@ -13,11 +13,11 @@ metadata:
 
 # Harness Session Inventory
 
-This is an OMH `omh-harness-session-inventory` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `harness-session-inventory` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-harness-session-inventory` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+`harness-session-inventory` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 
 ## Do Not Use When
 

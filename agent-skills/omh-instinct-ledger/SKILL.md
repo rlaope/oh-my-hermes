@@ -13,11 +13,11 @@ metadata:
 
 # Instinct Ledger
 
-This is an OMH `omh-instinct-ledger` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `instinct-ledger` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-instinct-ledger` exists because a lesson seen once is an anecdote and one seen across runs or projects is a candidate rule: it records each as one atomic instinct with its trigger, action, scope, confidence, and evidence, and promotes one only through a reviewed store route, never by writing a host's memory or skills on its own.
+`instinct-ledger` exists because a lesson seen once is an anecdote and one seen across runs or projects is a candidate rule: it records each as one atomic instinct with its trigger, action, scope, confidence, and evidence, and promotes one only through a reviewed store route, never by writing a host's memory or skills on its own.
 
 ## Do Not Use When
 

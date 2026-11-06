@@ -13,11 +13,11 @@ metadata:
 
 # Plan
 
-This is an OMH `omh-plan` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `plan` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-plan` exists so a feature or a fix gets its goals, non-goals, risks, acceptance criteria, and verification shape written down and accepted by the user before any code moves, with every step small enough to check and no implementation hidden inside the plan text.
+`plan` exists so a feature or a fix gets its goals, non-goals, risks, acceptance criteria, and verification shape written down and accepted by the user before any code moves, with every step small enough to check and no implementation hidden inside the plan text.
 
 ## Do Not Use When
 
@@ -29,13 +29,13 @@ This is an OMH `omh-plan` workflow skill, projected for Agent Skills hosts (Clau
 Good example:
 
 - Prompt: plan: handle a planning request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `omh-plan` only after naming the target, evidence boundary, and stop condition.
+- Expected behavior: Run `plan` only after naming the target, evidence boundary, and stop condition.
 - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
 
 Bad example:
 
 - Prompt: plan: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `omh-plan`.
+- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `plan`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
 ## Completion Checklist
@@ -84,7 +84,7 @@ Quality bar:
 - When the plan describes code changes, name the raw material the work starts from instead of a digest of it - the failing log, trace, or data rather than the issue summary - and the methods and tools a leading practitioner of the field would use on it. Every verification step names an outside judge - a test, CI, a measurement, a human reviewer, or an external tool - never the planning model's or the executor's own reading of the result; a step with no outside judge is recorded as an evidence gap.
 - When the plan describes code changes, restate the deliverable once as the verbs it must accomplish rather than the noun it produces; when that brings in another field, write what a practitioner of that field does as a task (fuzz the parser, audit each completion claim against its evidence), never an instruction to write or speak like one.
 - Take plan acceptance only from the answer the user gave — the response status and value the question tool returns, or the user's own reply — never from the wording of the question you asked: when the acceptance question times out, is dismissed, or returns with no answer, the plan stays unaccepted, so record no acceptance, prepare no handoff, and start nothing; a missing answer is not a refusal either, so ask again later or report the plan as awaiting acceptance.
-- Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on path that fits the work's shape — `ulw-work` durable checkpoints for progress that must survive sessions as a checkpointed ledger, `ulw-work` coordinated lanes for an accepted plan split into disjoint parallel lanes, `ulw-work` single-owner persistence for one already-scoped task with a single owner, `ulw-work` for one bounded delivery cycle, or a direct selected executor/runtime handoff for a single prepared coding change — state the fit reason in one line, and start it only after the user's explicit go-ahead.
+- Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on path that fits the work's shape — `ultrawork` durable checkpoints for progress that must survive sessions as a checkpointed ledger, `ultrawork` coordinated lanes for an accepted plan split into disjoint parallel lanes, `ultrawork` single-owner persistence for one already-scoped task with a single owner, `ultrawork` for one bounded delivery cycle, or a direct selected executor/runtime handoff for a single prepared coding change — state the fit reason in one line, and start it only after the user's explicit go-ahead.
 
 Required inputs:
 

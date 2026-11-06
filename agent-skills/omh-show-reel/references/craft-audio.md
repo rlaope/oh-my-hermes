@@ -121,7 +121,7 @@ Write `audio/music/spec.json` once, and both the ElevenLabs plan and the synthes
 - Without `global_styles`, the default wording for the mood is used: `cinematic` (orchestra and taiko, trailer-like) / `pulse` (electronic pulse) / `soft` (piano and strings) / `playful` (upbeat pop). The `synth_music.py` fallback path can make only these four, so write the mood as well for the fallback path.
 - For a showreel, align the sections with the segments in `concept.md`. If the sonic texture must change per segment, write the instrument change in the section `style`.
 - The energy (0 to 1) of sections sets the number of layers. In the plan it becomes a sentence that fits the mood ("orchestra" does not get into a tech mood).
-- Set sections in 4-bar units (8 seconds at bpm 120, 10.67 seconds at 90). If a boundary does not fall on a bar, `omh-plan` warns. The API does not accept sections shorter than 3 seconds, so `omh-plan` pushes the boundary to the 3-second point or merges it into the previous section.
+- Set sections in 4-bar units (8 seconds at bpm 120, 10.67 seconds at 90). If a boundary does not fall on a bar, `plan` warns. The API does not accept sections shorter than 3 seconds, so `plan` pushes the boundary to the 3-second point or merges it into the previous section.
 - events: hit, boom, braam, riser (ends at t), whoosh, chime, stop (briefly cut only the music - a silence effect)
 
 ### 2) ElevenLabs Music
@@ -131,13 +131,13 @@ python3 scripts/music_tools.py plan audio/music/spec.json            # → audio
 python3 scripts/eleven.py music audio/music/music.mp3 --plan audio/music/plan.json
 ```
 
-- Sections must be 3 seconds or longer. `omh-plan` merges short sections into the previous section.
+- Sections must be 3 seconds or longer. `plan` merges short sections into the previous section.
 - **Do not include artist, composer, or track names.** "Hans Zimmer style" was rejected twice with 400. When rejected, `eleven.py` shows the alternative prompt from the response.
 - Generation takes 1 to 2 minutes for a 60-second track. With the same plan you can change `--seed` to make two tracks and choose. Giving `--prompt` and `--seed` together returns 422, so `eleven.py` sends without the seed.
 - On 402, go to synthesized music.
 - The generated track length can differ from the request (a case where a 10-second request produced 7 seconds). Fit it to the video length with `music_tools.py fit`, then analyze.
 - Generated tracks are usually flat (in evaluation, 82 to 85% of both tracks was within 3dB of maximum loudness). When `analyze` warns, pull down the music before a big hit in the mix. If you write [time, dB] in `music` in `script.json`, like `"automation": [[0, 0], ["line.n07-2.5", 0], ["line.n07-0.3", -10], ["line.n07", 0]]`, `mix.py` changes the music volume along that curve. Time can be seconds, a cue name, or "cue±seconds". Pulling down to -8 to -12dB 2 to 3 seconds before a hit and returning to 0dB on the hit frame makes an anticipation -> impact structure audible even in the same track.
-- When writing the spec, put contrast in section energy. Keep the climax (0.9 or above) within 25% of the whole, one breakdown of 0.3 to 0.45 around the middle, and write instrument changes in `style` for neighboring sections (e.g. "strings drop out, only ticking pulse", "add brass stabs and choir"). `omh-plan` warns about a flat spec.
+- When writing the spec, put contrast in section energy. Keep the climax (0.9 or above) within 25% of the whole, one breakdown of 0.3 to 0.45 around the middle, and write instrument changes in `style` for neighboring sections (e.g. "strings drop out, only ticking pulse", "add brass stabs and choir"). `plan` warns about a flat spec.
 - A stop (silence effect) in the plan was often ignored (confirmed on a 2-minute track). After generation, find the first beat of the next phrase with `analyze` and cut up to that point: `python3 scripts/music_tools.py gap audio/music/music.mp3 audio/music/music_edit.wav 103.2-103.97`. Change `music.file` in `script.json` to `audio/music/music_edit.wav` and rerun from `timeline.py`.
 
 ### 3) Synthesized music (fallback path)

@@ -13,11 +13,11 @@ metadata:
 
 # Curriculum Design
 
-This is an OMH `omh-curriculum-design` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `curriculum-design` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-curriculum-design` makes outcomes, sequence, assessment, and constraints reviewable before materials or LMS work.
+`curriculum-design` makes outcomes, sequence, assessment, and constraints reviewable before materials or LMS work.
 
 ## Do Not Use When
 
@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: Explain the attached machine-learning paper for a beginner.
-- Expected behavior: Route to `omh-paper-learning`, not `omh-curriculum-design`.
+- Expected behavior: Route to `omh-paper-learning`, not `curriculum-design`.
 - Why: A supplied paper explanation is not a curriculum-design request.
 
 ## Completion Checklist

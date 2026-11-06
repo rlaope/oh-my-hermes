@@ -13,11 +13,11 @@ metadata:
 
 # Jit Learn
 
-This is an OMH `omh-jit-learn` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `jit-learn` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-jit-learn` exists to choose what is worth learning for the user's present problem and convert credible sources into an immediate application path, instead of returning a generic self-help shelf or a popularity list.
+`jit-learn` exists to choose what is worth learning for the user's present problem and convert credible sources into an immediate application path, instead of returning a generic self-help shelf or a popularity list.
 
 ## Do Not Use When
 

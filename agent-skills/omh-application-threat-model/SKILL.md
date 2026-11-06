@@ -13,11 +13,11 @@ metadata:
 
 # Application Threat Model
 
-This is an OMH `omh-application-threat-model` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `application-threat-model` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-application-threat-model` exists because the nearest neighbour does not merely miss this request. `omh-security-safety-review` maps the agent's own prompt, tool, credential, and dependency surface, so an application threat-model request came back as an agent tool inventory under a near-identical name — a confident wrong artifact rather than a miss, in the one domain where that costs most.
+`application-threat-model` exists because the nearest neighbour does not merely miss this request. `omh-security-safety-review` maps the agent's own prompt, tool, credential, and dependency surface, so an application threat-model request came back as an agent tool inventory under a near-identical name — a confident wrong artifact rather than a miss, in the one domain where that costs most.
 
 ## Do Not Use When
 

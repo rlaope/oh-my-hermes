@@ -13,11 +13,11 @@ metadata:
 
 # Deploy And Monitor
 
-This is an OMH `omh-deploy-and-monitor` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `deploy-and-monitor` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-deploy-and-monitor` exists to keep `monitoring` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`deploy-and-monitor` exists to keep `monitoring` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 
 ## Do Not Use When
 
@@ -36,7 +36,7 @@ Good example:
 Bad example:
 
 - Prompt: deploy-and-monitor: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `omh-deploy-and-monitor`.
+- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `deploy-and-monitor`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
 ## Completion Checklist
@@ -98,7 +98,7 @@ Artifact contracts:
 
 This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
 
-- contract_id: `omh-deploy-and-monitor`; enforcement_level: `guidance_only`; consumer_id: `none`
+- contract_id: `deploy-and-monitor`; enforcement_level: `guidance_only`; consumer_id: `none`
 
 Safety rules:
 

@@ -13,7 +13,7 @@ metadata:
 
 # Geospatial Analysis
 
-This is an OMH `omh-geospatial-analysis` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `geospatial-analysis` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 

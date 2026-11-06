@@ -84,4 +84,4 @@ attached, sent or published.
 - Summarizing, transcribing, captioning or trimming a recording that exists:
   `omh-media-input`.
 - An animation inside an app's own UI (a button, modal, page transition or
-  loading state): `omh-frontend`.
+  loading state): `frontend`.

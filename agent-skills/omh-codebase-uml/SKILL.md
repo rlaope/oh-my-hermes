@@ -14,11 +14,11 @@ metadata:
 
 # Codebase Uml
 
-This is an OMH `omh-codebase-uml` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `codebase-uml` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-codebase-uml` exists so 'visualize our codebase' produces one deterministic, readable picture instead of a hand-drawn guess: the interface each unit exposes is ranked by who imports it, the layout is bounded before PlantUML sees it, and every omission the bounding made is printed on the image.
+`codebase-uml` exists so 'visualize our codebase' produces one deterministic, readable picture instead of a hand-drawn guess: the interface each unit exposes is ranked by who imports it, the layout is bounded before PlantUML sees it, and every omission the bounding made is printed on the image.
 
 ## Do Not Use When
 

@@ -18,7 +18,7 @@ Declared checks:
   - Required result fields: `layer_hashes`, `source_crs`, `geometry_validity`, `target_units`
   - Criterion: Reject missing/conflicting CRS, invalid or non-finite geometry and geographic-degree measurement. Do not repair geometry silently.
 - `gis_backend_check`
-  - Required result fields: `omh-backend`, `versions`, `command`, `exit_code`
+  - Required result fields: `backend`, `versions`, `command`, `exit_code`
   - Criterion: Name the actual backend and versions; use direct Shapely/PyProj when sufficient. Missing dependencies or timeout must never produce guessed results.
 - `gis_output_check`
   - Required result fields: `result_count`, `pair_area_sum_m2`, `union_area_m2`, `output_hashes`, `fixture_limits`

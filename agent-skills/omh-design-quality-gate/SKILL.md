@@ -13,11 +13,11 @@ metadata:
 
 # Design Quality Gate
 
-This is an OMH `omh-design-quality-gate` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `design-quality-gate` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-design-quality-gate` makes high-stakes visual deliverables premium and trustworthy by treating taste, content, layout, accessibility, and render QA as first-class evidence.
+`design-quality-gate` makes high-stakes visual deliverables premium and trustworthy by treating taste, content, layout, accessibility, and render QA as first-class evidence.
 
 ## Do Not Use When
 

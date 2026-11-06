@@ -113,7 +113,7 @@ these languages.
   control that opened it.
 - A dialog holding unsaved input asks before discarding it on an accidental
   close. Under the HTML close-watcher rules (shipped in Chromium; check
-  other engines), a modal's `omh-cancel` can be prevented only once per user
+  other engines), a modal's `cancel` can be prevented only once per user
   activation, so a second Escape closes it anyway: ask on the first Escape,
   or open it with `closedby="none"`, give it an explicit close control that
   runs the check, and handle Escape yourself (keydown on the dialog) so it

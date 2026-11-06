@@ -13,11 +13,11 @@ metadata:
 
 # Iac Change
 
-This is an OMH `omh-iac-change` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `iac-change` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-iac-change` exists because infrastructure changes had no owner: `omh-deploy-and-monitor` watches an application release, `omh-release-cut` decides one, and `omh-inference-serving` deploys a model server, while a Terraform plan with drift, a Helm chart change, or a manifest edit reached a generic planner with no blast radius, cost delta, or staged apply at all.
+`iac-change` exists because infrastructure changes had no owner: `omh-deploy-and-monitor` watches an application release, `omh-release-cut` decides one, and `omh-inference-serving` deploys a model server, while a Terraform plan with drift, a Helm chart change, or a manifest edit reached a generic planner with no blast radius, cost delta, or staged apply at all.
 
 ## First Steps
 

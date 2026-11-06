@@ -13,11 +13,11 @@ metadata:
 
 # Ops Review
 
-This is an OMH `omh-ops-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `ops-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-ops-review` exists to keep `operations` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`ops-review` exists to keep `operations` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 
 ## Do Not Use When
 
@@ -35,7 +35,7 @@ Good example:
 Bad example:
 
 - Prompt: ops-review: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `omh-ops-review`.
+- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ops-review`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
 ## Completion Checklist
@@ -93,7 +93,7 @@ Artifact contracts:
 
 This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
 
-- contract_id: `omh-ops-review`; enforcement_level: `guidance_only`; consumer_id: `none`
+- contract_id: `ops-review`; enforcement_level: `guidance_only`; consumer_id: `none`
 
 Safety rules:
 

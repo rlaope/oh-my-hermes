@@ -13,11 +13,11 @@ metadata:
 
 # Show Reel
 
-This is an OMH `omh-show-reel` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `show-reel` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-show-reel` owns the motion-production method for every authored video, from a 20-second idea explainer to a product film, so factual claims, visual decisions, locale timing, revision budget, measured exports, and delivery receipts cannot drift apart. It does not render inside OMH core.
+`show-reel` owns the motion-production method for every authored video, from a 20-second idea explainer to a product film, so factual claims, visual decisions, locale timing, revision budget, measured exports, and delivery receipts cannot drift apart. It does not render inside OMH core.
 
 ## First Steps
 

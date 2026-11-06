@@ -69,7 +69,7 @@ Ingest only observed outputs and bounded evidence references, then derive interp
 
 ### `prototype_close_receipt` (validation)
 
-Decide keep or discard, observe cleanup before reporting `discarded`, and close with a compact decision receipt that `ulw-plan` can consume without transcript replay and without any implementation handoff.
+Decide keep or discard, observe cleanup before reporting `discarded`, and close with a compact decision receipt that `ralplan` can consume without transcript replay and without any implementation handoff.
 
 - Input refs: `decision question`, `experiment budget`, `scratch boundary`, `measurement method`
 - Output refs: `decision receipt for planning with supported option, rejected option, residual risk, and evidence limits`, `decision_prototype/v1`

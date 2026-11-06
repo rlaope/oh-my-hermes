@@ -14,11 +14,11 @@ metadata:
 
 # Run Efficiency
 
-This is an OMH `omh-run-efficiency` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `run-efficiency` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-run-efficiency` exists so a question about how a run spent its time, tools, and context gets the supplied timings and context budget, plus what Hermes itself recorded for a named session's tokens and cost, instead of figures a model guesses.
+`run-efficiency` exists so a question about how a run spent its time, tools, and context gets the supplied timings and context budget, plus what Hermes itself recorded for a named session's tokens and cost, instead of figures a model guesses.
 
 ## Do Not Use When
 

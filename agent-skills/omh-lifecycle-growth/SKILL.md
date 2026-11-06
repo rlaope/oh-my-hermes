@@ -13,11 +13,11 @@ metadata:
 
 # Lifecycle Growth
 
-This is an OMH `omh-lifecycle-growth` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `lifecycle-growth` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-lifecycle-growth` exists so audience eligibility, consent and frequency safety, sticky exposure, causal measurement, and the stop decision travel together in one plan instead of being assembled ad hoc from analysis, copy, scheduling, and connector work.
+`lifecycle-growth` exists so audience eligibility, consent and frequency safety, sticky exposure, causal measurement, and the stop decision travel together in one plan instead of being assembled ad hoc from analysis, copy, scheduling, and connector work.
 
 ## Do Not Use When
 

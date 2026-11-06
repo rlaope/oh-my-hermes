@@ -9,7 +9,7 @@ Hermes bundles `spike` (MIT, adapted from the GSD project), a method for throwaw
 | Breaking an idea into questions, ordering them, building each experiment | `spike` |
 | One decision id, its alternatives, and a falsifiable hypothesis | this skill. A `spike` table of several questions is several decisions: take the one planning is blocked on, or HOLD |
 | Budgets with units, the scratch boundary, the observed cleanup | this skill |
-| The verdict | `spike` writes one per experiment; this skill turns it into the receipt `ulw-plan` reads |
+| The verdict | `spike` writes one per experiment; this skill turns it into the receipt `ralplan` reads |
 
 ## Taken from `spike`
 

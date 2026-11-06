@@ -13,11 +13,11 @@ metadata:
 
 # Product Discovery Validation
 
-This is an OMH `omh-product-discovery-validation` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `product-discovery-validation` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-product-discovery-validation` gives an early idea a bounded, evidence-typed path to a kill, pivot, persevere, or inconclusive decision so `omh-product-brief` consumes validated inputs instead of judging raw discovery itself.
+`product-discovery-validation` gives an early idea a bounded, evidence-typed path to a kill, pivot, persevere, or inconclusive decision so `omh-product-brief` consumes validated inputs instead of judging raw discovery itself.
 
 ## Do Not Use When
 

@@ -13,11 +13,11 @@ metadata:
 
 # Data Analysis
 
-This is an OMH `omh-data-analysis` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `data-analysis` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-data-analysis` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+`data-analysis` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 
 ## Do Not Use When
 

@@ -13,11 +13,11 @@ metadata:
 
 # Sales Pipeline Review
 
-This is an OMH `omh-sales-pipeline-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `sales-pipeline-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-sales-pipeline-review` prepares evidence-bounded portfolio pipeline, forecast, and follow-up reviews from supplied CRM snapshots without replacing a CRM, mutating records, or claiming revenue.
+`sales-pipeline-review` prepares evidence-bounded portfolio pipeline, forecast, and follow-up reviews from supplied CRM snapshots without replacing a CRM, mutating records, or claiming revenue.
 
 ## Do Not Use When
 
@@ -39,7 +39,7 @@ Good example:
 Bad example:
 
 - Prompt: Write discovery questions for the Northwind opportunity and draft the follow-up email.
-- Expected behavior: Route to `omh-sales-development`, not `omh-sales-pipeline-review`.
+- Expected behavior: Route to `omh-sales-development`, not `sales-pipeline-review`.
 - Why: A single account's discovery, qualification, and outreach draft has no portfolio, aging, or forecast-calibration objective.
 
 ## Completion Checklist

@@ -13,11 +13,11 @@ metadata:
 
 # Localization Review
 
-This is an OMH `omh-localization-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `localization-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-localization-review` makes terminology, context, cultural fit, and locale QA reviewable without treating a drafted translation as a published or visually validated release.
+`localization-review` makes terminology, context, cultural fit, and locale QA reviewable without treating a drafted translation as a published or visually validated release.
 
 ## Do Not Use When
 
@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: Translate 'Your trial ends tomorrow' into Korean.
-- Expected behavior: Answer directly or route to `omh-content-operator`, not `omh-localization-review`.
+- Expected behavior: Answer directly or route to `omh-content-operator`, not `localization-review`.
 - Why: A one-off sentence has no product locale QA or release-review objective.
 
 ## Completion Checklist

@@ -13,7 +13,7 @@ metadata:
 
 # Biomedical Evidence
 
-This is an OMH `omh-biomedical-evidence` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `biomedical-evidence` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 

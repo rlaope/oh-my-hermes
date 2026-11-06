@@ -3,7 +3,7 @@
 ## Source record
 
 These are optional web-production references for an **explicit Apple
-marketing/product visual** or explicit `omh-apple-design` invocation. They are not
+marketing/product visual** or explicit `apple-design` invocation. They are not
 native Apple APIs, do not establish Liquid Glass equivalence, and do not route
 generic GSAP, logo, or glass requests into this skill. Inspect the current
 project's dependency, build, runtime, and license policy before the selected

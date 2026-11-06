@@ -13,11 +13,11 @@ metadata:
 
 # People Ops
 
-This is an OMH `omh-people-ops` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `people-ops` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-people-ops` keeps recruiting and people-process guidance fair, structured, and evidence bounded before any human decision or external HR action.
+`people-ops` keeps recruiting and people-process guidance fair, structured, and evidence bounded before any human decision or external HR action.
 
 ## Do Not Use When
 
@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: Send calendar invitations to every candidate for next Tuesday.
-- Expected behavior: Route to `omh-apps`, not `omh-people-ops`.
+- Expected behavior: Route to `omh-apps`, not `people-ops`.
 - Why: Sending invitations is an explicit external calendar action.
 
 ## Completion Checklist

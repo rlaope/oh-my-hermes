@@ -13,11 +13,11 @@ metadata:
 
 # Frontend Refactor
 
-This is an OMH `omh-frontend-refactor` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `frontend-refactor` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-frontend-refactor` exists so UI restructuring runs as a previewed, behavior-locked, impact-ordered process instead of ad-hoc rewrites: the plan comes before any edit, state fixes come before polish, and every change carries its safety reason.
+`frontend-refactor` exists so UI restructuring runs as a previewed, behavior-locked, impact-ordered process instead of ad-hoc rewrites: the plan comes before any edit, state fixes come before polish, and every change carries its safety reason.
 
 ## Do Not Use When
 
@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: Refactor and also add the dark-mode feature while you are in there.
-- Expected behavior: Split the request: the behavior-preserving refactor runs under this workflow, and the dark-mode feature is new `omh-frontend` work planned separately.
+- Expected behavior: Split the request: the behavior-preserving refactor runs under this workflow, and the dark-mode feature is new `frontend` work planned separately.
 - Why: A refactor that changes behavior cannot claim behavior preservation; mixing the two hides the feature from review.
 
 ## Completion Checklist
@@ -45,7 +45,7 @@ Bad example:
 - The preview plan was emitted before any file changed, and the apply step was an explicit second decision.
 - Behavior evidence exists on both sides of apply, and unsafe-in-isolation changes are listed as notes, not half-applied.
 - Pass order was impact-first and each finding names its category and safety reason.
-- Out-of-scope smells were routed: generic slop to `omh-ai-slop-cleaner`, new UI to `omh-frontend`, verdict-only review to `omh-code-review`.
+- Out-of-scope smells were routed: generic slop to `omh-ai-slop-cleaner`, new UI to `frontend`, verdict-only review to `omh-code-review`.
 
 ## Recovery Notes
 

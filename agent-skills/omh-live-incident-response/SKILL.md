@@ -13,11 +13,11 @@ metadata:
 
 # Live Incident Response
 
-This is an OMH `omh-live-incident-response` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `live-incident-response` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-live-incident-response` exists because an incident that is still open had no owner. `omh-support-operations` sent an active incident to `omh-reliability-review`, and `omh-reliability-review` reviews incident notes after the fact, so the one skill that saw the request handed it to a postmortem while the outage was still running.
+`live-incident-response` exists because an incident that is still open had no owner. `omh-support-operations` sent an active incident to `omh-reliability-review`, and `omh-reliability-review` reviews incident notes after the fact, so the one skill that saw the request handed it to a postmortem while the outage was still running.
 
 ## Do Not Use When
 

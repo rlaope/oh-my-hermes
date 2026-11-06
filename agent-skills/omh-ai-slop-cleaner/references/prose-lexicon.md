@@ -1,6 +1,6 @@
 # Prose Lexicon
 
-`omh-ai-slop-cleaner` is deletion-first and written for code. Prose in a repository
+`ai-slop-cleaner` is deletion-first and written for code. Prose in a repository
 needs the same pass and a different instrument: README text, docstrings, commit
 bodies, review comments, and report prose carry machine-writing tells that no
 code smell describes. Load this when the cleanup target is written English.

@@ -13,11 +13,11 @@ metadata:
 
 # Model Finetuning
 
-This is an OMH `omh-model-finetuning` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `model-finetuning` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-model-finetuning` exists because producing a model had no owner: `omh-inference-serving` serves one that exists and `omh-llm-app-dev` builds on top of one, while an SFT or DPO question had no baseline comparison and no way to answer that training is not needed.
+`model-finetuning` exists because producing a model had no owner: `omh-inference-serving` serves one that exists and `omh-llm-app-dev` builds on top of one, while an SFT or DPO question had no baseline comparison and no way to answer that training is not needed.
 
 ## First Steps
 

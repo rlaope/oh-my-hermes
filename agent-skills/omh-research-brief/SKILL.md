@@ -13,11 +13,11 @@ metadata:
 
 # Research Brief
 
-This is an OMH `omh-research-brief` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `research-brief` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-research-brief` exists to keep `ulw-research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`research-brief` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 
 ## Do Not Use When
 
@@ -36,7 +36,7 @@ Good example:
 Bad example:
 
 - Prompt: research-brief: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `omh-research-brief`.
+- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `research-brief`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
 ## Completion Checklist

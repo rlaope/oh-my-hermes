@@ -13,11 +13,11 @@ metadata:
 
 # Internal Audit
 
-This is an OMH `omh-internal-audit` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `internal-audit` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-internal-audit` exists because control-testing methodology had no owner: `omh-finance-analysis` reports figures and names control exceptions, `omh-tech-debt-audit` audits code, and `omh-production-audit` audits a release, while population, sampling, re-performance, and deficiency severity had nothing that derived a grade from criteria.
+`internal-audit` exists because control-testing methodology had no owner: `omh-finance-analysis` reports figures and names control exceptions, `omh-tech-debt-audit` audits code, and `omh-production-audit` audits a release, while population, sampling, re-performance, and deficiency severity had nothing that derived a grade from criteria.
 
 ## First Steps
 

@@ -376,7 +376,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then the render rail: every body names its siblings by the label `skill_view`
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
-        self.assertEqual(_digest(legacy_hashes), '222011688cb7b802e68445403fcd8a89bc78127494d3943f658a29dc1be3cafd')
+        self.assertEqual(_digest(legacy_hashes), 'd3f9bfdd181fc1ab0af5ad1b22920fdf892ccd406a5a2b6361a8e2699f911a46')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

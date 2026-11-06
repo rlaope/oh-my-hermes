@@ -118,7 +118,7 @@ class SkillReferenceTemplate:
         object.__setattr__(
             self,
             "content",
-            translate_sibling_mentions(self.content, owner=self.skill_name),
+            translate_sibling_mentions(self.content, owner=self.skill_name, path=self.relative_path),
         )
 
 
@@ -194,7 +194,7 @@ HUMAN_VOICE_SKILL_VIEW = skill_view_call(HUMAN_VOICE_REFERENCE_PATH)
 WORKFLOW_ARTIFACTS_REFERENCE_PATH = "omh-routing/references/workflow-artifacts.md"
 
 HARNESS_DISCIPLINE_RULES = (
-    "Start from the representative harness registry in `oh-my-hermes` when the workflow needs coding, "
+    "Start from the representative harness registry in `omh-routing` when the workflow needs coding, "
     "research, planning, goal execution, architecture, critique, QA, or documentation lanes.",
     "Prefer richer evidence and clearer stop conditions over adding more workflow names.",
     "Use specialist lanes only when they change the quality of the answer or verification.",
@@ -377,42 +377,50 @@ _CANONICAL_LINE_PREFIXES = (
     "related_skills:",
 )
 
-# The router's own body and references are the catalog's registries and keyword
-# lists: they speak catalog names because `omh_recommend` does.
+# The router's own body and these references are the catalog's registries and
+# keyword lists: they speak catalog names because `omh_recommend` does.
 _CANONICAL_NAME_OWNERS = frozenset({"oh-my-hermes", "omh-routing"})
-
-# A backticked word that is an installed skill's name but means something else
-# in that skill's files (a Terraform subcommand, a DOM event, a tool argument).
-# Each entry is (owning skill, token).
-_NOT_A_SIBLING = frozenset(
+_ROUTER_CANONICAL_REFERENCES = frozenset(
     {
-        ("iac-change", "plan"),
-        ("frontend", "cancel"),
-        ("show-reel", "plan"),
-        ("maestro", "research"),
-        ("ultrawork", "context"),
-        ("dag-ulw", "backend"),
-        ("geospatial-analysis", "backend"),
-        ("design-quality-gate", "frontend"),
-        ("visual-qa", "frontend"),
+        "references/catalog-index.md",
+        "references/harness-registry.md",
+        "references/workflow-registry.md",
+        "references/workflow-artifacts.md",
+        "references/wrapper-routing.md",
     }
 )
 
+# A one-word installed name (`plan`, `backend`, `cancel`) is also an ordinary
+# word, a config key or a command, so it is rewritten only when its own line
+# shows it is a skill hand-off: one of these words just before it or just after.
+_HANDOFF_BEFORE = re.compile(
+    r"(?:\b(?:use|load|loads|from)\s+(?:the\s+)?"
+    r"|\b(?:route|routes|routed|hand|hands|handed|send|sends)\b[^`]{0,40}\bto\s+(?:the\s+)?)$",
+    re.IGNORECASE,
+)
+_HANDOFF_WORDS_AFTER = frozenset({"workflow", "skill", "lane", "owns"})
+_CHAIN_SEPARATOR = re.compile(r"(?:, |, or |, and | or | and )")
+# `owner/repo@sha` names an upstream project's skill, never an OMH one.
+_UPSTREAM_ATTRIBUTION = re.compile(r"[\w.-]+/[\w.-]+@[0-9a-f]{7,}")
+_WORD = re.compile(r"[A-Za-z]+")
 
-def translate_sibling_mentions(text: str, *, owner: str = "") -> str:
-    """Write each backticked installed skill name in a rendered file as its loadable label.
 
-    The body and each reference are the text a model reads, so a sibling named
-    anywhere in them (description, examples, safety rules, a reference file) must
-    be a name `skill_view` loads. Fenced code, the trigger lists and the metadata
-    lines keep the canonical identifiers they carry; `./<name>` and `--skill
-    <name>` recipes are not a bare backticked name, so they never match. The
-    skill's own name, the router's registries and the `_NOT_A_SIBLING` words stay.
+def translate_sibling_mentions(text: str, *, owner: str = "", path: str = "") -> str:
+    """Write each backticked installed skill name that hands work to a sibling as its loadable label.
+
+    The body and each reference are the text a model reads, so a sibling named in
+    them must be a name `skill_view` loads. A hyphenated name is always a skill.
+    A one-word name is rewritten only on positive evidence from its own line (a
+    hand-off word beside it, or a rewritten sibling it is listed with); anything
+    else stays as the catalog wrote it. Fenced code, trigger lists, metadata lines,
+    lines crediting an upstream project, the skill's own name and the router's
+    registries stay canonical.
     """
-    if owner in _CANONICAL_NAME_OWNERS:
-        return text
     installed = _installable_skill_names()
-    skipped = {token for skill, token in _NOT_A_SIBLING if skill == owner} | {owner}
+    canonical_by_label = {omh_skill_display_name(name): name for name in installed}
+    owner = canonical_by_label.get(owner, owner)
+    if owner in _CANONICAL_NAME_OWNERS and (not path or path in _ROUTER_CANONICAL_REFERENCES or path == "SKILL.md"):
+        return text
     out: list[str] = []
     fenced = False
     for line in text.split("\n"):
@@ -420,18 +428,45 @@ def translate_sibling_mentions(text: str, *, owner: str = "") -> str:
         if stripped.startswith("```"):
             fenced = not fenced
             out.append(line)
-        elif fenced or stripped.lower().startswith(_CANONICAL_LINE_PREFIXES):
+        elif fenced or stripped.lower().startswith(_CANONICAL_LINE_PREFIXES) or _UPSTREAM_ATTRIBUTION.search(line):
             out.append(line)
         else:
-
-            def _label(match: re.Match[str]) -> str:
-                name = match.group(1)
-                if name in skipped or name not in installed:
-                    return match.group(0)
-                return f"`{omh_skill_display_name(name)}`"
-
-            out.append(_BACKTICKED_SKILL_NAME.sub(_label, line))
+            out.append(_translate_line(line, installed, owner))
     return "\n".join(out)
+
+
+def _translate_line(line: str, installed: frozenset[str], owner: str) -> str:
+    pieces: list[str] = []
+    cursor = 0
+    previous_rewrote_end = -1
+    for match in _BACKTICKED_SKILL_NAME.finditer(line):
+        name = match.group(1)
+        pieces.append(line[cursor : match.start()])
+        cursor = match.end()
+        rewrite = (
+            name in installed
+            and (name != owner or owner in _CANONICAL_NAME_OWNERS)
+            and omh_skill_display_name(name) != name
+        )
+        if rewrite and "-" not in name:
+            before = line[: match.start()]
+            after = _WORD.match(line[match.end() :].lstrip())
+            chained = previous_rewrote_end >= 0 and bool(
+                _CHAIN_SEPARATOR.fullmatch(line[previous_rewrote_end : match.start()])
+            )
+            rewrite = (
+                _HANDOFF_BEFORE.search(before) is not None
+                or (after is not None and after.group(0).lower() in _HANDOFF_WORDS_AFTER)
+                or chained
+            )
+        if rewrite:
+            pieces.append(f"`{omh_skill_display_name(name)}`")
+            previous_rewrote_end = match.end()
+        else:
+            pieces.append(match.group(0))
+            previous_rewrote_end = -1
+    pieces.append(line[cursor:])
+    return "".join(pieces)
 
 
 def related_skill_names(definition: SkillDefinition) -> tuple[str, ...]:
@@ -3164,7 +3199,7 @@ Required: {", ".join(definition.required_inputs)}. Output: {", ".join(definition
 
 ## Why This Exists
 
-{definition.why_this_exists}
+{loadable_skill_mentions(definition.why_this_exists)}
 
 ## First Steps
 

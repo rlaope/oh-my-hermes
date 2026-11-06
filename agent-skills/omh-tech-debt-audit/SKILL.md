@@ -13,11 +13,11 @@ metadata:
 
 # Tech Debt Audit
 
-This is an OMH `omh-tech-debt-audit` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `tech-debt-audit` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-tech-debt-audit` exists so accumulated debt becomes a ranked, reconcilable ledger instead of a one-off complaint: findings cite file:line, severity and effort make the trade-off explicit, quick wins are separated from big fixes, and reruns mark what was resolved instead of rediscovering it.
+`tech-debt-audit` exists so accumulated debt becomes a ranked, reconcilable ledger instead of a one-off complaint: findings cite file:line, severity and effort make the trade-off explicit, quick wins are separated from big fixes, and reruns mark what was resolved instead of rediscovering it.
 
 ## Do Not Use When
 

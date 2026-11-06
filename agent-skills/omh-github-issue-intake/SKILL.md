@@ -13,11 +13,11 @@ metadata:
 
 # Github Issue Intake
 
-This is an OMH `omh-github-issue-intake` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `github-issue-intake` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-github-issue-intake` exists so a public support-chat report can become a verified GitHub issue through one bounded, confirmation-gated lane instead of ad hoc chat narration or an unscoped bot write.
+`github-issue-intake` exists so a public support-chat report can become a verified GitHub issue through one bounded, confirmation-gated lane instead of ad hoc chat narration or an unscoped bot write.
 
 ## Do Not Use When
 

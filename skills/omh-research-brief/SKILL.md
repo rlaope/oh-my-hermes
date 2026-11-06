@@ -19,7 +19,7 @@ This is a Hermes-native `research-brief` workflow skill.
 
 ## Why This Exists
 
-`research-brief` exists to keep `ulw-research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`research-brief` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 
 ## Do Not Use When
 

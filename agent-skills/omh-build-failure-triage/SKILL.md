@@ -13,11 +13,11 @@ metadata:
 
 # Build Failure Triage
 
-This is an OMH `omh-build-failure-triage` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `build-failure-triage` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-build-failure-triage` adapts ECC's build-fix and PR-test-analysis posture into an OMH-native workflow so failed checks become evidence-backed minimal handoffs instead of ad hoc debugging or false-green verification claims.
+`build-failure-triage` adapts ECC's build-fix and PR-test-analysis posture into an OMH-native workflow so failed checks become evidence-backed minimal handoffs instead of ad hoc debugging or false-green verification claims.
 
 ## Do Not Use When
 

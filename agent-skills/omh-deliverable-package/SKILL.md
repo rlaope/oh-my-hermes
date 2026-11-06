@@ -13,11 +13,11 @@ metadata:
 
 # Deliverable Package
 
-This is an OMH `omh-deliverable-package` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `deliverable-package` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-deliverable-package` exists because a requested file moves through prepared, generated, QA-checked, approved, and attached states that no single tool reports together: it tracks each file through them and reports a state only from that state's own evidence, never from an earlier one's.
+`deliverable-package` exists because a requested file moves through prepared, generated, QA-checked, approved, and attached states that no single tool reports together: it tracks each file through them and reports a state only from that state's own evidence, never from an earlier one's.
 
 ## Do Not Use When
 

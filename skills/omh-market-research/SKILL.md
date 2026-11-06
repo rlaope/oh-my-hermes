@@ -21,7 +21,7 @@ Required: decision and audience, buyer segment and geography, period currency un
 
 ## Why This Exists
 
-`market-research` turns a broad market question into bounded sizing, customer evidence, and comparable competitive analysis that a decision owner can inspect without mistaking secondary research for validation.
+`omh-market-research` turns a broad market question into bounded sizing, customer evidence, and comparable competitive analysis that a decision owner can inspect without mistaking secondary research for validation.
 
 ## First Steps
 

@@ -13,11 +13,11 @@ metadata:
 
 # Physical Device Readiness
 
-This is an OMH `omh-physical-device-readiness` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `physical-device-readiness` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-physical-device-readiness` exists because a robot, heater, or relay acts on the physical world, where a wrong command can hurt someone or damage property: it fixes the safety envelope, sensor and camera gates, dry runs, operator approval, and emergency stop before any trial, and turns the commands the agent must never run into a proposed deny list the user applies.
+`physical-device-readiness` exists because a robot, heater, or relay acts on the physical world, where a wrong command can hurt someone or damage property: it fixes the safety envelope, sensor and camera gates, dry runs, operator approval, and emergency stop before any trial, and turns the commands the agent must never run into a proposed deny list the user applies.
 
 ## Do Not Use When
 

@@ -13,11 +13,11 @@ metadata:
 
 # Git Workflow
 
-This is an OMH `omh-git-workflow` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `git-workflow` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-git-workflow` exists because conflict resolution, bisect, and history repair had no owner: "resolve this merge conflict" reached a file operator and "clean up this branch's history" a live-information lane, while this repository's own incidents -- a stack that replayed its base commits, a commit landing on another session's branch -- each had a known correct procedure.
+`git-workflow` exists because conflict resolution, bisect, and history repair had no owner: "resolve this merge conflict" reached a file operator and "clean up this branch's history" a live-information lane, while this repository's own incidents -- a stack that replayed its base commits, a commit landing on another session's branch -- each had a known correct procedure.
 
 ## First Steps
 

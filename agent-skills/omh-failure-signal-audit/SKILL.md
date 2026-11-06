@@ -13,11 +13,11 @@ metadata:
 
 # Failure Signal Audit
 
-This is an OMH `omh-failure-signal-audit` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `failure-signal-audit` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-failure-signal-audit` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+`failure-signal-audit` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 
 ## Do Not Use When
 

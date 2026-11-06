@@ -13,11 +13,11 @@ metadata:
 
 # Web Research
 
-This is an OMH `omh-web-research` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `web-research` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-web-research` exists so a current-facts question returns a cited answer in one retrieval round, without the declared depth budget, reference-implementation study, and dossier that `ulw-research` requires.
+`web-research` exists so a current-facts question returns a cited answer in one retrieval round, without the declared depth budget, reference-implementation study, and dossier that `research` requires.
 
 ## First Steps
 
@@ -84,7 +84,7 @@ Quality bar:
 - Keep historical-capture evidence and live-page evidence as two typed surfaces for a point-in-time or then-versus-now question; capture time, publication time, and retrieval time are independent clocks and none substitutes for another.
 - When Hermes' bundled `grounded-citations` skill is available, load it and register each source in its ledger when it is retrieved (`scripts/sources.py add`), before any prose is written; cite a source only by the id the ledger gave it, written `[n]`. Keep the run's ledger in a file of its own, passed as `--ledger <path>` before the subcommand on every call: the default ledger is shared by the whole profile, and another run's reset rebinds its ids. Mark background that rests on model knowledge `[unverified]` instead of citing it: the marker is for background the answer does not rest on and never carries the answer, and a contested claim with a single source keeps its citation and is stated as uncorroborated. The ledger id sits beside the source class and the retrieval date and replaces neither. Without the skill, list each source when it is retrieved and cite it at the claim it supports.
 - When that ledger is in use, report the citation check from a run, or as `not_observed`: the exit status of `sources.py verify <draft>` is the observed check - `0` is a pass and any other status is not - and `verify --evidence` also fails a draft whose cited source carries no verbatim quote. An exit `0` whose `info: stats:` line reads `0 distinct source(s) cited` checked nothing and is reported as `not_observed`, and so is an answer given only in chat: `verify` reads a draft file and exits `2` without one, so write the answer to a file first when the check matters. The run compares cited ids and the Sources block with the ledger; it does not test whether a claim is true, so a passing citation check is never reported as fact verification. After that verify, run `omh research receipts verify --citations <ledger> --draft <draft>` and report its fetched coverage from the run, or as `not_observed`; a receipt proves only that the page was opened in this session tree, never that it supports the claim. Without the ledger the citation check is `not_observed`.
-- Stop at the answer: one retrieval round settles a lookup, and an expanding lead list means the request belongs to `ulw-research`.
+- Stop at the answer: one retrieval round settles a lookup, and an expanding lead list means the request belongs to `research`.
 - Report what retrieval did not yield rather than closing the gap from recall.
 
 Required inputs:

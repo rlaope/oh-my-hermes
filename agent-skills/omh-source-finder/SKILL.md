@@ -13,11 +13,11 @@ metadata:
 
 # Source Finder
 
-This is an OMH `omh-source-finder` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `source-finder` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-source-finder` exists so Hermes can turn vague source discovery requests into typed candidates, acquisition status, and downstream workflow choice without pretending OMH searched, downloaded, or verified the material.
+`source-finder` exists so Hermes can turn vague source discovery requests into typed candidates, acquisition status, and downstream workflow choice without pretending OMH searched, downloaded, or verified the material.
 
 ## First Steps
 
@@ -110,7 +110,7 @@ Safety rules:
 
 - Do not claim web search, download, repository clone, file extraction, file hash verification, license verification, or source correctness from a prepared candidate.
 - Do not define a source inbox; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.
-- Route current citations and source-backed synthesis to `ulw-research`, supplied-paper explanation to `omh-paper-learning`, file export to `omh-materials-package`, and image cards to `omh-image-cards`.
+- Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `omh-paper-learning`, file export to `omh-materials-package`, and image cards to `omh-image-cards`.
 
 ## Runtime Evidence
 

@@ -121,7 +121,7 @@ Safety rules:
 
 - Do not claim web search, download, repository clone, file extraction, file hash verification, license verification, or source correctness from a prepared candidate.
 - Do not redefine research-department's source_inbox/v1; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.
-- Route current citations and source-backed synthesis to `ulw-research`, supplied-paper explanation to `omh-paper-learning`, recurring monitoring to `omh-research-department`, file export to `omh-materials-package`, and image cards to `omh-image-cards`.
+- Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `omh-paper-learning`, recurring monitoring to `omh-research-department`, file export to `omh-materials-package`, and image cards to `omh-image-cards`.
 
 ## Runtime Evidence
 

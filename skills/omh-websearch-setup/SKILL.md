@@ -92,7 +92,7 @@ Run diagnosis and guidance directly in Hermes for web search setup. Diagnosis re
 
 Required inputs:
 
-- the Hermes config `web` section (`omh-backend`, `search_backend`, `extract_backend`, `provider_tier`, `keyless_fallback`) as non-secret metadata; an absent key is the Hermes default
+- the Hermes config `web` section (`backend`, `search_backend`, `extract_backend`, `provider_tier`, `keyless_fallback`) as non-secret metadata; an absent key is the Hermes default
 - the backend names `hermes tools` lists under Web Search & Extract
 - provider API key availability; value through secure entry or user-side setup only
 

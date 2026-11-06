@@ -13,11 +13,11 @@ metadata:
 
 # Agent Instructions
 
-This is an OMH `omh-agent-instructions` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+This is an OMH `agent-instructions` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
 
 ## Why This Exists
 
-`omh-agent-instructions` exists because the file every handoff target reads first had no owner: `omh-rules-distill` extracts rule candidates, `omh-codebase-onboarding` builds a human reading path, and `ulw-context` aligns terminology, and each reads that file without writing it.
+`agent-instructions` exists because the file every handoff target reads first had no owner: `omh-rules-distill` extracts rule candidates, `omh-codebase-onboarding` builds a human reading path, and `context` aligns terminology, and each reads that file without writing it.
 
 ## First Steps
 
