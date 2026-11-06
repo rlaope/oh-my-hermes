@@ -3710,6 +3710,21 @@ message through.
 
 Only senders Hermes authorizes are gated; everyone else is left to Hermes.
 
+How this relates to Hermes' own Slack options:
+
+- `ignore_other_user_mentions` already skips a message that opens with
+  someone else's @mention, which is the same as R1 above. If that is all you
+  want, turning it on is enough.
+- `thread_require_mention` and `strict_mention` make the bot wait for a
+  mention, so they also silence the bot on your own follow-ups that do not
+  mention it.
+- `thread_followup_silence` only lets a `[SILENT]` reply the model chose
+  stand.
+
+Hermes has no quiet-word mute and does not notice a message that calls
+someone else by name; those are what this gate adds. Name calls (R2) are
+checked only when `messenger_other_names` is set.
+
 The word lists cover English, Korean, Japanese, Simplified and Traditional
 Chinese, Spanish, French, German, Portuguese, Russian and Vietnamese, and are
 all checked whatever language the profile uses. They are closed data in
