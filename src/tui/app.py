@@ -199,7 +199,11 @@ from .keys import (
     Paste,
     list_nav_step,
 )
-from .launch import CLOSED_EXIT, PICK_SESSION_ENV, SESSION_FILE_ENV, request_fallback
+from .generation_watch import GenerationWatch, watch_for
+from .launch import (
+    CLOSED_EXIT, PICK_SESSION_ENV, RELAUNCH_EXIT, RELAUNCH_FILE_ENV, SESSION_FILE_ENV, UPDATED_ENV, UPDATED_PLAIN,
+    UPDATED_PLAN, request_fallback, request_relaunch,
+)
 from .agent_view import AGENT_STEER_LEFT_UNANSWERED_NOTICE, STEER_SAY, TAIL_ANSWER_SECONDS, AgentViewMixin
 from .aura import aura_ranges
 from .layout import Budget, choice_cap, is_tiny, slot_cap
@@ -650,6 +654,27 @@ LAUNCH_KEPT_NOTICE = "Launch look {name}, kept in {path}."
 UPDATE_NOTICE = "v{latest} available"
 UPDATE_NOTICE_HOW = " · omh update"
 UPDATE_NOTICE_SHORT = "↑ v{latest}"  # what stays beside the version once the line narrows
+# `omh update` installed another OMH generation under this TUI (`generation_watch`): the info line says so until it
+# restarts, and the slot asks once, between turns, whether to restart now on it (`_offer_restart_when_due`). The
+# answer defaults to not now. Restart leaves with `RELAUNCH_EXIT` once no turn runs and nothing typed waits, and
+# `omh` opens the installed generation's TUI on the same session (`_relaunch_when_due`).
+RESTART_TO_UPDATE = "restart to update"
+UPDATE_RESTART_QUESTION = "OMH updated to {label}. Restart the TUI now to use it? This session reopens."
+UPDATE_LATER_CHOICE = "Not now"
+UPDATE_RESTART_CHOICE = "Restart the TUI"
+UPDATE_LATER_NOTICE = "This TUI keeps running the OMH it started with. To use {label}, {how}."
+UPDATE_LATER_HOW = "quit and run `{command}`"
+UPDATE_LATER_HOW_PLAIN = "quit and open the OMH TUI again"
+RELAUNCH_AFTER_TURN = "The TUI restarts on {label} once this turn ends."
+RELAUNCH_AFTER_GATEWAY = "The TUI restarts on {label} once Hermes' gateway is back."
+RELAUNCH_AFTER_DRAFT = "The TUI restarts on {label} once what you typed is sent or cleared."
+RELAUNCH_AFTER_WAIT = "The TUI restarts on {label} once the work this session waits on ends."
+RELAUNCH_CANCELLED = "OMH went back to the version this TUI runs, so it does not restart."
+RELAUNCH_FAILED = "The TUI could not ask omh to restart it. To use {label}, quit and run `{command}`."
+RELAUNCH_FAREWELL = "omh: restarting the OMH TUI on {label}…"
+# In a TUI `omh` relaunched for an update (`UPDATED_ENV`) whose shared gateway still runs the old OMH plugin code:
+# the line above `/gateway restart`'s own question, which is asked once, with nothing chosen by default.
+GATEWAY_UPDATE_LEAD = "OMH updated, but Hermes' gateway still runs the OMH plugin code it started with."
 WHATS_NEW_NONE_NOTICE = "There is no What's new written for v{version}."
 WALLPAPER_KEPT_NOTICE = "Living wallpaper {state}, kept in {path}."
 WALLPAPER_SESSION_NOTICE = "Living wallpaper {state} for this session; there is no OMH home to keep it in."
@@ -2128,7 +2153,7 @@ class App(ModesMixin, AgentViewMixin):
         self.context_max: float | None = None
         # What the info line shows (`mode`): accept while Hermes has approvals off, the TUI's own plan flag.
         self.approvals_off = False
-        self.plan_mode = False
+        self.plan_mode = environ.get(UPDATED_ENV) == UPDATED_PLAN  # a TUI left in plan mode for an update's restart
         self.yolo_by_tui = False  # the approvals off shown are the TUI's own confirmed `on`, not Hermes' own
         self.hermes_approvals_said = False  # HERMES_APPROVALS_NOTICE was shown in this session
         self.effort = ""  # the reasoning effort the info line shows; "" shows none
@@ -2283,6 +2308,16 @@ class App(ModesMixin, AgentViewMixin):
         # what asks.
         self.update_check: UpdateCheck | None = None
         self.fetch_latest = fetch_latest
+        # The installed OMH generation (`generation_watch`), read from this process's own venv at its start; None off
+        # an installer generation. `installed` is the generation `current` names when it is not this TUI's own, with
+        # its label; the slot asks about it once (`update_asked`), and a Restart picked waits in `relaunch_label`
+        # until no turn runs (`relaunch_said`: the hold last said).
+        self.generation_watch: GenerationWatch | None = watch_for(sys.prefix)
+        self.installed = ""
+        self.installed_label = ""
+        self.update_asked = ""
+        self.relaunch_label = ""
+        self.relaunch_said = ""
         # Hermes' skills, regrouped for the card: the last launch's (last-known) from startup, the session's once
         # `session.info` says.
         self.session_skills: Skills | None = None
@@ -2417,6 +2452,8 @@ class App(ModesMixin, AgentViewMixin):
             self._draw_history(result.get("messages"))
         self._say_gateway_health()  # under a resumed session's history, where the launch's screen ends
         self._redeliver(result.get("open_requests"))
+        if self.environ.get(UPDATED_ENV) in (UPDATED_PLAIN, UPDATED_PLAN):
+            self._offer_gateway_after_update()
         if resume:
             self._offer_resume_continue(result)
         if pick:
@@ -2500,7 +2537,11 @@ class App(ModesMixin, AgentViewMixin):
 
     def _update_notice(self) -> tuple[Line, ...]:
         """While a newer release is known, the info line's update notice, longest first: `v4.0.5 available · omh
-        update` (the warning colour, then the hint's), then `↑ v4.0.5` (the warning colour)."""
+        update` (the warning colour, then the hint's), then `↑ v4.0.5` (the warning colour). Once `omh update`
+        installed another generation under this TUI, `restart to update` in its place: what npm has is not news then.
+        """
+        if self.installed:
+            return ((Span(RESTART_TO_UPDATE, self.theme.warn),),)
         latest = self.update_check.latest if self.update_check is not None else ""
         if not latest:
             return ()
@@ -2863,6 +2904,11 @@ class App(ModesMixin, AgentViewMixin):
         self._take_hud()
         self._take_board()
         self._take_update_check()
+        self._watch_generation()
+        self._offer_restart_when_due()
+        self._relaunch_when_due()
+        if self.exit_code is not None:
+            return
         self._take_thread_fault()
         self._render_when_due()
 
@@ -3516,14 +3562,127 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_notice(STEER_LOST_NOTICE.format(count=steers, s="" if steers == 1 else "s"), NOTICE_WARN)
         self._settle_switch_held()
 
+    # ── a restart onto the generation `omh update` installed ──
+
+    def _watch_generation(self) -> None:
+        """Read the installed generation when due (`GenerationWatch.poll`): another than this TUI's own is named on the
+        info line and asked about once; its own again (an update rolled back) clears both, and a restart picked for
+        the other one does not happen."""
+        watch = self.generation_watch
+        if watch is None:
+            return
+        name = watch.poll(self.clock())
+        if name is None:
+            return
+        self.dirty = True
+        if name == watch.running:
+            if self.relaunch_label:
+                self.transcript.add_notice(RELAUNCH_CANCELLED)
+            self.installed = self.installed_label = self.relaunch_label = self.relaunch_said = ""
+            return
+        self.installed, self.installed_label = name, watch.label(name)
+        if self.relaunch_label:  # the restart picked goes onto the generation installed now
+            self.relaunch_label = self.installed_label
+
+    def _offer_restart_when_due(self) -> None:
+        """Ask once per installed generation whether to restart on it, only when a restart could go at once
+        (`_relaunch_hold`): the question never lands in a turn, on another question, or under what is being typed. A
+        TUI `omh` cannot relaunch (`RELAUNCH_FILE_ENV` unset) only shows the info line's hint."""
+        if not self.installed or self.update_asked == self.installed or self.relaunch_label:
+            return
+        if not self.environ.get(RELAUNCH_FILE_ENV) or self.exit_code is not None:
+            return
+        if self._relaunch_hold() is not None:
+            return
+        self.update_asked = asked = self.installed
+        label = self.installed_label
+
+        def decided(choice: str) -> None:
+            if self.installed != asked:  # the pointer moved while this was open: a newer one is asked about in turn
+                if choice == UPDATE_RESTART_CHOICE and not self.installed:
+                    self.transcript.add_notice(RELAUNCH_CANCELLED)
+                return
+            if choice == UPDATE_RESTART_CHOICE:
+                self.relaunch_label = self.installed_label
+                return
+            command = self._omh_resume_command()
+            how = UPDATE_LATER_HOW.format(command=command) if command else UPDATE_LATER_HOW_PLAIN
+            self.transcript.add_notice(UPDATE_LATER_NOTICE.format(how=how, label=label))
+
+        self._ask_locally(UPDATE_RESTART_QUESTION.format(label=label), (UPDATE_LATER_CHOICE, UPDATE_RESTART_CHOICE),
+                          decided)
+
+    def _relaunch_hold(self) -> str | None:
+        """Why a restart waits, as a notice to say once ("" to wait without one: another question is open, a session
+        switch that may move the id the restart resumes is out, or the person reads a pager or picks from a list);
+        None when it can go now.
+
+        A turn counts from before it starts: the `continue` the TUI is about to send (`auto_continue`), Hermes' queued
+        redirect (`hermes_next_due`), and a `/compress` that may rotate the session. What runs between turns counts
+        too: what the session waits on, which wakes it (`_pending_wait`), a `!` line or a slash command whose answer
+        is out, and a `/bg` or `/btw` task, whose answer the gateway sends only to the view that asked."""
+        if self._busy() or self.auto_continue is not None or self.hermes_next_due is not None \
+                or self._compressing_since() is not None:
+            return RELAUNCH_AFTER_TURN
+        if self.gateway_restart is not None or self.respawn_reason:
+            return RELAUNCH_AFTER_GATEWAY
+        if self.slot is not None or self._switching() or self.pager is not None or self.chains_open or any(
+                (self.picker, self.model_picker, self.launch_picker, self.rewind_picker)):
+            return ""
+        if self._pending_wait() is not None or any(call.command is not None for call in self.pending.values()) \
+                or self.sid in self.side_tasks.values():
+            return RELAUNCH_AFTER_WAIT
+        if self._auto_continue_held():  # a draft, a steer or a rewind open, a queued line, a held submit
+            return RELAUNCH_AFTER_DRAFT
+        return None
+
+    def _relaunch_when_due(self) -> None:
+        """Leave with `RELAUNCH_EXIT` for the restart picked, once nothing holds it (`_relaunch_hold`), after creating
+        the file that makes the 78 a request (`request_relaunch`); `omh` then opens the installed generation's TUI on
+        this session. A file that cannot be created ends nothing and says how to restart by hand."""
+        if not self.relaunch_label or self.exit_code is not None:
+            return
+        hold = self._relaunch_hold()
+        if hold is not None:
+            if hold and hold != self.relaunch_said:
+                self.relaunch_said = hold
+                self.transcript.add_notice(hold.format(label=self.relaunch_label))
+                self.dirty = True
+            return
+        label, self.relaunch_label = self.relaunch_label, ""
+        if not request_relaunch(self.environ, plan_mode=self.plan_mode):
+            command = self._omh_resume_command() or "omh"
+            self.transcript.add_notice(RELAUNCH_FAILED.format(command=command, label=label), NOTICE_WARN)
+            self.dirty = True
+            return
+        self.farewell = RELAUNCH_FAREWELL.format(label=label)
+        self.exit_code = RELAUNCH_EXIT
+
+    def _offer_gateway_after_update(self) -> None:
+        """In a TUI `omh` relaunched for an update (`UPDATED_ENV`): when the shared gateway it attached to has not
+        loaded the OMH plugin bundle installed now (`stale_bundle_version`, the hint's own evidence), `/gateway
+        restart`'s question, once, with Cancel first. A gateway of the TUI's own (Hermes' stdio entry) started with
+        this TUI and runs the new code already; a gateway with no live record is not offered."""
+        if not self.shared_gateway or not self.stored_id:
+            return
+        from ..maintenance.hermes_gateway import stale_bundle_version
+
+        impact = self.read_restart_impact(self.environ, self.launch_profile)
+        if impact.home is None or stale_bundle_version(impact.home) is None:
+            return
+        self._gateway_command(GATEWAY_RESTART_ARG, offered=True)
+
     # ── /gateway restart ──
 
-    def _gateway_command(self, arg: str) -> None:
+    def _gateway_command(self, arg: str, *, offered: bool = False) -> None:
         """`/gateway restart`: ask, naming what the restart interrupts, then run Hermes' own restart and reattach.
         `/gateway` with anything else is Hermes' (its alias of `/platforms`), sent as typed.
 
         A named profile the shared gateway serves is asked which restart: Hermes' own for the profile, which only
-        re-serves it inside the shared process, or the whole gateway (`-p default`), the one that loads new code."""
+        re-serves it inside the shared process, or the whole gateway (`-p default`), the one that loads new code.
+
+        `offered`: the TUI asks after an update (`_offer_gateway_after_update`), not the person: a line says why, and
+        Cancel comes first, so the answer defaults to no restart."""
         if arg.strip().lower() != GATEWAY_RESTART_ARG:
             self._route_slash(SlashInvocation("gateway", arg, None), 0)
             return
@@ -3542,6 +3701,8 @@ class App(ModesMixin, AgentViewMixin):
         alone = GATEWAY_PROFILE_CHOICE.format(profile=profile) if profile else ""
         choices = (alone, GATEWAY_WHOLE_CHOICE, GATEWAY_CANCEL_CHOICE) if profile else (
             GATEWAY_RESTART_CHOICE, GATEWAY_CANCEL_CHOICE)
+        if offered:
+            choices = (GATEWAY_CANCEL_CHOICE, *choices[:-1])
 
         def decided(choice: str) -> None:
             if profile and choice == alone:
@@ -3552,7 +3713,8 @@ class App(ModesMixin, AgentViewMixin):
             else:
                 self.transcript.add_notice(GATEWAY_RESTART_CANCELLED)
 
-        question = "\n".join([*impact_lines(impact, self._busy()), GATEWAY_RESTART_QUESTION])
+        lead = [GATEWAY_UPDATE_LEAD] if offered else []
+        question = "\n".join([*lead, *impact_lines(impact, self._busy()), GATEWAY_RESTART_QUESTION])
         self._ask_locally(question, choices, decided)
 
     def _start_gateway_restart(self, impact: RestartImpact, target: str, command: str, alone: str) -> None:

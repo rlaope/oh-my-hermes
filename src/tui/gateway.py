@@ -227,14 +227,14 @@ class GatewayClient:
         self,
         spawn: GatewaySpawn,
         *,
-        popen: Callable[..., Any] = subprocess.Popen,
+        popen: Callable[..., Any] | None = None,
         clock: Callable[[], float] = time.monotonic,
         first_id: int = 1,
     ) -> None:
         """`first_id` is the first request id this client sends: a client that replaces one whose calls are still
         waiting starts past their ids, so no answer to it is ever read as an answer to them."""
         self._spawn = spawn
-        self._popen = popen
+        self._popen = subprocess.Popen if popen is None else popen  # read now: an import-time default would keep a patch
         self._clock = clock
         self._process: Any = None
         self._readers: list[tuple[threading.Thread, IO[bytes]]] = []

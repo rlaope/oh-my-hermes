@@ -35,6 +35,14 @@ marker, so `omh` can name that session once the TUI exits
 removes it before `omh` gets control back. A session the person closes then
 exits `CLOSED_EXIT` instead of 0, so Hermes prints no epilogue of its own and
 `omh` prints its card in its place, returning 0 to the shell.
+
+An `omh` that runs from an installer generation also names a relaunch marker
+(`RELAUNCH_FILE_ENV`). When `omh update` installs another generation under
+the running TUI and the person picks Restart, the TUI creates that file and
+exits `RELAUNCH_EXIT`; `omh` then opens the installed generation's own
+`omh --resume <session>` in its place (`commands.bare_launch`), with
+`UPDATED_ENV` set so that TUI offers `/gateway restart` once when the shared
+gateway still runs the old OMH plugin code.
 """
 
 from __future__ import annotations
@@ -76,6 +84,21 @@ SESSION_FILE_BYTES = 16384
 CLOSED_EXIT = 77
 # How much of the TUI's reason the marker keeps (`request_fallback`).
 FALLBACK_REASON_BYTES = 4096
+# What the TUI exits with when the person asked it to restart on the OMH generation `omh update` installed under
+# it (`request_relaunch`): `omh` then starts the installed generation's `omh --resume <session>` in its place.
+# Not 0/1/2/130, not 42 (Hermes relaunches as `hermes update`), not `FALLBACK_EXIT` or `CLOSED_EXIT`, below the
+# 128 + signal range, and passed on by Hermes' launcher as it is (no epilogue: it prints one for 0 and 130 only).
+RELAUNCH_EXIT = 78
+# The file that makes a `RELAUNCH_EXIT` a relaunch request, in the same private directory, as `FALLBACK_SENTINEL_ENV`
+# makes a 75 a fallback: a 78 from anything else is an exit code. A TUI whose environment names none (one `omh`
+# did not launch) cannot be relaunched and does not offer it.
+RELAUNCH_FILE_ENV = "OMH_TUI_RELAUNCH_FILE"
+# Set to "1" in the relaunched `omh`'s environment: the TUI it opens started for an update, so when the shared
+# gateway it attaches to still runs the old OMH plugin code it offers `/gateway restart` once.
+UPDATED_ENV = "OMH_TUI_UPDATED"
+# Its value and the marker's content when the TUI left in plan mode, which only the TUI knows (a prompt goes as `/plan`).
+UPDATED_PLAN = "plan"
+UPDATED_PLAIN = "1"
 # Windows opens a descriptor in text mode unless told otherwise, which rewrites line ends and stops at Ctrl+Z.
 _BINARY = getattr(os, "O_BINARY", 0)
 # The directory the TUI's interpreter imports `omh` from when its own path
@@ -155,7 +178,7 @@ def omh_import_root() -> str:
 
 def omh_tui_environment(
     environ: Mapping[str, str], *, python: str, site: str, omh_home: Path, fallback_sentinel: Path,
-    session_file: Path, pick_session: bool = False,
+    session_file: Path, pick_session: bool = False, relaunch_file: Path | None = None,
 ) -> dict[str, str]:
     """The environment `hermes --tui` runs with when it should start the OMH TUI.
 
@@ -164,7 +187,8 @@ def omh_tui_environment(
     config names) across the three processes in between, which do not see
     `omh`'s own arguments. `SITE_ENV` is set over any inherited value.
     `PICK_SESSION_ENV` is set only for `pick_session` (a bare `omh --resume`),
-    and an inherited one is dropped otherwise.
+    and an inherited one is dropped otherwise. `RELAUNCH_FILE_ENV` likewise:
+    only a launch that can relaunch the TUI names one.
     """
     env = dict(environ)
     env["HERMES_TUI_DIR"] = str(FRONTEND_DIR)
@@ -176,6 +200,9 @@ def omh_tui_environment(
     env.pop(PICK_SESSION_ENV, None)
     if pick_session:
         env[PICK_SESSION_ENV] = "1"
+    env.pop(RELAUNCH_FILE_ENV, None)
+    if relaunch_file is not None:
+        env[RELAUNCH_FILE_ENV] = str(relaunch_file)
     return env
 
 
@@ -256,6 +283,39 @@ def request_fallback(environ: Mapping[str, str], reason: str = "") -> int:
         finally:
             os.close(descriptor)
     return FALLBACK_EXIT
+
+
+def relaunch_requested(returncode: int, marker: Path) -> bool:
+    """Whether the TUI asked `omh` to start the installed generation in its place: `RELAUNCH_EXIT` and the file."""
+    return returncode == RELAUNCH_EXIT and os.path.lexists(marker)
+
+
+def relaunch_updated_value(marker: Path) -> str:
+    """What `UPDATED_ENV` says in the relaunched `omh`: what the marker holds (`request_relaunch`)."""
+    try:
+        return UPDATED_PLAN if marker.read_bytes() == UPDATED_PLAN.encode() else UPDATED_PLAIN
+    except OSError:
+        return UPDATED_PLAIN
+
+
+def request_relaunch(environ: Mapping[str, str], *, plan_mode: bool = False) -> bool:
+    """Create the file named in `RELAUNCH_FILE_ENV`, holding `UPDATED_PLAN` for a TUI in plan mode and empty otherwise;
+    whether it now exists, so the TUI may exit `RELAUNCH_EXIT`. False when the environment names none or it cannot be
+    written: then a 78 would only end the session, and the TUI does not leave for it."""
+    path = environ.get(RELAUNCH_FILE_ENV, "")
+    if not path:
+        return False
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | _BINARY | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags, 0o600)
+        try:
+            if plan_mode:
+                os.write(descriptor, UPDATED_PLAN.encode())
+        finally:
+            os.close(descriptor)
+    except OSError:
+        return False
+    return True
 
 
 def fallback_reason(sentinel: Path) -> list[str]:

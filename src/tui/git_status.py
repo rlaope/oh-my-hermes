@@ -56,15 +56,16 @@ def parse_status(text: str) -> GitState | None:
 
 def read_status(
     cwd: str,
-    popen: Callable[..., subprocess.Popen[str]] = subprocess.Popen,
+    popen: Callable[..., subprocess.Popen[str]] | None = None,
     started: Callable[[subprocess.Popen[str] | None], None] = lambda process: None,
 ) -> GitState | None:
     """One read in `cwd`; None for anything but a clean answer from git (see the module docstring). `started` is
     handed the running git, then None once it is done, so a watcher that stops can kill it."""
     try:
         # A ref or a path that is not UTF-8 (an unborn `caf\xe9`, core.quotePath=false) reads as U+FFFD, not a crash.
-        process = popen(list(ARGV), cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, encoding="utf-8", errors="replace")
+        process = (subprocess.Popen if popen is None else popen)(
+            list(ARGV), cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            encoding="utf-8", errors="replace")
     except (OSError, ValueError, subprocess.SubprocessError):
         return None
     started(process)

@@ -292,8 +292,10 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
     "src/commands/bare_launch.py": (
         "bare `omh` with a tty -- the operator's own launch of `hermes` (as `hermes --tui` "
         "with the OMH frontend when it can run, otherwise Hermes' own `hermes --tui`, or plain "
-        "`hermes` without Node), the same launch as typing it themselves; never reached from any "
-        "prepared-handoff path."
+        "`hermes` without Node), the same launch as typing it themselves; and, only after the person "
+        "picked Restart in that TUI's own question once `omh update` installed another generation under "
+        "it, one `<installer root>/current/venv/bin/python -P -m omh.cli [homes, profile] [--resume <id>]` "
+        "that opens the TUI again on the installed generation. Never reached from any prepared-handoff path."
     ),
     "src/tui/gateway.py": (
         "the OMH TUI's single gateway child: Hermes' own `tui_gateway`, spawned with the interpreter "
@@ -330,8 +332,12 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
         "prepared-handoff path."
     ),
     "src/commands/setup.py": (
-        "`omh setup` / `omh update` -- pip self-update, CLI re-entry after update, and the "
-        "opt-in GitHub star (see GH_INVOCATION_EXCEPTIONS in INVARIANT 3)."
+        "`omh setup` / `omh update` -- pip self-update, CLI re-entry after update, the "
+        "opt-in GitHub star (see GH_INVOCATION_EXCEPTIONS in INVARIANT 3), and after an activated update "
+        "in the process the person started, only on their yes at a terminal or an explicit "
+        "`--restart-gateway`: the person's `hermes -p <profile> gateway restart --yes --detach` for each "
+        "running gateway still on the old OMH plugin code (`commands/update_gateway.py` builds the argv), "
+        "in a session of its own with no stdin."
     ),
     "src/quality/cross_harness_adapter_sandbox.py": (
         "sandboxed child process for the cross-harness benchmark lane."

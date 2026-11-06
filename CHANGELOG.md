@@ -480,6 +480,28 @@ All notable changes will be documented here.
   not change; release wheels still name versions only. `omh update --json`
   carries the same facts as `identity_change`. EN, KO, JA and ZH rows. No new
   network call: the commit is read from the archive pip already downloads.
+- **After `omh update`, the open OMH TUI and the running gateway each offer a
+  restart, and nothing restarts on its own.** An OMH TUI started by `omh`
+  from the installer-managed environment reads the `current` generation
+  pointer at most every 5 s, with no network call. Once an update has finished
+  moving it, it shows `restart to update` on the info line and asks once, between turns:
+  `OMH updated to 4.0.6 main@1a2b3c4d. Restart the TUI now to use it?`. Not
+  now comes first. Restart the TUI waits for the running turn, for a turn
+  about to start, for what the session waits on or still has out, and for what
+  you typed, then exits for `omh` to open the new generation's `omh --resume <id>` on the same
+  session. If the shared gateway still runs
+  the old OMH plugin code, that TUI then offers the existing
+  `/gateway restart` once, with Cancel first. At the end of an activated
+  update on a terminal, `omh update` names what each stale running gateway's
+  restart interrupts, then asks `Restart the Hermes gateway now so the new
+  OMH plugin code loads?`, defaulting to no; yes runs Hermes' own
+  `hermes -p <profile> gateway restart --yes --detach`. `--restart-gateway`
+  and `--no-restart-gateway` decide without asking. With `--json`,
+  `--no-interactive`, `--yes`, off a terminal, and in a re-entered update,
+  nothing is asked. A restart that was asked for and failed exits 4. Both
+  start with the update after the one that installs this: the question runs
+  in the `omh update` you started and in the TUI's own generation, and both
+  are the previous version during that first update.
 - **`--channel main` names the channel that tracks `main`.** It is another
   spelling of `--channel preview`, which a plain installer-managed
   `omh update` already uses. The re-entry into a restored, older generation

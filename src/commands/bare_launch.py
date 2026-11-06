@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
 import time
@@ -429,12 +430,89 @@ def _launch_hermes_tui(args: argparse.Namespace) -> int | None:
     paths = _paths(args)
     started_at = time.time()
     closed: list[tuple[str, str, tuple[str, ...]]] = []
+    relaunch: list[tuple[Path, str]] = []
+    # What runs after the TUI exits, imported now: `sys.path` may go through `current`, which an update can move
+    # under the TUI, and an import after that would load the new generation's files beside this one's.
+    from ..install import generation_hold, self_update  # noqa: F401
+    from ..maintenance import hermes_resume  # noqa: F401
+
     try:
-        returncode = _run_terminal(hermes, args, paths, closed)
+        returncode = _run_terminal(hermes, args, paths, closed, relaunch)
     except (OSError, KeyboardInterrupt):
         return None
+    if relaunch:
+        # The TUI asked to restart on the generation `omh update` installed under it: that one prints the card.
+        generation, updated = relaunch[0]
+        return _relaunch_installed(args, generation, closed[0] if closed else ("", "", ()), updated)
     _print_exit_card(args, paths, started_at, time.time(), returncode, closed[0] if closed else ("", "", ()))
     return returncode
+
+
+def _installer_generation() -> Path | None:
+    """The generation this `omh` runs from (`<root>/generations/<name>`), read before the TUI starts: `sys.prefix` may
+    go through `current`, which an update moves. None for a checkout, pip, or the npm and Bun launcher, which have no
+    `current` pointer to relaunch through."""
+    from ..install.generation_hold import generation_of
+
+    return generation_of(Path(sys.prefix))
+
+
+def _relaunch_argv(args: argparse.Namespace, closed: tuple[str, str, tuple[str, ...]]) -> list[str]:
+    """The bare launch that reopens the session the TUI left for an update: this launch's homes, scope and profile,
+    then `--resume <id>`; no `--resume` when nothing was said in it (Hermes keeps no such session to reopen) or the
+    TUI recorded none, so a new session opens as at the first launch. `--continue` is not carried: the id is."""
+    argv: list[str] = []
+    for value, flag in ((args.omh_home, "--omh-home"), (args.hermes_home, "--hermes-home"),
+                        (getattr(args, "scope", None), "--scope"), (getattr(args, "tui_profile", None), "--profile")):
+        if value:
+            argv += [flag, str(value)]
+    session_id, hermes_home, _earlier = closed
+    if session_id and not _nothing_said(Path(hermes_home) / "state.db", session_id, args):
+        argv += ["--resume", session_id]
+    return argv
+
+
+def _nothing_said(db_path: Path, session_id: str, args: argparse.Namespace) -> bool:
+    """Whether Hermes' state database says the session has no messages; False when it cannot tell."""
+    from ..maintenance.hermes_resume import NOTHING_SAID_LINE, exit_card_lines
+
+    try:
+        return exit_card_lines(db_path, session_id, getattr(args, "tui_profile", None) or None) == [NOTHING_SAID_LINE]
+    except (OSError, ValueError):
+        return False
+
+
+def _relaunch_installed(args: argparse.Namespace, generation: Path, closed: tuple[str, str, tuple[str, ...]],
+                        updated: str = "1") -> int:
+    """Open the OMH TUI again on the generation `<root>/current` names, as `omh --resume <id>` would, and return its
+    exit code. `generation` is the one this `omh` runs from. It runs as `python -P -m omh.cli` on the current one
+    (`self_update.current_omh_cli`), with `UPDATED_ENV` set so its TUI offers `/gateway restart` once when the shared
+    gateway still runs the old OMH plugin code. It is waited on as the first launch's child is: SIGHUP and SIGTERM end
+    this `omh`, and Ctrl+C, which the new one reads itself, does not end the wait. This `omh` waits for a whole session
+    on its own generation's files, so it goes on holding that one, by path: its `sys.prefix` may now resolve to the new
+    one. `updated` is the value `UPDATED_ENV` carries (`relaunch_updated_value`). A new OMH that ended in failure
+    leaves the person the way back to the session, since it may be a generation that cannot run."""
+    from ..install.generation_hold import hold_running_generation
+    from ..install.self_update import current_omh_cli
+    from ..tui.launch import UPDATED_ENV, exit_on_signals
+
+    command = current_omh_cli(generation.parent.parent, *_relaunch_argv(args, closed))
+    again = f"omh --resume {closed[0]}" if closed[0] else "omh"
+    try:
+        with exit_on_signals(), hold_running_generation(str(generation / "venv")):
+            child = subprocess.Popen(command, env={**os.environ, UPDATED_ENV: updated})
+            while True:
+                try:
+                    code = int(child.wait())
+                    break
+                except KeyboardInterrupt:
+                    continue
+    except OSError as error:
+        print(f"omh: could not start the installed OMH ({error}); run `{again}`.", file=sys.stderr)
+        return 1
+    if code not in (0, 130):
+        print(f"omh: the installed OMH exited {code}; run `{again}` to open the session again.", file=sys.stderr)
+    return code
 
 
 def _omh_tui_blocker(paths) -> str:
@@ -479,12 +557,21 @@ def _node_available(paths) -> bool:
 
 
 def _run_terminal(
-    hermes: str, args: argparse.Namespace, paths, closed: list[tuple[str, str, tuple[str, ...]]] | None = None
+    hermes: str, args: argparse.Namespace, paths, closed: list[tuple[str, str, tuple[str, ...]]] | None = None,
+    relaunch: list[tuple[Path, str]] | None = None,
 ) -> int:
     """Run the OMH TUI through `hermes --tui`, or Hermes' own terminal when it cannot start.
 
     `closed`, when given, receives the session the OMH TUI had open as it
     exited (`closed_session`), read before its private directory goes.
+
+    `relaunch`, when given and this `omh` runs from an installer generation,
+    lets the TUI ask to be opened again on the generation `omh update`
+    installed under it: the launch names a marker file
+    (`RELAUNCH_FILE_ENV`), and `RELAUNCH_EXIT` with that file appends this
+    `omh`'s generation and what the file holds (`relaunch_updated_value`) to
+    `relaunch` for the caller (`_relaunch_installed`). A 78 without the file
+    is an exit code like any other.
 
     `CLOSED_EXIT` is the OMH TUI saying the person closed the session; it is
     returned as 0, after Hermes' launcher has skipped its own epilogue for it.
@@ -511,6 +598,8 @@ def _run_terminal(
         fallback_sentinel,
         omh_import_root,
         omh_tui_environment,
+        relaunch_requested,
+        relaunch_updated_value,
     )
 
     from ..install.generation_hold import hold_running_generation
@@ -523,7 +612,9 @@ def _run_terminal(
         # gap: a SIGTERM sent to `omh` alone ends this block (and the hold)
         # while the child runs on, as described above; waiting for the child
         # there would make `omh` ignore that SIGTERM.
+        generation = _installer_generation() if relaunch is not None else None
         with exit_on_signals(), fallback_sentinel() as sentinel, hold_running_generation():
+            marker = sentinel.with_name("relaunch")
             environment = omh_tui_environment(
                 {**os.environ, "HERMES_HOME": str(paths.hermes_home)},
                 python=sys.executable,
@@ -532,10 +623,13 @@ def _run_terminal(
                 fallback_sentinel=sentinel,
                 session_file=sentinel.with_name("session"),
                 pick_session=getattr(args, "tui_resume", None) == "",
+                relaunch_file=marker if generation is not None else None,
             )
             child = subprocess.Popen([hermes, *_hermes_passthrough_argv(args, tui=True)], env=environment)
             returncode = int(child.wait())
             fell_back = fallback_requested(returncode, sentinel)
+            if generation is not None and relaunch is not None and relaunch_requested(returncode, marker):
+                relaunch.append((generation, relaunch_updated_value(marker)))
             said = fallback_reason(sentinel) if fell_back else []
             if closed is not None and not fell_back:
                 closed.append(closed_session(sentinel.with_name("session")))

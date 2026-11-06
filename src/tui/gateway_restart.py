@@ -126,7 +126,7 @@ class RestartRun:
     """One `hermes gateway restart` in flight: `result()` is None until it ended, then what it ended with."""
 
     def __init__(
-        self, spawn: GatewaySpawn, wake: Callable[[], None], *, popen: Callable[..., Any] = subprocess.Popen,
+        self, spawn: GatewaySpawn, wake: Callable[[], None], *, popen: Callable[..., Any] | None = None,
     ) -> None:
         self._result: RestartResult | None = None
         self._lock = threading.Lock()
@@ -137,7 +137,7 @@ class RestartRun:
             self._result = RestartResult(None, (), f"no temporary file for its output ({error})")
             return
         try:
-            process = popen(
+            process = (subprocess.Popen if popen is None else popen)(
                 list(spawn.argv), cwd=spawn.cwd, env=spawn.env, stdin=subprocess.DEVNULL, stdout=output,
                 stderr=subprocess.STDOUT, start_new_session=True,
             )

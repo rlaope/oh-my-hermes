@@ -31,8 +31,9 @@ HOLD_ATTEMPTS = 20
 HOLD_RETRY_SECONDS = 0.05
 
 
-def _generation_of(prefix: Path) -> Path | None:
-    """The generation whose venv is `prefix`, through the `current` pointer too."""
+def generation_of(prefix: Path) -> Path | None:
+    """The generation whose venv is `prefix`, through the `current` pointer too: the one the pointer names when
+    this is called, so a long-running process reads its own once, at its start."""
     try:
         venv = prefix.expanduser().resolve()
     except OSError:
@@ -54,7 +55,7 @@ def hold_running_generation(prefix: str | None = None) -> Iterator[str]:
     from an installer generation (a source checkout, pip, npm) or the hold
     could not be taken; the block runs either way.
     """
-    generation = _generation_of(Path(prefix or sys.prefix))
+    generation = generation_of(Path(prefix or sys.prefix))
     if generation is None:
         yield ""
         return

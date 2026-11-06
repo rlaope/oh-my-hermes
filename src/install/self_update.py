@@ -146,6 +146,12 @@ def _omh_cli(python: str, *arguments: str) -> list[str]:
     return [python, "-P", "-m", "omh.cli", *arguments]
 
 
+def current_omh_cli(root: Path, *arguments: str, platform: SelfUpdatePlatform | None = None) -> list[str]:
+    """`python -P -m omh.cli ...` on the generation `<root>/current` names now: how a process started on an older
+    generation hands over to the one an update installed (bare `omh` relaunching its TUI after one)."""
+    return _omh_cli(_python(root / "current", platform or SelfUpdatePlatform.host()), *arguments)
+
+
 def _run(runner: Runner, command: list[str], *, env: dict[str, str] | None = None, timeout: float | None = None, capture: bool = True) -> subprocess.CompletedProcess[str]:
     return runner(command, text=True, stdout=subprocess.PIPE if capture else None, stderr=subprocess.PIPE if capture else None, env=env, timeout=timeout)
 
@@ -192,10 +198,20 @@ def _smoke(candidate: Path, expected_version: str, *, runner: Runner, platform: 
 
 
 
+# The gateway restart after an update is the started process's alone (`commands/update_gateway.py`), and a restored,
+# older generation does not know those flags, so no re-entry carries them.
+OUTER_ONLY_FLAGS = frozenset({"--recover-known-good", "--restart-gateway", "--no-restart-gateway"})
+
+
+def names_flag(item: str, flags: frozenset[str]) -> bool:
+    """Whether a command-line word is one of `flags`, or the abbreviation of one that argparse accepted."""
+    return item.startswith("--") and len(item) > 2 and any(flag.startswith(item) for flag in flags)
+
+
 def _reentry_argv() -> list[str]:
     argv: list[str] = []
     for item in sys.argv[1:]:
-        if item == "--recover-known-good":
+        if names_flag(item, OUTER_ONLY_FLAGS):
             continue
         # `--channel main` is an alias a restored, older generation may not know.
         if item == "--channel=main" or (item == "main" and argv[-1:] == ["--channel"]):
@@ -223,6 +239,13 @@ def generation_identity(generation: Path) -> GenerationIdentity:
         archive = read_archive_commit(package, version=version)
         return {"version": version, "ref": archive["ref"] or "", "commit_sha": archive["commit_sha"] or ""}
     return {"version": "", "ref": "", "commit_sha": ""}
+
+
+def identity_label(identity: GenerationIdentity) -> str:
+    """`4.0.5 main@1a2b3c4d`: the version and archive commit a generation records; "" when it records neither."""
+    short = identity["commit_sha"][:8]
+    commit = f"{identity['ref']}@{short}" if identity["ref"] and short else short
+    return " ".join(part for part in (identity["version"], commit) if part)
 
 
 def identity_change(previous: GenerationIdentity, current: GenerationIdentity) -> IdentityChange:

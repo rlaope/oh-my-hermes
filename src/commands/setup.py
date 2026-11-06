@@ -664,7 +664,7 @@ def cmd_update(args: argparse.Namespace) -> int:
                 print(f"  {line}")
             for hint in restart_hints or ():
                 print(f"  {hint}")
-    return code
+    return _offer_gateway_restart(args, code)
 
 
 def _skill_refresh_lines(rows: list[dict[str, str]]) -> list[str]:
@@ -1632,6 +1632,9 @@ def _self_update_target_label(plan: dict[str, object]) -> str:
 
 
 def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, object]) -> int:
+    # Imported before the update changes the files under this process: the gateway question runs after it.
+    from . import update_gateway  # noqa: F401
+
     if plan.get("method") == "package_manager":
         return _run_package_manager_self_update(args, plan)
     # Installer-owned packages are never mutated in place.  The transaction
@@ -1664,7 +1667,40 @@ def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, o
                 print(f"  {line}")
     if not result.get("ok"):
         return 1
-    return PROFILE_REPAIR_EXIT_CODE if profiles_need_repair else 0
+    return _offer_gateway_restart(args, PROFILE_REPAIR_EXIT_CODE if profiles_need_repair else 0)
+
+
+def _offer_gateway_restart(args: argparse.Namespace, code: int) -> int:
+    """After an update in the process the person started: ask about, or restart, each running Hermes gateway still on
+    the old OMH plugin code (`update_gateway`); the exit code to return."""
+    from .update_gateway import NO_DESCRIPTION, SKIP, YES_DESCRIPTION, restart_after_update, restart_mode
+
+    if not hasattr(args, "omh_home"):
+        return code
+    to_stderr = _wants_json(args)  # stdout holds the JSON payload, printed already
+    mode = restart_mode(args, terminal=_stdin_is_tty() and sys.stdout.isatty() and not to_stderr, environ=os.environ)
+    if mode == SKIP:
+        return code
+
+    def say(line: str) -> None:
+        print(line, file=sys.stderr if to_stderr else sys.stdout, flush=True)
+
+    def ask(question: str) -> bool:
+        try:
+            return _ask_yes_no(question, default=False, use_color=_use_color(), language=_resolve_language(args),
+                               yes_description=YES_DESCRIPTION, no_description=NO_DESCRIPTION)
+        except KeyboardInterrupt:  # Ctrl+C at the question is a no: the update has finished and stays
+            print()
+            return False
+
+    def run(argv: list[str], env: dict[str, str]) -> int:
+        # Its own session: a Ctrl+C here ends the wait, never Hermes' restart half done.
+        child = subprocess.Popen(argv, env=env, stdin=subprocess.DEVNULL, stdout=sys.stderr if to_stderr else None,
+                                 start_new_session=True)
+        return int(child.wait())
+
+    return restart_after_update(code, _paths(args).hermes_home, mode=mode, ask=ask, run=run,
+                                hermes=shutil.which("hermes"), environ=os.environ, say=say)
 
 
 def _managed_root_from_plan(plan: dict[str, object]) -> Path | None:
@@ -1674,14 +1710,11 @@ def _managed_root_from_plan(plan: dict[str, object]) -> Path | None:
 
 def _generation_label(root: Path | None, name: str) -> str:
     """`name (4.0.5 main@1a2b3c4d)`, or the bare name when the generation records nothing."""
-    from ..install.self_update import generation_identity
+    from ..install.self_update import generation_identity, identity_label
 
     if root is None or not name:
         return name
-    identity = generation_identity(root / "generations" / name)
-    short = identity["commit_sha"][:8]
-    commit = f"{identity['ref']}@{short}" if identity["ref"] and short else short
-    described = " ".join(part for part in (identity["version"], commit) if part)
+    described = identity_label(generation_identity(root / "generations" / name))
     return f"{name} ({described})" if described else name
 
 
@@ -1787,7 +1820,7 @@ def _run_package_manager_self_update(
     env = dict(os.environ)
     env[SELF_UPDATE_REENTRY_ENV] = "1"
     rerun = subprocess.run([*reentry_command, *argv], env=env)
-    return int(rerun.returncode)
+    return _offer_gateway_restart(args, int(rerun.returncode))
 
 
 def _validated_command_package_launcher(
@@ -1892,7 +1925,10 @@ def _bounded_command_error(value: str, *, limit: int = 2_000) -> str:
 
 
 def _reentry_argv_with_command_package_updated() -> list[str]:
-    argv = list(sys.argv[1:])
+    from ..install.self_update import names_flag
+    from .update_gateway import RESTART_FLAGS
+
+    argv = [item for item in sys.argv[1:] if not names_flag(item, RESTART_FLAGS)]  # the started process's alone
     if "--command-package-updated" not in argv:
         argv.append("--command-package-updated")
     return argv
@@ -4629,14 +4665,19 @@ def _ask_update_check_choice(args: argparse.Namespace, paths: OmhPaths, language
     print(tr(language, "update_check_recorded", mode=mode))
 
 
-def _ask_yes_no(prompt: str, *, default: bool, use_color: bool, note: str = "", language: str = "en") -> bool:
+def _ask_yes_no(
+    prompt: str, *, default: bool, use_color: bool, note: str = "", language: str = "en", yes_description: str = "",
+    no_description: str = "",
+) -> bool:
     if _keyboard_menu_available():
         value = _ask_single_choice(
             prompt,
             [note] if note else [],
             [
-                {"choice": "1", "value": "yes", "label": tr(language, "yes"), "description": tr(language, "yes_desc")},
-                {"choice": "2", "value": "no", "label": tr(language, "no"), "description": tr(language, "no_desc")},
+                {"choice": "1", "value": "yes", "label": tr(language, "yes"),
+                 "description": yes_description or tr(language, "yes_desc")},
+                {"choice": "2", "value": "no", "label": tr(language, "no"),
+                 "description": no_description or tr(language, "no_desc")},
             ],
             default_choice="1" if default else "2",
             use_color=use_color,
@@ -6911,9 +6952,27 @@ def _add_top_level_commands(sub) -> None:
     update = sub.add_parser("update", help="Refresh OMH from a preview, stable, local, or explicit package source.")
     _add_common_install_options(update)
     update.add_argument("--json", action="store_true", help="Print the full machine-readable update payload.")
-    update.add_argument("--yes", action="store_true", help="Accepted for compatibility; update asks nothing.")
-    update.add_argument("--interactive", action="store_true", help="Accepted for compatibility; update asks nothing.")
-    update.add_argument("--no-interactive", action="store_true", help="Accepted for compatibility; update asks nothing.")
+    update.add_argument("--yes", action="store_true", help="Ask nothing, the gateway restart question included.")
+    update.add_argument("--interactive", action="store_true", help="Accepted for compatibility.")
+    update.add_argument("--no-interactive", action="store_true", help="Ask nothing, the gateway restart question included.")
+    restart = update.add_mutually_exclusive_group()
+    restart.add_argument(
+        "--restart-gateway",
+        dest="restart_gateway",
+        action="store_true",
+        default=None,
+        help=(
+            "After the update, restart each running Hermes gateway still on the old OMH plugin code without asking "
+            "(it interrupts what that gateway runs). Without this flag a terminal is asked, defaulting to no."
+        ),
+    )
+    restart.add_argument(
+        "--no-restart-gateway",
+        dest="restart_gateway",
+        action="store_false",
+        default=None,
+        help="After the update, neither ask about nor restart a Hermes gateway.",
+    )
     update.add_argument("--recover-known-good", action="store_true", help="Atomically restore the retained known-good installer generation.")
     update.add_argument(
         "--no-omh-tui",

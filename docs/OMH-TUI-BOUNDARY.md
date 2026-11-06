@@ -262,6 +262,7 @@ file `omh` named in `OMH_TUI_SESSION_FILE`, in `omh`'s private 0700 launch
 directory (opened `O_NOFOLLOW`, mode 0600), holding the open session's id, the
 Hermes home it runs on and the ids of the sessions this launch had open
 before, which `omh` reads for its exit card and removes with the directory;
+the relaunch marker beside it, when the person picked a restart after an update;
 and what OMH's own HUD reader
 and model-chain picker already write under the OMH home (the HUD fan-out cache
 and its lock, and the chains `/omh-model` saves), and a fallback marker at the
@@ -334,11 +335,11 @@ pane's id after the pane closed.
 
 ## Restarting Hermes' gateway
 
-`/gateway restart`, and only that typed by the person, restarts Hermes'
-gateway (`src/tui/gateway_restart.py`, in INVARIANT 1's
-`PROCESS_SPAWN_ALLOWLIST`); `/gateway` with anything else goes to Hermes as
-typed. It is offered only attached to a shared gateway, with a session to
-reattach to. It first asks in the slot, naming what the gateway's record
+`/gateway restart`, typed by the person or offered once after an update (see
+Restarting after `omh update`), restarts Hermes' gateway
+(`src/tui/gateway_restart.py`, in INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`);
+`/gateway` with anything else goes to Hermes as typed. It is offered only
+attached to a shared gateway, with a session to reattach to. It first asks in the slot, naming what the gateway's record
 (`gateway_state.json`, read as the bot board reads it) says the restart
 affects: the profiles it serves, the messenger platforms connected to it, the
 work it runs (turns and cron jobs), and this session's own turn. For a gateway
@@ -374,6 +375,40 @@ otherwise Hermes' own last lines are shown. It says the gateway now runs the
 newer OMH only when the gateway's recorded start had preceded the plugin
 bundle's install before the restart and no longer does after it. A failure
 says Hermes' words and the command to run instead.
+
+## Restarting after `omh update`
+
+`omh update` moves `<installer root>/current` and leaves a running TUI on the
+generation it started from. A TUI that runs from an installer generation reads
+that link at most every 5 s (`src/tui/generation_watch.py`: one `readlink`; once
+it differs, also the update's state file; no network call, nothing written). A
+move counts only once that file names the generation active: the pointer moves
+before the update has finished, and a failed update moves it back and deletes
+that generation. Then the info line says `restart to update`, and a TUI `omh`
+launched asks once, in the slot, with Not now first, and only when a restart
+could go at once. The same check holds the question and a Restart already
+picked: a running turn, one about to start (the TUI's own `continue`, Hermes'
+queued redirect), a `/compress`, a session switch, what the session waits on
+between turns (background processes that wake it, delegated children), a `!`
+line or a slash command still out, a `/bg` or `/btw` answer still out, Hermes'
+gateway restarting, another open question, an open pager or picker, and what the
+person typed or queued. A pointer that moves back cancels a Restart still
+waiting.
+
+The TUI restarts nothing itself. It creates the marker `omh` named
+(`RELAUNCH_FILE_ENV`, in `omh`'s private launch directory, opened `O_NOFOLLOW`,
+mode 0600, holding `plan` in plan mode and otherwise empty) and exits
+`RELAUNCH_EXIT` through its normal shutdown, so the terminal is handed back as
+at any exit. Plan mode carries over; yolo the TUI set goes off, as at any exit. The `omh` waiting on it then starts
+`<installer root>/current/venv/.../python -P -m omh.cli` with its own homes,
+scope and profile and `--resume <id>` (`src/commands/bare_launch.py`, in
+INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`), and holds its own generation until
+that exits. A 78 without the marker is an ordinary exit code. A new TUI is not
+told to restart again: the generation it runs is the one `current` names.
+`UPDATED_ENV` in that launch makes the new TUI offer `/gateway restart` once,
+with Cancel first, when the shared gateway still runs older OMH plugin code. It
+never restarts the gateway without the person's pick. Each such restart leaves
+one waiting `omh` holding its generation until the session ends.
 
 ## Job control, and what OMH does not do
 
