@@ -33,6 +33,8 @@ from .workflow_composition import (
 
 
 SCHEMA_VERSION = "hermes_plan/v1"
+INPUT_SCHEMA_VERSION = "hermes_plan_input/v1"
+REVIEWED_BODY_MAX_BYTES = 262144
 WRAPPER_CONTRACT_VERSION = "hermes_plan_wrapper/v1"
 PLAN_STATUSES = ("draft", "accepted", "revised", "cancelled", "superseded", "blocked")
 _REVIEW_TERMS = (
@@ -223,22 +225,51 @@ def build_hermes_plan_event_payload(
     )
 
 
-def write_hermes_plan(paths: OmhPaths, payload: dict[str, object]) -> dict[str, object]:
-    """Write the file-backed plan artifact into OMH's store for this repository."""
+def validate_reviewed_body(body: str) -> str:
+    """The reviewed plan text a caller wants recorded, or ValueError."""
+    text = body.replace("\r\n", "\n").strip()
+    if not text:
+        raise ValueError("--plan-file is empty: nothing reviewed to record")
+    if len(text.encode("utf-8")) > REVIEWED_BODY_MAX_BYTES:
+        raise ValueError(f"--plan-file is larger than {REVIEWED_BODY_MAX_BYTES} bytes")
+    return text
+
+
+def write_hermes_plan(
+    paths: OmhPaths,
+    payload: dict[str, object],
+    *,
+    reviewed_body: str | None = None,
+    input_bundle: bool = False,
+) -> dict[str, object]:
+    """Write the file-backed plan artifact into OMH's store for this repository.
+
+    With `reviewed_body` the caller's reviewed plan replaces the canned
+    scaffold sections, and the front matter says `plan_body: reviewed`. With
+    `input_bundle` the body is recorded as planning input (`hermes_plan_input/v1`),
+    which `plan-accept` refuses because it is not a plan.
+    """
     plan = payload.get("plan")
     if not isinstance(plan, dict):
         raise ValueError("hermes plan payload is missing plan")
+    if input_bundle and reviewed_body is None:
+        raise ValueError("--input-bundle needs --plan-file")
     slug = _slugify(str(plan.get("task_statement", "plan")))
     plans_dir = project_artifact_dir(paths, "plans")
     ensure_project_store_ignored(plans_dir)
-    path = _unique_artifact_path(plans_dir, slug, ".md")
-    content = render_plan_markdown(payload, path.name)
+    if input_bundle:
+        path = _unique_artifact_path(plans_dir, f"{slug}-bundle", ".md")
+        content = render_plan_input_markdown(payload, str(reviewed_body), path.name)
+    else:
+        path = _unique_artifact_path(plans_dir, slug, ".md")
+        content = render_plan_markdown(payload, path.name, reviewed_body=reviewed_body)
     atomic_write_text(path, content, private=True)
     artifact: dict[str, object] = {
         "path": str(path),
-        "kind": "hermes_plan",
-        "schema_version": SCHEMA_VERSION,
-        "status": plan.get("status", "draft"),
+        "kind": "hermes_plan_input" if input_bundle else "hermes_plan",
+        "schema_version": INPUT_SCHEMA_VERSION if input_bundle else SCHEMA_VERSION,
+        "status": "input" if input_bundle else plan.get("status", "draft"),
+        "plan_body": "input" if input_bundle else ("reviewed" if reviewed_body is not None else "scaffold"),
     }
     if plan.get("status") == "blocked":
         context_path = _unique_artifact_path(
@@ -257,7 +288,10 @@ def write_hermes_plan(paths: OmhPaths, payload: dict[str, object]) -> dict[str, 
                 "source": "hermes_plan",
                 "plan_artifact": str(path),
                 "plan_status": str(artifact["status"]),
-                "summary": "Hermes file-backed plan artifact was created.",
+                "summary": {
+                    "reviewed": "Hermes file-backed plan artifact was created with a reviewed plan body.",
+                    "input": "Hermes planning input bundle was recorded; it is not a plan.",
+                }.get(str(artifact["plan_body"]), "Hermes file-backed plan artifact was created from the scaffold, with no reviewed body."),
             },
         )
     except (OSError, ValueError) as exc:
@@ -300,6 +334,7 @@ def read_hermes_plan_artifact(path: str | Path) -> dict[str, object]:
         "body": body,
         "text": text,
         "frontmatter": frontmatter,
+        "plan_body": str(frontmatter.get("plan_body", "scaffold")),
     }
 
 
@@ -326,6 +361,13 @@ def update_hermes_plan_status(
         "cancelled": "plan_cancelled",
     }.get(status, "plan_artifact_created")
     result: dict[str, object] = {"artifact": _plan_artifact_summary(artifact)}
+    scaffold_only = status == "accepted" and artifact.get("plan_body") != "reviewed"
+    if scaffold_only:
+        result["say"] = (
+            "This plan file holds only the generated scaffold, not a reviewed plan. "
+            "Accepting it accepts the scaffold; record the reviewed plan with --plan-file first."
+        )
+        result["reviewed_body"] = False
     try:
         result["journal_event"] = append_observation_event(
             paths,
@@ -337,7 +379,12 @@ def update_hermes_plan_status(
                 "source": "hermes_plan",
                 "plan_artifact": str(plan_path),
                 "plan_status": status,
-                "summary": summary or f"Hermes plan marked {status}.",
+                "summary": summary
+                or (
+                    "Hermes plan marked accepted, but it holds only the generated scaffold."
+                    if scaffold_only
+                    else f"Hermes plan marked {status}."
+                ),
             },
         )
     except (OSError, ValueError) as exc:
@@ -425,7 +472,12 @@ def write_plan_handoff_context_pack(
     return {"path": str(path), "context_pack": pack}
 
 
-def render_plan_markdown(payload: dict[str, object], artifact_name: str = "plan.md") -> str:
+def render_plan_markdown(
+    payload: dict[str, object],
+    artifact_name: str = "plan.md",
+    *,
+    reviewed_body: str | None = None,
+) -> str:
     plan = payload.get("plan")
     if not isinstance(plan, dict):
         raise ValueError("hermes plan payload is missing plan")
@@ -441,6 +493,7 @@ def render_plan_markdown(payload: dict[str, object], artifact_name: str = "plan.
         f"schema_version: {SCHEMA_VERSION}",
         f"status: {plan.get('status', 'draft')}",
         f"source: {payload.get('source', 'generic')}",
+        f"plan_body: {'scaffold' if reviewed_body is None else 'reviewed'}",
         "review_gate:",
         f"  architect: {review_gate.get('architect', 'not_observed')}",
         f"  critic: {review_gate.get('critic', 'not_observed')}",
@@ -463,58 +516,11 @@ def render_plan_markdown(payload: dict[str, object], artifact_name: str = "plan.
             "",
             str(plan.get("task_statement", "")).strip(),
             "",
-            "## Clarified Assumptions",
-            "",
-            *_markdown_list(plan.get("clarified_assumptions", [])),
-            "",
-            "## Goals",
-            "",
-            *_markdown_list(plan.get("goals", [])),
-            "",
-            "## Non-Goals",
-            "",
-            *_markdown_list(plan.get("non_goals", [])),
-            "",
-            "## Decision Drivers",
-            "",
-            *_markdown_list(plan.get("decision_drivers", [])),
-            "",
-            "## Quality Gate",
-            "",
-            *_quality_gate_lines(plan.get("quality_gate", {})),
-            "",
-            "## Deep Interview",
-            "",
-            *_deep_interview_lines(plan.get("deep_interview", {})),
-            "",
-            "## Viable Options",
-            "",
-            *_option_lines(plan.get("options", [])),
-            "",
-            "## Chosen Direction",
-            "",
-            str(plan.get("chosen_direction", "")).strip(),
-            "",
-            "## Rejection Rationale",
-            "",
-            *_markdown_list(plan.get("rejection_rationale", [])),
-            "",
-            "## Risks",
-            "",
-            *_markdown_list(plan.get("risks", [])),
-            "",
-            "## Mitigations",
-            "",
-            *_markdown_list(plan.get("mitigations", [])),
-            "",
-            "## Acceptance Criteria",
-            "",
-            *_markdown_list(plan.get("acceptance_criteria", [])),
-            "",
-            "## Verification Plan",
-            "",
-            *_markdown_list(plan.get("verification_plan", [])),
-            "",
+            *(
+                ["## Reviewed Plan", "", validate_reviewed_body(reviewed_body), ""]
+                if reviewed_body is not None
+                else _scaffold_section_lines(plan)
+            ),
             *_composed_workflow_lines(payload.get("workflow_composition")),
             "## Execution Handoff",
             "",
@@ -532,6 +538,95 @@ def render_plan_markdown(payload: dict[str, object], artifact_name: str = "plan.
         ]
     )
     return "\n".join(lines)
+
+
+def _scaffold_section_lines(plan: dict[str, object]) -> list[str]:
+    """The canned sections of a plan recorded without a reviewed body."""
+    return [
+        "## Clarified Assumptions",
+        "",
+        *_markdown_list(plan.get("clarified_assumptions", [])),
+        "",
+        "## Goals",
+        "",
+        *_markdown_list(plan.get("goals", [])),
+        "",
+        "## Non-Goals",
+        "",
+        *_markdown_list(plan.get("non_goals", [])),
+        "",
+        "## Decision Drivers",
+        "",
+        *_markdown_list(plan.get("decision_drivers", [])),
+        "",
+        "## Quality Gate",
+        "",
+        *_quality_gate_lines(plan.get("quality_gate", {})),
+        "",
+        "## Deep Interview",
+        "",
+        *_deep_interview_lines(plan.get("deep_interview", {})),
+        "",
+        "## Viable Options",
+        "",
+        *_option_lines(plan.get("options", [])),
+        "",
+        "## Chosen Direction",
+        "",
+        str(plan.get("chosen_direction", "")).strip(),
+        "",
+        "## Rejection Rationale",
+        "",
+        *_markdown_list(plan.get("rejection_rationale", [])),
+        "",
+        "## Risks",
+        "",
+        *_markdown_list(plan.get("risks", [])),
+        "",
+        "## Mitigations",
+        "",
+        *_markdown_list(plan.get("mitigations", [])),
+        "",
+        "## Acceptance Criteria",
+        "",
+        *_markdown_list(plan.get("acceptance_criteria", [])),
+        "",
+        "## Verification Plan",
+        "",
+        *_markdown_list(plan.get("verification_plan", [])),
+        "",
+    ]
+
+
+def render_plan_input_markdown(payload: dict[str, object], body: str, artifact_name: str) -> str:
+    """A planning input bundle: recorded beside the plans, never acceptable as one."""
+    plan = payload.get("plan")
+    if not isinstance(plan, dict):
+        raise ValueError("hermes plan payload is missing plan")
+    return "\n".join(
+        [
+            "---",
+            f"schema_version: {INPUT_SCHEMA_VERSION}",
+            "status: input",
+            f"source: {payload.get('source', 'generic')}",
+            "---",
+            "",
+            f"# Planning Input: {plan.get('task_statement', 'Untitled task')}",
+            "",
+            f"Artifact: `{artifact_name}`",
+            "",
+            "INPUT TO PLANNING, NOT A PLAN. A planner consumes this; it has no acceptance criteria, order or owner.",
+            "",
+            "## Task Statement",
+            "",
+            str(plan.get("task_statement", "")).strip(),
+            "",
+            "## Bundle",
+            "",
+            validate_reviewed_body(body),
+            "",
+        ]
+    )
 
 
 def render_context_markdown(payload: dict[str, object], artifact_name: str = "context.md") -> str:
@@ -695,6 +790,7 @@ def _plan_artifact_summary(artifact: dict[str, object]) -> dict[str, object]:
         "sha256": artifact.get("sha256", ""),
         "task_statement_sha256": artifact.get("task_statement_sha256", ""),
         "task_statement_length": artifact.get("task_statement_length", 0),
+        "plan_body": artifact.get("plan_body", "scaffold"),
     }
 
 

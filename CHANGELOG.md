@@ -277,6 +277,18 @@ All notable changes will be documented here.
   is. Briefings are not part of the session Hermes stores, so a resumed or
   rewound session is drawn without them. The rows erase on a scene look's ground
   and keep every mark and word under `NO_COLOR`. The messenger is unchanged.
+- **`omh hermes plan --record` can now record the reviewed plan, and
+  `plan-accept` says when it accepted only a scaffold.** Until now the
+  recorded file held the same generated goals, options and risks whatever the
+  plan was; the reviewed text stayed in chat, and accepting the file
+  accepted the scaffold. `--plan-file <path>` records that text in place of
+  the generated sections (`plan_body: reviewed`). Recording without it still
+  works and now says it recorded the scaffold only; accepting such a file
+  returns `reviewed_body: false` and a line to relay. `--input-bundle`
+  records a consensus bundle as `hermes_plan_input/v1`, planning input that
+  `plan-accept` refuses. `ulw-plan`, `omh-plan` and `omh-adversarial-consensus`
+  now use these. This round is one owner goal split into two pull requests so
+  each rolls back alone; this one carries the command change.
 - **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
   on.** With that setting each delegated child works in a git worktree of its
   own, made from the parent's last commit, so a dependent node and the verify

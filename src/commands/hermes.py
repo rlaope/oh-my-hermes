@@ -11,6 +11,7 @@ from ..hermes_planning import (
     build_hermes_plan_payload,
     read_hermes_plan_artifact,
     update_hermes_plan_status,
+    validate_reviewed_body,
     write_hermes_plan,
     write_plan_handoff_context_pack,
 )
@@ -68,10 +69,26 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
             limit=args.limit,
             source_metadata=source_metadata,
         )
+        plan_file = getattr(args, "plan_file", "")
+        input_bundle = bool(getattr(args, "input_bundle", False))
+        if (plan_file or input_bundle) and not args.record:
+            raise ValueError("--plan-file and --input-bundle need --record")
+        if input_bundle and not plan_file:
+            raise ValueError("--input-bundle needs --plan-file")
+        reviewed_body = None
+        if plan_file:
+            reviewed_body = validate_reviewed_body(Path(plan_file).expanduser().read_text(encoding="utf-8"))
         if args.record:
-            artifact = write_hermes_plan(_paths(args), payload)
+            artifact = write_hermes_plan(
+                _paths(args), payload, reviewed_body=reviewed_body, input_bundle=input_bundle
+            )
             payload["artifact"] = artifact
             attach_plan_artifact_to_wrapper_contract(payload, artifact)
+            if reviewed_body is None:
+                payload["say"] = (
+                    "Recorded the generated scaffold only; the reviewed plan is not in the file. "
+                    "Re-run with --plan-file <reviewed-plan.md> to record it."
+                )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     _print_json(payload)
@@ -86,7 +103,7 @@ def _maybe_handle_plan_lifecycle_alias(args: argparse.Namespace) -> dict[str, ob
     looks_like_path = path.exists() or words[1].endswith(".md") or "/" in words[1]
     if not looks_like_path:
         return None
-    if args.stdin or args.event_json or args.record:
+    if args.stdin or args.event_json or args.record or getattr(args, "plan_file", ""):
         raise ValueError("omh hermes plan accept/revise/cancel cannot be combined with --stdin, --event-json, or --record")
     status_by_action = {"accept": "accepted", "revise": "revised", "cancel": "cancelled"}
     return update_hermes_plan_status(_paths(args), path, status=status_by_action[words[0]])
@@ -319,6 +336,17 @@ def _add_hermes_commands(sub) -> None:
         "--record",
         action="store_true",
         help="Write the plan under <repo>/.omh/plans, or the OMH home when outside a repository.",
+    )
+    plan.add_argument(
+        "--plan-file",
+        default="",
+        metavar="PATH",
+        help="With --record: the reviewed plan (Markdown) to record in place of the generated sections.",
+    )
+    plan.add_argument(
+        "--input-bundle",
+        action="store_true",
+        help="With --record --plan-file: record the file as planning input (hermes_plan_input/v1), which plan-accept refuses.",
     )
     plan.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     plan.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")

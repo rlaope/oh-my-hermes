@@ -7386,7 +7386,12 @@ _DEFINITIONS = [
         handoff_policy="Keep planning in Hermes; if the accepted plan requires code edits, prepare a selected executor/runtime handoff after acceptance, and start a follow-on workflow engine only after the user explicitly confirms the recommended path.",
         required_inputs=("requirements", "constraints", "known facts", "non-goals"),
         expected_outputs=("plan", "acceptance criteria", "verification strategy"),
-        artifact_expectations=("plan artifact when durable execution will follow",),
+        artifact_expectations=(
+            PortableLine(
+                "plan artifact when durable execution will follow, recorded with `omh hermes plan --record --plan-file <reviewed-plan.md>` and accepted with `omh hermes plan-accept <path>` only after the user's answer",
+                "plan artifact when durable execution will follow",
+            ),
+        ),
         quality_tier="acceptance-gated",
         quality_bar=(
             "Make goals, non-goals, risks, acceptance criteria, and verification shape explicit.",
@@ -7466,8 +7471,8 @@ _DEFINITIONS = [
         # no path and no command, so no plan file was ever produced and the
         # planning harness rungs below had nothing to record.
         artifact_expectations=(
-            "record the plan with `omh hermes plan --record`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one",
-            "mark acceptance with `omh hermes plan-accept <path>` so acceptance_recorded and handoff_ready point at a real artifact",
+            "write the reviewed plan (options, rejected alternatives, risks, `Success criteria` table, target-state coverage, lanes in node-prompt shape) to a Markdown file, then record it with `omh hermes plan --record --plan-file <file> \"<task>\"`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one; without `--plan-file` the file holds only a generated scaffold, and its `say` field tells you so",
+            "mark acceptance with `omh hermes plan-accept <path>` only for a file recorded with `--plan-file` (front matter `plan_body: reviewed`), so acceptance_recorded and handoff_ready point at the reviewed plan; accepting a scaffold-only file returns `reviewed_body: false` and is not a reviewed plan",
         ),
         safety_rules=(
             "Do not implement directly from the planning lane.",
@@ -7475,7 +7480,7 @@ _DEFINITIONS = [
             "Make acceptance criteria testable.",
             "Record unresolved tradeoffs explicitly.",
             "Keep rejected options and handoff readiness separate from accepted execution evidence.",
-            "Write plan artifacts only through the named `omh hermes plan` commands under `<repo>/.omh/plans/`; never write plans or planning state into `.omc/**` or any other wrapper's state root — `.omc/` belongs to oh-my-claudecode, a different product.",
+            "Record plan artifacts only through the named `omh hermes plan` commands (the reviewed text goes in through `--plan-file`, not by editing the recorded file) under `<repo>/.omh/plans/`; never write plans or planning state into `.omc/**` or any other wrapper's state root — `.omc/` belongs to oh-my-claudecode, a different product.",
         ),
         quality_tier="reviewed-plan-gated",
         quality_bar=(
@@ -7579,8 +7584,8 @@ _DEFINITIONS = [
             ),
         },
         portable_override_shadows={
-            "artifact_expectations": "a8eb07c3491b92fb1f72dc0bbd8bd5da29398f9b8aa6cae9b64b2b2c5aa3bae6",
-            "safety_rules": "72126c765975b034ab683d27aa0349dbe84c564e45f29832f2b8424a1b3d28cc",
+            "artifact_expectations": "77d5a67495610773acd9105ba6ccdb7ae84e6c4da6ce35f00937d96520092aa3",
+            "safety_rules": "da7d45f616a86bdbcddd220ab3e4768f29770f898d106e144012d60ae5f34fa2",
             "opening_steps": "f839a5ee9ecaca2834a76d29b601f18e03ca292e0abc0b2af5c92274b5fa4c7e",
             "quality_bar": "f5ffeed8483244fd0c5f9ed2e606ffe5b7871c20906c0208cf1bc683b38e0fa9",
             "why_this_exists": "7c8d4e7c04114ed3e5fa532095f54cbd4f36aa5333d34f873c40d516f27c29e1",
@@ -7627,7 +7632,7 @@ _DEFINITIONS = [
             "mandatory planner handoff naming the follow-on planning workflow",
         ),
         artifact_expectations=(
-            "record the distilled bundle with `omh hermes plan --record`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one, so the planner pass consumes a file rather than scrollback",
+            "record the distilled bundle with `omh hermes plan --record --plan-file <bundle.md> --input-bundle \"<proposal>\"`, which writes it as `hermes_plan_input/v1` (planning input, marked INPUT TO PLANNING, NOT A PLAN) beside the plans, and which `omh hermes plan-accept` refuses; never record it without `--input-bundle`, because that stores a draft plan scaffold with canned goals and options",
         ),
         safety_rules=(
             "Do not write the plan here. This workflow produces the input a planner consumes, never the plan itself.",
@@ -7702,7 +7707,7 @@ _DEFINITIONS = [
             ),
         },
         portable_override_shadows={
-            "artifact_expectations": "26dd5fe667594b24d4bb5e4fbe7100e55469fd3af5b306bf26bd5fcbd06979ab",
+            "artifact_expectations": "8c722a351320dd38f3c8e3ebb4529e7b07e795ca1ff629e647be16389988c39f",
         },
     ),
     SkillDefinition(
