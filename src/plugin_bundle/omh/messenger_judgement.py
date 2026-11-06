@@ -64,6 +64,8 @@ TURN_TTL_SECONDS = 60 * 60
 _TOKEN_LENGTH_CAP = 64
 _ACKNOWLEDGEMENT_CHARS = 60
 _CODE_OR_LINK_MARKS = frozenset('=`"[]()<>{}')
+# What ends a sentence, read after `_normalized`: NFKC has made ``…`` into ``...`` and fullwidth ``！？`` into ASCII.
+_SENTENCE_ENDS = frozenset(".!?。؟।۔‽")
 _SHUTUP_WHOLE = re.compile(r"\[\s*SHUT[\s_-]*UP\s*\]", re.IGNORECASE)
 _SILENT_WHOLE = re.compile(r"\[\s*SILENT\s*\]", re.IGNORECASE)
 _EXACT_TOKENS = frozenset({SHUTUP_TOKEN, SILENT_TOKEN})
@@ -265,8 +267,9 @@ def reply_marker(text: object) -> str | None:
     """The marker this whole reply is, or None: a real answer is never read as one.
 
     The whole reply is the token once lightly unwrapped, in any case, or it opens with the exact
-    ``[SHUTUP]`` and a brief acknowledgement on one short line. A bare Hermes marker (``SILENT``,
-    ``NO REPLY``) counts only as the whole reply. Any other token is the answer's own text.
+    ``[SHUTUP]`` and a brief acknowledgement on one short line, or every line of it is a token (with
+    any ``[SHUTUP]`` among them, that is the marker). A bare Hermes marker (``SILENT``, ``NO REPLY``)
+    counts only as the whole reply. Any other token is the answer's own text.
     """
     if not isinstance(text, str):
         return None
@@ -277,7 +280,18 @@ def reply_marker(text: object) -> str | None:
         return SHUTUP_TOKEN
     if _SILENT_WHOLE.fullmatch(core) or _hermes_silence(core):
         return SILENT_TOKEN
-    return None
+    return _token_lines_marker(core)
+
+
+def _token_lines_marker(core: str) -> str | None:
+    """The marker a reply of nothing but token lines is, or None. A list of them is shown, not said."""
+    lines = [line for line in core.splitlines() if line.strip()]
+    if any(_LIST_ITEM.match(line) for line in lines):
+        return None
+    tokens = [_unwrapped(line) for line in lines]
+    if not tokens or not all(_SHUTUP_WHOLE.fullmatch(token) or _SILENT_WHOLE.fullmatch(token) for token in tokens):
+        return None
+    return SHUTUP_TOKEN if any(_SHUTUP_WHOLE.fullmatch(token) for token in tokens) else SILENT_TOKEN
 
 
 def _quoted_at(lines: list[str], index: int) -> bool:
@@ -293,15 +307,16 @@ def _quoted_at(lines: list[str], index: int) -> bool:
 def _without_closing_token(line: str) -> str:
     """`line` without an exact token that closes a finished sentence, or `line` as it is.
 
-    The token must follow punctuation that ends a statement: ``The token is [SILENT]`` and
-    ``Answer: [SILENT]`` show the token, and text with code or link marks may too.
+    The token must follow punctuation that ends a sentence (`_SENTENCE_ENDS`): ``The token is [SILENT]``,
+    ``Answer: [SILENT]`` and ``The marker - [SILENT]`` show the token, and text with code or link marks may too.
     """
     stripped = line.rstrip()
     for token in _EXACT_TOKENS:
         if stripped.endswith(" " + token):
             head = stripped[:-len(token)].rstrip()
-            closes = bool(head) and unicodedata.category(head[-1])[0] == "P"
-            shown = _normalized(head).endswith(":") or _LIST_ITEM.match(head) is not None
+            folded = _normalized(head).rstrip()
+            closes = folded[-1:] in _SENTENCE_ENDS
+            shown = folded.endswith(":") or _LIST_ITEM.match(stripped) is not None
             if closes and not shown and not any(mark in head for mark in _CODE_OR_LINK_MARKS):
                 return head
     return line

@@ -121,6 +121,29 @@ class TokenTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertIsNone(judge.reply_marker(text))
 
+    def test_a_reply_of_only_token_lines_is_a_marker(self) -> None:
+        zero_width = chr(0x200b)
+        for text, marker in (
+            ("[SILENT]\n\n[SHUTUP]", judge.SHUTUP_TOKEN),
+            ("[SHUTUP]\n[SHUTUP]", judge.SHUTUP_TOKEN),
+            ("[SHUTUP]\n[SILENT]", judge.SHUTUP_TOKEN),
+            ("`[SILENT]`\n~~[Shut Up]~~", judge.SHUTUP_TOKEN),
+            ("```\n[SILENT]\n[SHUTUP]\n```", judge.SHUTUP_TOKEN),
+            ("［SILENT］\r\n［SHUTUP］", judge.SHUTUP_TOKEN),
+            (zero_width + "[SILENT]\n" + zero_width + "[SHUTUP]", judge.SHUTUP_TOKEN),
+            ("[SILENT]\n[SILENT]", judge.SILENT_TOKEN),
+            ("*[SILENT]*\n\n`[silent]`.", judge.SILENT_TOKEN),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(judge.reply_marker(text), marker)
+
+    def test_lines_that_are_not_all_tokens_are_not_a_marker(self) -> None:
+        for text in ("[SILENT]\n\nHere is the answer", "[SHUTUP]\n\nreal answer", "Here is the answer\n\n[SILENT]",
+                     "[SILENT]\n" + " " * 80 + "\n[SHUTUP]", "- [SILENT]\n- [SHUTUP]", "* [SHUTUP]\n* [SHUTUP]",
+                     "[SILENT]\n```\n[SHUTUP]\n```", "SILENT\nSILENT", "[SILENT]\nSILENT", "[SHUTUP\n[SILENT]"):
+            with self.subTest(text=text):
+                self.assertIsNone(judge.reply_marker(text))
+
     def test_instruction_by_mode_and_address(self) -> None:
         on = judge.instruction("on")
         self.assertIn(judge.SHUTUP_TOKEN, on)
@@ -367,6 +390,19 @@ class ReplyTests(StoreReset):
             ("배포 끝났습니다. [SILENT]", "배포 끝났습니다."),
             ("First line.\nDeployed at 10:30. [SILENT]", "First line.\nDeployed at 10:30."),
             ("fine. [SHUTUP]", "fine."),
+            ("[SHUTUP]\n\nreal answer", "real answer"),
+            ("Done. [SILENT]", "Done."),
+            ("끝났습니다. [SHUTUP]", "끝났습니다."),
+            ("完了。 [SILENT]", "完了。"),
+            ("Done! [SILENT]", "Done!"),
+            ("Really? [SILENT]", "Really?"),
+            ("Wait… [SILENT]", "Wait…"),  # NFKC reads it as `...`; what is delivered keeps it as written
+            ("Done！ [SILENT]", "Done！"),
+            ("Really？ [SILENT]", "Really？"),
+            ("Done‽ [SILENT]", "Done‽"),
+            ("هل انتهى؟ [SILENT]", "هل انتهى؟"),
+            ("काम पूरा हुआ। [SILENT]", "काम पूरा हुआ।"),
+            ("کام ہو گیا۔ [SILENT]", "کام ہو گیا۔"),
         ):
             with self.subTest(text=text[:40]):
                 asyncio.run(self.keep_turn()())
@@ -414,6 +450,14 @@ class ReplyTests(StoreReset):
             "[SILENT] 은 마커입니다.",
             "[SILENT] not for me",
             "[SILENT]\nThis token drops a reply.",
+            "[SILENT]\n\nHere is the answer",
+            "- [SILENT]\n- [SHUTUP]",
+            "The marker - [SILENT]",
+            "One, [SILENT]",
+            "Done; [SILENT]",
+            "Done — [SILENT]",
+            "Done» [SILENT]",
+            "1. [SILENT]",
         ):
             with self.subTest(text=text):
                 asyncio.run(self.keep_turn()())
@@ -423,10 +467,25 @@ class ReplyTests(StoreReset):
         self.assertEqual(gate.read_mutes(self.home / "omh"), {})
         self.assertEqual(gate.read_skips(self.home / "omh"), [])
 
-    def test_two_token_lines_and_nothing_else_stay_silent(self) -> None:
+    def test_token_lines_and_nothing_else_mute_when_one_is_shutup(self) -> None:
+        for text, marker in (("[SILENT]\n\n[SHUTUP]", judge.SHUTUP_TOKEN), ("[SHUTUP]\n[SHUTUP]", judge.SHUTUP_TOKEN),
+                             ("[SHUTUP]\n[SILENT]", judge.SHUTUP_TOKEN), ("[SILENT]\n[SILENT]", judge.SILENT_TOKEN)):
+            with self.subTest(text=text):
+                muted: list[float] = []
+                reacted: list[int] = []
+                logged: list[str] = []
+                judge._turns["t1"] = judge.Room(1.0, "on", lambda tick: muted.append(tick) or True,
+                                                lambda: reacted.append(1), object(),
+                                                log=lambda said, tick: logged.append(said))
+                self.assertEqual(judge.judged_reply("t1", text, now=2.0), (True, judge.SILENT_TOKEN))
+                once = marker == judge.SHUTUP_TOKEN
+                self.assertEqual((muted, reacted, logged), ([2.0] if once else [], [1] if once else [], [marker]))
+
+    def test_token_lines_reach_the_real_mute_and_the_hook_sends_only_silent(self) -> None:
         asyncio.run(self.keep_turn()())
-        self.assertEqual(judge.judged_reply("t1", "[SHUTUP]\n\n[SILENT]"), (True, judge.SILENT_TOKEN))
-        self.assertEqual(gate.read_mutes(self.home / "omh"), {})
+        self.assertEqual(result_transforms.transform_llm_output(response_text="[SILENT]\n\n[SHUTUP]", turn_id="t1"),
+                         judge.SILENT_TOKEN)
+        self.assertEqual(len(gate.read_mutes(self.home / "omh")), 1)
 
     def test_a_round_end_restore_cannot_bring_back_a_marker(self) -> None:
         asyncio.run(self.keep_turn()())
