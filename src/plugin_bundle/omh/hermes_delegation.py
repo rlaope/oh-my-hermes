@@ -1123,7 +1123,7 @@ def load_model_provider_routes(
         raw = _strict_json_loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}, "absent"
-    except (OSError, UnicodeDecodeError, ValueError):
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError):
         return {}, "invalid: unreadable JSON"
     return parse_model_provider_routes(raw)
 

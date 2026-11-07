@@ -1743,6 +1743,26 @@ class ModelChainPickerTests(unittest.TestCase):
         self.assertIn("Model chains", written[0])
         self.assertEqual(list(root.iterdir()), [])
 
+    def test_a_refused_enter_keeps_the_picker_open_and_the_fix_saves_both_rows(self) -> None:
+        # deep is the second row, and + takes its Opus head to xhigh. The ring then
+        # walks onto Gemini 4 Argon, whose list stops at high.
+        from omh.plugin_bundle.omh.model_chain_picker import known_model_aliases
+
+        root = Path(self.enterContext(make_test_tempdir("omh-tui-picker-")))
+        environ = {"OMH_HOME": str(root / "omh"), "HERMES_HOME": str(root / "hermes"), "NO_COLOR": "1"}
+        aliases = known_model_aliases()
+        walk = ["right"] * (aliases.index("gemini-4-argon") - aliases.index("claude-opus-5-5"))
+        keys = iter(["down", "plus", *walk, "up", "plus", "enter", "minus", "enter"])
+        written: list[str] = []
+        message = run_model_chain_picker(
+            environ, DEFAULT_THEME, read_key=lambda: next(keys), write=written.append, width=100
+        )
+        self.assertIn("! deep: xhigh is not on gemini-4-argon's list; −/+ or d", written[-2])
+        self.assertTrue(message.startswith("Saved 2 categories"), message)
+        categories = json.loads((root / "omh" / "routing" / "model-chains.json").read_text(encoding="utf-8"))["categories"]
+        self.assertEqual(categories["ultrabrain"][0], {"model": "gpt-6-astra", "reasoning_effort": "max"})
+        self.assertEqual(categories["deep"][0], {"model": "gemini-4-argon", "reasoning_effort": "high"})
+
 
 FRESH_LIVE_ID = "fresh01"
 FRESH_STORED_ID = "20261013_140000_fresh"

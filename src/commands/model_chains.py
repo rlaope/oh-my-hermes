@@ -36,6 +36,7 @@ from ..coding.data_handling_policy import (
     SENSITIVE_WORK_CHAIN_CLAIM_BOUNDARY,
     data_handling_filtered_chain,
 )
+from ..coding.model_contracts import contract_effort_option
 from ..coding.model_routing import NON_GENERATIVE_MODEL_CLASS, REASONING_EFFORT_LADDER, model_class
 from ..local_store import atomic_write_text
 from ..plugin_bundle.omh.hermes_delegation import (
@@ -60,8 +61,8 @@ from ..plugin_bundle.omh.hermes_delegation import (
     unknown_route_labels,
 )
 from ..plugin_bundle.omh.model_chain_picker import (
+    apply_picker_changes,
     chain_text,
-    compose_override_document,
     picker_rows,
     read_override_document,
 )
@@ -435,7 +436,11 @@ def cmd_model_chains_pick(args: argparse.Namespace) -> int:
     paths = _paths(args)
     omh_home = paths.omh_home
     payload = picker_rows(
-        omh_home, hermes_home=paths.hermes_home, labels=MODEL_DISPLAY_LABELS, purposes=CHAIN_SURFACE_PURPOSES
+        omh_home,
+        hermes_home=paths.hermes_home,
+        labels=MODEL_DISPLAY_LABELS,
+        purposes=CHAIN_SURFACE_PURPOSES,
+        contract_option=contract_effort_option,
     )
     changes = pick_chains_interactively(payload, use_color=_use_color(), palette=_active_palette(paths))
     if changes is None:
@@ -444,13 +449,15 @@ def cmd_model_chains_pick(args: argparse.Namespace) -> int:
     if not changes:
         print("No changes.")
         return 0
-    try:
-        document = compose_override_document(read_override_document(omh_home), changes)
-        path = _write_document(omh_home, document)
-    except ValueError as exc:
-        print(f"omh: refused to write an invalid document: {exc}", file=sys.stderr)
+    result = apply_picker_changes(
+        omh_home, changes, hermes_home=paths.hermes_home, contract_option=contract_effort_option
+    )
+    if "error" in result:
+        print(f"omh: did not save: {result['error']}", file=sys.stderr)
         return 2
-    print(f"Saved {len(changes)} categor{'y' if len(changes) == 1 else 'ies'} to {path}.")
+    if result.get("warning"):
+        print(f"omh: warning: {result['warning']}", file=sys.stderr)
+    print(f"Saved {len(changes)} categor{'y' if len(changes) == 1 else 'ies'} to {result['path']}.")
     _print_state(_state(omh_home, paths.hermes_home))
     return 0
 
