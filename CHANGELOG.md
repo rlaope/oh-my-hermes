@@ -796,6 +796,19 @@ All notable changes will be documented here.
   serves you pick that profile alone, which does not load new OMH code, or
   the whole gateway, which does. A refused or failed restart says why and the
   command to run instead. Bare `/gateway` is still Hermes' platform status.
+- **A fenced reply that opens with prose no longer mutes a judged Slack or
+  Discord thread, and a prompt queued behind a `!` line in the OMH TUI waits
+  for a turn that started while the command ran.** Only one word after a
+  reply's opening fence is read as its label (`text`, `c++`, `완료`), so
+  ```` ```Done for today ```` above a `[SHUTUP]` line is posted as written
+  rather than read as the marker. The next queued line after a `!` command
+  used to go once Hermes answered the command, even into a turn that had
+  started meanwhile; it now goes when that turn ends, or after the turn
+  Hermes runs next when that turn left it one. Esc on a prompt still
+  staging its images holds the lines queued behind it, with the
+  interrupt's notice, instead of leaving them unsent. A rewind still goes
+  ahead of lines already queued: queued behind them, its cut would drop
+  the turns they start.
 - **A resumed session with work left goes on by itself in the OMH TUI.**
   `omh --resume <id>`, `/resume` and the session picker opened the session
   and waited for the person to write, so an interrupted turn or an open
