@@ -27,6 +27,7 @@ from omh.coding.hermes_child_dispatch import (  # noqa: E402
     HermesChildEvaluationContext,
     HermesChildRequest,
     SpawnPreflightError,
+    _child_env,
     dispatch_hermes_child,
 )
 from omh.coding.hermes_child_receipts import (  # noqa: E402
@@ -462,6 +463,24 @@ class HermesChildDispatchTests(unittest.TestCase):
         self.assertEqual(child_env["OPENAI_API_KEY"], openai_key)
         self.assertIsNone(child_env["AWS_SECRET_ACCESS_KEY"])
         self.assertNotIn("UNRELATED_CREDENTIAL", child_env)
+
+    def test_commandcode_key_reaches_only_a_commandcode_child(self) -> None:
+        env = {
+            "PATH": os.environ["PATH"],
+            "COMMANDCODE_API_KEY": "opaque-relay-material-4471",
+            "COMMANDCODE_BASE_URL": "https://relay.example/v1",
+            "OPENAI_API_KEY": "opaque-auth-material-7731",
+        }
+        def child(provider: str) -> dict[str, str]:
+            return _child_env(self.request(provider=provider, env=env), 1, self.root / "h", self.root / "u", "marker")
+
+        selected = child("commandcode")
+        self.assertEqual(selected["COMMANDCODE_API_KEY"], env["COMMANDCODE_API_KEY"])
+        self.assertEqual(selected["COMMANDCODE_BASE_URL"], env["COMMANDCODE_BASE_URL"])
+        self.assertNotIn("OPENAI_API_KEY", selected)
+        other = child("openai")
+        self.assertNotIn("COMMANDCODE_API_KEY", other)
+        self.assertNotIn("COMMANDCODE_BASE_URL", other)
 
     def test_missing_working_directory_is_blocked_by_preflight_before_any_spawn(self) -> None:
         # Provider auth is deliberately NOT preflighted (see

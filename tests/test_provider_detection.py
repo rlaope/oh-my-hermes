@@ -73,6 +73,53 @@ class TableTests(unittest.TestCase):
                 bool(_CHAIN_TOKEN_RE.fullmatch(token)),
             )
 
+    def test_a_route_only_provider_stays_out_of_both_detection_tables(self) -> None:
+        self.assertTrue(detection.ROUTE_ONLY_ENV_KEY_PROVIDERS)
+        for name, provider_id in detection.ROUTE_ONLY_ENV_KEY_PROVIDERS.items():
+            with self.subTest(name=name):
+                self.assertNotIn(provider_id, detection.HERMES_PROVIDER_KINDS)
+                self.assertNotIn(name, detection.HERMES_ENV_KEY_PROVIDERS)
+                self.assertNotIn(provider_id, detection.HERMES_ENV_KEY_PROVIDERS.values())
+
+    def test_a_route_only_key_leaves_detection_and_the_chains_alone(self) -> None:
+        # In the detection table this key is an account of kind `gateway`,
+        # which serves every alias: shaping would fall back to the shipped
+        # order and a key-holder's working category routes would refuse.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            without, with_key = root / "without" / "hermes", root / "with" / "hermes"
+            _write(without / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+            _write(with_key / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\nCOMMANDCODE_API_KEY={KEY_VALUE}\n")
+            self.assertEqual(
+                [row["id"] for row in detection.detect_linked_providers(with_key)],
+                ["deepseek"],
+            )
+            self.assertEqual(
+                effective_mixture_category_chains(root / "with" / "omh", with_key),
+                effective_mixture_category_chains(root / "without" / "omh", without),
+            )
+
+    def test_a_route_only_login_leaves_detection_and_the_chains_alone(self) -> None:
+        # With a kind row, any of these counts as a `gateway` account and flips
+        # category routes the same way the key does.
+        for label, store in (
+            ("manual row", {"credential_pool": {"commandcode": [{"source": "manual"}]}}),
+            ("active provider", {"active_provider": "commandcode"}),
+            ("provider state", {"providers": {"commandcode": {"token_type": "key"}}}),
+        ):
+            with self.subTest(label), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                without, held = root / "without" / "hermes", root / "held" / "hermes"
+                _write(without / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+                _write(held / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+                _write(held / "auth.json", _auth_store(**store))
+                self.assertEqual([row["id"] for row in detection.detect_linked_providers(held)], ["deepseek"])
+                self.assertEqual(
+                    effective_mixture_category_chains(root / "held" / "omh", held),
+                    effective_mixture_category_chains(root / "without" / "omh", without),
+                )
+                self.assertEqual(detection.route_only_provider_ids(held), {"commandcode"})
+
     def test_generic_and_implicit_tokens_are_not_provider_evidence(self) -> None:
         # Hermes' registry lists CLAUDE_CODE_OAUTH_TOKEN under its implicit
         # variables: Claude Code sets it, the operator did not configure
@@ -232,6 +279,45 @@ class DetectionTests(unittest.TestCase):
                 self.assertEqual(detection.env_key_names(home), ["GLM_API_KEY", "XAI_API_KEY"])
                 names = detection.env_key_names(home, environ={"KIMI_API_KEY": KEY_VALUE, "PATH": "/bin"})
         self.assertEqual(names, ["GLM_API_KEY", "KIMI_API_KEY", "XAI_API_KEY"])
+
+    def test_an_empty_line_is_not_a_key_and_the_last_line_decides(self) -> None:
+        empty = ("X=", "X=   ", 'X=""', "X=''", 'X="  "', 'X="" # none yet', "X='' # none yet", "export X=")
+        filled = (f"X={KEY_VALUE}", f'X="{KEY_VALUE}"', "X=# note", 'X="', '""x', 'X="" tail')
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "hermes"
+            for line in empty:
+                with self.subTest(empty=line):
+                    _write(home / ".env", line.replace("X", "DEEPSEEK_API_KEY") + "\n")
+                    self.assertEqual(detection.env_key_names(home), [])
+                    self.assertEqual(detection.detect_linked_providers(home), [])
+            for line in filled:
+                with self.subTest(filled=line):
+                    text = line.replace("X", "DEEPSEEK_API_KEY") if "=" in line else f"DEEPSEEK_API_KEY={line}"
+                    _write(home / ".env", text + "\n")
+                    self.assertEqual(detection.env_key_names(home), ["DEEPSEEK_API_KEY"])
+            _write(home / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\nDEEPSEEK_API_KEY=\n")
+            self.assertEqual(detection.env_key_names(home), [])
+            _write(home / ".env", f"DEEPSEEK_API_KEY=\nDEEPSEEK_API_KEY={KEY_VALUE}\n")
+            self.assertEqual(detection.env_key_names(home), ["DEEPSEEK_API_KEY"])
+
+    def test_an_empty_line_stops_counting_for_every_reader_of_the_names(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "hermes"
+            _write(home / ".env", f"ANTHROPIC_API_KEY=\nXAI_API_KEY={KEY_VALUE}\nTYPESAFE_API_KEY=\nOMH_HOME=\n")
+            self.assertEqual([row["id"] for row in detection.detect_linked_providers(home)], ["xai"])
+            self.assertEqual(detection.env_key_names(home, allowed=("TYPESAFE_API_KEY",)), [])
+            self.assertEqual(detection.env_key_names(home, allowed=("OMH_HOME",)), [])
+            # A pool row seeded from the variable lapses with it, as Hermes' does.
+            store = _auth_store(credential_pool={"anthropic": [{"source": "env:ANTHROPIC_API_KEY"}]})
+            self.assertEqual(detection.auth_store_provider_ids(store, detection.env_key_names(home)), [])
+
+    def test_a_filled_line_returns_the_name_and_never_the_value(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "hermes"
+            _write(home / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+            self.assertNotIn(KEY_VALUE, repr(detection.env_key_names(home)))
+            self.assertNotIn(KEY_VALUE, repr(detection.detect_linked_providers(home)))
 
     def test_local_endpoints_are_read_from_their_base_url_line(self) -> None:
         text = (

@@ -750,8 +750,9 @@ def _profile_clone(args: argparse.Namespace, primary: OmhPaths, profile_dir: Pat
 def _profile_env_names_omh_home(profile_dir: Path) -> bool:
     """Whether a profile chose its store through its `.env` `OMH_HOME` (#1679).
 
-    Names only, never the value: the choice is the profile's whatever it
-    says, and a setting written beside it would outrank it.
+    The name, never the value: the choice is the profile's whatever it says,
+    and a setting written beside it would outrank it. An empty `OMH_HOME=`
+    names no store, and the plugin refuses a blank path.
     """
     return bool(env_key_names(profile_dir, allowed=("OMH_HOME",)))
 
@@ -769,8 +770,8 @@ def _profile_theme_home(profile_paths: OmhPaths, profile_dir: Path) -> Path | No
     the primary's.
 
     None when the profile chose a store OMH cannot read: a setting in a
-    shape the standalone scan refuses, or an `OMH_HOME` in its `.env`,
-    whose value OMH never reads. Saving into the primary's store then
+    shape the standalone scan refuses, or a filled `OMH_HOME` in its `.env`,
+    whose value OMH does not keep. Saving into the primary's store then
     would hand the primary that profile's theme. That includes a setting
     OMH wrote before the `.env` named a store: the same pass takes it back
     (`reclaim_plugin_omh_home`, asked here with the record `_apply_result`
