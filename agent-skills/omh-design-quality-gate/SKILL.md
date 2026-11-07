@@ -98,7 +98,7 @@ Expected outputs:
 - layout_validation_plan/v1
 - visual_qa_evidence/v1 when observed
 - publishing_readiness/v1
-- downstream route: frontend, materials-package, img-summary, or deliverable-package
+- downstream route: `omh-frontend`, `omh-materials-package`, `omh-image-cards`, or `omh-deliverable-package`
 
 Artifact expectations:
 
@@ -113,7 +113,7 @@ Safety rules:
 - Require references/rubric plus fresh render QA before PASS.
 - Never claim PPTX, PDF, deployment, poster export, image generation, or publication without observed evidence.
 - Separate content, taste, layout, accessibility, render fidelity, and delivery checks.
-- Route web to frontend, binary files to materials/deliverable package, and image cards to img-summary.
+- Route web to `omh-frontend`, binary files to `omh-materials-package` or `omh-deliverable-package`, and image cards to `omh-image-cards`.
 - For Korean/CJK text, awkward breaks, clipped glyphs, orphan particles, or tiny copy block visual QA.
 - Do not call a result high-quality unless it is compared against a named ordinary-output baseline or references.
 

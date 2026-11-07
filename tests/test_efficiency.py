@@ -501,7 +501,7 @@ class EfficiencyContractTests(unittest.TestCase):
             if template.relative_path == "references/skill-common-rail.md"
         )
         self.assertIn("## OMH Context Rail", common_rail)
-        self.assertIn("Generic-tool checkpoint: image->img-summary", common_rail)
+        self.assertIn("Generic-tool checkpoint: image->omh-image-cards", common_rail)
         # The rail's host-voice section says the same thing at length; a
         # regenerated edit that dropped the persona's ownership of the reply
         # language, or the user's language as the fallback, would leave the

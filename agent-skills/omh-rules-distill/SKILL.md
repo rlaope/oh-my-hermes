@@ -22,7 +22,7 @@ This is an OMH `rules-distill` workflow skill, projected for Agent Skills hosts 
 ## Do Not Use When
 
 - The user wants a single workflow route regression.
-- The user wants durable factual project memory; use `omh-wiki` or memory curation.
+- The user wants durable factual project memory; use `omh-memory-new`.
 - The user already approved a concrete code/doc change; use the implementation workflow.
 - The ask is writing or keeping current the file an agent reads at startup -- AGENTS.md, CLAUDE.md, a Cursor rule; use `omh-agent-instructions`, which updates only its marked region.
 

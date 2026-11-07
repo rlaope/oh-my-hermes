@@ -399,7 +399,7 @@ _DEFINITIONS = [
         why_this_exists="`meta-router` exists to turn a leading /omh command into a live catalog lookup: it reasons over the imperative task, selects or chains concrete workflows, and keeps the decision inside the observed/prepared evidence boundary instead of guessing from memory.",
         do_not_use_when=(
             "The /omh token is not the leading command token.",
-            "The message is a bare picker alias or an OMH catalog/entrypoint question — those belong to oh-my-hermes.",
+            "The message is a bare picker alias or an OMH catalog/entrypoint question — those belong to `oh-my-hermes`.",
         ),
         good_example=SkillExample(
             prompt="/omh migrate this service off the deprecated API and add tests",
@@ -633,7 +633,7 @@ _DEFINITIONS = [
         recovery_notes=(
             "Prefer the native `omh_loop` tool when the plugin is loaded: assess, start, status, feedback, permit, run_once, goal_driver_observe, and queue_observe reach the same loop_cycle/v2 state, and a mutation submits the record_revision that status reported. Where it is absent, the same lifecycle is `omh loop assess|start|status|feedback|permit|run-once|goal-driver-observe|queue observe`, and every other Loop surface stays on that CLI.",
             "If a queued tick is pending, show it as prepared queue state and use loop status/run-once before claiming progress.",
-            "If feedback is unclear, ask one gate question or route back to research/plan rather than advancing the loop.",
+            "If feedback is unclear, ask one gate question or route back to `research` or `plan` rather than advancing the loop.",
             "If the goal turns into external waiting, record the waiting state and next observable signal instead of continuing locally.",
             "Checkpoint on context/budget exhaustion. Migrate loop_cycle/v1 with migrate-driver --apply before external binding.",
             "Resume paused native goals with re-registered gates; external goals follow driver recovery. Transfers require observed stopped/absent reconciliation; handoffs never dispatch.",
@@ -723,7 +723,7 @@ _DEFINITIONS = [
             "recovery_notes": (
                 "Drive the loop lifecycle through a native loop tool when this host offers one, submitting the revision the last read reported; the OMH native loop tool is unavailable in this projection, so keep the durable ledger with the host commands instead.",
                 "If a queued tick is pending, show it as prepared queue state and use loop status/run-once before claiming progress.",
-                "If feedback is unclear, ask one gate question or route back to research/plan rather than advancing the loop.",
+                "If feedback is unclear, ask one gate question or route back to `research` or `plan` rather than advancing the loop.",
                 "If the goal turns into external waiting, record the waiting state and next observable signal instead of continuing locally.",
                 "Checkpoint on context/budget exhaustion. Migrate loop_cycle/v1 with migrate-driver --apply before external binding.",
                 "Resume the current host's durable checklist from observed evidence. If native goal control is requested on an unsupported host, report unavailable instead of inventing activation.",
@@ -751,7 +751,7 @@ _DEFINITIONS = [
             "expected_outputs": "780eec788fe069700b05a39880a50a3813715f50fcd6401cb6fe486f1750616d",
             "artifact_expectations": "a0b60b9744a8ba2ea968e39cb84e90f2bc7125aaa4f40cee0996c658eeddc7ff",
             "final_checklist": "0e74ac3a35cd511b7db3310dc8040cfd5340bef69e367ee912228348616aa2c4",
-            "recovery_notes": "630d9114640801591c280cb196fbb6131c8997b1de811e2092074f704d4768ce",
+            "recovery_notes": "86737c2d744c48ac2ddcaf78494cfb825f0c7f24f022195742b231f6f3d32884",
             "why_this_exists": "65eb19c49cd94294ec7cb97ad323b69cd897bc844ff9c8e79fba9b6337483345",
         },
     ),
@@ -1097,7 +1097,7 @@ _DEFINITIONS = [
         ),
         safety_rules=(
             "Always ask at least one confirmation question before research, exactly one question per turn, even when the initial request appears complete.",
-            f"Use the shared deep-interview ceiling of {DEEP_INTERVIEW_MAX_ROUNDS} rounds and its early-stop discipline; do not create a second interview budget.",
+            f"Use the shared `deep-interview` ceiling of {DEEP_INTERVIEW_MAX_ROUNDS} rounds and its early-stop discipline; do not create a second interview budget.",
             "Use only the current conversation and reviewed or explicitly approved OMH context; never claim hidden Hermes memory or create a persistent learner profile.",
             "Admit recommendations only from primary, institutional, or credible practitioner evidence whose authority, currency, availability, and link can be checked; report retrieval gaps instead of inventing support.",
             "Never use bestseller status, ratings, follower counts, charts, generic popularity, or unsupported reputation as admission or ranking evidence.",
@@ -1132,7 +1132,7 @@ _DEFINITIONS = [
         bad_example=SkillExample(
             prompt="Design a six-week Python syllabus with weekly assessments.",
             expected="Route to `curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.",
-            why="Just-in-time target selection should not displace an explicit curriculum-design request.",
+            why="Just-in-time target selection should not displace an explicit `curriculum-design` request.",
         ),
         final_checklist=(
             "At least one confirmation question was answered, no turn contained more than one question, and the shared interview ceiling was respected.",
@@ -1284,7 +1284,7 @@ _DEFINITIONS = [
             "[capability:coordinated_scope] Use coordination lanes only when work is independent; if two lanes are not independent, collapse them under one owner or re-plan before dispatch.",
             "[capability:coordinated_scope] Keep shared-file edits under one owner; if integration reveals a shared-file conflict, stop lane fan-out and reassign ownership before continuing.",
             "[capability:coordinated_scope] Record unobserved delegation as not_observed; a delegation record exists only when separate participants are observed.",
-            "[capability:delivery_boundary] Do not continue into a repeated feedback loop; recommend `loop` when the user wants ongoing cycles.",
+            "[capability:delivery_boundary] Do not continue into a repeated feedback loop; recommend `ulw-loop` when the user wants ongoing cycles.",
             "[capability:delivery_boundary] Do not skip planning when the delivery request is broad, risky, or user-visible; a ralplan-style or reviewed plan names acceptance criteria, risks, and verification commands.",
             "[capability:delivery_boundary] Run docs sync only when behavior, setup, commands, examples, or public claims changed.",
             "[capability:delivery_boundary] Keep web research source-backed and permission-aware; do not run hidden network or LLM calls from OMH core.",
@@ -1297,7 +1297,7 @@ _DEFINITIONS = [
             ADAPTATION_QUALITY_READ_RULE,
             "Attach acceptance criteria, verification commands, and review expectations to each lane.",
             "Keep dispatch, execution, review, CI, and merge status evidence separate.",
-            "After final brief composition and before unattended coding handoff, explicitly run `omh handoff-risk-scan --brief-file <final-brief> --repo <workspace> --strict --json`. Route high_risk (exit 1) to existing confirmation or security-safety-review; scan_error (exit 2) requires repaired input and a new scan. Clear never grants permission or bypasses metadata preflight, approval, or host policy.",
+            "After final brief composition and before unattended coding handoff, explicitly run `omh handoff-risk-scan --brief-file <final-brief> --repo <workspace> --strict --json`. Route high_risk (exit 1) to existing confirmation or `security-safety-review`; scan_error (exit 2) requires repaired input and a new scan. Clear never grants permission or bypasses metadata preflight, approval, or host policy.",
             "Write each lane prompt to the node prompt contract and close every code-changing run with the verification fan-in; `references/dependency-topology.md` holds both.",
             "For each behavioral increment follow PIN -> RED -> GREEN -> SURFACE -> CLEAN: pin behavior a refactor could hide, capture the intended failing proof before implementation, make the smallest change, exercise the real user surface, and tear down every QA resource with a cleanup receipt; tests alone never prove completion.",
             "Keep one inspectable, append-only evidence ledger for the run using the available goal/runtime records: record the tier decision, dependency topology, todo transitions, command outputs, real-surface artifacts, and cleanup receipts when each occurs.",
@@ -1305,7 +1305,7 @@ _DEFINITIONS = [
             "[capability:coordinated_scope] Keep Hermes as coordinator and status narrator for lane framing and status while coding lanes become runtime handoffs with explicit ownership.",
             "[capability:delivery_boundary] Complete exactly one plan-to-PR delivery cycle, then stop with status, evidence gaps, or a next recommended workflow.",
             "[capability:delivery_boundary] Start a delivery cycle with codebase/source research and a ralplan-style decision record before implementation handoff.",
-            "[capability:delivery_boundary] Run code-review as a gate after implementation evidence exists; review preparation alone is not review evidence.",
+            "[capability:delivery_boundary] Run `code-review` as a gate after implementation evidence exists; review preparation alone is not review evidence.",
             "[capability:delivery_boundary] End a delivery cycle with a PR-ready or PR-observed report that separates prepared, executed, reviewed, verified, CI, and PR evidence.",
             "[capability:delivery_boundary] For implementation, default to Hermes-native delegation with a per-lane `omh_delegate_route` mixture route and acceptance criteria and verification commands attached; hand off to the `durable_checkpoint` capability for work that must survive sessions, and prepare a selected external executor/runtime path only on the user's explicit owner acceptance.",
             "When a lane's coding owner is an external CLI rather than the Hermes harness, that lane's handoff runs under `ulw-maestro`'s contract — load it and follow it whole; a lane with an external owner is never a Hermes-native `delegate_task` lane. Lane framing, disjointness, integration verification, and the closing brief stay here.",
@@ -1407,7 +1407,7 @@ _DEFINITIONS = [
                 ADAPTATION_QUALITY_READ_RULE.portable,
                 "Attach acceptance criteria, verification commands, and review expectations to each lane.",
                 "Keep dispatch, execution, review, CI, and merge status evidence separate.",
-                "After final brief composition and before unattended coding handoff, explicitly run `omh handoff-risk-scan --brief-file <final-brief> --repo <workspace> --strict --json`. Route high_risk (exit 1) to existing confirmation or security-safety-review; scan_error (exit 2) requires repaired input and a new scan. Clear never grants permission or bypasses metadata preflight, approval, or host policy.",
+                "After final brief composition and before unattended coding handoff, explicitly run `omh handoff-risk-scan --brief-file <final-brief> --repo <workspace> --strict --json`. Route high_risk (exit 1) to existing confirmation or `security-safety-review`; scan_error (exit 2) requires repaired input and a new scan. Clear never grants permission or bypasses metadata preflight, approval, or host policy.",
                 "Write every lane or node prompt standalone with TASK, DELIVERABLE, SCOPE, VERIFY, and STOP WHEN in that order, exact paths and binary pass/fail observables, and one role per node; a dependency edge orders execution only and never substitutes upstream output.",
                 "End every code-changing run with a verification fan-in that depends on all producer lanes, runs the repository's real test/build command, and reports captured binary pass/fail output; downstream consumers re-check upstream claims before trusting them.",
                 "For each behavioral increment follow PIN -> RED -> GREEN -> SURFACE -> CLEAN: pin behavior a refactor could hide, capture the intended failing proof before implementation, make the smallest change, exercise the real user surface, and tear down every QA resource with a cleanup receipt; tests alone never prove completion.",
@@ -1416,7 +1416,7 @@ _DEFINITIONS = [
                 "[capability:coordinated_scope] Keep the current host as coordinator and narrator; delegate through the host's own subagent/task mechanism with explicit ownership, or run lanes sequentially when unavailable.",
                 "[capability:delivery_boundary] Complete exactly one plan-to-PR delivery cycle, then stop with status, evidence gaps, or a next recommended workflow.",
                 "[capability:delivery_boundary] Start a delivery cycle with codebase/source research and a ralplan-style decision record before implementation handoff.",
-                "[capability:delivery_boundary] Run code-review as a gate after implementation evidence exists; review preparation alone is not review evidence.",
+                "[capability:delivery_boundary] Run `code-review` as a gate after implementation evidence exists; review preparation alone is not review evidence.",
                 "[capability:delivery_boundary] End a delivery cycle with a PR-ready or PR-observed report that separates prepared, executed, reviewed, verified, CI, and PR evidence.",
                 "[capability:delivery_boundary] Use the host's own subagent/task mechanism with explicit owner, acceptance criteria, verification commands, and a resumable ledger for durable checkpoints. Never imply hidden execution.",
                 "When the user explicitly selects an external coding owner, use the host's authorized task mechanism, verify its actual capabilities, and capture its session/task handle. Missing delegation means sequential work or a named blocker, never fabricated dispatch.",
@@ -1442,7 +1442,7 @@ _DEFINITIONS = [
                 "[capability:coordinated_scope] Use coordination lanes only when work is independent; if two lanes are not independent, collapse them under one owner or re-plan before dispatch.",
                 "[capability:coordinated_scope] Keep shared-file edits under one owner; if integration reveals a shared-file conflict, stop lane fan-out and reassign ownership before continuing.",
                 "[capability:coordinated_scope] Record unobserved delegation as not_observed; a delegation record exists only when separate participants are observed.",
-                "[capability:delivery_boundary] Do not continue into a repeated feedback loop; recommend `loop` when the user wants ongoing cycles.",
+                "[capability:delivery_boundary] Do not continue into a repeated feedback loop; recommend `ulw-loop` when the user wants ongoing cycles.",
                 "[capability:delivery_boundary] Do not skip planning when the delivery request is broad, risky, or user-visible; a ralplan-style or reviewed plan names acceptance criteria, risks, and verification commands.",
                 "[capability:delivery_boundary] Run docs sync only when behavior, setup, commands, examples, or public claims changed.",
                 "[capability:delivery_boundary] Keep web research source-backed and permission-aware; do not run hidden network or LLM calls from OMH core.",
@@ -1472,8 +1472,8 @@ _DEFINITIONS = [
             ),
         },
         portable_override_shadows={
-            "quality_bar": "b6444536d60f9df17070e0ac1b28ecc32aa54286626cc2c1daf5e8de389be364",
-            "safety_rules": "f5a8f74812425af82829bc083dac62883a283ed8acfa5bc299a594c107ccd4f7",
+            "quality_bar": "9a9269bd8161c50f5c4b9ebe88dae818bc7c340e10d51b5ea104149471b5376a",
+            "safety_rules": "cd9397f46cfa9403e793a7c95627aaff3a819e35c10fbb4773da640ce5a1a78b",
             "opening_steps": "cc7bce444d54a55fd937ea0529db186acdd6500c4f02a37cc8929081d403fefb",
             "final_checklist": "95ac04078f55d2c16dfc5f8a7d0a2ca5e833cae7ae1f2a0c03856687557762d5",
             "why_this_exists": "537b436c502275cd7aea748406d5018300d92d31fe670a4c3b48090058b4c0c6",
@@ -1692,7 +1692,7 @@ _DEFINITIONS = [
         # dropped clauses ("saturation-style", "in comparable open-source
         # repos", "across independent sources") live in the quality bar, which
         # the gate does not budget.
-        "Deep dive before a decision: deep research engine - grounding for specs and decisions: study open-source reference implementations with pinned refs, gather live web evidence with citation discipline, verify contested claims, and distill a decision-grounding dossier that planning consumes; for a decision brief use research-brief, for upstream guidance use web-research.",
+        "Deep dive before a decision: deep research engine - grounding for specs and decisions: study open-source reference implementations with pinned refs, gather live web evidence with citation discipline, verify contested claims, and distill a decision-grounding dossier that planning consumes; for a decision brief use `research-brief`, for upstream guidance use `web-research`.",
         (
             # No bare `research` token: it is an ordinary English word that
             # appears inside delivery-cycle and catalog-question messages
@@ -1850,7 +1850,7 @@ _DEFINITIONS = [
             "If no archive access exists or the capture provider's paid authority is exhausted, record a temporal retrieval gap with no network action and keep the as-of claim in the annex; never substitute the current page for it.",
             "If the evidence stays thin or contested, lower the stated confidence and keep the unresolved claims in the annex rather than flattening them.",
             "If leads keep expanding past the declared budget, stop, record open leads in the dossier, and ask whether to extend the budget.",
-            "If enough evidence already exists and the real request is planning, hand off to ralplan with the recorded dossier.",
+            "If enough evidence already exists and the real request is planning, hand off to `ralplan` with the recorded dossier.",
             "If the audience answer arrives after retrieval started, keep the evidence and re-render rather than re-running: the dossier feeds both branches.",
         ),
         situations=(
@@ -1871,13 +1871,13 @@ _DEFINITIONS = [
                 "If no archive access exists or the capture provider's paid authority is exhausted, record a temporal retrieval gap with no network action and keep the as-of claim in the annex; never substitute the current page for it.",
                 "If the evidence stays thin or contested, lower the stated confidence and keep the unresolved claims in the annex rather than flattening them.",
                 "If leads keep expanding past the declared budget, stop, record open leads in the dossier, and ask whether to extend the budget.",
-                "If enough evidence already exists and the real request is planning, hand off to ralplan with the recorded dossier.",
+                "If enough evidence already exists and the real request is planning, hand off to `ralplan` with the recorded dossier.",
                 "If the audience answer arrives after retrieval started, keep the evidence and re-render rather than re-running: the dossier feeds both branches.",
             ),
         },
         portable_override_shadows={
             "why_this_exists": "b5b9b7223118e93cf0e6c08b595b6d37cfcaa07a67bc51d418d2e1ef1e7244e5",
-            "recovery_notes": "088e71b7eef34d5896cf6ad927426ed3364d097bda7e2f8c4b487d65e94219f5",
+            "recovery_notes": "af686ba548e9683b41416e7e28cda2b4e70e01a99e82586df6c929e3a59e02f6",
         },
     ),
     SkillDefinition(
@@ -1963,10 +1963,10 @@ _DEFINITIONS = [
             "Keep historical-capture evidence and live-page evidence as two typed surfaces for a point-in-time or then-versus-now question; capture time, publication time, and retrieval time are independent clocks and none substitutes for another.",
             f"{_GROUNDED_CITATIONS_REGISTER_RULE}, before any prose is written; cite a source only by the id the ledger gave it, written `[n]`. {_GROUNDED_CITATIONS_LEDGER_FILE_RULE} Mark background that rests on model knowledge `[unverified]` instead of citing it: the marker is for background the answer does not rest on and never carries the answer, and a contested claim with a single source keeps its citation and is stated as uncorroborated. The ledger id sits beside the source class and the retrieval date and replaces neither. Without the skill, list each source when it is retrieved and cite it at the claim it supports.",
             f"When that ledger is in use, report the citation check from a run, or as `not_observed`: {_GROUNDED_CITATIONS_VERIFY_RULE}, and so is an answer given only in chat: `verify` reads a draft file and exits `2` without one, so write the answer to a file first when the check matters. The run compares cited ids and the Sources block with the ledger; it does not test whether a claim is true, so a passing citation check is never reported as fact verification. {_GROUNDED_CITATIONS_RECEIPTS_RULE}. Without the ledger the citation check is `not_observed`.",
-            "Stop at the answer: one retrieval round settles a lookup, plus at most the one follow-up the plan issues; a follow-up that still leaves required conditions unsupported, or an expanding lead list, means the request belongs to `research`.",
+            "Stop at the answer: one retrieval round settles a lookup, plus at most the one follow-up the plan issues; a follow-up that still leaves required conditions unsupported, or an expanding lead list, means the request belongs to `ulw-research`.",
             "Report what retrieval did not yield rather than closing the gap from recall.",
         ),
-        why_this_exists="`web-research` exists so a current-facts question returns a cited answer in one retrieval round, without the declared depth budget, reference-implementation study, and dossier that `research` requires.",
+        why_this_exists="`web-research` exists so a current-facts question returns a cited answer in one retrieval round, without the declared depth budget, reference-implementation study, and dossier that `ulw-research` requires.",
         do_not_use_when=(
             "The decision needs reference-implementation study, a declared depth budget, or a decision-grounding dossier; use `research`.",
             "The output is a typed candidate inventory and acquisition status rather than an answer; use `source-finder`.",
@@ -2130,7 +2130,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "source-finder",
-        "Gathering candidate papers, datasets, or repos: source candidate inventory - prepare typed source candidates and acquisition status before downstream work; use ulw-research to fetch and cite them, or research-brief to turn them into a decision-ready brief.",
+        "Gathering candidate papers, datasets, or repos: source candidate inventory - prepare typed source candidates and acquisition status before downstream work; use ulw-research to fetch and cite them, or `research-brief` to turn them into a decision-ready brief.",
         (
             "source-finder",
             "source finder",
@@ -2155,7 +2155,7 @@ _DEFINITIONS = [
         (
             "Use when the requested output is a typed source candidate inventory and acquisition status across papers, web links, "
             "datasets, GitHub repositories, public presentations, docs/specs, or unknown source material before choosing "
-            "paper-learning, research, research-brief, research-department, materials-package, or an ultrawork delivery cycle."
+            "`paper-learning`, `research`, `research-brief`, `research-department`, `materials-package`, or `ultrawork` for a delivery cycle."
         ),
         category="research",
         phase="source-acquisition",
@@ -2163,11 +2163,11 @@ _DEFINITIONS = [
         # `research-department` ships only on Hermes.
         portable_overrides={
             "use_when": (
-                "Use when the requested output is a typed source candidate inventory and acquisition status across papers, web links, datasets, GitHub repositories, public presentations, docs/specs, or unknown source material before choosing paper-learning, research, research-brief, materials-package, or an ultrawork delivery cycle.",
+                "Use when the requested output is a typed source candidate inventory and acquisition status across papers, web links, datasets, GitHub repositories, public presentations, docs/specs, or unknown source material before choosing `paper-learning`, `research`, `research-brief`, `materials-package`, or `ultrawork` for a delivery cycle.",
             ),
         },
         portable_override_shadows={
-            "use_when": "f974f0ceb3b312836952af1a27050ae88e0a5eb489d4ba8166c0ad0f6b3e4b38",
+            "use_when": "4548cb0d157cc5e7a82355110e6798005cd00d9af3e7453d35d86c0c44df8b68",
         },
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
@@ -2193,12 +2193,12 @@ _DEFINITIONS = [
         safety_rules=(
             "Do not claim web search, download, repository clone, file extraction, file hash verification, license verification, or source correctness from a prepared candidate.",
             PortableLine(
-                "Do not redefine research-department's source_inbox/v1; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.",
+                "Do not redefine `research-department`'s source_inbox/v1; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.",
                 "Do not define a source inbox; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.",
             ),
             PortableLine(
-                "Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `paper-learning`, recurring monitoring to `research-department`, file export to `materials-package`, and image cards to `img-summary`.",
-                "Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `paper-learning`, file export to `materials-package`, and image cards to `img-summary`.",
+                "Route current citations and source-backed synthesis to `ulw-research`, supplied-paper explanation to `paper-learning`, recurring monitoring to `research-department`, file export to `materials-package`, and image cards to `img-summary`.",
+                "Route current citations and source-backed synthesis to `ulw-research`, supplied-paper explanation to `paper-learning`, file export to `materials-package`, and image cards to `img-summary`.",
             ),
         ),
         quality_tier="source-acquisition-gated",
@@ -2257,7 +2257,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "research-brief",
-        "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research, and for ongoing multi-role research use research-department.",
+        "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research, and for ongoing multi-role research use `research-department`.",
         (
             "research-brief",
             "business-research",
@@ -2283,7 +2283,7 @@ _DEFINITIONS = [
             ),
         },
         portable_override_shadows={
-            "description": "c6099e9cb9ce65a7119a2a37b1375bc59a0d11ff1a90ccfddabc8e8c26de1b4f",
+            "description": "8269a2a72cf1856e5a3b98de6a6bb729104c4130a23291e206a96ee426b34ebb",
         },
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
@@ -2342,7 +2342,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "research-department",
-        "Recurring market or topic research: research operations department - coordinate Scout, Analyst, and Briefer work with source-inbox and status boundaries; for one decision brief use research-brief, and for typed candidates before research starts use source-finder.",
+        "Recurring market or topic research: research operations department - coordinate Scout, Analyst, and Briefer work with source-inbox and status boundaries; for one decision brief use `research-brief`, and for typed candidates before research starts use `source-finder`.",
         (
             "research-department",
             "research department",
@@ -2651,7 +2651,7 @@ _DEFINITIONS = [
             "When the decision is a resourcing one — hire, outsource, or cut scope — quantify demand and capacity against each other in one unit before comparing options, and price each option with the lag before it lands; a gap that exists this quarter is not closed by a hire that ramps next quarter. The worked example is `omh-decide/references/capacity-planning.md`.",
             "Ask whether the decision deserves a durable record - hard to reverse, surprising without its context, and carrying a real trade-off; all three or no record, a decision note in chat is enough.",
             "When a record is warranted, draft it per `omh-decide/references/decision-records.md` - the `docs/adr/` convention with Context, Drivers, Considered Options, Decision, Consequences with mitigations, and Related - and stop for the user's approval before any file is written.",
-            "Never edit an accepted record: status moves Proposed to Accepted to Deprecated or Superseded, supersession is a new record pointing back at the old one, and a Rejected record is kept - it is what `decision-recall` reads later.",
+            "Never edit an accepted record: status moves Proposed to Accepted to Deprecated or Superseded, supersession is a new record pointing back at the old one, and a Rejected record stays in the decision log for later readers; `decision-recall` covers memory candidates a person rejected, not these records.",
         ),
         why_this_exists=(
             "`strategy-brief` exists so a team decision ends as a recommendation whose options are priced in one unit "
@@ -3153,7 +3153,7 @@ _DEFINITIONS = [
             ProcedureStep(
                 "legal_trace_authority", "validation", ("supplied authority", "document or process version"),
                 ("legal_scope_authority_record/v1",), ("legal_authority_citation_check", "legal_final_determination_guard"),
-                "Create a citation ledger using only supplied or observed sources, exact pinpoints and effective status; route absent authority to research or counsel instead of filling it in.",
+                "Create a citation ledger using only supplied or observed sources, exact pinpoints and effective status; route absent authority to `research` or counsel instead of filling it in.",
                 on_fail=ProcedureBail(
                     still_stands=('legal_scope_authority_record/v1',),
                     downgrade_to='unresolved',
@@ -4067,7 +4067,7 @@ _DEFINITIONS = [
         do_not_use_when=(
             "The user only needs a weekly/monthly report outline; use `report-package`.",
             "The user asks for recurring meeting minutes or scrum history; use `operating-rhythm`.",
-            "The request is code documentation, README, or project wiki maintenance; use the docs/wiki workflow.",
+            "The request is code documentation, README, or project wiki maintenance; use `wiki`.",
             HermesSkillLine(
                 "The user wants an operation done on one existing file - fill a PDF form, merge or split PDFs, or edit the text of a Word document, the slides of a deck, or the cells of a workbook - rather than a material plan with an export and QA ladder; load Hermes' bundled `pdf`, `docx`, `powerpoint`, or `xlsx` skill (`microsoft-office` from v0.22.6) for that file instead of this one.",
                 ("pdf", "docx", "powerpoint", "xlsx", "microsoft-office"),
@@ -4312,7 +4312,7 @@ _DEFINITIONS = [
             "apple_visual_direction/v1",
             "apple_design_finding/v1 with severity, location/evidence, impact, source/applicability, fix, owner, and missing checks",
             "two to four design directions before visual work when direction is open",
-            "composed remediation route to frontend, design-quality-gate, accessibility-audit, visual-qa, or award-bar-score",
+            "composed remediation route to `frontend`, `design-quality-gate`, `accessibility-audit`, `visual-qa`, or `award-bar-score`",
         ),
         artifact_expectations=(
             "prepared Apple design brief with observations and hypotheses distinguished",
@@ -4337,7 +4337,7 @@ _DEFINITIONS = [
             "Start with mode, target, convention, and available evidence; choose directions before visuals when open.",
             "Load `references/platform-foundations.md`, `references/materials-and-accessibility.md`, `references/product-visual-production.md`, `references/web-production-libraries.md`, and `references/review-playbook.md` for their named boundaries.",
             "For product work, use reference -> actual production -> same-subject comparison -> revision. Motion needs frames, video, or browser evidence and a reduced-motion alternative; do not award an Apple score.",
-            "Findings name evidence, impact, source/applicability, fix, owner, and missing check; route implementation to the selected owner and proof to accessibility-audit or visual-qa.",
+            "Findings name evidence, impact, source/applicability, fix, owner, and missing check; route implementation to the selected owner and proof to `accessibility-audit` or `visual-qa`.",
         ),
         why_this_exists=(
             "`apple-design` turns Apple UI design, review, and improvement requests into a platform-aware brief that respects native and web differences while preserving OMH's existing implementation and evidence owners."
@@ -4405,7 +4405,7 @@ _DEFINITIONS = [
             "design_direction_set/v1 when the direction is still open",
             "design intent and opaque context-reference boundary",
             "prepared direction vocabulary",
-            "downstream composition: design-quality-gate, frontend, accessibility-audit, visual-qa",
+            "downstream composition: `design-quality-gate`, `frontend`, `accessibility-audit`, `visual-qa`",
             "executor-neutral handoff with executor_selection_required",
             "visual evidence requirements with visual_verdict not_observed",
         ),
@@ -4417,7 +4417,7 @@ _DEFINITIONS = [
             "no executor target, dispatch, implementation, render, QA PASS, review, CI, deployment, or merge claim",
         ),
         safety_rules=(
-            "Preserve the existing direct owners: design-quality-gate for premium multi-format quality, frontend for web implementation/design-system work, accessibility-audit for semantic access review, and visual-qa for fresh rendered verdicts.",
+            "Preserve the existing direct owners: `design-quality-gate` for premium multi-format quality, `omh-frontend` for web implementation/design-system work, `accessibility-audit` for semantic access review, and `visual-qa` for fresh rendered verdicts.",
             "Do not use a prepared direction to claim code, screenshots, browser QA, accessibility PASS, review, CI, deployment, or merge.",
             "Keep free-form briefs in Hermes conversation context; persist only closed vocabulary and opaque reference metadata in the deterministic artifact.",
             "Do not call Claude Design, Figma, Open Design, an image provider, browser, network service, daemon, or executor from OMH core.",
@@ -4444,7 +4444,7 @@ _DEFINITIONS = [
         ),
         bad_example=SkillExample(
             prompt="design-orchestration already rendered and visually passed the new page.",
-            expected="Keep rendering and visual PASS not_observed; route the required capture and verdict work to visual-qa.",
+            expected="Keep rendering and visual PASS not_observed; route the required capture and verdict work to `visual-qa`.",
             why="A prepared orchestration contract cannot create implementation or rendered evidence.",
         ),
         final_checklist=(
@@ -4509,7 +4509,7 @@ _DEFINITIONS = [
             "layout_validation_plan/v1",
             "visual_qa_evidence/v1 when observed",
             "publishing_readiness/v1",
-            "downstream route: frontend, materials-package, img-summary, or deliverable-package",
+            "downstream route: `omh-frontend`, `materials-package`, `img-summary`, or `deliverable-package`",
         ),
         artifact_expectations=(
             "design_quality_gate/v1 when prepared",
@@ -4522,7 +4522,7 @@ _DEFINITIONS = [
             "Require references/rubric plus fresh render QA before PASS.",
             "Never claim PPTX, PDF, deployment, poster export, image generation, or publication without observed evidence.",
             "Separate content, taste, layout, accessibility, render fidelity, and delivery checks.",
-            "Route web to frontend, binary files to materials/deliverable package, and image cards to img-summary.",
+            "Route web to `frontend`, binary files to `materials-package` or `deliverable-package`, and image cards to `img-summary`.",
             "For Korean/CJK text, awkward breaks, clipped glyphs, orphan particles, or tiny copy block visual QA.",
             "Do not call a result high-quality unless it is compared against a named ordinary-output baseline or references.",
         ),
@@ -4606,7 +4606,7 @@ _DEFINITIONS = [
         delegation_boundary="retained-catalog-intent",
         handoff_policy=(
             "Keep axis scoring, the weighted total, the binding-constraint call, and the tradeoff ledger in Hermes. "
-            "Route implementation to frontend, WCAG evidence to accessibility-audit, and rendered captures to visual-qa; never score an axis from a description of a page instead of the page."
+            "Route implementation to `frontend`, WCAG evidence to `accessibility-audit`, and rendered captures to `visual-qa`; never score an axis from a description of a page instead of the page."
         ),
         required_inputs=(
             "the target URL, route, or rendered capture being judged",
@@ -4620,7 +4620,7 @@ _DEFINITIONS = [
             "the weighted total and its distance from the published threshold",
             "the binding constraint: the axis whose gain moves the total most",
             "tradeoff_ledger/v1 when an innovation move costs accessibility or performance budget",
-            "downstream route: frontend, accessibility-audit, visual-qa, or design-quality-gate",
+            "downstream route: `omh-frontend`, `accessibility-audit`, `visual-qa`, or `design-quality-gate`",
         ),
         artifact_expectations=(
             "award_bar_score/v1 with prepared_not_observed status",
@@ -4670,7 +4670,7 @@ _DEFINITIONS = [
             "No award, jury, placement, or selection outcome is claimed.",
         ),
         recovery_notes=(
-            "If no rendered evidence exists, keep every axis not_observed and route the capture to visual-qa before scoring.",
+            "If no rendered evidence exists, keep every axis not_observed and route the capture to `visual-qa` before scoring.",
             "If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.",
             "If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.",
         ),
@@ -4836,7 +4836,7 @@ _DEFINITIONS = [
             "A 3D or canvas scene (WebGL, a three.js-style engine, a voxel world) is judged on its first frame: load `references/rendered-scene-craft.md`, boot on the view the scene's own title and copy promise, light it with a warm-or-cool key, a sky fill, explicit tone mapping, shadows, and fog, and make every small animated object read as what it is. A clean console is not a finished scene.",
             "For first-time UI creation, name the initial generation branch, reference direction, reusable primitives, state coverage, and required visual QA path.",
             "Cover responsive layout, empty/loading/error states, hover/focus/active states, CJK text, accessibility, and performance expectations.",
-            "When the surface reads or writes remote data, load the frontend-refactor skill's `omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6) before writing the component: server state lives in a query cache, each mutation names the query keys it invalidates, and an optimistic write ships with its rollback.",
+            "When the surface reads or writes remote data, load the `frontend-refactor` skill's `omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6) before writing the component: server state lives in a query cache, each mutation names the query keys it invalidates, and an optimistic write ships with its rollback.",
             "When the surface has a form, a text composer, or a dialog, load `references/forms-and-input.md` before writing it: labelled controls, errors shown after the user commits a value, server field errors mapped onto their fields, one submit in flight, an Enter-to-send that waits for IME composition, and focus returned when a dialog closes.",
             "Check the browser-support target before using a newer platform feature: a feature newer than the target (by default, anything only Baseline Newly available) needs feature detection plus a fallback, or a deliberate target change; suggest recording the target in the repository's agent instruction file (`omh-agent-instructions` owns that file).",
             "State performance as a budget, not an adjective: load `references/web-vitals-budgets.md`, name one metric with its published bar (LCP, INP, CLS), the device and network class it is judged on, the route and load shape, and the baseline captured under that same profile - before the change. A budget chosen after seeing the result describes what happened instead of gating it.",
@@ -4879,7 +4879,7 @@ _DEFINITIONS = [
             "The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict rows for remote writes.",
             "The frontend_component_state_inventory/v1 covers reusable primitives and their default/hover/focus/active/disabled/loading/empty/error states.",
             "The handoff names the executor/runtime owner and keeps code, browser, Lighthouse, accessibility, deployment, and visual QA evidence observed-only.",
-            "The next action is prepare_frontend_handoff, route to visual-qa, or report the missing evidence blocker.",
+            "The next action is prepare_frontend_handoff, route to `visual-qa`, or report the missing evidence blocker.",
         ),
         recovery_notes=(
             "If the target surface is unclear, prepare the brief with a route/component gap instead of inventing pages.",
@@ -5469,7 +5469,7 @@ _DEFINITIONS = [
             "Give every finding a stable rule ID from `omh-accessibility-audit/references/a11y-rules.md` - category prefix plus number - beside its WCAG criterion and severity, so two audits of the same surface produce comparable findings and a rerun can say which are resolved, carried, or new.",
             "Partition each fix by whether the markup determines the answer: `auto` when the correct output follows from the structure itself, `manual` whenever it requires knowing what the content means. A meaning-dependent fix marked `auto` is a defect - it produces confident, wrong alternative text - and a fix that is only half structural is split, never rounded to either side.",
             "Read the surface fully and collect every finding before reporting one; report rule ID, severity, location, WCAG criterion, fix class, and the fix, so the `auto` rows can be handed to an executor as a batch while the `manual` rows go back carrying the question each one needs answered.",
-            "Route design-system or implementation changes back to frontend or the selected coding owner, then recheck with visual-qa/accessibility evidence.",
+            "Route design-system or implementation changes back to `omh-frontend` or the selected coding owner, then recheck with visual-qa/accessibility evidence.",
         ),
         why_this_exists=(
             "`accessibility-audit` adapts ECC's accessibility-architect posture into an OMH-native workflow so frontend quality includes "
@@ -5501,7 +5501,7 @@ _DEFINITIONS = [
         recovery_notes=(
             "If no rendered or DOM/accessibility-tree evidence exists, prepare the audit plan and return verdict BLOCK with blocker `missing_accessibility_evidence`.",
             "If automated scan output exists without keyboard or screen-reader evidence, keep the verdict HOLD and request the smallest focus/announcement trace.",
-            "If the request is mostly visual layout or CJK clipping, route to visual-qa while preserving accessibility follow-up checks.",
+            "If the request is mostly visual layout or CJK clipping, route to `visual-qa` while preserving accessibility follow-up checks.",
         ),
         situations=(
             "is our app usable by blind users",
@@ -5836,7 +5836,7 @@ _DEFINITIONS = [
         recovery_notes=(
             "If the log is missing or stale, fetch it when `gh` is authenticated (`gh run view <id> --log-failed`); otherwise ask for the smallest fresh command output or CI job URL.",
             "If the failure looks environmental or credentialed, mark BLOCKED_BY_ENVIRONMENT and avoid patch handoff.",
-            "If a fix has already been applied, route to verification-gate for fresh evidence instead of re-triaging stale failures.",
+            "If a fix has already been applied, route to `verification-gate` for fresh evidence instead of re-triaging stale failures.",
         ),
         situations=(
             "the pipeline is red",
@@ -6105,7 +6105,7 @@ _DEFINITIONS = [
             "a field left out is a gap in the record, not a shorter record.",
             PortableLine(
                 "For native `omh_todo` checkpoints, load `omh-todo-checklist/references/closing-a-story.md`; `record` then `recall` this verification declaration. Stored declarations are not proof.",
-                "For native `omh_todo` checkpoints, `record` then `recall` this verification declaration. Stored declarations are not proof.",
+                "On Hermes, for native `omh_todo` checkpoints, `record` then `recall` this verification declaration. Stored declarations are not proof.",
             ),
             "When the change answers to a written spec, plan, or issue, load `references/requirement-coverage-map.md` and map requirement to task to evidence under stable ids before claiming coverage.",
             f"Give each failing check an `origin`: {FAILURE_ORIGIN_PROOF_RULE}. {FAILURE_ORIGIN_PRECEDENCE}. {FAILURE_ORIGIN_PROOF_NAMING}. {FAILURE_ORIGIN_RERUN_RULE}.",
@@ -6313,7 +6313,10 @@ _DEFINITIONS = [
         ),
         do_not_use_when=(
             "The user wants a single workflow route regression; use `workflow-learning`.",
-            "The user wants durable factual project memory; use `wiki` or memory curation.",
+            PortableLine(
+                "The user wants durable factual project memory; use `memory-new`, or `memory-sync` to curate what Hermes already holds.",
+                "The user wants durable factual project memory; use `memory-new`.",
+            ),
             "The user already approved a concrete code/doc change; use the implementation workflow.",
             "The ask is writing or keeping current the file an agent reads at startup -- AGENTS.md, CLAUDE.md, a Cursor rule; use `agent-instructions`, which updates only its marked region.",
         ),
@@ -6396,7 +6399,7 @@ _DEFINITIONS = [
             "Name the audience, depth, repo root, read-only boundary, and stop condition.",
             "Separate observed files and commands from inferred architecture and unknowns.",
             "Produce a practical reading path and first-task runway rather than a flat file tour.",
-            "Route follow-up implementation to plan, ultrawork, verification-gate, or workspace-audit as needed.",
+            "Route follow-up implementation to `plan`, `ultrawork`, `verification-gate`, or `workspace-audit` as needed.",
             "Take build, test, and lint commands in this order: CI config (`.github/workflows`, `.gitlab-ci.yml`), the task runner (`Makefile`, `justfile`, `package.json` scripts), the manifest, then contributor docs; read `CODEOWNERS` and the top-churn files for ownership; the README comes last, and where it disagrees with CI trust CI and record the disagreement.",
         ),
         final_checklist=(
@@ -6507,7 +6510,7 @@ _DEFINITIONS = [
             "Name repo root, refresh depth, task focus, artifact write policy, and stop condition.",
             "Choose build, summary, handoff, `--write`, and `--json` deliberately instead of treating all codegraph commands as equivalent.",
             "Separate prepared command plans from observed command outputs, generated artifacts, and executor-ready handoffs.",
-            "Route broader first-read orientation to codebase-onboarding and implementation to ultrawork or the selected coding owner.",
+            "Route broader first-read orientation to `codebase-onboarding` and implementation to `ulw-work` or the selected coding owner.",
         ),
         why_this_exists=(
             "`codegraph-refresh` exists so the local code index is rebuilt before a handoff and the answer says how old it was, without "
@@ -6536,8 +6539,8 @@ _DEFINITIONS = [
         ),
         recovery_notes=(
             PortableLine(
-                "If the codegraph command is unavailable, route to doctor or toolbelt-readiness before claiming freshness.",
-                "If the codegraph command is unavailable, route to toolbelt-readiness before claiming freshness.",
+                "If the codegraph command is unavailable, route to `doctor` or `toolbelt-readiness` before claiming freshness.",
+                "If the codegraph command is unavailable, route to `toolbelt-readiness` before claiming freshness.",
             ),
             "If no task focus is supplied, prepare build/summary guidance and ask for focus only when a handoff pack would otherwise be misleading.",
             "If the index is stale or missing, report the stale/missing state and next safe command rather than treating prior summaries as current.",
@@ -7155,7 +7158,7 @@ _DEFINITIONS = [
             "Prepare coding handoffs only after plan acceptance and selected executor/runtime choice.",
             "Mark deploy, monitoring, and rollback as unobserved until the wrapper or operator records evidence.",
             "For a fresh, empty, or newly `git init`-ed target that is expected to outlive the session, run the greenfield bootstrap pass before or alongside delivery planning - load `references/project-bootstrap.md` for the six-step order (git and .gitignore, LICENSE, README, agent context file, CI skeleton, docs/ seed) and its per-file verify line; explicitly skip it for throwaway or scratch work instead of silently running it.",
-            "Name the skill per stage: `backend`, `relational-db`, `frontend`, `application-threat-model`, `iac-change`, `production-audit`, `release-cut`, `deploy-and-monitor`. Settle where it runs, how secrets are provided, and the first environment before deploy.",
+            "Name the skill per stage: `omh-backend`, `relational-db`, `frontend`, `application-threat-model`, `iac-change`, `production-audit`, `release-cut`, `deploy-and-monitor`. Settle where it runs, how secrets are provided, and the first environment before deploy.",
         ),
         why_this_exists=(
             "`idea-to-deploy` exists because an idea becomes a running product through decisions nobody owns together: "
@@ -7362,7 +7365,7 @@ _DEFINITIONS = [
         do_not_use_when=(
             "The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly or use `strategy-brief` for a decision brief instead of starting a leadership operating loop.",
             "A launch-readiness audit of one named service or release with deploy, security, observability and rollback evidence; use `production-audit`. Prioritisation and risk ranking across workstreams stays here.",
-            "An accepted plan is ready for build; use `ralplan` or `idea-to-deploy`.",
+            "An accepted plan is ready for build; use `ultrawork` or `idea-to-deploy`.",
         ),
         situations=(
             "act as our cto for this launch",
@@ -7508,7 +7511,7 @@ _DEFINITIONS = [
         final_checklist=(
             "The scenario, expected behavior, observed result, and pass/fail basis are named.",
             "Proposed fixes are separated from observed QA evidence.",
-            "Missing or failed verification routes back to plan, fix, or a narrower test; a failed scenario gets at most two fix-and-rerun rounds, then it is reported as an open finding with its evidence and is not redefined to pass.",
+            "Missing or failed verification routes back to `plan`, fix, or a narrower test; a failed scenario gets at most two fix-and-rerun rounds, then it is reported as an open finding with its evidence and is not redefined to pass.",
             "Everything the hostile scenarios created or changed (accounts, rows, files, processes, ports) was listed before the first one ran and removed or restored afterwards, with the command and its observed result as the cleanup receipt, or what remains is named.",
         ),
         bad_example=SkillExample(
@@ -7704,13 +7707,13 @@ _DEFINITIONS = [
             "Start from observed repo facts and source/web evidence when freshness or external behavior matters.",
             "Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.",
             "Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.",
-            "List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `dag-ulw` nodes or `ultrawork` board rows come from the plan without re-planning; planning itself stays a bounded in-session lane.",
+            "List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `dag-ulw` nodes or `ulw-work` board rows come from the plan without re-planning; planning itself stays a bounded in-session lane.",
             ADAPTATION_QUALITY_READ_RULE,
             *_RALPLAN_IDEAL_STATE_BAR,
             *_PLAN_AMBITION_BAR,
             "Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.",
-            "When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.",
-            "Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
+            "When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `ulw-research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `ulw-research` artifact contract requires, and consume it instead of planning on assumptions.",
+            "Consume a recorded `ulw-research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
             PLAN_ACCEPTANCE_ANSWER_RULE,
             "End with a selected executor/runtime handoff shape only after the plan is accepted.",
             ENGINE_FIT_RECOMMENDATION_RULE,
@@ -7755,8 +7758,8 @@ _DEFINITIONS = [
             "If requirements are still fuzzy, route back to the `deep-interview` workflow before planning.",
             "If current-source evidence is missing, route a `research` step before accepting the plan.",
             PortableLine(
-                "If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.",
-                "If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.",
+                "If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ulw-work` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.",
+                "If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`ulw-work` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.",
             ),
         ),
         situations=(
@@ -7790,8 +7793,8 @@ _DEFINITIONS = [
                 *_RALPLAN_IDEAL_STATE_BAR,
                 *_PLAN_AMBITION_BAR,
                 "Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.",
-                "When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.",
-                "Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
+                "When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `ulw-research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `ulw-research` artifact contract requires, and consume it instead of planning on assumptions.",
+                "Consume a recorded `ulw-research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
                 PLAN_ACCEPTANCE_ANSWER_RULE,
                 "End with a selected executor/runtime handoff shape only after the plan is accepted.",
                 ENGINE_FIT_RECOMMENDATION_RULE.portable,
@@ -7805,7 +7808,7 @@ _DEFINITIONS = [
             "artifact_expectations": "a8d0abdc76de4e76641b6c958937b875bb0c6103cc5c8a5374965a8ef6531213",
             "safety_rules": "da7d45f616a86bdbcddd220ab3e4768f29770f898d106e144012d60ae5f34fa2",
             "opening_steps": "f839a5ee9ecaca2834a76d29b601f18e03ca292e0abc0b2af5c92274b5fa4c7e",
-            "quality_bar": "f5ffeed8483244fd0c5f9ed2e606ffe5b7871c20906c0208cf1bc683b38e0fa9",
+            "quality_bar": "e8eae08fd8e597c708803d1322ad9d0ddf1a4da3e5819fe055c3065089f0f848",
             "why_this_exists": "7c8d4e7c04114ed3e5fa532095f54cbd4f36aa5333d34f873c40d516f27c29e1",
         },
     ),
@@ -7989,7 +7992,7 @@ _DEFINITIONS = [
             "When the reviewed work ran in a Hermes session, cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) to scope which workspace files its read_file, write_file, and patch calls touched, with the outcome Hermes recorded; it is file lineage, never file-content, diff, test, review, CI, or merge evidence.",
             PortableLine(
                 "For native `omh_todo` checkpoints, load `omh-todo-checklist/references/closing-a-story.md`; `record` then `recall` this review declaration. Stored declarations are not proof.",
-                "For native `omh_todo` checkpoints, `record` then `recall` this review declaration. Stored declarations are not proof.",
+                "On Hermes, for native `omh_todo` checkpoints, `record` then `recall` this review declaration. Stored declarations are not proof.",
             ),
         ),
         why_this_exists="`code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal.",
@@ -8674,7 +8677,7 @@ _DEFINITIONS = [
         handoff_policy=(
             "Hermes owns the audit, baseline, hypothesis, budget, and status; each optimization code edit runs in the "
             "Hermes harness (a `delegate_task` lane routed with `omh_delegate_route`) unless the user chose an external "
-            "coding owner, in which case it goes through `maestro`; either way it returns as observed re-measurement."
+            "coding owner, in which case it goes through `ulw-maestro`; either way it returns as observed re-measurement."
         ),
         required_inputs=(
             "symptom or suspected slow surface",
@@ -8704,7 +8707,7 @@ _DEFINITIONS = [
             "Record a baseline and name the evaluator command before proposing any optimization edit.",
             "Attack only a hot path shown by a measurement or profile; never micro-optimize unmeasured code.",
             PortableLine(
-                "Keep every fix the smallest reversible change and run its code edit in the Hermes harness, or through `maestro` when the user chose an external coding owner.",
+                "Keep every fix the smallest reversible change and run its code edit in the Hermes harness, or through `ulw-maestro` when the user chose an external coding owner.",
                 "Keep every fix the smallest reversible change and run its code edit through the host's coding mechanism, or with the coding agent the user chose.",
             ),
             "Re-measure after each change and report deltas only from observed evidence; record the baseline as repeated runs (count and warm-up stated) with median and spread, and treat a delta smaller than the spread as no result.",
@@ -9189,7 +9192,7 @@ _DEFINITIONS = [
         ),
         bad_example=SkillExample(
             prompt="add a dark mode toggle to my settings page",
-            expected="Route to frontend or coding delegation instead of capability policy.",
+            expected="Route to `frontend` or coding delegation instead of capability policy.",
             why="That is a feature in the user's own product, not an OMH capability family.",
         ),
         final_checklist=(
@@ -9482,7 +9485,7 @@ _DEFINITIONS = [
             "For X/Twitter scraping or trend analysis, keep x_platform_data as a domain affinity rather than a role alias: prefer confirmed-active Grok, then Kimi K3.1 Pro, then Gemini, without removing the rest of the route or overriding an explicit model.",
             "When a recommendation head is missing, choose the first confirmed-active owner-compatible candidate in that chain. Only after every selected category, role-slot, and domain chain is exhausted, consult the shared final order Claude Opus 5.5 then GPT-6.1 Sol. If no candidate is confirmed active anywhere, keep the selector on its owner's native default model and let the rest of OMH setup finish without a model-config write.",
             "Give provider-specific native next actions without claiming provider readiness: use installed Hermes flows for OpenAI OAuth/OpenAI Codex, Anthropic or an existing Claude provider, Qwen OAuth or Alibaba, Gemini/Google/Vertex, Grok/xAI, Kimi, GLM/Z.AI, DeepSeek, or an already-working custom provider; preserve working alternatives.",
-            "Closing step: once model routing/chains are confirmed, ask once whether the user also wants to set up coding delegation (the maestro lane) for an external coding CLI -- do not ask before model setup is done and never auto-enable it. Point at `omh coding executor-skills --profile <profile>` for skill-set discovery, `~/.omh/routing/dispatch-models.json` for an optional per-owner model preference, and the `ulw-maestro` skill for the handoff itself; name Codex and Claude Code neutrally rather than favoring either.",
+            "Closing step: once model routing/chains are confirmed, ask once whether the user also wants to set up coding delegation (the `maestro` lane) for an external coding CLI -- do not ask before model setup is done and never auto-enable it. Point at `omh coding executor-skills --profile <profile>` for skill-set discovery, `~/.omh/routing/dispatch-models.json` for an optional per-owner model preference, and the `ulw-maestro` skill for the handoff itself; name Codex and Claude Code neutrally rather than favoring either.",
         ),
         why_this_exists=(
             "`model-setup` exists to turn local model history into a safe, user-confirmed activation flow: Hermes retains "
@@ -11258,7 +11261,7 @@ _DEFINITIONS.append(
         ),
         why_this_exists=(
             "`agent-instructions` exists because the file every handoff target reads first had no owner: `rules-distill` "
-            "extracts rule candidates, `codebase-onboarding` builds a human reading path, and `context` aligns terminology, "
+            "extracts rule candidates, `codebase-onboarding` builds a human reading path, and `omh-context` aligns terminology, "
             "and each reads that file without writing it."
         ),
         opening_steps=(

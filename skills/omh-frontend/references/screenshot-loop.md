@@ -74,7 +74,7 @@ that shows it, cropped or annotated when the defect is small. Triage
 orders the fixing and, when a loop is cut short, states exactly what
 remains at which severity.
 
-## Where visual-qa takes over
+## Where `omh-visual-qa` takes over
 
 This loop is the builder's inner iteration, not the QA verdict. The
 enumeration of what to capture — every route, viewport, scroll

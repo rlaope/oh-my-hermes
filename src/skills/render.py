@@ -372,7 +372,6 @@ _CANONICAL_LINE_PREFIXES = (
     "quality tier:",
     "reasoning demand:",
     "preferred harness",
-    "- current lane:",
     "name:",
     "related_skills:",
 )
@@ -403,6 +402,30 @@ _CHAIN_SEPARATOR = re.compile(r"(?:, |, or |, and | or | and )")
 # `owner/repo@sha` names an upstream project's skill, never an OMH one.
 _UPSTREAM_ATTRIBUTION = re.compile(r"[\w.-]+/[\w.-]+@[0-9a-f]{7,}")
 _WORD = re.compile(r"[A-Za-z]+")
+
+
+# A generic-tool checkpoint target: the name after `->` or a `/` in that line.
+_CHECKPOINT_TARGET = re.compile(r"(?:(?<=->)|(?<=/))[a-z0-9-]+")
+_CHECKPOINT_LINE_PREFIX = "- Generic-tool checkpoint:"
+
+
+def _shared_rail_context_markdown() -> str:
+    """The rail's context block, with the checkpoint's targets written as loadable labels.
+
+    The plugin bundle's checkpoint line speaks catalog names because the per-turn
+    primer shares it. This page is what a skill reads when it is about to pick a
+    sibling, so here each target is a name `skill_view` loads.
+    """
+    installed = _installable_skill_names()
+
+    def _label(match: re.Match[str]) -> str:
+        name = match.group(0)
+        return omh_skill_display_name(name) if name in installed else name
+
+    return "\n".join(
+        _CHECKPOINT_TARGET.sub(_label, line) if line.startswith(_CHECKPOINT_LINE_PREFIX) else line
+        for line in awareness_shared_context_markdown().split("\n")
+    )
 
 
 def translate_sibling_mentions(text: str, *, owner: str = "", path: str = "") -> str:
@@ -1195,7 +1218,7 @@ own evidence boundary, and a pointer to this file.
 Load this reference when harness selection, a missing Hermes runtime capability,
 multi-agent target topology, or the generic execution checklist is in play.
 
-{awareness_shared_context_markdown()}
+{_shared_rail_context_markdown()}
 
 ## Hermes Compatibility Contract
 
@@ -2572,7 +2595,7 @@ def _wiki_ecosystem_reference() -> str:
         lines.append(f"- Section: {item.section} | maturity: {item.maturity}")
         lines.append(f"- Summary: {item.summary}")
         lines.append(f"- OMH coverage: {coverage.status} (adoption priority {coverage.priority})")
-        lines.append(f"- Related surfaces: {', '.join(coverage.omh_surfaces)}")
+        lines.append("- Related surfaces: " + ", ".join(f"`{surface}`" for surface in coverage.omh_surfaces))
         lines.append("")
     lines.append(catalog.source.claim_boundary)
     return "\n".join(lines) + "\n"
@@ -3470,7 +3493,7 @@ def jit_learn_skill() -> SkillTemplate:
 
 1. Review only the current conversation and reviewed or explicitly approved OMH context. Never claim access to hidden Hermes memory and never create a learner profile.
 2. Always ask at least one confirmation question before research, including when the request appears complete. Ask exactly one question per turn. Resolve three readiness dimensions: **urgency/trigger** (why now), **current level** (what the user already knows or can do), and **application window** (where and by when this will be used), plus only practical constraints that change the recommendation. Record this evidence step as `confirmation_asked`.
-3. Reuse the deep-interview early-stop discipline and its shared ceiling of {max_rounds} rounds. After the mandatory first answer, stop asking as soon as the three readiness dimensions are clear. If the ceiling is reached, state assumptions and gaps instead of asking again.
+3. Reuse the `deep-interview` early-stop discipline and its shared ceiling of {max_rounds} rounds. After the mandatory first answer, stop asking as soon as the three readiness dimensions are clear. If the ceiling is reached, state assumptions and gaps instead of asking again.
 4. Confirm one target before research in exactly this semantic form: `Learn X now so I can do/decide Y in context Z by T.` Here T means the application deadline. When the initial request already supplies all readiness dimensions, use the mandatory first question to confirm this target so research can begin after one answer.
 5. Scope research around that target. Prefer primary, institutional, and credible practitioner sources; check authority, currency, availability, and links. Admit and rank by specific fit, authority, currency, time-to-first-value, and direct transfer. Never admit or rank from bestseller status, ratings, followers, charts, generic popularity, or unsupported reputation.
 6. Prepare the Markdown brief, then stop. Do not buy, download, enroll, subscribe, contact creators, bypass access controls, write externally, or imply those actions happened.
@@ -3845,11 +3868,33 @@ original `item` number, `kind` (`verification`, `review` or `qa`), `verdict`
 this declaration. An empty
 finding list declares none found, not a missing source. Keep raw outputs outside
 the dossier. Read back the exact checkpoint with `action=recall`: missing, stale
-and malformed differ from declared clean. The
-completion projection covers verification declarations for every accepted item;
-review and QA are applicable source records, not mandatory extra phases. A
-reported review/QA blocker also prevents declaration completeness. Even complete
-declarations remain `not_verified` until the agent checks original evidence.
+and malformed differ from declared clean.
+
+`ship`, `no_ship`, `pass` and `fail` are not verdicts the store accepts, so record
+each closing outcome as:
+
+| Closing outcome | `kind` | `verdict` | `findings` | Item in `blockers` |
+| --- | --- | --- | --- | --- |
+| Verification gate returns PASS | `verification` | `PASS` | empty | no |
+| Verification gate returns HOLD or BLOCK | `verification` | `HOLD` or `BLOCK` | the missing or failed checks | yes |
+| Review closes `ship` with no finding | `review` | `PASS` | empty | no |
+| Review closes `ship` with findings left open | `review` | `PASS` | the open findings | yes |
+| Review closes `no_ship` | `review` | `BLOCK` | the blocking findings | yes |
+| Review could not reach a verdict | `review` | `HOLD` | what could not be assessed | yes |
+| QA passes | `qa` | `PASS` | empty | no |
+| QA fails | `qa` | `BLOCK` | the failed scenarios | yes |
+| QA could not run its scenarios | `qa` | `HOLD` | what did not run | yes |
+
+`recall` with the current revision and environment reports `completion`. An item
+is in `blockers` when the latest current row of any kind for it has a verdict
+other than `PASS` or any finding at all, so `HOLD` and `BLOCK` count the same and
+a `ship` that leaves findings open still blocks. `missing` lists the items with no
+current verification row; review and QA are applicable source records, not
+mandatory extra phases. `declarations_complete` is true only when both lists are
+empty. A later row for the same item and kind replaces the earlier one, so a
+blocker clears by recording the fixed result, never by dropping a finding. Even
+complete declarations remain `not_verified` until the agent checks original
+evidence.
 
 `verification_receipt/v1` references reuse the existing immutable receipt key,
 which binds revision, command, toolchain, environment and claim scope. A stored
@@ -7101,7 +7146,7 @@ The bucket set is closed. If distillation seems to need a fifth bucket, the extr
 
 The run ends with the bundle handed to a separate planning pass, and it ends there.
 
-State plainly that the bundle ({buckets}) is INPUT to planning, name the follow-on workflow -- `ralplan` when the plan itself needs review gates, `plan` when the shape is already agreed -- and stop.
+State plainly that the bundle ({buckets}) is INPUT to planning, name the follow-on workflow -- `ulw-plan` when the plan itself needs review gates, `omh-plan` when the shape is already agreed -- and stop.
 
 **The anti-pattern:** treating the bundle as the plan. The four buckets read like a plan's front matter, which is exactly why the substitution is tempting and exactly why it is wrong. The bundle contains no sequence, no owner, no acceptance criteria, and no verification commands, because producing those is the planner's job and this workflow deliberately never did it. Emitting steps here skips the reviewed-plan gate and ships a task list that nobody planned.
 
@@ -9899,8 +9944,8 @@ the last three are findings it hands on.
 | Extreme gradients | loud multi-stop gradients on surfaces, buttons, or headline text | delete or flatten them unless the brand owns that look |
 | Stacked section labels | a small label, a heading, a subheading, and one more paragraph over each section; decorative emoji badges | delete every layer that repeats what the heading says |
 | Korean body text below 14px | Korean body copy at 11-13px | raise it to 14px; a dense data table keeps its size only with the reason written down |
-| Default palette | a framework-default blue (`#3B82F6`) or a blue-to-purple scheme nobody chose | report it; a new palette is a design decision for `frontend` |
-| Uniform grid | rows of equal cards in a perfect 3 or 4 columns when the items are not equals | report it; a new layout is `frontend` work |
+| Default palette | a framework-default blue (`#3B82F6`) or a blue-to-purple scheme nobody chose | report it; a new palette is a design decision for `omh-frontend` |
+| Uniform grid | rows of equal cards in a perfect 3 or 4 columns when the items are not equals | report it; a new layout is `omh-frontend` work |
 
 Deletion-first still holds. Removing a shadow, a label, or a gradient is a
 cleanup. Picking a new palette or a new layout is a redesign, and a redesign
@@ -11895,8 +11940,9 @@ terminal branch from Proposed.
   the reason recorded.
 - **Superseded** - replaced; the record stays in the tree as history.
 - **Rejected** - considered and not adopted, kept with the reasons. Rejected
-  records are the corpus `decision-recall` reads before the team re-litigates
-  an alternative; deleting one deletes the warning.
+  records stay in the decision log so a reader meets the argument before the
+  team re-litigates an alternative; deleting one deletes the warning. They do
+  not feed `decision-recall`, which covers memory candidates a person rejected.
 
 ## Review checklists
 
@@ -12574,7 +12620,7 @@ def _forms_and_input_reference() -> str:
     return """# Forms and Input
 
 Load this before writing a form, a text composer (chat box, comment field),
-or a dialog. The accessibility-audit skill's FORM rules check the same ground
+or a dialog. The `accessibility-audit` skill's FORM rules check the same ground
 after the code exists; these rules put it in the first draft, where it costs
 least.
 
@@ -12641,7 +12687,7 @@ least.
   idempotency key created once per user intent and reused on retry, so a
   retry after a timeout does not create the record twice.
 - An optimistic submit follows the cancel / snapshot / apply, restore on
-  error, invalidate on settle triple in the frontend-refactor skill's
+  error, invalidate on settle triple in the `frontend-refactor` skill's
   `omh-frontend-refactor/references/state-discipline.md`, section 6.
 
 ## Enter to submit, and IME composition
@@ -14460,7 +14506,7 @@ that shows it, cropped or annotated when the defect is small. Triage
 orders the fixing and, when a loop is cut short, states exactly what
 remains at which severity.
 
-## Where visual-qa takes over
+## Where `visual-qa` takes over
 
 This loop is the builder's inner iteration, not the QA verdict. The
 enumeration of what to capture — every route, viewport, scroll
@@ -15646,7 +15692,7 @@ When the user then asks to review, refine, accept, or hand off the plan, read th
 
 ## Two stores
 
-The file stays where `/plan` wrote it. A reviewed plan that `ralplan` records goes under `.omh/plans/`; when a task has both, the closing brief names the one the user accepted.
+The file stays where `/plan` wrote it. A reviewed plan that `ulw-plan` records goes under `.omh/plans/`; when a task has both, the closing brief names the one the user accepted.
 """
 
 

@@ -18,7 +18,7 @@ evaluation; adopting one is a separate decision with its own evidence.
 - Section: Guides & Documentation | maturity: beta
 - Summary: Comprehensive community documentation for Hermes Agent. Covers v0.2.0 in detail, useful supplement to the official docs for deployment patterns.
 - OMH coverage: partial (adoption priority medium)
-- Related surfaces: wiki, content-operator, source-finder, workspace-audit, doctor, toolbelt-readiness
+- Related surfaces: `wiki`, `omh-content-operator`, `omh-source-finder`, `omh-workspace-audit`, `omh-doctor`, `omh-toolbelt-readiness`
 
 ## Hermes Console
 
@@ -26,7 +26,7 @@ evaluation; adopting one is a separate decision with its own evidence.
 - Section: Integrations & Bridges | maturity: beta
 - Summary: Obsidian integration for Hermes Agent. Runs Hermes in a tabbed terminal inside Obsidian and bridges selected-note/cursor context through a local companion plugin, with background status alerts when agent runs finish.
 - OMH coverage: partial (adoption priority high)
-- Related surfaces: memory-sync, wiki, workflow-learning, instinct-ledger, skill-health
+- Related surfaces: `omh-memory-sync`, `wiki`, `omh-workflow-learning`, `omh-instinct-ledger`, `omh-skill-health`
 
 ## HermesWiki
 
@@ -34,7 +34,7 @@ evaluation; adopting one is a separate decision with its own evidence.
 - Section: Guides & Documentation | maturity: beta
 - Summary: Community-maintained wiki with practical patterns and deployment advice for building autonomous agents with Hermes.
 - OMH coverage: partial (adoption priority medium)
-- Related surfaces: wiki, content-operator, source-finder, workspace-audit, doctor, toolbelt-readiness
+- Related surfaces: `wiki`, `omh-content-operator`, `omh-source-finder`, `omh-workspace-audit`, `omh-doctor`, `omh-toolbelt-readiness`
 
 ## keepnotes
 
@@ -42,7 +42,7 @@ evaluation; adopting one is a separate decision with its own evidence.
 - Section: Memory Providers | maturity: beta
 - Summary: Reflective memory layer. Stores and resurfaces notes at contextually relevant moments.
 - OMH coverage: partial (adoption priority high)
-- Related surfaces: memory-sync, wiki, workflow-learning, instinct-ledger, skill-health
+- Related surfaces: `omh-memory-sync`, `wiki`, `omh-workflow-learning`, `omh-instinct-ledger`, `omh-skill-health`
 
 ## loremaster
 
@@ -50,7 +50,7 @@ evaluation; adopting one is a separate decision with its own evidence.
 - Section: Skills & Plugins | maturity: experimental
 - Summary: AI scrum-master and PM skill pack extracted from a production multi-project deployment. Sprint ceremonies with planning poker, backlog proposals with verifiable done criteria, plan-conflict detection, and a per-project wiki vault with a knowledge graph. Every external write (Jira, wiki commits) goes through per-item human approval. MIT.
 - OMH coverage: partial (adoption priority high)
-- Related surfaces: memory-sync, wiki, workflow-learning, instinct-ledger, skill-health
+- Related surfaces: `omh-memory-sync`, `wiki`, `omh-workflow-learning`, `omh-instinct-ledger`, `omh-skill-health`
 
 ## obsidian-auto-context
 
@@ -58,7 +58,7 @@ evaluation; adopting one is a separate decision with its own evidence.
 - Section: Skills & Plugins | maturity: experimental
 - Summary: Captures each session's findings, decisions, and action items into an Obsidian vault as tagged, wiki-linked Markdown with daily-note rollups. Secrets are redacted before anything touches disk. MIT.
 - OMH coverage: partial (adoption priority high)
-- Related surfaces: memory-sync, wiki, prompt-import-readiness, external-connector-readiness, skill-scout
+- Related surfaces: `omh-memory-sync`, `wiki`, `omh-prompt-import-readiness`, `omh-external-connector-readiness`, `omh-skill-scout`
 
 ## personal-api
 
@@ -66,6 +66,6 @@ evaluation; adopting one is a separate decision with its own evidence.
 - Section: Skills & Plugins | maturity: experimental
 - Summary: Turn your Obsidian vault into an identity layer any AI agent can read in under 30 seconds
 - OMH coverage: partial (adoption priority high)
-- Related surfaces: memory-sync, wiki, prompt-import-readiness, external-connector-readiness, skill-scout
+- Related surfaces: `omh-memory-sync`, `wiki`, `omh-prompt-import-readiness`, `omh-external-connector-readiness`, `omh-skill-scout`
 
 Static catalog parsed from upstream README. This is not plugin installation, runtime load, safety review, or endorsement evidence.

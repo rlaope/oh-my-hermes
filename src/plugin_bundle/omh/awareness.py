@@ -7290,12 +7290,7 @@ def awareness_workflow_context_markdown(skill_name: str) -> str:
     lane = _lane_for_skill(skill_name, payload["lanes"])
     lane_line = "Use `omh_recommend` or the `oh-my-hermes` router for workflow choice, and `omh_capabilities` for manifest detail."
     if lane:
-        lane_skills = tuple(str(skill) for skill in lane["skills"])
-        shown_skills = lane_skills[:8]
-        skills = "`, `".join(shown_skills)
-        if len(lane_skills) > len(shown_skills):
-            skills = f"{skills}`, `+{len(lane_skills) - len(shown_skills)} more"
-        lane_line = f"Current lane: **{lane['label']}** (`{skills}`) - {lane['use_for']}."
+        lane_line = f"Current lane: **{lane['label']}** - {lane['use_for']}."
     return "\n".join(
         [
             "## Workflow Lane",

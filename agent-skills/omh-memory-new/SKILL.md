@@ -1,6 +1,6 @@
 ---
 name: "omh-memory-new"
-description: "[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a past decision use omh memory recall or decision-recall. Use when the user says: memory-new, new memory, project memory, product memory, remember this project, remember this product, do not save, do not save this token."
+description: "[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a past decision use omh memory recall or `omh-decision-recall`. Use when the user says: memory-new, new memory, project memory, product memory, remember this project, remember this product, do not save, do not save this token."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:
@@ -49,7 +49,7 @@ Bad example:
 ## Recovery Notes
 
 - If project versus user scope or lasting versus temporary retention is ambiguous, retain the bounded summary as a candidate, mark capture unresolved, and hand back one scope-or-durability question without claiming a write.
-- If omh_memory returns error, retain memory_new_candidate/v1 as prepared only, mark the write not_observed, and hand back the bounded summary, record_type, tags, scope, and retention_class for the omh memory capture fallback.
+- If `omh memory capture` is unavailable or fails, retain memory_new_candidate/v1 as prepared only, mark the write not_observed, and hand back the bounded summary, record_type, tags, scope, and retention_class. On Hermes the same applies when omh_memory returns error.
 - If capture returns pending_review with review_reason relative_time_phrase, restate the fact with an absolute date and capture it again in the same turn; for any other review_reason, retain the staged memory_new_candidate/v1, mark approval not_observed, and hand back the stated reason without treating it as an approved record.
 
 

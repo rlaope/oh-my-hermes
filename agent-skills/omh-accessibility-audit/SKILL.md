@@ -52,7 +52,7 @@ Bad example:
 
 - If no rendered or DOM/accessibility-tree evidence exists, prepare the audit plan and return verdict BLOCK with blocker `missing_accessibility_evidence`.
 - If automated scan output exists without keyboard or screen-reader evidence, keep the verdict HOLD and request the smallest focus/announcement trace.
-- If the request is mostly visual layout or CJK clipping, route to visual-qa while preserving accessibility follow-up checks.
+- If the request is mostly visual layout or CJK clipping, route to `omh-visual-qa` while preserving accessibility follow-up checks.
 
 
 
@@ -78,7 +78,7 @@ Quality bar:
 - Give every finding a stable rule ID from `omh-accessibility-audit/references/a11y-rules.md` - category prefix plus number - beside its WCAG criterion and severity, so two audits of the same surface produce comparable findings and a rerun can say which are resolved, carried, or new.
 - Partition each fix by whether the markup determines the answer: `auto` when the correct output follows from the structure itself, `manual` whenever it requires knowing what the content means. A meaning-dependent fix marked `auto` is a defect - it produces confident, wrong alternative text - and a fix that is only half structural is split, never rounded to either side.
 - Read the surface fully and collect every finding before reporting one; report rule ID, severity, location, WCAG criterion, fix class, and the fix, so the `auto` rows can be handed to an executor as a batch while the `manual` rows go back carrying the question each one needs answered.
-- Route design-system or implementation changes back to frontend or the selected coding owner, then recheck with visual-qa/accessibility evidence.
+- Route design-system or implementation changes back to `omh-frontend` or the selected coding owner, then recheck with visual-qa/accessibility evidence.
 
 Required inputs:
 

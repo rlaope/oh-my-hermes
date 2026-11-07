@@ -1,6 +1,6 @@
 ---
 name: "omh-memory-sync"
-description: "[omh] Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use omh_memory recall or decision-recall. Use when the user says: memory-sync, memory curation, memory review, memory inspect, memory check, memory update, context cleanup, curate memory."
+description: "[omh] Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use `omh-memory-new`, and for a past decision use omh_memory recall or `omh-decision-recall`. Use when the user says: memory-sync, memory curation, memory review, memory inspect, memory check, memory update, context cleanup, curate memory."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:
@@ -56,7 +56,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Retained knowledge** (`memory-new`, `memory-sync`, `decision-recall`, `wiki`) - memory, rejected alternatives, wiki notes, retrieval, and staleness.
+- Current lane: **Retained knowledge** - memory, rejected alternatives, wiki notes, retrieval, and staleness.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
@@ -129,7 +129,7 @@ Quality bar:
 - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
 - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - State that Hermes-native and external provider/vector context is not_omh_reviewed, can nominate a candidate only, and may receive rendered OMH prefetch content through a configured Hermes runtime model request.
-- Send memory-provider lifecycle questions -- enabling, switching, pausing, retention, deletion, export, or failed synchronization -- to external-connector-readiness, which owns the provider posture this review cannot establish.
+- Send memory-provider lifecycle questions -- enabling, switching, pausing, retention, deletion, export, or failed synchronization -- to `omh-external-connector-readiness`, which owns the provider posture this review cannot establish.
 
 Handoff policy:
 

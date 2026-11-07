@@ -50,14 +50,14 @@ Bad example:
 
 ## Recovery Notes
 
-- If the codegraph command is unavailable, route to doctor or toolbelt-readiness before claiming freshness.
+- If the codegraph command is unavailable, route to `omh-doctor` or `omh-toolbelt-readiness` before claiming freshness.
 - If no task focus is supplied, prepare build/summary guidance and ask for focus only when a handoff pack would otherwise be misleading.
 - If the index is stale or missing, report the stale/missing state and next safe command rather than treating prior summaries as current.
 - The codegraph indexes Python files only; when `omh codegraph summary` shows no Python files, say so, navigate with `rg` or `ast-grep`, and present no handoff pack.
 
 ## Workflow Lane
 
-- Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
+- Current lane: **Intent -> plan** - clarify, plan, ship, or loop goals.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
@@ -80,7 +80,7 @@ Quality bar:
 - Name repo root, refresh depth, task focus, artifact write policy, and stop condition.
 - Choose build, summary, handoff, `--write`, and `--json` deliberately instead of treating all codegraph commands as equivalent.
 - Separate prepared command plans from observed command outputs, generated artifacts, and executor-ready handoffs.
-- Route broader first-read orientation to codebase-onboarding and implementation to ultrawork or the selected coding owner.
+- Route broader first-read orientation to `omh-codebase-onboarding` and implementation to `ulw-work` or the selected coding owner.
 
 Handoff policy:
 

@@ -48,7 +48,7 @@ Bad example:
 ## Recovery Notes
 
 - If the request is install/setup health, it is outside this skill.
-- If the request is a manager status or throughput review, route to agent-ops-review.
+- If the request is a manager status or throughput review, route to `omh-agent-ops-review`.
 - If the request is a durable self-improvement record after diagnosis, it is outside this skill.
 
 

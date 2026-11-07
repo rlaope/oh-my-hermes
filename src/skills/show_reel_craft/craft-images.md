@@ -1,5 +1,7 @@
 # Images: Generation, Real Photos, Cutouts, Post-processing
 
+Script paths on this page use `S=<skill_dir>/toolkit/scripts`, where `<skill_dir>` is this skill's folder.
+
 ## Contents
 
 - Deciding which images to use
@@ -95,8 +97,8 @@ bash $S/codex_ref_image.sh <project>/assets/gen/g01.png \
 ## Post-processing and checks
 
 ```bash
-python3 scripts/prep_images.py <project>/assets/gen <project>/assets/photos --out <project>/assets/img [--blur] [--cutout]
-python3 scripts/prep_images.py --sheet <project>/assets/img --out <project>/qa/sheet_images.png
+python3 $S/prep_images.py <project>/assets/gen <project>/assets/photos --out <project>/assets/img [--blur] [--cutout]
+python3 $S/prep_images.py --sheet <project>/assets/img --out <project>/qa/sheet_images.png
 ```
 
 - It automatically crops off letterbox black bars, fits the long side to 2400px, and saves as JPG at quality 92.

@@ -57,8 +57,9 @@ terminal branch from Proposed.
   the reason recorded.
 - **Superseded** - replaced; the record stays in the tree as history.
 - **Rejected** - considered and not adopted, kept with the reasons. Rejected
-  records are the corpus `omh-decision-recall` reads before the team re-litigates
-  an alternative; deleting one deletes the warning.
+  records stay in the decision log so a reader meets the argument before the
+  team re-litigates an alternative; deleting one deletes the warning. They do
+  not feed `omh-decision-recall`, which covers memory candidates a person rejected.
 
 ## Review checklists
 
