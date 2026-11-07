@@ -154,7 +154,10 @@ FROZEN_HANGUL_TRIGGERS_BY_SKILL: dict[str, int] = {
     "idea-to-deploy": 8,
     "img-summary": 55,
     "instinct-ledger": 6,
-    "live-info-operator": 13,
+    # 13 -> 17 (2026-11-07, skill audit): bare `주가` dispatched "이번 주가 고비야" and
+    # "외주가 밀렸어". It becomes five lookups (`주가 알려`, `주가 조회`, `주가 확인`,
+    # `주가 어때`, `주가 얼마`), a narrowing that costs more entries, not padding.
+    "live-info-operator": 17,
     "loop": 8,
     "materials-package": 27,
     "media-input-operator": 19,
@@ -233,10 +236,11 @@ FROZEN_HANGUL_TRIGGERS_BY_SKILL: dict[str, int] = {
     # 7 -> 8 (2026-11-07, skill audit): a project handover had no signal in Korean;
     # `인수인계 문서 써줘` carries the request, and its words are held back.
     "wiki": 8,
-    # 0 -> 2 (2026-11-07, skill audit): the skill could not be reached in Korean at all.
-    # `시장 규모` and `경쟁사 분석` are terms of the job, held back word by word and read
-    # only under a request verb of `_market_research_korean_request`.
-    "market-research": 2,
+    # 0 -> 4 (2026-11-07, skill audit): the skill could not be reached in Korean at all.
+    # `시장 규모` and `경쟁사 분석` are terms of the job, with their common spacing
+    # (`시장규모`, `경쟁사분석`), held back word by word and read only right before a
+    # request verb of `_market_research_korean_request`.
+    "market-research": 4,
     "workflow-learning": 11,
     "workspace-audit": 4,
     "workspace-file-operator": 12,

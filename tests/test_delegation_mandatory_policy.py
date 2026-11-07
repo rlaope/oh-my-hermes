@@ -25,6 +25,7 @@ _CODING_SHAPED_MESSAGES = (
     "fix the bug",
     "implement the new login feature in src/auth/login.py with tests",
     "refactor this code",
+    "refactor this function",
     "리팩토링 해줘",
     "write code for the parser and fix the failing tests",
     "코딩 해줘",

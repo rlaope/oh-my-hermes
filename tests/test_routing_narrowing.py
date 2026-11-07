@@ -22,6 +22,8 @@ class MatcherTests(unittest.TestCase):
         self.assertFalse(phrase_is_spoken("at the same time instead of", "time in"))
         self.assertTrue(phrase_is_spoken("what is the time in tokyo", "time in"))
         self.assertTrue(phrase_is_spoken("list the attack scenarios", "attack scenario"))
+        self.assertTrue(phrase_is_spoken("split this into reviewable prs", "reviewable pr"))
+        self.assertFalse(phrase_is_spoken("make a print", "make a pr"))
 
     def test_the_weekly_and_the_stock_price_are_apart_in_the_guard(self) -> None:
         self.assertNotEqual(_route("팀 주간 운영 리듬 만들어줘")["selected_skill"], "live-info-operator")
@@ -33,6 +35,20 @@ class MatcherTests(unittest.TestCase):
             "live-info-operator",
         )
         self.assertEqual(_route("time in tokyo")["selected_skill"], "live-info-operator")
+
+
+class ShortlistedPhraseTests(unittest.TestCase):
+    def test_a_named_phrase_a_rival_leads_is_still_offered(self) -> None:
+        for message, skill in (
+            ("someone is exfiltrating customer data", "security-event-response"),
+            ("instrumentation audit for this agent", "agent-ops-review"),
+            ("do a tracing audit for this agent", "agent-ops-review"),
+        ):
+            with self.subTest(message=message):
+                route = _route(message)
+                self.assertEqual(route["action"], "clarify")
+                offered = [row.get("skill") for row in route["candidate_handoff"]["candidates"]]
+                self.assertIn(skill, offered)
 
 
 class ToolbeltGapWordTests(unittest.TestCase):
@@ -54,7 +70,7 @@ class MarketResearchKoreanTests(unittest.TestCase):
                 self.assertEqual(_route(message)["candidate_skill"], "market-research")
 
     def test_the_words_under_another_verb_or_no_request_do_not(self) -> None:
-        for message in ("시장 규모 슬라이드 보내줘", "시장 규모가 작아서 걱정이야", "경쟁사 분석 회의 잡아줘", "경쟁사 분석 보고서 번역해줘"):
+        for message in ("시장 규모 슬라이드 보내줘", "시장 규모가 작아서 걱정이야", "경쟁사 분석 회의 잡아줘", "경쟁사 분석 보고서 번역해줘", "광장시장 규모 계산해줘", "시장 규모 뜻 정리해줘", "경쟁사 분석 코드 정리해줘"):
             with self.subTest(message=message):
                 self.assertNotEqual(_route(message)["candidate_skill"], "market-research")
 

@@ -117,8 +117,8 @@
 },
 {
 "anchors":"chos claud cli codex compos delegation instruction maestro ulw",
-"hangul":"넘기 드오 롬프 실행 에이 오프 외부 위임 이전 전트 준비 코딩 트에 프롬 프트 핸드 행기",
-"hangul_anchors":"넘기 드오 롬프 실행 에이 오프 외부 위임 이전 전트 코딩 트에 프롬 프트 핸드 행기",
+"hangul":"넘기 넘길 드오 롬프 실행 에이 오프 외부 위임 이전 전트 준비 코딩 트에 프롬 프트 핸드 행기",
+"hangul_anchors":"넘기 넘길 드오 롬프 실행 에이 오프 외부 위임 이전 전트 코딩 트에 프롬 프트 핸드 행기",
 "label":"ulw-maestro",
 "name":"maestro",
 "situation":"Coding owner already chosen, handoff pending",
@@ -429,8 +429,8 @@
 },
 {
 "anchors":"blocker leadership operat ops queu weekly",
-"hangul":"리뷰 리스 리즈 릴리 상태 스크 운영 주간",
-"hangul_anchors":"리스 리즈 릴리 상태 운영 주간",
+"hangul":"로커 리뷰 리스 리즈 릴리 블로 상태 선순 순위 스크 우선 운영 위랑 주간 크랑 크와",
+"hangul_anchors":"로커 리스 리즈 릴리 블로 상태 선순 순위 우선 운영 위랑 주간 크랑 크와",
 "label":"omh-ops-review",
 "name":"ops-review",
 "situation":"Recurring operating status and blockers",
@@ -659,7 +659,7 @@
 }
 },
 {
-"anchors":"400 a11y aa accessibility accessibl ada appearanc architect aria background blind color complianc contrast focus hard keyboard name navigation ratio reader reflow role screen screenreader size tab target text touch trap usabl valu wcag websit zoom",
+"anchors":"400 a11y aa accessibility accessibl ada appearanc architect aria background blind color complianc contrast focus hard keyboard name navigation ratio reader reflow role screen screenreader size tab target touch trap usabl valu wcag websit zoom",
 "hangul":"감사 검사 검토 게이 근성 내비 대비 리더 린리 명도 보드 비게 순서 스크 이션 접근 커스 크기 크린 키보 타깃 터치 포커 표시",
 "hangul_anchors":"감사 검사 검토 게이 근성 내비 대비 리더 린리 명도 보드 비게 순서 이션 접근 커스 크기 크린 키보 타깃 터치 포커 표시",
 "label":"omh-accessibility-audit",
@@ -675,7 +675,7 @@
 }
 },
 {
-"anchors":"analyz assuranc broken browser button cjk click clip consol cut dead imag interaction keyboard layout link look mobil navigation network pixel regression render responsiv right screenshot terminal text tui ui viewport visual wrong",
+"anchors":"analyz assuranc broken browser button cjk click clip consol cut dead imag interaction keyboard layout link look mobil navigation network pixel regression render responsiv right screenshot terminal tui ui viewport visual wrong",
 "hangul":"검증 글자 깨짐 레이 렌더 린샷 문제 미널 바꿈 비교 비주 스크 시각 아웃 이아 잘림 주얼 줄바 크린 터미 픽셀 한글 화면",
 "hangul_anchors":"검증 글자 깨짐 렌더 린샷 문제 미널 바꿈 비교 비주 시각 아웃 이아 잘림 주얼 줄바 크린 터미 픽셀 한글 화면",
 "label":"omh-visual-qa",
@@ -874,8 +874,8 @@
 },
 {
 "anchors":"automat automation blueprint continuously cron daily day digest discord morn noth notify ops ping post put recur schedul send silent slack telegram timed weekly",
-"hangul":"감시 계속 공유 그램 니터 동화 디스 레그 매일 매주 모니 반복 변화 보내 스케 스코 슬랙 없으 예약 용히 으면 자동 정기 조용 지켜 케줄 켜봐 코드 터링 텔레 화해",
-"hangul_anchors":"감시 계속 공유 그램 니터 동화 디스 레그 매일 매주 모니 반복 변화 보내 스케 스코 슬랙 없으 예약 용히 으면 자동 정기 조용 지켜 케줄 켜봐 터링 텔레 화해",
+"hangul":"감시 계속 공유 그램 니터 동화 디스 레그 매일 매주 모니 반복 변화 보내 복해 스케 스코 슬랙 없으 예약 용히 으면 자동 정기 조용 지켜 케줄 켜봐 코드 터링 텔레 화해",
+"hangul_anchors":"감시 계속 공유 그램 니터 동화 디스 레그 매일 매주 모니 반복 변화 보내 복해 스케 스코 슬랙 없으 예약 용히 으면 자동 정기 조용 지켜 케줄 켜봐 터링 텔레 화해",
 "label":"omh-automation-blueprint",
 "name":"automation-blueprint",
 "situation":"Recurring Hermes job on a schedule (cron, digests)",
@@ -1717,8 +1717,8 @@
 },
 {
 "anchors":"addressabl assumption demand pain purchas quantify rival seat side synthesiz trigger",
-"hangul":"경쟁 규모 분석 시장 쟁사",
-"hangul_anchors":"경쟁 규모 분석 시장 쟁사",
+"hangul":"경쟁 규모 분석 사분 시장 장규 쟁사",
+"hangul_anchors":"경쟁 규모 분석 사분 시장 장규 쟁사",
 "label":"omh-market-research",
 "name":"market-research",
 "situation":"Market sizing or customer/competitive analysis",
@@ -1897,7 +1897,7 @@
 }
 },
 {
-"anchors":"option probability rate scal text true typed",
+"anchors":"option probability rate scal true typed",
 "hangul":"",
 "hangul_anchors":"",
 "label":"omh-jev-ask",
@@ -2199,15 +2199,15 @@
 },
 {
 "anchors":"airport bitcoin btc crypto direction exchang forecast game info information krw last live near nearby night pric rate real restaurant scor seoul sport stock timezon today traffic usd weather won york zone",
-"hangul":"가격 간대 결과 경기 길찾 날씨 스포 시간 식당 예보 점수 주가 주변 지도 찾기 코인 포츠 현재 환율",
-"hangul_anchors":"가격 간대 결과 경기 길찾 날씨 스포 시간 식당 예보 점수 주가 주변 지도 찾기 코인 포츠 현재 환율",
+"hangul":"가격 간대 결과 경기 길찾 날씨 스포 시간 식당 어때 얼마 예보 점수 조회 주가 주변 지도 찾기 코인 포츠 현재 환율",
+"hangul_anchors":"가격 간대 결과 경기 길찾 날씨 스포 시간 식당 어때 얼마 예보 점수 조회 주가 주변 지도 찾기 코인 포츠 현재 환율",
 "label":"omh-live-info",
 "name":"live-info-operator",
 "situation":"Live rate, score, or local time a work task needs",
 "terms":{
-"1":"add after answer claim correctness data financ gate herm local nativ ordinary overlay policy prefer quality read request result retrieval sourc stat task tool without work",
+"1":"add after answer check claim correctness data financ gate herm made nativ never ordinary overlay policy prefer quality read request retrieval sourc stat task tool without work",
 "2":"airport bitcoin btc crypto direction exchang forecast freshness krw last lookup near nearby new night provider real restaurant seoul stock timezon today traffic unit usd won york",
-"3":"information map scor sport zone",
+"3":"information local map scor sport zone",
 "4":"current game pric",
 "5":"info operator rate time weather",
 "7":"live"
@@ -2215,14 +2215,14 @@
 },
 {
 "anchors":"adopt adoption affordabl agentchat agy antigravity assistant audio auth auto awar backend barg behavior blockchain bridg chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency devic discovery enough evaluat gateway genai graph handl home identity integration integrity keychain maco mailbox matrix messag microsoft minivers multimodal nextcloud oauth oci onequery oracl pair peer platform plugin privat real realtim receipt reliabl safety screenshot smart social solana spoken sql stack transaction trial universal voic weather websocket windy windymail wire workspac wxtrain xmr",
-"hangul":"그인 기기 기준 넥터 도입 라우 러그 리스 마트 멀티 모달 비도 비용 스마 스크 스턴 시스 어시 연동 외부 우팅 인증 자동 제어 준비 채택 커넥 턴트 트홈 티모 플러 홈어",
-"hangul_anchors":"그인 기기 기준 넥터 도입 라우 러그 리스 마트 멀티 모달 비도 비용 스마 스턴 시스 어시 연동 외부 우팅 인증 자동 제어 채택 커넥 턴트 트홈 티모 플러 홈어",
+"hangul":"그인 기기 기준 넥터 도입 라우 러그 리스 마트 멀티 모달 비도 비용 생성 스마 스크 스턴 시스 어시 연동 영상 외부 우팅 인증 자동 제어 준비 채택 커넥 턴트 트홈 티모 플러 홈어",
+"hangul_anchors":"그인 기기 기준 넥터 도입 라우 러그 리스 마트 멀티 모달 비도 비용 생성 스마 스턴 시스 어시 연동 영상 외부 우팅 인증 자동 제어 채택 커넥 턴트 트홈 티모 플러 홈어",
 "label":"omh-external-connector-readiness",
 "name":"external-connector-readiness",
 "situation":"Evaluating a plugin, connector, or API for adoption",
 "terms":{
 "1":"answer assess automatic befor choic coding deletion enabl evidenc executor fallback fresh freshness herm hook inventory miss modality named optional owner paus remov runtim scop toolbelt whether",
-"2":"agent agentchat agy antigravity assistant audio auto awar backend barg behavior benchmark blockchain bridg capability chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency delet devic disabl discovery enough failur gateway genai graph handl home integration integrity keychain lifecycl maco mailbox matrix messag microsoft migration minivers new nextcloud oauth observabl oci onequery oracl pair peer platform portability postur privat read real realtim receipt reliabl risk rollback screenshot smart social solana spoken sql stack sync time tool transaction turn universal voic weather websocket windy windymail wire workspac wxtrain xmr",
+"2":"agent agentchat agy antigravity assistant audio auto awar backend barg behavior benchmark blockchain bridg capability chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency delet devic disabl discovery enough failur gateway genai generation graph handl home integration integrity keychain lifecycl maco mailbox matrix messag microsoft migration minivers new nextcloud oauth observabl oci onequery oracl pair peer platform portability postur privat read real realtim receipt reliabl risk rollback screenshot smart social solana spoken sql stack sync text time tool transaction turn universal video voic weather websocket windy windymail wire workspac wxtrain xmr",
 "3":"adopt affordabl auth compar cost evaluat export identity multimodal retention safe safety switch",
 "4":"adoption rout",
 "5":"data memory trial",
@@ -2267,7 +2267,7 @@
 }
 },
 {
-"anchors":"announcement audienc changelog content copy draft email executiv guid land linkedin newsletter plain post publish rewrit social text tone voic word",
+"anchors":"announcement audienc changelog content copy draft email executiv guid land linkedin newsletter plain post publish rewrit social tone voic word",
 "hangul":"가이 객용 고객 공지 글쓰 널별 노트 뉴스 레이 레터 리즈 릴리 메일 문체 스레 쓰기 오퍼 요약 워크 이드 이메 이터 즈노 지문 채널 초안 콘텐 크플 텐츠 퍼레 플로",
 "hangul_anchors":"가이 객용 고객 공지 글쓰 널별 노트 뉴스 레터 리즈 릴리 메일 문체 스레 쓰기 오퍼 워크 이드 이메 이터 즈노 지문 채널 초안 콘텐 크플 텐츠 퍼레 플로",
 "label":"omh-content-operator",
@@ -2283,7 +2283,7 @@
 }
 },
 {
-"anchors":"audio clip extract extraction field graphic imag input media meet ocr pars photo pictur podcast pull receipt say screenshot text timestamp transcrib transcript transcription video webinar youtub",
+"anchors":"audio clip extract extraction field graphic imag input media meet ocr pars photo pictur podcast pull receipt say screenshot timestamp transcrib transcript transcription video webinar youtub",
 "hangul":"녹음 디오 라인 린샷 미지 샷에 수증 스크 스탬 스트 영상 영수 오디 요약 유튜 음성 이미 임라 임스 전사 지에 추출 크린 타임 탬프 텍스 튜브 회의",
 "hangul_anchors":"녹음 디오 라인 린샷 미지 샷에 수증 스탬 영상 영수 오디 유튜 음성 이미 임라 임스 전사 지에 추출 크린 타임 탬프 텍스 튜브 회의",
 "label":"omh-media-input",

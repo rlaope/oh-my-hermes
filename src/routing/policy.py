@@ -2008,6 +2008,7 @@ _TOOLBELT_READINESS_PHRASES = (
     "gpt 이미지 도구",
     "도구 연결",
     "연결체",
+    "웹 검색 연결",
 )
 _TOOLBELT_READINESS_TOKENS = _normalized_token_set(
     {
@@ -3704,11 +3705,9 @@ _VOICE_OPERATOR_TOKENS = _normalized_token_set(
         "spoken",
         "short",
         "terse",
-        "accessibility",
         "음성",
         "모바일",
         "짧은",
-        "접근성",
     }
 )
 _BROWSER_OPERATOR_PHRASES = (
@@ -4232,9 +4231,18 @@ _LIVE_INFO_OPERATOR_PHRASES = (
     "길찾기",
     "주변 식당",
 )
-# Read by `phrase_is_spoken`, not containment: "time in" is inside "time
-# instead" and "주가" is inside the folded "주간" (weekly).
-_LIVE_INFO_OPERATOR_SPOKEN_PHRASES = tuple(normalized_phrase(phrase) for phrase in ("time in", "주가"))
+# "time in" alone is inside "spend more time in the garden" and "time instead",
+# so it counts only leading the message or in a phrase that asks for the time.
+LIVE_TIME_LOOKUP_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in ("what is the time in", "what's the time in", "current time in", "local time in")
+)
+
+
+def live_time_lookup_said(normalized_query: str) -> bool:
+    return normalized_query.startswith("time in ") or any(phrase in normalized_query for phrase in LIVE_TIME_LOOKUP_PHRASES)
+
+
 _LIVE_INFO_OPERATOR_CONTEXT_TOKENS = _normalized_token_set(
     {
         "weather",
@@ -9997,8 +10005,9 @@ def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[s
     # The same holds for every word that is also a gap cue below: "the report is
     # missing a chart", "connect the dots" and "리액트로 설정 화면 만들어줘" name no
     # tool, and neither does a word that only says something is unset.
-    # A plugin or a tool said in Korean (`툴`) is itself named, so its gap word stands.
-    named_apart = bool(query_tokens & _TOOLBELT_READINESS_NAMED_APART_TOKENS)
+    # A plugin, a tool said in Korean (`툴`) or a connector the operator lane knows is
+    # itself named, so its gap word stands: "노션 연결 설정해줘".
+    named_apart = bool(query_tokens & (_TOOLBELT_READINESS_NAMED_APART_TOKENS | _CONNECTOR_OPERATOR_CONTEXT_TOKENS))
     tool_words = (_TOOLBELT_READINESS_TOKENS - ({"setup"} if named_apart else _TOOLBELT_READINESS_GAP_TOKENS)) & query_tokens
     if tool_words == {"api"} and not _contains_phrase(normalized_query, ("api key", "api keys", "api token", "credential", "api 키")):
         tool_words = set()
@@ -10273,7 +10282,7 @@ def _live_info_operator_guard_applies(normalized_query: str, query_tokens: set[s
         return False
     if _contains_phrase(normalized_query, _LIVE_INFO_OPERATOR_PHRASES):
         return True
-    if any(phrase_is_spoken(normalized_query, phrase) for phrase in _LIVE_INFO_OPERATOR_SPOKEN_PHRASES):
+    if live_time_lookup_said(normalized_query):
         return True
     live_context = _LIVE_INFO_OPERATOR_CONTEXT_TOKENS & query_tokens
     lookup_intent = bool(_LIVE_INFO_OPERATOR_LOOKUP_TOKENS & query_tokens)

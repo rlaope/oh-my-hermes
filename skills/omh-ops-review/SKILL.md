@@ -62,7 +62,7 @@ Bad example:
 
 Use when Hermes should summarize observed status, risks, blockers, priorities, and follow-up actions for recurring operating work.
 
-    Strong routing signals: `ops-review`, `ops review`, `weekly ops review`, `status review`, `operating review`, `release risks`, `risks and blockers`, `weekly status`, `운영 리뷰`, `주간 운영`, `상태 리뷰`, `릴리즈 리스크`
+    Strong routing signals: `ops-review`, `ops review`, `weekly ops review`, `status review`, `operating review`, `release risks`, `risks and blockers`, `weekly status`, `운영 리뷰`, `주간 운영`, `상태 리뷰`, `릴리즈 리스크`, `리스크랑 블로커`, `리스크와 블로커`, `우선순위랑 블로커`
 
 ## Catalog Metadata
 

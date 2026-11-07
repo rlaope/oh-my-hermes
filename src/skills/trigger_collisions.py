@@ -46,9 +46,6 @@ COLLISION_RATIONALES: dict[str, str] = {
     "R-OMH-ENTRYPOINT": (
         "The `/omh` entrypoint token is the meta-router's job to detect and the router skill's job to describe; both must answer to it."
     ),
-    "R-ACCESSIBILITY-SURFACE": (
-        "Accessibility is a real concern of both the visual frontend surface and the voice operator surface."
-    ),
     "R-GENERATED-FILE-SENSE": (
         "A generated file is two things: the PDF somebody produced and wants attached, which is the delivery lane's, and a checked-in artifact whose source of truth is a generator, which is the verification gate's. The words are identical and the sense is decided by whether the sentence also asks where the file came from, so both own the phrase and `generated_artifact_provenance_before_deliverable_package` separates them."
     ),
@@ -72,12 +69,6 @@ COLLISION_RATIONALES: dict[str, str] = {
     ),
     "R-ISSUE-INTAKE": (
         "Issue triage is both a GitHub operation and a planning intake."
-    ),
-    "R-ENVIRONMENT-INVENTORY": (
-        "MCP inventory is read by both the harness session view and the workspace audit."
-    ),
-    "R-RELEASE-GATE": (
-        "A release gate is enforced by the verification gate and inspected during code review."
     ),
     "R-RELEASE-READINESS": (
         "Release readiness is both an executive loop question and a production-audit subject."

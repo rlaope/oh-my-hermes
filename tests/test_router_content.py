@@ -1080,9 +1080,9 @@ class RouterContentTests(unittest.TestCase):
 
     def test_native_debugging_routed_text_promises_no_debug_adapter(self) -> None:
         # Hermes has no debug-adapter client, so a route that names one sends the
-        # executor after something it cannot reach. An adapter is the body's
-        # conditional, for a host that exposes one; `dap debugger` stays a trigger
-        # because a person may still ask for it.
+        # executor after something it cannot reach. An adapter belongs in the skill's
+        # body, not in text a route reads; `dap debugger` stays a trigger because a
+        # person may still ask for it.
         definition = next(item for item in builtin_definitions() if item.name == "native-debugging")
         route = route_chat_message("my binary segfaults, there is a core dump", source="discord")
         top = recommend_module.recommend_skills("my binary segfaults, there is a core dump", limit=1)[0]

@@ -710,8 +710,16 @@ def phrase_is_spoken(message: str, phrase: str) -> bool:
     is a different word: `asked` is not `ask`. Several words extended is the
     same phrase inflected: `attack scenarios` is `attack scenario` and
     `smooth scrolling` is `smooth scroll`, and the leading words have already
-    established the sense. So the right edge is enforced only for a
-    single-word phrase.
+    established the sense. So the right edge is enforced for a single-word
+    phrase, and for a last word of two letters or fewer, where extending it
+    usually makes another word: `time in` is not in `time instead`. A plural
+    `s` is the one extension such a short word keeps: `reviewable prs` is
+    `reviewable pr`.
+
+    Hangul folds to jamo here, so a phrase ending on an open syllable would
+    match that syllable with a final consonant: `주가` inside `주간`. Those
+    are other syllables and do not count; a particle after the phrase does
+    (`주가가`).
 
     `message` and `phrase` must already share a fold; this compares them
     verbatim, the same contract `contains_boundary_phrase` carries.
@@ -726,6 +734,12 @@ def phrase_is_spoken(message: str, phrase: str) -> bool:
             if _closes_an_open_hangul_syllable(message, end):
                 pass
             elif not require_right_edge or not _continues_a_spaced_word(message, end, phrase[-1]):
+                return True
+            elif (
+                " " in phrase
+                and message[end] == "s"
+                and not _continues_a_spaced_word(message, end + 1, phrase[-1])
+            ):
                 return True
         start = message.find(phrase, start + 1)
     return False

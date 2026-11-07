@@ -361,6 +361,7 @@ NON_SKILL_BACKTICKS = frozenset(
 # `provider-profile-posture` defers connector adoption, the tool inventory and
 # a model-provider login to those two and `model-setup`; no sibling gains a
 # statement pointing back. Five cases, five pairs, two new owners.
+# 448 -> 450 and 473 -> 475: web-research and research-brief defer to market-research for sizing.
 EXPECTED_DEFERENCE_CASES = 450
 EXPECTED_DEFERENCE_PAIRS = 475
 EXPECTED_DEFERRING_OWNERS = 133
