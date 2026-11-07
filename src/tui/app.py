@@ -5429,6 +5429,11 @@ class App(ModesMixin, AgentViewMixin):
         text (the command, for a command's prompt) goes back after the draft
         and nothing is cut; when Hermes refuses the cut, the screen goes back
         to how it was before the send and nothing comes back to the draft.
+
+        It goes ahead of lines already queued, also while the queue waits for
+        the turn Hermes runs next (`hermes_next_due`), where a prompt joins the
+        queue: queued behind them, its cut would drop the turns they start.
+        They follow its turn.
         """
         rewind, self.rewind = self.rewind, None
         if rewind is None:
@@ -6321,7 +6326,8 @@ class App(ModesMixin, AgentViewMixin):
 
         `echo` is the line as the composer showed it, when paste chips made it
         differ. `drain_after` sends the next queued line once Hermes answered,
-        so a prompt queued behind it does not start a turn under its output.
+        so a prompt queued behind it does not start a turn under its output;
+        a turn that started while it ran keeps that line for its end.
         """
         echo = echo or f"{SHELL_PREFIX}{command}"
 
@@ -6350,14 +6356,14 @@ class App(ModesMixin, AgentViewMixin):
         elif not printed:
             self.transcript.add_output("exit 0", command=echo)
         if drain_after:
-            self._drain_queue()
+            self._drain_unless_busy()
 
     def _on_shell_refused(self, echo: str, error: Mapping[str, Any], drain_after: bool) -> bool:
         """Hermes' own words: a refusal of a dangerous command (4005) is a warning, a timeout or failure an error."""
         level = NOTICE_WARN if error.get("code") == SHELL_REFUSED else NOTICE_ERROR
         self.transcript.add_output(plain_sentence(as_text(error.get("message"))), level, command=echo)
         if drain_after:
-            self._drain_queue()
+            self._drain_unless_busy()
         return True
 
     def _recall_queue(self, event: Key | Paste) -> bool:

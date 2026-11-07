@@ -21,7 +21,7 @@ from _tui_lines import line_text, lines_text, without_badge
 from test_tui_command_output import SKILL_LINE, SKILL_REFUSAL, SKILL_TURN
 from test_tui_gateway_contract import recorded_rows
 from test_tui_modes import PLAN_PROMPT, SID, answer, make_app, notices, type_text
-from omh.tui.app import DOUBLE_ESCAPE_SECONDS, REWIND_TURN_BACK_NOTICE, App, Attachment
+from omh.tui.app import DOUBLE_ESCAPE_SECONDS, HERMES_NEXT_TURN_SECONDS, REWIND_TURN_BACK_NOTICE, App, Attachment, QueuedLine
 from omh.tui.gateway import Event, Response
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, Key
 from omh.tui.rewind_picker import CLOSE, PICK, RewindPicker, rewind_rows
@@ -478,6 +478,22 @@ class RewindTests(unittest.TestCase):
         self.assertEqual(app.composer.text, "an edited prompt")
         self.assertIn("between turns", notices(app, NOTICE_WARN)[-1])
         self.assertIsNone(app.rewind)
+
+    def test_a_rewind_sent_while_the_queue_waits_goes_first_and_the_queued_line_follows_its_turn(self) -> None:
+        # While the queue waits for the turn Hermes runs next a prompt joins the queue, but a rewind cannot: its cut
+        # would drop the turns the lines ahead of it start. It goes at once, and they follow its turn.
+        app, client = self.picked()
+        app.queued.append(QueuedLine("older queued line"))
+        app.hermes_next_due = app.clock() + HERMES_NEXT_TURN_SECONDS
+        app._set_composer("an edited prompt")
+        app._on_input(Key(ENTER))
+        submits = [params for method, params in client.calls if method == "prompt.submit"]
+        self.assertEqual([(params["text"], params.get("truncate_before_row_id")) for params in submits],
+                         [("an edited prompt", 7)])
+        self.assertEqual([line.text for line in app.queued], ["older queued line"])
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("message.complete", SID, {"text": "rewound answer", "status": "complete"}))
+        self.assertEqual(client.calls[-1], ("prompt.submit", {"session_id": SID, "text": "older queued line", "queued": True}))
 
     def test_esc_cancels_a_rewind_and_empties_the_composer(self) -> None:
         app, client = self.picked()

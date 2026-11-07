@@ -126,13 +126,17 @@ SHOWN_TOKEN_LINES = (
     "> [SILENT]\n> [SHUTUP]", "> - [SILENT]\n> - [SHUTUP]", "| [SILENT] |\n| [SHUTUP] |",
     "```\n[SILENT]\n[SHUTUP]\n```", "```text\n[SILENT]\n[SHUTUP]\n```", "```\n[SILENT]\n[SILENT]\n```",
 )
+# A fence's opening line that holds prose, not a language label: the prose is the answer, so the token shows.
+PROSE_FENCE_OPENINGS = ("```Done for today\n[SHUTUP]\n```", "```Okay, going quiet\n[SHUTUP]\n```",
+                        "```Not for me\n[SILENT]\n```")
 
 
 class TokenTests(unittest.TestCase):
     def test_a_whole_reply_token_is_the_marker(self) -> None:
         zero_width, bom = chr(0x200b), chr(0xfeff)
         for text in ("[SHUTUP]", "  [shutup]\n", "*[SHUTUP]*", "[SHUTUP].", "[Shut Up]", "[SHUT_UP]", "`[SHUTUP]`",
-                     "```\n[SHUTUP]\n```", "```text\n[SHUTUP]\n```", "~~[SHUTUP]~~", "［SHUTUP］", "[ SHUTUP ]",
+                     "```\n[SHUTUP]\n```", "```text\n[SHUTUP]\n```", "```c++\n[SHUTUP]\n```", "``` objective-c\n[SHUTUP]\n```",
+                     "~~[SHUTUP]~~", "［SHUTUP］", "[ SHUTUP ]",
                      "\U0001fae1 [SHUTUP]", zero_width + "[SHUTUP]", bom + "[SHUTUP]",
                      "[SHUTUP] okay, going quiet", "[SHUTUP] 넵"):
             with self.subTest(text=text):
@@ -147,7 +151,7 @@ class TokenTests(unittest.TestCase):
                      "[SHUTUP]" + " " * 80 + "x", "one\nI said [SHUTUP] to it\ntwo", "[SHUTUP]\n\nOK", "OK.\n\n[SHUTUP]",
                      "[shutup] okay, going quiet", "[Shut Up] is a 2003 single", "The token is [SILENT]",
                      "x = [SILENT]", "[SILENT] = True", "fine. [SHUTUP]", "okay. [SILENT]", "[SILENT] not for me",
-                     "[SILENT] is the marker."):
+                     "[SILENT] is the marker.", *PROSE_FENCE_OPENINGS):
             with self.subTest(text=text):
                 self.assertIsNone(judge.reply_marker(text))
 
@@ -495,6 +499,7 @@ class ReplyTests(StoreReset):
             "１． [SILENT]",
             "1． [SILENT]",
             "⒈ [SILENT]",
+            *PROSE_FENCE_OPENINGS,
         ):
             with self.subTest(text=text):
                 asyncio.run(self.keep_turn()())
@@ -571,6 +576,10 @@ class ReplyTests(StoreReset):
             ("[SHUTUP]\n✅ No reply", "✅ No reply"),
             ("[SHUTUP]\n\n`silent`", "`silent`"),
             ("[SHUTUP]\n\nOkay, here it is.", "Okay, here it is."),
+            # Hermes reads what is left as written, not NFKC-folded: fullwidth letters are words to it.
+            ("[SHUTUP]\n\nＳＩＬＥＮＴ", "ＳＩＬＥＮＴ"),
+            # Past Hermes' 64-character cap nothing is a silence marker, whatever it folds to.
+            ("[SHUTUP]\n\nSilent" + "." * 60, "Silent" + "." * 60),
             ("Okay, here it is.\n\n[SHUTUP]", "Okay, here it is."),
             ("Okay, here it is. [SILENT]", "Okay, here it is."),
             # A token left showing is acceptable: `>` and an emoji are not punctuation to Hermes.
