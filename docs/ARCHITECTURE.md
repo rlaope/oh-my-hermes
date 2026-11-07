@@ -373,8 +373,13 @@ after a short TTL, and applies restarting state only inside its restart window.
 OMH does not turn prepared handoffs into observed execution, review, CI, or
 merge evidence.
 
-`cli.py` is a compatibility adapter. `commands/main.py` owns parser assembly,
-top-level error handling, and the public command handler re-export surface.
+`cli.py` is a compatibility adapter. `commands/main.py` owns full parser
+assembly and the public command handler re-export surface; `commands/fast_dispatch.py`
+owns the post-parse tail both paths share (top-level error handling included)
+and the subcommand-to-registrar table that lets `omh <subcommand>` import only
+that subcommand's module. Help, `--version` and anything the table does not
+name go through the full parser. A new subcommand needs a row in that table;
+`tests/test_cli_fast_dispatch.py` fails until it has one.
 Domain command modules under `commands/` own support JSON output for bootstrap,
 repair, verification, wrapper backends, and operator debugging. New command
 handlers should be added to the matching domain module rather than growing
