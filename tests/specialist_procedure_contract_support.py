@@ -64,7 +64,7 @@ DOMAIN_REVIEW_CONTRACTS = {
         "checks": {
             "sprite_input_check": {"grid_layout", "background_key", "cell_division", "source_record"},
             "sprite_backend_check": {"pillow_version", "command", "exit_code", "script_sha256"},
-            "sprite_qc_check": {"body_scale_cv", "anchor_y_std", "verdict", "output_hashes"},
+            "sprite_qc_check": {"body_scale_cv", "anchor_y_max_dev", "free_frames", "verdict", "output_hashes"},
         },
     },
     "show-reel": {

@@ -346,6 +346,11 @@ NON_SKILL_BACKTICKS = frozenset(
 # and `adversarial-consensus`; `ask` defers a multi-perspective attack to `adversarial-consensus`;
 # `ultrawork` defers an unplanned request to `ralplan`; `ultraperf` is rewritten to name `maestro`.
 # Eight cases, ten pairs (`ultrawork` also defers to `plan`), one new owner (`plan`).
+# `voice-operator` and `media-input-operator` each name the other (a spoken
+# instruction versus spoken material), `connector-operator` sends a local
+# desktop application to `command-operator`, and `show-reel` sends trimming or
+# caption burn-in to `command-operator`: three cases, four pairs, two new
+# owners.
 EXPECTED_DEFERENCE_CASES = 417
 EXPECTED_DEFERENCE_PAIRS = 437
 EXPECTED_DEFERRING_OWNERS = 123

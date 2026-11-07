@@ -2203,6 +2203,12 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # `test_one_more_ordinary_lane_member_fits_every_body_budget` finds that the largest lane-mate copy
 # (`ultrawork`, +26,949) no longer fits. The coding-core audit round adds 2,599 net across fourteen
 # bodies, which tipped it. 1,474,123 plus 10%, rounded up to the next 50,000, is 1,650,000.
+# 1336920 -> 1473602 (measured; the ceiling 1500000 -> 1650000): main had grown
+# to a reading whose worst lane-mate copy (`ultrawork`, +26,456) left no
+# margin, and the design, media and operator lane's body additions (read-back,
+# exact-payload and bulk-change confirmations, page text as data, per-string
+# locale checks) take it to 1,473,602. 1,473,602 plus 10%, rounded up to the
+# next 50,000, is 1,650,000.
 FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1480299
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000

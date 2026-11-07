@@ -143,7 +143,7 @@ DEFINITION = SkillDefinition(
     do_not_use_when=(
         "Only a static infographic or summary card is needed; use `img-summary`.",
         "The request is a website, landing page or interactive UI build, or an animation inside an app's own UI (a button, modal, page transition or loading state); use `frontend`.",
-        "Summarizing, transcribing, captioning or trimming a recording that already exists; use `media-input-operator`.",
+        "Summarizing or transcribing a recording that already exists; use `media-input-operator`. Trimming, converting or burning in captions is plain ffmpeg through `command-operator`.",
         HermesSkillLine("A math proof, equation or algorithm animation in the 3Blue1Brown style belongs to Hermes' bundled `manim-video` skill; converting existing footage to ASCII art belongs to `ascii-video`.", ("manim-video", "ascii-video")),
         "The output is a deck, PDF, spreadsheet or office document; use `materials-package`.",
         "Only a premium layout quality assessment is wanted; use `design-quality-gate`.",

@@ -398,6 +398,19 @@ All notable changes will be documented here.
   one Office skill. Completion checklists, examples and boundaries of the
   sales, product, support, people, meeting, cto and content skills are specific
   to each job.
+- **Design, media and operator skills now gate and describe what they
+  actually do.** The sprite-forge helper measures alignment on the source
+  sheet, so a misaligned sheet fails the gate instead of reading back the row
+  it had just set, using the largest deviation from the median so one lifted
+  frame cannot hide. `--free-frames` frees only the named airborne frames and
+  the rest stay gated. It also reports key-colour spill. Visual QA and the
+  accessibility audit return only their own verdicts and gain rule IDs for
+  focus, reflow, target size, status messages and non-text contrast. Show
+  reel no longer points at flags and downloads its toolkit does not have.
+  The browser, terminal, files and connector operators confirm the exact
+  payload and the paths a bulk change touches, and image cards read
+  generated text back.
+
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`

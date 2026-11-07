@@ -3653,7 +3653,7 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
         "headline": "I can prepare the external app action without claiming it ran.",
         "body": (
             "I will prepare the connector task card: provider, target object, allowed action, recipient or assignee, "
-            "payload summary, credential boundary, confirmation gate, result-evidence slots, and stop condition. "
+            "exact payload, credential boundary, confirmation gate, result-evidence slots, and stop condition. "
             "API calls, message sends, ticket mutations, external writes, webhook delivery, and connector success stay observed-only."
         ),
         "phase": "connector_operator_prepared",

@@ -24,6 +24,7 @@ This is an OMH `voice-operator` workflow skill, projected for Agent Skills hosts
 - The request is already handled by a narrower explicit skill with stronger evidence.
 - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
 - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- The speech is material to transcribe or summarize; use `omh-media-input`.
 
 ## Examples
 
@@ -42,6 +43,7 @@ Bad example:
 ## Completion Checklist
 
 - The short-input or voice-like request is clarified enough to avoid accidental action.
+- Before a delete, send, deploy or spend, state the transcript's names, numbers, paths and negations and wait for a yes.
 - The next action is readable, reversible when possible, and confirmation-gated when risky.
 - Delivery, notification, or platform behavior is not claimed without wrapper evidence.
 

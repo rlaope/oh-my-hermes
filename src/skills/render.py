@@ -3274,11 +3274,12 @@ def _progressive_workflow_body(definition: SkillDefinition, name: str) -> str:
 An explainer, motion graphics, kinetic type, a logo or title intro, a 3D scene, a data-viz animation, a music visual or a short, with no product claim, real UI or brand asset on screen, takes this lane. It skips the source register, the rights register and the 3-concept comparison; it never skips a render.
 
 - Defaults, each labeled as an assumption and overridden by anything the user said: 16:9 1920x1080, 30 fps, 20-30 s when no duration is given (about 2.5 s per beat), muted unless music is asked for, on-screen text in the user's language. Ask only for a fact that cannot be recovered.
-- Pick one concept from its genre recipe in `references/genres.md` and record its assumptions. Then author one HTML composition with a deterministic time seek (a paused GSAP timeline or a `__seek(t)` function; no `Math.random()` or wall clock).
+- Pick one concept from its genre recipe in `references/genres.md` and record its assumptions. Then probe the renderer, because the file you write depends on it.
 - Probe the renderer read-only, in the order `references/genres.md` gives: the `hyperframes` CLI only when `command -v hyperframes` finds it (`npx` would download it), then `toolkit/scripts/render.mjs` with a local Chrome, `puppeteer-core` and FFmpeg, then a frame renderer already installed (such as Python with Pillow) piped to FFmpeg. If none runs, HOLD with the exact install command and ask for consent once; never install, download fonts or call a paid API on your own.
+- Author for the renderer found, with a deterministic seek and no `Math.random()` or wall clock: HyperFrames takes `data-*` timing and a paused GSAP timeline; `render.mjs` renders only a `new_project.py NEW --font FILE` scaffold, not a standalone HTML.
 - Render 3 style frames and view them, render a draft, view its contact sheet, and rebuild the weakest beat once. Export, then measure codec, dimensions, fps, duration, size and sha256 with `ffprobe`; deliver the path with those facts. A storyboard or an HTML file alone is HOLD, not delivery.
 - Fill the frame, use one hue family plus at most one accent, add no meta text (window titles, dimension labels, invented paths), draw no rounded "document" cards as a metaphor, and move the camera on one continuous path rather than stopping at every beat.
-- A promo or social clip of 15 s or less holds one hero scene with no meta text, one number smaller than the logo, and the official logo unboxed at 25% or more of the frame height; check a still sheet against `references/craft-design.md` (Short promo clips) before rendering.
+- A promo or social clip of 15 s or less holds one hero scene with no meta text and one number; check a still sheet against `references/craft-design.md` (Short promo clips) before rendering. One that shows an official logo or a product is a brand asset and takes the full method below, with those one-scene rules for the shot itself.
 - A product claim, a real UI or a brand asset on screen moves the video to the full method below.
 
 {bundled_boundary}## Production Method
@@ -11910,7 +11911,7 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | --- | --- | --- | --- | --- |
 | LNK-1 | Link with no accessible name | critical | 2.4.4, 4.1.2 | `manual` |
 | LNK-2 | Link text that does not describe its destination | minor | 2.4.4 | `manual` |
-| LNK-3 | Link opening a new context with no warning | minor | 3.2.5 | `manual` |
+| LNK-3 | Link opening a new context with no warning (advisory: 3.2.5 is AAA) | minor | 3.2.5 | `manual` |
 | BTN-1 | Button with no accessible name | critical | 4.1.2 | `manual` |
 
 ### Forms
@@ -11926,7 +11927,7 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | ID | Finding | Severity | WCAG | Fix class |
 | --- | --- | --- | --- | --- |
 | ARIA-1 | Role that is not a valid role name | major | 4.1.2 | `manual` |
-| ARIA-2 | Focusable element hidden from assistive technology | critical | 2.4.3, 4.1.2 | `auto` (unhide; the element is reachable by keyboard and must be announced) |
+| ARIA-2 | Focusable element hidden from assistive technology | critical | 2.4.3, 4.1.2 | split: whether it should be reachable at all (a closed menu or dialog should not) is `manual`; once decided, removing the hiding or removing it from the tab order (`tabindex=-1` or `inert`) is `auto` |
 | ARIA-3 | Decorative vector graphic exposed to assistive technology | major | 1.1.1 | `auto` when decorative by context, else `manual` |
 
 ### Keyboard and focus
@@ -11935,12 +11936,17 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | --- | --- | --- | --- | --- |
 | KEY-1 | Positive tab index overriding document order | major | 2.4.3 | `auto` (neutralize), and the resulting order is re-walked |
 | KEY-2 | Pointer handler on a non-interactive element with no keyboard path | major | 2.1.1 | split: role and focusability `auto`, the key handler `manual` |
+| KEY-3 | No visible focus indicator (2.4.7), or the focused component entirely hidden behind author content such as a sticky header (2.4.11); partial overlap is advisory (2.4.12, AAA) | major | 2.4.7, 2.4.11 | `manual` |
+| KEY-4 | Keyboard trap: focus enters a region and cannot leave by keyboard | critical | 2.1.2 | `manual` |
+| RFL-1 | Content lost, or needing two-direction scrolling, at 320 CSS px width (256 CSS px height for horizontally scrolling content such as vertical text) / 400% zoom; not a finding for content that requires two-dimensional layout (data tables, not individual cells; maps, diagrams, video, games, and interfaces where toolbars must stay in view) | major | 1.4.10 | `manual` |
+| TGT-1 | Pointer target under 24x24 CSS px with none of the 2.5.8 exceptions (spacing, equivalent control, inline in a sentence or constrained by the line height of non-target text, user-agent-controlled, essential) | major | 2.5.8 | `manual` |
+| STAT-1 | Dynamic status or error not announced (no live region or focus move) | major | 4.1.3 | `manual` |
 
 ### Structure
 
 | ID | Finding | Severity | WCAG | Fix class |
 | --- | --- | --- | --- | --- |
-| SEM-1 | Page language not declared | critical | 3.1.1 | `auto` (the tag), with the language value verified |
+| SEM-1 | Page language not declared | critical | 3.1.1 | split: adding the attribute is `auto` only when the page language is already supplied; choosing the value is `manual` |
 | SEM-2 | Heading level skipped | major | 1.3.1 | `manual` |
 | SEM-3 | No main landmark | major | 1.3.1, 2.4.1 | `manual` |
 | SEM-4 | Embedded frame with no title | major | 2.4.1, 4.1.2 | `manual` |
@@ -11951,7 +11957,13 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | ID | Finding | Severity | WCAG | Fix class |
 | --- | --- | --- | --- | --- |
 | COL-1 | Color as the only carrier of meaning | minor | 1.4.1 | `manual` |
-| COL-2 | Color declared inline, contrast unverifiable from source | minor | 1.4.3 | `manual` (measure, then judge against 4.5:1 text / 3:1 large text and UI) |
+| COL-2 | Color declared inline, contrast unverifiable from source | minor | 1.4.3 | `manual` (measure, then judge against 4.5:1 text / 3:1 large text) |
+| COL-3 | UI component boundary, state or meaningful graphic under 3:1 (not for inactive components, a control whose appearance the user agent sets, or graphics where a particular presentation is essential) | major | 1.4.11 | `manual` |
+
+A finding the table does not cover takes the next number of the nearest
+prefix and goes into the rerun list, so reruns stay comparable. A target size
+of 44x44 is AAA (2.5.5) or platform guidance: report it as advisory, never as an
+AA failure.
 
 Detection criteria are written against structure, not one framework's syntax:
 a rule holds for a template language when the same structural condition can be
@@ -14397,8 +14409,9 @@ ends, and a required next action when it does not.
 
 ## The verdict shape
 
-A round returns one JSON object and nothing else — no prose above it, no
-commentary after it:
+A round is recorded as one JSON object and nothing else — no prose above it,
+no commentary after it. The reply to the user states the verdict, the score
+and the top differences in the host's own voice; the object is the record:
 
 ```json
 {
@@ -15480,7 +15493,7 @@ Hermes bundles `spike` (MIT, adapted from the GSD project), a method for throwaw
 | Breaking an idea into questions, ordering them, building each experiment | `spike` |
 | One decision id, its alternatives, and a falsifiable hypothesis | this skill. A `spike` table of several questions is several decisions: take the one planning is blocked on, or HOLD |
 | Budgets with units, the scratch boundary, the observed cleanup | this skill |
-| The verdict | `spike` writes one per experiment; this skill turns it into the receipt `ralplan` reads |
+| The verdict | `spike` writes one per experiment; this skill turns it into the receipt it hands to `ralplan` |
 
 ## Taken from `spike`
 

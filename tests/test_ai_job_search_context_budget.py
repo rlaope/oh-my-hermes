@@ -157,6 +157,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # ultraperf, ultraqa, ask, strategy-brief, plan, ralplan, loop, ultrawork, maestro and research
             # quality bars, safety rules and inputs (+1207 net, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT);
             # the pin before it was d6dfefff...fc71.
+            # Digest re-derived, length unchanged: sprite-forge's quality bar names the largest
+            # feet deviation (`anchor_y_max_dev`) where it named `anchor_y_std`, with four
+            # characters cut elsewhere in the line; no other row moved, and the pin before it
+            # was d6dfefff...fc71.
             (skill_capabilities, 533913, FULL_ROW_DELTA_CAP,
              '2af3d114df9fd471b650d923c9691f67a52a7de6301fce0f6487f7774f8e5f2a',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
@@ -405,6 +409,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The coding-core audit round moves fourteen bodies (adversarial-consensus, ask, dag-ulw, deep-interview,
         # loop, maestro, plan, ralplan, research, research-brief, strategy-brief, ultraperf, ultraqa, ultrawork);
         # the pin before it was 7e537e8d...4b2c.
+        # Design, media and operator skill review: bodies of accessibility-audit, apps, browser,
+        # files, image-cards, localization-review, media-input, show-reel, terminal, visual-qa and
+        # voice-input move (verdict vocabulary, exact-payload and bulk-change confirmations, page
+        # text as data, text read-back, per-string locale checks, renderer order, sprite-forge's free
+        # frames); the pin before it was 7e537e8d...b2c.
         self.assertEqual(_digest(legacy_hashes), '8c5d5eede91c056339f2aee6baeaf93bc9f704be51e228359a89bb8231a29c53')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
@@ -433,6 +442,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # checklists and generic Why lines with each skill's own (-1600).
         # 124814 -> 124568: the coding-core audit round rewords the repeated sections of the ultraperf, ultraqa,
         # ask, strategy-brief, plan, loop, ultrawork, maestro and dag-ulw bodies (-246 net); the ceilings keep their headroom.
+        # 124814 -> 123563 (-1251): img-summary states its own completion checklist, so the
+        # materials-category default lines it no longer repeats leave the repeated total.
         self.assertEqual(legacy['repeated']['bytes'], 123615)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
