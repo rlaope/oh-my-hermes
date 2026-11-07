@@ -85,12 +85,12 @@ class BoundaryDocTests(unittest.TestCase):
     def test_no_transmit_on_the_alternate_screen_and_the_cap(self) -> None:
         boundary = prose("docs/OMH-TUI-BOUNDARY.md")
         self.assertIn(
-            "A transmit over 2 MiB is refused unread. No transmit is written while the pager or a picker holds the "
+            "A transmit over 4 MiB is refused unread. No transmit is written while the pager or a picker holds the "
             "alternate screen, whose image store is not the main screen's: it is written once the main screen is "
             "back, and the pager shows a kitty preview as its caption only.",
             boundary,
         )
-        self.assertEqual(inline_image.TRANSMIT_MAX_CHARS, 2 * 1024 * 1024)
+        self.assertEqual(inline_image.TRANSMIT_MAX_CHARS, 4 * 1024 * 1024)
 
 
 class InstallationDocTests(unittest.TestCase):

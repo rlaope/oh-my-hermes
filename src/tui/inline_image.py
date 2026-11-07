@@ -26,8 +26,10 @@ PREVIEW_MAX_COLS = 64  # Hermes' cap (methods_images._MAX_PREVIEW_COLS)
 PREVIEW_MAX_ROWS = 16
 # The most previews the TUI keeps: of attached images by label (`App.previews`), and of prompts in the transcript.
 PREVIEW_KEEP = 32
-# Hermes' largest transmit, a 64x16 preview, measured about 922 KB; a longer one is not Hermes' and is not walked.
-TRANSMIT_MAX_CHARS = 2 * 1024 * 1024
+# The longest transmit Hermes can write for a 64x16 preview: 1024x512 RGBA pixels (2 px per 8x16 cell pixel) are
+# 2 MiB raw, a PNG of noise does not compress below that, and base64 and the chunk frames add a third, about 2.8 MiB
+# (Hermes' encoder measured 2,689,491 characters for RGBA noise). A longer one is not Hermes' and is not walked.
+TRANSMIT_MAX_CHARS = 4 * 1024 * 1024
 
 MODE_KITTY = "kitty"
 MODE_UNICODE = "unicode"

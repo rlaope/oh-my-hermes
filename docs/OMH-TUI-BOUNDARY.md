@@ -182,7 +182,7 @@ graphics transmit of an image the person attached, and only after it matches
 the kitty APC chunk form for the image Hermes named (`src/tui/inline_image.py`);
 it is written once per image, to the terminal only and never to disk or a log,
 and only the placeholder rows are kept for the transcript. A half-block preview
-is ordinary coloured cells. A transmit over 2 MiB is refused unread. No
+is ordinary coloured cells. A transmit over 4 MiB is refused unread. No
 transmit is written while the pager or a picker holds the alternate screen,
 whose image store is not the main screen's: it is written once the main screen
 is back, and the pager shows a kitty preview as its caption only.

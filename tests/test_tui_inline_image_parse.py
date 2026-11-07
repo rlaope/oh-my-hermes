@@ -297,16 +297,17 @@ class TransmitTests(unittest.TestCase):
         self.assert_refused(first + chunk("A" * 4092, more=True) + last)
         self.assert_refused(chunk("AAAA", more=True, control=control()) + middle + last)
 
-    def test_a_transmit_over_two_mib_is_refused(self) -> None:
-        self.assertEqual(inline_image.TRANSMIT_MAX_CHARS, 2 * 1024 * 1024)
+    def test_a_transmit_over_four_mib_is_refused(self) -> None:
+        self.assertEqual(inline_image.TRANSMIT_MAX_CHARS, 4 * 1024 * 1024)
         first = chunk("A" * 4096, more=True, control=control())
         middle = chunk("A" * 4096, more=True)
         count = inline_image.TRANSMIT_MAX_CHARS // len(middle) + 1
         self.assert_refused(first + middle * count + chunk("AAAA", more=False))
 
     def test_hermes_largest_shape_is_accepted(self) -> None:
-        """A 64x16 transmit near the size Hermes' largest measured one has (about 922 KB), cut as `_kitty_apc` cuts."""
-        data = "A" * (900 * 1024 + 7)
+        """A 64x16 transmit as long as Hermes' encoder wrote for an RGBA noise image (2,689,491 characters, past
+        the 2 MiB an earlier cap refused), cut as `_kitty_apc` cuts."""
+        data = "A" * (2_689_491 - 4 * 657)
         pieces = [data[start : start + 4096] for start in range(0, len(data), 4096)]
         transmit = "".join(chunk(piece, more=index < len(pieces) - 1,
                                  control=control(cols=PREVIEW_MAX_COLS, rows=PREVIEW_MAX_ROWS) if index == 0 else "")
