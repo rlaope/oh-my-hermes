@@ -252,6 +252,16 @@ HUD_FANOUT_CACHE_LOCK_SECONDS = 1.0
 # with the files it saw. A coarse mtime does not hide a rewrite: `write_progress_binding` replaces the file
 # atomically (a temp file renamed over it), so each version is a new inode while the old one is still live.
 _hud_binding_orders: dict[Path, tuple[tuple[int, int, int, int], str | None]] = {}
+# The same idea for the latency-sensitive readers (`read_omh_activity`, which `pre_llm_call` runs every turn, and
+# `read_omh_status`): per runtime directory, what the last read learned from each binding file (its identity, its
+# `updated_at` or None, and the validated binding) and from each surviving progress directory (the identities of
+# its binding, event log and report log, and the item built from them). A file whose identity is unchanged is not
+# opened again; every other file is read exactly as before. Each read replaces its directory's maps with the files
+# it saw, and only the most recent `_PROGRESS_READ_CACHE_DIRS` directories are kept.
+_FileIdentity = tuple[int, int, int, int]
+_progress_read_cache: dict[Path, tuple[dict[Path, tuple[_FileIdentity, str | None, dict[str, Any] | None]],
+                                       dict[Path, tuple[tuple[_FileIdentity | None, ...], dict[str, Any]]]]] = {}
+_PROGRESS_READ_CACHE_DIRS = 8
 
 
 def _expand_path(value: str | Path) -> Path:
@@ -582,14 +592,46 @@ def _child_names(directory: Path) -> list[str]:
 
 
 def _child_files(directory: Path, *relative: str) -> list[Path]:
-    """Return every existing `directory/<child>/*relative` file (children read by `_child_names`)."""
-    candidates = [directory.joinpath(name, *relative) for name in _child_names(directory)]
-    return [
-        candidate
-        for candidate in candidates
-        if not _contains_symlink(candidate, root=directory)
-        and candidate.is_file()
-    ]
+    """Return every existing `directory/<child>/*relative` file (children read by `_child_names`).
+
+    The same refusal as `_contains_symlink(candidate, root=directory)` for each candidate, which a hook that
+    runs every turn pays once per child: no component from the candidate up to `directory` and no `directory`
+    itself may be a symlink. `directory` is the same path for every candidate, so it is checked once per call
+    rather than once per child, and each component with one `lstat` rather than through pathlib.
+    """
+    names = _child_names(directory)
+    if not names or _is_symlink(directory):
+        return []
+    found: list[Path] = []
+    base = os.fspath(directory)
+    for name in names:
+        parts = (name, *relative)
+        component = base
+        refused = False
+        prefixes: list[str] = []
+        for part in parts:
+            component = os.path.join(component, part)
+            prefixes.append(component)
+        for prefix in prefixes:
+            if _is_symlink(prefix):
+                refused = True
+                break
+        if refused:
+            continue
+        try:
+            if stat.S_ISREG(os.stat(prefixes[-1]).st_mode):
+                found.append(directory.joinpath(*parts))
+        except (OSError, ValueError):
+            continue
+    return found
+
+
+def _is_symlink(path: str | Path) -> bool:
+    """`Path.is_symlink()` without the Path: False when the path cannot be lstat'ed, as pathlib answers."""
+    try:
+        return stat.S_ISLNK(os.lstat(path).st_mode)
+    except (OSError, ValueError):
+        return False
 
 
 def _hud_child_files(directory: Path, *relative: str) -> list[Path]:
@@ -3463,6 +3505,9 @@ def _progress_bindings(
         return [canonical_progress_record(row) for row in raw_jsonl_reader(path)]
 
     seen: dict[Path, tuple[tuple[int, int, int, int], str | None]] = {}
+    held_bindings, held_items = _progress_read_cache.get(runtime_dir, ({}, {})) if not hud_safe else ({}, {})
+    seen_bindings: dict[Path, tuple[_FileIdentity, str | None, dict[str, Any] | None]] = {}
+    seen_items: dict[Path, tuple[tuple[_FileIdentity | None, ...], dict[str, Any]]] = {}
     for root, target_type in roots:
         for binding_path in sorted(child_files(root, "executor_progress", EXECUTOR_PROGRESS_BINDING_FILE), reverse=True):
             if hud_safe:
@@ -3470,10 +3515,9 @@ def _progress_bindings(
                 if order is None:
                     continue
             else:
-                binding = json_reader(binding_path)
-                if not _valid_progress_binding(binding, target_type):
+                order, binding = _plain_binding_order(binding_path, target_type, json_reader, held_bindings, seen_bindings)
+                if order is None:
                     continue
-                order = str(binding.get("updated_at", ""))
             candidates.append((order, binding, binding_path, target_type))
     if hud_safe:
         _hud_binding_orders.clear()
@@ -3488,20 +3532,78 @@ def _progress_bindings(
         if read is None and not _valid_progress_binding(binding, target_type):
             continue  # its file changed after it was stat'ed
         progress_dir = binding_path.parent
+        key: tuple[_FileIdentity | None, ...] | None = None
+        if not hud_safe and binding_path in seen_bindings:
+            key = (
+                seen_bindings[binding_path][0],
+                _file_identity(progress_dir / EVENTS_FILE),
+                _file_identity(progress_dir / EXECUTOR_PROGRESS_REPORTS_FILE),
+            )
+            held_item = held_items.get(progress_dir)
+            if held_item is not None and held_item[0] == key:
+                seen_items[progress_dir] = held_item
+                # A copy: the projection replaces the item's `binding` with its own projected copy.
+                items.append(dict(held_item[1]))
+                continue
         events = jsonl_reader(progress_dir / EVENTS_FILE)
         reports = jsonl_reader(progress_dir / EXECUTOR_PROGRESS_REPORTS_FILE)
         binding_id = str(binding.get("binding_id", ""))
         instance_id = str(binding.get("instance_id", ""))
         matching_events = [event for event in events if _valid_progress_event(event, binding_id, instance_id)]
         matching_reports = [report for report in reports if _valid_progress_report(report, binding_id, instance_id)]
-        items.append(
-            {
-                "binding": binding,
-                "latest_event": matching_events[-1] if matching_events else {},
-                "latest_report": matching_reports[-1] if matching_reports else {},
-            }
-        )
+        item = {
+            "binding": binding,
+            "latest_event": matching_events[-1] if matching_events else {},
+            "latest_report": matching_reports[-1] if matching_reports else {},
+        }
+        if key is not None:
+            seen_items[progress_dir] = (key, item)
+            item = dict(item)
+        items.append(item)
+    if not hud_safe:
+        _progress_read_cache.pop(runtime_dir, None)
+        _progress_read_cache[runtime_dir] = (seen_bindings, seen_items)
+        while len(_progress_read_cache) > _PROGRESS_READ_CACHE_DIRS:
+            del _progress_read_cache[next(iter(_progress_read_cache))]
     return items
+
+
+def _file_identity(path: Path) -> _FileIdentity | None:
+    """A file's (inode, mtime, ctime, size), or None when it cannot be stat'ed (a missing log reads as empty)."""
+    try:
+        status = os.stat(path)
+    except OSError:
+        return None
+    return (status.st_ino, status.st_mtime_ns, status.st_ctime_ns, status.st_size)
+
+
+def _plain_binding_order(
+    path: Path,
+    target_type: str,
+    json_reader: Callable[[Path], dict[str, Any]],
+    held: dict[Path, tuple[_FileIdentity, str | None, dict[str, Any] | None]],
+    seen: dict[Path, tuple[_FileIdentity, str | None, dict[str, Any] | None]],
+) -> tuple[str | None, dict[str, Any] | None]:
+    """The binding file's `updated_at` and validated binding, both None when it holds no valid binding.
+
+    `_hud_binding_order`'s counterpart for the non-HUD readers: while the file is the one the last read of this
+    runtime directory saw (`held`), the answer comes from there and the file is not opened. A file that cannot be
+    stat'ed is read as before and not remembered.
+    """
+    identity = _file_identity(path)
+    entry = held.get(path)
+    if identity is not None and entry is not None and entry[0] == identity:
+        seen[path] = entry
+        return entry[1], entry[2]
+    binding = json_reader(path)
+    if not _valid_progress_binding(binding, target_type):
+        if identity is not None:
+            seen[path] = (identity, None, None)
+        return None, None
+    order = str(binding.get("updated_at", ""))
+    if identity is not None:
+        seen[path] = (identity, order, binding)
+    return order, binding
 
 
 def _hud_binding_order(
