@@ -980,6 +980,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # redline playbook question). Measured from the producer; no headroom.
 # 536979 -> 538186: the coding-core audit round edits quality-bar, safety-rule and input lines on ten
 # skills (+1207 net). Measured from the producer; no headroom.
+# 536979 -> 536975: the `application-threat-model` asset-register output line
+# drops a word (-4); the `inference-serving` and `security-event-response` rows change in content at the same length.
+# 536975 -> 537006: `security-event-response` names suspected unauthorized
+# access in its first required input (+31); no other row moved.
 FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536985
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
@@ -2209,6 +2213,11 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # exact-payload and bulk-change confirmations, page text as data, per-string
 # locale checks) take it to 1,473,602. 1,473,602 plus 10%, rounded up to the
 # next 50,000, is 1,650,000.
+# 1336920 -> 1474071 (measured; the ceiling 1500000 -> 1650000): main had grown
+# margin, and the build, infrastructure and security lane's body additions
+# (the generic fallback text of four skills replaced by their own, the review
+# fixes) take it to 1,474,071. 1,474,071 plus 10%, rounded up to the next
+# 50,000, is 1,650,000.
 FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1480299
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000

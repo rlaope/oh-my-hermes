@@ -410,6 +410,24 @@ All notable changes will be documented here.
   The browser, terminal, files and connector operators confirm the exact
   payload and the paths a bulk change touches, and image cards read
   generated text back.
+- **The build, infrastructure and security skills fix an audit's findings.**
+  A leaked secret that is compromised (pushed publicly, or used) is revoked
+  before its replacement is deployed, matching the rotation reference, and a
+  planned rotation keeps its overlap window. Model optimization means
+  onboarding a model into OMH's router only; making weights smaller or faster
+  is pointed to inference serving and fine-tuning. The backend error table
+  gains rate-limit and payload rows and a correct timeout status. The
+  database skill warns that `EXPLAIN ANALYZE` runs the statement and covers
+  index rebuilds. The LLM app skill drops a retired model id, plans for model
+  retirement, accounts for run-to-run variance and permission filtering in
+  retrieval. The serving runbook gains a startup probe, endpoint
+  authentication and a measured quantization delta. Data pipelines cover
+  late data, exactly-once and topic retention; infrastructure changes treat a
+  saved plan as secret; mobile release adds the Play closed-test and toolchain
+  gates and a rejection path. Deploy, idea-to-deploy, reliability and
+  production-audit lose their generic fallback text, and the incident,
+  security-event, threat-model and safety-review references close their
+  contradictions and gaps.
 
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node

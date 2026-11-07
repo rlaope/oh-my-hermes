@@ -161,6 +161,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # feet deviation (`anchor_y_max_dev`) where it named `anchor_y_std`, with four
             # characters cut elsewhere in the line; no other row moved, and the pin before it
             # was d6dfefff...fc71.
+            # 533903 -> 533934 and the digest re-derived: `security-event-response` names
+            # suspected unauthorized access in its first required input (+31); no other
+            # row moved, and the pin before it was 5aa1db27...1d90.
+            # 533907 -> 533903 and the digest re-derived: the application-threat-model
+            # asset-register output line drops a word (-4), and the `inference-serving` and `security-event-response` rows change in content at the same length; the pin
+            # before it was d6dfefff...fc71.
             (skill_capabilities, 533913, FULL_ROW_DELTA_CAP,
              '2af3d114df9fd471b650d923c9691f67a52a7de6301fce0f6487f7774f8e5f2a',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
@@ -444,6 +450,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # ask, strategy-brief, plan, loop, ultrawork, maestro and dag-ulw bodies (-246 net); the ceilings keep their headroom.
         # 124814 -> 123563 (-1251): img-summary states its own completion checklist, so the
         # materials-category default lines it no longer repeats leave the repeated total.
+        # 124814 -> 123412: five skills' own Completion Checklist replace the generic
+        # fallback they repeated; the ceilings keep their headroom.
         self.assertEqual(legacy['repeated']['bytes'], 123615)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))

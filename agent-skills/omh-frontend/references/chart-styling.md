@@ -53,6 +53,19 @@ chart:
 MUI X Charts exposes the three as `piecewise`, `continuous`, and `ordinal`
 color maps, with an `unknownColor` fallback on the ordinal one.
 
+## Color is never the only encoding
+
+A palette that passes the token rules can still be unreadable for a reader
+with color-vision deficiency, and marks need their own contrast.
+
+- Every series also differs by a direct label, a marker shape, or a line dash
+  (WCAG 1.4.1).
+- Marks, and the gridlines or axes a reader needs, meet 3:1 against their
+  background (WCAG 1.4.11).
+- The chart carries a text alternative or a data table for its main finding.
+- Check the categorical set under a deuteranopia and a protanopia simulation,
+  and record the result beside the tokens.
+
 ## Categorical slot exhaustion
 
 When the series outnumber the categorical slots, do not generate more hues.

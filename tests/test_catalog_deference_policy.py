@@ -351,6 +351,11 @@ NON_SKILL_BACKTICKS = frozenset(
 # desktop application to `command-operator`, and `show-reel` sends trimming or
 # caption burn-in to `command-operator`: three cases, four pairs, two new
 # owners.
+# `model-optimization` defers weight-level optimization to `inference-serving`
+# (serving format and quantization) and `model-finetuning` (distillation); no
+# sibling gains a statement pointing back. Two cases, two pairs, one owner.
+# `reliability-review` defers a go or hold verdict before launch to
+# `production-audit`; one case, one pair, no new owner.
 EXPECTED_DEFERENCE_CASES = 417
 EXPECTED_DEFERENCE_PAIRS = 437
 EXPECTED_DEFERRING_OWNERS = 123

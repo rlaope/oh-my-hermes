@@ -14,6 +14,7 @@ Load this while planning database work. OMH never connects to a database: every 
 | `ALTER TABLE ... ADD FOREIGN KEY` | `SHARE ROW EXCLUSIVE` on both tables + scan | writes | `ADD CONSTRAINT ... NOT VALID`, then `VALIDATE CONSTRAINT` |
 | `ALTER TABLE ... ALTER COLUMN TYPE` | `ACCESS EXCLUSIVE` + rewrite (most types) | everything | new column, dual write, backfill, switch, drop |
 | `VACUUM FULL`, `CLUSTER` | `ACCESS EXCLUSIVE` + rewrite | everything | `pg_repack` or plain `VACUUM` |
+| `REINDEX` of a bloated index | `SHARE` on the table | writes, and reads that need the index | `REINDEX INDEX CONCURRENTLY` (12+; `SHARE UPDATE EXCLUSIVE`, room for a second copy of the index plus its WAL, an invalid index is left on failure and must be dropped) |
 
 Every DDL statement on a live table runs under `SET lock_timeout = '2s'` (or the service's tolerance) with a retry. Without it, a statement queued behind one long transaction blocks every query that arrives after it, which is how a sub-second `ALTER` becomes an outage.
 
@@ -27,7 +28,7 @@ Every DDL statement on a live table runs under `SET lock_timeout = '2s'` (or the
 | Change a column type | `COPY` | `SHARED` | blocks writes; use `gh-ost` or `pt-online-schema-change` |
 | Drop the primary key | `COPY` | `SHARED` | blocks writes |
 
-State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refuses instead of silently falling back to a blocking copy. Every DDL still waits for a metadata lock; a long transaction holds it up and queues everything behind it, so bound it with `lock_wait_timeout`.
+State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refuses instead of silently falling back to a blocking copy. Every DDL still waits for a metadata lock; a long transaction holds it up and queues everything behind it, so bound it with `lock_wait_timeout`. A bloated InnoDB table is rebuilt with `ALTER TABLE ... ENGINE=InnoDB, ALGORITHM=INPLACE, LOCK=NONE`; `OPTIMIZE TABLE` runs the same rebuild, except on a table with a FULLTEXT index, where it copies the table.
 
 ## 3. Online migration order
 
@@ -38,15 +39,15 @@ State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refus
 
 Every step carries its statement, the lock it takes and for how long, its timeout, and its rollback. A plan with any step missing lock behaviour or rollback is not ready.
 
-- **Non-transactional DDL gets its own migration.** Most migration tools wrap each migration in a transaction, and `CREATE INDEX CONCURRENTLY` (and `DROP INDEX CONCURRENTLY`) refuses to run inside one. Mark that migration non-transactional in the project's tool and keep the statement alone in it. Removing `CONCURRENTLY` to get past the error turns an online build into a write lock.
-- **Each backfill batch runs under a `statement_timeout`** sized to the batch, beside the `lock_timeout`, so a batch that hits a slow plan fails fast and resumes instead of holding locks.
+- **Non-transactional DDL gets its own migration.** Most migration tools wrap each migration in a transaction, and `CREATE INDEX CONCURRENTLY` (and `DROP INDEX CONCURRENTLY` and `REINDEX ... CONCURRENTLY`) refuses to run inside one. Mark that migration non-transactional in the project's tool and keep the statement alone in it. Removing `CONCURRENTLY` to get past the error turns an online build into a write lock.
+- **Each backfill batch runs under a `statement_timeout`** sized to the batch, beside the `lock_timeout`, so a batch that hits a slow plan fails fast and resumes instead of holding locks. Check replica lag between batches and pause above a stated bound, so a fast backfill does not push replicas behind.
 - **Read the SQL that will run.** When an ORM or migration tool generates the statement, plan against the SQL it emits (its statement log or its to-SQL output), not against the call that produced it.
 
 ## 4. Index selection and sizing
 
 | Need | Index type |
 | --- | --- |
-| Equality and range on scalar columns | B-tree, most selective equality column first, range column last |
+| Equality and range on scalar columns | B-tree: equality columns first (order them by which prefixes the most queries use alone), then the sort or range column last |
 | Array, JSONB containment, full-text | GIN |
 | Geometric, range overlap, nearest neighbour | GiST |
 | Huge append-only table ordered by time | BRIN |
@@ -54,7 +55,7 @@ Every step carries its statement, the lock it takes and for how long, its timeou
 | Query reads few columns | covering index (`INCLUDE`) for an index-only scan |
 | Keyset (cursor) pagination: `WHERE (sort_col, id) > ($1, $2) ORDER BY sort_col, id LIMIT n` | B-tree on the equality-filter columns first, then the sort columns in sort direction, then the unique tie-breaker; the plan shows an index scan with no sort step. Mixed sort directions need the index to match them and the predicate written as `OR` terms, because a row comparison assumes one direction. On MySQL write the expanded `OR` form even for a single direction, because an equality prefix followed by a row comparison uses only the prefix columns of the index; check that the plan's `key_len` and range cover the sort columns, not only that there is no filesort |
 
-Size before proposing: rows times (key width plus about 20 bytes of per-entry overhead), plus fill-factor slack. Every index adds a write per insert and per update of its columns; name that cost next to the read it saves. Cite the observed plan the index changes (`EXPLAIN (ANALYZE, BUFFERS)`), and re-read the plan after the build.
+Size before proposing: rows times (key width plus about 20 bytes of per-entry overhead), plus fill-factor slack. Every index adds a write per insert and per update of its columns; name that cost next to the read it saves. Cite the observed plan the index changes (`EXPLAIN (ANALYZE, BUFFERS)`), and re-read the plan after the build. `ANALYZE` executes the statement: for a read, run it on a replica or a restored copy when one exists; for an `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE TABLE AS` or an `EXECUTE` of one, use plain `EXPLAIN` (MySQL's `EXPLAIN ANALYZE` takes `SELECT`, multi-table `UPDATE`/`DELETE` and `TABLE`, and executes them too), or wrap `EXPLAIN ANALYZE` in `BEGIN; ... ROLLBACK;` on a copy, never on the primary.
 
 ## 5. N+1 queries
 

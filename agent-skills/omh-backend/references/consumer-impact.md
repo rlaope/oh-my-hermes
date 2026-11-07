@@ -60,8 +60,11 @@ A deprecation with no date is a warning nobody acts on:
 - **Sunset date** - when the old behaviour stops. Name what is observed before
   it arrives: the old surface's traffic falling to zero, or to a known set of
   consumers who have accepted the break.
-- **What happens after** - the removed surface returns a specific status and
-  error body rather than a generic 404, so a late caller gets a diagnosis.
+- **What happens after** - the removed surface returns 410 Gone with an
+  error body naming the replacement, rather than a generic 404, so a late caller
+  gets a diagnosis. While the window is open, every response from the old
+  surface carries the `Sunset` header (RFC 8594, an HTTP-date) and a `Deprecation` header (RFC 9745, a structured-field date such as `@1688169599`, not an HTTP-date), so
+  clients that log headers see the date without reading a changelog.
 
 An open consumer set does not block the deprecation; it changes the window and
 the announcement, and it must say so rather than shortening the window on an

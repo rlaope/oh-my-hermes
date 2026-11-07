@@ -10,7 +10,7 @@ metadata:
     phase: incident-and-slo-review
     role: operator
     quality_tier: reliability-gated
-    related_skills: [omh-live-incident-response]
+    related_skills: [omh-live-incident-response, omh-production-audit]
 ---
 
 # Reliability Review
@@ -19,7 +19,7 @@ This is a Hermes-native `reliability-review` workflow skill.
 
 ## Why This Exists
 
-`reliability-review` exists to make SRE-style review strict: service reliability claims must point to metrics or references, and remediation remains separate from the review narrative.
+`reliability-review` exists because a reliability claim is cheap to write and expensive to check: it holds an SLO to its arithmetic and a postmortem to its structure, and keeps remediation separate from the review.
 
 ## Do Not Use When
 
@@ -27,6 +27,7 @@ This is a Hermes-native `reliability-review` workflow skill.
 - No service, incident, SLO, metric, or reliability source boundary is available.
 - The request is implementation of remediation rather than review of reliability evidence.
 - The incident is still open and the user needs severity declared, a commander assigned, a running timeline, and recovery verified; use `omh-live-incident-response` and review it once it is closed.
+- The ask is a go or hold verdict before launch; use `omh-production-audit`.
 
 ## Examples
 
@@ -44,9 +45,9 @@ Bad example:
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- An SLO conclusion states the SLI (good over valid events), window, target, budget consumed, and burn rate, or reads unresolved.
+- A postmortem draft names impact, detection and resolution times, trigger, contributing factors (systems, not people), and action items with owner and due date.
+- A pre-launch review names, per dependency, its slow, down, and wrong-answer behavior and the SLOs and runbooks that exist; remediation items read open or closed with evidence.
 
 ## Recovery Notes
 
@@ -89,6 +90,7 @@ Required inputs:
 - time window
 - metric/source references
 - known remediation items or gaps
+- for a pre-launch review: the dependency list, and the SLOs and runbooks that exist
 
 Expected outputs:
 
@@ -99,6 +101,7 @@ Expected outputs:
 Artifact expectations:
 
 - omh_operation_artifact/v1 reliability-review artifact when a wrapper or CLI records it
+- a postmortem draft when one is asked for
 
 Artifact contracts:
 
