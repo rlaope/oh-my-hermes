@@ -386,7 +386,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # time and the job-log endpoint) move build-failure-triage and codegraph-refresh only; the pin before it was 460133f6...abb.
         # The cross-lane rail fix then moves almost every body: the lane line drops its sample of member
         # names, and sibling hand-offs gain backticks or labels; the pin before it was ffca16e2...d704.
-        self.assertEqual(_digest(legacy_hashes), '0ac3cd4c7a11b2fcf11d408a227c8b4877cc623a5b14ace86579d7ce980b17f7')
+        # agent-instructions then names `ulw-context`, the label that loads, in place of `omh-context`
+        # (same length); only that body moves, and the pin before it was 0ac3cd4c...17f7.
+        self.assertEqual(_digest(legacy_hashes), '0ae5f905692c0dfb31f777d2e8e2c28a4c7e9cc1a42292cc01963e21451ebc5f')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

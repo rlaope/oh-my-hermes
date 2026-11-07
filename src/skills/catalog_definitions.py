@@ -11261,7 +11261,7 @@ _DEFINITIONS.append(
         ),
         why_this_exists=(
             "`agent-instructions` exists because the file every handoff target reads first had no owner: `rules-distill` "
-            "extracts rule candidates, `codebase-onboarding` builds a human reading path, and `omh-context` aligns terminology, "
+            "extracts rule candidates, `codebase-onboarding` builds a human reading path, and `ulw-context` aligns terminology, "
             "and each reads that file without writing it."
         ),
         opening_steps=(

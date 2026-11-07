@@ -7211,7 +7211,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep the section plan, the command verification record, and the region update in Hermes. Every command's outcome is recorded only from executor, operator, or wrapper observed output; the file is written by the executor, and only inside its marked region.
-- Why this exists: `agent-instructions` exists because the file every handoff target reads first had no owner: `rules-distill` extracts rule candidates, `codebase-onboarding` builds a human reading path, and `omh-context` aligns terminology, and each reads that file without writing it.
+- Why this exists: `agent-instructions` exists because the file every handoff target reads first had no owner: `rules-distill` extracts rule candidates, `codebase-onboarding` builds a human reading path, and `ulw-context` aligns terminology, and each reads that file without writing it.
 - First steps:
   - List every instruction file and which agent reads it before proposing a section.
   - Run or ask for the observed run of each command before marking it verified.

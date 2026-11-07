@@ -207,6 +207,22 @@ class RenderedSkillRailTests(unittest.TestCase):
         )
         self.assertEqual(sorted(_ONE_WORD_NON_HANDOFFS - found), [], "a listed word is gone: drop its row")
 
+    def test_every_backticked_label_shaped_name_is_an_installed_label(self) -> None:
+        # A label written by hand skips the rewrite, so nothing else checks that it exists.
+        # wrapper-routing.md names two earlier label eras that routing still accepts.
+        historical = {("oh-my-hermes", "references/wrapper-routing.md", name) for name in ("omh-ultrawork", "ulw-ultrawork")}
+        labels = {omh_skill_display_name(name) for name in self.installed}
+        shaped = re.compile(r"`((?:omh|ulw|dag)-[a-z0-9]+(?:-[a-z0-9]+)*)`")
+        unknown = set()
+        for projection, owner, path, content in self._texts():
+            for line in _prose_lines(content):
+                unknown.update(
+                    (projection, owner, path, name)
+                    for name in shaped.findall(line)
+                    if name not in labels and (owner, path, name) not in historical
+                )
+        self.assertEqual(sorted(unknown), [], "a hand-written label that no installed skill carries")
+
     def test_the_rail_checkpoint_names_no_sibling_canonically(self) -> None:
         rail = next(
             r.content
