@@ -492,6 +492,7 @@ class RewindTests(unittest.TestCase):
                          [("an edited prompt", 7)])
         self.assertEqual([line.text for line in app.queued], ["older queued line"])
         app._on_event(Event("message.start", SID, {}))
+        self.assertIsNone(app.hermes_next_due)  # the rewind's turn ends the wait: the queue goes at its end
         app._on_event(Event("message.complete", SID, {"text": "rewound answer", "status": "complete"}))
         self.assertEqual(client.calls[-1], ("prompt.submit", {"session_id": SID, "text": "older queued line", "queued": True}))
 

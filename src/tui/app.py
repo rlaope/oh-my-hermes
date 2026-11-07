@@ -5516,8 +5516,10 @@ class App(ModesMixin, AgentViewMixin):
         return True
 
     def _drain_unless_busy(self) -> None:
-        """Send the next queued line now, unless a turn runs: then it goes when that turn ends, as any queued line."""
-        if not self._busy():
+        """Send the next queued line now, unless a turn runs: then it goes when that turn ends, as any queued line.
+        While the queue waits for the turn Hermes runs next (`hermes_next_due`) it goes at that turn's end, or when
+        the wait runs out (`_drain_when_hermes_next_missed`)."""
+        if not self._busy() and self.hermes_next_due is None:
             self._drain_queue()
 
     def _interrupt(self) -> None:
@@ -5526,10 +5528,13 @@ class App(ModesMixin, AgentViewMixin):
         A prompt taken but not sent yet (its images still staging, or waiting
         to) is not sent: it comes back to the draft with its tokens
         (`_give_back_unsent`), and with no turn running or sent besides it,
-        nothing is asked of Hermes.
+        nothing is asked of Hermes. Lines queued behind it are held, as after
+        any interrupt (`_hold_queue`): no turn ends to send them on.
         """
         if self._give_back_unsent() and not (self.transcript.running or self.claim == CLAIM_SUBMITTED):
             self.turn_pending = False
+            if self.queued and not self.queue_held:
+                self._hold_queue(INTERRUPTED_WHY)
             return
         if self.sid:
             self.interrupting = True

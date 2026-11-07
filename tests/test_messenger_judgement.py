@@ -126,7 +126,7 @@ SHOWN_TOKEN_LINES = (
     "> [SILENT]\n> [SHUTUP]", "> - [SILENT]\n> - [SHUTUP]", "| [SILENT] |\n| [SHUTUP] |",
     "```\n[SILENT]\n[SHUTUP]\n```", "```text\n[SILENT]\n[SHUTUP]\n```", "```\n[SILENT]\n[SILENT]\n```",
 )
-# A fence's opening line that holds prose, not a language label: the prose is the answer, so the token shows.
+# A fence's opening line with words after its first: they are the answer, so the token shows.
 PROSE_FENCE_OPENINGS = ("```Done for today\n[SHUTUP]\n```", "```Okay, going quiet\n[SHUTUP]\n```",
                         "```Not for me\n[SILENT]\n```")
 
@@ -136,6 +136,9 @@ class TokenTests(unittest.TestCase):
         zero_width, bom = chr(0x200b), chr(0xfeff)
         for text in ("[SHUTUP]", "  [shutup]\n", "*[SHUTUP]*", "[SHUTUP].", "[Shut Up]", "[SHUT_UP]", "`[SHUTUP]`",
                      "```\n[SHUTUP]\n```", "```text\n[SHUTUP]\n```", "```c++\n[SHUTUP]\n```", "``` objective-c\n[SHUTUP]\n```",
+                     # One word after the ticks is the fence's label in any script, whatever its marks.
+                     "```완료\n[SHUTUP]\n```", "```了解\n[SHUTUP]\n```", "```Okay!\n[SHUTUP]\n```", "```Done.\n[SHUTUP]\n```",
+                     "```text:\n[SHUTUP]\n```",
                      "~~[SHUTUP]~~", "［SHUTUP］", "[ SHUTUP ]",
                      "\U0001fae1 [SHUTUP]", zero_width + "[SHUTUP]", bom + "[SHUTUP]",
                      "[SHUTUP] okay, going quiet", "[SHUTUP] 넵"):

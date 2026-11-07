@@ -15,13 +15,13 @@ import unittest
 
 from _tui_lines import INFO_INSET, rule_edges, line_text
 from test_tui_gateway_contract import recorded_rows
-from test_tui_modes import SID, answer, drawn, make_app, notices, type_text
+from test_tui_modes import CTRL_ENTER, SID, answer, call_id, drawn, make_app, notices, type_text
 from omh.skin_pack import SKIN_THEMES
 from omh.tui import gateway_contract as contract
-from omh.tui.app import App
+from omh.tui.app import INTERRUPTED_WHY, QUEUE_HELD_NOTICE, App, Attachment
 from omh.tui.frame import MODE_SHELL
 from omh.tui.gateway import Event, Response
-from omh.tui.keys import BACKSPACE, ENTER, UP, Key, Paste
+from omh.tui.keys import BACKSPACE, ENTER, ESCAPE, UP, Key, Paste
 from omh.tui.modes import SHELL_LABEL
 from omh.tui.style import Span
 from omh.tui.theme import DEFAULT_THEME, KIND_FAMILIES, build_theme
@@ -152,6 +152,45 @@ class ShellDuringATurnTests(unittest.TestCase):
                 app._on_event(Event("message.complete", SID, {"text": "theirs"}))
                 self.assertEqual(client.calls[-1],
                                  ("prompt.submit", {"session_id": SID, "text": "next prompt", "queued": True}))
+
+    def test_a_prompt_behind_it_waits_for_the_turn_hermes_runs_next(self) -> None:
+        # While the command ran, the person's prompt started a turn, and Hermes queued the line sent into it as its own
+        # next prompt: the line after waits for that turn as it does after any turn's end, not only for the command.
+        now = [100.0]
+        app, client = make_app(busy=True, clock=lambda: now[0])
+        for line in ("!ls", "b", "c"):
+            send(app, line)
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        send(app, "P")
+        app._on_event(Event("message.start", SID, {}))
+        app._on_input(CTRL_ENTER)
+        answer(app, client, {"status": "queued", "text": "b"})
+        app._on_event(Event("message.complete", SID, {"text": "P done"}))
+        self.assertIsNotNone(app.hermes_next_due)
+        app._on_response(Response(call_id(client, "shell.exec"), {"stdout": "a.py\n", "stderr": "", "code": 0}, None))
+        self.assertEqual([params["text"] for method, params in client.calls if method == "prompt.submit"], ["P"])
+        self.assertEqual([entry.text for entry in app.queued], ["c"])
+        app._on_event(Event("message.start", SID, {}))  # Hermes runs `b`
+        app._on_event(Event("message.complete", SID, {"text": "b done"}))
+        self.assertEqual(client.calls[-1], ("prompt.submit", {"session_id": SID, "text": "c", "queued": True}))
+
+    def test_esc_on_a_prompt_still_staging_holds_the_line_behind_it(self) -> None:
+        # The prompt sent while the command ran waits on its image, so the command's answer sends nothing. Esc gives
+        # that prompt back and no turn ends to send the queue on: it is held, as after any interrupt, and says so.
+        app, client = make_app(busy=True)
+        send(app, "!ls")
+        send(app, "next prompt")
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        image = Attachment("/hermes/cache/images/clip_1.png", "clip.png", "", "[Image #1]", b"\x89PNG")
+        app._submit("my prompt", images=(image,))
+        self.assertTrue(app._busy())
+        app._on_response(Response(call_id(client, "shell.exec"), {"stdout": "a.py\n", "stderr": "", "code": 0}, None))
+        app._on_input(Key(ESCAPE))
+        self.assertEqual((app._busy(), app.queue_held), (False, True))
+        self.assertEqual([entry.text for entry in app.queued], ["next prompt"])
+        self.assertIn(QUEUE_HELD_NOTICE.format(why=INTERRUPTED_WHY), notices(app))
+        self.assertIn("my prompt", app.composer.text)
+        self.assertNotIn("prompt.submit", [method for method, _params in client.calls])
 
     def test_a_bang_line_sent_while_a_queued_one_runs_runs_at_once(self) -> None:
         # No turn runs and the queue waits for no turn Hermes runs next: only the line queued behind the running
