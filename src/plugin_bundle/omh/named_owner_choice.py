@@ -1,29 +1,25 @@
-"""Per-owner explicit choices named in a person's dag-ulw request.
+"""External coding owners a person named in this turn's dag-ulw request.
 
 Stdlib and bundle imports only: Hermes loads this package without core ``omh``.
-The main route family remains the router's; this writer only records each
-external owner's own choice and never stores request prose.
+A coding-owner choice counts only for the request it was made in: `pre_llm_call`
+replaces the session's marker at the start of every turn, and `omh_dag`
+`define` copies it into the run it starts. An earlier request's naming, a
+`omh chat` or `omh coding` choice, or a recorded preference never starts an
+external coding CLI from a dag-ulw run. Nothing here is written to disk, and
+no request prose is kept.
 """
 
 from __future__ import annotations
 
-import json
-import os
-from pathlib import Path
+from collections import OrderedDict
 import re
-from tempfile import NamedTemporaryFile
+import sys
+import threading
+import types
 import unicodedata
 
 from .dag_ulw_cues import invokes_dag_ulw
 from .executor_cues import SUBSTRING_NAMED_CODING_AGENT_PHRASES
-from .owner_preference_record import (
-    OWNER_PREFERENCE_EXCLUDED_SIGNALS,
-    OWNER_PREFERENCE_PATH_SEGMENTS,
-    OWNER_PREFERENCE_RECORD_TYPE,
-    OWNER_PREFERENCE_SCHEMA_VERSION,
-    per_owner_route_family,
-    validate_owner_preference,
-)
 
 
 # Map each existing unambiguous executor phrase to its external owner once.
@@ -76,76 +72,51 @@ def named_owners(text: str) -> tuple[str, ...]:
     return tuple(owner for owner in _EXTERNAL_OWNERS if owner in found)
 
 
-def record_named_owner_choices(
-    omh_home: str | Path, text: str, *, now_iso: str
-) -> tuple[str, ...]:
-    """Atomically record each named dag-ulw owner, preserving all other routes.
+# One process can hold two copies of this package (Hermes' memory-provider loader execs the bundle again), and the
+# hook and the tool may each be a different copy: the markers live in one process-wide holder (as `jev_consent`).
+_STATE_HOLDER = "_omh_named_owner_turn_state"
+MAX_TRACKED_SESSIONS = 256
 
-    Invalid existing state is never repaired or replaced. Naming refreshes an
-    existing owner's timestamp without advancing the router's learning streak.
-    I/O and new-state validation errors belong to the calling hook's degraded
-    list; neither raw message text nor exception text is stored here.
+
+def _shared_state() -> types.SimpleNamespace:
+    candidate = types.SimpleNamespace(lock=threading.Lock(), turn_owners=OrderedDict())
+    holder = sys.modules.setdefault(_STATE_HOLDER, types.ModuleType(_STATE_HOLDER))
+    return holder.__dict__.setdefault("state", candidate)
+
+
+_state = _shared_state()
+
+
+def note_turn_owners(session_id: object, request_text: str) -> tuple[str, ...]:
+    """Record the owners this turn's dag-ulw request names for the session, replacing the previous turn's.
+
+    Text that does not invoke dag-ulw, or names no unnegated owner, records none.
     """
-    if not invokes_dag_ulw(text):
-        return ()
-    owners = named_owners(text)
-    if not owners:
-        return ()
-    path = Path(omh_home).joinpath(*OWNER_PREFERENCE_PATH_SEGMENTS)
-    try:
-        state = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        state = {
-            "schema_version": OWNER_PREFERENCE_SCHEMA_VERSION,
-            "record_type": OWNER_PREFERENCE_RECORD_TYPE,
-            "privacy": {
-                "mode": "metadata_only",
-                "learning_source": "accepted_explicit_owner_choice",
-                "excluded_signals": list(OWNER_PREFERENCE_EXCLUDED_SIGNALS),
-            },
-            "routes": {},
-            "updated_at": "",
-        }
-    except (ValueError, UnicodeError):
-        return ()
-    if not isinstance(state, dict) or validate_owner_preference(state):
-        return ()
-    for owner in owners:
-        family = per_owner_route_family("ulw-coding-delivery", owner)
-        previous = state["routes"].get(family)
-        changed = previous is not None and previous["selected_owner"] != owner
-        if previous is None or changed or not previous["selected_owner"]:
-            route = {
-                "route_family": family,
-                "selected_owner": owner,
-                "consecutive_accepted_explicit_choices": 1,
-                "first_choice_at": now_iso,
-                "last_choice_at": now_iso,
-                "learned_at": "",
-                "reset_at": now_iso if changed else "",
-                "reset_reason": "explicit_owner_changed" if changed else "",
-                "provenance": "in_message_naming",
-                "naming_cue": "named_executor:" + owner,
-            }
-        else:
-            route = dict(previous)
-            route.update(last_choice_at=now_iso, provenance="in_message_naming", naming_cue="named_executor:" + owner)
-        state["routes"][family] = route
-    state["updated_at"] = now_iso
-    errors = validate_owner_preference(state)
-    if errors:
-        raise ValueError("; ".join(errors))
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temporary: Path | None = None
-    try:
-        # NamedTemporaryFile creates mode 600 from the outset, before writing.
-        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
-                                prefix=".owner-preference-", suffix=".tmp", delete=False) as handle:
-            temporary = Path(handle.name)
-            json.dump(state, handle, indent=2, sort_keys=True)
-            handle.write("\n")
-        os.replace(temporary, path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
+    owners = named_owners(request_text) if request_text and invokes_dag_ulw(request_text) else ()
+    key = str(session_id or "").strip()
+    if key:
+        with _state.lock:
+            _state.turn_owners.pop(key, None)
+            _state.turn_owners[key] = owners
+            while len(_state.turn_owners) > MAX_TRACKED_SESSIONS:
+                # Oldest first; an evicted session reads as having named no owner.
+                _state.turn_owners.popitem(last=False)
     return owners
+
+
+def clear_turn_owners(session_id: object) -> None:
+    """Record that this turn named no owner yet; the hook calls this first on every turn."""
+    note_turn_owners(session_id, "")
+
+
+def turn_owners(session_id: object) -> tuple[str, ...]:
+    """The owners the session's current turn named in its dag-ulw request, or ()."""
+    key = str(session_id or "").strip()
+    with _state.lock:
+        return tuple(_state.turn_owners.get(key, ())) if key else ()
+
+
+def reset_turn_owners() -> None:
+    """Test seam: forget every session's marker."""
+    with _state.lock:
+        _state.turn_owners.clear()

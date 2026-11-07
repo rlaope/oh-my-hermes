@@ -29,8 +29,8 @@ from ..system.metadata_safety import require_opaque_metadata_ref
 from ..system.paths import OmhPaths
 
 
-# The schema, its constants and its one validator live in the plugin bundle, so `omh_dag`'s export reads the record
-# exactly as the router does (`plugin_bundle/omh/owner_preference_record.py`).
+# The schema, its constants and its one validator live in the plugin bundle
+# (`plugin_bundle/omh/owner_preference_record.py`).
 
 
 @dataclass(frozen=True)

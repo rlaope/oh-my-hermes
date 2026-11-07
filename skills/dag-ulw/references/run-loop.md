@@ -130,13 +130,13 @@ In the TUI a completion per node is fine; the panel and `/dag` draw the graph.
 
 ## External coding owner
 
-The choice is the router's explicit-choice record (`coding_owner_preference/v1`): the person picked Codex
-or Claude Code when asked, or named it in a request, through `omh chat` or `omh coding`. Naming either or
-both in a dag-ulw request in Hermes chat also records a choice per owner, without changing the main route.
-The record is read as the router reads it, with one extra rule: a choice counts for a day. An external
-coding CLI spends the person's money and quota, so a choice older than 24 hours (or dated in the future)
-starts nothing; the person names the owner again. This day rule belongs to a dag-ulw export: any other
-handoff to an external coding CLI (`ulw-maestro`) needs a choice made for that run.
+A coding-owner choice counts only for the request it was made in, as it does for `ulw-maestro`: an
+external coding CLI spends the person's money and quota. The person chooses by naming Codex or Claude Code,
+or both, in the dag-ulw request itself (`/dag-ulw <goal> with codex`). `define` keeps the owners that
+request named for the whole run, and only for that run. An earlier request's choice, a choice made in
+`omh chat` or `omh coding`, and a recorded or learned preference never count. When the person wants an
+external owner and this request names none, ask them to name it in a dag-ulw request; do not reuse an
+earlier one.
 
 With such a choice:
 
@@ -144,8 +144,8 @@ With such a choice:
   node is a `build` node that writes files (`write_scope`). Baseline, verify and review nodes always run
   on `delegate_task`, because the builder never approves itself. So does a node sent with no role whose
   label reads like another (`role_guess`); send `role=build` to export it.
-- A named node uses that owner's recent choice; if unchosen, it runs on `delegate_task`, not another owner.
-  An unnamed node uses only the main route's recent choice, never a per-owner choice or an arbitrary owner.
+- A node that names an owner the request chose goes to that owner; one that names an unchosen owner runs on
+  `delegate_task`, not another owner. A node that names no owner runs on `delegate_task`, whatever was chosen.
 - `ready`, `settle`, `repair` and `extend` keep chosen-owner coding nodes out of `calls` and list batches
   in `exports`, one entry per owner, sorted by owner (`owner`, `nodes`, `next`). `status` shows the same
   split. The unchanged single-owner `export` object appears only when `exports` has exactly one entry.
@@ -158,4 +158,4 @@ With such a choice:
 - An exported node is never handed to `delegate_task` again, however long its fanout runs. Settle it from
   the fanout result, writing its handoff file from that result.
 
-Without a matching recent choice, a node runs on `delegate_task`.
+Without that request's choice, a node runs on `delegate_task`.

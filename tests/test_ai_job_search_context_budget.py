@@ -153,8 +153,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was 41011a72...3bc7.
             # 537954 -> 537829 and the digest re-derived: the routing reach round, -125 (itemized at the same
             # limit); the pin before it was b1ad64a5...590b.
-            (skill_capabilities, 537829, FULL_ROW_DELTA_CAP,
-             'c5c17f8447a21a90f56652c76ca61560d12e987acf34f9d459d418765e562eb0',
+            # 537829 -> 538004 and the digest re-derived: a coding-owner choice counts only for the request it was
+            # made in, in the dag-ulw and maestro rows (+175, itemized at the same limit); the pin before it was
+            # c5c17f84...2eb0.
+            (skill_capabilities, 538004, FULL_ROW_DELTA_CAP,
+             'cbc660582e53ada0b9beacda30b0e72ab2f72068152892f04701cbe2c11636bc',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -392,8 +395,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # agent-instructions then names `ulw-context`, the label that loads, in place of `omh-context`
         # (same length); only that body moves, and the pin before it was 0ac3cd4c...17f7.
         # The routing reach round then moves the skills whose triggers or index text it narrows; the pin
-        # before it was 0ae5f905...ebc5f.
-        self.assertEqual(_digest(legacy_hashes), 'd4eb4e54b97d3d9f63ad060fade000feb57da574671317bc790a175459357ed7')
+        # before it was 0ae5f905...ebc5f. A coding-owner choice then counts only for the request it was made in:
+        # only dag-ulw and maestro move, and the pin before it was d4eb4e54...7ed7.
+        self.assertEqual(_digest(legacy_hashes), '2413aad2d1e1395fd1cf98a75820388e27ca15db511893c4a399cc531d3875da')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

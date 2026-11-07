@@ -990,7 +990,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # keeps its exclusions in do_not_use_when only (-104), model-optimization drops two triggers (-44),
 # morning-brief's and native-debugging's index text (-6, -4), and the named phrases joining agent-ops-review,
 # code-review, security-event-response, verification-gate and wiki (+3, +2, +14, +6, +8); -125 in all.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 540901
+# 540901 -> 541076: a coding-owner choice counts only for the request it was made in. dag-ulw's handoff policy and
+# fourth safety rule drop the one-day window (+90); ulw-maestro's required input, first safety rule and owner-choice
+# quality bar say the same (+85). Measured per row from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 541076
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
