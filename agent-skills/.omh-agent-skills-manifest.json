@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "49e28016d25b8c5eac4411cf6aa5de4c34bbc7e453a8511b210f204774c96b9b",
+  "catalog_revision": "d3cf12a6ff7ea90174f4f319b4648a3397e46716f258a83431baed7b9a9367a6",
   "files": {
     "omh-accessibility-audit/SKILL.md": "d76572f7d695dc8a936afd6e61db7108e2dcb17bed432c59382008b363f25b29",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -21,7 +21,7 @@
     "omh-ai-job-search/toolkit/examples/synthetic-captures.json": "34a730f3487d32d5acba6148ac13604751835466bd36660f713407f7d3c18aa3",
     "omh-ai-job-search/toolkit/scripts/job_state.py": "dc4344420ec9f4b4c1c3582b5ec0dcf58dc241ce7d3648f1926cec7d94dc0e4b",
     "omh-ai-job-search/toolkit/upstream-manifest.json": "c68a628b0fdf353605d47217618660972da8b9034a8c203ec7464609aea72fba",
-    "omh-ai-slop-cleaner/SKILL.md": "9ee92d77fd8d8d2b077d958b23ee04f393b0ed3e6641ceacc69e4e5a80653f59",
+    "omh-ai-slop-cleaner/SKILL.md": "374a25f76b8f974d6791a81b1d72db0353ca7a19ff13173719c6b2fb36bd8b30",
     "omh-ai-slop-cleaner/references/cleanup-passes.md": "c2ba97a9d2576e4bd6ac854e1b66ed99be6ce3ebf0d68c4b196afe6d80927f86",
     "omh-ai-slop-cleaner/references/prose-lexicon.md": "efd209984c3e5823995484dd5b6e38e3161a059db9e841b4599dbbd330417ee5",
     "omh-ai-slop-cleaner/references/ui-review-checklist.md": "ff7f41c6703e115bf27c197144daf69b50d68b106c1f87312c04bdd88b13efb7",

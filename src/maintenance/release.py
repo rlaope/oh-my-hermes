@@ -981,10 +981,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # its own head: native-debugging, build-failure-triage, verification-gate, github-event-ops, agent-debug,
 # codebase-onboarding, github-issue-intake, frontend-refactor, repro-audit, codegraph-refresh, codebase-uml,
 # rust, and the todo-checklist path in three rows. Measured from the producer on the merged tree; no headroom.
-# 540929 -> 540825: the routing reach round drops triggers from the rows it narrows (-110), native-debugging's
-# row stops promising a debug adapter (-4), morning-brief's and live-info's index text is reworded (-21),
-# verification-gate's `release gate` becomes two longer phrases (+6), and the named phrases join their rows (+25).
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 540825
+# 540929 -> 540806: the routing reach round, measured from the producer: the triggers it drops from the rows it
+# narrows, native-debugging's row no longer promising a debug adapter, morning-brief's and live-info's reworded
+# index text, verification-gate's two longer phrases, and the named phrases joining their rows (-123 in all).
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 540806
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

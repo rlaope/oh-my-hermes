@@ -10049,13 +10049,10 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "workflow-learning",
     ),
     # The reach round: what its narrowed triggers no longer take.
-    RoutingPrecisionCase("reach-korean-hermes-update-check-not-parallel", "A trigger narrowed in the reach round no longer takes this", "헤르메스 업데이트 확인해줘", "answer_clarification", "", ""),
     RoutingPrecisionCase("reach-ko-pr-risk-not-ops-review", "A trigger narrowed in the reach round no longer takes this", "이 PR 리스크 알려줘", "answer_clarification", "", "ops-review"),
     RoutingPrecisionCase("reach-ko-priorities-not-ops-review", "A trigger narrowed in the reach round no longer takes this", "우선순위 정리해줘", "answer_clarification", "", "ops-review"),
     RoutingPrecisionCase("reach-ko-blocker-not-ops-review", "A trigger narrowed in the reach round no longer takes this", "블로커 있어?", "answer_clarification", "", "ops-review"),
     RoutingPrecisionCase("reach-priorities-not-ops-review", "Bare `priorities` no longer names ops review", "list my priorities", "answer_clarification", "", "ops-review"),
-    RoutingPrecisionCase("reach-refactor-not-slop-cleaner", "A trigger narrowed in the reach round no longer takes this", "refactor this function", "answer_clarification", "", "ai-slop-cleaner"),
-    RoutingPrecisionCase("reach-ko-refactor-not-slop-cleaner", "A trigger narrowed in the reach round no longer takes this", "리팩터링 해줘", "answer_clarification", "", "ai-slop-cleaner"),
     RoutingPrecisionCase("reach-risk-analysis-not-slop-cleaner", "A trigger narrowed in the reach round no longer takes this", "do a risk analysis of this vendor", "answer_clarification", "", "ai-slop-cleaner"),
     RoutingPrecisionCase("reach-ko-before-release-not-code-review", "A trigger narrowed in the reach round no longer takes this", "릴리즈 전에 뭐 확인해야 해", "answer_clarification", "", "code-review"),
     RoutingPrecisionCase("reach-model-optimization-words-not-onboarding", "A trigger narrowed in the reach round no longer takes this", "do model optimization on our inference pipeline", "answer_clarification", "", "model-optimization"),
@@ -20940,6 +20937,7 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         expected_candidate="code-review",
     ),
     # The reach round: `release gate` left both skills that shared it, lengthened on one.
+    RoutingInterventionCase("korean-hermes-update-check-guide", "A Korean Hermes update check names no parallel tools, so it asks", "헤르메스 업데이트 확인해줘", "clarify", "oh-my-hermes", "answer_clarification", "clarification"),
     RoutingInterventionCase("release-gate-asks", "Bare `release gate` is no skill's whole phrase, so it asks", "release gate", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "deploy-and-monitor"),
     RoutingInterventionCase("run-the-release-gate-asks", "Running the release gate asks: its words count only whole, so a dam's gate cannot dispatch", "run the release gate on this branch", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "deploy-and-monitor"),
     # The audit's named reach phrases: each names its skill as the first option.

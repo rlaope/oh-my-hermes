@@ -1977,7 +1977,7 @@ def inline_coding_policy_payload() -> dict[str, object]:
 # path a bare "코딩 해줘" takes). Extends the catalog's coding terms with the
 # bare activity words the catalog reserves for stronger signals; matched with
 # the same substring rule `_intent_for` already uses for these terms.
-_INLINE_CODING_POLICY_EXTRA_TERMS = ("coding", "코딩", "패치", "patch ", " 짜줘", "코드 좀", "refactor", "리팩터링", "리팩토링")
+_INLINE_CODING_POLICY_EXTRA_TERMS = ("coding", "코딩", "패치", "patch ", " 짜줘", "코드 좀")
 
 
 def _message_is_coding_shaped(lowered_message: str, intent: str) -> bool:

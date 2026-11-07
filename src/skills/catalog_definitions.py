@@ -8048,6 +8048,8 @@ _DEFINITIONS = [
             "$ai-slop-cleaner",
             "cleanup",
             "deslop",
+            "refactor",
+            "risky",
             "behavior-preserving refactor",
             "refactor workflow",
             "legacy refactor",
