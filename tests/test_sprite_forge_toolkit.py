@@ -188,23 +188,64 @@ class PillowCliTests(ForgeFixture):
         path = self.lifted_sheet("jump.png", (0, 0, 40, 0))
         code, err, qc = self.process(path, "--free-frames", "2")
         self.assertEqual(code, 0, err)
+        self.assertEqual(qc["verdict"], "PASS_FREE_FRAMES")
         self.assertEqual(qc["free_frames"], [2])
         self.assertEqual(qc["gated_frames"], [0, 1, 3])
-        feet = [Image.open(self.output / f"frame_{i:03d}.png").convert("RGBA").getchannel("A").getbbox()[3]
-                for i in (0, 2)]
-        self.assertEqual(feet[0] - feet[1], 40)
+        boxes = [Image.open(self.output / f"frame_{i:03d}.png").convert("RGBA").getchannel("A").getbbox()
+                 for i in (0, 2)]
+        self.assertEqual(boxes[0][3] - boxes[1][3], 40)
+        # A centred figure keeps its horizontal place next to the gated frames.
+        self.assertEqual(boxes[0][0], boxes[1][0])
+
+    def test_freed_frame_keeps_its_offset_not_its_raw_cell_x(self):
+        from PIL import Image, ImageDraw
+        sheet = Image.new("RGB", (512, 512), (255, 0, 255))
+        draw = ImageDraw.Draw(sheet)
+        for index in range(4):
+            row, col = divmod(index, 2)
+            x0 = col * 256 + (40 if index == 2 else 108)
+            bottom = row * 256 + 244 - (40 if index == 2 else 0)
+            draw.rectangle([x0, bottom - 120, x0 + 40, bottom], fill=(230, 235, 240))
+        path = self.root / "offcentre.png"
+        sheet.save(path, "PNG")
+        code, err, qc = self.process(path, "--free-frames", "2")
+        self.assertEqual(code, 0, err)
+        lefts = [Image.open(self.output / f"frame_{i:03d}.png").convert("RGBA").getchannel("A").getbbox()[0]
+                 for i in range(4)]
+        # 68 px left of the gated pivot, not a free-standing source position.
+        self.assertEqual(lefts[0] - lefts[2], 68)
 
     def test_free_frames_do_not_excuse_other_misaligned_frames(self):
-        # Lifts 0/30/60/10: freeing frame 2 leaves frame 1 and 3 off the baseline.
-        code, err, qc = self.process(self.lifted_sheet("drift.png", (0, 30, 60, 10)),
+        # Lifts 0/30/60/10: frames 1 and 3 stay off the baseline, and freeing two of
+        # four frames is more than one in three.
+        code, err, _ = self.process(self.lifted_sheet("drift.png", (0, 30, 60, 10)),
+                                    "--free-frames", "1,2")
+        self.refused(code, err, "at most one frame in 3")
+        code, err, qc = self.process(self.lifted_sheet("drift2.png", (0, 30, 60, 10)),
                                      "--free-frames", "2")
         self.assertEqual(code, 3, err)
         self.assertEqual(qc["verdict"], "REGENERATE")
 
-    def test_free_frames_cannot_free_everything_or_name_a_missing_frame(self):
+    def test_a_freed_frame_cannot_hide_a_scale_change(self):
+        from PIL import Image, ImageDraw
+        sheet = Image.new("RGB", (512, 512), (255, 0, 255))
+        draw = ImageDraw.Draw(sheet)
+        for index in range(4):
+            row, col = divmod(index, 2)
+            height = 230 if index == 2 else 120
+            x0 = col * 256 + 108
+            bottom = row * 256 + 244
+            draw.rectangle([x0, bottom - height, x0 + 40, bottom], fill=(230, 235, 240))
+        path = self.root / "double.png"
+        sheet.save(path, "PNG")
+        code, err, qc = self.process(path, "--free-frames", "2")
+        self.assertEqual(code, 3, err)
+        self.assertGreater(qc["free_height_ratio_dev"], 0.3)
+
+    def test_free_frames_need_two_gated_frames_and_real_indices(self):
         path = self.lifted_sheet("all.png", (0, 0, 0, 0))
-        code, err, _ = self.process(path, "--free-frames", "0,1,2,3")
-        self.refused(code, err, "at least one gated frame")
+        code, err, _ = self.process(path, "--free-frames", "0,1,2")
+        self.refused(code, err, "at most one frame in 3")
         code, err, _ = self.process(path, "--free-frames", "9")
         self.refused(code, err, "not a frame index")
 

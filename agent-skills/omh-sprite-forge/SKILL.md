@@ -97,7 +97,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y` (frames named in `free_frames` keep their cell position), plus the re-composited aligned `sheet.png`.
+- Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y` (frames named in `free_frames` keep their offset from the gated pivot), plus the re-composited aligned `sheet.png`.
 - Authored `sprite_forge_qc/v1` in `qc.json`: frame count, grid, cell/frame size, per-frame bbox, body_scale_cv, anchor_y_max_dev, free_frames, thresholds, verdict, hashes and argv.
 - A character art-direction record: identity elements, rejected drafts with reasons, cell size + baseline, and attack-frame timing tied to game data.
 

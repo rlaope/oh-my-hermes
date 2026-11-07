@@ -3446,7 +3446,7 @@ _DEFINITIONS = [
             "Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.",
             "Open questions, residual risk, and missing verification are named.",
             "Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.",
-            "Per string: placeholders intact, plural categories, expansion and truncation, date/number/currency formats, register, literal brand and command tokens. Blocker: wrong meaning, broken placeholder, legal text; major: glossary or register miss; minor: style.",
+            "Per string: placeholders intact, target-locale plural categories, expansion and truncation, date/number/currency formats, register, literal brand and command tokens. Blocker: wrong meaning, broken placeholder, legal or safety text; major: glossary or register miss; minor: style.",
         ),
         quality_tier="review-gated",
         quality_bar=(
@@ -4136,7 +4136,7 @@ _DEFINITIONS = [
             "Preserve a stable OMH img-summary format contract: source badge, headline, source-kind subtitle, content modules, evidence footer, and small `OMH generated` mark (on request, delete its clause from the prompt).",
             "Use long_scroll or extended rows when the card needs a document-style vertical canvas with more sections or denser text.",
             "Keep visible card text readable and faithful to supplied source or structured sections; do not shrink paragraphs into tiny poster copy.",
-            "Read every visible string back from an observed card; a misspelled name, number or date, or garbled CJK, fails the attempt: regenerate with shorter copy or add the text outside the model.",
+            "Read every visible string back from an observed card and compare it with the card copy; a misspelled name, number or date, or garbled CJK, fails the attempt: regenerate with shorter copy or add the text outside the model.",
             "Separate prompt prepared, image generated, visual QA passed, and delivered states.",
             "Bind an image result to the card digest, action, attempt, and content digest, then warn on route mismatch, unknown route, stale card, digest drift, and response reuse rather than resolving any of them.",
             "For transformations, preserve requested identity, composition, text, and protected regions; verify the observed result against the edit brief before a PASS claim.",

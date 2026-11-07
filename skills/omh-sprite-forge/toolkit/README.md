@@ -62,7 +62,7 @@ executable fixture).
 - `frame_000.png`, `frame_001.png`, ...: equal-size RGBA frames, every body's
   bottom (feet) on one shared baseline row (`baseline_y`, the frame's last
   row), each body horizontally centered; frames named in `--free-frames` keep
-  their source-cell position instead.
+  their offset from the gated frames' pivot (median centre x and feet row).
 - `sheet.png`: the frames re-composited into an aligned rows x cols grid.
 - `qc.json` (`sprite_forge_qc/v1`): the numeric QC receipt. Its own hash is
   excluded; hash it separately when retaining evidence.
@@ -83,10 +83,13 @@ Exact metric definitions:
   frames use the scaled cell as canvas and `baseline_y` is the median source
   feet row after scaling.
 - **free_frames / gated_frames**: `--free-frames 2,5` (0-based) names frames that
-  leave the ground on purpose. They keep the place their source cell gave them
-  and are excluded from both gates; every other frame stays gated. Name them
-  from the art-direction record before the run: adding the flag after a
-  REGENERATE turns a failing sheet into a PASS and is not an accepted path.
+  leave the ground on purpose. They keep their offset from the gated pivot and
+  are excluded from the feet and scale-drift gates, though their height must stay
+  within 30% of the gated median (`free_height_ratio_dev`). At most one frame in
+  three may be freed and at least two stay gated. A pass with freed frames is
+  `PASS_FREE_FRAMES` (exit 0), printed with `free_frames` and `gated_frames`. Name
+  the frames from the art-direction record before the run; the helper cannot see
+  the order of events, so the list in the record is the control.
 - **anchor_y_max_dev**: largest distance of a gated frame's feet row (lowest
   retained opaque row) from the median feet row, measured on the INPUT sheet and
   divided by the cell height. It is measured before alignment because alignment

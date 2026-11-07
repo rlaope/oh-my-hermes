@@ -21,12 +21,12 @@ Declared checks:
   - Required result fields: `pillow_version`, `command`, `exit_code`, `script_sha256`
   - Criterion: Name the real interpreter and Pillow version; missing Pillow, refusal exit 2 or timeout never yields guessed frames.
 - `sprite_qc_check`
-  - Required result fields: `body_scale_cv`, `anchor_y_max_dev`, `verdict`, `output_hashes`
+  - Required result fields: `body_scale_cv`, `anchor_y_max_dev`, `free_frames`, `verdict`, `output_hashes`
   - Criterion: Require body_scale_cv <= 0.08 and anchor_y_max_dev <= 0.05 over the gated frames (--free-frames named before the run); a REGENERATE verdict (exit 3) means a new source sheet, never hand-patched frames.
 
 ### `sprite_direct` (analysis)
 
-Write the character art-direction record: identity elements, rejected drafts with reasons, cell size, baseline and attack-frame timing linked to game data.
+Write the character art-direction record: identity elements, rejected drafts with reasons, cell size, baseline, the frames that leave the ground (index, pose, reason) and attack-frame timing linked to game data.
 
 - Input refs: `grid sheet from the host image tool on flat #FF00FF`, `declared rows x cols, cell size and feet baseline`
 - Output refs: `character art-direction record`
@@ -34,7 +34,7 @@ Write the character art-direction record: identity elements, rejected drafts wit
 
 ### `sprite_process` (production)
 
-Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment (frames named in --free-frames keep their cell position) and nearest-neighbor resize.
+Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment (frames named in --free-frames keep their offset from the gated pivot) and nearest-neighbor resize.
 
 - Input refs: `grid sheet from the host image tool on flat #FF00FF`, `declared rows x cols, cell size and feet baseline`, `new output directory and execution budget`
 - Output refs: `aligned equal-size frames and sheet`, `sprite_forge_qc/v1 receipt`, `character art-direction record`

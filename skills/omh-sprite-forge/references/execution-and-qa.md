@@ -31,14 +31,18 @@ The helper keeps the largest component per cell plus components >= 5% of it,
 applies one common scale (nearest-neighbor), pins every body's lowest row to
 one baseline and centres it. Frames that leave the ground on purpose (jump,
 fall, lunge) are named before the run from the art-direction record with
-`--free-frames 2,5`: those keep the place their source cell gave them and are
-excluded from both gates, every other frame stays gated. Never add the flag
-after a REGENERATE to turn a failing sheet into a pass. An empty cell or a body
+`--free-frames 2,5`: those keep their offset from the gated frames' pivot and are
+excluded from the feet and scale-drift gates (their height must still stay within
+30% of the gated median), every other frame stays gated. At most one frame in
+three may be freed and at least two stay gated. A pass with freed frames is
+`PASS_FREE_FRAMES`, never a bare PASS. The helper cannot see the order of events,
+so the rule is structural: the freed frames are the record's list, and a
+REGENERATE is never answered by adding frames to it. An empty cell or a body
 touching the cell edge (bleed) is refused with the cell index.
 
 ## Read back and decide
 
-Exit codes: 0 PASS, 2 refusal (no outputs), 3 REGENERATE (outputs written as
+Exit codes: 0 PASS or PASS_FREE_FRAMES, 2 refusal (no outputs), 3 REGENERATE (outputs written as
 evidence). On exit 0 or 3, read `qc.json` (`sprite_forge_qc/v1`), every
 `frame_NNN.png` and `sheet.png`, and recompute their sha256 against the receipt.
 

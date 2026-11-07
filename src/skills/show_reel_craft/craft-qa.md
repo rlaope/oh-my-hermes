@@ -18,7 +18,7 @@
 | 3. Per-scene stills | Each time a scene is written | start+0.5 / cue+0.4 / end-0.6 seconds | Same |
 | 4. Draft critique | After all scenes exist, and on every fix | The eight questions in "Critique" below, the whole flow at 1-second intervals, frame strips of key moments, scene boundaries ±3 frames, frozen stretches and large motion | `render.mjs --scale 0.5` + `contact_sheet.py --every 1` / `--around` + `motion_check.py` |
 | 5. Audio | Right after the mix | Per-line narration vs background dB, LUFS | `mix.py` table |
-| 6. Finished cut | Right after finishing | Spec, loudness, luminance, freezes, finished-mix STT, final sheet | `qa_check.py --stt` |
+| 6. Finished cut | Right after finishing | Spec, loudness, luminance, freezes, final sheet | `qa_check.py --audio-mode MODE` (no STT in this kit) |
 
 Repeat stages 2 to 4 until every segment is "keep" in the critique and the checklist below passes. Always open the sheets with Read. For a revised scene, pull stills at the same times again and compare before and after. If you do not compare the same frames when changing parameters, you end up swinging between "too dark <-> blown out to white".
 

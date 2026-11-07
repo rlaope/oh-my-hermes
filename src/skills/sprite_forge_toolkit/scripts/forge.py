@@ -24,7 +24,8 @@ DEFAULT_KEY = "FF00FF"
 DEFAULT_TOLERANCE = 30
 ALPHA_OPAQUE_THRESHOLD = 128
 SMALL_COMPONENT_FRACTION = 0.05
-THRESHOLDS = {"body_scale_cv": 0.08, "anchor_y_max_dev": 0.05}
+THRESHOLDS = {"body_scale_cv": 0.08, "anchor_y_max_dev": 0.05, "free_height_ratio_dev": 0.3}
+MAX_FREE_SHARE = 3  # at most one frame in three may be freed
 SCHEMA = "sprite_forge_qc/v1"
 
 
@@ -297,8 +298,13 @@ def run_process(args, argv):
     # output would only read back the row the code just chose.
     free = parse_free_frames(args.free_frames, len(cells))
     gated = [i for i in range(len(cells)) if i not in free]
-    if not gated:
-        raise ValueError("--free-frames must leave at least one gated frame")
+    if len(free) > len(cells) // MAX_FREE_SHARE:
+        raise ValueError(
+            f"--free-frames may free at most one frame in {MAX_FREE_SHARE} "
+            f"({len(cells) // MAX_FREE_SHARE} of {len(cells)}); a sheet that needs more "
+            "should be regenerated or split by animation")
+    if len(gated) < 2:
+        raise ValueError("--free-frames must leave at least two gated frames")
     feet_in = [c["bbox"][3] for c in cells]
     gated_feet = [feet_in[i] for i in gated]
     feet_median = statistics.median(gated_feet)
@@ -306,6 +312,13 @@ def run_process(args, argv):
     # The gate is the largest deviation from the median, not the spread: a
     # standard deviation dilutes one lifted frame among many.
     anchor_y_max_dev = max(abs(f - feet_median) for f in gated_feet) / ch
+    centre_x = [(c["bbox"][0] + c["bbox"][2]) / 2 for c in cells]
+    centre_median = statistics.median(centre_x[i] for i in gated)
+    gated_height_median = statistics.median(heights[i] for i in gated)
+    # A freed frame is a pose, not a scale change: its body height stays near the
+    # gated frames' median or the sheet is regenerated.
+    free_height_ratio_dev = max(
+        (abs(heights[i] / gated_height_median - 1) for i in free), default=0.0)
     if free:
         frame_w = max(1, int(round(cw * scale)))
         frame_h = max(1, int(round(ch * scale)))
@@ -321,7 +334,11 @@ def run_process(args, argv):
                                    cell["body"]).resize((nw, nh), Image.NEAREST)
         frame = Image.new("RGBA", (frame_w, frame_h), (0, 0, 0, 0))
         if index in free:
-            at = (int(round(cell["bbox"][0] * scale)), int(round(cell["bbox"][1] * scale)))
+            # Relative to the gated frames' pivot (median centre x, median feet row),
+            # so a jump keeps its offset from the others instead of its raw cell place.
+            feet_at = baseline_y + (feet_in[index] - feet_median) * scale
+            at = ((frame_w - nw) // 2 + int(round((centre_x[index] - centre_median) * scale)),
+                  int(round(feet_at - nh + 1)))
         elif free:
             at = ((frame_w - nw) // 2, baseline_y - nh + 1)
         else:
@@ -337,7 +354,10 @@ def run_process(args, argv):
         raise ValueError("degenerate body heights")
     body_scale_cv = statistics.pstdev(gated_heights) / mean_h
     verdict = ("PASS" if body_scale_cv <= THRESHOLDS["body_scale_cv"]
-               and anchor_y_max_dev <= THRESHOLDS["anchor_y_max_dev"] else "REGENERATE")
+               and anchor_y_max_dev <= THRESHOLDS["anchor_y_max_dev"]
+               and free_height_ratio_dev <= THRESHOLDS["free_height_ratio_dev"] else "REGENERATE")
+    if verdict == "PASS" and free:
+        verdict = "PASS_FREE_FRAMES"
     spill = sum(c["spill"] for c in cells)
     kept_px = sum(c["opaque"] for c in cells)
 
@@ -381,9 +401,10 @@ def run_process(args, argv):
         "body_scale_cv": body_scale_cv,
         "anchor_y_std": anchor_y_std,
         "anchor_y_max_dev": anchor_y_max_dev,
+        "free_height_ratio_dev": free_height_ratio_dev,
         "free_frames": sorted(free),
         "gated_frames": gated,
-        "key_spill_pixels": spill,
+        "key_spill_pixels": None if alpha_input else spill,
         "key_spill_share": None if alpha_input else ((spill / kept_px) if kept_px else 0.0),
         "thresholds": dict(THRESHOLDS),
         "metric_definitions": {
@@ -401,10 +422,15 @@ def run_process(args, argv):
             "key_spill_pixels": ("retained opaque pixels within twice the tolerance of the "
                                  "key colour: fringe or key-coloured costume; reported, "
                                  "not gated"),
+            "free_height_ratio_dev": ("largest |height / gated median height - 1| over the "
+                                      "freed frames; gated at 0.3 so a freed frame is a pose, "
+                                      "not a scale change"),
             "verdict": ("PASS when body_scale_cv <= 0.08 and anchor_y_max_dev <= 0.05 over the "
-                        "gated frames, otherwise REGENERATE the source sheet; never retouch "
-                        "frames. Frames named in free_frames are excluded from both gates "
-                        "and keep their cell position"),
+                        "gated frames and free_height_ratio_dev <= 0.3, otherwise REGENERATE the "
+                        "source sheet; never retouch frames. PASS_FREE_FRAMES is the same "
+                        "pass when frames named in free_frames (at most one in three, at least "
+                        "two frames stay gated) were excluded from both feet and scale gates; "
+                        "they keep their offset from the gated frames' pivot"),
         },
         "input_sha256": input_sha,
         "output_sha256s": output_shas,
@@ -417,15 +443,17 @@ def run_process(args, argv):
     blob = (json.dumps(qc, indent=2, sort_keys=True, ensure_ascii=True) + "\n").encode("utf-8")
     write_new(output / "qc.json", blob)
 
-    print(json.dumps({"status": "ok" if verdict == "PASS" else "regenerate",
+    status = {"PASS": "ok", "PASS_FREE_FRAMES": "ok_free_frames"}.get(verdict, "regenerate")
+    print(json.dumps({"status": status,
                       "output_dir": str(output), "verdict": verdict,
                       "frame_count": len(frames), "frame_size": [frame_w, frame_h],
                       "body_scale_cv": round(body_scale_cv, 6),
                       "anchor_y_std": round(anchor_y_std, 6),
                       "anchor_y_max_dev": round(anchor_y_max_dev, 6),
                       "free_frames": sorted(free),
-                      "key_spill_pixels": spill}))
-    return 0 if verdict == "PASS" else 3
+                      "gated_frames": gated,
+                      "key_spill_pixels": None if alpha_input else spill}))
+    return 0 if verdict in ("PASS", "PASS_FREE_FRAMES") else 3
 
 
 def run_selftest(output_value):

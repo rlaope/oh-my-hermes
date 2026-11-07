@@ -2025,7 +2025,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
   - Open questions, residual risk, and missing verification are named.
   - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
-  - Per string: placeholders intact, plural categories, expansion and truncation, date/number/currency formats, register, literal brand and command tokens. Blocker: wrong meaning, broken placeholder, legal text; major: glossary or register miss; minor: style.
+  - Per string: placeholders intact, target-locale plural categories, expansion and truncation, date/number/currency formats, register, literal brand and command tokens. Blocker: wrong meaning, broken placeholder, legal or safety text; major: glossary or register miss; minor: style.
 - Recovery notes:
   - If the source version cannot be established, retain supplied strings and the locale/audience brief, mark terminology and cultural-fit choices tentative, and hand back the source-version question before treating the glossary as approved.
   - If rendered UI evidence is missing, retain glossary choices and the string issue matrix, mark rendered validation not_observed, and hand back locale QA criteria and review owners for an accepted `visual-qa` handoff.
@@ -2521,7 +2521,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Preserve a stable OMH img-summary format contract: source badge, headline, source-kind subtitle, content modules, evidence footer, and small `OMH generated` mark (on request, delete its clause from the prompt).
   - Use long_scroll or extended rows when the card needs a document-style vertical canvas with more sections or denser text.
   - Keep visible card text readable and faithful to supplied source or structured sections; do not shrink paragraphs into tiny poster copy.
-  - Read every visible string back from an observed card; a misspelled name, number or date, or garbled CJK, fails the attempt: regenerate with shorter copy or add the text outside the model.
+  - Read every visible string back from an observed card and compare it with the card copy; a misspelled name, number or date, or garbled CJK, fails the attempt: regenerate with shorter copy or add the text outside the model.
   - Separate prompt prepared, image generated, visual QA passed, and delivered states.
   - Bind an image result to the card digest, action, attempt, and content digest, then warn on route mismatch, unknown route, stale card, digest drift, and response reuse rather than resolving any of them.
   - For transformations, preserve requested identity, composition, text, and protected regions; verify the observed result against the edit brief before a PASS claim.
@@ -9104,7 +9104,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - sprite_forge_qc/v1 receipt
   - character art-direction record
 - Artifact expectations:
-  - Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y` (frames named in `free_frames` keep their cell position), plus the re-composited aligned `sheet.png`.
+  - Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y` (frames named in `free_frames` keep their offset from the gated pivot), plus the re-composited aligned `sheet.png`.
   - Authored `sprite_forge_qc/v1` in `qc.json`: frame count, grid, cell/frame size, per-frame bbox, body_scale_cv, anchor_y_max_dev, free_frames, thresholds, verdict, hashes and argv.
   - A character art-direction record: identity elements, rejected drafts with reasons, cell size + baseline, and attack-frame timing tied to game data.
 - Safety rules:
@@ -9121,20 +9121,20 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Required result fields: `pillow_version`, `command`, `exit_code`, `script_sha256`
     - Criterion: Name the real interpreter and Pillow version; missing Pillow, refusal exit 2 or timeout never yields guessed frames.
   - `sprite_qc_check`
-    - Required result fields: `body_scale_cv`, `anchor_y_max_dev`, `verdict`, `output_hashes`
+    - Required result fields: `body_scale_cv`, `anchor_y_max_dev`, `free_frames`, `verdict`, `output_hashes`
     - Criterion: Require body_scale_cv <= 0.08 and anchor_y_max_dev <= 0.05 over the gated frames (--free-frames named before the run); a REGENERATE verdict (exit 3) means a new source sheet, never hand-patched frames.
 - Procedure steps:
   - `sprite_direct` (`analysis`)
     - Input refs: `grid sheet from the host image tool on flat #FF00FF`, `declared rows x cols, cell size and feet baseline`
     - Output refs: `character art-direction record`
     - Check IDs: `sprite_input_check`
-    - Instruction: Write the character art-direction record: identity elements, rejected drafts with reasons, cell size, baseline and attack-frame timing linked to game data.
+    - Instruction: Write the character art-direction record: identity elements, rejected drafts with reasons, cell size, baseline, the frames that leave the ground (index, pose, reason) and attack-frame timing linked to game data.
   - `sprite_process` (`production`)
     - Input refs: `grid sheet from the host image tool on flat #FF00FF`, `declared rows x cols, cell size and feet baseline`, `new output directory and execution budget`
     - Output refs: `aligned equal-size frames and sheet`, `sprite_forge_qc/v1 receipt`, `character art-direction record`
     - Check IDs: `sprite_input_check`, `sprite_backend_check`
     - If this step fails: not_observed; still stands: `character art-direction record`; hand back: Return the character art-direction record and observed helper command, refusal or timeout, with the required grid correction or optional Pillow setup before retrying in a new output directory.
-    - Instruction: Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment (frames named in --free-frames keep their cell position) and nearest-neighbor resize.
+    - Instruction: Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment (frames named in --free-frames keep their offset from the gated pivot) and nearest-neighbor resize.
   - `sprite_verify` (`validation`)
     - Input refs: `grid sheet from the host image tool on flat #FF00FF`, `declared rows x cols, cell size and feet baseline`, `new output directory and execution budget`
     - Output refs: `aligned equal-size frames and sheet`, `sprite_forge_qc/v1 receipt`, `character art-direction record`
@@ -10991,7 +10991,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
-  - Receipt OCR checks items sum to the total, states currency and date order, and masks card and ID numbers.
+  - Receipt OCR checks items sum to the total, states assumed currency and date order, and masks card and ID numbers.
   - Media type, source location, permission boundary, transcript availability, language, requested output, timestamp requirement, and stop condition are explicit.
   - Downloads, uploads, ASR, transcript extraction, speaker labels, copyrighted media access, and provider setup are gated or marked missing.
   - Transcript text, OCR output, screenshot text, receipt fields, timestamps, quotes, action items, and media-summary claims are reported only from observed media or supplied transcript/extraction evidence.

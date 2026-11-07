@@ -47,14 +47,14 @@ DEFINITION = SkillDefinition(
                        "Refuse 1xN strips, inexact cell division, oversized files and wide effects packed into a character cell; put slashes and muzzle flashes on a separate sheet."),
         ProcedureCheck("sprite_backend_check", ("pillow_version", "command", "exit_code", "script_sha256"),
                        "Name the real interpreter and Pillow version; missing Pillow, refusal exit 2 or timeout never yields guessed frames."),
-        ProcedureCheck("sprite_qc_check", ("body_scale_cv", "anchor_y_max_dev", "verdict", "output_hashes"),
+        ProcedureCheck("sprite_qc_check", ("body_scale_cv", "anchor_y_max_dev", "free_frames", "verdict", "output_hashes"),
                        "Require body_scale_cv <= 0.08 and anchor_y_max_dev <= 0.05 over the gated frames (--free-frames named before the run); a REGENERATE verdict (exit 3) means a new source sheet, never hand-patched frames."),
     ),
     procedure_steps=(
         ProcedureStep("sprite_direct", "analysis", (_INPUTS[0], _INPUTS[1]), (_OUTPUTS[2],), ("sprite_input_check",),
-                      "Write the character art-direction record: identity elements, rejected drafts with reasons, cell size, baseline and attack-frame timing linked to game data."),
+                      "Write the character art-direction record: identity elements, rejected drafts with reasons, cell size, baseline, the frames that leave the ground (index, pose, reason) and attack-frame timing linked to game data."),
         ProcedureStep("sprite_process", "production", _INPUTS, _OUTPUTS, ("sprite_input_check", "sprite_backend_check"),
-                      "Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment (frames named in --free-frames keep their cell position) and nearest-neighbor resize.",
+                      "Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment (frames named in --free-frames keep their offset from the gated pivot) and nearest-neighbor resize.",
             on_fail=ProcedureBail(
                 still_stands=('character art-direction record',),
                 downgrade_to='not_observed',
@@ -71,7 +71,7 @@ DEFINITION = SkillDefinition(
         ),
     ),
     artifact_expectations=(
-        "Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y` (frames named in `free_frames` keep their cell position), plus the re-composited aligned `sheet.png`.",
+        "Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y` (frames named in `free_frames` keep their offset from the gated pivot), plus the re-composited aligned `sheet.png`.",
         "Authored `sprite_forge_qc/v1` in `qc.json`: frame count, grid, cell/frame size, per-frame bbox, body_scale_cv, anchor_y_max_dev, free_frames, thresholds, verdict, hashes and argv.",
         "A character art-direction record: identity elements, rejected drafts with reasons, cell size + baseline, and attack-frame timing tied to game data.",
     ),
@@ -148,14 +148,18 @@ The helper keeps the largest component per cell plus components >= 5% of it,
 applies one common scale (nearest-neighbor), pins every body's lowest row to
 one baseline and centres it. Frames that leave the ground on purpose (jump,
 fall, lunge) are named before the run from the art-direction record with
-`--free-frames 2,5`: those keep the place their source cell gave them and are
-excluded from both gates, every other frame stays gated. Never add the flag
-after a REGENERATE to turn a failing sheet into a pass. An empty cell or a body
+`--free-frames 2,5`: those keep their offset from the gated frames' pivot and are
+excluded from the feet and scale-drift gates (their height must still stay within
+30% of the gated median), every other frame stays gated. At most one frame in
+three may be freed and at least two stay gated. A pass with freed frames is
+`PASS_FREE_FRAMES`, never a bare PASS. The helper cannot see the order of events,
+so the rule is structural: the freed frames are the record's list, and a
+REGENERATE is never answered by adding frames to it. An empty cell or a body
 touching the cell edge (bleed) is refused with the cell index.
 
 ## Read back and decide
 
-Exit codes: 0 PASS, 2 refusal (no outputs), 3 REGENERATE (outputs written as
+Exit codes: 0 PASS or PASS_FREE_FRAMES, 2 refusal (no outputs), 3 REGENERATE (outputs written as
 evidence). On exit 0 or 3, read `qc.json` (`sprite_forge_qc/v1`), every
 `frame_NNN.png` and `sheet.png`, and recompute their sha256 against the receipt.
 
@@ -189,6 +193,14 @@ It travels with the frames and the `qc.json` receipt.
 List what must stay constant in every frame: silhouette, palette (hex values),
 proportions (head-to-body ratio), signature props and costume marks. A
 regeneration that loses an identity element is rejected even when QC passes.
+
+## Free frames
+
+List each frame that leaves the ground on purpose: frame index, pose, and the
+reason (jump apex, fall, lunge). This list is the only source of
+`--free-frames`; at most one frame in three, and the verify step compares it with
+`free_frames` in `qc.json`. A frame that is merely off the baseline in a bad
+generation is not a free frame: regenerate.
 
 ## Rejected drafts
 

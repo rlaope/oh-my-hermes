@@ -9,6 +9,14 @@ List what must stay constant in every frame: silhouette, palette (hex values),
 proportions (head-to-body ratio), signature props and costume marks. A
 regeneration that loses an identity element is rejected even when QC passes.
 
+## Free frames
+
+List each frame that leaves the ground on purpose: frame index, pose, and the
+reason (jump apex, fall, lunge). This list is the only source of
+`--free-frames`; at most one frame in three, and the verify step compares it with
+`free_frames` in `qc.json`. A frame that is merely off the baseline in a bad
+generation is not a free frame: regenerate.
+
 ## Rejected drafts
 
 For each rejected sheet record the source file hash, the prompt or settings

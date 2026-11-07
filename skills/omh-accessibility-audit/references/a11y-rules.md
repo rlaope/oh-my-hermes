@@ -77,8 +77,8 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | KEY-2 | Pointer handler on a non-interactive element with no keyboard path | major | 2.1.1 | split: role and focusability `auto`, the key handler `manual` |
 | KEY-3 | No visible focus indicator (2.4.7), or the focused component entirely hidden behind author content such as a sticky header (2.4.11); partial overlap is advisory (2.4.12, AAA) | major | 2.4.7, 2.4.11 | `manual` |
 | KEY-4 | Keyboard trap: focus enters a region and cannot leave by keyboard | critical | 2.1.2 | `manual` |
-| RFL-1 | Content lost, or needing two-direction scrolling, at 320 CSS px width (256 CSS px height for horizontally scrolling content such as vertical text) / 400% zoom; not a finding for content that requires two-dimensional layout (data tables, maps, diagrams, video, games, toolbars) | major | 1.4.10 | `manual` |
-| TGT-1 | Pointer target under 24x24 CSS px with none of the 2.5.8 exceptions (spacing, equivalent control, inline in a sentence, user-agent-controlled, essential) | major | 2.5.8 | `manual` |
+| RFL-1 | Content lost, or needing two-direction scrolling, at 320 CSS px width (256 CSS px height for horizontally scrolling content such as vertical text) / 400% zoom; not a finding for content that requires two-dimensional layout (data tables, not individual cells; maps, diagrams, video, games, and interfaces where toolbars must stay in view) | major | 1.4.10 | `manual` |
+| TGT-1 | Pointer target under 24x24 CSS px with none of the 2.5.8 exceptions (spacing, equivalent control, inline in a sentence or constrained by the line height of non-target text, user-agent-controlled, essential) | major | 2.5.8 | `manual` |
 | STAT-1 | Dynamic status or error not announced (no live region or focus move) | major | 4.1.3 | `manual` |
 
 ### Structure
@@ -97,7 +97,7 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | --- | --- | --- | --- | --- |
 | COL-1 | Color as the only carrier of meaning | minor | 1.4.1 | `manual` |
 | COL-2 | Color declared inline, contrast unverifiable from source | minor | 1.4.3 | `manual` (measure, then judge against 4.5:1 text / 3:1 large text) |
-| COL-3 | UI component boundary, state or meaningful graphic under 3:1 (not for inactive components or a control whose appearance the user agent sets) | major | 1.4.11 | `manual` |
+| COL-3 | UI component boundary, state or meaningful graphic under 3:1 (not for inactive components, a control whose appearance the user agent sets, or graphics where a particular presentation is essential) | major | 1.4.11 | `manual` |
 
 A finding the table does not cover takes the next number of the nearest
 prefix and goes into the rerun list, so reruns stay comparable. A target size

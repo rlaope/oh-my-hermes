@@ -212,10 +212,10 @@ Do not put reverb on the narration. A video that used a 2.4-second hall at `--ha
 ## 11. Automated QA and delivery report
 
 ```bash
-python3 $S/qa_check.py <project>/out/<name>.mp4 --audio-mode music-only --policy <project>/qa-policy.json   # --audio-mode is required in this kit; no --timeline/--script/--stt
+python3 $S/qa_check.py <project>/out/<name>.mp4 --audio-mode <muted|music-only|narration|narration+bed/SFX> --policy <project>/qa-policy.json   # the mode of this film; no --timeline/--script/--stt
 ```
 
-It checks the format, loudness, overly dark stretches, flashes, frozen screens, and a transcription of the finished mix (including number misrecognition), and creates `qa/qa_report.md` and the final sheet. Handle every "to fix" item, look at the final sheet with Read, and then deliver. For a line that STT got wrong only once, run it once more, and fix it if it is wrong both times.
+In this kit it checks the format, loudness, overly dark stretches, flashes and frozen screens and prints a JSON report; it does not transcribe the finished mix and does not write `qa/qa_report.md` or a final sheet (use `contact_sheet.py` for the sheet). A finished-mix transcript check is not observed unless you ran separate approved speech-to-text tooling. Handle every "to fix" item, look at the final sheet with Read, and then deliver. For a line that STT got wrong only once, run it once more, and fix it if it is wrong both times.
 
 The formats of the delivery report and `제작노트.md` (production notes) are in "Delivery" in `references/craft-qa.md`. Always include the following.
 

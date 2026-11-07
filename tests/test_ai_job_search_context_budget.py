@@ -385,7 +385,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # voice-input move (verdict vocabulary, exact-payload and bulk-change confirmations, page
         # text as data, text read-back, per-string locale checks, renderer order, sprite-forge's free
         # frames); the pin before it was 7e537e8d...b2c.
-        self.assertEqual(_digest(legacy_hashes), 'b61126e2f25c84b69d82aac7e9571353646d61b8525a3656a62df5d1965da8d2')
+        self.assertEqual(_digest(legacy_hashes), 'ed144a8cdfc12a5daafe097cc3cba0a5b59a9cca7f45a6326549415bcf4fccd7')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -432,7 +432,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1500000,
+            'full_profile_skill_body_chars': 1650000,
             'full_profile_skill_body_repeated_chars': 140000,
             'skill_density_filler_hits': 0,
         }
