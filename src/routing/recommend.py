@@ -7,7 +7,7 @@ import re
 
 from ..plugin_bundle.omh.data_share_cues import DATA_SHARE_REVIEW_KOREAN_PHRASES, data_share_request_admitted
 from ..coding.pi_family_interop import PI_DISTRIBUTION_HOST, RUNTIME_SHORT_NAME, RUNTIME_USER_PHRASE, SCORING_ONLY_TRIGGERS
-from ..plugin_bundle.omh.korean_request import korean_request, without_particle
+from ..plugin_bundle.omh.korean_request import SOFTENERS, korean_request, without_particle
 from ..plugin_bundle.omh.request_lead import after_courtesy
 from ..plugin_bundle.omh.spend_signals import SPEND_GATE_KOREAN_PHRASES, spend_request_clause
 from ..skills.catalog import SkillDefinition, builtin_definitions, routable_definitions
@@ -2891,8 +2891,6 @@ _SIBLING_POINTER_METADATA_TOKENS = {
 # phrases. Crediting them separately made unrelated sentences containing
 # `models` and `work` look like observed-work inventory requests.
 _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
-    # The time phrases count whole: `what` and `what's` open every question.
-    "live-info-operator": frozenset({"what", "what's", "local"}),
     # `write a handover guide`: the skill's closing handover. Each word is everyday alone.
     "wiki": frozenset({"write", "handover", "guide"}),
     # The audit phrases name the instrumentation review. Alone these words mean a school's
@@ -3055,7 +3053,9 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     "verification-gate": frozenset(
         {
             # `run the release gate` and `release gate check` count whole: these words
-            # alone dispatched "run the release gate at the dam".
+            # alone dispatched "run the release gate at the dam". Holding `gate` also
+            # makes bare `quality gate` ask instead of dispatching; its longer forms
+            # still dispatch.
             "release", "run", "check", "gate",
             "artifact",
             "editing",
@@ -4524,6 +4524,7 @@ def _one_word_self_name(definition: SkillDefinition) -> str:
 # an external product name the repo does not ship, yet a user who types it
 # still means this skill.
 _SCORING_ONLY_TRIGGERS = SCORING_ONLY_TRIGGERS
+_OPS_REVIEW_KOREAN_PAIR = tuple(normalized_phrase(word) for word in ("리스크", "블로커"))
 
 
 def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
@@ -4773,6 +4774,11 @@ def _score_definition(
     if definition.name == "llm-app-dev" and _llm_app_dev_explicit_match(normalized_query):
         score += 30
         matched.add("direct:llm_app_dev")
+    # `리스크` and `블로커` are held back one by one, so either word alone names
+    # nothing; said together, in any order or joiner, they are this review's pair.
+    if definition.name == "ops-review" and all(word in normalized_query for word in _OPS_REVIEW_KOREAN_PAIR):
+        score += 12
+        matched.add("direct:ops_review_risks_and_blockers")
     if definition.name == "todo-checklist" and _todo_checklist_explicit_match(normalized_query):
         score += 30
         matched.add("direct:todo_checklist")
@@ -6133,7 +6139,9 @@ def _market_research_korean_request(message: str) -> bool:
     request = korean_request(message)
     if request is None:
         return False
-    before = tuple(without_particle(word) for word in request.words[: request.predicate_index])
+    before = tuple(
+        without_particle(word) for word in request.words[: request.predicate_index] if word not in SOFTENERS
+    )
     said = (*before, request.predicate)
     return any(
         said[-len(method) :] == method or (request.predicate in _MARKET_RESEARCH_KOREAN_VERBS and before[-len(method) :] == method)

@@ -150,7 +150,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # tree (itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was a5d1c988...3e03.
             # 537857 -> 537734 and the digest re-derived: the routing reach round, -123 (itemized at the same limit).
             (skill_capabilities, 537734, FULL_ROW_DELTA_CAP,
-             '5e8a7bec8b79e67a848aca3b1da7880e88c26656017bfc5547ae26503967dda9',
+             '48b0a8bc010397137f930d9b03a885b8960e3b8b6e441b71b9a02f7f37337664',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -193,9 +193,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # trigger row (255 bytes) and its researcher token (+21); removing
         # only those reproduces 29ebe70f...7063.
         # Digest re-derived for the reach round: the registry rows of the triggers it drops.
-        self.assertEqual(_digest(legacy), 'b95bcd17485e1d6660c5f348ca8d0a4f9460cdda9bb6355504bb3d76166c3565')
+        self.assertEqual(_digest(legacy), 'd32edf2216a679aa88fdffccdd9564a44443ea1336b663c24b8ae373e8634ea5')
         baseline = len(''.join(legacy).encode())
-        self.assertEqual(baseline, 33570)
+        self.assertEqual(baseline, 33564)
         # 33_100 -> 33_318: main's ru pack and repro-audit (+222 over 32874) used
         # the gate's room and sprite-forge adds its 221-byte row and token; each
         # side alone fit, the merged tree measures 33317. The gate stays exact.
@@ -390,7 +390,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # frontend-refactor, github-event-ops, github-issue-intake and ultraqa among them); the pin before it was 49189871...a29a. Its second review then reworded
         # the origin rerun rule, the lldb crash recipe's neighbours and a few sibling labels; the pin before that was 55b2226e...25eb. The third review's two command fixes (the codegraph reflog
         # time and the job-log endpoint) move build-failure-triage and codegraph-refresh only; the pin before it was 460133f6...abb. The routing reach round moves the skills whose triggers or index text it narrows.
-        self.assertEqual(_digest(legacy_hashes), '51929735799c4d0b374a13ab4e97fcdd9ef9a77dfa1a659cbbbf004e4acd5757')
+        self.assertEqual(_digest(legacy_hashes), '22cc05ad1476d2211e4377a04a972f1d06e0a48a1234d3ec565b292bda6f8501')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

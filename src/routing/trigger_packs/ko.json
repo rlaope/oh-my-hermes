@@ -588,7 +588,9 @@
       "계속 감시",
       "계속 모니터링",
       "계속 지켜봐",
-      "반복해줘"
+      "반복해줘",
+      "반복 실행",
+      "반복 일정"
     ],
     "reliability-review": [
       "장애 리뷰",
@@ -953,6 +955,7 @@
       "오늘 날씨",
       "현재 날씨",
       "날씨 예보",
+      "주가",
       "코인 가격",
       "환율",
       "스포츠 점수",
@@ -961,12 +964,7 @@
       "현재 시간",
       "지도",
       "길찾기",
-      "주변 식당",
-      "주가 알려",
-      "주가 조회",
-      "주가 확인",
-      "주가 어때",
-      "주가 얼마"
+      "주변 식당"
     ],
     "external-connector-readiness": [
       "커넥터 준비도",
@@ -1208,8 +1206,6 @@
     ]
   },
   "whole_phrase_only_tokens": {
-    "external-connector-readiness": ["영상"],
-    "live-info-operator": ["주가", "알려", "조회", "어때", "얼마"],
     "buzz": ["연결"],
     "market-research": ["시장", "규모", "경쟁사", "분석", "시장규모", "경쟁사분석"],
     "wiki": ["인수인계", "문서", "써줘"],
@@ -1217,7 +1213,7 @@
     "parallel-tools": ["쓰려고"],
     "running-work-board": ["있어", "지금"],
     "agent-ops-review": ["있어", "지금", "작업이"],
-    "automation-blueprint": ["반복해줘"],
+    "automation-blueprint": ["반복해줘", "반복", "실행", "일정"],
     "ops-review": ["리스크", "블로커", "우선순위"],
     "adversarial-consensus": [
       "검토",

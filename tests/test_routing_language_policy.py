@@ -97,7 +97,10 @@ FROZEN_HANGUL_TRIGGERS_BY_SKILL: dict[str, int] = {
     # "watch continuously", "monitor continuously") and the ja/zh packs ship in
     # the same commit: new capability reach, not padding over a Korean-only
     # miss.
-    "automation-blueprint": 18,
+    # 18 -> 20 (2026-11-07, skill audit): bare `반복` dispatched "반복 학습이 중요해" and
+    # left. Its scheduling sense stays as `반복해줘`, `반복 실행` and `반복 일정`, each held
+    # back word by word: a narrowing that costs entries, not padding over a miss.
+    "automation-blueprint": 20,
     "browser-operator": 15,
     "build-failure-triage": 14,
     "code-review": 7,
@@ -154,10 +157,7 @@ FROZEN_HANGUL_TRIGGERS_BY_SKILL: dict[str, int] = {
     "idea-to-deploy": 8,
     "img-summary": 55,
     "instinct-ledger": 6,
-    # 13 -> 17 (2026-11-07, skill audit): bare `주가` dispatched "이번 주가 고비야" and
-    # "외주가 밀렸어". It becomes five lookups (`주가 알려`, `주가 조회`, `주가 확인`,
-    # `주가 어때`, `주가 얼마`), a narrowing that costs more entries, not padding.
-    "live-info-operator": 17,
+    "live-info-operator": 13,
     "loop": 8,
     "materials-package": 27,
     "media-input-operator": 19,

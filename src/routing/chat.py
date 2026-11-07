@@ -69,7 +69,7 @@ from ..plugin_bundle.omh.route_question_mode import ROUTE_QUESTION_MODE_OFF, rou
 from ..plugin_bundle.omh.spend_signals import SPEND_GATE_PHRASES, spend_request_clause
 from .intent import classify_workflow_intent, scrub_diagnostic_status_text
 from .reference_regions import executable_routing_text, reference_regions
-from .localization import normalized_phrase, prepare_routing_text, routing_tokens
+from .localization import normalized_phrase, phrase_is_spoken, prepare_routing_text, routing_tokens
 from .missed_route import is_missed_route_feedback
 from .omh_help import (
     is_omh_docs_question,
@@ -96,7 +96,7 @@ from .policy import (
     point_in_time_web_guard_applies,
 )
 from .policy import _doctor_health_guard_applies
-from .policy import asks_to_produce_materials, command_request_is_failure_or_agent_question, guard_label_dispatch_trust, live_time_lookup_said
+from .policy import asks_to_produce_materials, command_request_is_failure_or_agent_question, guard_label_dispatch_trust
 from .policy import _explicit_skill_candidate_is_negated, employer_hiring_intent
 from .policy import EXPLICIT_INVOCATION_PREFIXES, bare_name_reports_or_asks
 from .policy import _greenfield_project_bootstrap_requested
@@ -4661,11 +4661,7 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "오늘 날씨",
             "현재 날씨",
             "날씨 예보",
-            "주가 알려",
-            "주가 조회",
-            "주가 확인",
-            "주가 어때",
-            "주가 얼마",
+            "주가",
             "코인 가격",
             "환율",
             "스포츠 점수",
@@ -5375,8 +5371,8 @@ def _operator_surface_fast_path_match(
             continue
         if skill == "live-info-operator" and normalized_pattern == "환율" and "전환율" in text:
             continue
-        # "spend more time in the garden" holds "time in", and asks for no time.
-        if skill == "live-info-operator" and normalized_pattern == "time in" and not live_time_lookup_said(text):
+        # "at the same time instead" holds "time in", as a word it does not say.
+        if skill == "live-info-operator" and normalized_pattern == "time in" and not phrase_is_spoken(text, "time in"):
             continue
         if skill == "memory-new" and _memory_new_scope_overroutes_curation(text):
             continue

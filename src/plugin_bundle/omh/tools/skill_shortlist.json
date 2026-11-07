@@ -874,8 +874,8 @@
 },
 {
 "anchors":"automat automation blueprint continuously cron daily day digest discord morn noth notify ops ping post put recur schedul send silent slack telegram timed weekly",
-"hangul":"감시 계속 공유 그램 니터 동화 디스 레그 매일 매주 모니 반복 변화 보내 복해 스케 스코 슬랙 없으 예약 용히 으면 자동 정기 조용 지켜 케줄 켜봐 코드 터링 텔레 화해",
-"hangul_anchors":"감시 계속 공유 그램 니터 동화 디스 레그 매일 매주 모니 반복 변화 보내 복해 스케 스코 슬랙 없으 예약 용히 으면 자동 정기 조용 지켜 케줄 켜봐 터링 텔레 화해",
+"hangul":"감시 계속 공유 그램 니터 동화 디스 레그 매일 매주 모니 반복 변화 보내 복해 스케 스코 슬랙 실행 없으 예약 용히 으면 일정 자동 정기 조용 지켜 케줄 켜봐 코드 터링 텔레 화해",
+"hangul_anchors":"감시 계속 공유 그램 니터 동화 디스 레그 매일 매주 모니 반복 변화 보내 복해 스케 스코 슬랙 실행 없으 예약 용히 으면 일정 자동 정기 조용 지켜 케줄 켜봐 터링 텔레 화해",
 "label":"omh-automation-blueprint",
 "name":"automation-blueprint",
 "situation":"Recurring Hermes job on a schedule (cron, digests)",
@@ -2199,15 +2199,15 @@
 },
 {
 "anchors":"airport bitcoin btc crypto direction exchang forecast game info information krw last live near nearby night pric rate real restaurant scor seoul sport stock timezon today traffic usd weather won york zone",
-"hangul":"가격 간대 결과 경기 길찾 날씨 스포 시간 식당 어때 얼마 예보 점수 조회 주가 주변 지도 찾기 코인 포츠 현재 환율",
-"hangul_anchors":"가격 간대 결과 경기 길찾 날씨 스포 시간 식당 어때 얼마 예보 점수 조회 주가 주변 지도 찾기 코인 포츠 현재 환율",
+"hangul":"가격 간대 결과 경기 길찾 날씨 스포 시간 식당 예보 점수 주가 주변 지도 찾기 코인 포츠 현재 환율",
+"hangul_anchors":"가격 간대 결과 경기 길찾 날씨 스포 시간 식당 예보 점수 주가 주변 지도 찾기 코인 포츠 현재 환율",
 "label":"omh-live-info",
 "name":"live-info-operator",
 "situation":"Live rate, score, or local time a work task needs",
 "terms":{
-"1":"add after answer check claim correctness data financ gate herm made nativ never ordinary overlay policy prefer quality read request retrieval sourc stat task tool without work",
+"1":"add after answer check claim correctness data financ gate herm local made nativ never ordinary overlay policy prefer quality read request retrieval sourc stat task tool without work",
 "2":"airport bitcoin btc crypto direction exchang forecast freshness krw last lookup near nearby new night provider real restaurant seoul stock timezon today traffic unit usd won york",
-"3":"information local map scor sport zone",
+"3":"information map scor sport zone",
 "4":"current game pric",
 "5":"info operator rate time weather",
 "7":"live"
@@ -2283,7 +2283,7 @@
 }
 },
 {
-"anchors":"audio clip extract extraction field graphic imag input media meet ocr pars photo pictur podcast pull receipt say screenshot timestamp transcrib transcript transcription video webinar youtub",
+"anchors":"audio clip demo extract extraction field graphic imag input media meet ocr pars photo pictur podcast pull receipt say screenshot timestamp transcrib transcript transcription video webinar youtub",
 "hangul":"녹음 디오 라인 린샷 미지 샷에 수증 스크 스탬 스트 영상 영수 오디 요약 유튜 음성 이미 임라 임스 전사 지에 추출 크린 타임 탬프 텍스 튜브 회의",
 "hangul_anchors":"녹음 디오 라인 린샷 미지 샷에 수증 스탬 영상 영수 오디 유튜 음성 이미 임라 임스 전사 지에 추출 크린 타임 탬프 텍스 튜브 회의",
 "label":"omh-media-input",
@@ -2291,7 +2291,7 @@
 "situation":"Audio, video, or screenshot to process",
 "terms":{
 "1":"access claim download evidenc factual gated hallucination herm link output permission prepar process risk sent sourc supervis user without work",
-"2":"extract field graphic pictur pull read say summariz webinar",
+"2":"demo extract field graphic pictur pull read say summariz webinar",
 "3":"clip extraction imag meet pars transcription",
 "4":"audio ocr photo podcast summary transcrib transcript",
 "5":"input operator record text",

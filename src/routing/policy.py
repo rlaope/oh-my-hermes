@@ -2008,7 +2008,9 @@ _TOOLBELT_READINESS_PHRASES = (
     "gpt 이미지 도구",
     "도구 연결",
     "연결체",
-    "웹 검색 연결",
+    "웹 검색 연결이 없",
+    "웹 검색 연결이 안",
+    "웹 검색 연결 설정",
 )
 _TOOLBELT_READINESS_TOKENS = _normalized_token_set(
     {
@@ -4231,18 +4233,9 @@ _LIVE_INFO_OPERATOR_PHRASES = (
     "길찾기",
     "주변 식당",
 )
-# "time in" alone is inside "spend more time in the garden" and "time instead",
-# so it counts only leading the message or in a phrase that asks for the time.
-LIVE_TIME_LOOKUP_PHRASES = tuple(
-    normalized_phrase(phrase)
-    for phrase in ("what is the time in", "what's the time in", "current time in", "local time in")
-)
-
-
-def live_time_lookup_said(normalized_query: str) -> bool:
-    return normalized_query.startswith("time in ") or any(phrase in normalized_query for phrase in LIVE_TIME_LOOKUP_PHRASES)
-
-
+# Read by `phrase_is_spoken`, not containment: "time in" is inside "time
+# instead" and "주가" is inside the folded "주간" (weekly).
+_LIVE_INFO_OPERATOR_SPOKEN_PHRASES = tuple(normalized_phrase(phrase) for phrase in ("time in", "주가"))
 _LIVE_INFO_OPERATOR_CONTEXT_TOKENS = _normalized_token_set(
     {
         "weather",
@@ -10282,7 +10275,7 @@ def _live_info_operator_guard_applies(normalized_query: str, query_tokens: set[s
         return False
     if _contains_phrase(normalized_query, _LIVE_INFO_OPERATOR_PHRASES):
         return True
-    if live_time_lookup_said(normalized_query):
+    if any(phrase_is_spoken(normalized_query, phrase) for phrase in _LIVE_INFO_OPERATOR_SPOKEN_PHRASES):
         return True
     live_context = _LIVE_INFO_OPERATOR_CONTEXT_TOKENS & query_tokens
     lookup_intent = bool(_LIVE_INFO_OPERATOR_LOOKUP_TOKENS & query_tokens)
