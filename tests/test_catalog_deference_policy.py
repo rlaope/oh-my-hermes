@@ -332,6 +332,11 @@ NON_SKILL_BACKTICKS = frozenset(
 # `research-department` defer a cited lookup to `web-research`, and
 # `research-brief` defers fresh links or current facts to it as well. Seven cases,
 # eleven pairs, two new owners.
+# The operations-and-boards audit adds six statements, each with a statement pointing back:
+# `gateway-intent-card` <-> `automation-blueprint` (a scheduled delivery against a single
+# in-session one), `harness-session-inventory` <-> `workspace-audit` (cross-harness drift
+# against one workspace's own surfaces) and `agent-board` <-> `running-work-board` (changing a
+# task against only seeing what runs). Six cases, six pairs, four new owners.
 EXPECTED_DEFERENCE_CASES = 417
 EXPECTED_DEFERENCE_PAIRS = 437
 EXPECTED_DEFERRING_OWNERS = 123

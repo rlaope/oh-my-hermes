@@ -1458,6 +1458,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user wants current market research rather than triage of supplied signals.
   - The triage result asks for a retention or activation intervention rather than another cluster; use `lifecycle-growth`.
   - The supplied material is opportunity records and the request is portfolio health or forecast review; use `sales-pipeline-review`.
+  - The request is one reproducible bug with a fix asked for, not a set of reports to cluster; use the coding handoff.
 - Strong routing signals: `feedback-triage`, `customer-feedback-triage`, `feedback triage`, `customer feedback`, `feedback cluster`, `bug or feature`, `feature request triage`, `payment failure feedback`, `feedback trends`, `payment failure`, `payment failure issue`, `payment failure reports`, `고객 피드백`, `피드백`, `피드백 분류`, `피드백을 모아서`, `결제 실패`, `결제 실패 이슈`, `결제 실패 피드백`, `결제 오류`, `고객 불만`, `버그 제보`, `버그 기능 요청`, `기능 요청`
 - Good example:
   - Prompt: Cluster these customer payment failure reports and feature requests before we plan fixes.
@@ -1475,6 +1476,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The source boundary, signal clusters, severity, and follow-up lane are named.
   - Bug, feature, research, strategy, and coding handoff outcomes stay separate.
   - The next workflow is recommended before any implementation claim.
+  - A cluster is ranked by distinct customers reporting it (one customer counted once), severity (lost data or money, then a blocked task, then annoyance), and whether a workaround exists, with the count and its source.
+  - Quotes carry names, emails, order ids, and card digits masked, and keep the raw item reference.
 - Recovery notes:
   - If no feedback items are supplied, no cluster stands; mark triage not_observed and hand back the request for feedback items or a summary, source boundary, and product area.
   - If bug and feature signals cannot be separated from the supplied reports, retain source-bounded clusters, mark their classification and ranking tentative, and hand back the missing evidence with research or strategy follow-up options.
@@ -2269,6 +2272,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - Confirm the workflow target, evidence boundary, and stop condition are named.
   - Report which outputs are prepared, observed, blocked, or missing.
+  - Order priorities by impact on the next release or customer, then by time left; a blocker names who unblocks it and by when, or says the owner is unknown.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
   - If status evidence covers only part of the requested time window, retain the dated observations in the status summary, mark uncovered status not_observed, and hand back the missing periods and affected priorities.
@@ -3615,6 +3619,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user already named a concrete implementation task with files and acceptance criteria; use the coding handoff or delivery workflow.
   - The request is local OMH installation health only; use `doctor`.
   - The request is a source acquisition or current web lookup; use `source-finder` or `research`.
+  - The request compares several harnesses, sessions, MCP hosts, or worktrees for drift; use `harness-session-inventory`.
 - Strong routing signals: `workspace-audit`, `workspace audit`, `repo surface audit`, `repository surface audit`, `workspace surface audit`, `repo inventory`, `surface inventory`, `skill inventory`, `prompt inventory`, `plugin inventory`, `mcp inventory`, `hook inventory`, `config audit`, `what are we missing`, `audit this repo`, `레포 감사`, `워크스페이스 감사`, `설정 감사`, `스킬 인벤토리`, `аудит репозитория`, `аудит воркспейса`, `инвентаризация репо`, `инвентарь скиллов`, `аудит харнессов`, `аудит харнесов`, `проверь конфиги`
 - Good example:
   - Prompt: workspace-audit OMH에 스킬/프롬프트/플러그인 표면이 어디 비어있는지 먼저 점검해줘.
@@ -4192,9 +4197,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - On Hermes, bind the summarization checkpoint to Hermes' own compaction: render the must-keep classes as one short focus topic and hand the person `/compress <focus>` to run when the checkpoint is due. OMH never compresses, and a compaction is observed only from Hermes' own reply to that command.
   - On Hermes, offer `/compress --preview <focus>` only in the classic CLI or on a messaging platform, never when the surface is unknown, and count it as a preview only when the reply says `Preview — no changes made.`: a modern TUI whose `/compress` does not parse the flag compresses for real with the flag in its focus. Context occupancy is the person's `/usage` reading when shared, otherwise an estimate.
 - Completion checklist:
-  - The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
-  - Local telemetry, provider truth, billing truth, and completion evidence are separate states.
-  - Warnings name the next measurement or operator review action.
+  - `context_budget_plan/v1` names the route (the wire model) and its usable budget with a class of observed, assumed, or unknown.
+  - The must-keep pack lists its items under the closed classes prohibitions, decisions, open_questions, requirements, paths, pr_state, and verification_gaps, with a count for each.
+  - The checkpoint gives a cadence and the exact `/compress <focus>` text, and compaction is reported only after Hermes' own reply to it.
+  - Estimated, observed, and billed figures are stated apart; capacity nobody published is `capacity_unknown_hold`, never a number.
 - Recovery notes:
   - If the previous must-keep pack has no item classes, retain its recorded contents, mark the class delta unresolved, and hand back must_keep_item_class_delta/v1 as comparison unavailable, never as zero items.
   - If a checkpoint is due but no Hermes /compress reply is observed, retain the must-keep context pack and checkpoint plan, mark compaction not_observed, and hand back /compress <focus> with the reply needed to verify continuity.
@@ -4331,6 +4337,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user needs a one-off report or deck; use `report-package` or `materials-package`.
   - The user asks to review incident metrics once; use `reliability-review`.
   - The user needs actual code changes; prepare a selected executor/runtime handoff after the blueprint or plan is accepted.
+  - The request is one message, thread reply, or attachment delivered now with no schedule; use `gateway-intent-card`.
   - The person is inside Hermes' own /blueprint setup for one of its catalog automations; answer the questions that flow asks and let it create the job instead of preparing a second blueprint.
   - The recurring job would move money -- a purchase, a renewal, a top-up, or a transfer; use `spend-gate`, because an agent run on a schedule never spends, and a no-agent script that pays is a spend set up now: its card, typed yes, and cap come before the job exists.
 - Strong routing signals: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`, `recurring ops`, `recurring workflow`, `keep watching`, `keep monitoring`, `watch continuously`, `monitor continuously`, `every morning`, `every day`, `daily digest`, `weekly digest`, `automate this`, `automate workflow`, `send to slack`, `send to discord`, `post to telegram`, `only if changed`, `silent if nothing changed`, `schedule this`, `ずっと監視`, `監視し続け`, `継続的に監視`, `매일`, `매주`, `정기`, `예약`, `반복`, `자동화`, `자동화해줘`, `스케줄`, `슬랙`, `디스코드`, `텔레그램`, `보내`, `공유`, `변화 없으면`, `조용히`, `계속 감시`, `계속 모니터링`, `계속 지켜봐`, `автоматизируй`, `сделай автоматизацию`, `крон задача`, `cron задача`, `напоминай мне каждый`, `реши это скриптами`, `持续监控`, `持續監控`, `一直监控`, `rancang otomatisasi terjadwal`, `bikin alur kerja otomatis setiap hari`, `rancang pengiriman ringkasan otomatis`, `thiết kế tự động hóa theo lịch trình`, `tạo luồng công việc tự động hàng ngày`, `thiết kế gửi tóm tắt tự động`
@@ -5714,6 +5721,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Clear OMH state with its own commands: `omh state clear --workflow <name>` (`--session-ref` when session-bound), on Hermes `omh_todo action=clear`, and `omh goal cancel --goal <id>`; an OMH loop stops through its linked goal, and one without a goal has no cancel record.
   - Hand host work to the person's own stop command; on Hermes `/stop` (in a CLI or TUI session it ends every background process, and the classic CLI its background delegations too; on a messaging platform it interrupts the running turn rather than ending every background process), `/loop stop`, `/goal pause` or `/goal clear`, `/heartbeat clear`, `/pause` (all new work on a gateway).
   - Report an OMH clear as done only from its command result, and a host stop as requested until the host's own reply to it is seen.
+  - List what exists before clearing: `omh state status` (workflow state) and `omh goal board` (goals); on Hermes a scheduled job's stop is also the person's command: `hermes cron pause <job_id>` stops later runs and `hermes cron runs <job_id>` shows whether the run ended; where `hermes cron --help` lists `cancel` (Hermes 0.22.6 and later), `hermes cron cancel <job_id>` stops the live run and leaves the schedule, and on an older Hermes there is no per-job live stop, so report the live run as still going.
 - Completion checklist:
   - Every stopped item is named with its owner: OMH state or host work.
   - Each OMH clear cites its command result; each host stop stays requested until the host's reply is seen.
@@ -5924,6 +5932,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Use when: Use when the user asks what coding work is running right now -- which unit, which runtime, which model, how long, how many tokens -- rather than asking to start, plan, or review work.
 - Do not use when:
   - The user wants to start, plan, or dispatch coding work rather than observe it.
+  - The user wants to create or change tasks on an agent board, or to coordinate profiles; use `agent-board`.
   - The user wants review, CI, or merge evidence, which a status board never provides.
   - The user is asking about their own application's runtime status rather than OMH coding units.
 - Strong routing signals: `running-work-board`, `running work board`, `which units are running`, `what models are running`, `지금 뭐 돌고 있어`, `뭐가 돌고 있어`, `어떤 모델로 돌고 있어`, `실행 중인 작업 보여줘`, `что делают агенты`, `покажи что запущено`, `чем заняты агенты`, `что запущено сейчас`
@@ -5939,6 +5948,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Name the workflow target, constraints, validation evidence, and stop condition.
   - Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
 - Completion checklist:
+  - The board is rendered with `omh coding status-board --json` (read-only: local dispatch and progress artifacts; on Hermes it also reads delegate children and workers from Hermes' own records), not recalled.
   - Runtime and model are named per unit, or explicitly reported as unknown.
   - Token counts and session references are observed values or the literal unknown, never estimates.
   - Elapsed time for an unfinished unit comes from its start marker, which cannot prove the unit is still alive.
@@ -6151,6 +6161,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
   - The reported capability status matches an observed read, not an assumed default.
   - Each proposed `supports_parallel_tool_calls` diff names one server and carries the read/write race caution for that server's tools.
+  - The diff names the profile whose config holds `mcp_servers.<name>`; the flag applies only to the profile that set it.
 - Recovery notes:
   - If the installed version cannot be read, report the read failure and continue with the per-server diagnosis; recommend no update on a version you could not read.
   - If the update command is unavailable for the user's install path, name the blocker instead of guessing a fix.
@@ -7806,7 +7817,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - spend_receipt/v1
   - spend_cap_ledger/v1
 - Artifact expectations:
-  - pre_spend_card/v1 names the payee with its exact origin or address, the item, the total with fees and taxes in its currency, the rail, the cap and what remains of it, the refund terms, whether the spend can be reversed, and the approver, who is the person whose money moves
+  - pre_spend_card/v1 names the payee with its exact origin or address, the item, the total with fees and taxes in its currency, the rail, the cap and what remains of it (or that the cap cannot be checked), the refund terms, whether the spend can be reversed, and the approver, who is the person whose money moves
   - spend_confirmation/v1 records the person's typed yes in this session to that card's payee and total, with a host approval prompt's answer beside it as additional evidence when one appeared, and is void once the payee, the total, the currency, or the item changes
   - spend_receipt/v1 cites the observed order id, transaction id, or receipt header with the amount actually charged, and keeps quoted, confirmed, submitted, charged, declined, and unknown as separate states
   - spend_cap_ledger/v1 holds metadata only -- date, payee, amount, currency, rail, and receipt reference -- with the running total against the cap, and never a card number, security code, wallet key, password, or one-time code
@@ -9897,6 +9908,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
   - A multi-lane implementation of an accepted plan is ultrawork, which prepares its durable lanes through this board.
+  - The user only wants to see what is running right now, without creating or changing a task; use `running-work-board`.
   - The turn is a Kanban worker that the review dispatcher started on a review-lane task to verify a review-requested handoff; that worker loads Hermes' bundled `sdlc-review` skill, not this one.
 - Strong routing signals: `agent-board`, `agent board`, `kanban`, `multi-agent`, `multi agent`, `multi agent board`, `multiple hermes agents`, `multiple hermes profiles`, `hermes profiles`, `subagent`, `subagents`, `sub agent`, `sub agents`, `agent coordination`, `agent task board`, `task board`, `roles and board`, `role board`, `heartbeat`, `blocker`, `agent blocker`, `agent heartbeat`, `agent handoff`, `handoff board`, `interviewer reviewer builder`, `reviewer builder`, `칸반`, `멀티 에이전트`, `서브에이전트`, `서브 에이전트`, `여러 에이전트`, `Hermes agent 여러 명`, `여러 명이 같이 일`, `에이전트 보드`, `작업 배분`, `역할 배분`, `작업 보드`, `역할과 보드`, `역할 보드`
 - Good example:
@@ -9915,7 +9927,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Choose the coordination from the request: `durable` (restart survival, cross-profile pickup) prepares a `kanban_*` action on the named board; `bounded_research` prepares one `delegate_task` action. Never substitute one route for the other when its surface is missing.
   - Call `omh_agent_board` `prepare`, then invoke the returned `native_action` through the normal Hermes tool loop; OMH never calls a native tool itself and grants no host permission.
   - Report the request state exactly: `prepared`, `unavailable` (named `missing_capabilities`, zero native calls), `denied`, `observed`, or `failed`. A `complete` receipt implies no review approval, CI, or merge; a `running` readback is a claim, not dispatch proof.
-  - Agent/operator reference: docs/AGENT-BOARD.md; wrapper actions example: examples/agent-board/native-actions.json.
+  - Load `references/board-prepare.md` for the `prepare` fields, the supported operations and the refusal reasons; the repository reference docs/AGENT-BOARD.md is not part of an installed skill.
 - Recovery notes:
   - If `prepare` returns `unavailable`, name the missing capability (tool, schema, hook, host identity, board binding, or native compare-and-swap) and keep the card prepared-only.
   - If a receipt is `failed` or `requires_reconciliation`, run an observed `show` on the same task before the next mutation; never retry a `create` automatically. Repeating a `create` with the same `request_id` returns the already observed task.
@@ -10085,6 +10097,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+  - The request names a cadence or a recurring job (every morning, a daily digest, a cron job); use `automation-blueprint`.
 - Strong routing signals: `gateway-intent-card`, `gateway intent`, `discord thread`, `slack thread`, `telegram delivery`, `discord delivery policy`, `slack delivery policy`, `telegram delivery policy`, `discord status update`, `slack status update`, `telegram status update`, `gateway delivery`, `gateway notification`, `channel delivery`, `session delivery`, `silent update`, `attachment policy`, `status update policy`, `webhook delivery`, `게이트웨이`, `디스코드`, `슬랙`, `텔레그램`, `알림`, `전달`, `채널`, `조용히`, `스레드`, `보내줘`
 - Good example:
   - Prompt: gateway-intent-card route this Discord thread update silently unless action is needed.
@@ -10102,6 +10115,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The origin platform, thread/session boundary, delivery target, and update policy are named.
   - Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.
   - The next wrapper action is explicit and platform-safe.
+  - For `send_message` the delivery target is a bare platform name (its home channel), `platform:chat_id` (channel-level) or `platform:chat_id:thread_id` (thread-level); `origin` is only a cron job's `deliver` value and `send_message` refuses it, and a reply to the same chat is just the reply.
+  - An attachment is a `MEDIA:/absolute/path` line in the reply, and the platform adapter that cannot send it is named instead of promising the file.
+  - A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat stays silent for an internal or heartbeat turn, a message known to expect no reply, or a healthy completed turn in a room with `allow_silence: true` (Hermes 0.22.6 and later); on any other human message Hermes 0.21.6 and later replaces the marker with a visible warning asking them to retry, an older Hermes drops it with no reply, and cron and webhook runs follow a looser rule.
 - Recovery notes:
   - If silent update conflicts with a status notice, keep the thread; hand back the silent-or-notify choice.
   - If an action would touch a thread other than the named one, mark it unresolved; hand back the target.
@@ -11181,6 +11197,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+  - The request is one repository's own skill, prompt, plugin, or config surfaces and gaps with no cross-harness comparison; use `workspace-audit`.
 - Strong routing signals: `harness-session-inventory`, `harness session inventory`, `session inventory`, `session adapter`, `session adapters`, `harness sessions`, `mcp inventory`, `mcp config inventory`, `mcp drift`, `harness drift`, `connector drift`, `worktree inventory`, `worktree lifecycle`, `operator inventory`, `control pane inventory`, `codex session inventory`, `claude code session inventory`, `find previous coding session`, `recover coding session`, `previous codex coding session`, `coding session recall`, `세션 인벤토리`, `지난 코딩 세션`, `코딩 세션 복구`, `세션 기억 복구`, `하네스 세션`, `하네스 드리프트`, `MCP 인벤토리`, `MCP 설정 드리프트`, `워크트리 인벤토리`, `커넥터 드리프트`, `сессии агентов`, `инвентарь харнессов`, `восстанови сессию агента`, `инвентарь сессий`, `каждый харнесс`, `харнесс подхватывает`, `харнес подхватывает`
 - Good example:
   - Prompt: harness-session-inventory compare Codex, Claude Code, Hermes, MCP configs, and worktrees for drift before we dispatch agents.
@@ -11201,6 +11218,9 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If config sources are unavailable, report only the discovered surfaces and mark the missing hosts not_observed.
   - If cleanup, host load, connector execution, or session progress is requested, route to the owning workflow instead of folding it into inventory.
+  - To recover a previous coding session, list candidates read-only by metadata only (file name, modified time, size): Codex `~/.codex/sessions/`, Claude Code `~/.claude/projects/<project-slug>/`, Hermes `hermes sessions list`; mark an unreadable source not_observed, and read a transcript body only when the person asks for that next step.
+  - For `omh harness mcp-tool-name-compatibility`, each snapshot is a JSON file with exactly `schema_version` (`mcp_tool_name_compatibility_snapshot/v1`), `target_harness`, `adapter` (an object of `id` and `version`; only `id` `opencode-mcp-tool-naming` with `version` `v1` and `target_harness` `opencode` carries naming rules, and any other adapter reports `unsupported_adapter`), `required_tools` (entries of `logical_name` and `evidence_refs`) and `advertised_tools` (entries of `name`, `observation` of `registered` or `config_only`, and `evidence_refs`); one `--snapshot` per distinct target harness (1 to 20 files), and a malformed file is refused with no field named.
+  - Write each of the other inventory artifacts as a table with columns entry, source path, and state in {observed, prepared, missing, stale, drifted, not_observed}, so completion can be checked row by row.
 - Required inputs:
   - user request
   - target context
@@ -11332,10 +11352,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
-  - The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
-  - Local telemetry, provider truth, billing truth, and completion evidence are separate states.
-  - Warnings name the next measurement or operator review action.
+  - The summary states the snapshot's `generated_at` and whether it is older than 120 seconds, the plugin's own rescan rule.
+  - Unlocked, discovered, and secret badges are listed from the files read, and nothing is recomputed from session history.
+  - Missing plugin files give not_observed with the way to produce a snapshot, not an empty list.
 - Recovery notes:
+  - If no snapshot exists, the plugin has not scanned yet: it writes one when its dashboard Achievements tab asks (`hermes dashboard`), so a gateway-only person has none until they open it; read with `omh achievements summary`.
   - If neither active-profile nor legacy hermes-achievements files are available, no badge result stands; mark the summary not_observed and hand back the missing local-file evidence needed for hermes_achievements_observation/v1.
   - If the snapshot is older than the plugin's rescan window, retain its badge list as of generated_at, mark current progress tentative, and hand back the timestamp and stale-snapshot warning.
   - If supplied session_activity_receipt/v1 lacks a metric, retain the available badge and activity metadata, mark that metric not_observed, and hand back the gap without replacing it with zero.
@@ -11533,8 +11554,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - No remediation, runtime repair, verification, CI, merge, or future reliability claim is made without observed follow-up evidence.
 - Recovery notes:
   - If no code/trace/runtime evidence is supplied, prepare the audit plan and request the smallest source surface to inspect.
-  - If the user wants live service SLO or incident review, route to reliability-review.
-  - If the user wants rendered browser proof, route frontend visual evidence to visual-qa before PASS.
+  - If the user wants live service SLO or incident review, route to the `reliability-review` workflow.
+  - If the user wants rendered browser proof, route frontend visual evidence to the `visual-qa` workflow before any PASS is claimed.
 - Required inputs:
   - user request
   - target context
@@ -11921,7 +11942,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - host_usage: Hermes' recorded usage for a named session, or not_observed
   - not_observed provider and billing gaps
 - Artifact expectations:
-  - run_efficiency_report/v1 metadata-only report
+  - run_efficiency_report/v1 metadata-only report, built with `omh runtime efficiency-report --input <run_efficiency_input/v1 file> [--hermes-session <id>] [--write]`; the input is JSON with exactly `schema_version` (`run_efficiency_input/v1`), `run_id`, `context_budget` (`schema_version` `omh_run_context_budget/v1`, `run_id`, `budget_bytes`, `emitted_bytes`, `remaining_bytes` equal to the difference, and `surfaces` mapping a surface name to a count) and `observations` (at most 20 entries of `metric`, one of `wall_clock_duration_ms`, `tool_duration_ms`, `context_bytes`, an integer `value` and a `source_ref`); with no input file you ask for the timings and never write estimates into it
   - supplied `session_activity_receipt/v1` when available; unavailable metrics stay unavailable, never zero
   - `host_usage` from the Hermes-accounted part of the cost receipt `omh_run_summary` returns (the session, its delegated children, and its kanban workers; `--hermes-session`, and a local Hermes terminal holds the id in `$HERMES_SESSION_ID`): observed only when Hermes recorded tokens for it; no session row or no tokens stays not_observed, never zero
 - Safety rules:

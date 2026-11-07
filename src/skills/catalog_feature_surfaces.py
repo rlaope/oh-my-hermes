@@ -168,7 +168,7 @@ _FEATURE_SURFACE_SKILLS = (
             "Choose the coordination from the request: `durable` (restart survival, cross-profile pickup) prepares a `kanban_*` action on the named board; `bounded_research` prepares one `delegate_task` action. Never substitute one route for the other when its surface is missing.",
             "Call `omh_agent_board` `prepare`, then invoke the returned `native_action` through the normal Hermes tool loop; OMH never calls a native tool itself and grants no host permission.",
             "Report the request state exactly: `prepared`, `unavailable` (named `missing_capabilities`, zero native calls), `denied`, `observed`, or `failed`. A `complete` receipt implies no review approval, CI, or merge; a `running` readback is a claim, not dispatch proof.",
-            "Agent/operator reference: docs/AGENT-BOARD.md; wrapper actions example: examples/agent-board/native-actions.json.",
+            "Load `references/board-prepare.md` for the `prepare` fields, the supported operations and the refusal reasons; the repository reference docs/AGENT-BOARD.md is not part of an installed skill.",
         ),
         recovery_notes=(
             "If `prepare` returns `unavailable`, name the missing capability (tool, schema, hook, host identity, board binding, or native compare-and-swap) and keep the card prepared-only.",
@@ -177,6 +177,7 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         extra_do_not_use_when=(
             "A multi-lane implementation of an accepted plan is ultrawork, which prepares its durable lanes through this board.",
+            "The user only wants to see what is running right now, without creating or changing a task; use `running-work-board`.",
             HermesSkillLine(
                 "The turn is a Kanban worker that the review dispatcher started on a review-lane task to verify a review-requested handoff; that worker loads Hermes' bundled `sdlc-review` skill, not this one.",
                 ("sdlc-review",),
@@ -368,6 +369,17 @@ _FEATURE_SURFACE_SKILLS = (
             "where should the bot post updates",
             "send the attachment to telegram",
             "quiet status updates in the channel",
+        ),
+        final_checklist=(
+            "The origin platform, thread/session boundary, delivery target, and update policy are named.",
+            "Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.",
+            "The next wrapper action is explicit and platform-safe.",
+            "For `send_message` the delivery target is a bare platform name (its home channel), `platform:chat_id` (channel-level) or `platform:chat_id:thread_id` (thread-level); `origin` is only a cron job's `deliver` value and `send_message` refuses it, and a reply to the same chat is just the reply.",
+            "An attachment is a `MEDIA:/absolute/path` line in the reply, and the platform adapter that cannot send it is named instead of promising the file.",
+            "A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat stays silent for an internal or heartbeat turn, a message known to expect no reply, or a healthy completed turn in a room with `allow_silence: true` (Hermes 0.22.6 and later); on any other human message Hermes 0.21.6 and later replaces the marker with a visible warning asking them to retry, an older Hermes drops it with no reply, and cron and webhook runs follow a looser rule.",
+        ),
+        extra_do_not_use_when=(
+            "The request names a cadence or a recurring job (every morning, a daily digest, a cron job); use `automation-blueprint`.",
         ),
         recovery_notes=(
             "If silent update conflicts with a status notice, keep the thread; hand back the silent-or-notify choice.",
@@ -1757,6 +1769,12 @@ _FEATURE_SURFACE_SKILLS = (
         recovery_notes=(
             "If config sources are unavailable, report only the discovered surfaces and mark the missing hosts not_observed.",
             "If cleanup, host load, connector execution, or session progress is requested, route to the owning workflow instead of folding it into inventory.",
+            "To recover a previous coding session, list candidates read-only by metadata only (file name, modified time, size): Codex `~/.codex/sessions/`, Claude Code `~/.claude/projects/<project-slug>/`, Hermes `hermes sessions list`; mark an unreadable source not_observed, and read a transcript body only when the person asks for that next step.",
+            "For `omh harness mcp-tool-name-compatibility`, each snapshot is a JSON file with exactly `schema_version` (`mcp_tool_name_compatibility_snapshot/v1`), `target_harness`, `adapter` (an object of `id` and `version`; only `id` `opencode-mcp-tool-naming` with `version` `v1` and `target_harness` `opencode` carries naming rules, and any other adapter reports `unsupported_adapter`), `required_tools` (entries of `logical_name` and `evidence_refs`) and `advertised_tools` (entries of `name`, `observation` of `registered` or `config_only`, and `evidence_refs`); one `--snapshot` per distinct target harness (1 to 20 files), and a malformed file is refused with no field named.",
+            "Write each of the other inventory artifacts as a table with columns entry, source path, and state in {observed, prepared, missing, stale, drifted, not_observed}, so completion can be checked row by row.",
+        ),
+        extra_do_not_use_when=(
+            "The request is one repository's own skill, prompt, plugin, or config surfaces and gaps with no cross-harness comparison; use `workspace-audit`.",
         ),
         situations=(
             "find my earlier codex session",
@@ -1894,6 +1912,11 @@ _FEATURE_SURFACE_SKILLS = (
             "hermes_achievements_observation/v1 metadata-only payload from `omh achievements` when recorded",
             "supplied `session_activity_receipt/v1` when available; unavailable metrics stay unavailable, never zero",
         ),
+        final_checklist=(
+            "The summary states the snapshot's `generated_at` and whether it is older than 120 seconds, the plugin's own rescan rule.",
+            "Unlocked, discovered, and secret badges are listed from the files read, and nothing is recomputed from session history.",
+            "Missing plugin files give not_observed with the way to produce a snapshot, not an empty list.",
+        ),
         situations=(
             "what have I unlocked",
             "how close am I to the next tier",
@@ -1902,6 +1925,7 @@ _FEATURE_SURFACE_SKILLS = (
             "newest badges I earned",
         ),
         recovery_notes=(
+            "If no snapshot exists, the plugin has not scanned yet: it writes one when its dashboard Achievements tab asks (`hermes dashboard`), so a gateway-only person has none until they open it; read with `omh achievements summary`.",
             "If neither active-profile nor legacy hermes-achievements files are available, no badge result stands; mark the summary not_observed and hand back the missing local-file evidence needed for hermes_achievements_observation/v1.",
             "If the snapshot is older than the plugin's rescan window, retain its badge list as of generated_at, mark current progress tentative, and hand back the timestamp and stale-snapshot warning.",
             "If supplied session_activity_receipt/v1 lacks a metric, retain the available badge and activity metadata, mark that metric not_observed, and hand back the gap without replacing it with zero.",
@@ -2094,8 +2118,8 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         recovery_notes=(
             "If no code/trace/runtime evidence is supplied, prepare the audit plan and request the smallest source surface to inspect.",
-            "If the user wants live service SLO or incident review, route to reliability-review.",
-            "If the user wants rendered browser proof, route frontend visual evidence to visual-qa before PASS.",
+            "If the user wants live service SLO or incident review, route to the `reliability-review` workflow.",
+            "If the user wants rendered browser proof, route frontend visual evidence to the `visual-qa` workflow before any PASS is claimed.",
         ),
         extra_quality_bar=(
             "Hold masked-failure and intended-fallback as competing hypotheses for each suspect site, each with observed evidence for and against, until one reading is discriminated.",

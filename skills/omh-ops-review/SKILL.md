@@ -44,6 +44,7 @@ Bad example:
 
 - Confirm the workflow target, evidence boundary, and stop condition are named.
 - Report which outputs are prepared, observed, blocked, or missing.
+- Order priorities by impact on the next release or customer, then by time left; a blocker names who unblocks it and by when, or says the owner is unknown.
 - Name the smallest next verification or handoff instead of claiming completion from narration.
 
 ## Recovery Notes

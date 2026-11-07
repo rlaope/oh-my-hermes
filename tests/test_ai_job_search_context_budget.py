@@ -381,6 +381,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # section; the pin before it was 4f552dc5...a07a.
         # The plan, ralplan and adversarial-consensus bodies name `--plan-file` / `--input-bundle`; only those
         # three move, and the pin before it was 7e537e8d...4b2c.
+        # Operations-and-boards audit fixes: gateway-intent-card, harness-session-inventory, cancel,
+        # running-work-board, agent-board, achievements, context-budget-review, ops-review,
+        # feedback-triage, workspace-audit, automation-blueprint, parallel-tools, run-efficiency and
+        # failure-signal-audit move their own bodies only; the pin before it was 7e537e8d...4b2c.
         self.assertEqual(_digest(legacy_hashes), '8c5d5eede91c056339f2aee6baeaf93bc9f704be51e228359a89bb8231a29c53')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
@@ -398,6 +402,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
         # 124814 -> 123615: research-department, finance-analysis and curriculum-design state their
         # own Completion Checklist, so they stop repeating the category default.
+        # 124814 -> 123079: gateway-intent-card, ops-review, achievements, context-budget-review and
+        # feedback-triage write their own Completion Checklist in place of the category default they
+        # repeated (-1,735); the ceilings are unchanged.
         self.assertEqual(legacy['repeated']['bytes'], 123615)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))

@@ -2167,6 +2167,14 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # `test_one_more_ordinary_lane_member_fits_every_body_budget` found that the largest
 # lane-mate copy (`ultrawork`, +26,456) no longer fits. 1,480,299 plus 10%, rounded up to
 # the next 50,000, is 1,650,000.
+# 1336920 -> 1477231 (measured; the ceiling 1500000 -> 1650000): main reads
+# 1,471,273 after the skills that merged since the last measurement, and the
+# operations-and-boards audit fixes (gateway delivery grammar, session recovery
+# steps, per-skill completion checklists, the cron stop commands) add 5,958,
+# which took the pack to 1,477,231, where
+# `test_one_more_ordinary_lane_member_fits_every_body_budget` found that the
+# largest lane-mate copy (`ultrawork`, +26,456) no longer fits.
+# 1,477,231 plus 10%, rounded up to the next 50,000, is 1,650,000.
 FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1480299
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
