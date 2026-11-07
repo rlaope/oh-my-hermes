@@ -21,10 +21,10 @@ waste; do not delete them before the record is written.
 Declare the cell size and the feet baseline the game expects, for example a
 512px cell with feet at y=430, and the target frame height passed to the helper.
 The helper has no cell-size or baseline argument: it sizes the frame to the
-scaled bodies (or to the scaled cell with `--align cell`) and reports
+scaled bodies (or to the scaled cell when `--free-frames` is used) and reports
 `frame_size` and `baseline_y` in qc.json. Record those, then place the frames on
 the game's canvas and baseline in the engine or an import step. The source-row
-`anchor_y_std` is the alignment evidence.
+`anchor_y_max_dev` is the alignment evidence.
 
 ## Attack-frame timing
 

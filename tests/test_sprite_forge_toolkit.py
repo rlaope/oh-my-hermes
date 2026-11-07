@@ -140,65 +140,78 @@ class PillowCliTests(ForgeFixture):
         self.assertEqual(qc["rows"], 2)
         self.assertEqual(qc["cols"], 2)
 
-    def lifted_sheet(self, name, lifts, key=(255, 0, 255), body=(230, 235, 240)):
+    def lifted_sheet(self, name, lifts, key=(255, 0, 255), body=(230, 235, 240), rows=2, cols=2):
         from PIL import Image, ImageDraw
-        sheet = Image.new("RGB", (512, 512), key)
+        sheet = Image.new("RGB", (cols * 256, rows * 256), key)
         draw = ImageDraw.Draw(sheet)
         for index, lift in enumerate(lifts):
-            row, col = divmod(index, 2)
+            row, col = divmod(index, cols)
             x0 = col * 256 + 108
             bottom = row * 256 + 244 - lift
-            draw.rectangle([x0, bottom - 170, x0 + 40, bottom], fill=body)
+            draw.rectangle([x0, bottom - 120, x0 + 40, bottom], fill=body)
         path = self.root / name
         sheet.save(path, "PNG")
         return path
 
+    def process(self, path, *extra, rows=2, cols=2):
+        api = helper_api()
+        code, err = self.run_main(api, ["process", "--input", str(path), "--rows", str(rows),
+                                        "--cols", str(cols), "--output", str(self.output), *extra])
+        qc = json.loads((self.output / "qc.json").read_text()) if self.output.exists() else None
+        return code, err, qc
+
     def test_misaligned_feet_in_source_fail_the_gate(self):
-        # One pose stands 40 px above the others in its cell: feet differ by
-        # more than 5% of the 256 px cell. The gate used to read back the row
-        # the code had just pinned, so this exited 0 with anchor_y_std == 0.
-        api = helper_api()
-        path = self.lifted_sheet("lifted.png", (0, 0, 40, 0))
-        code, err = self.run_main(api, ["process", "--input", str(path), "--rows", "2",
-                                        "--cols", "2", "--output", str(self.output)])
+        # One pose stands 40 px above the others in its cell. The gate used to
+        # read back the row the code had just pinned, so this exited 0.
+        code, err, qc = self.process(self.lifted_sheet("lifted.png", (0, 0, 40, 0)))
         self.assertEqual(code, 3, err)
-        qc = json.loads((self.output / "qc.json").read_text())
         self.assertEqual(qc["verdict"], "REGENERATE")
-        self.assertGreater(qc["anchor_y_std"], 0.05)
+        self.assertGreater(qc["anchor_y_max_dev"], 0.05)
 
-    def test_aligned_feet_keep_zero_anchor_error(self):
-        api = helper_api()
-        path = self.lifted_sheet("flat.png", (0, 0, 0, 0))
-        code, err = self.run_main(api, ["process", "--input", str(path), "--rows", "2",
-                                        "--cols", "2", "--output", str(self.output)])
+    def test_one_lifted_frame_among_many_still_fails(self):
+        # Population std diluted this to 0.043; the largest deviation does not.
+        lifts = (0,) * 11 + (40,)
+        code, err, qc = self.process(
+            self.lifted_sheet("many.png", lifts, rows=3, cols=4), rows=3, cols=4)
+        self.assertEqual(code, 3, err)
+        self.assertLess(qc["anchor_y_std"], 0.05)
+        self.assertGreater(qc["anchor_y_max_dev"], 0.05)
+
+    def test_aligned_feet_pass(self):
+        code, err, qc = self.process(self.lifted_sheet("flat.png", (0, 0, 0, 0)))
         self.assertEqual(code, 0, err)
-        qc = json.loads((self.output / "qc.json").read_text())
-        self.assertEqual(qc["anchor_y_std"], 0.0)
+        self.assertEqual(qc["anchor_y_max_dev"], 0.0)
+        self.assertEqual(qc["free_frames"], [])
 
-    def test_cell_alignment_keeps_an_airborne_frame_off_the_ground(self):
+    def test_free_frames_free_only_the_named_frames(self):
         from PIL import Image
-        api = helper_api()
         path = self.lifted_sheet("jump.png", (0, 0, 40, 0))
-        code, err = self.run_main(api, ["process", "--input", str(path), "--rows", "2",
-                                        "--cols", "2", "--align", "cell",
-                                        "--output", str(self.output)])
+        code, err, qc = self.process(path, "--free-frames", "2")
         self.assertEqual(code, 0, err)
-        qc = json.loads((self.output / "qc.json").read_text())
-        self.assertFalse(qc["anchor_y_std_gated"])
-        feet = []
-        for i in (0, 2):
-            box = Image.open(self.output / f"frame_{i:03d}.png").convert("RGBA").getchannel("A").getbbox()
-            feet.append(box[3])
+        self.assertEqual(qc["free_frames"], [2])
+        self.assertEqual(qc["gated_frames"], [0, 1, 3])
+        feet = [Image.open(self.output / f"frame_{i:03d}.png").convert("RGBA").getchannel("A").getbbox()[3]
+                for i in (0, 2)]
         self.assertEqual(feet[0] - feet[1], 40)
 
+    def test_free_frames_do_not_excuse_other_misaligned_frames(self):
+        # Lifts 0/30/60/10: freeing frame 2 leaves frame 1 and 3 off the baseline.
+        code, err, qc = self.process(self.lifted_sheet("drift.png", (0, 30, 60, 10)),
+                                     "--free-frames", "2")
+        self.assertEqual(code, 3, err)
+        self.assertEqual(qc["verdict"], "REGENERATE")
+
+    def test_free_frames_cannot_free_everything_or_name_a_missing_frame(self):
+        path = self.lifted_sheet("all.png", (0, 0, 0, 0))
+        code, err, _ = self.process(path, "--free-frames", "0,1,2,3")
+        self.refused(code, err, "at least one gated frame")
+        code, err, _ = self.process(path, "--free-frames", "9")
+        self.refused(code, err, "not a frame index")
+
     def test_key_spill_is_reported(self):
-        api = helper_api()
         # A body colour inside twice the tolerance of the key but outside it.
-        path = self.lifted_sheet("spill.png", (0, 0, 0, 0), body=(255, 0, 255 - 45))
-        code, err = self.run_main(api, ["process", "--input", str(path), "--rows", "2",
-                                        "--cols", "2", "--output", str(self.output)])
+        code, err, qc = self.process(self.lifted_sheet("spill.png", (0, 0, 0, 0), body=(255, 0, 210)))
         self.assertEqual(code, 0, err)
-        qc = json.loads((self.output / "qc.json").read_text())
         self.assertGreater(qc["key_spill_pixels"], 0)
 
     def test_alpha_input_passthrough(self):

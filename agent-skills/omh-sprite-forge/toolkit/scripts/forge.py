@@ -24,7 +24,7 @@ DEFAULT_KEY = "FF00FF"
 DEFAULT_TOLERANCE = 30
 ALPHA_OPAQUE_THRESHOLD = 128
 SMALL_COMPONENT_FRACTION = 0.05
-THRESHOLDS = {"body_scale_cv": 0.08, "anchor_y_std": 0.05}
+THRESHOLDS = {"body_scale_cv": 0.08, "anchor_y_max_dev": 0.05}
 SCHEMA = "sprite_forge_qc/v1"
 
 
@@ -40,10 +40,11 @@ def parser():
     proc.add_argument("--key", default=DEFAULT_KEY)
     proc.add_argument("--tolerance", type=int, default=DEFAULT_TOLERANCE)
     proc.add_argument("--target-height", type=int, default=None)
-    proc.add_argument("--align", choices=("feet", "cell"), default="feet",
-                      help="feet: pin every body's lowest row to one baseline and centre it "
-                           "(idle/walk cycles). cell: keep each body where the source cell "
-                           "placed it (jump, lunge, airborne or weapon-extended frames)")
+    proc.add_argument("--free-frames", default="",
+                      help="comma-separated 0-based frame indices that keep the place their "
+                           "source cell gave them (jump, fall, lunge). Decided from the "
+                           "art-direction record BEFORE the run, never after a REGENERATE. "
+                           "Every other frame stays gated on feet alignment")
     test = sub.add_parser("selftest", help="run the built-in synthetic self test")
     test.add_argument("--output", required=True)
     return cli
@@ -99,6 +100,19 @@ def validate_process(args):
     if source.stat().st_size > MAX_FILE_BYTES:
         raise ValueError(f"input file exceeds the maximum size ({MAX_FILE_BYTES} bytes)")
     return key, source, output
+
+
+def parse_free_frames(value, count):
+    """Parse --free-frames into a set of valid 0-based frame indices."""
+    free = set()
+    for part in str(value).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if not part.isdigit() or int(part) >= count:
+            raise ValueError(f"--free-frames entry {part!r} is not a frame index below {count}")
+        free.add(int(part))
+    return free
 
 
 def cell_mask(cell_bytes, cw, ch, alpha_input, key, tolerance):
@@ -281,38 +295,49 @@ def run_process(args, argv):
     # Alignment is judged on the INPUT: the lowest opaque row of each retained
     # body inside its own cell, as a share of the cell height. Measuring the
     # output would only read back the row the code just chose.
+    free = parse_free_frames(args.free_frames, len(cells))
+    gated = [i for i in range(len(cells)) if i not in free]
+    if not gated:
+        raise ValueError("--free-frames must leave at least one gated frame")
     feet_in = [c["bbox"][3] for c in cells]
-    anchor_y_std = statistics.pstdev(feet_in) / ch
-    if args.align == "cell":
+    gated_feet = [feet_in[i] for i in gated]
+    feet_median = statistics.median(gated_feet)
+    anchor_y_std = statistics.pstdev(gated_feet) / ch
+    # The gate is the largest deviation from the median, not the spread: a
+    # standard deviation dilutes one lifted frame among many.
+    anchor_y_max_dev = max(abs(f - feet_median) for f in gated_feet) / ch
+    if free:
         frame_w = max(1, int(round(cw * scale)))
         frame_h = max(1, int(round(ch * scale)))
-        baseline_y = min(frame_h - 1, int(round(statistics.median(feet_in) * scale)))
+        baseline_y = min(frame_h - 1, int(round(feet_median * scale)))
     else:
         frame_w = max(s[1] for s in scaled)
         frame_h = max(s[2] for s in scaled)
         baseline_y = frame_h - 1
 
     frames = []
-    for cell, nw, nh in scaled:
+    for index, (cell, nw, nh) in enumerate(scaled):
         body_img = Image.frombytes("RGBA", (cell["width"], cell["height"]),
                                    cell["body"]).resize((nw, nh), Image.NEAREST)
         frame = Image.new("RGBA", (frame_w, frame_h), (0, 0, 0, 0))
-        if args.align == "cell":
-            frame.paste(body_img, (int(round(cell["bbox"][0] * scale)),
-                                   int(round(cell["bbox"][1] * scale))))
+        if index in free:
+            at = (int(round(cell["bbox"][0] * scale)), int(round(cell["bbox"][1] * scale)))
+        elif free:
+            at = ((frame_w - nw) // 2, baseline_y - nh + 1)
         else:
-            frame.paste(body_img, ((frame_w - nw) // 2, frame_h - nh))
+            at = ((frame_w - nw) // 2, frame_h - nh)
+        if at[0] < 0 or at[1] < 0 or at[0] + nw > frame_w or at[1] + nh > frame_h:
+            raise ValueError(f"frame {index} does not fit the shared canvas; "
+                             "regenerate the sheet with margins inside each cell")
+        frame.paste(body_img, at)
         frames.append(frame)
-    mean_h = statistics.fmean(heights)
+    gated_heights = [heights[i] for i in gated]
+    mean_h = statistics.fmean(gated_heights)
     if mean_h <= 0:
         raise ValueError("degenerate body heights")
-    body_scale_cv = statistics.pstdev(heights) / mean_h
-    # In cell mode feet legitimately differ (a jump leaves the ground), so the
-    # feet gate applies to feet mode only; the metric is still reported.
-    anchor_gated = args.align == "feet"
+    body_scale_cv = statistics.pstdev(gated_heights) / mean_h
     verdict = ("PASS" if body_scale_cv <= THRESHOLDS["body_scale_cv"]
-               and (not anchor_gated or anchor_y_std <= THRESHOLDS["anchor_y_std"])
-               else "REGENERATE")
+               and anchor_y_max_dev <= THRESHOLDS["anchor_y_max_dev"] else "REGENERATE")
     spill = sum(c["spill"] for c in cells)
     kept_px = sum(c["opaque"] for c in cells)
 
@@ -355,10 +380,11 @@ def run_process(args, argv):
         "frames": frames_qc,
         "body_scale_cv": body_scale_cv,
         "anchor_y_std": anchor_y_std,
-        "align": args.align,
-        "anchor_y_std_gated": anchor_gated,
+        "anchor_y_max_dev": anchor_y_max_dev,
+        "free_frames": sorted(free),
+        "gated_frames": gated,
         "key_spill_pixels": spill,
-        "key_spill_share": (spill / kept_px) if kept_px else 0.0,
+        "key_spill_share": None if alpha_input else ((spill / kept_px) if kept_px else 0.0),
         "thresholds": dict(THRESHOLDS),
         "metric_definitions": {
             "body_height": ("pixel rows spanned by the opaque bbox of the retained "
@@ -366,14 +392,19 @@ def run_process(args, argv):
             "body_scale_cv": ("population std / mean of the per-frame body heights, "
                               "measured before common scaling"),
             "feet_row": "lowest opaque row of each retained body inside its source cell",
-            "anchor_y_std": ("population std of the per-cell feet rows measured on the "
-                             "input sheet, divided by the cell height; gated in --align "
-                             "feet only"),
+            "anchor_y_std": ("population std of the gated frames' feet rows measured on "
+                             "the input sheet, divided by the cell height; reported only"),
+            "anchor_y_max_dev": ("largest distance of a gated frame's feet row from the median "
+                                 "feet row on the input sheet, divided by the cell height; "
+                                 "the gate. REGENERATE here means a pose stands off the "
+                                 "baseline in the source image, not that outputs are misaligned"),
             "key_spill_pixels": ("retained opaque pixels within twice the tolerance of the "
                                  "key colour: fringe or key-coloured costume; reported, "
                                  "not gated"),
-            "verdict": ("PASS when body_scale_cv <= 0.08 and anchor_y_std <= 0.05, "
-                        "otherwise REGENERATE the source sheet; never retouch frames"),
+            "verdict": ("PASS when body_scale_cv <= 0.08 and anchor_y_max_dev <= 0.05 over the "
+                        "gated frames, otherwise REGENERATE the source sheet; never retouch "
+                        "frames. Frames named in free_frames are excluded from both gates "
+                        "and keep their cell position"),
         },
         "input_sha256": input_sha,
         "output_sha256s": output_shas,
@@ -391,6 +422,8 @@ def run_process(args, argv):
                       "frame_count": len(frames), "frame_size": [frame_w, frame_h],
                       "body_scale_cv": round(body_scale_cv, 6),
                       "anchor_y_std": round(anchor_y_std, 6),
+                      "anchor_y_max_dev": round(anchor_y_max_dev, 6),
+                      "free_frames": sorted(free),
                       "key_spill_pixels": spill}))
     return 0 if verdict == "PASS" else 3
 

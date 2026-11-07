@@ -118,7 +118,7 @@ Artifact expectations:
 - accessibility_audit_plan/v1 with platform, surfaces, critical tasks, standard level, supplied evidence, and missing observations
 - wcag_success_criteria_matrix/v1 covering perceivable, operable, understandable, robust requirements with PASS/HOLD/BLOCK per criterion
 - semantic_structure_review/v1 with labels, roles, names, headings, landmarks, form errors, live regions, and state semantics
-- focus_and_keyboard_trace/v1 only from observed keyboard navigation, tab order, focus appearance, skip/focus-trap checks, and critical interaction paths
+- focus_and_keyboard_trace/v1 only from observed keyboard navigation, tab order, focus indicator (2.4.7; 2.4.13 appearance is AAA, advisory), skip/focus-trap checks, and critical interaction paths
 - screen_reader_announcement_map/v1 only when announcements, accessible names, roles, values, hints, and dynamic updates are observed or supplied
 - target_size_and_pointer_review/v1 with 24x24 CSS px as the WCAG 2.2 AA criterion (2.5.8), 44x44 as AAA (2.5.5) or platform guidance reported as advisory, and pointer gesture alternatives
 - contrast_and_reflow_review/v1 with measured contrast, zoom/reflow risk, clipping, overflow, and CJK/localized text concerns

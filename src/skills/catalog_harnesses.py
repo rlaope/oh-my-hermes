@@ -2653,7 +2653,7 @@ _FEATURE_SURFACE_HARNESSES = (
         "connector-operator",
         "Scope external app and SaaS connector actions as safe task cards with provider, auth, payload, confirmation, and result boundaries.",
         "Use when Hermes should prepare or supervise email, Slack, Discord, Notion, Linear, Jira, calendar, CRM, or similar provider actions without claiming connector execution.",
-        ("provider", "target object or recipient", "allowed connector action", "payload summary", "auth boundary and stop condition"),
+        ("provider", "target object or recipient", "allowed connector action", "exact payload", "auth boundary and stop condition"),
         (
             "connector_task_card/v1",
             "connector_scope/v1",

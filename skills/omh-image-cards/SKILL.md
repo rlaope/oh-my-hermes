@@ -81,10 +81,10 @@ Quality bar:
 - Adapt scene, texture, depth, lighting, camera, motifs, palette, and composition to domains such as security, commerce, sports, fashion, finance, developer work, or research.
 - Resolve a poster archetype such as Swiss grid, cinematic key-art, editorial magazine, constructivist photomontage, data infographic, product ad, technical brutalist, museum exhibition, sports event, or luxury lookbook.
 - Ask image tools to render the domain-specific environment first, then place readable card modules on top; reject flat vector clipart, plain gradients, generic glass cards, color-swapped templates, and low-detail wallpaper.
-- Preserve a stable OMH img-summary format contract: source badge, headline, source-kind subtitle, content modules, evidence footer, and small `OMH generated` mark (omit it on request).
+- Preserve a stable OMH img-summary format contract: source badge, headline, source-kind subtitle, content modules, evidence footer, and small `OMH generated` mark (on request, delete its clause from the prompt).
 - Use long_scroll or extended rows when the card needs a document-style vertical canvas with more sections or denser text.
 - Keep visible card text readable and faithful to supplied source or structured sections; do not shrink paragraphs into tiny poster copy.
-- Read every visible string back from an observed card and compare it with the card copy; a misspelled name, number or date, or garbled CJK, fails the attempt: regenerate with shorter copy or composite the text outside the model.
+- Read every visible string back from an observed card; a misspelled name, number or date, or garbled CJK, fails the attempt: regenerate with shorter copy or add the text outside the model.
 - Separate prompt prepared, image generated, visual QA passed, and delivered states.
 - Bind an image result to the card digest, action, attempt, and content digest, then warn on route mismatch, unknown route, stale card, digest drift, and response reuse rather than resolving any of them.
 - For transformations, preserve requested identity, composition, text, and protected regions; verify the observed result against the edit brief before a PASS claim.

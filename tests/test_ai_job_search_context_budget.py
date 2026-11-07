@@ -143,8 +143,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
+            # Digest re-derived, length unchanged: sprite-forge's quality bar names the largest
+            # feet deviation (`anchor_y_max_dev`) where it named `anchor_y_std`, with four
+            # characters cut elsewhere in the line; no other row moved, and the pin before it
+            # was d6dfefff...fc71.
             (skill_capabilities, 533907, FULL_ROW_DELTA_CAP,
-             'd6dfefff9df440fda6bdeb7fa17b920ad28c1fcfe2676e049210c6df7751fc71',
+             'ef78b8e2a8a8aae6556d163ab949652d38d5f60988f3c68f273a97ef376ad1bc',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -379,9 +383,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Design, media and operator skill review: bodies of accessibility-audit, apps, browser,
         # files, image-cards, localization-review, media-input, show-reel, terminal, visual-qa and
         # voice-input move (verdict vocabulary, exact-payload and bulk-change confirmations, page
-        # text as data, text read-back, per-string locale checks, renderer order); the pin before
-        # it was 7e537e8d...b2c.
-        self.assertEqual(_digest(legacy_hashes), 'cddde64236f866f9f1669d2d437629978f0aa8ebd81f4d48be12273104e63696')
+        # text as data, text read-back, per-string locale checks, renderer order, sprite-forge's free
+        # frames); the pin before it was 7e537e8d...b2c.
+        self.assertEqual(_digest(legacy_hashes), 'b61126e2f25c84b69d82aac7e9571353646d61b8525a3656a62df5d1965da8d2')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

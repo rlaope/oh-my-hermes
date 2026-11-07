@@ -109,9 +109,10 @@ NATIVE_GATE_CLAUSES = {
     "command-operator": (
         COMMAND_CONFIRMATION,
         COMMAND_NATIVE_NOTE,
-        "Destructive, credential, network, filesystem mutation, install, deploy, and production commands are "
-        "confirmed in chat before the run, or marked missing and not run; a native approval note is recorded beside that "
-        "confirmation, never in place of it.",
+        "Irreversible or externally visible commands (data deletion or overwrite, force-push, database drop, "
+        "credentialed or networked mutation, install, deploy, production change, external send) "
+        "are confirmed in chat before the run, or marked missing and not run; a native approval note is recorded "
+        "beside that confirmation, never in place of it.",
         "On Hermes, a cron job, a one-shot `-q` run, or a webhook run denies a flagged command by default",
         COMMAND_UNATTENDED,
     ),

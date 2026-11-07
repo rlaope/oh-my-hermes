@@ -14,10 +14,10 @@
       "classification": "original_omh",
       "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
       "license": "MIT",
-      "local_sha256": "e850705b864db223f039d640518a4a606700a6bd770760f8eecd36a76354e393",
+      "local_sha256": "54b6ed39e49f38524536a454f70770b467c1a9cb57dc9ef602f3a45055671720",
       "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
       "source_path": "src/skills/sprite_forge_toolkit/README.md",
-      "source_sha256": "e850705b864db223f039d640518a4a606700a6bd770760f8eecd36a76354e393",
+      "source_sha256": "54b6ed39e49f38524536a454f70770b467c1a9cb57dc9ef602f3a45055671720",
       "upstream": []
     },
     "examples/layout.json": {
@@ -34,10 +34,10 @@
       "classification": "original_omh",
       "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
       "license": "MIT",
-      "local_sha256": "0b6f19131b3d6af18088719f71c0fa4c948be20470c4d09fe3cd478b85448568",
+      "local_sha256": "faa681b8169a73207e3c13309b5f69e11781a8b52166cb57167a8fcc9a2e282d",
       "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
       "source_path": "src/skills/sprite_forge_toolkit/scripts/forge.py",
-      "source_sha256": "0b6f19131b3d6af18088719f71c0fa4c948be20470c4d09fe3cd478b85448568",
+      "source_sha256": "faa681b8169a73207e3c13309b5f69e11781a8b52166cb57167a8fcc9a2e282d",
       "upstream": []
     }
   },

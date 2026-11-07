@@ -43,7 +43,7 @@ Bad example:
 ## Completion Checklist
 
 - The short-input or voice-like request is clarified enough to avoid accidental action.
-- Before a delete, send, deploy or spend, state the transcript's reading of names, numbers, paths and negations and wait for a yes.
+- Before a delete, send, deploy or spend, state the transcript's names, numbers, paths and negations and wait for a yes.
 - The next action is readable, reversible when possible, and confirmation-gated when risky.
 - Delivery, notification, or platform behavior is not claimed without wrapper evidence.
 

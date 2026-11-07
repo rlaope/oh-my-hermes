@@ -3261,7 +3261,7 @@ An explainer, motion graphics, kinetic type, a logo or title intro, a 3D scene, 
 - Defaults, each labeled as an assumption and overridden by anything the user said: 16:9 1920x1080, 30 fps, 20-30 s when no duration is given (about 2.5 s per beat), muted unless music is asked for, on-screen text in the user's language. Ask only for a fact that cannot be recovered.
 - Pick one concept from its genre recipe in `references/genres.md` and record its assumptions. Then probe the renderer, because the file you write depends on it.
 - Probe the renderer read-only, in the order `references/genres.md` gives: the `hyperframes` CLI only when `command -v hyperframes` finds it (`npx` would download it), then `toolkit/scripts/render.mjs` with a local Chrome, `puppeteer-core` and FFmpeg, then a frame renderer already installed (such as Python with Pillow) piped to FFmpeg. If none runs, HOLD with the exact install command and ask for consent once; never install, download fonts or call a paid API on your own.
-- Author for the renderer found, with a deterministic time seek and no `Math.random()` or wall clock: HyperFrames takes `data-*` timing and a paused GSAP timeline; `render.mjs` renders only a `new_project.py NEW --font FILE` scaffold, so a standalone HTML with `__seek(t)` is refused.
+- Author for the renderer found, with a deterministic seek and no `Math.random()` or wall clock: HyperFrames takes `data-*` timing and a paused GSAP timeline; `render.mjs` renders only a `new_project.py NEW --font FILE` scaffold, not a standalone HTML.
 - Render 3 style frames and view them, render a draft, view its contact sheet, and rebuild the weakest beat once. Export, then measure codec, dimensions, fps, duration, size and sha256 with `ffprobe`; deliver the path with those facts. A storyboard or an HTML file alone is HOLD, not delivery.
 - Fill the frame, use one hue family plus at most one accent, add no meta text (window titles, dimension labels, invented paths), draw no rounded "document" cards as a metaphor, and move the camera on one continuous path rather than stopping at every beat.
 - A promo or social clip of 15 s or less holds one hero scene with no meta text and one number; check a still sheet against `references/craft-design.md` (Short promo clips) before rendering. One that shows an official logo or a product is a brand asset and takes the full method below, with those one-scene rules for the shot itself.
@@ -11736,10 +11736,10 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | --- | --- | --- | --- | --- |
 | KEY-1 | Positive tab index overriding document order | major | 2.4.3 | `auto` (neutralize), and the resulting order is re-walked |
 | KEY-2 | Pointer handler on a non-interactive element with no keyboard path | major | 2.1.1 | split: role and focusability `auto`, the key handler `manual` |
-| KEY-3 | Focus indicator missing, or hidden behind sticky content | major | 2.4.7, 2.4.11 | `manual` |
+| KEY-3 | No visible focus indicator (2.4.7), or the focused component entirely hidden behind author content such as a sticky header (2.4.11); partial overlap is advisory (2.4.12, AAA) | major | 2.4.7, 2.4.11 | `manual` |
 | KEY-4 | Keyboard trap: focus enters a region and cannot leave by keyboard | critical | 2.1.2 | `manual` |
-| RFL-1 | Content lost or scrolling in two directions at 320 CSS px width / 400% zoom | major | 1.4.10 | `manual` |
-| TGT-1 | Pointer target under 24x24 CSS px with no spacing exception | major | 2.5.8 | `manual` |
+| RFL-1 | Content lost, or needing two-direction scrolling, at 320 CSS px width (256 CSS px height for horizontally scrolling content such as vertical text) / 400% zoom; not a finding for content that requires two-dimensional layout (data tables, maps, diagrams, video, games, toolbars) | major | 1.4.10 | `manual` |
+| TGT-1 | Pointer target under 24x24 CSS px with none of the 2.5.8 exceptions (spacing, equivalent control, inline in a sentence, user-agent-controlled, essential) | major | 2.5.8 | `manual` |
 | STAT-1 | Dynamic status or error not announced (no live region or focus move) | major | 4.1.3 | `manual` |
 
 ### Structure
@@ -11758,7 +11758,7 @@ into its `auto` half and its `manual` half rather than rounded to either.
 | --- | --- | --- | --- | --- |
 | COL-1 | Color as the only carrier of meaning | minor | 1.4.1 | `manual` |
 | COL-2 | Color declared inline, contrast unverifiable from source | minor | 1.4.3 | `manual` (measure, then judge against 4.5:1 text / 3:1 large text) |
-| COL-3 | UI component boundary, state or meaningful graphic under 3:1 | major | 1.4.11 | `manual` |
+| COL-3 | UI component boundary, state or meaningful graphic under 3:1 (not for inactive components or a control whose appearance the user agent sets) | major | 1.4.11 | `manual` |
 
 A finding the table does not cover takes the next number of the nearest
 prefix and goes into the rerun list, so reruns stay comparable. A target size
@@ -11785,10 +11785,6 @@ A rule ID classifies a finding and a fix class describes a fix - neither is
 evidence the fix was applied. The audit verdict still requires observed
 keyboard and assistive-technology evidence after the change, and a scan that
 produced these findings is not a keyboard walk.
-
-This audit owns the keyboard walk (`focus_and_keyboard_trace/v1`). Visual QA
-cites that trace instead of recording its own `accessibility_keyboard_trace/v1`
-for the same surface, and keeps only what its captures show.
 """
 
 

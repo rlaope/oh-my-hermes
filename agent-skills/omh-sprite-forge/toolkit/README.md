@@ -61,7 +61,8 @@ executable fixture).
 
 - `frame_000.png`, `frame_001.png`, ...: equal-size RGBA frames, every body's
   bottom (feet) on one shared baseline row (`baseline_y`, the frame's last
-  row), each body horizontally centered.
+  row), each body horizontally centered; frames named in `--free-frames` keep
+  their source-cell position instead.
 - `sheet.png`: the frames re-composited into an aligned rows x cols grid.
 - `qc.json` (`sprite_forge_qc/v1`): the numeric QC receipt. Its own hash is
   excluded; hash it separately when retaining evidence.
@@ -77,19 +78,28 @@ Exact metric definitions:
 - **common scale**: a single scale factor applied to all frames so the median
   body height maps to `--target-height`; omitted `--target-height` keeps the
   median, i.e. scale = 1.0. Resizing is nearest-neighbor.
-- **baseline_y**: with `--align feet` (default) the shared bottom row every
-  body's feet sit on (the frame's last row), bodies horizontally centered; with
-  `--align cell` the median source feet row after scaling.
-- **anchor_y_std**: population standard deviation of the per-cell feet rows
-  (lowest retained opaque row) measured on the INPUT sheet, divided by the cell
-  height. It is measured before alignment because alignment sets the output
-  feet by construction. Threshold: **0.05**, gating `--align feet` only; with
-  `--align cell` it is reported, not gated.
+- **baseline_y**: without `--free-frames` the shared bottom row every body's
+  feet sit on (the frame's last row), bodies horizontally centered. With it,
+  frames use the scaled cell as canvas and `baseline_y` is the median source
+  feet row after scaling.
+- **free_frames / gated_frames**: `--free-frames 2,5` (0-based) names frames that
+  leave the ground on purpose. They keep the place their source cell gave them
+  and are excluded from both gates; every other frame stays gated. Name them
+  from the art-direction record before the run: adding the flag after a
+  REGENERATE turns a failing sheet into a PASS and is not an accepted path.
+- **anchor_y_max_dev**: largest distance of a gated frame's feet row (lowest
+  retained opaque row) from the median feet row, measured on the INPUT sheet and
+  divided by the cell height. It is measured before alignment because alignment
+  sets the output feet by construction, and as a maximum because a standard
+  deviation dilutes one lifted frame among many. Threshold: **0.05**.
+  REGENERATE on it means a pose stands off the baseline in the source image; the
+  output frames are aligned. `anchor_y_std` (population std) is reported only.
 - **key_spill_pixels / key_spill_share**: retained opaque pixels within twice
   `--tolerance` of the key colour (magenta fringe, or a costume colour near the
-  key). Reported, not gated; a share that is not near 0 means regenerate on
-  another key (`--key 00FF00`) or a despill step outside this helper.
-- **verdict**: `PASS` when `body_scale_cv <= 0.08` and `anchor_y_std <= 0.05`,
+  key). Reported, not gated, null on alpha input, and without a fixed threshold:
+  compare with a clean sheet and look at the edge on a dark ground; a fringe
+  means regenerate on another key (`--key 00FF00`) or despill outside this helper.
+- **verdict**: `PASS` when `body_scale_cv <= 0.08` and `anchor_y_max_dev <= 0.05` over the gated frames,
   otherwise `REGENERATE`. A REGENERATE verdict still writes all outputs but
   exits with code 3; fix the source sheet, not the produced frames.
 

@@ -114,7 +114,7 @@ DEFINITION = SkillDefinition(
         ProcedureCheck(
             "prototype_execution_evidence_check",
             ("execution_status", "observed_outputs", "evidence_refs", "interpretation", "confidence", "unresolved_questions"),
-            "When no executor is available, emit the prepared handoff and report results as unobserved; when execution occurred, record only observed outputs and bounded evidence references, keep interpretation and confidence separate, and mark timeout or inconclusive runs as such; tool success is never product validation. A performance or concurrency probe fixes its pass threshold before the run, warms up once, repeats at least five times and records min, median, p95 and machine load; fewer runs are inconclusive.",
+            "When no executor is available, emit the prepared handoff and report results as unobserved; when execution occurred, record only observed outputs and bounded evidence references, keep interpretation and confidence separate, and mark timeout or inconclusive runs as such; tool success is never product validation. A performance or concurrency probe fixes its pass threshold before the run, warms up once, repeats at least five times and records min, median and max of the repeats, plus p95 over the requests inside a run when it issues many, and machine load; fewer runs are inconclusive.",
         ),
         ProcedureCheck(
             "prototype_cleanup_receipt_check",

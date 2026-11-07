@@ -41,7 +41,7 @@ Quality bar:
 
 - Require a grid sheet on flat #FF00FF with exact cell division; strips and packed wide effects are regenerated, not cropped.
 - Record the real interpreter, Pillow version, command, exit and output hashes; QC numbers come from qc.json, not from inspection by eye.
-- Gate on body_scale_cv <= 0.08 and anchor_y_std <= 0.05, and keep technical PASS distinct from art-direction approval.
+- Gate on body_scale_cv <= 0.08 and anchor_y_max_dev <= 0.05; keep technical PASS distinct from art-direction approval.
 
 Handoff policy:
 
@@ -61,8 +61,8 @@ Expected outputs:
 
 Artifact expectations:
 
-- Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y`, plus the re-composited aligned `sheet.png`.
-- Authored `sprite_forge_qc/v1` in `qc.json`: frame count, grid, cell/frame size, per-frame bbox, body_scale_cv, anchor_y_std, thresholds, verdict, hashes and argv.
+- Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y` (frames named in `free_frames` keep their cell position), plus the re-composited aligned `sheet.png`.
+- Authored `sprite_forge_qc/v1` in `qc.json`: frame count, grid, cell/frame size, per-frame bbox, body_scale_cv, anchor_y_max_dev, free_frames, thresholds, verdict, hashes and argv.
 - A character art-direction record: identity elements, rejected drafts with reasons, cell size + baseline, and attack-frame timing tied to game data.
 
 Detailed procedure steps: `references/procedure.md`.

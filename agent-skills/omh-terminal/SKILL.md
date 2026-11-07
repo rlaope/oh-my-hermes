@@ -42,7 +42,7 @@ Bad example:
 ## Completion Checklist
 
 - Command text, working directory, environment assumptions, timeout, safety level, and stop condition are explicit.
-- Destructive, credential, network, filesystem mutation, install, deploy, and production commands are confirmed in chat before the run, or marked missing and not run; a native approval note is recorded beside that confirmation, never in place of it.
+- Irreversible or externally visible commands (data deletion or overwrite, force-push, database drop, credentialed or networked mutation, install, deploy, production change, external send) are confirmed in chat before the run, or marked missing and not run; a native approval note is recorded beside that confirmation, never in place of it.
 - With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing.
 - Exit codes, stdout/stderr, test results, package-manager effects, and filesystem mutations are reported only from observed command evidence; token-like values in output are masked before quoting.
 
