@@ -755,6 +755,17 @@ All notable changes will be documented here.
   Hermes resubmits itself after a crash, a run that needs repair, a draft,
   a queued line or an open question.
 
+- **A push no longer ends the reply with "the session has stopped, send a
+  message".** After a `git push`, `gh pr create`, `gh pr merge` or
+  `gh workflow run` with no watcher armed, OMH appended that sentence to the
+  person's reply in the reply's language. It landed on very nearly every
+  successful push, a README edit pushed straight to main included, where
+  nothing was ever going to be waited on, and it was appended even right after
+  the model said it would stop writing it. The model still gets the in-loop
+  note on the push result (arm a background watcher, or say the session has
+  stopped); the reply the person reads is left as the model wrote it. The
+  end-of-turn sentence remains only on a turn a failed watcher's notice opened.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and

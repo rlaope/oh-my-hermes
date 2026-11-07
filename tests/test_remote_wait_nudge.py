@@ -56,8 +56,6 @@ from omh.plugin_bundle.omh import remote_wait_nudge
 from omh.plugin_bundle.omh.remote_wait_nudge import (
     APPROVAL_GATE_CAUSE,
     APPROVAL_GATE_TEXT,
-    HONEST_STOP_TEXT,
-    HONEST_STOP_TEXTS,
     REPLY_SCRIPT_MIN_RUN,
     PROCESS_RECORD_FILENAME,
     REMOTE_WAIT_NUDGE_KEY,
@@ -446,15 +444,14 @@ class NoPromiseTests(RemoteWaitTestCase):
         self.assertEqual(remote_wait_declines().get("tool_not_terminal"), 1)
 
 
-class EndOfTurnHonestStopTests(RemoteWaitTestCase):
-    """The end-of-turn half: a turn told it was unarmed that ends unarmed.
+class EndOfTurnPushTests(RemoteWaitTestCase):
+    """A turn that pushed with nothing armed ends on the model's own reply.
 
-    `transform_llm_output` fires once per turn after the tool loop. It can
-    append to the final response but not re-enter the loop, so the only exit
-    left to deliver is the honest stop. Its trigger is two records -- the
-    directive's own per-turn latch and a fresh read of the process record --
-    and never the response text, which is why the wording case below gives it
-    every sentence a waiting session writes and expects silence.
+    An earlier version appended "the session has stopped, send a message" to
+    the person's reply here. It fired on very nearly every successful push,
+    a README edit pushed to main included, and the owner rejected it as noise
+    (2026-11-07). The in-loop directive still reaches the model; the reply the
+    person reads is left exactly as the model wrote it.
     """
 
     WAITING_PROSE = (
@@ -472,91 +469,53 @@ class EndOfTurnHonestStopTests(RemoteWaitTestCase):
             hermes_home=str(self.home),
         )
 
-    def test_an_unarmed_wait_turn_ends_on_the_honest_stop(self) -> None:
+    def test_an_unarmed_push_turn_gets_the_directive_and_an_untouched_reply(self) -> None:
         self.assertIsNotNone(self.fire("git push origin HEAD"))
-        self.assertEqual(self.end(), f"{self.WAITING_PROSE}\n\n{HONEST_STOP_TEXT}")
+        self.assertIsNone(self.end())
+        self.assertEqual(remote_wait_declines().get("end_of_turn_no_failed_wait"), 1)
 
-    def test_the_sentence_is_appended_so_a_streamed_response_stays_its_prefix(self) -> None:
-        # The CLI prints only the suffix when the new text starts with the
-        # streamed one (`cli.py::_post_stream_transform_output`), so trailing
-        # whitespace must survive untouched.
-        # Once per language: localizing the sentence must keep it a suffix.
-        # Ends in spaces on purpose: a newline would survive an `rstrip`
-        # followed by the "\n\n" separator and hide the mutation.
-        for language, streamed in LOCALIZED_REPLIES.items():
+    def test_no_reply_language_gets_a_sentence_after_a_push(self) -> None:
+        for language, reply in LOCALIZED_REPLIES.items():
             with self.subTest(language=language):
                 self.fire("git push", turn=f"t-{language}")
-                streamed = f"{streamed}  "
-                ended = self.end(streamed, turn=f"t-{language}")
-                self.assertIsNotNone(ended)
-                self.assertTrue(str(ended).startswith(streamed))
-                self.assertEqual(str(ended), f"{streamed}\n\n{HONEST_STOP_TEXTS[language]}")
+                self.assertIsNone(self.end(reply, turn=f"t-{language}"))
 
-    def test_an_armed_turn_is_left_untouched(self) -> None:
-        self.fire("git push")
-        self.arm(self.watcher("s1"))
-        self.assertIsNone(self.end())
-        self.assertEqual(remote_wait_declines().get("end_of_turn_waiter_armed"), 1)
+    def test_every_remote_work_anchor_leaves_the_reply_alone(self) -> None:
+        for index, anchor in enumerate(remote_work_anchors()):
+            with self.subTest(anchor=anchor):
+                turn = f"t-{index}"
+                self.assertIsNotNone(self.fire(anchor, turn=turn))
+                self.assertIsNone(self.end("Done.", turn=turn))
 
-    def test_a_watcher_armed_and_already_exited_this_turn_is_left_untouched(self) -> None:
-        # A watcher that finished inside the turn has left the record, but
-        # its completion notice is queued and will still wake the session.
+    def test_the_composed_hook_leaves_a_push_reply_alone(self) -> None:
         self.fire("git push")
         self.assertIsNone(
-            self.fire(
-                "gh pr checks 1721 --watch",
-                background=True,
-                result=self.spawn_result(notify_on_complete=True),
+            transform_llm_output(
+                response_text="Pushed.",
+                session_id="s1",
+                model="any-model",
+                platform="cli",
+                turn_id="t1",
+                hermes_home=str(self.home),
             )
         )
-        self.assertIsNone(self.end())
-        self.assertEqual(remote_wait_declines().get("end_of_turn_session_arms_watchers"), 1)
 
-    def test_a_turn_with_no_remote_promise_is_untouched(self) -> None:
-        self.assertIsNone(self.fire("ls -la"))
-        self.assertIsNone(self.end("Here is the listing."))
+    def test_the_old_sentence_is_gone_from_the_module(self) -> None:
+        source = Path(remote_wait_nudge.__file__).read_text(encoding="utf-8")
+        for old in (
+            "이 세션은 자동으로 다시 시작되지 않습니다",
+            "This session has stopped: the remote work it started",
+            "HONEST_STOP_TEXTS",
+        ):
+            with self.subTest(old=old):
+                self.assertNotIn(old, source)
+        self.assertFalse(hasattr(remote_wait_nudge, "HONEST_STOP_TEXTS"))
 
-    def test_the_latch_belongs_to_the_turn_that_pushed(self) -> None:
-        self.fire("git push", turn="t1")
-        self.assertIsNone(self.end(turn="t2"))
-        self.assertIsNone(self.end(session="s2"))
-
-    def test_wording_alone_cannot_trigger_the_sentence(self) -> None:
-        # Nothing ran and the record is empty, so "nothing armed" is TRUE
-        # here; the response says every thing a waiting session says, and
-        # even carries the sentence itself, in every language it ships in.
-        # Without the latch record: silence.
-        self.assertIsNone(self.end("I'll wait for CI. Waiting for CI to finish."))
-        for text in HONEST_STOP_TEXTS.values():
-            self.assertIsNone(self.end(f"Pushed with git push. {text}"))
-        self.assertEqual(
-            remote_wait_declines().get("end_of_turn_no_unarmed_wait"), 1 + len(HONEST_STOP_TEXTS)
-        )
-
-    def test_a_push_the_directive_never_reached_does_not_end_on_it(self) -> None:
-        # A failed push records no latch, so the end of the turn is silent.
-        self.fire("git push", result=json.dumps({"status": "error", "exit_code": 1}))
-        self.assertIsNone(self.end())
-
-    def test_an_unreadable_record_fails_open(self) -> None:
-        self.fire("git push")
-        (self.home / PROCESS_RECORD_FILENAME).mkdir()
-        self.assertIsNone(self.end())
-        self.assertEqual(remote_wait_declines().get("end_of_turn_record_unreadable"), 1)
-
-    def test_an_unparseable_record_fails_open(self) -> None:
-        self.fire("git push")
-        (self.home / PROCESS_RECORD_FILENAME).write_text("{", encoding="utf-8")
-        self.assertIsNone(self.end())
-
-    def test_missing_turn_or_session_identity_fails_open(self) -> None:
+    def test_missing_identity_or_empty_response_fails_open(self) -> None:
         self.fire("git push")
         for session, turn in (("", "t1"), ("s1", ""), (None, "t1"), ("s1", None)):
             with self.subTest(session=session, turn=turn):
                 self.assertIsNone(self.end(session=session, turn=turn))
-
-    def test_an_empty_or_non_text_response_is_untouched(self) -> None:
-        self.fire("git push")
         for response in ("", "   ", None, ["x"]):
             with self.subTest(response=response):
                 self.assertIsNone(self.end(response))
@@ -564,79 +523,10 @@ class EndOfTurnHonestStopTests(RemoteWaitTestCase):
     def test_a_failure_inside_the_pass_fails_open_and_is_counted(self) -> None:
         self.fire("git push")
         with mock.patch.object(
-            remote_wait_nudge, "armed_waiter_present", side_effect=RuntimeError("boom")
+            remote_wait_nudge, "turn_cause_fired", side_effect=RuntimeError("boom")
         ):
             self.assertIsNone(self.end())
         self.assertEqual(remote_wait_declines().get("error:RuntimeError"), 1)
-
-    def test_the_composed_hook_reads_the_hosts_kwargs(self) -> None:
-        self.fire("git push")
-        ended = transform_llm_output(
-            response_text="Pushed.",
-            session_id="s1",
-            model="any-model",
-            platform="cli",
-            turn_id="t1",
-            hermes_home=str(self.home),
-        )
-        self.assertEqual(ended, f"Pushed.\n\n{HONEST_STOP_TEXT}")
-
-    def test_the_sentence_is_short_and_executor_neutral_in_every_language(self) -> None:
-        # Pinned so a later edit moves the numbers deliberately. It rides the
-        # displayed response only: the host persists the transcript before
-        # this transform runs (`agent/turn_finalizer.py::finalize_turn`), so
-        # the sentence never enters the model's context on a later turn.
-        self.assertEqual(sorted(HONEST_STOP_TEXTS), ["en", "ja", "ko", "zh"])
-        self.assertEqual(HONEST_STOP_TEXT, HONEST_STOP_TEXTS["en"])
-        self.assertEqual(
-            {language: len(text) for language, text in HONEST_STOP_TEXTS.items()},
-            {"en": 125, "ko": 56, "ja": 53, "zh": 31},
-        )
-        self.assertTrue(HONEST_STOP_TEXTS["en"].isascii())
-        for language, text in HONEST_STOP_TEXTS.items():
-            with self.subTest(language=language):
-                for name in ("Codex", "Claude", "Hermes", "gh ", "git "):
-                    self.assertNotIn(name, text)
-                if language != "en":
-                    self.assertFalse(text.isascii())
-                    self.assertNotEqual(text, HONEST_STOP_TEXTS["en"])
-                # Each copy is in the language the detector would give it.
-                self.assertEqual(reply_language(text), language)
-
-    def test_the_sentence_carries_no_omh_vocabulary_in_any_language(self) -> None:
-        from omh.quality.reply_lint import build_reply_lint, record_term_vocabulary
-
-        for language, text in HONEST_STOP_TEXTS.items():
-            with self.subTest(language=language):
-                self.assertTrue(build_reply_lint(text)["ok"], build_reply_lint(text)["findings"])
-                self.assertNotIn("[OMH", text)
-                self.assertNotIn("armed", text.lower())
-                # The lint knows English and Korean only. For ja and zh this
-                # structural check is what stands in for it: no ASCII record
-                # term can appear in the copy at all.
-                for term in record_term_vocabulary():
-                    if term.isascii():
-                        self.assertNotIn(term.lower(), text.lower())
-
-    def test_the_appended_sentence_leaves_a_question_closing_clean(self) -> None:
-        # The sentence becomes the reply's closing paragraph, so the question
-        # the Turn Ending rule asks for is no longer last; the lint then
-        # judges this sentence, and it must not read as a refusal.
-        from omh.quality.reply_lint import build_reply_lint
-
-        for language, reply in QUESTION_REPLIES.items():
-            with self.subTest(language=language):
-                self.assertEqual(reply_language(reply), language)
-                ended = f"{reply}\n\n{HONEST_STOP_TEXTS[language]}"
-                self.assertTrue(build_reply_lint(ended)["ok"], build_reply_lint(ended)["findings"])
-
-    def test_the_sentence_follows_the_reply_language(self) -> None:
-        for language, reply in LOCALIZED_REPLIES.items():
-            with self.subTest(language=language):
-                self.fire("git push", turn=f"t-{language}")
-                self.assertEqual(
-                    self.end(reply, turn=f"t-{language}"), f"{reply}\n\n{HONEST_STOP_TEXTS[language]}"
-                )
 
 
 # One ordinary closing per language, as a session would end on a push.
@@ -645,13 +535,6 @@ LOCALIZED_REPLIES = {
     "ko": "브랜치를 푸시했고 지금 CI가 돌고 있습니다.",
     "ja": "ブランチをプッシュしました。いまCIが動いています。",
     "zh": "已推送分支，持续集成正在运行。",
-}
-
-QUESTION_REPLIES = {
-    "en": "Pushed the branch.\n\nShall I watch CI, or stop here for review?",
-    "ko": "브랜치를 푸시했습니다.\n\nCI를 지켜볼까요, 아니면 리뷰를 기다릴까요?",
-    "ja": "ブランチをプッシュしました。\n\nCIを見守りますか、それともレビューを待ちますか？",
-    "zh": "已推送分支。\n\n要我继续关注持续集成，还是先等评审？",
 }
 
 
@@ -1048,15 +931,14 @@ class InstalledPluginTests(unittest.TestCase):
                 "[OMH unarmed wait]", json.loads(str(carried))[REMOTE_WAIT_NUDGE_KEY]
             )
 
-            # The end-of-turn half is wired too, and reads the latch the
-            # tool-result half just recorded for this turn.
+            # The end-of-turn hook is wired, and leaves a push turn's reply
+            # exactly as the model wrote it.
             self.assertIn("transform_llm_output", ctx.hooks)
             ended = ctx.hooks["transform_llm_output"](
                 response_text="Pushed.", session_id="sess-1", model="m", platform="cli",
                 turn_id="turn-1", hermes_home=str(hermes_home),
             )
-            self.assertIsInstance(ended, str)
-            self.assertEqual(str(ended), f"Pushed.\n\n{HONEST_STOP_TEXT}")
+            self.assertIsNone(ended)
 
             (hermes_home / PROCESS_RECORD_FILENAME).write_text(
                 json.dumps(
