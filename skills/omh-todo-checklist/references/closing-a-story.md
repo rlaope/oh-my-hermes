@@ -63,11 +63,33 @@ original `item` number, `kind` (`verification`, `review` or `qa`), `verdict`
 this declaration. An empty
 finding list declares none found, not a missing source. Keep raw outputs outside
 the dossier. Read back the exact checkpoint with `action=recall`: missing, stale
-and malformed differ from declared clean. The
-completion projection covers verification declarations for every accepted item;
-review and QA are applicable source records, not mandatory extra phases. A
-reported review/QA blocker also prevents declaration completeness. Even complete
-declarations remain `not_verified` until the agent checks original evidence.
+and malformed differ from declared clean.
+
+`ship`, `no_ship`, `pass` and `fail` are not verdicts the store accepts, so record
+each closing outcome as:
+
+| Closing outcome | `kind` | `verdict` | `findings` | Item in `blockers` |
+| --- | --- | --- | --- | --- |
+| Verification gate returns PASS | `verification` | `PASS` | empty | no |
+| Verification gate returns HOLD or BLOCK | `verification` | `HOLD` or `BLOCK` | the missing or failed checks | yes |
+| Review closes `ship` with no finding | `review` | `PASS` | empty | no |
+| Review closes `ship` with findings left open | `review` | `PASS` | the open findings | yes |
+| Review closes `no_ship` | `review` | `BLOCK` | the blocking findings | yes |
+| Review could not reach a verdict | `review` | `HOLD` | what could not be assessed | yes |
+| QA passes | `qa` | `PASS` | empty | no |
+| QA fails | `qa` | `BLOCK` | the failed scenarios | yes |
+| QA could not run its scenarios | `qa` | `HOLD` | what did not run | yes |
+
+`recall` with the current revision and environment reports `completion`. An item
+is in `blockers` when the latest current row of any kind for it has a verdict
+other than `PASS` or any finding at all, so `HOLD` and `BLOCK` count the same and
+a `ship` that leaves findings open still blocks. `missing` lists the items with no
+current verification row; review and QA are applicable source records, not
+mandatory extra phases. `declarations_complete` is true only when both lists are
+empty. A later row for the same item and kind replaces the earlier one, so a
+blocker clears by recording the fixed result, never by dropping a finding. Even
+complete declarations remain `not_verified` until the agent checks original
+evidence.
 
 `verification_receipt/v1` references reuse the existing immutable receipt key,
 which binds revision, command, toolchain, environment and claim scope. A stored

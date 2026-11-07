@@ -368,9 +368,9 @@ NON_SKILL_BACKTICKS = frozenset(
 # `github-event-ops` with their labels, and `github-event-ops` defers a patch or minor bump to `verification-gate`;
 # no sibling gains a pointing-back statement. Seven cases, nine pairs, four new owners.
 # Web-research and research-brief then defer to market-research for sizing: two cases, two pairs.
-EXPECTED_DEFERENCE_CASES = 457
-EXPECTED_DEFERENCE_PAIRS = 484
-EXPECTED_DEFERRING_OWNERS = 137
+EXPECTED_DEFERENCE_CASES = 460
+EXPECTED_DEFERENCE_PAIRS = 488
+EXPECTED_DEFERRING_OWNERS = 138
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

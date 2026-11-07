@@ -52,7 +52,7 @@ class ServerStateTests(unittest.TestCase):
     def test_the_build_body_loads_the_state_ladder_when_data_is_remote(self) -> None:
         body = _body("frontend")
         self.assertIn(
-            "When the surface reads or writes remote data, load the frontend-refactor skill's "
+            "When the surface reads or writes remote data, load the `omh-frontend-refactor` skill's "
             "`omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6)",
             body,
         )

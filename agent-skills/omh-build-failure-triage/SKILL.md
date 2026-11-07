@@ -54,7 +54,7 @@ Bad example:
 
 - If the log is missing or stale, fetch it when `gh` is authenticated (`gh run view <id> --log-failed`); otherwise ask for the smallest fresh command output or CI job URL.
 - If the failure looks environmental or credentialed, mark BLOCKED_BY_ENVIRONMENT and avoid patch handoff.
-- If a fix has already been applied, route to verification-gate for fresh evidence instead of re-triaging stale failures.
+- If a fix has already been applied, route to `omh-verification-gate` for fresh evidence instead of re-triaging stale failures.
 
 
 

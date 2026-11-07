@@ -52,13 +52,13 @@ Bad example:
 ## Recovery Notes
 
 - If the media or transcript is missing, ask for the smallest source, file, transcript, or provider result needed.
-- If the request is broad current-source research about a video topic, route to research or source-finder before summary.
-- If the user wants a PPT/PDF/report generated from the media summary, route to materials-package after media input evidence is clear.
-- If the request is about whether a live duplex voice connector keeps whole spoken turns, route to external-connector-readiness for a realtime_voice_trial_receipt/v1 rather than treating a supplied recording as that evidence.
+- If the request is broad current-source research about a video topic, route to `ulw-research` or `omh-source-finder` before summary.
+- If the user wants a PPT/PDF/report generated from the media summary, route to `omh-materials-package` after media input evidence is clear.
+- If the request is about whether a live duplex voice connector keeps whole spoken turns, route to `omh-external-connector-readiness` for a realtime_voice_trial_receipt/v1 rather than treating a supplied recording as that evidence.
 
 ## Workflow Lane
 
-- Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
+- Current lane: **Materials and visual summaries** - web, accessibility, visual QA, files, and packages.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 

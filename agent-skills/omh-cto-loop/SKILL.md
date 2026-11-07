@@ -23,7 +23,7 @@ This is an OMH `cto-loop` workflow skill, projected for Agent Skills hosts (Clau
 
 - The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly or use `omh-decide` for a decision brief instead of starting a leadership operating loop.
 - A launch-readiness audit of one named service or release with deploy, security, observability and rollback evidence; use `omh-production-audit`. Prioritisation and risk ranking across workstreams stays here.
-- An accepted plan is ready for build; use `ulw-plan` or `omh-idea-to-deploy`.
+- An accepted plan is ready for build; use `ulw-work` or `omh-idea-to-deploy`.
 
 ## Examples
 

@@ -53,13 +53,13 @@ Bad example:
 
 ## Recovery Notes
 
-- If no rendered evidence exists, keep every axis not_observed and route the capture to visual-qa before scoring.
+- If no rendered evidence exists, keep every axis not_observed and route the capture to `omh-visual-qa` before scoring.
 - If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.
 - If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.
 
 ## Workflow Lane
 
-- Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
+- Current lane: **Materials and visual summaries** - web, accessibility, visual QA, files, and packages.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
@@ -86,7 +86,7 @@ Quality bar:
 
 Handoff policy:
 
-Keep axis scoring, the weighted total, the binding-constraint call, and the tradeoff ledger in Hermes. Route implementation to frontend, WCAG evidence to accessibility-audit, and rendered captures to visual-qa; never score an axis from a description of a page instead of the page.
+Keep axis scoring, the weighted total, the binding-constraint call, and the tradeoff ledger in Hermes. Route implementation to `omh-frontend`, WCAG evidence to `omh-accessibility-audit`, and rendered captures to `omh-visual-qa`; never score an axis from a description of a page instead of the page.
 
 Required inputs:
 
@@ -102,7 +102,7 @@ Expected outputs:
 - the weighted total and its distance from the published threshold
 - the binding constraint: the axis whose gain moves the total most
 - tradeoff_ledger/v1 when an innovation move costs accessibility or performance budget
-- downstream route: frontend, accessibility-audit, visual-qa, or design-quality-gate
+- downstream route: `omh-frontend`, `omh-accessibility-audit`, `omh-visual-qa`, or `omh-design-quality-gate`
 
 Artifact expectations:
 

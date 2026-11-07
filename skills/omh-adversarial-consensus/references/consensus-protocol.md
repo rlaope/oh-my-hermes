@@ -70,7 +70,7 @@ The bucket set is closed. If distillation seems to need a fifth bucket, the extr
 
 The run ends with the bundle handed to a separate planning pass, and it ends there.
 
-State plainly that the bundle (**Hard Constraints**, **Decisions**, **Risks**, **Open Questions**) is INPUT to planning, name the follow-on workflow -- `ralplan` when the plan itself needs review gates, `plan` when the shape is already agreed -- and stop.
+State plainly that the bundle (**Hard Constraints**, **Decisions**, **Risks**, **Open Questions**) is INPUT to planning, name the follow-on workflow -- `ulw-plan` when the plan itself needs review gates, `omh-plan` when the shape is already agreed -- and stop.
 
 **The anti-pattern:** treating the bundle as the plan. The four buckets read like a plan's front matter, which is exactly why the substitution is tempting and exactly why it is wrong. The bundle contains no sequence, no owner, no acceptance criteria, and no verification commands, because producing those is the planner's job and this workflow deliberately never did it. Emitting steps here skips the reviewed-plan gate and ships a task list that nobody planned.
 

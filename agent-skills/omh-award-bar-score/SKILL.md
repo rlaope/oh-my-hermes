@@ -51,7 +51,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If no rendered evidence exists, keep every axis not_observed and route the capture to visual-qa before scoring.
+- If no rendered evidence exists, keep every axis not_observed and route the capture to `omh-visual-qa` before scoring.
 - If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.
 - If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.
 
@@ -91,7 +91,7 @@ Expected outputs:
 - the weighted total and its distance from the published threshold
 - the binding constraint: the axis whose gain moves the total most
 - tradeoff_ledger/v1 when an innovation move costs accessibility or performance budget
-- downstream route: frontend, accessibility-audit, visual-qa, or design-quality-gate
+- downstream route: `omh-frontend`, `omh-accessibility-audit`, `omh-visual-qa`, or `omh-design-quality-gate`
 
 Artifact expectations:
 

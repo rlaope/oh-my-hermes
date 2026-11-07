@@ -39,7 +39,7 @@ Bad example:
 
 - Prompt: Design a six-week Python syllabus with weekly assessments.
 - Expected behavior: Route to `omh-curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.
-- Why: Just-in-time target selection should not displace an explicit curriculum-design request.
+- Why: Just-in-time target selection should not displace an explicit `omh-curriculum-design` request.
 
 ## Completion Checklist
 
@@ -107,7 +107,7 @@ Artifact expectations:
 Safety rules:
 
 - Always ask at least one confirmation question before research, exactly one question per turn, even when the initial request appears complete.
-- Use the shared deep-interview ceiling of 6 rounds and its early-stop discipline; do not create a second interview budget.
+- Use the shared `ulw-interview` ceiling of 6 rounds and its early-stop discipline; do not create a second interview budget.
 - Use only the current conversation and reviewed or explicitly approved OMH context; never claim hidden Hermes memory or create a persistent learner profile.
 - Admit recommendations only from primary, institutional, or credible practitioner evidence whose authority, currency, availability, and link can be checked; report retrieval gaps instead of inventing support.
 - Never use bestseller status, ratings, follower counts, charts, generic popularity, or unsupported reputation as admission or ranking evidence.

@@ -39,5 +39,5 @@ Contract: `references/full-contract.md`. Procedure: `references/procedure.md`.
 
 ## Workflow Lane
 
-- Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
+- Current lane: **Intent -> plan** - clarify, plan, ship, or loop goals.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.

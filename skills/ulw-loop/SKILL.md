@@ -59,7 +59,7 @@ Bad example:
 
 - Prefer the native `omh_loop` tool when the plugin is loaded: assess, start, status, feedback, permit, run_once, goal_driver_observe, and queue_observe reach the same loop_cycle/v2 state, and a mutation submits the record_revision that status reported. Where it is absent, the same lifecycle is `omh loop assess|start|status|feedback|permit|run-once|goal-driver-observe|queue observe`, and every other Loop surface stays on that CLI.
 - If a queued tick is pending, show it as prepared queue state and use loop status/run-once before claiming progress.
-- If feedback is unclear, ask one gate question or route back to research/plan rather than advancing the loop.
+- If feedback is unclear, ask one gate question or route back to `ulw-research` or `omh-plan` rather than advancing the loop.
 - If the goal turns into external waiting, record the waiting state and next observable signal instead of continuing locally.
 - Checkpoint on context/budget exhaustion. Migrate loop_cycle/v1 with migrate-driver --apply before external binding.
 - Resume paused native goals with re-registered gates; external goals follow driver recovery. Transfers require observed stopped/absent reconciliation; handoffs never dispatch.
@@ -67,7 +67,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
+- Current lane: **Intent -> plan** - clarify, plan, ship, or loop goals.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 

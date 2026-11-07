@@ -2,6 +2,8 @@
 
 # Audio: narration, music, sound effects, mix
 
+Script paths on this page use `S=<skill_dir>/toolkit/scripts`, where `<skill_dir>` is this skill's folder.
+
 ## Contents
 
 - ElevenLabs key and plan
@@ -14,7 +16,7 @@
 
 ## ElevenLabs key and plan
 
-Check the key, voices, and models with `python3 scripts/eleven.py check`. If there is no key, give the user the procedure below exactly as written (the same content is in `KEY_HELP` in `eleven.py`).
+Check the key, voices, and models with `python3 $S/eleven.py check`. If there is no key, give the user the procedure below exactly as written (the same content is in `KEY_HELP` in `eleven.py`).
 
 1. Sign up or log in at https://elevenlabs.io -> bottom left Developers (or the profile) -> API Keys -> Create API Key
 2. Permissions: turn on Text to Speech, Speech to Text, Sound Effects, Music, Voices (Read), and User (Read). User Read is required to query the remaining credits. The key is shown only once, so copy it right away.
@@ -80,7 +82,7 @@ Ways to use it:
 ## Narration generation and pronunciation verification
 
 ```bash
-python3 scripts/narrate.py <project>/script.json --stt
+python3 $S/narrate.py <project>/script.json --stt
 ```
 
 - Each line is generated with `/with-timestamps`, and the character-level alignment (`<id>.align.json`) is saved. For Korean, use `alignment`. `normalized_alignment` returns Hangul romanized.
@@ -127,8 +129,8 @@ Write `audio/music/spec.json` once, and both the ElevenLabs plan and the synthes
 ### 2) ElevenLabs Music
 
 ```bash
-python3 scripts/music_tools.py plan audio/music/spec.json            # → audio/music/plan.json
-python3 scripts/eleven.py music audio/music/music.mp3 --plan audio/music/plan.json
+python3 $S/music_tools.py plan audio/music/spec.json            # → audio/music/plan.json
+python3 $S/eleven.py music audio/music/music.mp3 --plan audio/music/plan.json
 ```
 
 - Sections must be 3 seconds or longer. `plan` merges short sections into the previous section.
@@ -138,12 +140,12 @@ python3 scripts/eleven.py music audio/music/music.mp3 --plan audio/music/plan.js
 - The generated track length can differ from the request (a case where a 10-second request produced 7 seconds). Fit it to the video length with `music_tools.py fit`, then analyze.
 - Generated tracks are usually flat (in evaluation, 82 to 85% of both tracks was within 3dB of maximum loudness). When `analyze` warns, pull down the music before a big hit in the mix. If you write [time, dB] in `music` in `script.json`, like `"automation": [[0, 0], ["line.n07-2.5", 0], ["line.n07-0.3", -10], ["line.n07", 0]]`, `mix.py` changes the music volume along that curve. Time can be seconds, a cue name, or "cue±seconds". Pulling down to -8 to -12dB 2 to 3 seconds before a hit and returning to 0dB on the hit frame makes an anticipation -> impact structure audible even in the same track.
 - When writing the spec, put contrast in section energy. Keep the climax (0.9 or above) within 25% of the whole, one breakdown of 0.3 to 0.45 around the middle, and write instrument changes in `style` for neighboring sections (e.g. "strings drop out, only ticking pulse", "add brass stabs and choir"). `plan` warns about a flat spec.
-- A stop (silence effect) in the plan was often ignored (confirmed on a 2-minute track). After generation, find the first beat of the next phrase with `analyze` and cut up to that point: `python3 scripts/music_tools.py gap audio/music/music.mp3 audio/music/music_edit.wav 103.2-103.97`. Change `music.file` in `script.json` to `audio/music/music_edit.wav` and rerun from `timeline.py`.
+- A stop (silence effect) in the plan was often ignored (confirmed on a 2-minute track). After generation, find the first beat of the next phrase with `analyze` and cut up to that point: `python3 $S/music_tools.py gap audio/music/music.mp3 audio/music/music_edit.wav 103.2-103.97`. Change `music.file` in `script.json` to `audio/music/music_edit.wav` and rerun from `timeline.py`.
 
 ### 3) Synthesized music (fallback path)
 
 ```bash
-python3 scripts/synth_music.py audio/music/spec.json --out audio/music/music.wav
+python3 $S/synth_music.py audio/music/spec.json --out audio/music/music.wav
 ```
 
 It is made with numpy, without source audio. The same input gives the same sound, and it finishes in a few seconds. It is simpler than ElevenLabs Music, so state in the delivery report that it is synthesized music.
@@ -153,7 +155,7 @@ It is made with numpy, without source audio. The same input gives the same sound
 **ElevenLabs Music does not keep the plan's section lengths.** It usually converges on 4-bar phrases (8 seconds at 120 BPM). Always analyze after generation.
 
 ```bash
-python3 scripts/music_tools.py analyze audio/music/music.mp3     # → analysis.json: bpm, beats, downbeats, hits, energy
+python3 $S/music_tools.py analyze audio/music/music.mp3     # → analysis.json: bpm, beats, downbeats, hits, energy
 ```
 
 - Look at the analysis and move the scene boundaries to the actual hits and downbeats. Passing `timeline.py --music-analysis` creates `music.hit1…` cues, and `REEL.TL.music.hits` and `downbeats` can be used on screen.
@@ -162,15 +164,15 @@ python3 scripts/music_tools.py analyze audio/music/music.mp3     # → analysis.
 - **If the drop comes late, cut and splice by the beat.** There was a case where a 15-second reel requested the drop at 3 seconds and both seeds put it at 7.8 seconds. Look at the beat times in the analysis and cut at the same beat phase (bar start to bar start).
 
 ```bash
-python3 scripts/music_tools.py splice audio/music/music.mp3 audio/music/music_edit.wav \
+python3 $S/music_tools.py splice audio/music/music.mp3 audio/music/music_edit.wav \
   --segments 0-3.90,7.78-19.5 --snap audio/music/analysis.json      # front of the build-up + from the drop -> drop pulled to about 3.9 s
-python3 scripts/music_tools.py analyze audio/music/music_edit.wav   # re-analyze and align the scene boundaries
+python3 $S/music_tools.py analyze audio/music/music_edit.wav   # re-analyze and align the scene boundaries
 ```
 
 ## Sound effects
 
 ```bash
-python3 scripts/eleven.py sfx-kit audio/sfx --names impact,whoosh,riser,logo_hit,glitch,ui_blip   # ElevenLabs
+python3 $S/eleven.py sfx-kit audio/sfx --names impact,whoosh,riser,logo_hit,glitch,ui_blip   # ElevenLabs
 # synthesized SFX (free, instant): add tick/boom/whoosh events to the synth_music.py spec and render it with --out; there is no `sfx` subcommand in this kit
 ```
 
@@ -187,7 +189,7 @@ Placement principles:
 ## Mix standards
 
 ```bash
-python3 scripts/mix.py <project>/timeline.json
+python3 $S/mix.py <project>/timeline.json
 ```
 
 | Item | Standard |

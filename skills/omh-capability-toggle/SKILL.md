@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: add a dark mode toggle to my settings page
-- Expected behavior: Route to frontend or coding delegation instead of capability policy.
+- Expected behavior: Route to `omh-frontend` or coding delegation instead of capability policy.
 - Why: That is a feature in the user's own product, not an OMH capability family.
 
 ## Completion Checklist
@@ -55,7 +55,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
+- Current lane: **Automation and status** - schedules, status, health, and ops review.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 

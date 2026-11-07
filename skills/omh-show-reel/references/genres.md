@@ -85,4 +85,4 @@ attached, sent or published.
   Trimming, converting or burning in captions: plain ffmpeg through
   `omh-terminal`.
 - An animation inside an app's own UI (a button, modal, page transition or
-  loading state): `frontend`.
+  loading state): `omh-frontend`.

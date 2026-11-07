@@ -47,18 +47,18 @@ Bad example:
 - Confidence is the count of independent observations (different runs, sessions, or projects; one session counts once): 1 is an anecdote, 2 is tentative, 3 or more with no contradicting observation is a promotion candidate. Show the count and evidence refs beside every instinct. Instincts live only in this conversation's `instinct_candidate/v1` list until a store route accepts one; say so.
 - Project-specific conventions, global practices, project/global promotion candidates, imports, and exports are separated.
 - No hooks, memory writes, skill edits, global promotion, import/export, or behavior-change claims are made without observed approval and implementation evidence.
-- A promoted instinct leaves as a store route, `memory_candidate` for `omh-memory-new`, `skill_update_candidate` for `omh-workflow-learning`, or a rule candidate for `omh-rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.
+- A promoted instinct leaves as a store route, `memory_new_candidate/v1` for `omh-memory-new`, `skill_update_candidate` for `omh-workflow-learning`, or a rule candidate for `omh-rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.
 - On Hermes, the skill audit ledger (`skills/.curator_ledger.jsonl` under the active profile's Hermes home) is observed evidence of what the agent or its background review already wrote; an instinct that matches a ledger entry no store route accounts for is reported as `unreviewed_native_write` (OMH holds no record of that write, which is not to say nobody reviewed it), never counted as repeated evidence for the instinct.
 
 ## Recovery Notes
 
-- If the request is a single missed route or run trace, route to workflow-learning first.
-- If the request is to mutate durable rules, prompts, skills, or AGENTS guidance, route to rules-distill or implementation after review approval.
-- If evidence comes from a stuck run, use agent-debug before converting lessons into instincts.
+- If the request is a single missed route or run trace, route to `omh-workflow-learning` first.
+- If the request is to mutate durable rules, prompts, skills, or AGENTS guidance, route to `omh-rules-distill` or implementation after review approval.
+- If evidence comes from a stuck run, use `omh-agent-debug` before converting lessons into instincts.
 
 ## Workflow Lane
 
-- Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
+- Current lane: **Automation and status** - schedules, status, health, and ops review.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 

@@ -324,7 +324,9 @@ class RouterContentTests(unittest.TestCase):
         # not widened.
         # 33,194 -> 33,236: the memory-new and memory-sync index lines name omh_memory recall for
         # a past decision (33,172 -> 33,214 measured); the same 22-byte allowance is kept.
-        self.assertLess(len(rendered.encode("utf-8")), 33_236)
+        # 33,236 -> 33,274: descriptions backtick the sibling they hand to, so the rewrite can give it its
+        # label (33,214 -> 33,252 measured); the same 22-byte allowance is kept.
+        self.assertLess(len(rendered.encode("utf-8")), 33_274)
         for line in rendered.splitlines():
             self.assertLess(len(line.encode("utf-8")), 400, line)
 
@@ -522,7 +524,7 @@ class RouterContentTests(unittest.TestCase):
             if template.skill_name == "oh-my-hermes" and template.relative_path == "references/workflow-registry.md":
                 limit = 33_841
             elif template.skill_name == "oh-my-hermes" and template.relative_path == "references/catalog-index.md":
-                limit = 33_236
+                limit = 33_274
             else:
                 limit = 33_100
             self.assertLess(len(template.content.encode("utf-8")), limit, template.relative_path)
@@ -1987,11 +1989,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertTrue(any("destination or existing store" in item for item in wiki.required_inputs))
         self.assertIn("destination-aware", " ".join(wiki.expected_outputs))
         self.assertIn(
-            "Current lane: **Retained knowledge** (`memory-new`, `memory-sync`, `decision-recall`, `wiki`)",
+            "Current lane: **Retained knowledge**",
             content,
         )
         self.assertIn("observed external write", content)
-        self.assertNotIn("Current lane: **Materials and visual summaries** (`wiki`)", content)
+        self.assertNotIn("Current lane: **Materials and visual summaries**", content)
         self.assertNotEqual(wiki.category, "materials")
 
     def test_wiki_contract_surfaces_construction_design(self) -> None:
@@ -3394,7 +3396,7 @@ class RouterContentTests(unittest.TestCase):
         )
         self.assertTrue(
             any(
-                "run the `research` workflow as a bounded in-plan stage" in item
+                "run the `ulw-research` workflow as a bounded in-plan stage" in item
                 for item in ralplan_bar
             )
         )

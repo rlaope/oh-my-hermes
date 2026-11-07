@@ -56,7 +56,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
+- Current lane: **Intent -> plan** - clarify, plan, ship, or loop goals.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
@@ -78,7 +78,7 @@ Quality bar:
 
 - Record a baseline and name the evaluator command before proposing any optimization edit.
 - Attack only a hot path shown by a measurement or profile; never micro-optimize unmeasured code.
-- Keep every fix the smallest reversible change and run its code edit in the Hermes harness, or through `maestro` when the user chose an external coding owner.
+- Keep every fix the smallest reversible change and run its code edit in the Hermes harness, or through `ulw-maestro` when the user chose an external coding owner.
 - Re-measure after each change and report deltas only from observed evidence; record the baseline as repeated runs (count and warm-up stated) with median and spread, and treat a delta smaller than the spread as no result.
 - Never present a restart, cache flush, or resource bump as a leak fix; prove causation by revert-verify.
 - Set the regression budget as baseline x (1 + tolerance) for a lower-is-better metric (latency, memory, cost) or baseline x (1 - tolerance) for a higher-is-better one (throughput), with a tolerance at least the observed spread, and name the CI gate that enforces it.

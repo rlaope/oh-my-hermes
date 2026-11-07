@@ -10,6 +10,7 @@ metadata:
     phase: meta-routing
     role: guide
     quality_tier: routing-gated
+    related_skills: [omh-routing]
 ---
 
 # Meta Router
@@ -23,7 +24,7 @@ This is a Hermes-native `meta-router` workflow skill.
 ## Do Not Use When
 
 - The /omh token is not the leading command token.
-- The message is a bare picker alias or an OMH catalog/entrypoint question — those belong to oh-my-hermes.
+- The message is a bare picker alias or an OMH catalog/entrypoint question — those belong to `omh-routing`.
 
 ## Examples
 
@@ -53,7 +54,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
+- Current lane: **Intent -> plan** - clarify, plan, ship, or loop goals.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 

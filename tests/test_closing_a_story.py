@@ -24,8 +24,17 @@ measuring the other one.
 
 from __future__ import annotations
 
+import re
+import time
 import unittest
 
+from omh.plugin_bundle.omh.completion_store import (
+    CompletionValidationError,
+    KINDS,
+    RESULT_FIELDS,
+    _projection,
+    _result,
+)
 from omh.plugin_bundle.omh.todo_store import (
     MAX_TODO_ITEMS,
     MAX_TODO_TEXT_CHARS,
@@ -239,6 +248,100 @@ class ClosingReferenceContentTest(unittest.TestCase):
         content = _closing_reference_content()
         self.assertIn("**Landing the change happens outside OMH.**", content)
         self.assertIn("`prepared_not_observed` and is not a landing", content)
+
+
+def _verdict_map_rows() -> list[dict[str, object]]:
+    """The closing page's outcome table, as the store would receive each row."""
+    lines = _closing_reference_content().split("\n")
+    start = next(i for i, line in enumerate(lines) if line.startswith("| Closing outcome |"))
+    rows = []
+    for line in lines[start + 2 :]:
+        if not line.startswith("|"):
+            break
+        outcome, kind, verdict, findings, blocker = (cell.strip() for cell in line.strip("|").split("|"))
+        rows.append(
+            {
+                "outcome": outcome,
+                "kind": kind.strip("`"),
+                "verdicts": re.findall(r"`([^`]+)`", verdict),
+                "findings": [] if findings == "empty" else [findings],
+                "blocks": blocker == "yes",
+            }
+        )
+    return rows
+
+
+def _row(kind: str, verdict: str, findings: list[str]) -> dict[str, object]:
+    return {
+        "kind": kind,
+        "item": 1,
+        "verdict": verdict,
+        "summary": "closing outcome",
+        "findings": findings,
+        "claimed_source": "model",
+        "claimed_evidence_state": "prepared_not_observed",
+        "references": [],
+        "revision": "rev",
+        "environment": "env",
+        "author": "0" * 64,
+        "created_at": time.time(),
+        "standing": "model_declaration",
+        "observed": False,
+    }
+
+
+def _completion(rows: list[dict[str, object]]) -> dict[str, object]:
+    checkpoint = {"items": [{"text": "only item"}], "results": rows}
+    return _projection(checkpoint, "rev", "env")["completion"]
+
+
+class ClosingVerdictMapTest(unittest.TestCase):
+    """The page's outcome table against the store that takes the declaration."""
+
+    def test_every_mapped_verdict_and_kind_is_one_the_store_accepts(self) -> None:
+        rows = _verdict_map_rows()
+        self.assertEqual({row["kind"] for row in rows}, set(KINDS))
+        self.assertTrue(all(row["verdicts"] for row in rows))
+        self.assertEqual({verdict for row in rows for verdict in row["verdicts"]}, {"PASS", "HOLD", "BLOCK"})
+        for row in rows:
+            for verdict in row["verdicts"]:
+                with self.subTest(outcome=row["outcome"], verdict=verdict):
+                    declared = {k: v for k, v in _row(row["kind"], verdict, row["findings"]).items()
+                                if k in RESULT_FIELDS}
+                    _result(declared, 1)
+
+    def test_the_outcome_words_the_page_names_are_refused_as_verdicts(self) -> None:
+        self.assertIn("`ship`, `no_ship`, `pass` and `fail` are not verdicts", _closing_reference_content())
+        for word in ("ship", "no_ship", "pass", "fail"):
+            with self.subTest(word=word):
+                declared = {k: v for k, v in _row("review", word, []).items() if k in RESULT_FIELDS}
+                with self.assertRaises(CompletionValidationError):
+                    _result(declared, 1)
+
+    def test_the_blocker_column_is_what_the_projection_computes(self) -> None:
+        for row in _verdict_map_rows():
+            for verdict in row["verdicts"]:
+                with self.subTest(outcome=row["outcome"], verdict=verdict):
+                    rows = [_row(row["kind"], verdict, row["findings"])]
+                    if row["kind"] != "verification":
+                        rows.insert(0, _row("verification", "PASS", []))
+                    completion = _completion(rows)
+                    self.assertEqual(completion["blockers"], [1] if row["blocks"] else [])
+                    self.assertEqual(completion["missing"], [])
+                    self.assertEqual(completion["declarations_complete"], not row["blocks"])
+
+    def test_the_prose_around_the_table_holds(self) -> None:
+        # No verification row: the item is missing, whatever review says.
+        completion = _completion([_row("review", "PASS", [])])
+        self.assertEqual(completion["missing"], [1])
+        self.assertFalse(completion["declarations_complete"])
+        # A later row for the same item and kind replaces the earlier one.
+        completion = _completion(
+            [_row("verification", "PASS", []), _row("review", "BLOCK", ["finding"]), _row("review", "PASS", [])]
+        )
+        self.assertEqual(completion["blockers"], [])
+        self.assertTrue(completion["declarations_complete"])
+        self.assertEqual(completion["status"], "not_verified")
 
 
 class ClosingReferenceReachabilityTest(unittest.TestCase):
