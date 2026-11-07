@@ -385,8 +385,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # lanes' moved lists equals the merged tree's. Plan, ralplan and adversarial-consensus name
         # `--plan-file` / `--input-bundle`; the pin before it was 7e537e8d...4b2c. The code-quality skills fix round then moves
         # its lane's bodies (build-failure-triage, verification-gate, codebase-onboarding, codebase-uml, codegraph-refresh,
-        # frontend-refactor, github-event-ops, github-issue-intake and ultraqa among them); the pin before it was 49189871...a29a.
-        self.assertEqual(_digest(legacy_hashes), '55b2226e6fed23c19789f4def34301f38e06aed02c885a6282c82f7b864825eb')
+        # frontend-refactor, github-event-ops, github-issue-intake and ultraqa among them); the pin before it was 49189871...a29a. Its second review then reworded
+        # the origin rerun rule, the lldb crash recipe's neighbours and a few sibling labels; the pin before that was 55b2226e...25eb.
+        self.assertEqual(_digest(legacy_hashes), '460133f6fcde4908c32d5845a56c14b28fb2058027c397c0e15948849c969abb')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

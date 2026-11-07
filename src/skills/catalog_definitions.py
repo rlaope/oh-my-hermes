@@ -205,10 +205,10 @@ FAILURE_ORIGIN_PROOF_NAMING = (
 # `pre_existing`, and a higher head rate is a change that made the test flakier, which
 # goes to `app-debugging` and never gets a one-line fix handoff.
 FAILURE_ORIGIN_RERUN_RULE = (
-    "A failing test is `introduced` only after one rerun at head fails again; with no rerun its origin stays `unknown` "
-    "and the missing evidence is the failure rate, measured at head and at the merge-base with the same command and the "
-    "same N. A head rate near the merge-base rate is `pre_existing`; a higher head rate goes to `app-debugging` and never "
-    "to FIX_READY"
+    "A failing test is `introduced` only after one rerun at head fails again; with no rerun, or a green one, its origin "
+    "stays `unknown` and the missing evidence is the failure rate, measured at head and at the merge-base with the same "
+    "command and the same N. A head rate near the merge-base rate is `pre_existing`; a higher head rate is `introduced`, "
+    "with the two rates as its proof, and its remediation is a root-cause investigation (`app-debugging`), not a one-line fix"
 )
 # A regression test written with its fix and only ever run green never saw the
 # bug: it may pass on the broken tree too. The witness is that test's observed
@@ -4948,7 +4948,7 @@ _DEFINITIONS = [
         safety_rules=(
             "Preview is the default: analyze the whole target and emit the plan before touching any file.",
             "Outputs, side effects, and error handling stay identical; a dropped branch or weakened handler is a defect, not a simplification.",
-            "Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits. Changes to props, exports, or file layout are proposals in notes until the user's second decision. `[behavior-changing]` items (remounts, new dependencies, caching, URL state, timing, a logout reset) never apply under this skill: they go to notes for `frontend` or a feature request.",
+            "Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits. Changes to props, exports, or file layout are proposals in notes until the user's second decision. `[behavior-changing]` items (remounts, new dependencies, caching, URL state, timing, a logout reset) never apply under this skill: route them to `frontend` or a feature request and list them in notes.",
             "Do not refactor test files, and do not claim behavior preservation without the before/after test evidence.",
         ),
         quality_tier="behavior-lock-gated",
@@ -4978,14 +4978,14 @@ _DEFINITIONS = [
         ),
         bad_example=SkillExample(
             prompt="Refactor and also add the dark-mode feature while you are in there.",
-            expected="Split the request: the behavior-preserving refactor runs under this workflow, and the dark-mode feature is new `frontend` work planned separately.",
+            expected="Split the request: the behavior-preserving refactor runs under this workflow, and the dark-mode feature goes to `frontend` as separate planned work.",
             why="A refactor that changes behavior cannot claim behavior preservation; mixing the two hides the feature from review.",
         ),
         final_checklist=(
             "The preview plan was emitted before any file changed, and the apply step was an explicit second decision.",
             "Behavior evidence exists on both sides of apply, and unsafe-in-isolation changes are listed as notes, not half-applied.",
             "Pass order was impact-first and each finding names its category and safety reason.",
-            "Out-of-scope smells were routed: generic slop to `ai-slop-cleaner`, new UI to `frontend`, verdict-only review to `code-review`.",
+            "Out-of-scope smells were routed: generic slop to `ai-slop-cleaner`, new UI goes to `frontend`, verdict-only review to `code-review`.",
         ),
         recovery_notes=(
             "If no tests exist, write the characterization checks first or hand the user the smallest set to approve; do not start the macro pass on unlocked behavior.",
@@ -5800,8 +5800,8 @@ _DEFINITIONS = [
             "Recommend the smallest safe fix path and name when no fix is justified without more logs.",
             "Prefer targeted reruns before broad expensive checks, then broaden only when the changed surface requires it.",
             "Preserve exact observed failure snippets or file references without treating them as current PASS evidence.",
-            f"Give each cluster an origin: {FAILURE_ORIGIN_PROOF_RULE}. {FAILURE_ORIGIN_PRECEDENCE}. {FAILURE_ORIGIN_PROOF_NAMING}. {FAILURE_ORIGIN_RERUN_RULE}.",
-            "For a CI-only failure (matrix entry, OS, secrets, services), take the origin from CI, citing the URL: the same job on the merge-base commit or the base branch's latest run (`gh run list --branch <base> --workflow <name> --json conclusion,headSha,url`, `gh pr checks <n>`). A `pull_request` run builds the merge ref `refs/pull/<n>/merge`, not the PR head (`gh run view <id> --json headSha` returns the PR head), so read the commit it built from its checkout log, `gh run view <id> --log | grep -m1 'HEAD is now at'`, which names the merge commit and the base sha it merged into, and compare against that commit when the base moved.",
+            f"Give each cluster an origin: {FAILURE_ORIGIN_PROOF_RULE}. {FAILURE_ORIGIN_PRECEDENCE}. {FAILURE_ORIGIN_PROOF_NAMING}. {FAILURE_ORIGIN_RERUN_RULE}. For a cluster of that last kind the verdict is NEEDS_MORE_LOGS naming the missing root cause with `app-debugging` as the next step, never FIX_READY.",
+            "For a CI-only failure (matrix entry, OS, secrets, services), take the origin from CI, citing the URL: the same job on the merge-base commit or the base branch's latest run (`gh run list --branch <base> --workflow <name> --json conclusion,headSha,url`, `gh pr checks <n>`). A `pull_request` run builds the merge ref `refs/pull/<n>/merge`, not the PR head (`gh run view <id> --json headSha` returns the PR head), so read the commit it built from its checkout log, `gh run view <id> --log | grep -m1 'HEAD is now at'` (the run-level log is refused while any job is still running; then ask for that job's log, `gh run view <id> --job <job-id> --log`, not tried here), which names the merge commit and the base sha it merged into, and compare against that commit when the base moved.",
             f"Return FIX_READY only for `{_INTRODUCED}` clusters; a `{_PRE_EXISTING}` cluster gets its own follow-up handoff outside this change's fix. Clusters of different origins still share one verdict: NEEDS_MORE_LOGS while any cluster that can run locally is `{_UNKNOWN_ORIGIN}`, naming the missing rerun or merge-base run (or the failure rate, for a test), even beside `{_INTRODUCED}` ones; otherwise FIX_READY when at least one is `{_INTRODUCED}`; otherwise, with every cluster `{_PRE_EXISTING}`, ROUTE_TO_VERIFICATION_GATE. A cluster that is environmental or credentialed cannot run at the merge-base, so it never counts as `unknown`: it is BLOCKED_BY_ENVIRONMENT, which takes the verdict ahead of FIX_READY and behind NEEDS_MORE_LOGS.",
         ),
         why_this_exists=(
@@ -6111,7 +6111,7 @@ _DEFINITIONS = [
             f"Give each failing check an `origin`: {FAILURE_ORIGIN_PROOF_RULE}. {FAILURE_ORIGIN_PRECEDENCE}. {FAILURE_ORIGIN_PROOF_NAMING}. {FAILURE_ORIGIN_RERUN_RULE}.",
             REGRESSION_WITNESS_RULE,
             "Take the required set from the repository, not from what happened to run: branch protection or ruleset required status checks (a repository that uses rulesets has none: `gh api repos/{owner}/{repo}/branches/{base}/protection/required_status_checks` answers 404 there; read `gh api repos/{owner}/{repo}/rules/branches/{base}` and take the contexts of its `required_status_checks` rule), the CI workflow, and the contributor docs; name which source defined required. Then compare those contexts with the results (`gh pr view <n> --json statusCheckRollup`): a required context with no result is missing evidence, not a pass. `gh pr checks --required` lists only checks that already exist, so it can read green while a required check has not started.",
-            f"Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `{_PRE_EXISTING}` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `{_UNKNOWN_ORIGIN}` is HOLD with the merge-base run named as the missing evidence.",
+            f"Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `{_PRE_EXISTING}` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `{_UNKNOWN_ORIGIN}` is HOLD with the merge-base run named as the missing evidence (for a failing test, the failure rate at head and at the merge-base).",
             "Keep fixes, reruns, review, CI, and merge as separate observed states.",
         ),
         why_this_exists=(
@@ -6492,7 +6492,7 @@ _DEFINITIONS = [
         ),
         artifact_expectations=(
             "codegraph_command_plan/v1 naming `omh codegraph build`, `summary`, `handoff`, `--write`, and `--json` choices",
-            "staleness_and_scope_report/v1 separating requested refresh scope, observed command output, missing index evidence, and stale artifacts; the artifact is stale when its `generated_at` is older than the newest commit (`git log -1 --format=%cI`) or a Python file listed by `git status --porcelain -- '*.py'` has an mtime later than `generated_at` (a dirty file older than the artifact is not stale, and the list stays non-empty after a rebuild), and a rebuild is the refresh because the scan is full, not incremental",
+            "staleness_and_scope_report/v1 separating requested refresh scope, observed command output, missing index evidence, and stale artifacts; the artifact is stale when its `generated_at` is older than the newest commit (`git log -1 --format=%cI`) or a Python file listed by `git status --porcelain -- '*.py'` has an mtime later than `generated_at` (a dirty file older than the artifact is not stale, and the list stays non-empty after a rebuild), or the HEAD reflog's newest entry (`git reflog -1 --format=%cI`) is later than `generated_at` (a branch switch or pull leaves the commit time old), or a dirty file is deleted (it has no mtime, so treat it as stale); a rebuild is the refresh because the scan is full, not incremental",
             "`omh_codegraph_summary/v1` or `.omh/codegraph/codegraph.json` only when the corresponding command output or write is observed",
             "codegraph_handoff_context/v1 with task terms, focus files, symbols, entrypoints, warnings, and claim boundary when `omh codegraph handoff` is observed",
         ),

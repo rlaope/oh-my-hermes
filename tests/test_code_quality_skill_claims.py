@@ -38,10 +38,10 @@ class DebuggingReferencesTests(unittest.TestCase):
                 self.assertIn(needle, text)
 
     def test_lldb_batch_reads_the_crash_through_one_line_on_crash(self):
-        """`lldb --batch` stops the remaining -o commands at a crash; only -k runs there."""
+        """`-o` reads run at a breakpoint stop; at a crash only `-k` reads run, and `-k quit` ends the session."""
         text = (ROOT / "skills/omh-native-debugging/references/native-debug-loop.md").read_text(encoding="utf-8")
-        self.assertIn("-k bt -k 'frame variable'", text)
-        self.assertNotIn("-o bt", text)
+        self.assertIn("-o bt -o 'frame variable' -k bt -k 'frame variable' -k quit", text)
+        self.assertIn("was not run here", text)
         self.assertNotIn("thread apply all bt`)", text.replace("gdb: `thread apply all bt`", ""))
 
     def test_the_required_checks_come_from_the_ruleset_and_a_missing_one_is_evidence_missing(self):
