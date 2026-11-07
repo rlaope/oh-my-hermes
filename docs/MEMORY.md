@@ -677,6 +677,18 @@ adapters), with duplicates skipped, and map the result to one `status`:
 | `refused` | Nothing was written: invalid input (including an `invalid_subject`), a session that may not write (`shared_surface_writes_refused` on a shared surface, `writes_disabled` in a background run, `session_lens_unavailable` with no provider lens; see [Surface classes](#surface-classes)), memory turned off, a project scope this session cannot resolve, or an `instruction_shaped_summary` (a second-person order or a Korean request ending, outside `procedure` records), whose `next_action` asks for the fact restated as an observation. |
 | `error` | Admission raised (an unreadable store, a lock held past its 10 s wait); `reason` names the exception class and nothing is confirmed saved. |
 
+A capture that persists a candidate retires every earlier held candidate
+(`pending_review` or `blocked_review_required`) with the same normalized
+summary, the key the duplicate check reads, inside the same confinement (scope,
+subject principal, audience) and with the same `correction_of`. The earlier
+candidate gets `status: retired`, `retirement_reason: recaptured` and
+`recaptured_as` naming the new candidate. Approval refuses it, and the review
+queue no longer lists it. Admission returns the ids as
+`retired_held_candidates`, and the tool result returns them as
+`retired_candidate_ids`. No person is asked: the newer capture is the one that
+stands. Approved, rejected, superseded and lifecycle candidates are never
+touched, so recapturing an approved fact still stamps `duplicate_of` as before.
+
 A `remembered` save whose summary states a point-in-time snapshot also
 carries `point_in_time`. It holds the new `record_id` and a `next_action` that
 asks the model to pass that id as `replaces` when it saves the changed state,
