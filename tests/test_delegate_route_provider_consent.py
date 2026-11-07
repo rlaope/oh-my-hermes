@@ -204,10 +204,16 @@ class RouteOnlyProviderConsentTest(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"schema_version": PROVIDER_ENTITLEMENTS_SCHEMA_VERSION, **document}), encoding="utf-8")
 
-    def call(self) -> dict:
+    def auth(self, **store: object) -> None:
+        (self.hermes_home / "auth.json").write_text(json.dumps({"version": 1, **store}), encoding="utf-8")
+
+    def pool(self, source: str, provider: str = "commandcode") -> None:
+        self.auth(credential_pool={provider: [{"source": source}]})
+
+    def call(self, **route: object) -> dict:
         return json.loads(
             omh_delegate_route_handler(
-                {"hermes_home": str(self.hermes_home), "omh_home": str(self.omh_home), **self.ROUTE},
+                {"hermes_home": str(self.hermes_home), "omh_home": str(self.omh_home), **(route or self.ROUTE)},
                 session_id="consent-session",
                 task_id="consent-task",
             )
@@ -229,6 +235,42 @@ class RouteOnlyProviderConsentTest(unittest.TestCase):
     def test_the_key_in_env_lets_a_route_name_the_provider(self) -> None:
         self.env("COMMANDCODE_API_KEY=placeholder-key\n")
         self.assert_routed()
+
+    def test_a_login_or_counted_pool_row_lets_a_route_name_the_provider(self) -> None:
+        for name, store in (
+            ("manual", {"credential_pool": {"commandcode": [{"source": "manual"}]}}),
+            ("manual label", {"credential_pool": {"commandcode": [{"source": "manual:work"}]}}),
+            ("active provider", {"active_provider": "commandcode"}),
+            ("provider state", {"providers": {"commandcode": {"token_type": "key"}}}),
+        ):
+            with self.subTest(name):
+                self.auth(**store)
+                self.assert_routed()
+
+    def test_a_pool_row_hermes_would_not_count_is_refused(self) -> None:
+        # A row seeded from a variable that is gone, and one borrowed from
+        # another CLI, are not credentials the person gave Hermes.
+        for source in ("env:COMMANDCODE_API_KEY", "gh_cli"):
+            with self.subTest(source):
+                self.pool(source)
+                self.assert_refused()
+
+    def test_an_env_seeded_row_lapses_with_an_empty_key(self) -> None:
+        self.pool("env:COMMANDCODE_API_KEY")
+        self.env("COMMANDCODE_API_KEY=\n")
+        self.assert_refused()
+
+    def test_an_excluded_provider_is_refused_with_a_pool_row(self) -> None:
+        self.pool("manual")
+        self.record(providers={"anthropic": "anthropic"}, excluded_providers=["commandcode"])
+        self.assert_refused()
+
+    def test_a_pool_row_for_a_provider_outside_the_table_is_refused(self) -> None:
+        # The auth store is read for the route-only providers, not as a new
+        # way to enrol any id it holds.
+        self.pool("manual", provider="other-relay")
+        payload = self.call(action="set", model="deepseek/deepseek-v4-pro", provider="other-relay")
+        self.assertEqual(payload["reason"], "provider_not_configured", payload)
 
     def test_no_env_file_is_refused(self) -> None:
         self.assert_refused()

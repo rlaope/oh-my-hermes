@@ -770,8 +770,8 @@ def _profile_theme_home(profile_paths: OmhPaths, profile_dir: Path) -> Path | No
     the primary's.
 
     None when the profile chose a store OMH cannot read: a setting in a
-    shape the standalone scan refuses, or an `OMH_HOME` in its `.env`,
-    whose value OMH never reads. Saving into the primary's store then
+    shape the standalone scan refuses, or a filled `OMH_HOME` in its `.env`,
+    whose value OMH does not keep. Saving into the primary's store then
     would hand the primary that profile's theme. That includes a setting
     OMH wrote before the `.env` named a store: the same pass takes it back
     (`reclaim_plugin_omh_home`, asked here with the record `_apply_result`

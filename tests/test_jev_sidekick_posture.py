@@ -6,7 +6,7 @@ may not. It may say a plugin directory exists, that Hermes' config lists the
 name, and that a credential NAME appears in the env file. It may quote what a
 catalog entry declares, naming where the quote was read. It may not say the
 plugin ran, that Jev is served, or that anything left the machine -- and it may
-never read a credential value, which the fixtures below prove by writing one
+never copy a credential value, which the fixtures below prove by writing one
 and asserting it reaches no output.
 
 The check is appended on every run, in both branches, because an optional

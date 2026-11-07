@@ -98,7 +98,6 @@ HERMES_PROVIDER_KINDS: dict[str, str] = {
     "copilot-acp": "gateway",
     "ai-gateway": "gateway",
     "kilocode": "gateway",
-    "commandcode": "gateway",
     "nvidia": "gateway",
     "ollama-cloud": "gateway",
     "bedrock": "gateway",
@@ -148,10 +147,11 @@ HERMES_ENV_KEY_PROVIDERS: dict[str, str] = {
 }
 
 # Variable NAME -> Hermes provider id, read only by the consent check in
-# `omh_delegate_route`, never by `detect_linked_providers`. A relay's key in
-# the table above counts as an account of kind `gateway`, which serves every
-# alias, so chain shaping turns off for everyone holding it. A name here only
-# lets a route that names the provider pass.
+# `omh_delegate_route`, never by `detect_linked_providers`. A relay in the
+# tables above counts as an account of kind `gateway`, which serves every
+# alias, so chain shaping turns off for everyone holding its key or login. A
+# provider here has no row in `HERMES_PROVIDER_KINDS` either: its key or auth
+# store entry only lets a route that names it pass.
 ROUTE_ONLY_ENV_KEY_PROVIDERS: dict[str, str] = {
     "COMMANDCODE_API_KEY": "commandcode",
 }
@@ -468,6 +468,13 @@ def auth_store_provider_ids(text: str, env_names: Iterable[str] = ()) -> list[st
     if isinstance(active, str) and active:
         found.add(active)
     return sorted(name for name in found if PROVIDER_ID_RE.fullmatch(name))
+
+
+def route_only_provider_ids(hermes_home: Path) -> set[str]:
+    """Route-only providers this home holds a filled key or an auth store entry for."""
+    names = env_key_names(hermes_home, allowed=ROUTE_ONLY_ENV_KEY_PROVIDERS)
+    stored = auth_store_provider_ids(_read_text(hermes_home / "auth.json"), names)
+    return {ROUTE_ONLY_ENV_KEY_PROVIDERS[name] for name in names} | (set(ROUTE_ONLY_ENV_KEY_PROVIDERS.values()) & set(stored))
 
 
 def _hermes_home(value: str | Path | None) -> Path | None:

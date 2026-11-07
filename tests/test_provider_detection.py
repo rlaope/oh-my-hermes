@@ -73,11 +73,11 @@ class TableTests(unittest.TestCase):
                 bool(_CHAIN_TOKEN_RE.fullmatch(token)),
             )
 
-    def test_a_route_only_name_has_a_kind_and_never_joins_the_detection_table(self) -> None:
+    def test_a_route_only_provider_stays_out_of_both_detection_tables(self) -> None:
         self.assertTrue(detection.ROUTE_ONLY_ENV_KEY_PROVIDERS)
         for name, provider_id in detection.ROUTE_ONLY_ENV_KEY_PROVIDERS.items():
             with self.subTest(name=name):
-                self.assertIn(provider_id, detection.HERMES_PROVIDER_KINDS)
+                self.assertNotIn(provider_id, detection.HERMES_PROVIDER_KINDS)
                 self.assertNotIn(name, detection.HERMES_ENV_KEY_PROVIDERS)
                 self.assertNotIn(provider_id, detection.HERMES_ENV_KEY_PROVIDERS.values())
 
@@ -98,6 +98,27 @@ class TableTests(unittest.TestCase):
                 effective_mixture_category_chains(root / "with" / "omh", with_key),
                 effective_mixture_category_chains(root / "without" / "omh", without),
             )
+
+    def test_a_route_only_login_leaves_detection_and_the_chains_alone(self) -> None:
+        # With a kind row, any of these counts as a `gateway` account and flips
+        # category routes the same way the key does.
+        for label, store in (
+            ("manual row", {"credential_pool": {"commandcode": [{"source": "manual"}]}}),
+            ("active provider", {"active_provider": "commandcode"}),
+            ("provider state", {"providers": {"commandcode": {"token_type": "key"}}}),
+        ):
+            with self.subTest(label), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                without, held = root / "without" / "hermes", root / "held" / "hermes"
+                _write(without / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+                _write(held / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+                _write(held / "auth.json", _auth_store(**store))
+                self.assertEqual([row["id"] for row in detection.detect_linked_providers(held)], ["deepseek"])
+                self.assertEqual(
+                    effective_mixture_category_chains(root / "held" / "omh", held),
+                    effective_mixture_category_chains(root / "without" / "omh", without),
+                )
+                self.assertEqual(detection.route_only_provider_ids(held), {"commandcode"})
 
     def test_generic_and_implicit_tokens_are_not_provider_evidence(self) -> None:
         # Hermes' registry lists CLAUDE_CODE_OAUTH_TOKEN under its implicit

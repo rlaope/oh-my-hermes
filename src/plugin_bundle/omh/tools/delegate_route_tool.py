@@ -53,11 +53,10 @@ from ..delegation_backend_mode import (
 from ..omh_identities import read_identity_chains
 from ..route_endpoint_guard import managed_config_layer, route_endpoint_refusal
 from ..provider_detection import (
-    ROUTE_ONLY_ENV_KEY_PROVIDERS,
     config_provider_base_url_hosts,
     config_provider_declared_models,
     configured_provider_ids,
-    env_key_names,
+    route_only_provider_ids,
 )
 from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, host_session_id, observe_plugin_tool_call
 from ..kanban_board_reader import conversation_session_ids
@@ -356,9 +355,8 @@ def _configured_providers(hermes_home: Any, omh_home: Any) -> frozenset[str]:
     every `providers.<id>` block and `model.provider` in config.yaml (a
     loopback block is configured even though entitlements skip it), the
     `custom:<name>` identities of `providers.<id>` blocks with a `base_url`
-    and of legacy `custom_providers` entries, the `.env` keys in
-    `ROUTE_ONLY_ENV_KEY_PROVIDERS` (minus the same exclusions), and the
-    session's own provider.
+    and of legacy `custom_providers` entries, `route_only_provider_ids`
+    (minus the same exclusions), and the session's own provider.
     """
     recorded, _ = load_provider_entitlements(omh_home)
     excluded = {str(item).casefold() for item in (recorded or {}).get("excluded_providers", [])}
@@ -372,8 +370,7 @@ def _configured_providers(hermes_home: Any, omh_home: Any) -> frozenset[str]:
         }
         custom_names |= _legacy_custom_provider_names(text)
         configured |= config_ids | {f"custom:{name}" for name in custom_names - excluded}
-    route_only = env_key_names(Path(hermes_home).expanduser(), allowed=ROUTE_ONLY_ENV_KEY_PROVIDERS)
-    configured |= {ROUTE_ONLY_ENV_KEY_PROVIDERS[name].casefold() for name in route_only} - excluded
+    configured |= {item.casefold() for item in route_only_provider_ids(Path(hermes_home).expanduser())} - excluded
     session = read_session_provider(hermes_home).casefold()
     if session:
         configured.add(session)
