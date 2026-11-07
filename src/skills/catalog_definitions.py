@@ -197,6 +197,19 @@ FAILURE_ORIGIN_PRECEDENCE = (
 FAILURE_ORIGIN_PROOF_NAMING = (
     "Name the proof beside the origin: a merge-base run is an observation, a diff-line reading is an inference"
 )
+# A failing test can be a flake, and one red run at head beside one green run at the
+# merge-base looks exactly like a regression. So a failing test is `introduced` only
+# after it fails again on a rerun at head; until then the origin is `unknown` and the
+# missing evidence is the failure rate, not the merge-base run. Once both rates are
+# measured at the same N the outcome is fixed: a head rate near the merge-base rate is
+# `pre_existing`, and a higher head rate is a change that made the test flakier, which
+# goes to `app-debugging` and never gets a one-line fix handoff.
+FAILURE_ORIGIN_RERUN_RULE = (
+    "A failing test is `introduced` only after one rerun at head fails again; with no rerun, or a green one, its origin "
+    "stays `unknown` and the missing evidence is the failure rate, measured at head and at the merge-base with the same "
+    "command and the same N. A head rate near the merge-base rate is `pre_existing`; a higher head rate is `introduced`, "
+    "with the two rates as its proof, and its remediation is a root-cause investigation (`app-debugging`), not a one-line fix"
+)
 # A regression test written with its fix and only ever run green never saw the
 # bug: it may pass on the broken tree too. The witness is that test's observed
 # red on the tree before the fix. Its source is whatever observed it -- a
@@ -209,7 +222,7 @@ REGRESSION_WITNESS_RULE = (
     "change), recorded with its source -- a run in a clean detached worktree at that tree, a CI job on a commit that "
     "adds only the test, or the debugging session's run before the fix. A collection or import error there is not a "
     "witness. For an intermittent fault the witness is the failure rate over N runs before beside 0/N at the same N "
-    "after. When the test calls a seam the fix added, force the red by reverting only the behavioural lines, keep the "
+    "after, with N sized from the pre-fix rate p as N >= ln(0.05) / ln(1 - p), about 3 / p. When the test calls a seam the fix added, force the red by reverting only the behavioural lines, keep the "
     "seam, and show that diff. When the fix changes only test code, the witness is the old test's measured failure "
     "rate on the pre-fix tree beside the new test's 0/N at the same N. A fix test only ever observed green is HOLD "
     "with `regression_witness_missing`. A fix recorded with `regression_seam: none_correct` and its reason has no fix "
@@ -4935,7 +4948,7 @@ _DEFINITIONS = [
         safety_rules=(
             "Preview is the default: analyze the whole target and emit the plan before touching any file.",
             "Outputs, side effects, and error handling stay identical; a dropped branch or weakened handler is a defect, not a simplification.",
-            "Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits.",
+            "Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits. Changes to props, exports, or file layout are proposals in notes until the user's second decision. `[behavior-changing]` items (remounts, new dependencies, caching, URL state, timing, a logout reset) never apply under this skill: route them to `frontend` or a feature request and list them in notes.",
             "Do not refactor test files, and do not claim behavior preservation without the before/after test evidence.",
         ),
         quality_tier="behavior-lock-gated",
@@ -4965,19 +4978,20 @@ _DEFINITIONS = [
         ),
         bad_example=SkillExample(
             prompt="Refactor and also add the dark-mode feature while you are in there.",
-            expected="Split the request: the behavior-preserving refactor runs under this workflow, and the dark-mode feature is new `frontend` work planned separately.",
+            expected="Split the request: the behavior-preserving refactor runs under this workflow, and the dark-mode feature goes to `frontend` as separate planned work.",
             why="A refactor that changes behavior cannot claim behavior preservation; mixing the two hides the feature from review.",
         ),
         final_checklist=(
             "The preview plan was emitted before any file changed, and the apply step was an explicit second decision.",
             "Behavior evidence exists on both sides of apply, and unsafe-in-isolation changes are listed as notes, not half-applied.",
             "Pass order was impact-first and each finding names its category and safety reason.",
-            "Out-of-scope smells were routed: generic slop to `ai-slop-cleaner`, new UI to `frontend`, verdict-only review to `code-review`.",
+            "Out-of-scope smells were routed: generic slop to `ai-slop-cleaner`, new UI goes to `frontend`, verdict-only review to `code-review`.",
         ),
         recovery_notes=(
             "If no tests exist, write the characterization checks first or hand the user the smallest set to approve; do not start the macro pass on unlocked behavior.",
             "If a change turns out to alter behavior mid-apply, revert that change, record it as a finding, and keep the rest of the pass.",
             "If the component resists extraction because state is tangled, run the state ladder first and re-attempt decomposition after.",
+            "If the framework is not React, run only the micro pass and the characterization-test gate, say the hook, effect, and context content does not apply, and use the state ladder's principles (derive, colocate, one owner) only where the framework has the same idea.",
         ),
         situations=(
             "this react component is 800 lines",
@@ -5194,7 +5208,7 @@ _DEFINITIONS = [
         ),
         safety_rules=(
             "Do not claim compilation, clippy cleanliness, passing tests, a Miri run, a sanitizer run, or a loom run from a prepared Rust contract.",
-            "The UB escalation is deterministic, not a judgment call: if the change touches `unsafe`, `*mut`/`*const`, FFI or `extern`, `MaybeUninit`, `unsafe impl Send`/`Sync`, `transmute`, or a hand-written lock-free primitive, escalate.",
+            "The UB escalation is deterministic, not a judgment call: if the change touches `unsafe`, `*mut`/`*const`, FFI or `extern`, `MaybeUninit`, `unsafe impl Send`/`Sync`, `transmute`, a hand-written lock-free primitive, or non-test code in a module whose existing `unsafe` depends on it (fields, constructors, `Drop`, visibility), escalate.",
             "When escalated, a change is not ready for handoff until the UB checklist names the Miri, sanitizer, and concurrency-testing requirement for it.",
             "Never present `unsafe` as safe because it compiles: the compiler does not check the invariant an `unsafe` block asserts.",
             "Do not silence a borrow-checker error with a clone, `Rc<RefCell<_>>`, or `unsafe` without naming the ownership decision that made it necessary.",
@@ -5303,13 +5317,13 @@ _DEFINITIONS = [
             "native_fault_statement/v1 separates the observed symptom from the assumed cause, names the reproduction command, quotes the observed failure beside the reported one (`symptom_match`), and records the `minimised` reproduction",
             "hypothesis_set/v1 spans distinct axes — caller-side misuse, callee invariant, memory lifetime, concurrency, build/runtime mismatch — not three phrasings of one guess",
             "distinguishing_observation_plan/v1 pairs each hypothesis with the one observation that refutes it, and where to read it",
-            "debugger_session_plan/v1 names the adapter (lldb or gdb via DAP), the breakpoints and watchpoints, the frames and threads to inspect, and the values to read at each stop",
+            "debugger_session_plan/v1 names the instrument chosen for the fault class (sanitizer build, Valgrind, rr, core file, or a batch lldb or gdb session; a DAP adapter only when the host exposes one), the breakpoints and watchpoints, the frames and threads to inspect, and the values to read at each stop",
             "native_debug_handoff/v1 states that the executor drives the debugger and OMH executes nothing",
             "breakpoint hits, memory and register reads, backtraces, and confirmed reproductions only when observed",
         ),
         safety_rules=(
             "Do not claim a reproduction, a breakpoint hit, a read value, a root cause, or a fix from a prepared debugging plan.",
-            "Instruct the executor to drive a DAP debug adapter — lldb-dap, codelldb, or a gdb adapter — with breakpoints, stepping, and thread and frame inspection, and to reach for print-and-rebuild only when no adapter is available.",
+            "Instruct the executor to use the instrument the fault class needs (sanitizer, Valgrind, rr, or the core file) and then a debugger session, scripted in batch lldb or gdb unless the host exposes a DAP adapter, and to reach for print-and-rebuild only when no debugger can attach.",
             "Require at least three hypotheses on distinct axes before any observation is planned; a single hypothesis makes every reading confirmatory.",
             "Never treat a symptom's disappearance as a root cause; an unexplained fix is an open fault.",
             "Treat attaching to, patching, or bypassing protections on a binary the user does not own or operate as out of scope.",
@@ -5320,12 +5334,12 @@ _DEFINITIONS = [
             "State the fault as an observed symptom with its reproduction command before naming any cause.",
             "Load `references/native-debug-loop.md` and follow its hypothesis, observation, and escalation order rather than improvising a search.",
             "Write at least three hypotheses on distinct axes, each with the single observation that would refute it and the exact place to read that observation.",
-            "Plan the debugger session concretely: adapter, breakpoints, watchpoints, threads, frames, and the values read at each stop — the executor should not have to invent the session.",
+            "Plan the debugger session concretely: debugger, breakpoints, watchpoints, threads, frames, and the values read at each stop — the executor should not have to invent the session.",
             "Prefer debugger-observed state over added print statements; a rebuild-and-print loop is the fallback, not the method.",
             "Keep reproduction, debugger output, root cause, and fix as separate observed states.",
         ),
         why_this_exists=(
-            "`native-debugging` closes OMH's zero-coverage low-level domain by preparing a hypothesis-driven, DAP-first debugging plan "
+            "`native-debugging` closes OMH's zero-coverage low-level domain by preparing a hypothesis-driven, instrument-first debugging plan "
             "for native binaries, while OMH itself continues to execute nothing."
         ),
         do_not_use_when=(
@@ -5337,25 +5351,25 @@ _DEFINITIONS = [
         ),
         good_example=SkillExample(
             prompt="This binary segfaults on the third request; help me debug it.",
-            expected="Prepare native_fault_statement/v1, three competing hypotheses with distinguishing observations, and a debugger_session_plan/v1 naming the DAP adapter, breakpoints, and values to read.",
+            expected="Prepare native_fault_statement/v1, three competing hypotheses with distinguishing observations, and a debugger_session_plan/v1 naming the instrument, breakpoints, and values to read.",
             why="The request is a runtime fault in a native binary where the plan, not the guess, is what OMH can prepare.",
         ),
         bad_example=SkillExample(
             prompt="Add some printfs and tell me it is fixed once the crash stops.",
-            expected="Name the DAP-driven observation plan, and keep reproduction, root cause, and fix as separate not_observed states.",
+            expected="Name the debugger-driven observation plan, and keep reproduction, root cause, and fix as separate not_observed states.",
             why="A disappearing symptom is not a root cause, and printf-via-rebuild is the fallback rather than the method.",
         ),
         final_checklist=(
             "The fault is stated as an observed symptom with a reproduction command, separate from any assumed cause.",
             "At least three hypotheses span distinct axes and each carries its refuting observation.",
-            "The debugger session plan names the DAP adapter, breakpoints, watchpoints, threads, frames, and values to read.",
+            "The debugger session plan names the debugger or instrument, breakpoints, watchpoints, threads, frames, and values to read.",
             "The handoff says the executor drives the debugger and OMH executes nothing.",
             "Reproduction, debugger output, root cause, and fix are reported as separate observed or not_observed states.",
             "Any print-and-rebuild probe carried the session's probe tag, and an observed search for that tag returns nothing.",
         ),
         recovery_notes=(
             "If the fault does not reproduce, make reproduction the first hypothesis and plan the observation that would establish it, rather than debugging a fault no one can trigger.",
-            "If no debug adapter or symbols are available, say so, plan the coarser evidence path, and keep root cause unclaimed instead of upgrading a guess.",
+            "If no debugger, core file, or symbols are available, say so, plan the coarser evidence path, and keep root cause unclaimed instead of upgrading a guess.",
         ),
         situations=(
             "binary crashes with signal 11",
@@ -5786,12 +5800,13 @@ _DEFINITIONS = [
             "Recommend the smallest safe fix path and name when no fix is justified without more logs.",
             "Prefer targeted reruns before broad expensive checks, then broaden only when the changed surface requires it.",
             "Preserve exact observed failure snippets or file references without treating them as current PASS evidence.",
-            f"Give each cluster an origin: {FAILURE_ORIGIN_PROOF_RULE}. {FAILURE_ORIGIN_PRECEDENCE}. {FAILURE_ORIGIN_PROOF_NAMING}.",
-            f"Return FIX_READY only for `{_INTRODUCED}` clusters; a `{_PRE_EXISTING}` cluster gets its own follow-up handoff outside this change's fix. Clusters of different origins still share one verdict: NEEDS_MORE_LOGS while any cluster is `{_UNKNOWN_ORIGIN}`, naming the merge-base run as the missing evidence, even beside `{_INTRODUCED}` ones; otherwise FIX_READY when at least one is `{_INTRODUCED}`; otherwise, with every cluster `{_PRE_EXISTING}`, ROUTE_TO_VERIFICATION_GATE.",
+            f"Give each cluster an origin: {FAILURE_ORIGIN_PROOF_RULE}. {FAILURE_ORIGIN_PRECEDENCE}. {FAILURE_ORIGIN_PROOF_NAMING}. {FAILURE_ORIGIN_RERUN_RULE}. For a cluster of that last kind the verdict is NEEDS_MORE_LOGS naming the missing root cause with `app-debugging` as the next step, never FIX_READY.",
+            "For a CI-only failure (matrix entry, OS, secrets, services), take the origin from CI, citing the URL: the same job on the merge-base commit or the base branch's latest run (`gh run list --branch <base> --workflow <name> --json conclusion,headSha,url`, `gh pr checks <n>`). A `pull_request` run builds the merge ref `refs/pull/<n>/merge`, not the PR head (`gh run view <id> --json headSha` returns the PR head), so read the commit it built from its checkout log, `gh run view <id> --log | grep -m1 'HEAD is now at'` (the run-level log is refused while any job is still running, and so is `--job <job-id> --log`; read that job's log through the API instead, `gh api --allow-escape-sequences repos/{owner}/{repo}/actions/jobs/<job-id>/logs | grep -m1 'HEAD is now at'`), which names the merge commit and the base sha it merged into, and compare against that commit when the base moved.",
+            f"Return FIX_READY only for `{_INTRODUCED}` clusters; a `{_PRE_EXISTING}` cluster gets its own follow-up handoff outside this change's fix. Clusters of different origins still share one verdict: NEEDS_MORE_LOGS while any cluster that can run locally is `{_UNKNOWN_ORIGIN}`, naming the missing rerun or merge-base run (or the failure rate, for a test), even beside `{_INTRODUCED}` ones; otherwise FIX_READY when at least one is `{_INTRODUCED}`; otherwise, with every cluster `{_PRE_EXISTING}`, ROUTE_TO_VERIFICATION_GATE. A cluster that is environmental or credentialed cannot run at the merge-base, so it never counts as `unknown`: it is BLOCKED_BY_ENVIRONMENT, which takes the verdict ahead of FIX_READY and behind NEEDS_MORE_LOGS.",
         ),
         why_this_exists=(
-            "`build-failure-triage` adapts ECC's build-fix and PR-test-analysis posture into an OMH-native workflow so failed checks "
-            "become evidence-backed minimal handoffs instead of ad hoc debugging or false-green verification claims."
+            "`build-failure-triage` exists so a failed check becomes an evidence-backed minimal handoff, clustered by cause and origin, "
+            "instead of ad hoc debugging or a false-green claim; the posture is adapted from ECC's build-fix and PR-test-analysis surfaces."
         ),
         do_not_use_when=(
             "The user needs a pre-merge evidence matrix for passing or missing checks; use `verification-gate`.",
@@ -5819,7 +5834,7 @@ _DEFINITIONS = [
             "The final verdict is FIX_READY, NEEDS_MORE_LOGS, BLOCKED_BY_ENVIRONMENT, or ROUTE_TO_VERIFICATION_GATE.",
         ),
         recovery_notes=(
-            "If the log is missing or stale, ask for the smallest fresh command output or CI job URL.",
+            "If the log is missing or stale, fetch it when `gh` is authenticated (`gh run view <id> --log-failed`); otherwise ask for the smallest fresh command output or CI job URL.",
             "If the failure looks environmental or credentialed, mark BLOCKED_BY_ENVIRONMENT and avoid patch handoff.",
             "If a fix has already been applied, route to verification-gate for fresh evidence instead of re-triaging stale failures.",
         ),
@@ -6076,7 +6091,7 @@ _DEFINITIONS = [
             "Read generated paths from a map the repository declares; where none exists report `map_not_declared` and never infer one from filename patterns, directory names, or a generated-file header, because a false positive redirects correct work while the miss it prevents only costs a rerun.",
             "Do not collapse build, lint, tests, security, generated docs, review, CI, DCO, merge-readiness, or merge into one claim.",
             "Failed or unavailable checks must produce HOLD/BLOCK with a rerun or remediation path.",
-            "A change touching an authentication, secrets/config, schema/migration, or payment/crypto path escalates to the thorough verification lane regardless of diff size.",
+            "A change touching an authentication, secrets/config, schema/migration, or payment/crypto path escalates to the thorough verification lane regardless of diff size: add a negative test that fails if the guard is removed, a migration run up and down on a copy, a secrets scan of the diff, and a second reader (`code-review`); the verdict stays HOLD until each is observed or listed as missing.",
             "Refuse completion, do not merely report it, when the claim carries an unlinked TODO/FIXME/stub marker in changed code, a suppressed test with no linked reason, placeholder or self-referential evidence ('TBD', 'works as expected'), or a proof word ('fixed', 'verified', 'passing') with no observed evidence naming a command; each refusal names its category, the offending excerpt, and the remedy.",
             "Before a diff deletes a validation/refusal/sanitization/permission/allowlist check at a trust boundary, or a negative test named for it ('refuses', 'rejects', 'denies', 'blocks', 'invalid'), require a named adversarial or regression case proving the boundary still refuses what it should; a guard that only moves elsewhere in the same diff is not a deletion, but a deletion with no negative case behind it -- in the diff or named in evidence -- earns no completion claim.",
         ),
@@ -6089,18 +6104,19 @@ _DEFINITIONS = [
             f"for each observed result ({observed_check_results_failing_only_note()}); "
             "a field left out is a gap in the record, not a shorter record.",
             PortableLine(
-                "For native `omh_todo` checkpoints, load the todo-checklist closing recipe; `record` then `recall` this verification declaration. Stored declarations are not proof.",
+                "For native `omh_todo` checkpoints, load `omh-todo-checklist/references/closing-a-story.md`; `record` then `recall` this verification declaration. Stored declarations are not proof.",
                 "For native `omh_todo` checkpoints, `record` then `recall` this verification declaration. Stored declarations are not proof.",
             ),
             "When the change answers to a written spec, plan, or issue, load `references/requirement-coverage-map.md` and map requirement to task to evidence under stable ids before claiming coverage.",
-            f"Give each failing check an `origin`: {FAILURE_ORIGIN_PROOF_RULE}. {FAILURE_ORIGIN_PRECEDENCE}. {FAILURE_ORIGIN_PROOF_NAMING}.",
+            f"Give each failing check an `origin`: {FAILURE_ORIGIN_PROOF_RULE}. {FAILURE_ORIGIN_PRECEDENCE}. {FAILURE_ORIGIN_PROOF_NAMING}. {FAILURE_ORIGIN_RERUN_RULE}.",
             REGRESSION_WITNESS_RULE,
-            f"Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `{_PRE_EXISTING}` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `{_UNKNOWN_ORIGIN}` is HOLD with the merge-base run named as the missing evidence.",
+            "Take the required set from the repository, not from what happened to run: branch protection or ruleset required status checks (a repository that uses rulesets has none: `gh api repos/{owner}/{repo}/branches/{base}/protection/required_status_checks` answers 404 there; read `gh api repos/{owner}/{repo}/rules/branches/{base}` and take the contexts of its `required_status_checks` rule), the CI workflow, and the contributor docs; name which source defined required. Then compare those contexts with the results (`gh pr view <n> --json statusCheckRollup`): a required context with no result is missing evidence, not a pass. `gh pr checks --required` lists only checks that already exist, so it can read green while a required check has not started.",
+            f"Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `{_PRE_EXISTING}` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `{_UNKNOWN_ORIGIN}` is HOLD with the merge-base run named as the missing evidence (for a failing test, the failure rate at head and at the merge-base).",
             "Keep fixes, reruns, review, CI, and merge as separate observed states.",
         ),
         why_this_exists=(
-            "`verification-gate` gives OMH a deterministic evidence surface before done/merge claims, inspired by ECC-style gates "
-            "but rebuilt around OMH's prepared-versus-observed contract."
+            "`verification-gate` gives OMH a deterministic evidence surface before done/merge claims: every claim maps to a check that was "
+            "observed, with its scope and freshness; the gate shape is inspired by ECC and rebuilt around the prepared-versus-observed contract."
         ),
         do_not_use_when=(
             "The user asks for visual render QA; use `visual-qa`.",
@@ -6381,6 +6397,7 @@ _DEFINITIONS = [
             "Separate observed files and commands from inferred architecture and unknowns.",
             "Produce a practical reading path and first-task runway rather than a flat file tour.",
             "Route follow-up implementation to plan, ultrawork, verification-gate, or workspace-audit as needed.",
+            "Take build, test, and lint commands in this order: CI config (`.github/workflows`, `.gitlab-ci.yml`), the task runner (`Makefile`, `justfile`, `package.json` scripts), the manifest, then contributor docs; read `CODEOWNERS` and the top-churn files for ownership; the README comes last, and where it disagrees with CI trust CI and record the disagreement.",
         ),
         final_checklist=(
             "repo_map/v1 cites an observed path for every directory, entrypoint, generated surface, and test location it names; what was inferred is marked inferred, and what was never opened is listed as unread.",
@@ -6391,19 +6408,21 @@ _DEFINITIONS = [
             "The stop condition named at the start is met, or the reply names what was left unread.",
         ),
         recovery_notes=(
+            "If the audience or depth is not given, assume a new contributor and an architecture tour, read-only, and state the assumption in the first line.",
             "If the repository is too large for the stated depth, narrow to the entrypoint the audience touches first and record the rest as unread rather than summarizing it from file names.",
             "If a build, test, or setup command could not run (read-only mode, missing toolchain, secrets), list it in first_task_runway/v1 as not run with the reason, never as a known-good command. A command that installs or syncs dependencies as a side effect (`npm ci`, `uv sync`, and `uv run`, which syncs first) counts as setup and stays not run.",
             "If docs and code disagree, report what the code does, cite both, and add the disagreement to risk_and_unknowns_map/v1 instead of trusting the docs.",
             "If the user names a concrete task mid-tour, stop at the current reading_path/v1 entry and hand the runway so far to `omh-plan`, or to `ulw-work` or `omh-idea-to-deploy` when the task already has acceptance criteria.",
         ),
         why_this_exists=(
-            "`codebase-onboarding` adapts ECC's code-tour and onboarding surfaces into an OMH-native first-read workflow "
-            "so unfamiliar repos become navigable before implementation pressure starts."
+            "`codebase-onboarding` exists so an unfamiliar repo gets a reading order, a glossary, and a first task that cite files that "
+            "were opened, before implementation pressure starts; the surface is adapted from ECC's code-tour and onboarding work."
         ),
         do_not_use_when=(
             "The user already named a concrete implementation task and acceptance criteria; use `ultrawork` or `idea-to-deploy`.",
             "The user needs a whole-workspace capability inventory; use `workspace-audit`.",
             "The user wants a code diff review; use `code-review`.",
+            "The user wants a picture of the structure; use `codebase-uml`. The user wants the code index refreshed or a task-scoped handoff pack; use `codegraph-refresh`.",
         ),
         good_example=SkillExample(
             prompt="codebase-onboarding 처음 보는 레포라서 구조, 주요 모듈, 테스트, 첫 작업 후보를 잡아줘.",
@@ -6473,7 +6492,7 @@ _DEFINITIONS = [
         ),
         artifact_expectations=(
             "codegraph_command_plan/v1 naming `omh codegraph build`, `summary`, `handoff`, `--write`, and `--json` choices",
-            "staleness_and_scope_report/v1 separating requested refresh scope, observed command output, missing index evidence, and stale artifacts",
+            "staleness_and_scope_report/v1 separating requested refresh scope, observed command output, missing index evidence, and stale artifacts; the artifact is stale when its `generated_at` is older than the newest commit (`git log -1 --format=%cI`) or a Python file listed by `git status --porcelain -- '*.py'` has an mtime later than `generated_at` (a dirty file older than the artifact is not stale, and the list stays non-empty after a rebuild), or the HEAD reflog's newest entry is later than `generated_at` (`git reflog -1 --date=iso-strict --format=%gd` prints `HEAD@{<time>}`; a branch switch or pull moves it while the commit time stays old; compare the two as instants, because the entry carries the local UTC offset and `generated_at` is UTC), or a dirty file is deleted (it has no mtime, so treat it as stale); a rebuild is the refresh because the scan is full, not incremental",
             "`omh_codegraph_summary/v1` or `.omh/codegraph/codegraph.json` only when the corresponding command output or write is observed",
             "codegraph_handoff_context/v1 with task terms, focus files, symbols, entrypoints, warnings, and claim boundary when `omh codegraph handoff` is observed",
         ),
@@ -6491,8 +6510,8 @@ _DEFINITIONS = [
             "Route broader first-read orientation to codebase-onboarding and implementation to ultrawork or the selected coding owner.",
         ),
         why_this_exists=(
-            "`codegraph-refresh` adapts ECC-style codemap freshness into OMH's local codegraph commands so operators can "
-            "refresh navigation context before handoff without pretending code intelligence is execution evidence."
+            "`codegraph-refresh` exists so the local code index is rebuilt before a handoff and the answer says how old it was, without "
+            "pretending code intelligence is execution evidence; the freshness posture is credited to ECC's codemap work."
         ),
         do_not_use_when=(
             "The user needs a narrative first-read tour of an unfamiliar repo; use `codebase-onboarding`.",
@@ -6522,6 +6541,7 @@ _DEFINITIONS = [
             ),
             "If no task focus is supplied, prepare build/summary guidance and ask for focus only when a handoff pack would otherwise be misleading.",
             "If the index is stale or missing, report the stale/missing state and next safe command rather than treating prior summaries as current.",
+            "The codegraph indexes Python files only; when `omh codegraph summary` shows no Python files, say so, navigate with `rg` or `ast-grep`, and present no handoff pack.",
         ),
         situations=(
             "the codemap is out of date",
@@ -6608,6 +6628,7 @@ _DEFINITIONS = [
             "Read the legend back to the user in one line: units shown, units folded, edges pruned, symbols hidden - so nobody mistakes 16 boxes for the whole system.",
             "Answer follow-up exploration by re-running with a narrower `--focus` or `--level module` rather than describing what the first picture omitted from memory.",
             "Keep the omh theme unless the user asks for `--theme mono`; the theme exists so every OMH diagram reads as one family.",
+            "The picture is a package or module dependency view with ranked public symbols, not a class diagram: say so when the user asked for classes or inheritance.",
         ),
         why_this_exists=(
             "`codebase-uml` exists so 'visualize our codebase' produces one deterministic, readable picture instead of a "
@@ -6640,6 +6661,7 @@ _DEFINITIONS = [
             "Follow-up exploration used narrower generated views, not recollection of the first picture.",
         ),
         recovery_notes=(
+            "The generator reads Python files only. Before generating, check `omh codegraph summary` finds Python files; for a TypeScript, Go, Java, or Rust repository (or an empty model) say the generator cannot read it, stop, and attach nothing. Do the same when Python is a small share of the source (compare the summary's Python file count with `git ls-files | grep -c -E '\\.(ts|tsx|js|go|java|rs)$'`): the picture would show only that part, and saying so is the answer. A picture drawn from a description is a different request, not this workflow.",
             "If the render plan is blocked, send the PlantUML source path plus the install hint; do not attach a stale or hand-drawn image.",
             "If the picture is still unreadable, lower `--max-nodes`, narrow `--focus`, or raise `--depth` by one, and say which knob changed.",
             "If Graphviz `dot` is missing, rerun with `--layout smetana`; the layout differs but the content is identical.",
@@ -7471,7 +7493,7 @@ _DEFINITIONS = [
             ENGINE_CLOSING_BRIEF_RULE,
             "Generate hostile scenarios from changed behavior and known risk areas.",
             "Report pass/fail evidence separately from proposed fixes.",
-            "For native `omh_todo` checkpoints, load the todo-checklist closing recipe; `record` then `recall` this qa declaration. Stored declarations are not proof.",
+            "For native `omh_todo` checkpoints, load `omh-todo-checklist/references/closing-a-story.md`; `record` then `recall` this qa declaration. Stored declarations are not proof.",
             "Delegate code mutations discovered by QA to the selected coding executor.",
             "A check no automation can hold gets a manual test guide, never a done claim: load `references/manual-test-guide.md` for the step shape (setup, do, expect, broken), the four reasons a step may stay manual, and why it stays `prepared_not_observed` until a run records a fresh `observed_check_results/v1`. `code-story` phase `VI. Manual test guide`; rendered surfaces go to `visual-qa`.",
             "For probes that must run in Hermes-owned isolation or outlive this session, load `references/board-fanin.md`: one probe row per scenario in its own worktree, one fixer row whose `parents` is every probe, re-verification through the review lane, and findings only through bounded readback.",
@@ -7524,7 +7546,7 @@ _DEFINITIONS = [
             ),
         },
         portable_override_shadows={
-            "quality_bar": "a8376dad9d82ab8f240c6368c424abc4b793cf0953174364252a84014a7f0321",
+            "quality_bar": "e88dfb1f0c2989bf063ab5f8afa8e8e382cf32bca761920a0d88920a23474f86",
         },
         recovery_notes=(
             "If a scenario needs a real install or external service the harness cannot reach, retain other observed pass/fail evidence, mark that scenario not_observed, and hand back its manual test guide with setup, do, expect, and broken signals.",
@@ -7966,7 +7988,7 @@ _DEFINITIONS = [
             ),
             "When the reviewed work ran in a Hermes session, cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) to scope which workspace files its read_file, write_file, and patch calls touched, with the outcome Hermes recorded; it is file lineage, never file-content, diff, test, review, CI, or merge evidence.",
             PortableLine(
-                "For native `omh_todo` checkpoints, load the todo-checklist closing recipe; `record` then `recall` this review declaration. Stored declarations are not proof.",
+                "For native `omh_todo` checkpoints, load `omh-todo-checklist/references/closing-a-story.md`; `record` then `recall` this review declaration. Stored declarations are not proof.",
                 "For native `omh_todo` checkpoints, `record` then `recall` this review declaration. Stored declarations are not proof.",
             ),
         ),
@@ -7975,6 +7997,7 @@ _DEFINITIONS = [
             "The user asks to implement the fix rather than review existing code or claims.",
             "There is no diff, file set, claim, artifact, or expected behavior to review.",
             "The request is broad product critique, strategy, or planning rather than code or evidence review.",
+            "The user wants build, lint, test, and CI results collected into a PASS/HOLD/BLOCK evidence matrix before merge; use `verification-gate`. This skill supplies findings that matrix may cite.",
             HermesSkillLine(
                 "A kanban review worker needs its card's transition decided: Hermes' bundled `sdlc-review` owns approve, request-changes, and escalate there, and this skill only supplies the findings that decision cites.",
                 ("sdlc-review",),
@@ -8080,7 +8103,7 @@ _DEFINITIONS = [
         quality_bar=(
             "Lock current behavior with regression checks before non-trivial cleanup.",
             "Classify before deleting: every finding names one category from the slop taxonomy - duplication, dead code, needless abstraction, boundary violation, missing tests, or templated defaults - so the pass order below can own it.",
-            "Run single-smell passes in fixed order, re-verifying between passes and never bundling categories: dead-code deletion, then duplicate removal, then naming and error handling, then test reinforcement; the full contract is `omh-ai-slop-cleaner/references/cleanup-passes.md`.",
+            "Run single-smell passes in fixed order, re-verifying between passes and never bundling categories: dead-code deletion, then duplicate removal, then naming and error handling, then test reinforcement, after a pass 0 that names the check locking each file's behavior; the full contract is `omh-ai-slop-cleaner/references/cleanup-passes.md`.",
             "When the user names no target smell, run detection first and hand back the inventory: prepared linter and dead-code commands are named per stack in the reference and stay prepared_not_observed until run.",
             "When the cleanup target is written English rather than code, load `omh-ai-slop-cleaner/references/prose-lexicon.md` for the word tiers, the pattern severities, and the context profile that decides which rules apply.",
             "Review mode (`deslop review`, or a request to judge a drafted cleanup without editing) edits nothing: read the writer pass's plan, its diff, and the before/after checks it ran against the six taxonomy categories and return findings in the `code-review` shape - P0-P3 severity and a ship or no_ship verdict - never a new verdict format; the checklist is in `cleanup-passes.md`.",
@@ -8156,7 +8179,7 @@ _DEFINITIONS = [
             "The plan comes from observed repo evidence, never from memory of the tree.",
             "An upgrade plan is not ready while any breaking change lacks its call sites or an observed empty search, or any stage lacks its rollback; name the open rows instead of calling the bump safe to merge.",
             "Every phase ends at a commit that could ship; a phase that cannot end green is split further.",
-            "Nothing is deleted before the cleanup phase, and cleanup starts from a tagged rollback point.",
+            "No production code is deleted before the cleanup phase (phase 4 may delete a test only when an interface-level test covers the same behavior, named in the plan), and cleanup starts from a tagged rollback point.",
             "Do not begin implementing any phase without the user's explicit approval of the plan.",
         ),
         quality_tier="plan-gated",
@@ -8202,6 +8225,7 @@ _DEFINITIONS = [
         recovery_notes=(
             "If the import graph is unavailable, build the codegraph first or reduce the plan's confidence and say which files are unverified.",
             "If a phase cannot be made independently green, split it further; two half-phases beat one unabortable one.",
+            "If no regression gate covers the affected files, open the plan with a Phase 0 of characterization tests, or say each phase is unverified and stop at the approval gate.",
             "If reconnaissance finds the direction itself is unsettled, route back to `ralplan` before ordering phases.",
             "If the module to deepen is chosen but its interface is not, shape it under contrasting constraints and recommend one design before phase 1; that is not a contested direction.",
         ),
@@ -8254,7 +8278,7 @@ _DEFINITIONS = [
         ),
         expected_outputs=(
             "orientation summary: manifests read, churn ranking, largest files, test and CI entry points",
-            "findings table per `tech_debt_ledger/v1`: id, category, file:line, severity, effort, recommendation",
+            "findings table per `tech_debt_ledger/v1`: id, dimension, file:line, severity, effort, recommendation",
             "top fixes ranked by severity and the quick wins ranked by payoff-per-effort",
             "the looks-bad-but-is-actually-fine list, and the RESOLVED/NEW/CARRIED reconciliation on rerun",
         ),
@@ -9977,7 +10001,7 @@ _DEFINITIONS.append(
             "No external mutation before the direction check and an explicit confirmation; a maintainer file-now requires authenticated-wrapper actor/evidence identity and never bypasses duplicate, template, security, or read-back gates.",
             "Confirmation requires a complete direction check - type, user-visible problem, source summary, smallest desired outcome, included and excluded scope, observed evidence versus inference, and duplicate status - plus a completed duplicate search; any blocker (security redirect, missing evidence, connector unavailable, or credentials missing) stops confirmation and handoff and cannot be cleared by a later observed result.",
             "A public reporter authorizes exactly one scoped create_issue against an explicit repository; code, configuration, branch, commit, PR, merge, deployment, and coding-executor mutations stay in their own maintainer-gated lanes.",
-            "Security vulnerability reports redirect to the private SECURITY.md reporting path instead of a public issue.",
+            "Security vulnerability reports redirect to the private SECURITY.md reporting path instead of a public issue. When the repository has no SECURITY.md and private vulnerability reporting is off (`gh api repos/{owner}/{repo}/private-vulnerability-reporting`), point the reporter to a private maintainer contact, file nothing publicly, and do not restate the exploit details in the reply.",
             "Core OMH never calls GitHub; only a checked-in issue-form builder can produce an authorized create_issue request. An authorized connector receives one stable idempotency-keyed request, must enforce that key externally, and returns observed result evidence bound to that request; dispatch consumes the core handoff, so dispatched or observed artifacts cannot hand off again.",
             "A prepared issue package is not creation evidence; only connector read-back of repository, author, title, body, labels, and URL is observed evidence.",
             "The target repository must be explicit or safely configured; never infer a cross-repository target from context.",
@@ -9988,14 +10012,20 @@ _DEFINITIONS.append(
             "Classify the report from supplied or observed facts and separate observation from inference.",
             "Ask at most three unresolved, decision-changing questions; stop with a specific missing-evidence request instead of filing a vague issue.",
             "Present the direction check, require confirmation, and keep prepared packages distinct from observed creation.",
+            "Search open and closed issues and PRs for duplicates (`gh issue list --repo <r> --state all --search '<keywords> in:title,body'` and the same with `gh pr list`, since `gh issue list` returns issues only), record the query and the top hits, and build the body from the matching `.github/ISSUE_TEMPLATE/` form.",
+        ),
+        final_checklist=(
+            "github_issue_intake/v1 carries the report type, smallest outcome, scope, evidence versus inference, and the duplicate query with its result.",
+            "Confirmation was taken on the complete direction check before any connector handoff.",
+            "Creation is reported only with the connector's read-back URL; otherwise it is stated as prepared, not created.",
         ),
         why_this_exists=(
             "`github-issue-intake` exists so a public support-chat report can become a verified GitHub issue through "
             "one bounded, confirmation-gated lane instead of ad hoc chat narration or an unscoped bot write."
         ),
         do_not_use_when=(
-            "The report only wants classification or signal clustering; use feedback-triage instead.",
-            "The event concerns an already-existing issue, PR, review, or CI run; use github-event-ops instead.",
+            "The report only wants classification or signal clustering; use `feedback-triage` instead.",
+            "The event concerns an already-existing issue, PR, review, or CI run; use `github-event-ops` instead.",
             "The user wants implementation; coding stays a separate follow-up lane with its own maintainer authority.",
             "The report describes a security vulnerability; redirect to the private SECURITY.md path.",
             HermesSkillLine(
@@ -10717,8 +10747,8 @@ _DEFINITIONS.append(
         ),
         final_checklist=(
             "The convention read names the template and log sample it drew from.",
-            "Every `Tested:` entry maps to an observed ledger row with its exit status.",
-            "Every prepared, skipped, or unobserved command is under `Not-tested:` with its reason.",
+            "Every `Tested:` entry (or the validation line of a repository whose log has no such trailer) maps to an observed ledger row with its exit status.",
+            "Every prepared, skipped, or unobserved command is under `Not-tested:` (or \"Not run\" where the log has no trailers) with its reason.",
             "The draft lists the paths to stage, and any state-claiming subject prefix maps to an observed ledger row.",
             "Nothing was committed, pushed, or opened by OMH.",
         ),

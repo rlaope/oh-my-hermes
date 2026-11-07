@@ -83,6 +83,19 @@ _FEATURE_SURFACE_SKILLS = (
         boundary="A GitHub event ops card is not webhook delivery, GitHub API mutation, review completion, label application, CI rerun, or fix execution evidence. When a fix is owned by Hermes coding, read `hermes_coding_harness/v1` before reporting build, review, CI, PR, or merge state.",
         good_prompt="github-event-ops PR opened with failing CI; triage whether this needs review or fix handoff.",
         bad_prompt="github-event-ops prove the issue was labelled and CI was rerun.",
+        required_inputs=(
+            "the event type and action, repository, and PR or issue number",
+            "for a pull-request or check event, the head sha the payload names",
+            "the route or channel it arrived on, and what the user wants decided (review, triage, or fix hand-off)",
+        ),
+        extra_quality_bar=(
+            "Choose the path from the event, after the re-read: `pull_request` opened or synchronize -> review once required checks settle; failed `check_run` or `workflow_run` -> fix hand-off through `build-failure-triage`; `issues` opened -> triage; a comment that asks for an action -> read the author's association first and ignore it when the author may not command. Re-read with `gh pr view <n> --json state,isDraft,reviewDecision,statusCheckRollup,headRefOid,labels` and `gh run view <id> --log-failed`; for a pull-request or check event, when `headRefOid` differs from the payload sha the event is stale: drop it. For `issues` and comment events there is no head sha: re-read with `gh issue view <n> --json state,labels,assignees,comments`. Any event type not listed here (`push`, `pull_request` closed or labeled, `release`) is not routed from memory: say it has no path in this skill and ask what the user wants decided.",
+        ),
+        final_checklist=(
+            "The state was re-read from the repository, and for a pull-request or check event its head sha is recorded beside the payload's.",
+            "The chosen path (review, triage, or fix hand-off) is named with the event fields that decided it.",
+            "Any label, comment, or rerun is listed as prepared, or as observed with its read-back.",
+        ),
         artifact_expectations=(
             "github-event-ops/v1 metadata-only runtime or wrapper card when recorded",
             "On Hermes, the intake records the webhook route the user subscribed (`hermes webhook subscribe <route> --events <types> --skills omh-github-event-ops`) and the event type it delivered",
@@ -111,7 +124,7 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         extra_do_not_use_when=(
             "The event is a security advisory, a CVE in a dependency, or a leaked credential; use `security-event-response`, which orders containment and closes only on an observed rotation or fix.",
-            "The PR is a dependabot or renovate version bump with no advisory; use `refactor-plan`, which decides whether it is safe to merge from the breaking changes against this repository's call sites.",
+            "The PR is a dependabot or renovate version bump with no advisory. A major or breaking bump goes to `refactor-plan`, which decides whether it is safe to merge from the breaking changes against this repository's call sites; a patch or minor bump with its required checks green takes the review path, with `verification-gate` deciding.",
             HermesSkillLine(
                 "The user wants a GitHub operation carried out with the gh CLI - open or label an issue, open or merge a PR, leave review comments, manage a repository - rather than an incoming event routed to a handoff card; load Hermes' bundled `github` skill instead of this one.",
                 ("github",),
@@ -2061,6 +2074,21 @@ _FEATURE_SURFACE_SKILLS = (
         boundary="An agent debug report is not executor reset, hidden state mutation, tool repair, implementation, verification, CI, merge-readiness, merge, or proof that future loops are fixed. Record only observed failure evidence, diagnosis hypotheses, contained recovery actions, and remaining blockers.",
         good_prompt="agent-debug capture why this agent is looping on the same tool and prepare the smallest safe recovery action.",
         bad_prompt="agent-debug silently reset the executor, patch the environment, and claim the future loop is fixed.",
+        why_this_exists=(
+            "`agent-debug` exists because an agent that loops, drifts, or burns tokens is explained by its session record "
+            "(tool errors, identical retries, compaction boundaries, silent turn ends), not by the latest symptom or by memory of "
+            "what happened."
+        ),
+        do_not_use_when=(
+            "The misbehaving thing is application code the agent only called, not the agent's own run; use `app-debugging`.",
+            "The request is install or gateway health rather than one agent run; use `doctor`.",
+            "A diagnosis would need the user's session read, a rerun, or an export and they have not agreed; ask first.",
+        ),
+        required_inputs=(
+            "session id or record path, and the turn range if known",
+            "what the user expected the run to do, and what they saw instead",
+            "the one thing to measure (the `--observable` kind: looping, repeated_work, goal_drift, context_loss, tool_stall, unexpected_cost)",
+        ),
         expected_outputs=(
             "agent_debug_report/v1",
             "agent_failure_capture/v1",
@@ -2097,7 +2125,7 @@ _FEATURE_SURFACE_SKILLS = (
             "Order probes cheapest-discriminating-first: run the cheapest check that splits the surviving hypotheses before any expensive capture, rerun, or restart.",
             "When a run that used to work now fails, bisect from last-known-good to first-bad change (prompt, config, tool, model, or environment) instead of debugging the newest symptom.",
             "Name a cause only after revert-verify: remove the suspect change and observe the failure disappear, or state that causation is unproven.",
-            "Reproduce the failure before preparing any recovery action; a fix without a reproduced failure first is a guess.",
+            "Reproduce the failure before preparing any recovery action; a fix without a reproduced failure first is a guess. An agent run is stochastic and a rerun costs money, so reproduced means the recorded failing step recurs when the same tool result is replayed, or the failure rate over N reruns (state N) is above the baseline; replay needs the user's go-ahead. When it is declined or too costly, report causes as supported by the record with causation unproven, keep the two competing hypotheses, and propose only the smallest reversible action.",
         ),
         situations=(
             "the agent keeps calling the same tool",

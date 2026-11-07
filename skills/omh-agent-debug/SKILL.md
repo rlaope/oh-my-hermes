@@ -10,6 +10,7 @@ metadata:
     phase: agent-debug
     role: operator
     quality_tier: workflow-surface-gated
+    related_skills: [omh-app-debugging, omh-doctor]
 ---
 
 # Agent Debug
@@ -18,13 +19,13 @@ This is a Hermes-native `agent-debug` workflow skill.
 
 ## Why This Exists
 
-`agent-debug` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+`agent-debug` exists because an agent that loops, drifts, or burns tokens is explained by its session record (tool errors, identical retries, compaction boundaries, silent turn ends), not by the latest symptom or by memory of what happened.
 
 ## Do Not Use When
 
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- The misbehaving thing is application code the agent only called, not the agent's own run; use `omh-app-debugging`.
+- The request is install or gateway health rather than one agent run; use `omh-doctor`.
+- A diagnosis would need the user's session read, a rerun, or an export and they have not agreed; ask first.
 
 ## Examples
 
@@ -82,7 +83,7 @@ Quality bar:
 - Order probes cheapest-discriminating-first: run the cheapest check that splits the surviving hypotheses before any expensive capture, rerun, or restart.
 - When a run that used to work now fails, bisect from last-known-good to first-bad change (prompt, config, tool, model, or environment) instead of debugging the newest symptom.
 - Name a cause only after revert-verify: remove the suspect change and observe the failure disappear, or state that causation is unproven.
-- Reproduce the failure before preparing any recovery action; a fix without a reproduced failure first is a guess.
+- Reproduce the failure before preparing any recovery action; a fix without a reproduced failure first is a guess. An agent run is stochastic and a rerun costs money, so reproduced means the recorded failing step recurs when the same tool result is replayed, or the failure rate over N reruns (state N) is above the baseline; replay needs the user's go-ahead. When it is declined or too costly, report causes as supported by the record with causation unproven, keep the two competing hypotheses, and propose only the smallest reversible action.
 
 Handoff policy:
 
@@ -90,10 +91,9 @@ Keep this as Hermes-facing orchestration guidance first. Prepare executor, conne
 
 Required inputs:
 
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
+- session id or record path, and the turn range if known
+- what the user expected the run to do, and what they saw instead
+- the one thing to measure (the `--observable` kind: looping, repeated_work, goal_drift, context_loss, tool_stall, unexpected_cost)
 
 Expected outputs:
 

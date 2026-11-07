@@ -18,6 +18,11 @@ HEAD_SHA=$(git rev-parse HEAD)
 the last. Record BASE before the work starts; deriving it afterwards from the
 log is guesswork the moment a merge or a fixup lands.
 
+If `origin/main` does not exist (another default branch, no remote, a stacked
+branch), take the PR's base ref (`gh pr view --json baseRefName`) or the commit
+recorded before the work started; if neither is known, ask for the base and do
+not guess.
+
 State both SHAs in the request. A review whose range is unstated cannot be
 re-run, and cannot be shown to have covered anything.
 

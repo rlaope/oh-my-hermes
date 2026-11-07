@@ -24,6 +24,7 @@ This is an OMH `code-review` workflow skill, projected for Agent Skills hosts (C
 - The user asks to implement the fix rather than review existing code or claims.
 - There is no diff, file set, claim, artifact, or expected behavior to review.
 - The request is broad product critique, strategy, or planning rather than code or evidence review.
+- The user wants build, lint, test, and CI results collected into a PASS/HOLD/BLOCK evidence matrix before merge; use `omh-verification-gate`. This skill supplies findings that matrix may cite.
 
 ## Examples
 

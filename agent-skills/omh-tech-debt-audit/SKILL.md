@@ -86,7 +86,7 @@ Required inputs:
 Expected outputs:
 
 - orientation summary: manifests read, churn ranking, largest files, test and CI entry points
-- findings table per `tech_debt_ledger/v1`: id, category, file:line, severity, effort, recommendation
+- findings table per `tech_debt_ledger/v1`: id, dimension, file:line, severity, effort, recommendation
 - top fixes ranked by severity and the quick wins ranked by payoff-per-effort
 - the looks-bad-but-is-actually-fine list, and the RESOLVED/NEW/CARRIED reconciliation on rerun
 

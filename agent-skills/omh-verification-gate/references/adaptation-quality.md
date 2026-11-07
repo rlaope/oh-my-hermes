@@ -1,7 +1,10 @@
 # Adaptation Quality Preservation
 
 Load this only when importing, porting, wrapping, or replacing an existing
-capability. Unrelated tasks do not require upstream execution. This procedure
+capability, meaning a skill, plugin, or tool whose output quality a user sees
+(media, rendering, generation). An ordinary code port or API wrapper is not one:
+verify it with the requirement coverage map. Unrelated tasks do not require
+upstream execution. This procedure
 uses the existing plan, requirement coverage map, node prompts, and verification
 matrix; it adds no engine, executable schema, or automatic service call.
 

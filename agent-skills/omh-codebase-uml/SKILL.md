@@ -49,6 +49,7 @@ Bad example:
 
 ## Recovery Notes
 
+- The generator reads Python files only. Before generating, check `omh codegraph summary` finds Python files; for a TypeScript, Go, Java, or Rust repository (or an empty model) say the generator cannot read it, stop, and attach nothing. Do the same when Python is a small share of the source (compare the summary's Python file count with `git ls-files | grep -c -E '\.(ts|tsx|js|go|java|rs)$'`): the picture would show only that part, and saying so is the answer. A picture drawn from a description is a different request, not this workflow.
 - If the render plan is blocked, send the PlantUML source path plus the install hint; do not attach a stale or hand-drawn image.
 - If the picture is still unreadable, lower `--max-nodes`, narrow `--focus`, or raise `--depth` by one, and say which knob changed.
 - If Graphviz `dot` is missing, rerun with `--layout smetana`; the layout differs but the content is identical.
@@ -76,6 +77,7 @@ Quality bar:
 - Read the legend back to the user in one line: units shown, units folded, edges pruned, symbols hidden - so nobody mistakes 16 boxes for the whole system.
 - Answer follow-up exploration by re-running with a narrower `--focus` or `--level module` rather than describing what the first picture omitted from memory.
 - Keep the omh theme unless the user asks for `--theme mono`; the theme exists so every OMH diagram reads as one family.
+- The picture is a package or module dependency view with ranked public symbols, not a class diagram: say so when the user asked for classes or inheritance.
 
 Required inputs:
 

@@ -10,6 +10,7 @@ metadata:
     phase: result-audit
     role: researcher
     quality_tier: evidence-gated
+    related_skills: [omh-app-debugging]
 ---
 
 # Repro Audit
@@ -18,7 +19,7 @@ This is a Hermes-native `repro-audit` workflow skill.
 
 ## Why This Exists
 
-A displayed score is not evidence that evaluation conditions match. This workflow compares retained source claims without executing an evaluator or inventing missing conditions.
+A displayed score is not evidence that evaluation conditions match. This audit covers lm-eval HellaSwag results only. This workflow compares retained source claims without executing an evaluator or inventing missing conditions.
 
 ## First Steps
 
@@ -31,6 +32,8 @@ A displayed score is not evidence that evaluation conditions match. This workflo
 
 ## Do Not Use When
 
+- A bug report whose reproduction steps need checking is software debugging, not an evaluation audit; use `omh-app-debugging`.
+- A results file for any benchmark other than HellaSwag (the importer reads only the HellaSwag task); say it is unsupported and do not map it onto HellaSwag.
 - A supplied article needs section-by-section explanation rather than comparison of retained records.
 - A pull request needs code correctness review rather than research evidence mapping.
 - The request requires running an evaluator, downloading weights or verifying scientific reproduction.

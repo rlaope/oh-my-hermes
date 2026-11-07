@@ -39,7 +39,7 @@ Good example:
 Bad example:
 
 - Prompt: Refactor and also add the dark-mode feature while you are in there.
-- Expected behavior: Split the request: the behavior-preserving refactor runs under this workflow, and the dark-mode feature is new `frontend` work planned separately.
+- Expected behavior: Split the request: the behavior-preserving refactor runs under this workflow, and the dark-mode feature goes to `omh-frontend` as separate planned work.
 - Why: A refactor that changes behavior cannot claim behavior preservation; mixing the two hides the feature from review.
 
 ## Completion Checklist
@@ -47,13 +47,14 @@ Bad example:
 - The preview plan was emitted before any file changed, and the apply step was an explicit second decision.
 - Behavior evidence exists on both sides of apply, and unsafe-in-isolation changes are listed as notes, not half-applied.
 - Pass order was impact-first and each finding names its category and safety reason.
-- Out-of-scope smells were routed: generic slop to `omh-ai-slop-cleaner`, new UI to `frontend`, verdict-only review to `omh-code-review`.
+- Out-of-scope smells were routed: generic slop to `omh-ai-slop-cleaner`, new UI goes to `omh-frontend`, verdict-only review to `omh-code-review`.
 
 ## Recovery Notes
 
 - If no tests exist, write the characterization checks first or hand the user the smallest set to approve; do not start the macro pass on unlocked behavior.
 - If a change turns out to alter behavior mid-apply, revert that change, record it as a finding, and keep the rest of the pass.
 - If the component resists extraction because state is tangled, run the state ladder first and re-attempt decomposition after.
+- If the framework is not React, run only the micro pass and the characterization-test gate, say the hook, effect, and context content does not apply, and use the state ladder's principles (derive, colocate, one owner) only where the framework has the same idea.
 
 ## Workflow Lane
 
@@ -122,7 +123,7 @@ Safety rules:
 
 - Preview is the default: analyze the whole target and emit the plan before touching any file.
 - Outputs, side effects, and error handling stay identical; a dropped branch or weakened handler is a defect, not a simplification.
-- Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits.
+- Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits. Changes to props, exports, or file layout are proposals in notes until the user's second decision. `[behavior-changing]` items (remounts, new dependencies, caching, URL state, timing, a logout reset) never apply under this skill: route them to `omh-frontend` or a feature request and list them in notes.
 - Do not refactor test files, and do not claim behavior preservation without the before/after test evidence.
 
 ## Runtime Evidence

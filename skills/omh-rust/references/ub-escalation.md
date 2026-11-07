@@ -16,6 +16,7 @@ The change is **escalated** if it adds, moves, or modifies any of:
 - a hand-written lock-free primitive, or any direct use of `core::sync::atomic` ordering weaker than `SeqCst`
 - `Pin` projection written by hand rather than through a derive
 - a `#[repr(...)]` change on a type that crosses an FFI or transmute boundary
+- a non-test edit in a module, or to a type, that contains `unsafe` or an `unsafe impl` which depends on it: struct fields, constructors, `Drop`, visibility, `Deref`, or a length or capacity update. Soundness is module-wide, so a safe edit there can break the invariant an unchanged `unsafe` block relies on
 
 If the change cannot be inspected well enough to answer, the verdict is **escalated**. A conservative verdict is correct and is labelled conservative; an unmeasured "not escalated" is a false clean.
 
@@ -26,9 +27,9 @@ Ordinary Rust that touches none of the above is **not escalated**, and `referenc
 An escalated change is not ready for handoff until all four are named as blocking items:
 
 1. **The invariant.** Every `unsafe` block states, in a comment the change ships with, what it asserts and why the assertion holds. An `unsafe` block with no stated invariant is an unreviewable one -- the compiler stopped checking, so the comment is the only remaining specification.
-2. **Miri.** The affected tests run under Miri. Miri is the oracle for aliasing, use-after-free, uninitialized reads, invalid values, misalignment, out-of-bounds access, provenance, and double free.
-3. **A sanitizer**, where Miri cannot reach -- anything crossing FFI or doing real I/O. Address, leak, thread, and memory sanitizers each cover a different class; name which one and why.
-4. **Concurrency testing** for anything lock-free or atomic-ordering-sensitive: a loom-style exhaustive interleaving check, not a stress loop. A stress test that passes ten thousand times has sampled the interleaving space, not covered it.
+2. **Miri.** The affected tests run under Miri (`rustup +nightly component add miri`, then `cargo +nightly miri test <filter>`; add `MIRIFLAGS="-Zmiri-strict-provenance"` for provenance). Miri is the oracle for aliasing, use-after-free, uninitialized reads, invalid values, misalignment, out-of-bounds access, provenance, and double free.
+3. **A sanitizer**, where Miri cannot reach -- anything crossing FFI or doing real I/O. Address, leak, thread, and memory sanitizers each cover a different class; name which one and why. Sanitizers need nightly, the `rust-src` component (`rustup +nightly component add rust-src`), and a rebuilt standard library: `RUSTFLAGS="-Zsanitizer=address" RUSTDOCFLAGS="-Zsanitizer=address" cargo +nightly test -Zbuild-std --target <host-triple>` (`thread` and `memory` likewise; memory needs Linux). Without `RUSTDOCFLAGS` the unit tests pass and the doctests fail at link with undefined `__asan_init`.
+4. **Concurrency testing** for anything lock-free or atomic-ordering-sensitive: a loom-style exhaustive interleaving check (`RUSTFLAGS="--cfg loom" cargo test --release <loom tests>`, with the code under test built against `loom`'s types), not a stress loop. A stress test that passes ten thousand times has sampled the interleaving space, not covered it.
 
 ## 3. Categories and where each is caught
 
@@ -70,10 +71,7 @@ If the executor cannot run Miri or the needed sanitizer, the change stays blocke
 ## Attribution
 
 Concept lineage only. The idea of a mandatory per-language reference gate that
-escalates on `unsafe`/FFI contact, and of a hypothesis-first native debugging
-loop, is adapted from the `programming` and `debugging` skills of an
-upstream coding-agent plugin; the DAP-over-printf preference is adapted from `can1357/oh-my-pi`'s
-first-class debug adapter tooling. No upstream text is reproduced -- the
-wording, the artifact vocabulary, and the `prepared_not_observed` claim
-boundary are OMH's own, and OMH keeps its no-execution boundary: every command
-below is something the executor runs, never OMH.
+escalates on `unsafe`/FFI contact is adapted from the `programming` skill of an
+upstream coding-agent plugin. No upstream text is reproduced -- the wording,
+the artifact vocabulary, and the `prepared_not_observed` claim boundary are
+OMH's own.

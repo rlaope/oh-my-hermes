@@ -10,7 +10,7 @@ metadata:
     phase: critique
     role: reviewer
     quality_tier: finding-evidence-gated
-    related_skills: [sdlc-review, requesting-code-review]
+    related_skills: [omh-verification-gate, sdlc-review, requesting-code-review]
 ---
 
 # Code Review
@@ -26,6 +26,7 @@ This is a Hermes-native `code-review` workflow skill.
 - The user asks to implement the fix rather than review existing code or claims.
 - There is no diff, file set, claim, artifact, or expected behavior to review.
 - The request is broad product critique, strategy, or planning rather than code or evidence review.
+- The user wants build, lint, test, and CI results collected into a PASS/HOLD/BLOCK evidence matrix before merge; use `omh-verification-gate`. This skill supplies findings that matrix may cite.
 - A kanban review worker needs its card's transition decided: Hermes' bundled `sdlc-review` owns approve, request-changes, and escalate there, and this skill only supplies the findings that decision cites.
 - The user wants their own uncommitted changes checked before a commit or push, with a security scan, quality gates, and fixes applied in place; load Hermes' bundled `requesting-code-review` skill for that pre-commit pass instead of this one.
 
@@ -99,7 +100,7 @@ Quality bar:
 - Select depth by changed risk, not diff size; record selected and omitted checks, reasons, actual coverage, and budget. Deduplicate candidates by root cause and validate before final findings; retain unresolved protected risks separately. Say `independent validation unavailable` when no different reader participated.
 - Hermes handles two parts of a review itself; load `omh-code-review/references/native-review-contract.md` for both. When `delegate_task` is in your tool list or tool_search finds it, pass the findings schema as the reviewer task's `output_schema`. The host validates the return, but its `schema_valid` record reaches you only when the call returns its results in the same turn; a result that arrives later as a completion message carries none, so check that summary against the schema yourself and never read `completed` as validated. A return that fails the contract is `not_observed`, never a pass. Inside a kanban review worker, `no_ship` becomes the request-changes transition that `sdlc-review` makes.
 - When the reviewed work ran in a Hermes session, cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) to scope which workspace files its read_file, write_file, and patch calls touched, with the outcome Hermes recorded; it is file lineage, never file-content, diff, test, review, CI, or merge evidence.
-- For native `omh_todo` checkpoints, load the todo-checklist closing recipe; `record` then `recall` this review declaration. Stored declarations are not proof.
+- For native `omh_todo` checkpoints, load `omh-todo-checklist/references/closing-a-story.md`; `record` then `recall` this review declaration. Stored declarations are not proof.
 
 Handoff policy:
 

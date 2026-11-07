@@ -10,8 +10,19 @@ Before any dimension, establish the observed baseline:
 
 - **Stack truth** - read the manifests (package/build/dependency files), never
   memory of the tree.
-- **Churn ranking** - `git log --format= --name-only | sort | uniq -c |
-  sort -rn | head -30`: the most-changed files are where debt costs the most.
+- **Churn ranking** - the most-changed files are where debt costs the most, but
+  an all-history count is led by changelogs, lockfiles, and generated docs. Use a
+  window, skip merges, drop those paths, keep only files that still exist, keep
+  the count, and run it from the repository top level (paths are relative to it).
+  Also drop every path the repository declares generated:
+
+  ```sh
+  cd "$(git rev-parse --show-toplevel)"
+  git -c core.quotePath=false log --since=12.months --no-merges --format= --name-only \
+    | grep -v -E '(^|/)(CHANGELOG[^/]*|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|uv\.lock)$|\.snap$|\.min\.' \
+    | sort | uniq -c | sort -rn \
+    | while read -r n f; do [ -e "$f" ] && echo "$n $f"; done | head -30
+  ```
 - **Size ranking** - the largest source files by line count.
 - **Gate inventory** - the test suites, typecheckers, linters, and CI entry
   points that already exist; debt findings that a gate already catches are
@@ -30,7 +41,7 @@ High-churn plus high-size plus low-test is the audit's priority corner.
 | Dependency and configuration debt | unpinned or abandoned dependencies, drifted config copies, secrets handling by convention |
 | Performance and resource debt | unbounded caches and queues, N+1 access patterns, sync work on hot paths |
 | Error-handling and observability debt | swallowed exceptions, bare retries, failures invisible to logs or metrics |
-| Security hygiene | credentials in the tree, injectable string building, permissive defaults |
+| Security hygiene | injectable string building, permissive defaults; a live-looking credential in the tree is not a ledger row (see below) |
 | Documentation drift | READMEs and comments contradicting the code, dead runbooks, stale generated artifacts |
 
 Per-stack detection commands (linters, dead-code finders, dependency and
@@ -49,6 +60,11 @@ orientation; they stay prepared_not_observed until run through the operator.
 - A `critical`/`L` finding routes to `omh-refactor-plan`; the ledger never
   recommends a rewrite.
 
+A live-looking credential found in the tree stops the ledger. Cite path and
+line only, never the value; route to `omh-security-event-response` (rotate, then
+clean history). Placeholders and test fixtures go on the looks-bad-but-fine
+list with the reason.
+
 ## The ledger (`tech_debt_ledger/v1`)
 
 One row per finding: `id`, `dimension`, `file:line`, `severity`, `effort`,
@@ -59,6 +75,11 @@ and the mandatory **looks bad but is actually fine** section - deliberate
 patterns that pattern-match to debt (a generated file, an intentional
 duplication, a documented workaround) stay off the ledger with their reason
 recorded, so the next audit does not rediscover them.
+
+Write the ledger to a file the user names (default `docs/tech-debt-ledger.md`)
+as a Markdown table carrying the stable ids, and end the reply with its path.
+On a rerun with no path given, look for that file; when none exists, say this
+is a first audit.
 
 ## Rerun reconciliation
 
