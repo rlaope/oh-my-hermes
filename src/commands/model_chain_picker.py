@@ -5,9 +5,10 @@ first and the last row as every OMH list does; on the selected row, left and
 right step the head model through the aliases chains name today, `-` and `+`
 step its reasoning effort along that model's ladder, and `d` restores the
 shipped default. Enter hands every edited category back to the command, which
-writes them through the same validated document `omh model-chains set` writes;
-Esc, q or Ctrl-C hands back nothing, so a cancelled picker cannot have touched
-the file by construction.
+writes them through the same validated document `omh model-chains set` writes,
+unless a pressed effort is off its head's list: then the picker stays open and
+says which row. Esc, q or Ctrl-C hands back nothing, so a cancelled picker
+cannot have touched the file by construction.
 
 The chain rules — which aliases the ring holds, how an effort steps, how a
 save composes the document — live in the plugin bundle's
@@ -223,6 +224,7 @@ def render_frame(
     use_color: bool,
     width: int,
     palette: Mapping[str, str] | None = None,
+    notice: str = "",
 ) -> list[str]:
     """One full repaint: title, column header, one row per category, the
     cursor row's detail, then the key hints. Every line fits `width`."""
@@ -348,6 +350,8 @@ def render_frame(
     if not served.get(head_model, True):
         note = _clip(f"! {labels.get(head_model, head_model)} is not served by this machine's providers", inner)
         lines.append(" " * _MARGIN + paint(note, "ui_error"))
+    if notice:
+        lines.append(" " * _MARGIN + paint(_clip(notice, inner), "ui_error", bold=True))
     lines.append(rule)
     hints = "   ".join(paint(keys, "ui_accent", bold=True) + " " + paint(what, "banner_dim") for keys, what in KEY_HINTS)
     lines.append(" " * _MARGIN + hints)
@@ -358,6 +362,28 @@ def render_frame(
     if use_color:
         return lines
     return [line if len(line) <= width else line[: max(0, width - 1)] + "…" for line in lines]
+
+
+def _refused_edit(
+    rows: list[Mapping[str, Any]],
+    chains: Mapping[str, Chain],
+    original: Mapping[str, Chain],
+    effort_edits: set[str],
+    ladders: Mapping[str, tuple[str, ...]],
+) -> tuple[int, str] | None:
+    """The first row a save would refuse, as (its index, the sentence), or None.
+
+    A pressed effort must be on its head's list; switching the head afterwards
+    can carry it off. An untouched value and a model-only switch never count.
+    """
+    for index, row in enumerate(rows):
+        name = row["category"]
+        if name in effort_edits and chains[name] != original[name]:
+            model, effort = chains[name][0]
+            if effort not in ladders[model]:
+                keys = "−/+ or d" if ladders[model] else "←→ or d"
+                return index, f"! {name}: {effort} is not on {model}'s list; {keys}"
+    return None
 
 
 def run_picker(
@@ -373,8 +399,9 @@ def run_picker(
     """Drive the cursor until Enter or cancel.
 
     Returns the edited categories (possibly none) on Enter, or None on
-    cancel. Writes nothing but frames: applying the result is the caller's
-    job.
+    cancel. Enter with a pressed effort off its head's list stays open, on that
+    row, so the session's other edits are not lost to a refused save. Writes
+    nothing but frames: applying the result is the caller's job.
     """
     rows = payload["categories"]
     if not rows:
@@ -394,13 +421,17 @@ def run_picker(
         key = read_key()
         if key == KEY_QUIT:
             return None
-        if key == KEY_ENTER:
-            return PickerChanges(
-                {name: chain for name, chain in chains.items() if chain != original[name]},
-                effort_edits=frozenset(effort_edits),
-            )
+        notice = ""
         name = rows[cursor]["category"]
-        if key == KEY_UP:
+        if key == KEY_ENTER:
+            refused = _refused_edit(rows, chains, original, effort_edits, ladders)
+            if refused is None:
+                return PickerChanges(
+                    {name: chain for name, chain in chains.items() if chain != original[name]},
+                    effort_edits=frozenset(effort_edits),
+                )
+            cursor, notice = refused
+        elif key == KEY_UP:
             cursor = max(cursor - 1, 0)
         elif key == KEY_DOWN:
             cursor = min(cursor + 1, len(rows) - 1)
@@ -421,8 +452,10 @@ def run_picker(
         else:
             continue
         previous_rows = len(frame)
-        frame = render_frame(payload, chains, cursor, use_color=use_color, width=width, palette=palette)
-        write(cursor_up(previous_rows) + "".join(f"{CLEAR_LINE}{line}\n" for line in frame))
+        frame = render_frame(payload, chains, cursor, use_color=use_color, width=width, palette=palette, notice=notice)
+        # The frame's height follows the head's effort and the notice, so a
+        # shorter one must clear what the taller one left below it.
+        write(cursor_up(previous_rows) + "".join(f"{CLEAR_LINE}{line}\n" for line in frame) + f"{ESC}[J")
     return None
 
 

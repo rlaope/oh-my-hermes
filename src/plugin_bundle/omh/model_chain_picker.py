@@ -463,10 +463,11 @@ def apply_picker_changes(
     """The save both picker surfaces make, as one call.
 
     A refusal comes back as `{"error": ...}` rather than a traceback, and the
-    surface shows the sentence; nothing is written then. A -/+ edit is checked
-    against the model's ladder as `model-efforts.json` reads now. A file broken
-    meanwhile is ignored whole, and checking a new effort against the wider
-    built-in ladder would undo what it meant to narrow, so that refuses too.
+    surface shows the sentence; nothing is written then. The picker already
+    keeps a -/+ edit off the model's ladder from reaching this point, so the
+    effort check here only fires for a `model-efforts.json` edited or broken
+    while the picker was open: such a file is ignored whole, and checking a new
+    effort against the wider built-in ladder would undo what it meant to narrow.
     Untouched rows and model switches are never checked, and still save with a
     broken file, carrying a `warning` for the surface to print.
     """

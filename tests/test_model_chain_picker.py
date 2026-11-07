@@ -150,6 +150,27 @@ def _row_of(lines, name: str) -> str:
     return next(line for line in lines if f" {name} " in line)
 
 
+def _screen_after(writes: list[str]) -> list[str]:
+    """What a terminal shows after these writes: cursor-up, clear-line, clear-below."""
+    screen: list[str] = []
+    row = 0
+    for chunk in writes:
+        for piece in re.split(r"(\x1b\[\d*[AJK]|\x1b\[2K|\n)", chunk):
+            if piece == "\n":
+                row += 1
+            elif piece == f"{ESC}[J":
+                del screen[row:]
+            elif piece == f"{ESC}[2K":
+                if row < len(screen):
+                    screen[row] = ""
+            elif piece.startswith(ESC):
+                row -= int(piece[2:-1])
+            elif piece:
+                screen.extend([""] * (row + 1 - len(screen)))
+                screen[row] = piece
+    return screen
+
+
 class PickerModelTests(unittest.TestCase):
     """The bundle layer: rules a widget and the CLI both rely on."""
 
@@ -805,12 +826,13 @@ class EffortPickerTests(unittest.TestCase):
             },
         )
         payload = _payload(self.root)
+        notice = "! a-long-category-name: xhigh is not on a-really-quite-long-model-identifier's list; −/+ or d"
         for width in (60, 80, 110, 160):
             for cursor in range(len(payload["categories"])):
                 with self.subTest(width=width, cursor=cursor):
-                    lines = render_frame(payload, _chains(payload), cursor, use_color=False, width=width)
+                    lines = render_frame(payload, _chains(payload), cursor, use_color=False, width=width, notice=notice)
                     self.assertTrue(all(len(line) <= width for line in lines), max(lines, key=len))
-                    colored = render_frame(payload, _chains(payload), cursor, use_color=True, width=max(width, 80))
+                    colored = render_frame(payload, _chains(payload), cursor, use_color=True, width=max(width, 80), notice=notice)
                     visible = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in colored]
                     self.assertTrue(all(len(line) <= max(width, 80) for line in visible), max(visible, key=len))
                     if width >= 110:
@@ -828,6 +850,102 @@ class EffortPickerTests(unittest.TestCase):
                 _write_overrides(self.root, {"swarm": ((model, stored),)})
                 payload = _payload(self.root)
                 self.assertRegex(_row_of(_frame(payload, "swarm", width=120), "swarm"), rf"\+ +{re.escape(shown)} +◆ override")
+
+
+class EnterStaysOpenTests(unittest.TestCase):
+    """Enter on a pressed effort off its head's list keeps the whole session."""
+
+    def setUp(self) -> None:
+        self._tmp = TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def _carry_xhigh_onto_argon(self, payload) -> list[str]:
+        # On deep press + (high to xhigh), then step the head to a model whose
+        # ladder stops at high. Each piece is legal; together a save refuses.
+        return _down_to(payload, "deep") + [KEY_PLUS] + _rights_to(payload, "claude-opus-5-5", "gemini-4-argon")
+
+    def test_the_refused_row_is_named_and_a_fix_then_saves_every_edit(self) -> None:
+        payload = _payload(self.root)
+        keys = self._carry_xhigh_onto_argon(payload) + ["up", KEY_PLUS, KEY_ENTER]
+        _, frames = _drive(payload, keys)
+        self.assertIn("! deep: xhigh is not on gemini-4-argon's list; −/+ or d", frames[-1])
+        # The cursor went to the row the sentence names, so the next key fixes it.
+        self.assertIn(f" {CURSOR_MARK} deep ", frames[-1])
+        self.assertEqual(sum("is not on gemini-4-argon's list; −/+" in line for line in frames[-1].splitlines()), 1)
+
+        result, frames = _drive(payload, keys + [KEY_MINUS, KEY_ENTER])
+        self.assertNotIn("is not on gemini-4-argon's list; −/+", frames[-1])
+        self.assertEqual(result["deep"][0], ("gemini-4-argon", "high"))
+        self.assertEqual(result["ultrabrain"], (("gpt-6-astra", "max"),))
+        self.assertEqual(result.effort_edits, frozenset({"deep", "ultrabrain"}))
+
+    def test_d_clears_the_refused_row_and_the_other_rows_edit_survives(self) -> None:
+        payload = _payload(self.root)
+        keys = self._carry_xhigh_onto_argon(payload) + ["up", KEY_PLUS, KEY_ENTER, KEY_DEFAULT, KEY_ENTER]
+        result, _ = _drive(payload, keys)
+        self.assertEqual(result, {"ultrabrain": (("gpt-6-astra", "max"),)})
+
+    def test_switching_the_head_onto_a_list_holding_the_value_also_saves(self) -> None:
+        payload = _payload(self.root)
+        keys = self._carry_xhigh_onto_argon(payload) + [KEY_ENTER, KEY_LEFT, KEY_LEFT, KEY_ENTER]
+        result, _ = _drive(payload, keys)
+        self.assertEqual(result["deep"][0], ("claude-sonnet-5-5", "xhigh"))
+
+    def test_a_row_back_to_exactly_what_is_stored_is_no_edit_to_refuse(self) -> None:
+        # Argon's stored xhigh is off its list. Stepped away, pressed down and
+        # up, and stepped back, the row is what the file already holds.
+        _write_overrides(self.root, {"swarm": (("gemini-4-argon", "xhigh"),)})
+        payload = _payload(self.root)
+        out = _rights_to(payload, "gemini-4-argon", "gpt-6-astra")
+        back = [KEY_LEFT] * len(out)
+        result, _ = _drive(payload, _down_to(payload, "swarm") + out + [KEY_MINUS, KEY_PLUS] + back + [KEY_ENTER])
+        self.assertEqual(result, {})
+
+    def test_cancel_after_a_refused_enter_still_hands_back_nothing(self) -> None:
+        payload = _payload(self.root)
+        result, frames = _drive(payload, self._carry_xhigh_onto_argon(payload) + [KEY_ENTER, KEY_QUIT])
+        self.assertIsNone(result)
+        self.assertIn("! deep: xhigh", frames[-1])
+
+    def test_a_list_with_no_rungs_offers_the_keys_that_can_still_move_the_row(self) -> None:
+        _write_efforts(self.root, {"gemini-4-argon": []})
+        payload = _payload(self.root)
+        _, frames = _drive(payload, self._carry_xhigh_onto_argon(payload) + [KEY_ENTER])
+        self.assertIn("! deep: xhigh is not on gemini-4-argon's list; ←→ or d", frames[-1])
+
+    def test_a_shared_step_value_saves_and_one_carried_from_a_wider_ladder_does_not(self) -> None:
+        # `max` and `none` are on no shared step: pressing to them on a contract
+        # head and then switching to a model with no ladder stays open.
+        for stored, key, carried in (("xhigh", KEY_PLUS, "max"), ("low", KEY_MINUS, "none")):
+            with self.subTest(carried=carried):
+                _write_overrides(self.root, {"swarm": (("gpt-6-luna", stored),)})
+                payload = _payload(self.root)
+                keys = _down_to(payload, "swarm") + [key] + _rights_to(payload, "gpt-6-luna", "grok-4.7") + [KEY_ENTER]
+                result, frames = _drive(payload, keys)
+                self.assertIsNone(result)
+                self.assertIn(f"! swarm: {carried} is not on grok-4.7's list; −/+ or d", frames[-1])
+                result, _ = _drive(payload, keys + [KEY_DEFAULT, KEY_ENTER])
+                self.assertIsNotNone(result)
+        _write_overrides(self.root, {"swarm": (("gpt-6-luna", "low"),)})
+        payload = _payload(self.root)
+        keys = _down_to(payload, "swarm") + [KEY_PLUS] + _rights_to(payload, "gpt-6-luna", "grok-4.7") + [KEY_ENTER]
+        result, _ = _drive(payload, keys)
+        self.assertEqual(result["swarm"], (("grok-4.7", "medium"),))
+
+    def test_a_shorter_frame_leaves_no_ghost_lines_below_it(self) -> None:
+        # Luna at `none` carries one explaining line more than at `low`, and a
+        # refused Enter one more again, so the frame shrinks on the next key.
+        _write_overrides(self.root, {"swarm": (("gpt-6-luna", "low"),)})
+        payload = _payload(self.root)
+        moves = _down_to(payload, "swarm")
+        to_argon = _rights_to(payload, "gpt-6-luna", "gemini-4-argon")
+        for keys in ([KEY_MINUS, KEY_PLUS], [KEY_PLUS, *to_argon, KEY_ENTER, KEY_MINUS]):
+            with self.subTest(keys=keys):
+                _, frames = _drive(payload, moves + keys)
+                self.assertLess(frames[-1].count("\n"), frames[-2].count("\n"))
+                visible = [re.sub(r"\x1b\[[0-9]*[AJK]", "", line) for line in frames[-1].splitlines()]
+                self.assertEqual(_screen_after(frames), [line for line in visible if line])
 
 
 class EffortSaveTests(unittest.TestCase):
