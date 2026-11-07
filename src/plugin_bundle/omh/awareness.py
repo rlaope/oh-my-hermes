@@ -7331,9 +7331,9 @@ def _compact_workflow_context_cards_line() -> str:
 
 def _compact_generic_tool_checkpoint_line() -> str:
     return (
-        "image->img-summary; frontend->frontend/a11y/visual-qa; paper->paper-learning; content->content-operator; media->media-input-operator; file->materials-package; "
-        "search->research; live->live-info-operator; audit->workspace/production/security; "
-        "failures->build-failure; verify->verification-gate; code->codegraph/onboarding/ultrawork"
+        "image->img-summary; frontend->frontend/accessibility-audit/visual-qa; paper->paper-learning; content->content-operator; media->media-input-operator; file->materials-package; "
+        "search->research; live->live-info-operator; audit->workspace-audit/production-audit/security-safety-review; "
+        "failures->build-failure-triage; verify->verification-gate; code->codegraph-refresh/codebase-onboarding/ultrawork"
     )
 
 

@@ -30,7 +30,7 @@ from .domain_signals import (
     ClarificationRelevance,
     classify_clarification_relevance,
 )
-from .dispatch_evidence import OWN_EVIDENCE_FLOOR, own_evidence_score
+from .dispatch_evidence import OWN_EVIDENCE_FLOOR, offered_ahead_of_words, own_evidence_score
 from .input_language import SUPPORT_MODEL_SELECTION_REQUIRED
 from .lexical_shortlist import LEXICAL_SCORE_FLOOR, lexical_anchor_terms, lexical_ranking, only_held_back_overlap
 from .policy import skill_is_negated
@@ -210,7 +210,7 @@ def _lexical_shortlist(
     `routing/jev_addressing.py`.
     """
     candidates: list[dict[str, object]] = []
-    for index, recommendation in enumerate(recommendations):
+    for index, recommendation in enumerate(offered_ahead_of_words(recommendations)):
         if len(candidates) >= MAX_SCORED_CANDIDATES:
             break
         labels = recommendation.get("matched")

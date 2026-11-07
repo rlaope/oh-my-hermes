@@ -10,7 +10,7 @@ metadata:
     phase: web-evidence
     role: researcher
     quality_tier: source-gated
-    related_skills: [ulw-research, omh-source-finder, omh-research-brief, omh-research-department, omh-websearch-setup, omh-codebase-onboarding, grounded-citations, arxiv]
+    related_skills: [ulw-research, omh-source-finder, omh-research-brief, omh-market-research, omh-research-department, omh-websearch-setup, omh-codebase-onboarding, grounded-citations, arxiv]
 ---
 
 # Web Research
@@ -30,6 +30,7 @@ This is a Hermes-native `web-research` workflow skill.
 - The decision needs reference-implementation study, a declared depth budget, or a decision-grounding dossier; use `ulw-research`.
 - The output is a typed candidate inventory and acquisition status rather than an answer; use `omh-source-finder`.
 - The ask is a market, competitor, pricing, or customer decision brief; use `omh-research-brief`.
+- Market sizing, a customer-evidence matrix, or a competitor or pricing profile is the deliverable; use `omh-market-research`.
 - The user wants recurring monitoring, a source inbox, or Scout/Analyst/Briefer operations; use `omh-research-department`.
 - The user wants to configure or cheapen web search itself, such as a provider API key or a search or extract backend or tier; use `omh-websearch-setup`.
 - The study target is this repository rather than the open web; use `omh-codebase-onboarding`.

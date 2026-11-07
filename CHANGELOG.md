@@ -393,6 +393,19 @@ All notable changes will be documented here.
   Hermes' context-file cap. The full-profile skill-body ceiling is re-derived
   by its written policy.
 
+- **More skills are reachable by the words a person actually uses, in English
+  and in Korean, and several too-wide triggers stopped taking turns that were
+  not theirs.** A new `offer_only_phrases` table in the trigger packs holds how
+  people say a need ("cold outreach", "작업 취소해줘", "시장 규모"). Such a phrase names
+  its skill as the candidate and the turn asks; it cannot dispatch, its words do
+  not score, and it is no trigger, so skill bodies do not grow. Word credits and
+  the "build me something" interview step aside for it, and a guard's dispatch
+  stays. Bare `priorities`, `리스크`, `블로커`, `우선순위`, `refactor`, `risky`,
+  `리팩터링`, `release gate`, `accessibility`, `접근성`, `pytest` and the video words
+  on the connector card no longer pull a turn. Missing or unset words alone no
+  longer open toolbelt readiness, "주간" no longer reads as "주가", and "time instead"
+  no longer reads as "time in".
+
 - **Business and operations skills now check what a practitioner checks.**
   The morning brief no longer claims a Gmail connection is draft-only from
   its scopes (every Gmail scope that creates drafts also sends); it enforces

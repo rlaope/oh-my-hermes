@@ -20,7 +20,7 @@ from .catalog_questions import (
 from .compound_intent import distinct_complete_domain_signals
 from .action_copy import next_action_label as _route_next_action_label
 from .candidate_handoff import SHORTLIST_LEXICAL, WEAK_DISPATCH_EVIDENCE, build_candidate_handoff, shortlist_clarification
-from .dispatch_evidence import EVIDENCE_WEAK, GUARD_TRUSTED, dispatch_evidence
+from .dispatch_evidence import EVIDENCE_WEAK, GUARD_TRUSTED, dispatch_evidence, offer_only_winner, offered_over_word_credits
 from .decision_contract import build_route_decision_contract
 from .route_question import (
     DECLINE_ACKNOWLEDGEMENT,
@@ -69,7 +69,7 @@ from ..plugin_bundle.omh.route_question_mode import ROUTE_QUESTION_MODE_OFF, rou
 from ..plugin_bundle.omh.spend_signals import SPEND_GATE_PHRASES, spend_request_clause
 from .intent import classify_workflow_intent, scrub_diagnostic_status_text
 from .reference_regions import executable_routing_text, reference_regions
-from .localization import normalized_phrase, prepare_routing_text, routing_tokens
+from .localization import normalized_phrase, phrase_is_spoken, prepare_routing_text, routing_tokens
 from .missed_route import is_missed_route_feedback
 from .omh_help import (
     is_omh_docs_question,
@@ -2606,7 +2606,7 @@ def _route_chat_message_cached(
         action = "dispatch"
         reason = "Catalog question; show the OMH workflow picker instead of asking for shell command approval."
         ambiguous = False
-    elif file_or_text_lookup:
+    elif file_or_text_lookup and not offer_only_winner(top):
         selected_skill = _ROUTER_SKILL
         candidate_skill = selected_skill
         candidate_harness = primary_harness_for_skill(candidate_skill)
@@ -2641,6 +2641,12 @@ def _route_chat_message_cached(
         candidate_harness = primary_harness_for_skill(candidate_skill)
         action = "fallback"
         reason = "No strong catalog metadata match; use the router to clarify the workflow."
+    elif offered_skill := offered_over_word_credits(top, full_recommendations[1:]):
+        selected_skill = _ROUTER_SKILL
+        candidate_skill = offered_skill
+        candidate_harness = primary_harness_for_skill(candidate_skill)
+        action = "clarify"
+        reason = f"The message names what `{candidate_skill}` does; ask before dispatching on shared words."
     elif ambiguous:
         selected_skill = _ROUTER_SKILL
         action = "clarify"
@@ -5370,6 +5376,9 @@ def _operator_surface_fast_path_match(
         if only_skill is not None and skill != only_skill:
             continue
         if skill == "live-info-operator" and normalized_pattern == "환율" and "전환율" in text:
+            continue
+        # "at the same time instead" holds "time in", as a word it does not say.
+        if skill == "live-info-operator" and normalized_pattern == "time in" and not phrase_is_spoken(text, "time in"):
             continue
         if skill == "memory-new" and _memory_new_scope_overroutes_curation(text):
             continue

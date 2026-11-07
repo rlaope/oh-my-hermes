@@ -978,7 +978,8 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # (executor-runtime-readiness -16, provider-profile-posture -14, capability-toggle +13). The
 # operations lane moves no row, and design and media moves sprite-forge at the same length.
 # Measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 539268
+# 539268 -> 539158: the reach round drops triggers from the rows it narrows (-110).
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 539158
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

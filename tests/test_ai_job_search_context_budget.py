@@ -146,8 +146,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 533907 -> 536196 and the digest re-derived: the skill audit round's rows, +2,289
             # (itemized by lane at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the sum of the lanes'
             # readings is exact on the merged tree, and the pin before it was d6dfefff...fc71.
-            (skill_capabilities, 536196, FULL_ROW_DELTA_CAP,
-             'a5d1c98868990aef117ac9373851d1a32090ffb70a011d712e459853085b3e03',
+            # Digest re-derived for the reach round: the rows of the skills whose triggers,
+            # description, or use-when moved; removing those edits reproduces a5d1c988...3e03.
+            (skill_capabilities, 536086, FULL_ROW_DELTA_CAP,
+             '65f6ca11207f7d9837f78db183908e6a5fa51da92b85f753d8bad73e8cfeddd4',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -189,9 +191,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 33317 -> 33593 and the digest re-derived: the systematic-review
         # trigger row (255 bytes) and its researcher token (+21); removing
         # only those reproduces 29ebe70f...7063.
-        self.assertEqual(_digest(legacy), 'caa4437572df136f2fc5d2e4f3b7a5a3c6997306d9595e56e422604fc26a9ec3')
+        # Digest re-derived for the reach round: the registry rows of the triggers it drops.
+        self.assertEqual(_digest(legacy), '10db13f43691a26084910fe8529ebd77edca2f27fe058c47fc204063a131e8a7')
         baseline = len(''.join(legacy).encode())
-        self.assertEqual(baseline, 33593)
+        self.assertEqual(baseline, 33563)
         # 33_100 -> 33_318: main's ru pack and repro-audit (+222 over 32874) used
         # the gate's room and sprite-forge adds its 221-byte row and token; each
         # side alone fit, the merged tree measures 33317. The gate stays exact.
@@ -382,7 +385,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The skill audit round moves the bodies each lane edited and nothing else: the union of the
         # lanes' moved lists equals the merged tree's. Plan, ralplan and adversarial-consensus name
         # `--plan-file` / `--input-bundle`; the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '49189871872c2013aeaac9cd6c38a6775f9d7ea66272b44536a5e0ccac37a29a')
+        self.assertEqual(_digest(legacy_hashes), '47b6898f56f7b517be9ad2adc7e4595f743a83b295bc74136bb7468845b86234')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -428,7 +431,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
-            'awareness_primer_markdown_chars': 3630,  # Human-voice reply sentence (+110).
+            'awareness_primer_markdown_chars': 3685,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,
             'role_context_chars_max': 2600,

@@ -207,8 +207,8 @@
 "name":"research-brief",
 "situation":"Business question on market, competitors, pricing",
 "terms":{
-"1":"boundary department handoff herm link multi ongo preserv raw role scop strategy structur summariz turn ulw vs",
-"2":"call compar comparison competitiv data decision feedback gather inferenc landscap question ready say scan search set trend vendor",
+"1":"boundary gather handoff herm preserv scop strategy structur summariz turn vs",
+"2":"call compar comparison competitiv data decision feedback inferenc landscap question ready say scan search set trend vendor",
 "3":"back befor competitor",
 "5":"customer market pric sourc",
 "6":"business evidenc research",
@@ -428,17 +428,17 @@
 }
 },
 {
-"anchors":"blocker leadership operat ops priority queu weekly",
-"hangul":"로커 리뷰 리스 리즈 릴리 블로 상태 선순 순위 스크 우선 운영 주간",
-"hangul_anchors":"로커 리스 리즈 릴리 블로 상태 선순 순위 우선 운영 주간",
+"anchors":"blocker leadership operat ops queu weekly",
+"hangul":"리뷰 리스 리즈 릴리 상태 스크 운영 주간",
+"hangul_anchors":"리스 리즈 릴리 상태 운영 주간",
 "label":"omh-ops-review",
 "name":"ops-review",
 "situation":"Recurring operating status and blockers",
 "terms":{
 "1":"action herm observ ups work",
-"2":"across block follow leadership operation owner queu recur support team updat week",
+"2":"across block follow leadership operation owner priority queu recur support team updat week",
 "3":"summariz",
-"4":"operat priority releas weekly",
+"4":"operat releas weekly",
 "5":"ops review",
 "6":"blocker risk status"
 }
@@ -566,9 +566,9 @@
 "name":"award-bar-score",
 "situation":"Aiming for design-award quality",
 "terms":{
-"1":"aiming axe axis bind constraint external name quality threshold total weight",
-"2":"against back contender css cssda daily day judg land page priz publish rate ready surfac web wotd",
-"3":"hold innovation ui ux",
+"1":"aiming axis bind body chosen constraint external name quality threshold total weight",
+"2":"against axe back contender css cssda daily day innovation judg land page priz publish rate ready surfac ui ux web wotd",
+"3":"hold",
 "4":"awwward site websit win",
 "5":"design",
 "6":"bar",
@@ -577,8 +577,8 @@
 },
 {
 "anchors":"accessibility ai animation beautiful broken brutalism component core front frontend generic js land layout library lighthous market motion neobrutalism neobrutalist parallax polish premium react responsiv shadcn slop styl system terminal threej tooltip tui ui ux visual vital wcag webgl",
-"hangul":"고급 근성 급스 깨짐 네오 니메 드러 드럽 디자 딩페 랙스 랜딩 러운 럴랙 럽게 레이 려하 로고 론트 루탈 리즘 마키 메이 반응 부드 브루 스러 스럽 스크 스타 스트 스플 아웃 애니 엔드 연스 오브 응형 이션 이아 이지 일링 자연 자인 접근 차트 크롤 타일 탈리 테마 텍스 트엔 패럴 페이 푸터 프론 플릿 하게 화려 화면",
-"hangul_anchors":"고급 근성 급스 깨짐 네오 니메 드러 드럽 디자 딩페 랙스 랜딩 러운 럴랙 럽게 려하 로고 론트 루탈 리즘 마키 메이 반응 부드 브루 스러 스럽 스타 스플 아웃 애니 엔드 연스 오브 응형 이션 이아 이지 일링 자연 자인 접근 차트 크롤 타일 탈리 테마 텍스 트엔 패럴 페이 푸터 프론 플릿 하게 화려 화면",
+"hangul":"고급 급스 깨짐 네오 니메 드러 드럽 디자 딩페 랙스 랜딩 러운 럴랙 럽게 레이 려하 로고 론트 루탈 리즘 마키 메이 반응 부드 브루 스러 스럽 스크 스타 스트 스플 아웃 애니 엔드 연스 오브 응형 이션 이아 이지 일링 자연 자인 차트 크롤 타일 탈리 테마 텍스 트엔 패럴 페이 푸터 프론 플릿 하게 화려 화면",
+"hangul_anchors":"고급 급스 깨짐 네오 니메 드러 드럽 디자 딩페 랙스 랜딩 러운 럴랙 럽게 려하 로고 론트 루탈 리즘 마키 메이 반응 부드 브루 스러 스럽 스타 스플 아웃 애니 엔드 연스 오브 응형 이션 이아 이지 일링 자연 자인 차트 크롤 타일 탈리 테마 텍스 트엔 패럴 페이 푸터 프론 플릿 하게 화려 화면",
 "label":"omh-frontend",
 "name":"frontend",
 "situation":"Building or polishing a web or terminal UI",
@@ -659,7 +659,7 @@
 }
 },
 {
-"anchors":"400 a11y aa accessibility accessibl ada appearanc architect aria background blind color complianc contrast focus hard keyboard name navigation ratio reader reflow role screen screenreader size tab target touch trap usabl valu wcag websit zoom",
+"anchors":"400 a11y aa accessibility accessibl ada appearanc architect aria background blind color complianc contrast focus hard keyboard name navigation ratio reader reflow role screen screenreader size tab target text touch trap usabl valu wcag websit zoom",
 "hangul":"감사 검사 검토 게이 근성 내비 대비 리더 린리 명도 보드 비게 순서 스크 이션 접근 커스 크기 크린 키보 타깃 터치 포커 표시",
 "hangul_anchors":"감사 검사 검토 게이 근성 내비 대비 리더 린리 명도 보드 비게 순서 이션 접근 커스 크기 크린 키보 타깃 터치 포커 표시",
 "label":"omh-accessibility-audit",
@@ -675,7 +675,7 @@
 }
 },
 {
-"anchors":"analyz assuranc broken browser button cjk click clip consol cut dead imag interaction keyboard layout link look mobil navigation network pixel regression render responsiv right screenshot terminal tui ui viewport visual wrong",
+"anchors":"analyz assuranc broken browser button cjk click clip consol cut dead imag interaction keyboard layout link look mobil navigation network pixel regression render responsiv right screenshot terminal text tui ui viewport visual wrong",
 "hangul":"검증 글자 깨짐 레이 렌더 린샷 문제 미널 바꿈 비교 비주 스크 시각 아웃 이아 잘림 주얼 줄바 크린 터미 픽셀 한글 화면",
 "hangul_anchors":"검증 글자 깨짐 렌더 린샷 문제 미널 바꿈 비교 비주 시각 아웃 이아 잘림 주얼 줄바 크린 터미 픽셀 한글 화면",
 "label":"omh-visual-qa",
@@ -709,16 +709,16 @@
 }
 },
 {
-"anchors":"config configur gap hook inventory mcp plugin repository workspac",
+"anchors":"config configur gap hook inventory plugin repository workspac",
 "hangul":"감사 레포 벤토 설정 스킬 스페 워크 이스 인벤 크스 토리 페이",
 "hangul_anchors":"감사 레포 벤토 설정 스킬 스페 워크 이스 인벤 크스 토리 페이",
 "label":"omh-workspace-audit",
 "name":"workspace-audit",
 "situation":"Workspace setup inventory and gaps",
 "terms":{
-"1":"featur herm inspect local operat operator plan produc risk rout runtim safe",
+"1":"featur herm inspect local mcp operat operator plan produc risk rout runtim safe",
 "2":"agent befor configur find map miss set strengthen tool",
-"3":"config list mcp repository setup",
+"3":"config list repository setup",
 "4":"gap inventory surfac",
 "5":"hook plugin prompt repo",
 "7":"audit",
@@ -774,7 +774,7 @@
 }
 },
 {
-"anchors":"best comment distill distillation extract guidanc guidelin md past practic principl rule trac wrong",
+"anchors":"best comment distillation extract guidanc guidelin md past practic principl rule trac wrong",
 "hangul":"규칙 롬프 스킬 원칙 증류 추출 프롬 프트",
 "hangul_anchors":"규칙 롬프 스킬 원칙 증류 추출 프롬 프트",
 "label":"omh-rules-distill",
@@ -1038,14 +1038,14 @@
 },
 {
 "anchors":"actually bug eye happen logic match pair pull readm second spot",
-"hangul":"검증 결과 까지 는가 는지 드와 리뷰 리즈 릴리 맞는 뷰까 실제 제로 증된 코드 했는",
-"hangul_anchors":"검증 결과 까지 는가 는지 드와 리즈 릴리 맞는 뷰까 실제 제로 증된 했는",
+"hangul":"검증 결과 까지 는가 는지 드와 리뷰 맞는 뷰까 실제 제로 증된 코드 했는",
+"hangul_anchors":"검증 결과 까지 는가 는지 드와 맞는 뷰까 실제 제로 증된 했는",
 "label":"omh-code-review",
 "name":"code-review",
 "situation":"Pull request or changes to vet",
 "terms":{
 "1":"cite come concret shap vet",
-"2":"actually audit claim diff error eye first gate happen logic match pair releas second spot",
+"2":"actually audit claim diff error eye first gate happen logic match pair second spot",
 "3":"chang find pull",
 "4":"evidenc readm request",
 "5":"bug",
@@ -1054,15 +1054,15 @@
 }
 },
 {
-"anchors":"ai behavior clean cleaner cleanup dead delet deslop duplicat helper legacy logic preserv refactor remov risky simplify unus wrot",
-"hangul":"리팩 범위 변경 분석 스트 위험 제한 터링 테스 토링 팩터 팩토 회귀",
-"hangul_anchors":"리팩 범위 변경 분석 위험 제한 터링 테스 토링 팩터 팩토 회귀",
+"anchors":"ai behavior clean cleaner cleanup dead delet deslop duplicat helper legacy logic preserv refactor remov simplify unus wrot",
+"hangul":"범위 변경 분석 스트 위험 제한 테스 회귀",
+"hangul_anchors":"범위 변경 분석 위험 제한 테스 회귀",
 "label":"omh-ai-slop-cleaner",
 "name":"ai-slop-cleaner",
 "situation":"Messy or AI-generated code to clean up",
 "terms":{
 "1":"after befor duplication edit exist goal identical lock low messy quality stay test",
-"2":"analysis anti cleanup deslop generat helper legacy logic observabl pass preserv refactor review risk risky simplify sweep unus without wrot",
+"2":"anti cleanup deslop generat helper legacy logic observabl pass preserv refactor review simplify sweep unus without wrot",
 "3":"chang clean dead delet duplicat remov",
 "4":"code",
 "5":"cleaner",
@@ -1130,7 +1130,7 @@
 "situation":"Onboarding a newly released model generation",
 "terms":{
 "1":"check current doc fixed handl honest keep measurement newly operator pric research strengthen through walk want",
-"2":"calibrat came chang claud contract family generation glm gpt latest optimiz process recognition serv ship support updat version",
+"2":"calibrat came chang claud contract family generation glm gpt latest process recognition serv ship support updat version",
 "3":"releas",
 "4":"rout",
 "5":"optimization",
@@ -1299,8 +1299,8 @@
 },
 {
 "anchors":"capability enabl faster parallel",
-"hangul":"데이 도구 병렬 설정 업데 이트 인해",
-"hangul_anchors":"데이 도구 병렬 설정 업데 이트 인해",
+"hangul":"데이 도구 려고 병렬 설정 쓰려 업데 이트",
+"hangul_anchors":"데이 도구 려고 병렬 설정 쓰려 업데 이트",
 "label":"omh-parallel-tools",
 "name":"parallel-tools",
 "situation":"Parallel tool-call capability in doubt",
@@ -1339,10 +1339,10 @@
 "name":"morning-brief",
 "situation":"Mail and calendar brief configuration",
 "terms":{
-"1":"apply approv approval check configuration contract demand diagnos draft follow guid herm itself mcp prerequisit produc scop shar time user verify want",
-"2":"diff digest gmail inbox integration set summary",
-"3":"access daily read setup",
-"4":"configur email mail",
+"1":"allow apply approv approval check configuration contract demand diagnos follow guid herm itself mcp narrowest prerequisit produc provider shar time user verify want",
+"2":"diff digest gmail inbox integration read set summary",
+"3":"daily setup",
+"4":"access configur email mail",
 "6":"calendar connect",
 "7":"brief",
 "9":"morn"
@@ -1897,7 +1897,7 @@
 }
 },
 {
-"anchors":"option probability rate scal true typed",
+"anchors":"option probability rate scal text true typed",
 "hangul":"",
 "hangul_anchors":"",
 "label":"omh-jev-ask",
@@ -2115,15 +2115,15 @@
 }
 },
 {
-"anchors":"accessibility dictat driv free line messag mobil phon push quick short speech spoken talk ters voic",
-"hangul":"근성 드폰 말로 말한 명령 모바 바일 성으 요청 음성 접근 짧게 짧은 폰으 핸드",
-"hangul_anchors":"근성 드폰 말로 말한 명령 모바 바일 성으 요청 음성 접근 짧게 짧은 폰으 핸드",
+"anchors":"dictat driv free line messag mobil phon push quick short speech spoken talk ters voic",
+"hangul":"드폰 말로 말한 명령 모바 바일 성으 요청 음성 짧게 짧은 폰으 핸드",
+"hangul_anchors":"드폰 말로 말한 명령 모바 바일 성으 요청 음성 짧게 짧은 폰으 핸드",
 "label":"omh-voice-input",
 "name":"voice-operator",
 "situation":"Dictated voice note about project work or status",
 "terms":{
 "1":"action clarification clarify concis confirmation handoff herm produc project receiv turn ux work",
-"2":"accessibility command driv first free hand line messag plan push quick speech status styl talk",
+"2":"command driv first free hand line messag plan push quick speech status styl talk",
 "3":"ask note short spoken",
 "4":"phon ters",
 "5":"dictat operator",
@@ -2166,7 +2166,7 @@
 }
 },
 {
-"anchors":"bun cargo cli execut npm pnpm print pytest python script shell suit terminal unittest uv",
+"anchors":"bun cli execut npm pnpm print python script shell suit terminal unittest uv",
 "hangul":"결과 널에 령어 명령 미널 스트 실행 요약 준비 터미 테스",
 "hangul_anchors":"결과 널에 령어 명령 미널 실행 터미 테스",
 "label":"omh-terminal",
@@ -2174,7 +2174,7 @@
 "situation":"Shell command or test-suite execution",
 "terms":{
 "1":"add after claim cwd environment evidenc gate herm manager nativ ordinary overlay packag policy prefer prepar ran result safety succeed supervis tool without",
-"2":"build bun cargo install output pnpm print pytest python script summariz task unittest uv",
+"2":"build bun install output pnpm print python script summariz task unittest uv",
 "3":"suit",
 "4":"cli execut execution npm terminal",
 "5":"operator run shell test",
@@ -2205,24 +2205,24 @@
 "name":"live-info-operator",
 "situation":"Live rate, score, or local time a work task needs",
 "terms":{
-"1":"access add after api availability claim correctness data financ gate herm local nativ ordinary overlay policy prefer prepar quality read request result retrieval sourc supervis task tool unit without work",
-"2":"airport bitcoin btc crypto direction exchang forecast freshness krw last lookup near nearby new night provider real restaurant seoul stock timezon today traffic usd won york",
-"3":"information map scor sport zone",
+"1":"add after beyond claim data financ gate local nativ ordinary output overlay policy prefer quality request result sourc stat task work",
+"2":"airport bitcoin btc crypto direction exchang forecast freshness information krw last lookup near nearby new night provider real restaurant seoul stock timezon today tool traffic unit usd won york",
+"3":"map scor sport zone",
 "4":"current game pric",
 "5":"info operator rate time weather",
 "7":"live"
 }
 },
 {
-"anchors":"adopt adoption affordabl agentchat agy antigravity assistant audio auth auto awar backend barg behavior blockchain bridg chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency demo devic discovery enough evaluat gateway genai generat generation graph handl home identity integration integrity keychain maco mailbox matrix messag microsoft minivers multimodal nextcloud oauth oci onequery oracl pair peer platform plugin privat real realtim receipt reliabl safety screenshot smart social solana spoken sql stack transaction trial universal video voic weather websocket windy windymail wire workspac wxtrain xmr",
-"hangul":"그인 기기 기준 넥터 데모 도입 라우 러그 리스 마트 멀티 모달 비도 비용 생성 스마 스크 스턴 시스 어시 연동 영상 외부 우팅 인증 자동 제어 제품 준비 채택 커넥 턴트 트홈 티모 플러 홈어",
-"hangul_anchors":"그인 기기 기준 넥터 데모 도입 라우 러그 리스 마트 멀티 모달 비도 비용 생성 스마 스턴 시스 어시 연동 영상 외부 우팅 인증 자동 제어 제품 채택 커넥 턴트 트홈 티모 플러 홈어",
+"anchors":"adopt adoption affordabl agentchat agy antigravity assistant audio auth auto awar backend barg behavior blockchain bridg chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency devic discovery enough evaluat gateway genai graph handl home identity integration integrity keychain maco mailbox matrix messag microsoft minivers multimodal nextcloud oauth oci onequery oracl pair peer platform plugin privat real realtim receipt reliabl safety screenshot smart social solana spoken sql stack transaction trial universal voic weather websocket windy windymail wire workspac wxtrain xmr",
+"hangul":"그인 기기 기준 넥터 도입 라우 러그 리스 마트 멀티 모달 비도 비용 스마 스크 스턴 시스 어시 연동 외부 우팅 인증 자동 제어 준비 채택 커넥 턴트 트홈 티모 플러 홈어",
+"hangul_anchors":"그인 기기 기준 넥터 도입 라우 러그 리스 마트 멀티 모달 비도 비용 스마 스턴 시스 어시 연동 외부 우팅 인증 자동 제어 채택 커넥 턴트 트홈 티모 플러 홈어",
 "label":"omh-external-connector-readiness",
 "name":"external-connector-readiness",
 "situation":"Evaluating a plugin, connector, or API for adoption",
 "terms":{
 "1":"answer assess automatic befor choic coding deletion enabl evidenc executor fallback fresh freshness herm hook inventory miss modality named optional owner paus remov runtim scop toolbelt whether",
-"2":"agent agentchat agy antigravity assistant audio auto awar backend barg behavior benchmark blockchain bridg capability chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency delet demo devic disabl discovery enough failur gateway genai generat generation graph handl home integration integrity keychain lifecycl maco mailbox matrix messag microsoft migration minivers new nextcloud oauth observabl oci onequery oracl pair peer platform portability postur privat product read real realtim receipt reliabl risk rollback screenshot smart social solana spoken sql stack sync text time tool transaction turn universal video voic weather websocket windy windymail wire workspac wxtrain xmr",
+"2":"agent agentchat agy antigravity assistant audio auto awar backend barg behavior benchmark blockchain bridg capability chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency delet devic disabl discovery enough failur gateway genai graph handl home integration integrity keychain lifecycl maco mailbox matrix messag microsoft migration minivers new nextcloud oauth observabl oci onequery oracl pair peer platform portability postur privat read real realtim receipt reliabl risk rollback screenshot smart social solana spoken sql stack sync time tool transaction turn universal voic weather websocket windy windymail wire workspac wxtrain xmr",
 "3":"adopt affordabl auth compar cost evaluat export identity multimodal retention safe safety switch",
 "4":"adoption rout",
 "5":"data memory trial",
@@ -2267,7 +2267,7 @@
 }
 },
 {
-"anchors":"announcement audienc changelog content copy draft email executiv guid land linkedin newsletter plain post publish rewrit social tone voic word",
+"anchors":"announcement audienc changelog content copy draft email executiv guid land linkedin newsletter plain post publish rewrit social text tone voic word",
 "hangul":"가이 객용 고객 공지 글쓰 널별 노트 뉴스 레이 레터 리즈 릴리 메일 문체 스레 쓰기 오퍼 요약 워크 이드 이메 이터 즈노 지문 채널 초안 콘텐 크플 텐츠 퍼레 플로",
 "hangul_anchors":"가이 객용 고객 공지 글쓰 널별 노트 뉴스 레터 리즈 릴리 메일 문체 스레 쓰기 오퍼 워크 이드 이메 이터 즈노 지문 채널 초안 콘텐 크플 텐츠 퍼레 플로",
 "label":"omh-content-operator",
@@ -2283,7 +2283,7 @@
 }
 },
 {
-"anchors":"audio clip extract extraction field graphic imag input media meet ocr pars photo pictur podcast pull receipt say screenshot timestamp transcrib transcript transcription video webinar youtub",
+"anchors":"audio clip extract extraction field graphic imag input media meet ocr pars photo pictur podcast pull receipt say screenshot text timestamp transcrib transcript transcription video webinar youtub",
 "hangul":"녹음 디오 라인 린샷 미지 샷에 수증 스크 스탬 스트 영상 영수 오디 요약 유튜 음성 이미 임라 임스 전사 지에 추출 크린 타임 탬프 텍스 튜브 회의",
 "hangul_anchors":"녹음 디오 라인 린샷 미지 샷에 수증 스탬 영상 영수 오디 유튜 음성 이미 임라 임스 전사 지에 추출 크린 타임 탬프 텍스 튜브 회의",
 "label":"omh-media-input",

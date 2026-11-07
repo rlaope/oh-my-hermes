@@ -171,7 +171,7 @@ class ShippedTriggerPackTests(unittest.TestCase):
         for pack in packs:
             with self.subTest(language=pack.language):
                 self.assertEqual(pack.origin, ORIGIN_SHIPPED)
-                self.assertTrue(pack.skills)
+                self.assertTrue(pack.skills or pack.offer_only_phrases)
 
     def test_korean_moved_out_of_source_and_into_its_pack(self) -> None:
         # The move is the point: Korean goes through the same mechanism as every

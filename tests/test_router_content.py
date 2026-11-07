@@ -1084,7 +1084,7 @@ class RouterContentTests(unittest.TestCase):
             "memory-new": ("omh-memory-sync", "decision-recall"),
             "memory-sync": ("memory-new", "decision-recall"),
             "research": ("research-brief", "web-research", "research-department"),
-            "research-brief": ("ulw-research", "research-department"),
+            "research-brief": ("source-finder", "research-department"),
             "research-department": ("research-brief", "source-finder"),
             "source-finder": ("ulw-research", "research-brief"),
             "executor-runtime-readiness": ("external-connector-readiness", "toolbelt-readiness"),

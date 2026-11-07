@@ -70,6 +70,9 @@ PHRASE_LEAD = 6
 # message shares with the skill's description prose.
 _SCORER_LABEL_WEIGHTS: Mapping[str, int] = {
     "trigger": 3,
+    # A phrase that offers the skill and cannot dispatch it: it counts toward the
+    # shortlist floor and is never phrase evidence (`phrase_count`).
+    "offer": 6,
     "name": 5,
     "description": 3,
     "use_when": 3,
@@ -143,6 +146,52 @@ def has_own_phrase(labels: Sequence[str]) -> bool:
     return phrase_count(labels) > 0
 
 
+# What a winner may carry and still hold only word credits.
+_WORD_CREDIT_KINDS = frozenset({"trigger", "name", "description", "use_when", "category", "phase", "metadata", "locale"})
+
+
+def offered_over_word_credits(top: Mapping[str, object], others: Sequence[Mapping[str, object]]) -> str:
+    """The skill a message said an offer-only phrase of, when the winner has only words.
+
+    Word credits are what a Korean message dispatches on and an English one
+    clarifies on. Beside a phrase that says what the person needs, they name the
+    wrong skill: "에이전트가 계속 같은 툴만 반복 호출하는데" reached automation by
+    `계속` and `반복`. The turn asks, and offers the skill that was said. This only
+    ever takes a dispatch away; an offer-only phrase never makes one.
+    """
+    labels = _labels(top)
+    if any(_kind(label) not in _WORD_CREDIT_KINDS for label in labels) or phrase_count(labels):
+        return ""
+    for other in others:
+        if any(_kind(label) == "offer" for label in _labels(other)):
+            return str(other.get("skill") or "")
+    return ""
+
+
+def offered_ahead_of_words(recommendations: Sequence[Mapping[str, object]]) -> list[Mapping[str, object]]:
+    """The field for a clarify, with the skill an offer-only phrase named in front.
+
+    The route already asks, so a guard that only read topic words does not keep
+    the lead either: nothing here dispatches.
+    """
+    ranked = list(recommendations)
+    if not ranked:
+        return ranked
+    labels = _labels(ranked[0])
+    if any(_kind(label) not in {*_WORD_CREDIT_KINDS, "guard"} for label in labels) or phrase_count(labels):
+        return ranked
+    for index, other in enumerate(ranked[1:], start=1):
+        if any(_kind(label) == "offer" for label in _labels(other)):
+            ranked.insert(0, ranked.pop(index))
+            break
+    return ranked
+
+
+def offer_only_winner(top: Mapping[str, object]) -> bool:
+    """Whether the winner stands on an offer-only phrase, below the dispatch threshold."""
+    return int(top.get("score", 0) or 0) < 8 and any(_kind(label) == "offer" for label in _labels(top))
+
+
 def dispatch_evidence(
     top: Mapping[str, object],
     others: Sequence[Mapping[str, object]],
@@ -208,6 +257,9 @@ __all__ = [
     "OWN_EVIDENCE_FLOOR",
     "PHRASE_LEAD",
     "dispatch_evidence",
+    "offer_only_winner",
+    "offered_ahead_of_words",
+    "offered_over_word_credits",
     "has_own_phrase",
     "phrase_count",
     "own_evidence_score",

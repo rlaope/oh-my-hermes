@@ -84,7 +84,6 @@ _OVERRIDES_AROUND_UNSHIPPED_SKILLS = {
     "ulw-work::quality_bar": ("maestro",),
     "ulw-qa::quality_bar": ("todo-checklist",),
     "omh-source-finder::use_when": ("research-department",),
-    "omh-research-brief::description": ("research-department",),
     "omh-model-finetuning::why_this_exists": ("model-optimization", "workflow-learning"),
     "omh-spend-gate::why_this_exists": ("browser-operator",),
     "omh-memory-new::description": ("memory-sync",),

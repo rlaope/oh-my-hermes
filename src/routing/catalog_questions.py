@@ -5,6 +5,8 @@ import re
 from functools import lru_cache
 import unicodedata
 
+from .localization import normalized_phrase
+from .trigger_language_packs import offer_only_phrase_spoken
 from .visual_qa_cues import BROWSER_VISUAL_QA_PHRASES
 
 _EXPLICIT_CATALOG_PHRASES = (
@@ -643,6 +645,9 @@ _OPERATOR_ACTION_QUESTION_MARKERS = (
 
 @lru_cache(maxsize=4096)
 def is_skill_catalog_question(message: str) -> bool:
+    # "할 일 목록" says a list, and an offer-only phrase says which one: not the catalog.
+    if offer_only_phrase_spoken(normalized_phrase(message), other_than=""):
+        return False
     lowered = message.strip().lower()
     if not lowered:
         return False

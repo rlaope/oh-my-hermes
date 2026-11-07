@@ -361,8 +361,8 @@ NON_SKILL_BACKTICKS = frozenset(
 # `provider-profile-posture` defers connector adoption, the tool inventory and
 # a model-provider login to those two and `model-setup`; no sibling gains a
 # statement pointing back. Five cases, five pairs, two new owners.
-EXPECTED_DEFERENCE_CASES = 448
-EXPECTED_DEFERENCE_PAIRS = 473
+EXPECTED_DEFERENCE_CASES = 450
+EXPECTED_DEFERENCE_PAIRS = 475
 EXPECTED_DEFERRING_OWNERS = 133
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
@@ -422,7 +422,14 @@ _SPEND_GATE_BY_DESIGN = (
     "request marker; a Do-Not-Use line is not such a request, so it cannot surface spend-gate. A person's "
     "marked request ('please pay ... with my card') reaches it."
 )
+_MARKET_RESEARCH_BY_DESIGN = (
+    "by design: market-research is offered only to a request that opens on one of its method phrases, or by an "
+    "offer-only phrase (_market_research_offers_itself); a Do-Not-Use line is neither. 'do market sizing for "
+    "dental clinics' and '치과 시장 규모 추정해줘' reach it."
+)
 DELIBERATELY_UNREACHABLE: dict[tuple[str, str], str] = {
+    ("web-research", "market-research"): _MARKET_RESEARCH_BY_DESIGN,
+    ("research-brief", "market-research"): _MARKET_RESEARCH_BY_DESIGN,
     ("automation-blueprint", "spend-gate"): _SPEND_GATE_BY_DESIGN,
     ("browser-operator", "spend-gate"): _SPEND_GATE_BY_DESIGN,
     ("systematic-review", "repro-audit"): (
@@ -431,8 +438,9 @@ DELIBERATELY_UNREACHABLE: dict[tuple[str, str], str] = {
         "a Do-Not-Use line is not such a request. 'Compare my HellaSwag log with the paper' reaches it."
     ),
 }
-# systematic-review's repro-audit statement adds the third pair (+1).
-EXPECTED_DELIBERATELY_UNREACHABLE_COUNT = 3
+# systematic-review's repro-audit statement adds the third pair (+1), and the
+# market-research lines in web-research and research-brief two more.
+EXPECTED_DELIBERATELY_UNREACHABLE_COUNT = 5
 
 
 def _deference_cases() -> list[tuple[str, tuple[str, ...], str]]:

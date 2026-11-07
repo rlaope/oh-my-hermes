@@ -111,6 +111,17 @@ places the Hangul, Kana or Han phrases had. This covers shipped packs only: a
 user pack's phrases also score word by word, so hold a word back with
 `whole_phrase_only_tokens` where it should count only inside its phrase.
 
+A pack may also carry `offer_only_phrases`, a table of the same shape as
+`skills`, for how a person says a need when the words are not enough to take the
+turn. An offer-only phrase is not a trigger: it stays out of the catalog and the
+rendered skill, its words never score, and it holds its skill below the dispatch
+threshold, so it names the skill as the candidate and the turn asks. It may name
+a skill whose own gate refuses the sentence, still only as the candidate. What
+the router would have dispatched without it stands, except a winner that holds
+only word credits, which asks instead. A pack may hold this table alone. Add a
+phrase here first; promote it to `skills` only with aimed negatives that show it
+can dispatch.
+
 Two gates hold the mechanism together. `tests/test_trigger_language_packs.py`
 proves every shipped phrase is live in its skill's scored surface, that every
 skill's trigger tokens, lexical document and anchors stay as they are with its

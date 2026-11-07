@@ -718,15 +718,21 @@ def phrase_is_spoken(message: str, phrase: str) -> bool:
     """
     if not message or not phrase:
         return False
-    require_right_edge = " " not in phrase
+    require_right_edge = " " not in phrase or len(phrase.rsplit(" ", 1)[1]) <= 2
     start = message.find(phrase)
     while start != -1:
         if not _continues_a_spaced_word(message, start - 1, phrase[0]):
             end = start + len(phrase)
-            if not require_right_edge or not _continues_a_spaced_word(message, end, phrase[-1]):
+            if _closes_an_open_hangul_syllable(message, end):
+                pass
+            elif not require_right_edge or not _continues_a_spaced_word(message, end, phrase[-1]):
                 return True
         start = message.find(phrase, start + 1)
     return False
+
+
+def _closes_an_open_hangul_syllable(message: str, index: int) -> bool:
+    return index < len(message) and "\u11a8" <= message[index] <= "\u11ff"
 
 
 def _continues_a_spaced_word(message: str, index: int, edge: str) -> bool:
