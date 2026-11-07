@@ -153,6 +153,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # other row moved, and the pin before it was d6dfefff...fc71.
             # 533907 -> 534254 and the digest re-derived: the business-operations skill audit
             # adds required-input words and a redline rule to ten rows (+347, itemized at
+            # 533907 -> 535114 and the digest re-derived: the coding-core skill audit round edits the
+            # ultraperf, ultraqa, ask, strategy-brief, plan, ralplan, loop, ultrawork, maestro and research
+            # quality bars, safety rules and inputs (+1207 net, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT);
+            # the pin before it was d6dfefff...fc71.
             (skill_capabilities, 533913, FULL_ROW_DELTA_CAP,
              '2af3d114df9fd471b650d923c9691f67a52a7de6301fce0f6487f7774f8e5f2a',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
@@ -398,6 +402,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # pin before it was 7e537e8d...4b2c.
         # The business-operations skill audit rewrites sixteen bodies (checklists, boundaries and
         # practitioner checks); the pin before it was 7e537e8d...4b2c.
+        # The coding-core audit round moves fourteen bodies (adversarial-consensus, ask, dag-ulw, deep-interview,
+        # loop, maestro, plan, ralplan, research, research-brief, strategy-brief, ultraperf, ultraqa, ultrawork);
+        # the pin before it was 7e537e8d...4b2c.
         self.assertEqual(_digest(legacy_hashes), '8c5d5eede91c056339f2aee6baeaf93bc9f704be51e228359a89bb8231a29c53')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
@@ -424,6 +431,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # other bodies repeat (-134); swapping those bodies back to main's restores 124355.
         # 124814 -> 123214: the business-operations skill audit replaces repeated default
         # checklists and generic Why lines with each skill's own (-1600).
+        # 124814 -> 124568: the coding-core audit round rewords the repeated sections of the ultraperf, ultraqa,
+        # ask, strategy-brief, plan, loop, ultrawork, maestro and dag-ulw bodies (-246 net); the ceilings keep their headroom.
         self.assertEqual(legacy['repeated']['bytes'], 123615)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
@@ -450,8 +459,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         expected = {
             'skill_index_line_max_chars': 100,
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
-            'pre_llm_call_context_chars_max': 6041,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
-            'pre_llm_call_context_fallback_chars_max': 7593,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
+            'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
+            'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 3630,  # Human-voice reply sentence (+110).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,

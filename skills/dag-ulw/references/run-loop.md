@@ -135,7 +135,8 @@ or Claude Code when asked, or named it in a request, through `omh chat` or `omh 
 both in a dag-ulw request in Hermes chat also records a choice per owner, without changing the main route.
 The record is read as the router reads it, with one extra rule: a choice counts for a day. An external
 coding CLI spends the person's money and quota, so a choice older than 24 hours (or dated in the future)
-starts nothing; the person names the owner again.
+starts nothing; the person names the owner again. This day rule belongs to a dag-ulw export: any other
+handoff to an external coding CLI (`ulw-maestro`) needs a choice made for that run.
 
 With such a choice:
 

@@ -194,7 +194,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The user asks for one bounded delivery cycle; use `ultrawork`'s delivery-boundary capability instead.
   - Scope and milestones are already known and only durable checkpoint/resume tracking is needed; use `ultrawork`'s durable-checkpoint capability.
-  - The user gives only a north-star outcome such as revenue, stars, or adoption and has not accepted a bounded first loop goal.
+  - The user gives only a north-star outcome such as revenue, stars, or adoption and declines the bounded first loop goal you proposed; stop at the proposed arena, problem and verification and wait.
   - The goal is too vague to name an observable problem, next artifact, verification signal, or stop condition.
   - The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.
   - The permission profile does not allow repeated research, handoff, queue, or feedback cycles.
@@ -211,7 +211,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expected behavior: Use a direct delivery or PR workflow instead of starting a persistent loop.
   - Why: The task is bounded and should stop after merge evidence rather than create ongoing cycles.
 - Quality bar:
-  - Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path.
+  - Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path, unless a Do Not Use condition holds; then name that condition and hand to the skill it names, or say none applies.
   - Classify the goal as task, project, ambition, external-wait, or unclear inside the loop, then keep progressing until a real permission, evidence, verification, context, budget, or external-wait gate appears.
   - A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it. A mid-run message is the latest steering for the active task, not automatically a replacement objective: it replaces the objective when the user says so and steers the current one otherwise.
   - A follow-up that needs new authority, materially expands the scope, or changes external state not already authorized is described first and started only on the user's approval: the turn ends by naming that next action and asking whether to take it, as one question carrying the choices the user has, never by declaring what will not be done; persistence never broadens the authorized scope. A refused escalation is answered the same way, with a safer alternative inside the boundary or the authorization the boundary asks for — never a workaround or an indirect execution.
@@ -234,7 +234,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Treat ticks as preparation only. Advance one legal role phase through loop_phase_transition/v1 only after its named gate has observed evidence.
   - Treat a judge `done` verdict, a turn-ceiling pause, or a gate-retry pause as narration; completion still requires the linked goal ledger completion gate and observed evidence.
   - When the stop ladder names `replan_stuck_loop_once`, re-plan once from the goal ledger and recorded failures alone, not the transcript or recalled memory; record the new approach and continue; a second stop names the blocker step.
-  - Treat any future change to the default as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.
+  - Treat any future change to the default goal driver (native `/goal`) as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.
   - Compare only observed outcomes under matched task, model/provider, permissions, turn budget, and verification surface; unresolved evidence keeps the current default.
   - Keep promotion governance separate from goal-ledger completion and ordinary measured-loop keep/discard decisions; do not invent subjective scorers, fixed numeric thresholds, minimum run counts, weighted percentages, or per-turn artifact quotas.
   - Name the one element gating this loop from the `loop_constraint_assessment/v1` block before choosing the next action; if none is binding, say so from the recorded reason rather than assuming.
@@ -561,11 +561,11 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Handoff policy: Keep the workflow name for compatibility. The default implementation owner is the Hermes coding harness itself: run coding lanes as Hermes-native delegate_task subagents with OMH skills loaded, each lane given disjoint scope, verification, and review expectations, and each lane routed through the mixture categories — set the route with the `omh_delegate_route` tool before dispatch (research/scan lanes quick or unspecified-low; ideation and hard debugging ultrabrain or deep; architecture and system-design lanes architect; visual work visual-engineering or artistry; docs writing) and name the routed category and reasoning effort in the lane's status. When the user names a model for the run (for example 'use fable' or 'fable로 해줘'), pin it: keep the fitting category for each lane's label but pass the user's model and reasoning effort as explicit overrides in `omh_delegate_route` on every lane, so each dispatch runs the named model and the lane status shows it. [capability:delivery_boundary] Convert implementation into an external executor/runtime handoff such as Codex, Claude Code, OMX/pi-family/OMC, or another coding agent only when the user accepts that owner; no external CLI is the default owner, and external handoff is a separate opt-in path, never the default recommendation.
 - Why this exists: `ultrawork` exists to choose one-owner, ordered-dependency, or independent-frontier execution for an accepted implementation plan without letting concurrency blur ownership, verification, worker protocol, worktree isolation, or observed runtime evidence. It also carries four named internal capabilities absorbed from sibling engines: `coordinated_scope` (coordinated worker lanes), `delivery_boundary` (one bounded plan-to-PR cycle), `single_owner_persistence` (one owner finishes and verifies), and `durable_checkpoint` (durable goal ledger with checkpoints and a final gate).
 - First steps:
-  - Initialize the phase todo before engine work (todo init) in ONE tool, never both: `todo_list` when `todo_list` is in your tool list or tool_search finds it (OMH mirrors it), else `omh_todo`; an accepted plan stays in `omh_todo`. Declare numbered phases in delivery order — bootstrap, one implement/verify/deliver task per lane or work unit, independent review lanes, and an evidence-and-cleanup close, one task per observable outcome — keep exactly one item active, and update states as lanes complete, so the run walks a bounded checklist. Phase names and task titles are written in English as short labels even when the conversation runs in another language, since the HUD checklist is an operator surface.
+  - Initialize the phase todo before engine work (todo init) in ONE tool, never both: `todo_list` when `todo_list` is in your tool list or tool_search finds it (OMH mirrors it), else `omh_todo`; an accepted plan stays in `omh_todo`. Declare numbered phases in delivery order — bootstrap, one implement/verify/deliver task per lane or work unit, independent review lanes, and an evidence-and-cleanup close, one task per observable outcome — keep exactly one item active, and update states as lanes complete, so the run walks a bounded checklist. Phase names and task titles are written in English as short labels even when the conversation runs in another language (the HUD is an operator surface).
 - Use when: Use when an accepted implementation plan can be split into independent, reviewable work lanes.
 - Do not use when:
   - Avoid conflicting parallel writers; use single-owner or ordered execution.
-  - The plan is not accepted, lane boundaries are unclear, or verification commands are missing.
+  - Plan not accepted, lanes unclear or verification missing; use `plan` (`ralplan` for a stated risk) unless a delivery cycle was asked for or it is one concrete change with its own acceptance criteria and verification command.
   - The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.
   - For a decision spike, use `decision-prototype`.
   - [capability:coordinated_scope] The lanes are exploratory research or QA coordination without an accepted implementation plan; frame them with the `coordinated_scope` capability before parallel delivery.
@@ -644,7 +644,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - [capability:durable_checkpoint] If the goal ledger is stale or missing, inspect .omh/goals and ask which checkpoint to resume before continuing.
   - [capability:durable_checkpoint] If a blocker checkpoint exists, keep the goal open and record the blocker plus the smallest unblock action.
 - Required inputs:
-  - accepted plan
+  - accepted plan, or one concrete change's acceptance criteria and verification command
   - work units with read/write scopes
   - dependency edges or shared invariants
   - verification commands
@@ -706,7 +706,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Planning is not execution permission. Handoff requests authorize preparation only; explicit execution requests authorize only their scope, subject to readiness and permission probes. Clarify missing authority.
   - Require an explicit owner choice for this run: named now, confirmed when asked, or recorded as `accepted_explicit_choice`. Recommendations, plan mentions and previous owners do not count. For a missing, ambiguous or unready owner, ask `choose_executor` once and stop; never choose for the user.
   - Owner selection alone is not dispatch permission: `prepare a Codex handoff only` or `use Codex, do not dispatch` stays preparation-only. `Use Codex to implement this now` supplies both the owner choice and dispatch permission within scope, with no redundant confirmation. After readiness and permission probes, invoke the fanout-dispatch bridge (`omh coding run` for one unit); clarify missing owner or action authority first.
-  - State the handoff mode before composing: claude-code is prompt-only (`coding_prompt_handoff/v1` -- the prepared handoff record is never dispatchable and never described as a run; only the fanout-dispatch bridge -- `omh coding fanout dispatch` or its `omh coding run` single-run entry -- ever spawns a CLI), codex is a dispatchable `coding_executor_handoff/v1`, and omx-runtime/pi-family-runtime/omc-runtime are `coding_runtime_handoff/v1`.
+  - State the handoff mode before composing: the claude-code handoff record is prompt-only (`coding_prompt_handoff/v1` -- that record is never dispatchable and never described as a run; a user-commanded Claude Code run goes through the bridge below, and only the fanout-dispatch bridge -- `omh coding fanout dispatch` or its `omh coding run` single-run entry -- ever spawns a CLI), codex is a dispatchable `coding_executor_handoff/v1`, and omx-runtime/pi-family-runtime/omc-runtime are `coding_runtime_handoff/v1`.
   - Compose the prompt from the selected profile's DISCOVERED skills via `omh coding executor-skills --profile <profile>`: arrange the returned skills by the unit's role recipe, one named skill per step, using each skill's own invocation string verbatim (`/name`, `/pack:name` from its manifest, `$name` for a codex pack) -- never a guessed prefix. Empty discovery gets one explicit line -- "no installed skills discovered for <profile>; prompt composed generically" -- then compose generically. Load `references/executor-prompt-composition.md` for the full procedure.
   - A discovered skill is declared, never observed: a `SKILL.md` on disk is evidence the file exists, not that the receiving agent loads, enables, or honours it -- its own registry is the authority.
   - Hold every composed prompt to the executor prompting contract: the ten required sections in order (Goal, Do, Don't, Known context, Unknowns and decision rule, Expected result, Test, Progress and blockers, Evidence boundary, Task), a greppable `Docs consulted:` block (URL plus version, or the explicit none-line), and the six-section session summary shape on report-back.
@@ -792,7 +792,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expected behavior: Route to `codebase-onboarding` because the study target is this repository, not external sources or reference implementations.
   - Why: Local repo orientation needs no external evidence gathering or claim verification.
 - Quality bar:
-  - Ask for the research question, source boundaries, freshness, jurisdiction, and version assumptions before retrieval.
+  - Ask for the research question, source boundaries, freshness, jurisdiction, and version assumptions before retrieval. When another workflow or a lane that cannot ask called you, take audience = coding agent, skip the format and language questions, use the caller's stated question and depth, take the open web and the caller's repository as source boundaries, current freshness, and no stated jurisdiction or version, and record each defaulted input in the dossier `scope` as `defaulted: <why>`; ask only when a human is in the loop.
   - Ask who the output is for before retrieval and never infer it: a human reader gets a briefing document, a coding agent gets the dense handoff of findings, exact symbols, and file paths. The answer changes what the run records, not only how it is written up.
   - On the human branch ask the output format (markdown, a print-ready page, or both) and the output language before writing, then hold the document to `references/briefing-format.md` - noun-phrase titles carrying a role label from its closed vocabulary, cause before effect, terms defined at first use, figures drawn in code blocks, and the fixed chapter-and-appendix structure.
   - Keep the coding-agent branch dense: findings, exact symbols, file paths, and the plan-feed block, with no narrative framing and no briefing structure.
@@ -1324,9 +1324,10 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep strategy synthesis in Hermes; do not create implementation handoff until a decision is accepted and code work is explicit.
-- Why this exists: `strategy-brief` exists to keep `strategy` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+- Why this exists: `strategy-brief` exists so a team decision ends as a recommendation whose options are priced in one unit with their lag (and, when hard to reverse, a proposed ADR), not a discussion where each option is argued in different terms.
 - Use when: Use when Hermes should turn goals and evidence into options, tradeoffs, recommendations, and a decision-ready brief.
 - Do not use when:
+  - A technical choice one cheap experiment can settle; use `decision-prototype`. A technical choice inside a plan being written; use `plan`. A technical choice the user wants attacked; use `adversarial-consensus`. Use this skill for the decision note and ADR once the options are known.
   - The strategic question is whether an early idea's customer problem and segment are real, and no validated discovery receipt exists yet; use `product-discovery-validation`.
   - The question is how to run a hiring process — scorecards, interview loops, candidate comparison — rather than whether to hire at all; use `people-ops`.
   - The user wants Jev's typed probabilities for a yes/no, pick-one, or scored question over supplied text rather than tradeoffs and a recommendation; use `jev-ask`.
@@ -4766,9 +4767,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expected behavior: Generate adversarial QA scenarios, expected signals, observed results, and fix-or-retry routing.
   - Why: The request asks for verification pressure and hostile scenarios.
 - Bad example:
-  - Prompt: ultraqa: treat casual chat or unaccepted work as if this workflow already produced verified results.
-  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ultraqa`.
-  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+  - Prompt: ultraqa that the profile page looks right on mobile
+  - Expected behavior: Route to `visual-qa`; no changed behavior is being attacked.
+  - Why: The question is how a rendered page looks, which the viewport and state matrix answers.
 - Quality bar:
   - Do not start this engine as an automatic continuation of another skill's output: an accepted plan, a clarified brief, or a routing recommendation is planning evidence, not permission. Unless the user explicitly invoked this engine themselves, restate in one line what will start (engine, scope, selected executor) and wait for the user's explicit go-ahead first.
   - A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it. A mid-run message is the latest steering for the active task, not automatically a replacement objective: it replaces the objective when the user says so and steers the current one otherwise.
@@ -4785,7 +4786,8 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - The scenario, expected behavior, observed result, and pass/fail basis are named.
   - Proposed fixes are separated from observed QA evidence.
-  - Missing or failed verification routes back to plan, fix, or a narrower test.
+  - Missing or failed verification routes back to plan, fix, or a narrower test; a failed scenario gets at most two fix-and-rerun rounds, then it is reported as an open finding with its evidence and is not redefined to pass.
+  - Everything the hostile scenarios created or changed (accounts, rows, files, processes, ports) was listed before the first one ran and removed or restored afterwards, with the command and its observed result as the cleanup receipt, or what remains is named.
 - Recovery notes:
   - If a scenario needs a real install or external service the harness cannot reach, retain other observed pass/fail evidence, mark that scenario not_observed, and hand back its manual test guide with setup, do, expect, and broken signals.
   - If a hostile browser scenario would submit, buy, send, or delete on a live target without approval, retain read-only scenario results, mark that action not_observed, and hand back the target and exact action for user approval.
@@ -4826,15 +4828,18 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+  - The change is risky or architectural and the user wants alternatives compared, a risk review and a recorded decision; use `ralplan`, and keep this skill for the ordinary plan.
+  - Requirements are too vague to list non-goals or acceptance criteria; use `deep-interview`.
+  - The direction is decided and what is missing is the phase-by-phase refactor shape; use `refactor-plan`.
 - Strong routing signals: `plan`, `$plan`, `implementation plan`, `make a plan`, `write a plan`, `write the plan`, `task breakdown`, `safe feature`, `safely add a feature`, `add a feature`, `feature request`, `new feature`, `product triage`, `bug triage`, `issue triage`, `reproduction plan`, `workflow hub`, `coding handoff`, `project template`, `github pr workflow`, `実装計画`, `タスク分解`, `安全に機能追加`, `機能追加の計画`, `답할 차례`, `준비할 차례`, `재현 계획`, `요구사항 정리`, `작업 허브`, `작업 허브가 필요`, `상태와 다음 행동`, `프로젝트별 운영`, `сделай план`, `составь план`, `напиши план`, `спланируй`, `план реализации`, `实现计划`, `任务拆解`, `安全地新增功能`, `新增功能计划`, `susun rencana implementasi`, `pecah fitur ini jadi langkah pengerjaan`, `bantu rencanakan penambahan fitur`, `tolong bikin rencana perbaikan bug`, `susun tahapan implementasi sebelum mulai coding`, `lập kế hoạch thực hiện`, `chia tính năng này thành các bước thực hiện`, `giúp lên kế hoạch thêm tính năng`, `hãy lập kế hoạch sửa lỗi`, `xác định các giai đoạn thực hiện trước khi code`
 - Good example:
-  - Prompt: plan: handle a planning request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `plan` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: plan: add CSV export to the reports page; admins only, and it must stream 100k rows.
+  - Expected behavior: Write goals, non-goals, risks, tasks with ids, dependencies and done checks, a closing gate, and the acceptance criteria; hand back for acceptance before any handoff.
+  - Why: A feature with real acceptance questions needs a plan the user accepts before any code moves.
 - Bad example:
-  - Prompt: plan: treat casual chat or unaccepted work as if this workflow already produced verified results.
-  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `plan`.
-  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+  - Prompt: plan: fix the null check in parse_user (one line, the test already exists)
+  - Expected behavior: Make the edit directly and run the test; a plan adds a round trip with nothing to decide.
+  - Why: One bounded edit with a known check has no goals or tradeoffs to write down.
 - Quality bar:
   - Make goals, non-goals, risks, acceptance criteria, and verification shape explicit.
   - Where the repository declares non-negotiable principles, load `references/project-constitution.md` and record the check: a plan conflicting with a MUST is resolved by changing the plan, never by reinterpreting the principle.
@@ -4905,6 +4910,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The refactor's direction is already decided and what is missing is its execution shape - which files move in which phase, what verifies each phase, where each phase rolls back to; use `refactor-plan`.
   - One plan-blocking choice still needs behavior evidence rather than argument; run `decision-prototype` first and consume its decision receipt without transcript replay.
   - The user wants a pure source lookup, citation check, or paper explanation with no implementation plan.
+  - An ordinary feature or fix that needs a plan but not a consensus review (no architectural, regression or user-visible risk the user named); use `plan`.
   - The unresolved work is repository terminology alignment or a project-language decision frontier; use `context` before planning.
 - Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`, `acceptance criteria`, `verification command`, `reviewable PR`, `risky planning`, `dangerous planning`, `unsafe change`, `refactor safety`, `PR로 만들`, `PR로 만들 수 있게`, `위험한 리팩터링`, `리팩터링 위험`, `리스크 있는 리팩터링`, `검증 command`, `리뷰 가능한 단위`, `코드베이스 조사`, `웹리서치 계획`, `대안 비교`, `리스크 검토`, `план с рисками`, `план с критериями приёмки`, `рискованный рефакторинг`, `опасный рефакторинг`
 - Good example:
@@ -4941,13 +4947,13 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Observed repo facts and source/web evidence gaps are named.
   - At least two options or one chosen option plus rejected alternatives are recorded.
   - Risks, acceptance criteria, and verification commands are testable or explicitly blocked.
-  - Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped.
+  - Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped: the plan states the count of target-state differences and the count of `Success criteria` rows, and the two are equal or each gap is named as a user-excluded non-goal.
   - When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
   - The plan exists as a recorded file-backed artifact, not only as chat narration.
   - The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.
   - The follow-on engine or executor path was started only after the user's explicit go-ahead in this conversation, never from plan acceptance alone.
 - Recovery notes:
-  - If requirements are still fuzzy, route back to deep-interview before planning.
+  - If requirements are still fuzzy, route back to the `deep-interview` workflow before planning.
   - If current-source evidence is missing, route a `research` step before accepting the plan.
   - If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
 - Required inputs:
@@ -5014,7 +5020,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Round two attacks only: every perspective attacks other perspectives' findings and never defends or restates its own. A perspective with no objection to any other seat says so explicitly rather than filling the round with agreement.
   - Round three answers each objection with exactly one verdict — defend with evidence, refine the finding, or concede it — and a conceded finding is struck from the record instead of being softened.
   - The lead distills only. Nothing new enters at distillation: every line in the bundle traces to a surviving finding, and it goes into one of Hard Constraints, Decisions, Risks, Open Questions — never into a fifth bucket, a recommendation, a sequence of steps, or a task list.
-  - End with the mandatory handoff: state that the bundle is INPUT to planning, name the follow-on planning workflow (`ralplan` for a reviewed plan, `plan` when the shape is already agreed), and stop. Treating the bundle as the plan is the anti-pattern this workflow exists to prevent.
+  - End with the mandatory handoff: state that the bundle is INPUT to planning, name the follow-on planning workflow (the `ralplan` workflow for a reviewed plan, the `plan` workflow when the shape is already agreed), and stop. Treating the bundle as the plan is the anti-pattern this workflow exists to prevent.
   - Keep round transitions and perspective outputs as declarations: a stated round change is not evidence that the round happened, and a distilled bundle is not plan acceptance, implementation, review, CI, or merge evidence.
 - Completion checklist:
   - The roster is named with 3-5 distinct angles, and no two seats argue the same one.
@@ -5508,7 +5514,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Compatibility alias: `false`
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
-- Handoff policy: Hermes owns the audit, baseline, hypothesis, budget, and status; every optimization code edit becomes a selected executor/runtime handoff and returns as observed re-measurement.
+- Handoff policy: Hermes owns the audit, baseline, hypothesis, budget, and status; each optimization code edit runs in the Hermes harness (a `delegate_task` lane routed with `omh_delegate_route`) unless the user chose an external coding owner, in which case it goes through `maestro`; either way it returns as observed re-measurement.
 - Why this exists: `ultraperf` exists because most performance work starts unlocalized: something is slow, leaking, or expensive and nobody knows where. It forces measurement before edits, one hypothesis at a time, executor-owned changes, and a regression budget, so an optimization loop cannot end in unverified claims.
 - Use when: Use when performance problems are suspected but not yet localized, or when several cost hotspots across domains need a measured inspect-and-fix loop.
 - Do not use when:
@@ -5518,19 +5524,19 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `ultraperf`, `$ultraperf`, `ulw-perf`, `performance audit`, `performance bottleneck`, `find the bottleneck`, `profile the hot path`, `memory leak investigation`, `token cost hotspot`, `storage footprint audit`, `rendering jank`, `model inference hotspot`, `slow ci pipeline`, `query performance audit`, `performance-goal`, `performance goal`, `latency`, `throughput`, `benchmark`, `성능 병목`, `메모리 누수`, `느려진 원인`, `성능 전반 점검`
 - Good example:
   - Prompt: $ultraperf checkout feels slow and the worker memory keeps climbing - find where and fix it
-  - Expected behavior: Audit the baseline, name the evaluator command, rank hot-path hypotheses, hand the smallest reversible fix to the selected executor, re-measure, and state the budget delta.
+  - Expected behavior: Audit the baseline, name the evaluator command, rank hot-path hypotheses, hand the smallest reversible fix to its owner (the Hermes harness unless an external one was chosen), re-measure, and state the budget delta.
   - Why: The problem is real but unlocalized across more than one domain.
 - Bad example:
-  - Prompt: $ultraperf make the recommender p95 under 200ms; baseline 340ms, benchmark is 'make bench'
-  - Expected behavior: Skip the discovery audit: record 340ms as the baseline and `make bench` as the evaluator command, then hand the fix to the selected executor and re-measure against the 200ms target.
-  - Why: A single declared measurable goal does not need a discovery loop.
+  - Prompt: $ultraperf the docstring on parse_user is wrong
+  - Expected behavior: Fix the docstring directly; there is no measured cost and no hot path to rank.
+  - Why: A wrong comment is a correctness edit, not a performance problem, so no baseline or regression budget applies.
 - Quality bar:
   - Record a baseline and name the evaluator command before proposing any optimization edit.
   - Attack only a hot path shown by a measurement or profile; never micro-optimize unmeasured code.
-  - Keep every fix the smallest reversible change and route code edits to the selected executor.
-  - Re-measure after each change and report deltas only from observed evidence.
+  - Keep every fix the smallest reversible change and run its code edit in the Hermes harness, or through `maestro` when the user chose an external coding owner.
+  - Re-measure after each change and report deltas only from observed evidence; record the baseline as repeated runs (count and warm-up stated) with median and spread, and treat a delta smaller than the spread as no result.
   - Never present a restart, cache flush, or resource bump as a leak fix; prove causation by revert-verify.
-  - Set the regression budget as baseline x (1 + tolerance) and name the CI gate that enforces it.
+  - Set the regression budget as baseline x (1 + tolerance) for a lower-is-better metric (latency, memory, cost) or baseline x (1 - tolerance) for a higher-is-better one (throughput), with a tolerance at least the observed spread, and name the CI gate that enforces it.
   - A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it. A mid-run message is the latest steering for the active task, not automatically a replacement objective: it replaces the objective when the user says so and steers the current one otherwise.
   - A follow-up that needs new authority, materially expands the scope, or changes external state not already authorized is described first and started only on the user's approval: the turn ends by naming that next action and asking whether to take it, as one question carrying the choices the user has, never by declaring what will not be done; persistence never broadens the authorized scope. A refused escalation is answered the same way, with a safer alternative inside the boundary or the authorization the boundary asks for — never a workaround or an indirect execution.
   - The closing brief scales to the change: one or two sentences for a simple change. Lead with the result and validation; omit abandoned approaches unless they explain a tradeoff, and internal bookkeeping. Disclose requested-but-not-done work and material prepared/unmerged work; omit unrelated non-action footers. Required accounting stays outside this scaling. Order: result -> relevant evidence/limits -> observed accounting (when required) -> specific question (if useful). For a real unresolved user decision or a useful briefing discussion, offer one specific, content-linked question. Completed work needs no question; discussion grants no authority. Never estimate usage.
@@ -5542,7 +5548,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If no evaluator command exists, stop the loop and produce one before touching code.
   - If the re-measure does not move, revert the change and re-rank hypotheses instead of stacking fixes.
-  - If the goal turns out to be one declared metric with a budget, keep the loop and start from that baseline instead of profiling for a hot path.
+  - If the goal turns out to be one declared metric with a budget (for example p95 340ms to 200ms with `make bench`), skip the discovery audit: record the declared baseline and evaluator command, then fix and re-measure against the target.
 - Required inputs:
   - symptom or suspected slow surface
   - workload or reproduction
@@ -5657,17 +5663,18 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
   - The user wants typed yes/no, pick-one, or scored probabilities from Jev over supplied text; use `jev-ask`.
+  - The user wants several perspectives to attack a proposal and a distilled constraint bundle; use `adversarial-consensus`. Use this skill for one named outside advisor.
 - Strong routing signals: `ask`, `$ask`, `external advisor`, `ask claude`, `ask gemini`, `consult claude`, `consult gemini`, `opinion from claude`, `opinion from gemini`, `second opinion`, `claude 의견`, `gemini 의견`
 - Good example:
   - Prompt: ask: ask Claude as an external advisor to critique this plugin bridge plan before implementation.
   - Expected behavior: Prepare an advisor prompt, capture the response boundary, and summarize reusable critique.
   - Why: The user wants outside review before committing to a direction.
 - Bad example:
-  - Prompt: ask: treat casual chat or unaccepted work as if this workflow already produced verified results.
-  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ask`.
-  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+  - Prompt: ask: should I rename this variable?
+  - Expected behavior: Answer directly; no outside advisor would change the answer.
+  - Why: An outside critique is worth its cost only when it could change the decision.
 - Quality bar:
-  - Before consulting, name the question, why an outside answer could change yours, and the advisor the user named or configured; with none configured, say so and answer without one.
+  - Before consulting, name the question, why an outside answer could change yours, and the advisor the user named or configured (named in this request or earlier in this conversation, never inferred from an installed CLI; if none, ask once); with none, say so and answer without one.
   - Report the advice as one input: which points you accept, which you reject and why, and none of it as a verdict, a review, or a verified fact.
   - When the advisor is a coding CLI the user named and Hermes' bundled skill for it (`claude-code`, `codex`, or `opencode`) is in your skill list, take only the invocation from that skill and keep the run to advice, with no edits; load `references/cli-advisors.md`. None of these CLIs is the default advisor.
 - Completion checklist:
@@ -7872,6 +7879,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - One small change with one owner and one check: run it directly, or use `ultrawork` when the person named it.
   - The plan itself is still undecided and needs a reviewed decision record first; use `ralplan`.
   - Workers must talk to each other mid-run rather than hand off through files; use `ultrawork` coordinated lanes.
+  - The graph tool (omh_dag) is not in your tool list: say so and offer `ultrawork` for the same plan; do not simulate the graph in chat.
 - Strong routing signals: `dag-ulw`, `$dag-ulw`, `dag ulw`, `ulw dag`, `dag ultrawork`, `ultrawork dag`, `даг ультраворк`, `граф задач`, `задачи графом`
 - Good example:
   - Prompt: dag ulw: add the export API, its UI button and the docs page, then verify with the full test suite
@@ -12088,8 +12096,8 @@ Route implementation requests through scoped context, edit discipline, tests, re
   - Report coding progress from lifecycle evidence, not from the existence of a prepared prompt.
   - Name every delegated or parallel lane's model and, when the host exposes it, its reasoning effort inline as `(model effort)` in status and briefing lines — including runtime-native subagents; when no effort is exposed, show the model alone as `(model)` rather than writing a placeholder like `unknown` beside a known model, and never emit empty parentheses. Carry token and elapsed figures the same way in these narration lines: report observed figures and omit unobserved ones — when the user asks for a figure directly, say it was not observed instead of omitting it; a rendered status-board column keeps its own `unknown` cell.
   - When the user asks mid-run which models are working or how many tokens are spent, answer immediately with one line per lane in that same format plus a one-line total; a steering question never waits for lane completion.
-  - When delegating, show the composed delegate prompt in a fenced code block in the status message; truncate a long prompt to a bounded preview ending with `... [truncated, N chars total]` — the user must see WHAT was asked, not just that something was.
-  - Capture a resumable session or thread id at dispatch and report it in the status message: for non-interactive Claude Code pass `--output-format json` and read `session_id` from the result (resume with `claude -p --resume <session-id>`); for Codex pass `--json` and read `thread_id` (resume with `codex exec resume <thread-id>`, repeating `--skip-git-repo-check` outside a git repo). Never leave a delegate run with no recorded way to resume or steer it — a plain-text one-shot that hides its session id strands the work when the run stalls or times out.
+  - When delegating, show the composed delegate prompt in a fenced code block in the status message; truncate a long prompt to a bounded preview ending with `... [truncated, N chars total]`.
+  - Capture a resumable session or thread id at dispatch and report it in the status message: for non-interactive Claude Code pass `--output-format json` and read `session_id` from the result (resume with `claude -p --resume <session-id>`); for Codex pass `--json` and read `thread_id` (resume with `codex exec resume <thread-id>`, repeating `--skip-git-repo-check` outside a git repo). Never leave a delegate run with no recorded way to resume or steer it.
   - Before dispatch, grant the executor session every permission the task will need — file write/edit, command/test execution, and the working directory — on the dispatch command itself, not through settings-file guesses: for non-interactive Claude Code pass `--permission-mode acceptEdits` or an explicit `--allowedTools` list (`--dangerously-skip-permissions` only inside an isolated worktree or sandbox), and the equivalent sandbox/approval flags for other CLIs. `acceptEdits: true` is not a settings key and `~/.claude/settings.local.json` is not a file Claude Code reads — user scope is `~/.claude/settings.json` and project scope is the dispatch cwd's `.claude/settings.local.json` with rules under `permissions.allow`. Prove the grant with a bounded scratch-edit probe run before the real dispatch: a permission denial in a non-interactive run recurs identically on retry, so never redispatch until a changed grant is proven, and surface an ungrantable permission as a blocker before dispatch, not after minutes of silence.
   - Choose the wait strategy before starting long-running work and bind it to a completion signal the host exposes, never to a status loop: a command that fits one tool call runs once in the foreground with a duration-sized timeout; a longer terminal command runs in the background with completion notification armed and no process-status polling; a delegated lane relies on its delivered result while the parent continues independent work or ends the turn; a CI, PR, deploy, file, port, log-line, or external-session condition uses the host's monitor when observed, else exactly ONE bounded watcher or adaptive backoff outside model turns. Record the handle and observation mode at dispatch; every armed wait needs a hard deadline, a cancellation path, and a fallback naming the missing capability. Each wait closes in one terminal state with bounded evidence; an unbounded idle or busy-wait is a defect and a lost notification times out. One decision-changing midpoint peek and any user-requested status check stay allowed; neither is the wait mechanism. Ladder and terminal states: shared rail.
   - EVERY delegated or reviewer prompt carries the delegation protocol (omh coding composition-guide): goal echo-back before tool use, numbered pre-declared done criteria, exactly one mandatory verification pass with a two fix-and-verify cycle cap when the task changes files or other state, and a two-round re-review cap. On Hermes `delegate_task` the OMH plugin puts the protocol in each child's system prompt, so do not paste it into the goal; still write the numbered done criteria there. For Codex, Claude Code, and other runtime-native spawns, embed it in the prompt yourself. After two review rounds, stop and report the criterion-cited blockers instead of starting another reviewer.

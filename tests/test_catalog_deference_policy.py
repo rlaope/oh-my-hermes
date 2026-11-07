@@ -340,6 +340,12 @@ NON_SKILL_BACKTICKS = frozenset(
 # The business-operations skill audit adds six cases, eight pairs and one
 # owner (internal-audit now defers an engagement plan; people-ops, meeting-brief, cto-loop,
 # report-package and operating-rhythm gain boundaries); re-derived from the catalog.
+# The coding-core skill audit adds declining statements: `plan` defers a risky change to `ralplan`,
+# vague requirements to `deep-interview` and a decided refactor to `refactor-plan`; `ralplan` defers an
+# ordinary change to `plan`; `strategy-brief` defers technical choices to `decision-prototype`, `plan`
+# and `adversarial-consensus`; `ask` defers a multi-perspective attack to `adversarial-consensus`;
+# `ultrawork` defers an unplanned request to `ralplan`; `ultraperf` is rewritten to name `maestro`.
+# Eight cases, ten pairs (`ultrawork` also defers to `plan`), one new owner (`plan`).
 EXPECTED_DEFERENCE_CASES = 417
 EXPECTED_DEFERENCE_PAIRS = 437
 EXPECTED_DEFERRING_OWNERS = 123

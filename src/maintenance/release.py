@@ -978,6 +978,8 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # decides, targets for a report) and the playbook-free redline rule to the
 # capability rows (+347; the later review adds the countries whose formats apply and the
 # redline playbook question). Measured from the producer; no headroom.
+# 536979 -> 538186: the coding-core audit round edits quality-bar, safety-rule and input lines on ten
+# skills (+1207 net). Measured from the producer; no headroom.
 FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536985
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
@@ -2196,6 +2198,11 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # its checklists, boundaries and practitioner checks and took the pack to the
 # measured value below; that plus 10%, rounded up to the next 50,000, is
 # 1,650,000, the value the other skill-audit lanes re-derived too.
+# 1336920 -> 1473872 (measured; the ceiling 1500000 -> 1650000): the pack had grown to 1,471,273 across
+# the bodies merged since the last re-derive, leaving 1,778 chars under the point where
+# `test_one_more_ordinary_lane_member_fits_every_body_budget` finds that the largest lane-mate copy
+# (`ultrawork`, +26,949) no longer fits. The coding-core audit round adds 2,599 net across fourteen
+# bodies, which tipped it. 1,474,123 plus 10%, rounded up to the next 50,000, is 1,650,000.
 FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1480299
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000

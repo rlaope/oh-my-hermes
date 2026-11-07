@@ -80,7 +80,7 @@ Quality bar:
 - Round two attacks only: every perspective attacks other perspectives' findings and never defends or restates its own. A perspective with no objection to any other seat says so explicitly rather than filling the round with agreement.
 - Round three answers each objection with exactly one verdict — defend with evidence, refine the finding, or concede it — and a conceded finding is struck from the record instead of being softened.
 - The lead distills only. Nothing new enters at distillation: every line in the bundle traces to a surviving finding, and it goes into one of Hard Constraints, Decisions, Risks, Open Questions — never into a fifth bucket, a recommendation, a sequence of steps, or a task list.
-- End with the mandatory handoff: state that the bundle is INPUT to planning, name the follow-on planning workflow (`ralplan` for a reviewed plan, `plan` when the shape is already agreed), and stop. Treating the bundle as the plan is the anti-pattern this workflow exists to prevent.
+- End with the mandatory handoff: state that the bundle is INPUT to planning, name the follow-on planning workflow (the `ulw-plan` workflow for a reviewed plan, the `omh-plan` workflow when the shape is already agreed), and stop. Treating the bundle as the plan is the anti-pattern this workflow exists to prevent.
 - Keep round transitions and perspective outputs as declarations: a stated round change is not evidence that the round happened, and a distilled bundle is not plan acceptance, implementation, review, CI, or merge evidence.
 
 Required inputs:
