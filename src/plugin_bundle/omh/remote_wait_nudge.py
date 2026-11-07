@@ -425,6 +425,7 @@ FAILED_WAIT_STOP_TEXTS: Final[dict[str, str]] = {
     "ko": "이 세션을 다시 깨울 작업이 걸려 있지 않습니다. 이어서 하려면 메시지를 보내 주세요.",
     "ja": "このセッションを再び起こす処理は設定されていません。続けるには、メッセージを送ってください。",
     "zh": "没有任务会再次唤醒此会话。如需继续，请发送一条消息。",
+    "zh-Hant": "沒有任何工作會再次喚醒這個對話。如需繼續，請傳送一則訊息。",
 }
 
 # The host's notice header for one finished process, wherever a block starts:
@@ -468,6 +469,12 @@ _HANGUL = "ᄀ-ᇿ㄰-㆏가-힣"
 _KANA = "぀-ゟ゠-ヿㇰ-ㇿｦ-ﾟ"
 _HAN = "㐀-䶿一-鿿豈-﫿"
 _CJK_CHARS = re.compile(f"[{_HANGUL}{_KANA}{_HAN}]")
+# Common characters whose Simplified and Traditional forms differ, paired by
+# position. A Han reply is Traditional only when its Traditional-only forms
+# outnumber its Simplified-only ones; a tie, including a reply built only from
+# shared characters, keeps the Simplified copy it always had.
+_HANS_ONLY = "这们个会说请没设为来时对与从还过点开关么样经发现进动务话题实问认应该传续试测码数据项档执连环"
+_HANT_ONLY = "這們個會說請沒設為來時對與從還過點開關麼樣經發現進動務話題實問認應該傳續試測碼數據項檔執連環"
 _QUOTATION = re.compile(r'"[^"\n]*"|“[^”\n]*”|「[^」\n]*」|『[^』\n]*』')
 _SCRIPT_RUNS: Final = tuple(
     (language, re.compile(f"[{chars}]{{{REPLY_SCRIPT_MIN_RUN},}}"))
@@ -476,7 +483,7 @@ _SCRIPT_RUNS: Final = tuple(
 
 
 def reply_language(text: object) -> str:
-    """The language of *text*: ``ko``, ``ja``, ``zh`` or ``en``.
+    """The language of *text*: ``ko``, ``ja``, ``zh``, ``zh-Hant`` or ``en``.
 
     Fenced and inline code are removed first, because a Korean string in a
     code block says nothing about the language the reply is written in, and
@@ -487,8 +494,11 @@ def reply_language(text: object) -> str:
     majority script: a Japanese reply is often mostly kanji, so a majority
     rule would call it Chinese.
 
+    A Chinese reply is ``zh-Hant`` when its Traditional-only forms outnumber
+    its Simplified-only ones, else ``zh``.
+
     The stated limit: a Japanese reply with no run of two kana (all kanji, or
-    kanji with single-kana particles) reads as Chinese. Nothing in the text
+    kanji with single-kana particles) reads as Chinese, usually Traditional. Nothing in the text
     tells the two apart without a dictionary. Anything else, including a
     script with no copy here, is English.
     """
@@ -498,8 +508,14 @@ def reply_language(text: object) -> str:
         return "en"
     for language, run in _SCRIPT_RUNS:
         if run.search(prose):
+            if language == "zh" and _count_in(prose, _HANT_ONLY) > _count_in(prose, _HANS_ONLY):
+                return "zh-Hant"
             return language
     return "en"
+
+
+def _count_in(text: str, chars: str) -> int:
+    return sum(1 for char in text if char in chars)
 
 
 def remote_wait_declines() -> dict[str, int]:
