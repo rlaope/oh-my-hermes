@@ -945,7 +945,7 @@ _FEATURE_SURFACE_SKILLS = (
             "nearby restaurants",
             "traffic now",
         ),
-        "Use when someone needs a live lookup now, with the provider, freshness, and units stated, and no result claimed beyond the tool's output.",
+        "Use when Hermes should answer read-only live information lookups with the provider, freshness, and units stated, without claiming retrieval or result correctness.",
         category="live-info",
         phase="live-info-task",
         next_action="prepare_live_info_operator_card",

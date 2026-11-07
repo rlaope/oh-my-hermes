@@ -29,7 +29,6 @@ from .intent import classify_omh_quality_intent
 from .reference_regions import executable_routing_text
 from .jev_addressing import jev_addressed_skill
 from .localization import normalized_phrase, phrase_is_spoken, routing_terms, routing_tokens
-from .trigger_language_packs import offer_only_phrase_spoken
 from .materials_cues import OFFICE_FILE_MATERIAL_PHRASES
 from ..plugin_bundle.omh.dag_ulw_cues import DAG_ULW, asks_about_dag_ulw, dag_ulw_control, declines_dag_ulw, invokes_dag_ulw
 from ..plugin_bundle.omh.invocation_cues import invoked_instruction
@@ -6877,10 +6876,6 @@ def _greenfield_build_guard_applies(
     the unrelated low-confidence guesses (ops review, research, code review)
     a bare "what" otherwise scores against.
     """
-    # "RAG 챗봇 만들어줘" and "정식 보고서로 만들어줘" name the thing to make by a phrase
-    # another skill owns, so it is not an unnamed product to interview about.
-    if offer_only_phrase_spoken(normalized_query, other_than="deep-interview"):
-        return False
     if direct_coding_task_applies is None:
         direct_coding_task_applies = _direct_coding_task_guard_applies(normalized_query, query_tokens)
     if direct_coding_task_applies:
@@ -8647,25 +8642,10 @@ def employer_hiring_intent(normalized_query: str, query_tokens: set[str]) -> boo
     return search_sourcing or hiring_actor or (employer_actor and hiring_objective)
 
 
-WEB_SEARCH_UNAVAILABLE_PHRASES = (
-    "agent can't search the web",
-    "agent cant search the web",
-    "agent cannot search the web",
-    "hermes can't search the web",
-    "hermes cannot search the web",
-    "에이전트가 웹 검색을 못",
-    "에이전트가 웹 검색이 안",
-    "헤르메스가 웹 검색을 못",
-)
-
-
 def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     # Career discovery retains its domain method; retrieval is one of its steps.
     # Generic job/process/search words alone do not establish that intent.
     if _contains_phrase(normalized_query, ("job search",)):
-        return False
-    # An agent that cannot search has a backend to set up, not a topic to look up.
-    if _contains_phrase(normalized_query, WEB_SEARCH_UNAVAILABLE_PHRASES):
         return False
     if _hermes_setup_guide_requested(normalized_query):
         return False

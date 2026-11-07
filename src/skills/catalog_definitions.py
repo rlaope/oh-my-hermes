@@ -6020,7 +6020,10 @@ _DEFINITIONS = [
             "verification-gate",
             "verification gate",
             "quality gate",
-            "release gate",
+            # Lengthened from `release gate`, which dispatched on a racetrack's once it was this
+            # skill's alone; the two words still score, and bare they ask.
+            "run the release gate",
+            "release gate check",
             "test gate",
             "build lint test",
             "lint typecheck tests",
@@ -9661,7 +9664,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "morning-brief",
-        "Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with the narrowest access the provider allows and diff approval; produces the configuration, not the daily brief itself.",
+        "Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with the narrowest scope and diff approval; produces the configuration, not the daily brief itself.",
         (
             "morning-brief",
             "morning brief",

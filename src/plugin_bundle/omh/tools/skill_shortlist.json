@@ -751,9 +751,9 @@
 "situation":"Proof a change is done before merge",
 "terms":{
 "1":"block ci claim completion concret defin doc herm hold proof record security turn verdict",
-"2":"artifact chang check clos definition deriv edit instead longer match prov quality readiness ready regenerat task their truth verify work",
+"2":"artifact chang clos definition deriv edit instead longer match prov quality readiness ready regenerat run task their truth verify work",
 "3":"build checklist generat lint output pass pr releas typecheck",
-"4":"evidenc file sourc",
+"4":"check evidenc file sourc",
 "5":"befor gate merg test verification"
 }
 },
@@ -1339,10 +1339,10 @@
 "name":"morning-brief",
 "situation":"Mail and calendar brief configuration",
 "terms":{
-"1":"allow apply approv approval check configuration contract demand diagnos follow guid herm itself mcp narrowest prerequisit produc provider shar time user verify want",
+"1":"apply approv approval check configuration contract demand diagnos follow guid herm itself mcp narrowest prerequisit produc scop shar time user verify want",
 "2":"diff digest gmail inbox integration read set summary",
-"3":"daily setup",
-"4":"access configur email mail",
+"3":"access daily setup",
+"4":"configur email mail",
 "6":"calendar connect",
 "7":"brief",
 "9":"morn"
@@ -2205,9 +2205,9 @@
 "name":"live-info-operator",
 "situation":"Live rate, score, or local time a work task needs",
 "terms":{
-"1":"add after beyond claim data financ gate local nativ ordinary output overlay policy prefer quality request result sourc stat task work",
-"2":"airport bitcoin btc crypto direction exchang forecast freshness information krw last lookup near nearby new night provider real restaurant seoul stock timezon today tool traffic unit usd won york",
-"3":"map scor sport zone",
+"1":"add after answer claim correctness data financ gate herm local nativ ordinary overlay policy prefer quality read request result retrieval sourc stat task tool without work",
+"2":"airport bitcoin btc crypto direction exchang forecast freshness krw last lookup near nearby new night provider real restaurant seoul stock timezon today traffic unit usd won york",
+"3":"information map scor sport zone",
 "4":"current game pric",
 "5":"info operator rate time weather",
 "7":"live"

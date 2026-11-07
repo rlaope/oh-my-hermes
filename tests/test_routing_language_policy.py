@@ -310,10 +310,7 @@ class RoutingLanguagePolicyTests(unittest.TestCase):
         # `trigger_backed_scripts()`: Latin was already backed by the English
         # catalog, so a Latin pack adds a language to a supported script rather
         # than a script to the supported set.
-        #
-        # `en` holds only offer-only phrases: English triggers stay in the catalog,
-        # and Latin was already backed by it.
-        self.assertEqual(set(shipped_trigger_pack_languages()), {"en", "ko", "ja", "zh", "id", "vi", "ru"})
+        self.assertEqual(set(shipped_trigger_pack_languages()), {"ko", "ja", "zh", "id", "vi", "ru"})
 
     def test_every_routable_skill_is_reachable_in_english(self) -> None:
         missing = [

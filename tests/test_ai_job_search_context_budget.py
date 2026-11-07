@@ -148,8 +148,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # readings is exact on the merged tree, and the pin before it was d6dfefff...fc71.
             # Digest re-derived for the reach round: the rows of the skills whose triggers,
             # description, or use-when moved; removing those edits reproduces a5d1c988...3e03.
-            (skill_capabilities, 536082, FULL_ROW_DELTA_CAP,
-             '54c674134c373c36a63a77ef515c3791d02c1c8105ab396426753e6ddc67a338',
+            (skill_capabilities, 536067, FULL_ROW_DELTA_CAP,
+             '529dd8f769d49a24c6cb2a4cf2b33051ab56112c1fb5ebbcdfdba4aabf4849a9',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -192,9 +192,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # trigger row (255 bytes) and its researcher token (+21); removing
         # only those reproduces 29ebe70f...7063.
         # Digest re-derived for the reach round: the registry rows of the triggers it drops.
-        self.assertEqual(_digest(legacy), '10db13f43691a26084910fe8529ebd77edca2f27fe058c47fc204063a131e8a7')
+        self.assertEqual(_digest(legacy), '4a908a453531ae84b79e36f269aacb30cf39e9c716a1479a03b46426a43f811a')
         baseline = len(''.join(legacy).encode())
-        self.assertEqual(baseline, 33563)
+        self.assertEqual(baseline, 33569)
         # 33_100 -> 33_318: main's ru pack and repro-audit (+222 over 32874) used
         # the gate's room and sprite-forge adds its 221-byte row and token; each
         # side alone fit, the merged tree measures 33317. The gate stays exact.
@@ -385,7 +385,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The skill audit round moves the bodies each lane edited and nothing else: the union of the
         # lanes' moved lists equals the merged tree's. Plan, ralplan and adversarial-consensus name
         # `--plan-file` / `--input-bundle`; the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '7709744d76e5ed973f059bfb7e2a8a51a0045f172302bf1fa369aee14da7a85d')
+        self.assertEqual(_digest(legacy_hashes), 'e45ddcfdf46f2169799a2475643f5fb124c50dc72d254d6a2a870b4bb6e6653b')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

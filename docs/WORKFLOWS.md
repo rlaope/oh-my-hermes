@@ -3764,7 +3764,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user asks for visual render QA; use `visual-qa`.
   - The user asks for production release readiness beyond verification commands; use `production-audit`.
   - The user wants a bug-first code review of a diff; use `code-review`.
-- Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `generated file`, `generated artifact`, `generated output`, `source of truth`, `regenerate instead of editing`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `перед мерджем проверь`, `проверь перед пушем`, `гейт проверки`, `проверь перед мерджем`, `докажи что тесты проходят`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`, `verifikasi sebelum merge`, `buktikan perubahan ini sudah selesai`, `cek bukti build lint dan tes`, `pastikan semua pemeriksaan lulus sebelum merge`, `tolong validasi hasil implementasi ini`, `xác minh trước khi gộp`, `xác minh trước khi merge`, `chứng minh thay đổi này đã hoàn thành`, `kiểm tra bằng chứng build lint và kiểm thử`, `đảm bảo mọi kiểm tra đều đạt trước khi gộp`, `đảm bảo tất cả kiểm tra đạt trước khi merge`, `hãy xác thực kết quả thực hiện này`
+- Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `run the release gate`, `release gate check`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `generated file`, `generated artifact`, `generated output`, `source of truth`, `regenerate instead of editing`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `перед мерджем проверь`, `проверь перед пушем`, `гейт проверки`, `проверь перед мерджем`, `докажи что тесты проходят`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`, `verifikasi sebelum merge`, `buktikan perubahan ini sudah selesai`, `cek bukti build lint dan tes`, `pastikan semua pemeriksaan lulus sebelum merge`, `tolong validasi hasil implementasi ini`, `xác minh trước khi gộp`, `xác minh trước khi merge`, `chứng minh thay đổi này đã hoàn thành`, `kiểm tra bằng chứng build lint và kiểm thử`, `đảm bảo mọi kiểm tra đều đạt trước khi gộp`, `đảm bảo tất cả kiểm tra đạt trước khi merge`, `hãy xác thực kết quả thực hiện này`
 - Good example:
   - Prompt: verification-gate 이 PR 머지 전에 build/lint/test/docs/CI 증거를 정리해서 PASS 가능한지 봐줘.
   - Expected behavior: Prepare verification_matrix/v1, record observed_check_results/v1, and issue PASS/HOLD/BLOCK with missing evidence.
@@ -6277,7 +6277,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### morning-brief
 
-[omh] Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with the narrowest access the provider allows and diff approval; produces the configuration, not the daily brief itself.
+[omh] Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with the narrowest scope and diff approval; produces the configuration, not the daily brief itself.
 
 - Category: `hermes-setup`
 - Phase: `setup`
@@ -10655,7 +10655,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Preferred usage: Use as an installed Hermes workflow skill when users ask to prepare or supervise read-only weather, finance, sports, map, place, exchange-rate, or time-zone lookups without claiming live data retrieval.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `live-info-operator` exists because a live number answered from recall, or from a quote with no timestamp, is wrong in a way the reader cannot see: it runs the lookup with an available tool and then checks what came back for provider, time, units and staleness before it is stated.
-- Use when: Use when someone needs a live lookup now, with the provider, freshness, and units stated, and no result claimed beyond the tool's output.
+- Use when: Use when Hermes should answer read-only live information lookups with the provider, freshness, and units stated, without claiming retrieval or result correctness.
 - Do not use when:
   - The question is a broad current-facts or citation question rather than one live value; use `web-research`.
   - A supplied ledger, budget or close needs analysis rather than a live rate; use `finance-analysis`.

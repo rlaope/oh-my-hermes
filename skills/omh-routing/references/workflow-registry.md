@@ -80,7 +80,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `build-failure-triage`: `build-failure-triage`, `build failure triage`, `build failure`, `build-failure`, `build fix`, `build failed`, `build failing`, `compile error`, `compilation error`
 - `workspace-audit`: `workspace-audit`, `workspace audit`, `repo surface audit`, `repository surface audit`, `workspace surface audit`, `repo inventory`, `surface inventory`, `skill inventory`, `prompt inventory`
 - `production-audit`: `production-audit`, `production audit`, `production readiness`, `prod audit`, `prod readiness`, `ready for production`, `ready to ship`, `ship readiness`, `release readiness`
-- `verification-gate`: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`
+- `verification-gate`: `verification-gate`, `verification gate`, `quality gate`, `run the release gate`, `release gate check`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`
 - `agent-evaluation`: `agent-evaluation`, `agent evaluation`, `agent eval`, `agent benchmark`, `executor evaluation`, `executor benchmark`, `compare agents`, `compare codex claude`, `agent tournament`
 - `rules-distill`: `rules-distill`, `rules distill`, `distill rules`, `rule distillation`, `principle distill`, `skill principles`, `extract agent rules`, `turn traces into rules`, `policy distill`
 - `codebase-onboarding`: `codebase-onboarding`, `codebase onboarding`, `repo onboarding`, `repository onboarding`, `codebase tour`, `code tour`, `new repo orientation`, `understand this repo`, `how this repo works`

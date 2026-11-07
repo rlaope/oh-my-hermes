@@ -33,7 +33,6 @@ from .trigger_language_packs import (
     is_latin_script,
     load_user_trigger_language_packs,
     merged_holdback_tokens,
-    merged_offer_only_phrases,
     merged_trigger_phrases,
     shipped_trigger_language_packs,
 )
@@ -41,7 +40,6 @@ from .path_signal import PATH_GLOB_SCORE, matching_path_glob, path_mentions
 from .query import RoutingQuery
 from ..plugin_bundle.omh.hermes_session_commands import LOOP_TIMER_NONE
 from .policy import (
-    WEB_SEARCH_UNAVAILABLE_PHRASES,
     appearance_edit_request,
     everyday_sense_phrase_unanchored,
     KOREAN_NOUN_PARTICLES,
@@ -1069,9 +1067,6 @@ class _PreparedDefinition:
     # Trigger-pack phrases every word of which is held back. See
     # `_held_back_pack_phrases`.
     held_back_pack_phrases: frozenset[str] = frozenset()
-    # Normalized `offer_only_phrases` from the shipped and user packs. See
-    # `merged_offer_only_phrases`.
-    offer_only_phrases: tuple[str, ...] = ()
 
 
 _DEFAULT_POLICY = RecommendationPolicy(
@@ -4325,15 +4320,6 @@ def _pack_trigger_token_holdback() -> dict[str, frozenset[str]]:
     }
 
 
-@lru_cache(maxsize=1)
-def _pack_offer_only_phrases() -> dict[str, frozenset[str]]:
-    return merged_offer_only_phrases(_trigger_pack_packs())
-
-
-def _offer_only_phrases_for(name: str) -> frozenset[str]:
-    return _pack_offer_only_phrases().get(name, frozenset())
-
-
 def _trigger_token_holdback_for(name: str) -> frozenset[str]:
     return _NORMALIZED_WHOLE_PHRASE_ONLY_TRIGGER_TOKENS.get(
         name, frozenset()
@@ -4523,9 +4509,6 @@ def _one_word_self_name(definition: SkillDefinition) -> str:
 # an external product name the repo does not ship, yet a user who types it
 # still means this skill.
 _SCORING_ONLY_TRIGGERS = SCORING_ONLY_TRIGGERS
-_WEB_SEARCH_UNAVAILABLE_CUES = tuple(normalized_phrase(phrase) for phrase in WEB_SEARCH_UNAVAILABLE_PHRASES)
-# One below `_confidence`'s high band, which is what a dispatch needs.
-_OFFER_ONLY_SCORE_CAP = 7
 
 
 def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
@@ -4539,7 +4522,6 @@ def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
     )
     trigger_phrases = tuple(normalized_phrase(trigger) for trigger in triggers)
     phrase_only = shipped_latin_pack_phrases(definition.name)
-    offer_only_phrases = tuple(sorted({normalized_phrase(phrase) for phrase in _offer_only_phrases_for(definition.name)}))
     metadata_tokens = frozenset(
         _tokens(" ".join((definition.name, definition.description, definition.use_when)))
     ) - _SIBLING_POINTER_METADATA_TOKENS.get(definition.name, frozenset())
@@ -4560,7 +4542,6 @@ def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
         metadata_tokens=metadata_tokens,
         one_word_self_name=_one_word_self_name(definition),
         held_back_pack_phrases=_held_back_pack_phrases(definition.name, holdback),
-        offer_only_phrases=offer_only_phrases,
     )
 
 
@@ -4596,7 +4577,6 @@ def _score_definition(
     # live in `_SKILL_OFFERS_ITSELF` at the foot of this module now: same
     # predicates, same evaluation order, one row per skill.
     offers_itself = _offers_itself_predicate(definition.name, shielded=shielded, raw=raw_query)
-    offered_past_its_gate = False
     if (
         offers_itself is not None
         and (
@@ -4608,10 +4588,7 @@ def _score_definition(
         )
         and not offers_itself(normalized_query, query_tokens)
     ):
-        # Its offer-only phrase may still name it as the candidate, and only that.
-        if not any(_trigger_phrase_match(normalized_query, phrase) for phrase in prepared.offer_only_phrases):
-            return None
-        offered_past_its_gate = True
+        return None
     if explicit_skill != definition.name and everyday_sense_phrase_unanchored(definition.name, normalized_query):
         return None
 
@@ -4781,10 +4758,6 @@ def _score_definition(
     if definition.name == "llm-app-dev" and _llm_app_dev_explicit_match(normalized_query):
         score += 30
         matched.add("direct:llm_app_dev")
-    # The agent's own search does not work: its backend needs setting up.
-    if definition.name == "websearch-setup" and contains_cue_phrase(normalized_query, _WEB_SEARCH_UNAVAILABLE_CUES):
-        score += 30
-        matched.add("direct:web_search_unavailable")
     if definition.name == "todo-checklist" and _todo_checklist_explicit_match(normalized_query):
         score += 30
         matched.add("direct:todo_checklist")
@@ -4899,17 +4872,6 @@ def _score_definition(
         - _TECH_DEBT_AUDIT_CLARIFY_ONLY_TRIGGERS
     ):
         score = min(score, _TECH_DEBT_AUDIT_CLARIFY_ONLY_SCORE_CAP)
-
-    # An offer-only phrase names this skill as the candidate and nothing more:
-    # what scored without it stands, and with it the skill stays below the
-    # dispatch threshold. It is no trigger and no word of it scores, so this is
-    # the only thing it adds. See `merged_offer_only_phrases`.
-    offers = tuple(phrase for phrase in prepared.offer_only_phrases if _trigger_phrase_match(trigger_text, phrase))
-    if offers:
-        score = max(score, min(score + 6 * len(offers), _OFFER_ONLY_SCORE_CAP))
-        matched.update(f"offer:{phrase}" for phrase in offers)
-    if offered_past_its_gate:
-        score = min(score, _OFFER_ONLY_SCORE_CAP)
 
     if score <= 0:
         return None
@@ -5879,7 +5841,6 @@ def _match_source_label(source: str) -> str:
         "locale": "deterministic multilingual hint",
         "metadata": "catalog keywords",
         "name": "workflow name",
-        "offer": "a phrase naming this need",
         "phase": "workflow phase",
         "trigger": "workflow trigger language",
         "use_when": "catalog use-when guidance",

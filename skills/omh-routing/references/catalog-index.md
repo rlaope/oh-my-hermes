@@ -100,7 +100,7 @@ Trigger phrases and the role registry live in `references/workflow-registry.md`;
 - `omh-model-optimization`: [omh] Onboarding a newly released model generation: when a model family ships a new generation or changes its serving contract, walk the recognition, research, calibration, routing, and measurement process that keeps model handling honest and current.
 - `omh-model-setup`: [omh] Model and provider configuration changes: diagnose role-slot model configuration, guide provider connection, and apply changes only after diff approval.
 - `omh-molecular-docking`: [omh] Prepared PDBQT inputs: run bounded standalone Vina docking with real poses, scores and replay provenance; never infer efficacy or safety.
-- `omh-morning-brief`: [omh] Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with the narrowest access the provider allows and diff approval; produces the configuration, not the daily brief itself.
+- `omh-morning-brief`: [omh] Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with the narrowest scope and diff approval; produces the configuration, not the daily brief itself.
 - `omh-native-debugging`: [omh] Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a debugger instead of printf.
 - `omh-routing`: [omh] Choosing among OMH skills for a request: router guidance for using oh-my-hermes workflow skills inside Hermes Agent.
 - `omh-operating-rhythm`: [omh] Team minutes, retros, and decision history to keep: meeting minutes, scrum/sprint records, retros, decisions, and follow-up history.

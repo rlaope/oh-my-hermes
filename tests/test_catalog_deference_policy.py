@@ -423,9 +423,9 @@ _SPEND_GATE_BY_DESIGN = (
     "marked request ('please pay ... with my card') reaches it."
 )
 _MARKET_RESEARCH_BY_DESIGN = (
-    "by design: market-research is offered only to a request that opens on one of its method phrases, or by an "
-    "offer-only phrase (_market_research_offers_itself); a Do-Not-Use line is neither. 'do market sizing for "
-    "dental clinics' and '치과 시장 규모 추정해줘' reach it."
+    "by design: market-research is offered only to a request that opens on one of its method phrases "
+    "(_market_research_offers_itself); a Do-Not-Use line is not one. 'do market sizing for dental clinics' "
+    "reaches it."
 )
 DELIBERATELY_UNREACHABLE: dict[tuple[str, str], str] = {
     ("web-research", "market-research"): _MARKET_RESEARCH_BY_DESIGN,

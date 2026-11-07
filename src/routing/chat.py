@@ -20,7 +20,7 @@ from .catalog_questions import (
 from .compound_intent import distinct_complete_domain_signals
 from .action_copy import next_action_label as _route_next_action_label
 from .candidate_handoff import SHORTLIST_LEXICAL, WEAK_DISPATCH_EVIDENCE, build_candidate_handoff, shortlist_clarification
-from .dispatch_evidence import EVIDENCE_WEAK, GUARD_TRUSTED, dispatch_evidence, offer_only_winner, offered_over_word_credits
+from .dispatch_evidence import EVIDENCE_WEAK, GUARD_TRUSTED, dispatch_evidence
 from .decision_contract import build_route_decision_contract
 from .route_question import (
     DECLINE_ACKNOWLEDGEMENT,
@@ -2606,7 +2606,7 @@ def _route_chat_message_cached(
         action = "dispatch"
         reason = "Catalog question; show the OMH workflow picker instead of asking for shell command approval."
         ambiguous = False
-    elif file_or_text_lookup and not offer_only_winner(top):
+    elif file_or_text_lookup:
         selected_skill = _ROUTER_SKILL
         candidate_skill = selected_skill
         candidate_harness = primary_harness_for_skill(candidate_skill)
@@ -2641,12 +2641,6 @@ def _route_chat_message_cached(
         candidate_harness = primary_harness_for_skill(candidate_skill)
         action = "fallback"
         reason = "No strong catalog metadata match; use the router to clarify the workflow."
-    elif offered_skill := offered_over_word_credits(top, full_recommendations[1:]):
-        selected_skill = _ROUTER_SKILL
-        candidate_skill = offered_skill
-        candidate_harness = primary_harness_for_skill(candidate_skill)
-        action = "clarify"
-        reason = f"The message names what `{candidate_skill}` does; ask before dispatching on shared words."
     elif ambiguous:
         selected_skill = _ROUTER_SKILL
         action = "clarify"

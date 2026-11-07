@@ -1,0 +1,51 @@
+"""What the reach round narrowed: matcher edges and gap words that named a tool."""
+
+from __future__ import annotations
+
+import unittest
+
+from omh.routing.chat import route_chat_message
+from omh.routing.localization import normalized_phrase, phrase_is_spoken
+
+
+def _route(message: str) -> dict[str, object]:
+    return route_chat_message(message, source="discord")
+
+
+class MatcherTests(unittest.TestCase):
+    def test_an_open_hangul_syllable_is_not_the_syllable_with_a_final(self) -> None:
+        self.assertFalse(phrase_is_spoken(normalized_phrase("팀 주간 회의"), normalized_phrase("주가")))
+        self.assertTrue(phrase_is_spoken(normalized_phrase("오늘 주가 알려줘"), normalized_phrase("주가")))
+        self.assertTrue(phrase_is_spoken(normalized_phrase("삼성 주가가 올랐어"), normalized_phrase("주가")))
+
+    def test_a_short_last_word_is_not_extended(self) -> None:
+        self.assertFalse(phrase_is_spoken("at the same time instead of", "time in"))
+        self.assertTrue(phrase_is_spoken("what is the time in tokyo", "time in"))
+        self.assertTrue(phrase_is_spoken("list the attack scenarios", "attack scenario"))
+
+    def test_the_weekly_and_the_stock_price_are_apart_in_the_guard(self) -> None:
+        self.assertNotEqual(_route("팀 주간 운영 리듬 만들어줘")["selected_skill"], "live-info-operator")
+        self.assertEqual(_route("삼성 주가 알려줘")["selected_skill"], "live-info-operator")
+
+    def test_time_instead_is_not_a_time_lookup(self) -> None:
+        self.assertNotEqual(
+            _route("Can you read these five files at the same time instead of one by one?")["selected_skill"],
+            "live-info-operator",
+        )
+        self.assertEqual(_route("time in tokyo")["selected_skill"], "live-info-operator")
+
+
+class ToolbeltGapWordTests(unittest.TestCase):
+    def test_a_gap_word_alone_names_no_tool(self) -> None:
+        for message in ("the report is missing a chart", "홈, 탐색, 설정 탭 숨겨줘", "several screens are missing"):
+            with self.subTest(message=message):
+                self.assertNotEqual(_route(message)["selected_skill"], "toolbelt-readiness")
+
+    def test_a_named_tool_with_a_gap_word_still_opens_it(self) -> None:
+        for message in ("the mcp server is missing", "외부 도구 설정이 필요해", "API 키 설정해줘", "weather plugin is missing, check provider setup"):
+            with self.subTest(message=message):
+                self.assertEqual(_route(message)["selected_skill"], "toolbelt-readiness")
+
+
+if __name__ == "__main__":
+    unittest.main()

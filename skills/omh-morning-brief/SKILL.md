@@ -1,6 +1,6 @@
 ---
 name: "omh-morning-brief"
-description: "[omh] Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with the narrowest access the provider allows and diff approval; produces the configuration, not the daily brief itself. Use when the user says: morning-brief, morning brief, connect my email for a morning brief, set up morning brief, configure morning brief, connect mail for morning brief, connect calendar for morning brief, set up my morning brief."
+description: "[omh] Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with the narrowest scope and diff approval; produces the configuration, not the daily brief itself. Use when the user says: morning-brief, morning brief, connect my email for a morning brief, set up morning brief, configure morning brief, connect mail for morning brief, connect calendar for morning brief, set up my morning brief."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:

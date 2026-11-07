@@ -978,9 +978,11 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # (executor-runtime-readiness -16, provider-profile-posture -14, capability-toggle +13). The
 # operations lane moves no row, and design and media moves sprite-forge at the same length.
 # Measured from the producer; no headroom.
-# 539268 -> 539154: the reach round drops triggers from the rows it narrows (-110),
-# and native-debugging's row stops promising a debug adapter (-4).
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 539154
+# 539268 -> 539139: the reach round drops triggers from the rows it narrows (-110),
+# native-debugging's row stops promising a debug adapter (-4), morning-brief's and
+# live-info's index text is reworded (-21), and verification-gate's `release gate`
+# becomes two longer phrases (+6).
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 539139
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

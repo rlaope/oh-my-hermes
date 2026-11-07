@@ -44,7 +44,7 @@ from pathlib import Path
 import re
 import unicodedata
 
-from .localization import normalized_phrase, phrase_is_spoken, routing_terms, routing_tokens
+from .localization import routing_terms, routing_tokens
 
 
 TRIGGER_LANGUAGE_PACK_SCHEMA_VERSION = "trigger_language_pack/v1"
@@ -78,9 +78,6 @@ class TriggerLanguagePack:
     source: str
     skills: tuple[tuple[str, tuple[str, ...]], ...]
     whole_phrase_only_tokens: tuple[tuple[str, tuple[str, ...]], ...] = ()
-    # Phrases that make a skill the candidate and never dispatch it. See
-    # `merged_offer_only_phrases`.
-    offer_only_phrases: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @property
     def phrase_count(self) -> int:
@@ -126,7 +123,7 @@ def parse_trigger_language_pack(
 
     if raw.get("schema_version") != TRIGGER_LANGUAGE_PACK_SCHEMA_VERSION:
         problems.append(f"schema_version must be {TRIGGER_LANGUAGE_PACK_SCHEMA_VERSION}")
-    unsupported = sorted(set(raw) - {"schema_version", "language", "skills", "whole_phrase_only_tokens", "offer_only_phrases"})
+    unsupported = sorted(set(raw) - {"schema_version", "language", "skills", "whole_phrase_only_tokens"})
     if unsupported:
         problems.append(f"unsupported fields {unsupported}")
 
@@ -136,18 +133,22 @@ def parse_trigger_language_pack(
     elif declared != language:
         problems.append(f"language {declared!r} does not match the pack name {language!r}")
 
-    offer_only_raw = raw.get("offer_only_phrases", {})
-    skills_raw = raw.get("skills", {} if offer_only_raw else None)
+    skills_raw = raw.get("skills")
     skills: list[tuple[str, tuple[str, ...]]] = []
-    if not isinstance(skills_raw, dict) or not (skills_raw or offer_only_raw):
+    if not isinstance(skills_raw, dict) or not skills_raw:
         problems.append("skills must be an object with at least one skill")
     else:
-        skills = _validated_skill_phrases(skills_raw, known_skills, problems)
-    offer_only: list[tuple[str, tuple[str, ...]]] = []
-    if not isinstance(offer_only_raw, dict):
-        problems.append("offer_only_phrases must be an object")
-    else:
-        offer_only = _validated_skill_phrases(offer_only_raw, known_skills, problems)
+        for skill in sorted(skills_raw):
+            entries = skills_raw[skill]
+            if skill not in known_skills:
+                problems.append(f"unknown skill id {skill!r}")
+                continue
+            if not isinstance(entries, list) or not entries:
+                problems.append(f"skill {skill!r} must list at least one trigger phrase")
+                continue
+            phrases = _validated_phrases(skill, entries, problems)
+            if phrases:
+                skills.append((skill, phrases))
 
     holdback_raw = raw.get("whole_phrase_only_tokens", {})
     holdback: list[tuple[str, tuple[str, ...]]] = []
@@ -176,28 +177,9 @@ def parse_trigger_language_pack(
             source=source,
             skills=tuple(skills),
             whole_phrase_only_tokens=tuple(holdback),
-            offer_only_phrases=tuple(offer_only),
         ),
         "applied",
     )
-
-
-def _validated_skill_phrases(
-    table: dict[str, object], known_skills: frozenset[str], problems: list[str]
-) -> list[tuple[str, tuple[str, ...]]]:
-    validated: list[tuple[str, tuple[str, ...]]] = []
-    for skill in sorted(table):
-        entries = table[skill]
-        if skill not in known_skills:
-            problems.append(f"unknown skill id {skill!r}")
-            continue
-        if not isinstance(entries, list) or not entries:
-            problems.append(f"skill {skill!r} must list at least one trigger phrase")
-            continue
-        phrases = _validated_phrases(skill, entries, problems)
-        if phrases:
-            validated.append((skill, phrases))
-    return validated
 
 
 def _validated_phrases(skill: str, entries: list[object], problems: list[str]) -> tuple[str, ...]:
@@ -340,45 +322,6 @@ def merged_trigger_phrases(packs: tuple[TriggerLanguagePack, ...]) -> dict[str, 
                 known.add(phrase)
                 bucket.append(phrase)
     return {skill: tuple(phrases) for skill, phrases in merged.items()}
-
-
-def merged_offer_only_phrases(packs: tuple[TriggerLanguagePack, ...]) -> dict[str, frozenset[str]]:
-    """Skill id -> the phrases that may name it as the candidate and nothing more.
-
-    A trigger phrase is strong evidence: it dispatches, its words score apart
-    from it, and the skill's rendered text lists it. A phrase in
-    `offer_only_phrases` is how a person with this need says it, and that is not
-    enough to take the turn: the same words open a question about the topic,
-    someone else's sentence, or a request about something else. So it is no
-    trigger. It stays out of the catalog, it scores only when said whole, it
-    holds the skill below the dispatch threshold, and it leaves the turn the
-    router would otherwise have dispatched untouched (`_score_definition`).
-    """
-    merged: dict[str, set[str]] = {}
-    for pack in packs:
-        for skill, phrases in pack.offer_only_phrases:
-            merged.setdefault(skill, set()).update(phrases)
-    return {skill: frozenset(phrases) for skill, phrases in merged.items()}
-
-
-@lru_cache(maxsize=1)
-def _shipped_offer_only_phrases() -> tuple[tuple[str, tuple[str, ...]], ...]:
-    # Read from the documents: the routing guards that ask this sit below the
-    # catalog, and the catalog validates the same documents when it merges them.
-    table: dict[str, set[str]] = {}
-    for _, text in _shipped_pack_documents():
-        for skill, phrases in json.loads(text).get("offer_only_phrases", {}).items():
-            table.setdefault(skill, set()).update(normalized_phrase(phrase) for phrase in phrases)
-    return tuple((skill, tuple(sorted(phrases))) for skill, phrases in sorted(table.items()))
-
-
-def offer_only_phrase_spoken(normalized_query: str, *, other_than: str) -> bool:
-    """Whether the message says a shipped offer-only phrase of a skill other than `other_than`."""
-    return any(
-        skill != other_than and phrase_is_spoken(normalized_query, phrase)
-        for skill, phrases in _shipped_offer_only_phrases()
-        for phrase in phrases
-    )
 
 
 def is_latin_script(phrase: str) -> bool:
