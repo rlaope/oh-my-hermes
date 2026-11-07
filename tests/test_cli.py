@@ -12314,8 +12314,10 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             root = Path(tmp)
             base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
             task = ["implement", "durable", "observation", "journal", "with", "tests"]
+            reviewed = root / "reviewed-plan.md"
+            reviewed.write_text("## Plan\n- T1 append journal events\n", encoding="utf-8")
 
-            status, stdout, stderr = run_cli(base + ["hermes", "plan", "--record", *task])
+            status, stdout, stderr = run_cli(base + ["hermes", "plan", "--record", "--plan-file", str(reviewed), *task])
             self.assertEqual((status, stderr), (0, ""))
             planned = json.loads(stdout)
             plan_path = Path(planned["artifact"]["path"])
