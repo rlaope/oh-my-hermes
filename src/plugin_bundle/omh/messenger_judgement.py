@@ -71,6 +71,8 @@ _SHUTUP_WHOLE = re.compile(r"\[\s*SHUT[\s_-]*UP\s*\]", re.IGNORECASE)
 _SILENT_WHOLE = re.compile(r"\[\s*SILENT\s*\]", re.IGNORECASE)
 _EXACT_TOKENS = frozenset({SHUTUP_TOKEN, SILENT_TOKEN})
 _LIST_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)])\s")
+# A fence's opening line: three ticks, then at most a language label (`text`, `c++`, `objective-c`), never prose.
+_FENCE_OPEN = re.compile(r"```[ \t]*[A-Za-z0-9_+#.-]*[ \t]*")
 _CODEX_APP_SERVER = "codex_app_server"
 
 
@@ -248,10 +250,14 @@ def _unwrapped(line: str) -> str:
 
 
 def _whole_reply(text: str) -> str:
-    """The reply with light wrapping gone: code ticks, ``~~``, edge marks, a fence that is all of it."""
+    """The reply with light wrapping gone: code ticks, ``~~``, edge marks, a fence that is all of it.
+
+    The fence's opening line may carry a language label and nothing else: prose there (```` ```Done for today ````)
+    is the answer's own text, so the fence stays and the reply is not a marker.
+    """
     stripped = _normalized(text).strip()
     lines = stripped.splitlines()
-    if len(lines) >= 3 and lines[0].startswith("```") and lines[-1].strip() == "```":
+    if len(lines) >= 3 and _FENCE_OPEN.fullmatch(lines[0]) and lines[-1].strip() == "```":
         stripped = "\n".join(lines[1:-1]).strip()
     return _unwrapped(stripped)
 

@@ -134,6 +134,36 @@ class ShellDuringATurnTests(unittest.TestCase):
         app._on_response(Response(1, {"stdout": "a.py\n", "stderr": "", "code": 0}, None))
         self.assertEqual(client.calls[-1], ("prompt.submit", {"session_id": SID, "text": "next prompt", "queued": True}))
 
+    def test_a_prompt_behind_it_waits_for_a_turn_that_started_while_it_ran(self) -> None:
+        # A turn another client (or Hermes' own queue) started while the command ran: the prompt goes at that turn's
+        # end, not into it, whether Hermes answered the command or refused it.
+        for frame in ({"result": {"stdout": "a.py\n", "stderr": "", "code": 0}},
+                      {"error": {"code": 4005, "message": "Blocked: recursive delete."}}):
+            with self.subTest(answered="result" in frame):
+                app, client = make_app(busy=True)
+                send(app, "!ls")
+                send(app, "next prompt")
+                app._on_event(Event("message.complete", SID, {"text": "done"}))
+                self.assertEqual(client.calls, [("shell.exec", {"command": "ls"})])
+                app._on_event(Event("message.start", SID, {}))
+                reply(app, client, frame)
+                self.assertEqual(client.calls, [("shell.exec", {"command": "ls"})])
+                self.assertEqual([entry.text for entry in app.queued], ["next prompt"])
+                app._on_event(Event("message.complete", SID, {"text": "theirs"}))
+                self.assertEqual(client.calls[-1],
+                                 ("prompt.submit", {"session_id": SID, "text": "next prompt", "queued": True}))
+
+    def test_a_bang_line_sent_while_a_queued_one_runs_runs_at_once(self) -> None:
+        # No turn runs and the queue waits for no turn Hermes runs next: only the line queued behind the running
+        # command waits for its answer, and a new `!` line is not queued behind it.
+        app, client = make_app(busy=True)
+        send(app, "!ls")
+        send(app, "next prompt")
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        send(app, "!pwd")
+        self.assertEqual(client.calls, [("shell.exec", {"command": "ls"}), ("shell.exec", {"command": "pwd"})])
+        self.assertEqual([entry.text for entry in app.queued], ["next prompt"])
+
     def test_a_queued_bang_line_with_a_chip_echoes_the_chip_when_it_runs(self) -> None:
         script = "echo one\necho two\necho three\necho four\n"
         app, client = make_app(busy=True)
