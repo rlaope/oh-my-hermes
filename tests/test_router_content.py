@@ -1080,13 +1080,27 @@ class RouterContentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"unsafe picker aliases.*\$unsafe"):
             frontmatter_description(malformed)
 
+    def test_native_debugging_routed_text_promises_no_debug_adapter(self) -> None:
+        # Hermes has no debug-adapter client, so a route that names one sends the
+        # executor after something it cannot reach. An adapter belongs in the skill's
+        # body, not in text a route reads; `dap debugger` stays a trigger because a
+        # person may still ask for it.
+        definition = next(item for item in builtin_definitions() if item.name == "native-debugging")
+        route = route_chat_message("my binary segfaults, there is a core dump", source="discord")
+        top = recommend_module.recommend_skills("my binary segfaults, there is a core dump", limit=1)[0]
+        self.assertEqual(route["selected_skill"], "native-debugging")
+        self.assertEqual(top["skill"], "native-debugging")
+        for text in (definition.description, definition.use_when, str(route.get("reason")), str(top["wrapper_guidance"])):
+            with self.subTest(text=text):
+                self.assertNotIn("DAP", text)
+
     def test_picker_sibling_families_name_their_decision_boundaries(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
         expected_fragments = {
             "memory-new": ("omh-memory-sync", "decision-recall"),
             "memory-sync": ("memory-new", "decision-recall"),
             "research": ("research-brief", "web-research", "research-department"),
-            "research-brief": ("ulw-research", "research-department"),
+            "research-brief": ("source-finder", "research-department"),
             "research-department": ("research-brief", "source-finder"),
             "source-finder": ("ulw-research", "research-brief"),
             "executor-runtime-readiness": ("external-connector-readiness", "toolbelt-readiness"),

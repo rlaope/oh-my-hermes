@@ -367,8 +367,9 @@ NON_SKILL_BACKTICKS = frozenset(
 # picture to `codebase-uml` and the index to `codegraph-refresh`, `github-issue-intake` names `feedback-triage` and
 # `github-event-ops` with their labels, and `github-event-ops` defers a patch or minor bump to `verification-gate`;
 # no sibling gains a pointing-back statement. Seven cases, nine pairs, four new owners.
-EXPECTED_DEFERENCE_CASES = 458
-EXPECTED_DEFERENCE_PAIRS = 486
+# Web-research and research-brief then defer to market-research for sizing: two cases, two pairs.
+EXPECTED_DEFERENCE_CASES = 460
+EXPECTED_DEFERENCE_PAIRS = 488
 EXPECTED_DEFERRING_OWNERS = 138
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
@@ -428,7 +429,14 @@ _SPEND_GATE_BY_DESIGN = (
     "request marker; a Do-Not-Use line is not such a request, so it cannot surface spend-gate. A person's "
     "marked request ('please pay ... with my card') reaches it."
 )
+_MARKET_RESEARCH_BY_DESIGN = (
+    "by design: market-research is offered only to a request that opens on one of its method phrases "
+    "(_market_research_offers_itself); a Do-Not-Use line is not one. 'do market sizing for dental clinics' "
+    "reaches it."
+)
 DELIBERATELY_UNREACHABLE: dict[tuple[str, str], str] = {
+    ("web-research", "market-research"): _MARKET_RESEARCH_BY_DESIGN,
+    ("research-brief", "market-research"): _MARKET_RESEARCH_BY_DESIGN,
     ("automation-blueprint", "spend-gate"): _SPEND_GATE_BY_DESIGN,
     ("browser-operator", "spend-gate"): _SPEND_GATE_BY_DESIGN,
     ("systematic-review", "repro-audit"): (
@@ -437,8 +445,9 @@ DELIBERATELY_UNREACHABLE: dict[tuple[str, str], str] = {
         "a Do-Not-Use line is not such a request. 'Compare my HellaSwag log with the paper' reaches it."
     ),
 }
-# systematic-review's repro-audit statement adds the third pair (+1).
-EXPECTED_DELIBERATELY_UNREACHABLE_COUNT = 3
+# systematic-review's repro-audit statement adds the third pair (+1), and the
+# market-research lines in web-research and research-brief two more.
+EXPECTED_DELIBERATELY_UNREACHABLE_COUNT = 5
 
 
 def _deference_cases() -> list[tuple[str, tuple[str, ...], str]]:

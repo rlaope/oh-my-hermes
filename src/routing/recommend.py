@@ -7,6 +7,7 @@ import re
 
 from ..plugin_bundle.omh.data_share_cues import DATA_SHARE_REVIEW_KOREAN_PHRASES, data_share_request_admitted
 from ..coding.pi_family_interop import PI_DISTRIBUTION_HOST, RUNTIME_SHORT_NAME, RUNTIME_USER_PHRASE, SCORING_ONLY_TRIGGERS
+from ..plugin_bundle.omh.korean_request import SOFTENERS, korean_request, without_particle
 from ..plugin_bundle.omh.request_lead import after_courtesy
 from ..plugin_bundle.omh.spend_signals import SPEND_GATE_KOREAN_PHRASES, spend_request_clause
 from ..skills.catalog import SkillDefinition, builtin_definitions, routable_definitions
@@ -1219,7 +1220,7 @@ _SKILL_POLICIES = {
         ),
         wrapper_guidance=(
             "Prepare native_fault_statement/v1, hypothesis_set/v1 with at least three hypotheses on distinct axes, "
-            "distinguishing_observation_plan/v1, and debugger_session_plan/v1 naming the DAP adapter, breakpoints, "
+            "distinguishing_observation_plan/v1, and debugger_session_plan/v1 naming the instrument, breakpoints, "
             "watchpoints, threads, frames, and values the executor reads at each stop."
         ),
     ),
@@ -2045,7 +2046,7 @@ _SKILL_POLICIES.update(
             ),
             wrapper_guidance=(
                 "Prepare connector_task_card/v1 with provider, target object or recipient, allowed action, "
-                "payload summary, auth boundary, confirmation gate, result manifest slots, and a stop condition "
+                "exact outbound payload, auth boundary, confirmation gate, result manifest slots, and a stop condition "
                 "before external app execution is claimed."
             ),
         ),
@@ -2890,6 +2891,11 @@ _SIBLING_POINTER_METADATA_TOKENS = {
 # phrases. Crediting them separately made unrelated sentences containing
 # `models` and `work` look like observed-work inventory requests.
 _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
+    # `write a handover guide`: the skill's closing handover. Each word is everyday alone.
+    "wiki": frozenset({"write", "handover", "guide"}),
+    # The audit phrases name the instrumentation review. Alone these words mean a school's
+    # instruments, a race car's sensors and contact tracing, and `audit` is code review's.
+    "agent-ops-review": frozenset({"instrumentation", "audit", "telemetry", "tracing"}),
     # Only complete domain phrases may score; their ordinary component words
     # must not turn unrelated market, customer or profile mentions into work.
     "market-research": frozenset({"market", "research", "sizing", "tam", "sam", "som", "bottom", "up", "size", "sensitivity", "customer", "evidence", "analysis", "jtbd", "matrix", "competitor", "pricing", "profiles", "competitive"}),
@@ -3046,6 +3052,11 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # is untouched.
     "verification-gate": frozenset(
         {
+            # `run the release gate` and `release gate check` count whole: these words
+            # alone dispatched "run the release gate at the dam". Holding `gate` also
+            # makes bare `quality gate` ask instead of dispatching; its longer forms
+            # still dispatch.
+            "release", "run", "check", "gate",
             "artifact",
             "editing",
             "file",
@@ -3490,6 +3501,9 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # (the skill name), `cve`, `gpl` and `agpl`.
     "security-event-response": frozenset(
         {
+            # The words of the incident phrases: each is everyday alone, so only the
+            # whole phrase says something is happening.
+            "account", "takeover", "suspected", "unauthorized", "access", "exfiltrating", "customer", "data",
             "advisory",
             "alert",
             "analysis",
@@ -3978,6 +3992,8 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # trial phrasings never touched.
     "external-connector-readiness": frozenset(
         {
+            # Its video phrases count whole: the words alone ask for the video, not a connector.
+            "video", "generation", "provider", "text",
             "benchmark",
             "delete",
             "disable",
@@ -4192,6 +4208,7 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # logging", and turned "how much does it cost" from a direct answer into
     # a clarify. Only the complete phrases score.
     "websearch-setup": frozenset({"backend", "costs", "free", "much", "tier", "too"}),
+    "rules-distill": frozenset({"distill"}),
 }
 
 
@@ -4507,6 +4524,7 @@ def _one_word_self_name(definition: SkillDefinition) -> str:
 # an external product name the repo does not ship, yet a user who types it
 # still means this skill.
 _SCORING_ONLY_TRIGGERS = SCORING_ONLY_TRIGGERS
+_OPS_REVIEW_KOREAN_PAIR = tuple(normalized_phrase(word) for word in ("리스크", "블로커"))
 
 
 def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
@@ -4756,6 +4774,11 @@ def _score_definition(
     if definition.name == "llm-app-dev" and _llm_app_dev_explicit_match(normalized_query):
         score += 30
         matched.add("direct:llm_app_dev")
+    # `리스크` and `블로커` are held back one by one, so either word alone names
+    # nothing; said together, in any order or joiner, they are this review's pair.
+    if definition.name == "ops-review" and all(word in normalized_query for word in _OPS_REVIEW_KOREAN_PAIR):
+        score += 12
+        matched.add("direct:ops_review_risks_and_blockers")
     if definition.name == "todo-checklist" and _todo_checklist_explicit_match(normalized_query):
         score += 30
         matched.add("direct:todo_checklist")
@@ -6103,10 +6126,35 @@ def _market_research_method_phrases() -> tuple[tuple[str, ...], ...]:
     return tuple(sorted(phrases, key=len, reverse=True))
 
 
+# A Korean request puts its verb last, so the lead rule below cannot read one. It
+# is admitted when the method phrase sits right before the requested verb, as whole
+# words: "치과 시장 규모 추정해줘" and "경쟁사 분석해줘" ask for the method. "시장 규모
+# 뜻 정리해줘" tidies a word, "광장시장 규모 계산해줘" is a place, and "시장 규모
+# 슬라이드 보내줘" has another verb. A verb outside the closed list stays out.
+_MARKET_RESEARCH_KOREAN_METHODS = (("시장", "규모"), ("시장규모",), ("경쟁사", "분석"), ("경쟁사분석",))
+_MARKET_RESEARCH_KOREAN_VERBS = frozenset({"정리", "분석", "조사", "추정", "계산", "산정"})
+
+
+def _market_research_korean_request(message: str) -> bool:
+    request = korean_request(message)
+    if request is None:
+        return False
+    before = tuple(
+        without_particle(word) for word in request.words[: request.predicate_index] if word not in SOFTENERS
+    )
+    said = (*before, request.predicate)
+    return any(
+        said[-len(method) :] == method or (request.predicate in _MARKET_RESEARCH_KOREAN_VERBS and before[-len(method) :] == method)
+        for method in _MARKET_RESEARCH_KOREAN_METHODS
+    )
+
+
 def _market_research_offers_itself(normalized_query: str, query_tokens: set[str]) -> bool:
     """Admit only a request that leads with a market method, not a method named in passing."""
     del query_tokens
     message = normalized_query.strip()
+    if _market_research_korean_request(message):
+        return True
     request = after_courtesy(message)
     opener = message[: len(message) - len(request)]
     if "?" in message and ("you" not in _MARKET_RESEARCH_WORD.findall(opener) or "?" in message.rstrip("?")):

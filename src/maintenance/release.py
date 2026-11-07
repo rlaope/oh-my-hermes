@@ -986,7 +986,11 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # executor-runtime-readiness, external-connector-readiness, memory-new, memory-sync, physical-device-readiness,
 # prompt-import-readiness, ralplan, research, research-brief, research-department, source-finder,
 # toolbelt-readiness, ultraperf. Measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 541026
+# 541026 -> 540901: the routing reach round, measured per row from the producer: research-brief's description
+# keeps its exclusions in do_not_use_when only (-104), model-optimization drops two triggers (-44),
+# morning-brief's and native-debugging's index text (-6, -4), and the named phrases joining agent-ops-review,
+# code-review, security-event-response, verification-gate and wiki (+3, +2, +14, +6, +8); -125 in all.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 540901
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

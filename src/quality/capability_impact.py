@@ -34,7 +34,6 @@ REPRESENTATIVE_ROUTE_CASES = (
     ImpactRouteCase("session-en", "Find and recover my previous Codex coding session", "harness-session-inventory"),
     ImpactRouteCase("session-ko", "지난 코딩 세션을 찾아서 기억을 복구해줘", "harness-session-inventory"),
     ImpactRouteCase("image-edit", "Edit this image to remove the background", "img-summary"),
-    ImpactRouteCase("video-generate", "Generate a short product demo video", "external-connector-readiness"),
     ImpactRouteCase("home-assistant", "Check whether Home Assistant can control this device", "external-connector-readiness"),
     # `best-practice-research` retired into `web-research` (#1691); the cited
     # best-practice retrieval this sentence asks for is the target home's job.

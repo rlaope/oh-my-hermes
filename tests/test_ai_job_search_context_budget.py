@@ -151,8 +151,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 537857 -> 537954 and the digest re-derived: the cross-lane rail fix writes sibling hand-offs in
             # backticks or as labels in the rows that carry them (itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was 41011a72...3bc7.
-            (skill_capabilities, 537954, FULL_ROW_DELTA_CAP,
-             'b1ad64a54867268a24e7d38c67f7bf46df8d9f1651d58c98c46f2f02a126590b',
+            # 537954 -> 537829 and the digest re-derived: the routing reach round, -125 (itemized at the same
+            # limit); the pin before it was b1ad64a5...590b.
+            (skill_capabilities, 537829, FULL_ROW_DELTA_CAP,
+             'c5c17f8447a21a90f56652c76ca61560d12e987acf34f9d459d418765e562eb0',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -194,9 +196,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 33317 -> 33593 and the digest re-derived: the systematic-review
         # trigger row (255 bytes) and its researcher token (+21); removing
         # only those reproduces 29ebe70f...7063.
-        self.assertEqual(_digest(legacy), 'caa4437572df136f2fc5d2e4f3b7a5a3c6997306d9595e56e422604fc26a9ec3')
+        # Digest re-derived for the reach round: the registry rows of the triggers it drops.
+        self.assertEqual(_digest(legacy), 'd32edf2216a679aa88fdffccdd9564a44443ea1336b663c24b8ae373e8634ea5')
         baseline = len(''.join(legacy).encode())
-        self.assertEqual(baseline, 33593)
+        self.assertEqual(baseline, 33564)
         # 33_100 -> 33_318: main's ru pack and repro-audit (+222 over 32874) used
         # the gate's room and sprite-forge adds its 221-byte row and token; each
         # side alone fit, the merged tree measures 33317. The gate stays exact.
@@ -388,7 +391,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # names, and sibling hand-offs gain backticks or labels; the pin before it was ffca16e2...d704.
         # agent-instructions then names `ulw-context`, the label that loads, in place of `omh-context`
         # (same length); only that body moves, and the pin before it was 0ac3cd4c...17f7.
-        self.assertEqual(_digest(legacy_hashes), '0ae5f905692c0dfb31f777d2e8e2c28a4c7e9cc1a42292cc01963e21451ebc5f')
+        # The routing reach round then moves the skills whose triggers or index text it narrows; the pin
+        # before it was 0ae5f905...ebc5f.
+        self.assertEqual(_digest(legacy_hashes), 'd4eb4e54b97d3d9f63ad060fade000feb57da574671317bc790a175459357ed7')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -438,7 +443,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
-            'awareness_primer_markdown_chars': 3630,  # Human-voice reply sentence (+110).
+            'awareness_primer_markdown_chars': 3685,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,
             'role_context_chars_max': 2600,

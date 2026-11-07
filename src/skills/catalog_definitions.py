@@ -1971,6 +1971,7 @@ _DEFINITIONS = [
             "The decision needs reference-implementation study, a declared depth budget, or a decision-grounding dossier; use `research`.",
             "The output is a typed candidate inventory and acquisition status rather than an answer; use `source-finder`.",
             "The ask is a market, competitor, pricing, or customer decision brief; use `research-brief`.",
+            "Market sizing, a customer-evidence matrix, or a competitor or pricing profile is the deliverable; use `market-research`.",
             "The user wants recurring monitoring, a source inbox, or Scout/Analyst/Briefer operations; use `research-department`.",
             "The user wants to configure or cheapen web search itself, such as a provider API key or a search or extract backend or tier; use `websearch-setup`.",
             "The study target is this repository rather than the open web; use `codebase-onboarding`.",
@@ -2257,7 +2258,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "research-brief",
-        "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research, and for ongoing multi-role research use `research-department`.",
+        "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief.",
         (
             "research-brief",
             "business-research",
@@ -2276,15 +2277,6 @@ _DEFINITIONS = [
         "Use when Hermes should scope a business question, gather or summarize source-backed evidence, and preserve evidence/inference boundaries before strategy or handoff.",
         category="research",
         phase="business-brief",
-        # `research-department` ships only on Hermes.
-        portable_overrides={
-            "description": (
-                "Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research.",
-            ),
-        },
-        portable_override_shadows={
-            "description": "8269a2a72cf1856e5a3b98de6a6bb729104c4130a23291e206a96ee426b34ebb",
-        },
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
         handoff_policy="Keep business research in Hermes; prepare a selected executor/runtime handoff only after a later accepted plan requires code changes.",
@@ -2312,6 +2304,7 @@ _DEFINITIONS = [
             "The user needs to decide whether a customer problem deserves product investment with evidence typing and customer re-entry; use `product-discovery-validation`.",
             "The request is only fresh links, citations, or current facts without a business question or decision audience; use `web-research` for one cited lookup, or `research` for a depth-budget study.",
             "Sources have not yet been selected and the user wants source types, candidates, or acquisition state; use `source-finder`.",
+            "A scoped TAM/SAM/SOM model, customer-evidence matrix, or comparable competitor or pricing profile is the deliverable; use `market-research`, then return here for the audience synthesis.",
             "The research is recurring and run by several roles; use `research-department`.",
         ),
         why_this_exists=(
@@ -3787,7 +3780,6 @@ _DEFINITIONS = [
             "operating review",
             "release risks",
             "risks and blockers",
-            "priorities",
             "weekly status",
         ),
         "Use when Hermes should summarize observed status, risks, blockers, priorities, and follow-up actions for recurring operating work.",
@@ -4599,7 +4591,7 @@ _DEFINITIONS = [
             "wotd",
             "score my site",
         ),
-        "Use when a web surface must be judged against an external award bar: per-axis scores for UI, UX, and innovation, the weighted total against the published threshold, and the one axis holding the score down.",
+        "Use when a web surface must be judged against an external award bar: per-axis scores for the axes the chosen award body publishes, the weighted total against the published threshold, and the one axis holding the score down.",
         category="materials",
         phase="award-bar-score",
         hermes_role="retained-cognition",
@@ -5266,7 +5258,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "native-debugging",
-        "Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a DAP debugger instead of printf.",
+        "Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a debugger instead of printf.",
         (
             "native-debugging",
             "native debugging",
@@ -5288,7 +5280,7 @@ _DEFINITIONS = [
             "watchpoint",
             "backtrace",
         ),
-        "Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a DAP-driven evidence plan for the executor.",
+        "Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a debugger-driven evidence plan for the executor.",
         category="verification",
         phase="native-debugging",
         hermes_role="retained-cognition",
@@ -5861,7 +5853,6 @@ _DEFINITIONS = [
             "skill inventory",
             "prompt inventory",
             "plugin inventory",
-            "mcp inventory",
             "hook inventory",
             "config audit",
             "what are we missing",
@@ -6044,7 +6035,10 @@ _DEFINITIONS = [
             "verification-gate",
             "verification gate",
             "quality gate",
-            "release gate",
+            # Lengthened from `release gate`, which dispatched on a racetrack's once it was this
+            # skill's alone; the two words still score, and bare they ask.
+            "run the release gate",
+            "release gate check",
             "test gate",
             "build lint test",
             "lint typecheck tests",
@@ -7940,7 +7934,6 @@ _DEFINITIONS = [
             "review",
             "audit",
             "find bugs",
-            "release gate",
             "claim audit",
             "evidence audit",
             "README claim",
@@ -8061,7 +8054,6 @@ _DEFINITIONS = [
             "refactor",
             "risky",
             "behavior-preserving refactor",
-            "risk analysis",
             "refactor workflow",
             "legacy refactor",
             "anti-slop pass",
@@ -8527,8 +8519,6 @@ _DEFINITIONS = [
         "Onboarding a newly released model generation: when a model family ships a new generation or changes its serving contract, walk the recognition, research, calibration, routing, and measurement process that keeps model handling honest and current.",
         (
             "model-optimization",
-            "model optimization",
-            "optimize for model",
             "onboard new model",
             "calibrate new model",
             "new model calibration",
@@ -8776,6 +8766,7 @@ _DEFINITIONS = [
         (
             "wiki",
             "project wiki",
+            "write a handover guide",
             "build a wiki",
             "start a wiki",
             "organize my notes",
@@ -9703,7 +9694,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "morning-brief",
-        "Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with read-and-draft-only scope and diff approval; produces the configuration, not the daily brief itself.",
+        "Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with the narrowest scope and diff approval; produces the configuration, not the daily brief itself.",
         (
             "morning-brief",
             "morning brief",
@@ -11056,6 +11047,9 @@ _DEFINITIONS.append(
         (
             "security-event-response",
             "security event response",
+            "exfiltrating customer data",
+            "suspected unauthorized access",
+            "account takeover",
             "cve",
             "triage this cve",
             "cve in our dependency",
