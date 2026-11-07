@@ -300,8 +300,7 @@ All notable changes will be documented here.
   returns `reviewed_body: false` and a line to relay. `--input-bundle`
   records a consensus bundle as `hermes_plan_input/v1`, planning input that
   `plan-accept` refuses. `ulw-plan`, `omh-plan` and `omh-adversarial-consensus`
-  now use these. This round is one owner goal split into two pull requests so
-  each rolls back alone; this one carries the command change.
+  now use these.
 - **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
   on.** With that setting each delegated child works in a git worktree of its
   own, made from the parent's last commit, so a dependent node and the verify
@@ -559,8 +558,7 @@ All notable changes will be documented here.
   names the terminology capture command; `omh-ask` runs an advisor read-only
   and out of the live repository. Smaller edits in `omh-decide`,
   `omh-adversarial-consensus`, `dag-ulw`, `ulw-maestro` and the TDD
-  reference. This round is one owner goal split into two pull requests so each
-  rolls back alone; this one carries the skill text.
+  reference.
 - **A dag-ulw run that waits shows whole and moves, and says what it waits
   on.** A run of up to 12 lanes (the transcript's own small-run measure)
   shows every layer and node. A done layer of one node is one dim row
