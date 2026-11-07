@@ -85,7 +85,7 @@ MODIFICATIONS = {
     "assets/engine/scenes.js": ("upstream_with_notice", "Upstream bytes unmodified below a prepended attribution notice"),
     "assets/engine/index.html": ("modified_derivative", "fonts.css link moved after the inline style so explicit-font tokens win; attribution notice"),
     "scripts/new_project.py": ("modified_derivative", "Upstream folder layout and engine template; explicit local fonts with family/weight read from the font, no download or npm setup, existing project refused"),
-    "scripts/render.mjs": ("modified_derivative", "Puppeteer adapter with a realpath allowlist server; keeps upstream --scale/--sub/--shutter/--crf 16/--preset/--from/--to/--every; serial capture piped to FFmpeg; project.json cuts keep sub-frame samples inside each shot"),
+    "scripts/render.mjs": ("modified_derivative", "Puppeteer adapter with a realpath allowlist server; keeps upstream --scale/--sub/--shutter/--crf 16/--preset/--from/--to/--every; serial capture piped to FFmpeg with frame-clock throttling off; project.json cuts keep sub-frame samples inside each shot"),
     "scripts/timeline.py": ("modified_derivative", "Explicit cue graph plus the upstream script.json composition with a stdlib envelope; music.dropN cues from the analysis"),
     "scripts/synth_music.py": ("modified_derivative", "Seeded section score and SFX rewritten for stdlib PCM"),
     "scripts/mix.py": ("modified_derivative", "Cue placement, speech ducking and gain automation adapted to stdlib PCM; required tracks fail closed; reports SFX buried under the bed"),

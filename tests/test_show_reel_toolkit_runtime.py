@@ -234,6 +234,23 @@ console.log('safe');
             result = subprocess.run([NODE, "--input-type=module", "-e", script, adapter.as_uri(), str(root)], capture_output=True, text=True, timeout=20)
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_browser_skips_the_vsync_wait_and_keeps_its_request_and_colour_scope(self):
+        if not NODE:
+            self.skipTest("optional Node unavailable")
+        script = """
+const {browserArgs}=await import(process.argv[1]);
+console.log(JSON.stringify(browserArgs('http://127.0.0.1:4321',4321)));
+"""
+        adapter = KIT / "scripts/render.mjs"
+        result = subprocess.run([NODE, "--input-type=module", "-e", script, adapter.as_uri()], capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = json.loads(result.stdout)
+        # The vsync wait dominated capture time; the proxy pair and sRGB profile are the request and colour scope.
+        for flag in ("--disable-gpu-vsync", "--disable-frame-rate-limit", "--proxy-server=http://127.0.0.1:4321",
+                     "--proxy-bypass-list=<-loopback>;127.0.0.1:4321", "--force-color-profile=srgb", "--mute-audio"):
+            self.assertIn(flag, args)
+        self.assertEqual(len(args), len(set(args)))
+
     def test_only_macos_system_aliases_are_trusted(self):
         if not NODE:
             self.skipTest("optional Node unavailable")

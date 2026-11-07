@@ -145,7 +145,11 @@ in the pinned tool/font environment; no cross-platform MP4 byte equality claim.
 Serial capture only, piped to FFmpeg. `--sub N --shutter 0.5` averages N
 sub-frame captures per output frame (upstream's 180-degree shutter); `--scale s`
 sets deviceScaleFactor (s<1 draft at reduced size, s>1 supersampled back to the
-page size); `--crf` defaults to 16, `--preset` to medium. No workers, chunking,
+page size); `--crf` defaults to 16, `--preset` to medium. Chrome runs with
+`--disable-gpu-vsync --disable-frame-rate-limit`, so each capture waits on the
+seek and the screenshot, not on the next vsync tick. Repeated renders with the
+same settings stay byte-identical; a frame where two scenes overlap can differ
+by a few code values from a render made before these flags. No workers, chunking,
 stale resume or exists-only caching. Existing output/receipt refuses; a failure
 writes `.failure.json` and keeps the partial folder. The loopback static server
 serves only realpath-contained, symlink-free allowlisted files; sibling-prefix,
