@@ -82,6 +82,15 @@ last row, "no, and tell Hermes what to do instead", sends the explicit deny at
 once, interrupts nothing, and then opens the composer for what the person tells
 Hermes instead; Esc there sends nothing more.
 
+When the person attaches an image, it also sends `image.render` once for that
+image, naming only the path Hermes staged and answered, to draw a preview under
+the prompt that sends it: it asks for at most 64 columns by 16 rows, for kitty
+graphics only on a kitty-family terminal at truecolor and otherwise for
+half-blocks, and not at all under `NO_COLOR`. It reads nothing else for the
+preview and sends nothing on its own. The preview follows Hermes'
+`display.inline_images` (off draws none), and a Hermes that does not know the
+call, or an answer that does not check out, draws no preview and says nothing.
+
 ## Leaving a session, approvals and session settings
 
 Leaving a session (`/new`, a switch) declines that session's open requests and
@@ -161,6 +170,14 @@ green `●`, failed red `✗`), its name in its tool family's hue at 4.5:1 on da
 and light, consecutive skill loads and tool-detail reads folded into one row,
 and the composer between two full-width rules with no side edges; none of it
 changes what the TUI sends or answers.
+
+Every escape sequence in text is still removed before it reaches the terminal
+(`screen.paint_line`). The one sequence the TUI writes from Hermes is the kitty
+graphics transmit of an image the person attached, and only after it matches
+the kitty APC chunk form for the image Hermes named (`src/tui/inline_image.py`);
+it is written once per image, to the terminal only and never to disk or a log,
+and only the placeholder rows are kept for the transcript. A half-block preview
+is ordinary coloured cells.
 
 ## Agent views
 
