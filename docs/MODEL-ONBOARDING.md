@@ -185,10 +185,10 @@ What does apply, and what this step therefore produces:
   otherwise the tier it could read (installed, enabled, credential name
   present) with one note per plugin quoting what that plugin's catalog entry
   declares and where OMH read it, and a note naming any hook the plugin
-  declares that OMH also registers. It reads names only, never a credential
-  value, and it never says what a plugin does at runtime, because OMH did not
-  observe that. `omh doctor --json` carries the full `jev_sidekick_posture/v1`
-  payload under the check's `detail`.
+  declares that OMH also registers. It reports names only, never copies a
+  credential value, and it never says what a plugin does at runtime, because
+  OMH did not observe that. `omh doctor --json` carries the full
+  `jev_sidekick_posture/v1` payload under the check's `detail`.
 - OMH's own route to the model, where one exists. For Jev that is the opt-in
   `omh_jev_ask` plugin tool and the six default-installed `omh-jev-*` skills
   that call it (`omh-jev-ask`, `omh-jev-route`, `omh-jev-failure-triage`,

@@ -115,6 +115,18 @@ All notable changes will be documented here.
   `claude-opus-5-5 (x412), claude-sonnet-5-5 (x61)`; `--json` keeps every
   observation.
 
+- **A route can name `commandcode` once its key is in Hermes' `.env`.**
+  `omh_delegate_route` refused every route naming the provider. With
+  `COMMANDCODE_API_KEY` in `.env` such a route now applies, and a Hermes login
+  or credential pool row for the provider, or a `providers.commandcode` block,
+  counts as well; without any of those, or with the key only exported in a
+  shell, the route is still refused. The key or login alone does not reorder
+  any model chain or change which category routes work. The isolated Hermes
+  child lane passes the key to a `commandcode` child.
+  Separately, a line with an empty value (`X=`, `X=""`) no longer counts as a
+  key for any provider, because Hermes has no credential to use from it.
+  (Reported and first fixed by @levinkin in #2636.)
+
 - **A reply that opens with a code block keeps its `⚚ Hermes` header in
   the OMH TUI's scrollback, and a table after a released one keeps its own
   box whatever spaces its divider holds.** When a reply's first line was a
