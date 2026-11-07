@@ -356,6 +356,11 @@ NON_SKILL_BACKTICKS = frozenset(
 # sibling gains a statement pointing back. Two cases, two pairs, one owner.
 # `reliability-review` defers a go or hold verdict before launch to
 # `production-audit`; one case, one pair, no new owner.
+# `executor-runtime-readiness` defers a named plugin or API to
+# `external-connector-readiness` and a missing tool to `toolbelt-readiness`;
+# `provider-profile-posture` defers connector adoption, the tool inventory and
+# a model-provider login to those two and `model-setup`; no sibling gains a
+# statement pointing back. Five cases, five pairs, two new owners.
 EXPECTED_DEFERENCE_CASES = 417
 EXPECTED_DEFERENCE_PAIRS = 437
 EXPECTED_DEFERRING_OWNERS = 123

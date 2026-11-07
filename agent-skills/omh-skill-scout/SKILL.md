@@ -31,7 +31,7 @@ Good example:
 
 - Prompt: skill-scout find existing skill candidates before we create a release-note workflow skill.
 - Expected behavior: Produce `prepare_skill_scout` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Why: Reuse is judged by candidate and source trust; the scout installs nothing.
 
 Bad example:
 

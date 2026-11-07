@@ -390,7 +390,7 @@ _DEFINITIONS = [
         ),
         good_example=SkillExample(
             prompt="/omh migrate this service off the deprecated API and add tests",
-            expected="Consult `omh recommend` on the remainder, then chain the recommended plan and executor workflows with explicit observed-vs-prepared evidence boundaries.",
+            expected="Consult `omh recommend` on the remainder, then name the recommended chain and start only its first stage; each later engine waits for the user's go-ahead, with explicit observed-vs-prepared evidence boundaries.",
             why="A leading /omh command with an imperative remainder is a meta-routing request that reasons over the live catalog rather than a memorized list.",
         ),
         bad_example=SkillExample(
@@ -9032,7 +9032,7 @@ _DEFINITIONS = [
             "The user wants skill health checked: stale surfaces, failure patterns, or pending amendments; use "
             "`skill-health`.",
             HermesSkillLine(
-                "The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' bundled `hermes-agent-skill-authoring` skill instead of this one.",
+                "The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' `hermes-agent-skill-authoring` skill instead of this one (if skill_view cannot find it: hermes skills install official/software-development/hermes-agent-skill-authoring).",
                 ("hermes-agent-skill-authoring",),
             ),
         ),
@@ -9101,11 +9101,12 @@ _DEFINITIONS = [
             "Blocking issues and warnings are separated, with one next repair action named for each blocking area.",
             "Plugin install, plugin import/register smoke, and Hermes runtime load are not collapsed into one claim.",
             "The final status says whether setup/update/doctor repaired anything or only observed health.",
+            "`omh doctor --json` was run (`--no-state-write` writes nothing, `--no-personal-files` skips SOUL.md and memory files) and `recommended_next_action` is quoted.",
         ),
         recovery_notes=(
             "If managed skills are stale, recommend omh update or omh setup depending on whether registration also needs repair.",
             "If skills.external_dirs or Hermes config is missing, route to setup repair rather than editing hidden runtime state.",
-            "If plugin register smoke fails, reinstall the plugin bundle with setup --with-plugin --force before claiming plugin readiness.",
+            "If plugin register smoke fails, reinstall the plugin bundle with `omh setup --force` before claiming plugin readiness.",
             "If omh is missing from PATH, use the installer-reported absolute command path and then re-run doctor.",
         ),
         situations=(
@@ -9141,12 +9142,12 @@ _DEFINITIONS = [
         category="operator",
         phase="configuration",
         hermes_role="retained-operator",
-        handoff_policy="Read and write the local capability policy directly; propose executor work only when a repository fix is required.",
+        handoff_policy="Change the local capability policy with `omh capability-policy`; propose executor work only when a repository fix is required.",
         required_inputs=("capability family", "requested state"),
-        expected_outputs=("policy change summary", "what was removed versus retained", "the exact command that reverses it"),
+        expected_outputs=("policy change summary", "what was withheld versus retained", "the exact command that reverses it"),
         artifact_expectations=("capability policy recorded in the local setup profile",),
         why_this_exists=(
-            "`capability-toggle` exists because OMH shipped one binary install lever -- 9 core skills or all of them -- "
+            "`capability-toggle` exists because OMH shipped one binary install lever -- the small core set or all installable skills -- "
             "so a user who wanted the coding surface but not the memory surface had to take both. It turns that into a "
             "per-family choice without uninstalling OMH."
         ),
@@ -9159,7 +9160,7 @@ _DEFINITIONS = [
         ),
         good_example=SkillExample(
             prompt="turn off memory, I already run my own memory system",
-            expected="Disable the retain_knowledge family, report the four memory workflows removed and the five core skills retained, and name the enable command.",
+            expected="Run `omh capability-policy disable retain_knowledge`; report the four memory workflows withheld, memory off, the five core skills retained, and the enable command.",
             why="The request is about which OMH surfaces are offered locally, not about capturing a memory.",
         ),
         bad_example=SkillExample(
@@ -9169,14 +9170,13 @@ _DEFINITIONS = [
         ),
         final_checklist=(
             "The affected family is named by its canonical id, not guessed from a partial word.",
-            "Removed workflows and retained core skills are listed separately.",
-            "The reversing command is stated so the change never reads as permanent.",
-            "Locally modified skill files are reported as retained exceptions rather than deleted.",
+            "Withheld workflows and retained core skills are listed separately.",
+            "The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capability-policy status`), routing is unchanged.",
+            "The change uses `omh capability-policy disable|enable <family>` (`--dry-run` previews, `status` lists), never a hand edit, and the printed reversing command is stated.",
         ),
         recovery_notes=(
             "If the family id is ambiguous, list all six and ask rather than picking the closest match.",
-            "If a disable would remove a core skill, refuse that part and report it; core skills are the floor doctor checks for.",
-            "If files were kept with --keep-files, say the policy changed but the files remain so the state is not misread as a full removal.",
+            "The policy never deletes skill files.",
         ),
         situations=(
             "I don't want omh memory features",
@@ -9454,7 +9454,7 @@ _DEFINITIONS = [
         )
         + (
             "Treat each Hermes model alias, semantic category, and external owner as an independent prerequisite/diagnose/recommend/apply unit instead of one combined change.",
-            "Explain the shipped recommendations as editable editorial defaults, not benchmarks or allowlists: ultrabrain uses GPT-6 Astra; deep prefers Claude Opus 5.5, GPT-6.1 Sol, then Kimi K3.1 Pro at high; architect prefers Claude Opus 5.5, GPT-6 Astra, Claude Fable 5.1, then Kimi K3.1 Pro at xhigh; unspecified-high prefers GPT-6.1 Sol, Claude Opus 5.5, then Kimi K3.1 Pro; unspecified-low prefers GLM-5.3, DeepSeek V4.1 Flash, GPT-6.1 Sol, then Claude Sonnet 5.5 at low; quick prefers GLM-5.3 Flash, GPT-6 Luna, Claude Haiku 5.5, then Kimi K3.1 Pro at low; writing prefers Claude Opus 5.5, Claude Sonnet 5.5, Kimi K3.1 Pro, then Gemini 4 Argon; visual-engineering prefers Claude Opus 5.5, Claude Fable 5.1, Gemini 4 Argon, then Kimi K3.1 Pro; artistry prefers Gemini 4 Argon, Claude Opus 5.5, Claude Fable 5.1, then Kimi K3.1 Pro; capable prefers Claude Opus 5.5, GPT-6.1 Sol, Claude Fable 5.1, then Kimi K3.1 Pro at medium; simple-work prefers GPT-6 Luna, Claude Haiku 5.5, then DeepSeek V4.1 Flash at low; deep-work prefers Claude Opus 5.5 then GPT-6.1 Sol at max; google-search prefers Gemini 4 Argon, GPT-6.1 Sol, then Claude Opus 5.5 at medium; x-search prefers Grok 4.7, Kimi K3.1 Pro, then Gemini 4 Argon at high; review prefers GPT-6.1 Sol, Claude Opus 5.5, then Kimi K3.1 Pro at xhigh; swarm prefers DeepSeek V4.1 Flash, GLM-5.3 Flash, then GPT-6 Luna at low; forensics prefers GPT-6 Astra, Claude Opus 5.5, then Kimi K3.1 Pro at xhigh; and synthesize prefers Claude Opus 5.5 and GPT-6.1 Sol at xhigh, then Gemini 4 Argon at high. The last six are opt-in: no role or task scale selects them. Each chain names the current generation of a model line; a superseded generation (Fable 5, Opus 5, GLM 5.2, DeepSeek V3.2, GPT-5.6 Luna, GPT-5.6 Sol, GPT-5.6 Terra, GPT-6 Sol, Claude Haiku 4.5, Kimi K3, Grok Code Fast, Gemini 3.1 Pro) or a retired line (Qwen3-Coder) is kept only by a machine-level chain override. Chain customization is a config edit: a category written into ~/.omh/routing/model-chains.json (mixture_chain_overrides/v1, seeded by omh setup) replaces that chain for routing, fallback, and HUD labels without touching code. The interactive omh setup also records which providers the machine holds and whether it has a Claude Code subscription in ~/.omh/routing/providers.json (provider_entitlements/v1); every chain is then reordered so served entries lead, nothing is removed, and the Claude Code subscription only seeds the Maestro lane's --model preference because Hermes cannot spend it.",
+            "Explain the shipped recommendations as editable editorial defaults, not benchmarks or allowlists: ultrabrain uses GPT-6 Astra; deep prefers Claude Opus 5.5, GPT-6.1 Sol, then Kimi K3.1 Pro at high; architect prefers Claude Opus 5.5, GPT-6 Astra, Claude Fable 5.1, then Kimi K3.1 Pro at xhigh; unspecified-high prefers GPT-6.1 Sol, Claude Opus 5.5, then Kimi K3.1 Pro; unspecified-low prefers GLM-5.3, DeepSeek V4.1 Flash, GPT-6.1 Sol, then Claude Sonnet 5.5 at low; quick prefers GLM-5.3 Flash, GPT-6 Luna, Claude Haiku 5.5, then Kimi K3.1 Pro at low; writing prefers Claude Opus 5.5, Claude Sonnet 5.5, Kimi K3.1 Pro, then Gemini 4 Argon; visual-engineering prefers Claude Opus 5.5, Claude Fable 5.1, Gemini 4 Argon, then Kimi K3.1 Pro; artistry prefers Gemini 4 Argon, Claude Opus 5.5, Claude Fable 5.1, then Kimi K3.1 Pro; capable prefers Claude Opus 5.5, GPT-6.1 Sol, Claude Fable 5.1, then Kimi K3.1 Pro at medium; simple-work prefers GPT-6 Luna, Claude Haiku 5.5, then DeepSeek V4.1 Flash at low; deep-work prefers Claude Opus 5.5 then GPT-6.1 Sol at max; google-search prefers Gemini 4 Argon, GPT-6.1 Sol, then Claude Opus 5.5 at medium; x-search prefers Grok 4.7, Kimi K3.1 Pro, then Gemini 4 Argon at high; review prefers GPT-6.1 Sol, Claude Opus 5.5, then Kimi K3.1 Pro at xhigh; swarm prefers DeepSeek V4.1 Flash, GLM-5.3 Flash, then GPT-6 Luna at low; forensics prefers GPT-6 Astra, Claude Opus 5.5, then Kimi K3.1 Pro at xhigh; and synthesize prefers Claude Opus 5.5 and GPT-6.1 Sol at xhigh, then Gemini 4 Argon at high. The last six are opt-in: no role or task scale selects them. Each chain names the current generation of a model line; a superseded generation (Fable 5, Opus 5, GLM 5.2, DeepSeek V3.2, GPT-5.6 Luna, GPT-5.6 Sol, GPT-5.6 Terra, GPT-6 Sol, Claude Haiku 4.5, Kimi K3, Grok Code Fast, Gemini 3.1 Pro) or a retired line (Qwen3-Coder) is kept only by a machine-level chain override. Chain customization is a config edit: a category written into ~/.omh/routing/model-chains.json (mixture_chain_overrides/v1, seeded by omh setup) replaces that chain for routing, fallback, and HUD labels without touching code. The interactive omh setup (or, in chat, `omh model-chains provider set <id> <kind>` for one provider; the subscription answer comes only from interactive setup) also records which providers the machine holds and whether it has a Claude Code subscription in ~/.omh/routing/providers.json (provider_entitlements/v1); every chain is then reordered so served entries lead, nothing is removed, and the Claude Code subscription only seeds the Maestro lane's --model preference because Hermes cannot spend it.",
             "For X/Twitter scraping or trend analysis, keep x_platform_data as a domain affinity rather than a role alias: prefer confirmed-active Grok, then Kimi K3.1 Pro, then Gemini, without removing the rest of the route or overriding an explicit model.",
             "When a recommendation head is missing, choose the first confirmed-active owner-compatible candidate in that chain. Only after every selected category, role-slot, and domain chain is exhausted, consult the shared final order Claude Opus 5.5 then GPT-6.1 Sol. If no candidate is confirmed active anywhere, keep the selector on its owner's native default model and let the rest of OMH setup finish without a model-config write.",
             "Give provider-specific native next actions without claiming provider readiness: use installed Hermes flows for OpenAI OAuth/OpenAI Codex, Anthropic or an existing Claude provider, Qwen OAuth or Alibaba, Gemini/Google/Vertex, Grok/xAI, Kimi, GLM/Z.AI, DeepSeek, or an already-working custom provider; preserve working alternatives.",
@@ -9642,7 +9642,6 @@ _DEFINITIONS = [
         why_this_exists="`websearch-setup` exists to make web search cost and backend choice configurable through two clearly separated, diff-approved steps against the `web` keys Hermes reads, instead of one opaque edit.",
         do_not_use_when=(
             "The user wants Hermes to run a web search now, not configure how web search is set up.",
-            "No provider key, backend, or tier intent has been named yet.",
             "The request needs a repository code change rather than a local `.env` or Hermes config edit.",
         ),
         good_example=SkillExample(
@@ -9659,9 +9658,11 @@ _DEFINITIONS = [
         + (
             "The provider API key write and the `web` backend or tier change were verified as two separate, independently-approved changes, each read back from the key Hermes consumes.",
             "Nothing was written to `auxiliary.web_extract`, and a leftover block there was reported as ignored rather than counted as configuration.",
+            "Verified needs every keyed backend or `paid` tier in the merged `web` section to have its key present.",
         ),
         recovery_notes=(
-            "If no provider account or key is available, mark the key step \"not applicable\" and continue with the backend and tier step alone; the keyless free tier needs no key.",
+            "If no provider account or key is available, mark the key step \"not applicable\" and continue with the backend and tier step alone, pick a keyless backend or a `provider_tier.<name>: free` tier, never a keyed or `paid` one without its key; offer to reverse an approved keyed backend as its own diff.",
+            "If nothing is named yet, run the read-only diagnosis first, then ask which paid provider, if any.",
             "If either diff is rejected, keep the other step's state independent and do not roll both back together.",
             "If the config still holds an `auxiliary.web_extract` block, report it as a leftover Hermes ignores and leave it in place unless the user asks to remove it as its own diff.",
         ),

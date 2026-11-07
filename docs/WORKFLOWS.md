@@ -119,7 +119,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `/omh`, `./omh`
 - Good example:
   - Prompt: /omh migrate this service off the deprecated API and add tests
-  - Expected behavior: Consult `omh recommend` on the remainder, then chain the recommended plan and executor workflows with explicit observed-vs-prepared evidence boundaries.
+  - Expected behavior: Consult `omh recommend` on the remainder, then name the recommended chain and start only its first stage; each later engine waits for the user's go-ahead, with explicit observed-vs-prepared evidence boundaries.
   - Why: A leading /omh command with an imperative remainder is a meta-routing request that reasons over the live catalog rather than a memorized list.
 - Bad example:
   - Prompt: omh add dark mode
@@ -5789,7 +5789,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user wants an OMH capability family turned on or off; use `capability-toggle`.
   - The user wants a public skill found and vetted before installing it; use `skill-scout`.
   - The user wants skill health checked: stale surfaces, failure patterns, or pending amendments; use `skill-health`.
-  - The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' bundled `hermes-agent-skill-authoring` skill instead of this one.
+  - The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' `hermes-agent-skill-authoring` skill instead of this one (if skill_view cannot find it: hermes skills install official/software-development/hermes-agent-skill-authoring).
 - Strong routing signals: `skill`, `$skill`, `skills`, `manage skills`
 - Good example:
   - Prompt: which skills do I have, and add one for our release checklist
@@ -5862,10 +5862,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Blocking issues and warnings are separated, with one next repair action named for each blocking area.
   - Plugin install, plugin import/register smoke, and Hermes runtime load are not collapsed into one claim.
   - The final status says whether setup/update/doctor repaired anything or only observed health.
+  - `omh doctor --json` was run (`--no-state-write` writes nothing, `--no-personal-files` skips SOUL.md and memory files) and `recommended_next_action` is quoted.
 - Recovery notes:
   - If managed skills are stale, recommend omh update or omh setup depending on whether registration also needs repair.
   - If skills.external_dirs or Hermes config is missing, route to setup repair rather than editing hidden runtime state.
-  - If plugin register smoke fails, reinstall the plugin bundle with setup --with-plugin --force before claiming plugin readiness.
+  - If plugin register smoke fails, reinstall the plugin bundle with `omh setup --force` before claiming plugin readiness.
   - If omh is missing from PATH, use the installer-reported absolute command path and then re-run doctor.
 - Required inputs:
   - omh home
@@ -5896,8 +5897,8 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Compatibility alias: `false`
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
-- Handoff policy: Read and write the local capability policy directly; propose executor work only when a repository fix is required.
-- Why this exists: `capability-toggle` exists because OMH shipped one binary install lever -- 9 core skills or all of them -- so a user who wanted the coding surface but not the memory surface had to take both. It turns that into a per-family choice without uninstalling OMH.
+- Handoff policy: Change the local capability policy with `omh capability-policy`; propose executor work only when a repository fix is required.
+- Why this exists: `capability-toggle` exists because OMH shipped one binary install lever -- the small core set or all installable skills -- so a user who wanted the coding surface but not the memory surface had to take both. It turns that into a per-family choice without uninstalling OMH.
 - Use when: Use when the user wants to turn an OMH capability family on or off -- memory, coding delegation, research, planning, materials, or operations -- rather than uninstall OMH or run the workflow that family owns.
 - Do not use when:
   - The user wants to run the workflow a family owns rather than change whether that family is offered.
@@ -5907,7 +5908,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `capability-toggle`, `capability policy`, `disable memory`, `enable memory`, `disable coding orchestration`, `disable a capability family`, `enable a capability family`, `메모리 기능 꺼줘`, `메모리 기능 끄기`, `메모리 기능 켜줘`, `메모리 비활성화`, `메모리 관리 비활성화`, `코딩 오케스트레이션 비활성화`, `코딩 오케스트레이션 꺼줘`, `기능 비활성화`, `기능 활성화`
 - Good example:
   - Prompt: turn off memory, I already run my own memory system
-  - Expected behavior: Disable the retain_knowledge family, report the four memory workflows removed and the five core skills retained, and name the enable command.
+  - Expected behavior: Run `omh capability-policy disable retain_knowledge`; report the four memory workflows withheld, memory off, the five core skills retained, and the enable command.
   - Why: The request is about which OMH surfaces are offered locally, not about capturing a memory.
 - Bad example:
   - Prompt: add a dark mode toggle to my settings page
@@ -5918,19 +5919,18 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
 - Completion checklist:
   - The affected family is named by its canonical id, not guessed from a partial word.
-  - Removed workflows and retained core skills are listed separately.
-  - The reversing command is stated so the change never reads as permanent.
-  - Locally modified skill files are reported as retained exceptions rather than deleted.
+  - Withheld workflows and retained core skills are listed separately.
+  - The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capability-policy status`), routing is unchanged.
+  - The change uses `omh capability-policy disable|enable <family>` (`--dry-run` previews, `status` lists), never a hand edit, and the printed reversing command is stated.
 - Recovery notes:
   - If the family id is ambiguous, list all six and ask rather than picking the closest match.
-  - If a disable would remove a core skill, refuse that part and report it; core skills are the floor doctor checks for.
-  - If files were kept with --keep-files, say the policy changed but the files remain so the state is not misread as a full removal.
+  - The policy never deletes skill files.
 - Required inputs:
   - capability family
   - requested state
 - Expected outputs:
   - policy change summary
-  - what was removed versus retained
+  - what was withheld versus retained
   - the exact command that reverses it
 - Artifact expectations:
   - capability policy recorded in the local setup profile
@@ -6102,7 +6102,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Verify: re-inspect the allowlisted Hermes config metadata and report a completion checklist covering every applicable item.
   - Chain interview: when the user wants the per-category model chains changed, first show the current state (`omh model-chains show`), then interview one category at a time with numbered options — keep current first, the shipped default only when the current chain differs from it, the Ultrafast tier only when a chain member has a known `-ultrafast` id, and a custom entry (직접 입력) last — and apply each outcome with `omh model-chains set <category> "model[:effort], ..."` or by editing ~/.omh/routing/model-chains.json directly; close by re-reading the file and showing the resulting chains with their origins.
   - Treat each Hermes model alias, semantic category, and external owner as an independent prerequisite/diagnose/recommend/apply unit instead of one combined change.
-  - Explain the shipped recommendations as editable editorial defaults, not benchmarks or allowlists: ultrabrain uses GPT-6 Astra; deep prefers Claude Opus 5.5, GPT-6.1 Sol, then Kimi K3.1 Pro at high; architect prefers Claude Opus 5.5, GPT-6 Astra, Claude Fable 5.1, then Kimi K3.1 Pro at xhigh; unspecified-high prefers GPT-6.1 Sol, Claude Opus 5.5, then Kimi K3.1 Pro; unspecified-low prefers GLM-5.3, DeepSeek V4.1 Flash, GPT-6.1 Sol, then Claude Sonnet 5.5 at low; quick prefers GLM-5.3 Flash, GPT-6 Luna, Claude Haiku 5.5, then Kimi K3.1 Pro at low; writing prefers Claude Opus 5.5, Claude Sonnet 5.5, Kimi K3.1 Pro, then Gemini 4 Argon; visual-engineering prefers Claude Opus 5.5, Claude Fable 5.1, Gemini 4 Argon, then Kimi K3.1 Pro; artistry prefers Gemini 4 Argon, Claude Opus 5.5, Claude Fable 5.1, then Kimi K3.1 Pro; capable prefers Claude Opus 5.5, GPT-6.1 Sol, Claude Fable 5.1, then Kimi K3.1 Pro at medium; simple-work prefers GPT-6 Luna, Claude Haiku 5.5, then DeepSeek V4.1 Flash at low; deep-work prefers Claude Opus 5.5 then GPT-6.1 Sol at max; google-search prefers Gemini 4 Argon, GPT-6.1 Sol, then Claude Opus 5.5 at medium; x-search prefers Grok 4.7, Kimi K3.1 Pro, then Gemini 4 Argon at high; review prefers GPT-6.1 Sol, Claude Opus 5.5, then Kimi K3.1 Pro at xhigh; swarm prefers DeepSeek V4.1 Flash, GLM-5.3 Flash, then GPT-6 Luna at low; forensics prefers GPT-6 Astra, Claude Opus 5.5, then Kimi K3.1 Pro at xhigh; and synthesize prefers Claude Opus 5.5 and GPT-6.1 Sol at xhigh, then Gemini 4 Argon at high. The last six are opt-in: no role or task scale selects them. Each chain names the current generation of a model line; a superseded generation (Fable 5, Opus 5, GLM 5.2, DeepSeek V3.2, GPT-5.6 Luna, GPT-5.6 Sol, GPT-5.6 Terra, GPT-6 Sol, Claude Haiku 4.5, Kimi K3, Grok Code Fast, Gemini 3.1 Pro) or a retired line (Qwen3-Coder) is kept only by a machine-level chain override. Chain customization is a config edit: a category written into ~/.omh/routing/model-chains.json (mixture_chain_overrides/v1, seeded by omh setup) replaces that chain for routing, fallback, and HUD labels without touching code. The interactive omh setup also records which providers the machine holds and whether it has a Claude Code subscription in ~/.omh/routing/providers.json (provider_entitlements/v1); every chain is then reordered so served entries lead, nothing is removed, and the Claude Code subscription only seeds the Maestro lane's --model preference because Hermes cannot spend it.
+  - Explain the shipped recommendations as editable editorial defaults, not benchmarks or allowlists: ultrabrain uses GPT-6 Astra; deep prefers Claude Opus 5.5, GPT-6.1 Sol, then Kimi K3.1 Pro at high; architect prefers Claude Opus 5.5, GPT-6 Astra, Claude Fable 5.1, then Kimi K3.1 Pro at xhigh; unspecified-high prefers GPT-6.1 Sol, Claude Opus 5.5, then Kimi K3.1 Pro; unspecified-low prefers GLM-5.3, DeepSeek V4.1 Flash, GPT-6.1 Sol, then Claude Sonnet 5.5 at low; quick prefers GLM-5.3 Flash, GPT-6 Luna, Claude Haiku 5.5, then Kimi K3.1 Pro at low; writing prefers Claude Opus 5.5, Claude Sonnet 5.5, Kimi K3.1 Pro, then Gemini 4 Argon; visual-engineering prefers Claude Opus 5.5, Claude Fable 5.1, Gemini 4 Argon, then Kimi K3.1 Pro; artistry prefers Gemini 4 Argon, Claude Opus 5.5, Claude Fable 5.1, then Kimi K3.1 Pro; capable prefers Claude Opus 5.5, GPT-6.1 Sol, Claude Fable 5.1, then Kimi K3.1 Pro at medium; simple-work prefers GPT-6 Luna, Claude Haiku 5.5, then DeepSeek V4.1 Flash at low; deep-work prefers Claude Opus 5.5 then GPT-6.1 Sol at max; google-search prefers Gemini 4 Argon, GPT-6.1 Sol, then Claude Opus 5.5 at medium; x-search prefers Grok 4.7, Kimi K3.1 Pro, then Gemini 4 Argon at high; review prefers GPT-6.1 Sol, Claude Opus 5.5, then Kimi K3.1 Pro at xhigh; swarm prefers DeepSeek V4.1 Flash, GLM-5.3 Flash, then GPT-6 Luna at low; forensics prefers GPT-6 Astra, Claude Opus 5.5, then Kimi K3.1 Pro at xhigh; and synthesize prefers Claude Opus 5.5 and GPT-6.1 Sol at xhigh, then Gemini 4 Argon at high. The last six are opt-in: no role or task scale selects them. Each chain names the current generation of a model line; a superseded generation (Fable 5, Opus 5, GLM 5.2, DeepSeek V3.2, GPT-5.6 Luna, GPT-5.6 Sol, GPT-5.6 Terra, GPT-6 Sol, Claude Haiku 4.5, Kimi K3, Grok Code Fast, Gemini 3.1 Pro) or a retired line (Qwen3-Coder) is kept only by a machine-level chain override. Chain customization is a config edit: a category written into ~/.omh/routing/model-chains.json (mixture_chain_overrides/v1, seeded by omh setup) replaces that chain for routing, fallback, and HUD labels without touching code. The interactive omh setup (or, in chat, `omh model-chains provider set <id> <kind>` for one provider; the subscription answer comes only from interactive setup) also records which providers the machine holds and whether it has a Claude Code subscription in ~/.omh/routing/providers.json (provider_entitlements/v1); every chain is then reordered so served entries lead, nothing is removed, and the Claude Code subscription only seeds the Maestro lane's --model preference because Hermes cannot spend it.
   - For X/Twitter scraping or trend analysis, keep x_platform_data as a domain affinity rather than a role alias: prefer confirmed-active Grok, then Kimi K3.1 Pro, then Gemini, without removing the rest of the route or overriding an explicit model.
   - When a recommendation head is missing, choose the first confirmed-active owner-compatible candidate in that chain. Only after every selected category, role-slot, and domain chain is exhausted, consult the shared final order Claude Opus 5.5 then GPT-6.1 Sol. If no candidate is confirmed active anywhere, keep the selector on its owner's native default model and let the rest of OMH setup finish without a model-config write.
   - Give provider-specific native next actions without claiming provider readiness: use installed Hermes flows for OpenAI OAuth/OpenAI Codex, Anthropic or an existing Claude provider, Qwen OAuth or Alibaba, Gemini/Google/Vertex, Grok/xAI, Kimi, GLM/Z.AI, DeepSeek, or an already-working custom provider; preserve working alternatives.
@@ -6225,7 +6225,6 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Use when: Use when the user wants to reduce web search cost or configure web search by choosing the search and extract providers, a provider's free or paid tier, or the keyless free tier, or by adding a provider API key, following the shared prerequisite-check, diagnose, guide, diff-approved apply, and verify contract.
 - Do not use when:
   - The user wants Hermes to run a web search now, not configure how web search is set up.
-  - No provider key, backend, or tier intent has been named yet.
   - The request needs a repository code change rather than a local `.env` or Hermes config edit.
 - Strong routing signals: `websearch-setup`, `web search setup`, `make web search cheaper`, `set up web search`, `configure web search`, `reduce web search cost`, `connect scraper api key`, `web search backend`, `hermes web search`, `web search costs too much`, `free web search tier`, `웹 검색 싸게 만들어줘`, `웹 검색 설정`, `웹서치 설정`, `웹 검색 비용 줄이기`
 - Good example:
@@ -6252,8 +6251,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
   - The provider API key write and the `web` backend or tier change were verified as two separate, independently-approved changes, each read back from the key Hermes consumes.
   - Nothing was written to `auxiliary.web_extract`, and a leftover block there was reported as ignored rather than counted as configuration.
+  - Verified needs every keyed backend or `paid` tier in the merged `web` section to have its key present.
 - Recovery notes:
-  - If no provider account or key is available, mark the key step "not applicable" and continue with the backend and tier step alone; the keyless free tier needs no key.
+  - If no provider account or key is available, mark the key step "not applicable" and continue with the backend and tier step alone, pick a keyless backend or a `provider_tier.<name>: free` tier, never a keyed or `paid` one without its key; offer to reverse an approved keyed backend as its own diff.
+  - If nothing is named yet, run the read-only diagnosis first, then ask which paid provider, if any.
   - If either diff is rejected, keep the other step's state independent and do not roll both back together.
   - If the config still holds an `auxiliary.web_extract` block, report it as a leftover Hermes ignores and leave it in place unless the user asks to remove it as its own diff.
 - Required inputs:
@@ -10189,14 +10190,13 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Why this exists: `executor-runtime-readiness` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 - Use when: Use when a user may choose Codex, Claude Code, Hermes coding, or another runtime and needs tool/credential gaps before handoff.
 - Do not use when:
-  - The request is already handled by a narrower explicit skill with stronger evidence.
-  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+  - A named plugin or API to adopt; use `external-connector-readiness`.
+  - Which tool or credential is missing for work already chosen; use `toolbelt-readiness`.
 - Strong routing signals: `executor-runtime-readiness`, `executor readiness`, `runtime readiness`, `codex readiness`, `claude code readiness`, `hermes coding readiness`, `executor tools`, `missing tools`, `missing runtime tools`, `runtime tools`, `coding agent readiness`, `coding runtime`, `handoff mode`, `handoff readiness`, `codex or claude`, `codex vs claude`, `codex tools`, `claude code tools`, `hermes coding`, `agent runtime`, `subagent readiness`, `worktree readiness`, `runtime migration`, `omx`, `omc`, `codex로 넘길지 claude`, `claude code로 넘길지 codex`, `codex랑 claude`, `claude code 중`, `넘길지 codex`, `넘길지 claude`, `코덱스`, `클로드 코드`, `헤르메스 코딩`, `코딩 에이전트`, `서브에이전트`, `작업트리`, `준비성`, `실행 런타임`, `어떤 런타임`, `런타임으로 넘겨`, `какой рантайм выбрать`, `кодекс или клод`, `codex или claude`, `каким агентом делать`, `какой моделью делать`
 - Good example:
   - Prompt: executor-runtime-readiness can this task run in Codex, Claude Code, or Hermes coding?
   - Expected behavior: Produce `prepare_executor_runtime_readiness` with required context, wrapper actions, and not-evidence boundaries.
-  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+  - Why: The choice depends on which CLI is on PATH and the flags it accepts.
 - Bad example:
   - Prompt: executor-runtime-readiness claim Codex already started the session.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
@@ -10211,9 +10211,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The final status cites observed runtime evidence or keeps the work prepared_not_observed.
   - When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
   - Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
+  - Run `omh coding executor-readiness --executor <profile>`; report status and `auth_signal` separately, since ready is a PATH probe, not login proof.
 - Recovery notes:
-  - If the scratch-edit probe is denied, keep the denial, mark permission unresolved; hand back the grant needed.
-  - If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the JSON flag.
+  - If the scratch-edit probe (see Delegation transparency) is denied, keep the denial, mark permission unresolved; hand back the grant needed.
+  - If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the output flag (`--output-format json` for Claude Code, `--json` for Codex).
 - Required inputs:
   - user request
   - target context
@@ -10730,7 +10731,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Good example:
   - Prompt: external-connector-readiness compare weather plugin and wxtrain candidates with cost, freshness, multimodal evidence, and fallback routes before adoption.
   - Expected behavior: Produce `prepare_external_connector_readiness` with required context, wrapper actions, and not-evidence boundaries.
-  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+  - Why: Two named weather connectors need a cost, freshness, and fallback comparison before either is enabled; no provider has been called.
 - Bad example:
   - Prompt: external-connector-readiness silently enable a paid connector and claim weather, SQL, and screenshot results without observed provider evidence.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
@@ -10743,16 +10744,16 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - Candidate connector, target domain, read/write scope, modality needs, provider owner, fallback workflow, and stop condition are explicit.
   - Cost, quota, credential, permission, live-data freshness, multimodal capture, safety, and compliance boundaries are marked ready, missing, risky, or not_observed.
-  - Route live read-only lookups to live-info-operator, external writes to connector-operator, datasets/SQL to data-analysis, and missing tools to toolbelt-readiness before claiming results.
+  - Route live read-only lookups to `live-info-operator`, external writes to `connector-operator`, datasets/SQL to `data-analysis`, and missing tools to `toolbelt-readiness` before claiming results.
   - Provider responses, screenshots, audio/video/file captures, query outputs, message ids, and external mutations are reported only from observed trial evidence.
   - For a memory provider, disabling it, removing its local cache, deleting its remote memory, deleting the account, and switching away are reported as distinct operations with distinct postconditions.
   - Unknown deletion, isolation, or write semantics block automatic writes and irreversible adoption instead of resolving to an OMH or Hermes default.
   - For a realtime voice connector, keep turn integrity, latency, fallback, interruption, and spoken tool safety separate; report unsupported or unobserved dimensions as hold or block rather than as a pass.
   - On Hermes, record its install-time scans as observed evidence beside the card, never in place of it: `hermes plugins install` scans a plugin before installing it (`safe`, `caution`, or `dangerous`, and a `dangerous` verdict is refused even with `--force`), and an MCP server started through `npx`, `uvx`, or `pipx` is checked against OSV malware advisories and refused on a match with an error that reads `MCP server '<name>': BLOCKED: ...`. A scan counts only when its output was seen: the plugin scan does not run with `plugins.scan_on_install` off, and the OSV check covers known malware only and lets the server start when its lookup fails, so a quiet install or launch is not a clean result.
 - Recovery notes:
-  - If the candidate list is unknown, route to skill-scout or source-finder before readiness scoring.
-  - If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to toolbelt-readiness.
-  - If a specific provider action is already selected, route read-only live data to live-info-operator or write/mutation tasks to connector-operator.
+  - If the candidate list is unknown, route to `skill-scout` or `source-finder` before readiness scoring.
+  - If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to `toolbelt-readiness`.
+  - If a specific provider action is already selected, route read-only live data to `live-info-operator` or write/mutation tasks to `connector-operator`.
   - If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to memory-sync as not_omh_reviewed context rather than importing it into OMH review.
   - If a realtime voice connector has no supplied realtime_voice_trial_receipt/v1, route the setup and the trial run to the host, connector, or operator that owns the microphone, call, or room, then consume only the returned receipt.
 - Required inputs:
@@ -10824,7 +10825,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Good example:
   - Prompt: prompt-import-readiness review Codex and Claude Code prompt folders before exposing them as Hermes slash commands with $ARGUMENTS mapping.
   - Expected behavior: Produce `prepare_prompt_import_readiness` with required context, wrapper actions, and not-evidence boundaries.
-  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+  - Why: Argument syntax differs per CLI and a name can shadow a built-in command; settle both before writing.
 - Bad example:
   - Prompt: prompt-import-readiness silently import every external prompt, overwrite slash commands, and claim the prompts are trusted without review.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
@@ -10836,14 +10837,14 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - Prompt sources, agent family, expected file formats, argument syntax, slash-command names, trust level, and stop condition are explicit.
   - Explicit-path audit reads and compatibility results are observed only in their audit output; source discovery, command registration, prompt mutation, slash-command activation, and dry-run execution remain marked not_observed.
-  - Route broad candidate discovery to skill-scout, prompt/tool safety to security-safety-review, missing CLIs or directories to toolbelt-readiness, and approved implementation to a selected executor handoff.
+  - Route broad candidate discovery to `skill-scout`, prompt/tool safety to `security-safety-review`, missing CLIs or directories to `toolbelt-readiness`, and approved implementation to a selected executor handoff.
   - Imported prompts, generated command files, registry updates, and dry-run results are reported only from observed prompt-import evidence.
-  - Seed `prompt_source_inventory/v1` from the user's `hermes import-agent claude-code --dry-run` (or `codex`) preview, which imports nothing (it only writes a default `config.yaml` when the Hermes home has none): it reports Claude Code's `commands/` directory as one skipped item with no direct Hermes equivalent, so this card enumerates the `*.md` files in it itself, and it reads no Codex prompt files at all, so those come from the files the user names. The preview is observed only when its output is seen.
+  - Seed `prompt_source_inventory/v1` from the user's `hermes import-agent claude-code --dry-run` (or `codex`) preview, which imports nothing (it only writes a default `config.yaml` when the Hermes home has none): it reports Claude Code's `commands/` directory as one skipped item with no direct Hermes equivalent, so this card enumerates the `*.md` files in it itself, and it reads no Codex prompt files at all, so those come from the files the user names. The preview is observed only when its output is seen. On a Hermes where `hermes import-agent` is not core, it comes from the `agent-importers` catalog plugin, so when the command is not recognised the plugin is not installed: build the inventory from the folders the user names and do not install it for them.
   - Make a skill the conversion target for a prompt the model should follow; a Hermes quick command (`quick_commands`) runs only a shell command (`exec`) or another slash command (`alias`) and cannot hold a prompt.
   - In the Hermes CLI a slash name resolves to a built-in command first, then a quick command, a plugin command, a skill bundle, and a skill, so `slash_command_collision_report/v1` checks each candidate name against all five in that order.
 - Recovery notes:
-  - If source prompt directories are unknown, route to workspace-audit or skill-scout before readiness scoring.
-  - If source trust, prompt-injection risk, secrets, or destructive command content is unclear, route to security-safety-review before import.
+  - If source prompt directories are unknown, route to `workspace-audit` or `skill-scout` before readiness scoring.
+  - If source trust, prompt-injection risk, secrets, or destructive command content is unclear, route to `security-safety-review` before import.
   - If the user asks to actually copy, generate, or register prompt files, prepare an executor or workspace-file handoff and keep readiness prepared_not_observed until file evidence exists.
 - Required inputs:
   - user request
@@ -10900,7 +10901,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Good example:
   - Prompt: physical-device-readiness check Snapmaker printer safety with camera gate, slicer dry-run, heat command approval, and emergency-stop evidence before printing.
   - Expected behavior: Produce `prepare_physical_device_readiness` with required context, wrapper actions, and not-evidence boundaries.
-  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+  - Why: Heat and motion act within seconds; the card holds the emergency stop, camera gate, and approval wording first.
 - Bad example:
   - Prompt: physical-device-readiness start the printer, heat the bed, flip relays, and claim the robot is safe without observed operator approval or device telemetry.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
@@ -10912,12 +10913,12 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - Device scope, actuator and hazard classes, sensor/camera gates, operator approval, dry-run policy, emergency stop, and stop condition are explicit.
   - Physical actions, heat commands, relay toggles, robot movement, print starts, camera inspections, and telemetry readings are marked observed, missing, risky, or not_observed.
-  - Route external APIs or provider setup to external-connector-readiness, terminal commands to command-operator, safety concerns to security-safety-review, visual/camera checks to visual-qa, and missing tools to toolbelt-readiness.
+  - Route external APIs or provider setup to `external-connector-readiness`, terminal commands to `command-operator`, safety concerns to `security-safety-review`, visual/camera checks to `visual-qa`, and missing tools to `toolbelt-readiness`.
   - Do not claim device movement, heat, print, relay, robot, camera, sensor, or emergency-stop success without observed device-trial evidence.
 - Recovery notes:
   - If the device, workspace, actuator, or authority is unclear, keep readiness blocked until the missing safety context is named.
-  - If the user asks to execute commands, move hardware, heat a bed/nozzle, flip a relay, or start a print, route to command-operator or connector-operator and require observed operator approval before any execution claim.
-  - If camera or telemetry evidence is required but unavailable, route to visual-qa or toolbelt-readiness and keep the physical device readiness card prepared_not_observed.
+  - If the user asks to execute commands, move hardware, heat a bed/nozzle, flip a relay, or start a print, route to `command-operator` or `connector-operator` and require observed operator approval before any execution claim.
+  - If camera or telemetry evidence is required but unavailable, route to `visual-qa` or `toolbelt-readiness` and keep the physical device readiness card prepared_not_observed.
 - Required inputs:
   - user request
   - target context
@@ -10941,7 +10942,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - sensor_camera_gate_policy/v1 for camera/OCR, sensor telemetry, stale readings, manual inspection, and blocked/no-camera fallback
   - operator_approval_policy/v1 with explicit human authority, confirmation moment, disallowed autonomous actions, and emergency contact or stop owner, plus a proposed `approvals.deny` glob list for the terminal commands that actuate the device: on Hermes a match blocks the command for the agent even under yolo; the user applies the list, OMH writes no host config, and a device driven through an MCP or HTTP tool rather than a terminal command stays outside it
   - dry_run_and_simulation_policy/v1 for slicer/G-code dry-runs, command previews, mock relays, simulated robot paths, and no-hardware trial mode
-  - emergency_stop_and_rollback_plan/v1 with stop command, power/network isolation, recovery boundary, and abort condition
+  - emergency_stop_and_rollback_plan/v1 with stop command, power/network isolation, recovery boundary, and abort condition, naming the stop that still works when the agent, host, and network are gone (a physical e-stop, switch, or power cut) and who is within reach of it; for any heater, whether firmware thermal-runaway protection is on and verified, and that heating never starts unattended without a camera or sensor gate
   - device_trial_manifest/v1 only when real telemetry, camera capture id, dry-run output, command transcript, operator confirmation, or hardware observation is recorded
 - Safety rules:
   - A physical device readiness card is not device discovery, network pairing, credential validation, slicer output, G-code safety, camera inspection, sensor reading, relay actuation, robot movement, heat command, print start, emergency stop test, or successful hardware trial evidence unless observed device-trial evidence records it.
@@ -11185,7 +11186,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Good example:
   - Prompt: toolbelt-readiness what MCP or CLI tools do I need for weekly Linear and GitHub triage?
   - Expected behavior: Produce `prepare_toolbelt_readiness` with required context, wrapper actions, and not-evidence boundaries.
-  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+  - Why: Linear and GitHub triage needs two read credentials and matching MCP servers or CLIs, listed before the first run.
 - Bad example:
   - Prompt: toolbelt-readiness claim Gmail access works without an observed credential check.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
@@ -11196,9 +11197,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
   - On Hermes, count a native tool as present when it is in your tool list or tool_search finds it: a tool deferred behind tool_search is reached through `tool_call` and is never listed as missing, and a Hermes version number never decides presence. Present is not authorized or working.
 - Completion checklist:
-  - Confirm the workflow target, evidence boundary, and stop condition are named.
-  - Report which outputs are prepared, observed, blocked, or missing.
-  - Name the smallest next verification or handoff instead of claiming completion from narration.
+  - Each required tool is listed once as present, missing, optional, or unsafe, with how it was observed: the tool list or `tool_search` for native tools, `hermes mcp list` on Hermes (else the host's MCP list) for MCP servers, `command -v <cli>` for CLIs, the env-var NAME only for credentials.
+  - Unsafe says why: a tool that writes outside the stated scope, or a credential broader than the task needs.
+  - Name the smallest next verification or handoff and who runs it, instead of claiming completion from narration.
 - Recovery notes:
   - If tool_search finds a deferred native tool but access is untested, retain its present classification, mark API access not_observed, and hand back the tool_call step for a user-approved check instead of listing the tool as missing.
   - If a required MCP server or CLI is absent, retain the present, optional, and unsafe inventory entries, mark workflow readiness unresolved, and hand back the missing dependency and installation owner without installing it.
@@ -11717,7 +11718,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Good example:
   - Prompt: skill-scout find existing skill candidates before we create a release-note workflow skill.
   - Expected behavior: Produce `prepare_skill_scout` with required context, wrapper actions, and not-evidence boundaries.
-  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+  - Why: Reuse is judged by candidate and source trust; the scout installs nothing.
 - Bad example:
   - Prompt: skill-scout install the best GitHub skill and copy it into the marketplace without review.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
@@ -11782,7 +11783,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Good example:
   - Prompt: skill-health show the OMH skill portfolio dashboard with stale surfaces, failure patterns, pending amendments, and top improvement actions.
   - Expected behavior: Produce `prepare_skill_health` with required context, wrapper actions, and not-evidence boundaries.
-  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+  - Why: Drift comes from `lint_warnings` and, on Hermes, the curator ledger, not use counts.
 - Bad example:
   - Prompt: skill-health claim every skill is working and patch the failures automatically without observed signals or review.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
@@ -12011,17 +12012,17 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill to prepare provider/profile metadata without reading secrets, calling providers, or routing models.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
-- Why this exists: `provider-profile-posture` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+- Why this exists: `provider-profile-posture` exists so a profile's required secret names and capabilities are recorded as present, missing, or unknown without any secret value being read or any provider being called.
 - Use when: Use for provider/profile capability and secret-presence preparation before connector or credential action.
 - Do not use when:
-  - The request is already handled by a narrower explicit skill with stronger evidence.
-  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+  - Choosing or adopting a connector; use `external-connector-readiness`.
+  - Listing every tool and credential a workflow needs; use `toolbelt-readiness`.
+  - Connecting a model provider or its login; use `model-setup`.
 - Strong routing signals: `provider-profile-posture`, `provider profile posture`, `provider profile readiness`, `secret presence confirmation`, `connector profile posture`, `공급자 프로필 상태`, `시크릿 존재 확인`, `커넥터 준비 상태`
 - Good example:
   - Prompt: Prepare provider profile posture for this connector using metadata-only secret presence.
   - Expected behavior: Produce `prepare_provider_profile_posture` with required context, wrapper actions, and not-evidence boundaries.
-  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+  - Why: The card records which key names are present, missing, or unknown, and never reads a value.
 - Bad example:
   - Prompt: Read the secret, validate the credential, call the provider, or create a payment route.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
@@ -12031,7 +12032,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
-  - Provider ID, profile ID, requested capabilities, and secret-presence metadata are explicit.
+  - Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret presence are explicit, and `omh ops provider-profile-posture --input <file>` made the record from JSON with `schema_version` `provider_profile_posture_input/v1`, `provider_id`, `profile_id`, `requested_capabilities`, `secret_requirements` as `{name, present: true|false|"unknown"}`, optional `host_observations`.
   - No secret value, credential validation, provider call, model route, wallet, or payment action is claimed.
   - Any host observation reference remains supplied metadata, not a live connector check.
 - Recovery notes:

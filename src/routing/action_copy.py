@@ -186,7 +186,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "show_running_work_board": "showing the running work board",
     "declare_plan_checklist": "declaring the plan checklist",
     "prepare_wiki_blueprint": "preparing the wiki blueprint",
-    "run_omh_uninstall": "running omh uninstall",
+    "run_omh_uninstall": "previewing omh uninstall",
     "run_setup_guide": "walking the setup guide",
     "send_to_executor": "opening the selected coding agent",
     "show_command_preview": "showing the command preview",

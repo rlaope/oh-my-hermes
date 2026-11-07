@@ -984,6 +984,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # drops a word (-4); the `inference-serving` and `security-event-response` rows change in content at the same length.
 # 536975 -> 537006: `security-event-response` names suspected unauthorized
 # access in its first required input (+31); no other row moved.
+# 536979 -> 536962: `executor-runtime-readiness` (-16) and `provider-profile-posture` (-14)
+# shorten their first Do-Not-Use line, and `capability-toggle`'s handoff policy (+12) and expected outputs (+1) name
+# `omh capability-policy`; no other row moved. Measured from the producer; no headroom.
 FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536985
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone

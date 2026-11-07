@@ -21,6 +21,8 @@ from .catalog_types import (
     HermesSkillLine,
     PortableLine,
     _GENERAL_RECOVERY_NOTES,
+    _HANDOFF_FINAL_CHECKLIST,
+    _HERMES_CODING_HARNESS_FINAL_CHECKLIST,
     _feature_surface_skill,
 )
 
@@ -422,8 +424,18 @@ _FEATURE_SURFACE_SKILLS = (
         phase="runtime-selection",
         next_action="prepare_executor_runtime_readiness",
         boundary="Runtime readiness is not executor dispatch, plugin load, tool invocation, repository mutation, review, CI, or merge evidence.",
+        good_why="The choice depends on which CLI is on PATH and the flags it accepts.",
         good_prompt="executor-runtime-readiness can this task run in Codex, Claude Code, or Hermes coding?",
         bad_prompt="executor-runtime-readiness claim Codex already started the session.",
+        do_not_use_when=(
+            "A named plugin or API to adopt; use `external-connector-readiness`.",
+            "Which tool or credential is missing for work already chosen; use `toolbelt-readiness`.",
+        ),
+        final_checklist=_HANDOFF_FINAL_CHECKLIST
+        + _HERMES_CODING_HARNESS_FINAL_CHECKLIST
+        + (
+            "Run `omh coding executor-readiness --executor <profile>`; report status and `auth_signal` separately, since ready is a PATH probe, not login proof.",
+        ),
         situations=(
             "is claude code ready to run here",
             "is codex set up on this machine",
@@ -432,8 +444,8 @@ _FEATURE_SURFACE_SKILLS = (
             "worktree support for helper agents",
         ),
         recovery_notes=(
-            "If the scratch-edit probe is denied, keep the denial, mark permission unresolved; hand back the grant needed.",
-            "If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the JSON flag.",
+            "If the scratch-edit probe (see Delegation transparency) is denied, keep the denial, mark permission unresolved; hand back the grant needed.",
+            "If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the output flag (`--output-format json` for Claude Code, `--json` for Codex).",
         ),
     ),
     _feature_surface_skill(
@@ -1124,6 +1136,7 @@ _FEATURE_SURFACE_SKILLS = (
             "description": "751662656f553783f9b6a83f6eea7925e16ec42447f33350dab8054b041d1e7a",
         },
         boundary="An external connector readiness card is not connector installation, credential validation, provider access, API invocation, multimodal capture, live-data retrieval, external mutation, cost authorization, or successful trial evidence unless observed connector-trial evidence records it.",
+        good_why="Two named weather connectors need a cost, freshness, and fallback comparison before either is enabled; no provider has been called.",
         good_prompt="external-connector-readiness compare weather plugin and wxtrain candidates with cost, freshness, multimodal evidence, and fallback routes before adoption.",
         bad_prompt="external-connector-readiness silently enable a paid connector and claim weather, SQL, and screenshot results without observed provider evidence.",
         expected_outputs=(
@@ -1156,7 +1169,7 @@ _FEATURE_SURFACE_SKILLS = (
         final_checklist=(
             "Candidate connector, target domain, read/write scope, modality needs, provider owner, fallback workflow, and stop condition are explicit.",
             "Cost, quota, credential, permission, live-data freshness, multimodal capture, safety, and compliance boundaries are marked ready, missing, risky, or not_observed.",
-            "Route live read-only lookups to live-info-operator, external writes to connector-operator, datasets/SQL to data-analysis, and missing tools to toolbelt-readiness before claiming results.",
+            "Route live read-only lookups to `live-info-operator`, external writes to `connector-operator`, datasets/SQL to `data-analysis`, and missing tools to `toolbelt-readiness` before claiming results.",
             "Provider responses, screenshots, audio/video/file captures, query outputs, message ids, and external mutations are reported only from observed trial evidence.",
             "For a memory provider, disabling it, removing its local cache, deleting its remote memory, deleting the account, and switching away are reported as distinct operations with distinct postconditions.",
             "Unknown deletion, isolation, or write semantics block automatic writes and irreversible adoption instead of resolving to an OMH or Hermes default.",
@@ -1164,9 +1177,9 @@ _FEATURE_SURFACE_SKILLS = (
             "On Hermes, record its install-time scans as observed evidence beside the card, never in place of it: `hermes plugins install` scans a plugin before installing it (`safe`, `caution`, or `dangerous`, and a `dangerous` verdict is refused even with `--force`), and an MCP server started through `npx`, `uvx`, or `pipx` is checked against OSV malware advisories and refused on a match with an error that reads `MCP server '<name>': BLOCKED: ...`. A scan counts only when its output was seen: the plugin scan does not run with `plugins.scan_on_install` off, and the OSV check covers known malware only and lets the server start when its lookup fails, so a quiet install or launch is not a clean result.",
         ),
         recovery_notes=(
-            "If the candidate list is unknown, route to skill-scout or source-finder before readiness scoring.",
-            "If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to toolbelt-readiness.",
-            "If a specific provider action is already selected, route read-only live data to live-info-operator or write/mutation tasks to connector-operator.",
+            "If the candidate list is unknown, route to `skill-scout` or `source-finder` before readiness scoring.",
+            "If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to `toolbelt-readiness`.",
+            "If a specific provider action is already selected, route read-only live data to `live-info-operator` or write/mutation tasks to `connector-operator`.",
             PortableLine(
                 "If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to memory-sync as not_omh_reviewed context rather than importing it into OMH review.",
                 "If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; keep the result as not_omh_reviewed context rather than importing it into OMH review.",
@@ -1241,6 +1254,7 @@ _FEATURE_SURFACE_SKILLS = (
         phase="prompt-import-readiness",
         next_action="prepare_prompt_import_readiness",
         boundary="An explicit-path prompt compatibility audit observes only bounded local file classification and metadata. It is not source-directory discovery, prompt import, slash command registration, prompt mutation, command activation, imported prompt trust, or successful dry-run evidence.",
+        good_why="Argument syntax differs per CLI and a name can shadow a built-in command; settle both before writing.",
         good_prompt="prompt-import-readiness review Codex and Claude Code prompt folders before exposing them as Hermes slash commands with $ARGUMENTS mapping.",
         bad_prompt="prompt-import-readiness silently import every external prompt, overwrite slash commands, and claim the prompts are trusted without review.",
         expected_outputs=(
@@ -1268,15 +1282,15 @@ _FEATURE_SURFACE_SKILLS = (
         final_checklist=(
             "Prompt sources, agent family, expected file formats, argument syntax, slash-command names, trust level, and stop condition are explicit.",
             "Explicit-path audit reads and compatibility results are observed only in their audit output; source discovery, command registration, prompt mutation, slash-command activation, and dry-run execution remain marked not_observed.",
-            "Route broad candidate discovery to skill-scout, prompt/tool safety to security-safety-review, missing CLIs or directories to toolbelt-readiness, and approved implementation to a selected executor handoff.",
+            "Route broad candidate discovery to `skill-scout`, prompt/tool safety to `security-safety-review`, missing CLIs or directories to `toolbelt-readiness`, and approved implementation to a selected executor handoff.",
             "Imported prompts, generated command files, registry updates, and dry-run results are reported only from observed prompt-import evidence.",
-            "Seed `prompt_source_inventory/v1` from the user's `hermes import-agent claude-code --dry-run` (or `codex`) preview, which imports nothing (it only writes a default `config.yaml` when the Hermes home has none): it reports Claude Code's `commands/` directory as one skipped item with no direct Hermes equivalent, so this card enumerates the `*.md` files in it itself, and it reads no Codex prompt files at all, so those come from the files the user names. The preview is observed only when its output is seen.",
+            "Seed `prompt_source_inventory/v1` from the user's `hermes import-agent claude-code --dry-run` (or `codex`) preview, which imports nothing (it only writes a default `config.yaml` when the Hermes home has none): it reports Claude Code's `commands/` directory as one skipped item with no direct Hermes equivalent, so this card enumerates the `*.md` files in it itself, and it reads no Codex prompt files at all, so those come from the files the user names. The preview is observed only when its output is seen. On a Hermes where `hermes import-agent` is not core, it comes from the `agent-importers` catalog plugin, so when the command is not recognised the plugin is not installed: build the inventory from the folders the user names and do not install it for them.",
             "Make a skill the conversion target for a prompt the model should follow; a Hermes quick command (`quick_commands`) runs only a shell command (`exec`) or another slash command (`alias`) and cannot hold a prompt.",
             "In the Hermes CLI a slash name resolves to a built-in command first, then a quick command, a plugin command, a skill bundle, and a skill, so `slash_command_collision_report/v1` checks each candidate name against all five in that order.",
         ),
         recovery_notes=(
-            "If source prompt directories are unknown, route to workspace-audit or skill-scout before readiness scoring.",
-            "If source trust, prompt-injection risk, secrets, or destructive command content is unclear, route to security-safety-review before import.",
+            "If source prompt directories are unknown, route to `workspace-audit` or `skill-scout` before readiness scoring.",
+            "If source trust, prompt-injection risk, secrets, or destructive command content is unclear, route to `security-safety-review` before import.",
             "If the user asks to actually copy, generate, or register prompt files, prepare an executor or workspace-file handoff and keep readiness prepared_not_observed until file evidence exists.",
         ),
         why_this_exists=(
@@ -1329,6 +1343,7 @@ _FEATURE_SURFACE_SKILLS = (
         phase="device-readiness",
         next_action="prepare_physical_device_readiness",
         boundary="A physical device readiness card is not device discovery, network pairing, credential validation, slicer output, G-code safety, camera inspection, sensor reading, relay actuation, robot movement, heat command, print start, emergency stop test, or successful hardware trial evidence unless observed device-trial evidence records it.",
+        good_why="Heat and motion act within seconds; the card holds the emergency stop, camera gate, and approval wording first.",
         good_prompt="physical-device-readiness check Snapmaker printer safety with camera gate, slicer dry-run, heat command approval, and emergency-stop evidence before printing.",
         bad_prompt="physical-device-readiness start the printer, heat the bed, flip relays, and claim the robot is safe without observed operator approval or device telemetry.",
         expected_outputs=(
@@ -1350,19 +1365,19 @@ _FEATURE_SURFACE_SKILLS = (
             "sensor_camera_gate_policy/v1 for camera/OCR, sensor telemetry, stale readings, manual inspection, and blocked/no-camera fallback",
             "operator_approval_policy/v1 with explicit human authority, confirmation moment, disallowed autonomous actions, and emergency contact or stop owner, plus a proposed `approvals.deny` glob list for the terminal commands that actuate the device: on Hermes a match blocks the command for the agent even under yolo; the user applies the list, OMH writes no host config, and a device driven through an MCP or HTTP tool rather than a terminal command stays outside it",
             "dry_run_and_simulation_policy/v1 for slicer/G-code dry-runs, command previews, mock relays, simulated robot paths, and no-hardware trial mode",
-            "emergency_stop_and_rollback_plan/v1 with stop command, power/network isolation, recovery boundary, and abort condition",
+            "emergency_stop_and_rollback_plan/v1 with stop command, power/network isolation, recovery boundary, and abort condition, naming the stop that still works when the agent, host, and network are gone (a physical e-stop, switch, or power cut) and who is within reach of it; for any heater, whether firmware thermal-runaway protection is on and verified, and that heating never starts unattended without a camera or sensor gate",
             "device_trial_manifest/v1 only when real telemetry, camera capture id, dry-run output, command transcript, operator confirmation, or hardware observation is recorded",
         ),
         final_checklist=(
             "Device scope, actuator and hazard classes, sensor/camera gates, operator approval, dry-run policy, emergency stop, and stop condition are explicit.",
             "Physical actions, heat commands, relay toggles, robot movement, print starts, camera inspections, and telemetry readings are marked observed, missing, risky, or not_observed.",
-            "Route external APIs or provider setup to external-connector-readiness, terminal commands to command-operator, safety concerns to security-safety-review, visual/camera checks to visual-qa, and missing tools to toolbelt-readiness.",
+            "Route external APIs or provider setup to `external-connector-readiness`, terminal commands to `command-operator`, safety concerns to `security-safety-review`, visual/camera checks to `visual-qa`, and missing tools to `toolbelt-readiness`.",
             "Do not claim device movement, heat, print, relay, robot, camera, sensor, or emergency-stop success without observed device-trial evidence.",
         ),
         recovery_notes=(
             "If the device, workspace, actuator, or authority is unclear, keep readiness blocked until the missing safety context is named.",
-            "If the user asks to execute commands, move hardware, heat a bed/nozzle, flip a relay, or start a print, route to command-operator or connector-operator and require observed operator approval before any execution claim.",
-            "If camera or telemetry evidence is required but unavailable, route to visual-qa or toolbelt-readiness and keep the physical device readiness card prepared_not_observed.",
+            "If the user asks to execute commands, move hardware, heat a bed/nozzle, flip a relay, or start a print, route to `command-operator` or `connector-operator` and require observed operator approval before any execution claim.",
+            "If camera or telemetry evidence is required but unavailable, route to `visual-qa` or `toolbelt-readiness` and keep the physical device readiness card prepared_not_observed.",
         ),
         situations=(
             "let the agent run my 3d printer",
@@ -1701,6 +1716,12 @@ _FEATURE_SURFACE_SKILLS = (
         boundary="A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
         good_prompt="toolbelt-readiness what MCP or CLI tools do I need for weekly Linear and GitHub triage?",
         bad_prompt="toolbelt-readiness claim Gmail access works without an observed credential check.",
+        good_why="Linear and GitHub triage needs two read credentials and matching MCP servers or CLIs, listed before the first run.",
+        final_checklist=(
+            "Each required tool is listed once as present, missing, optional, or unsafe, with how it was observed: the tool list or `tool_search` for native tools, `hermes mcp list` on Hermes (else the host's MCP list) for MCP servers, `command -v <cli>` for CLIs, the env-var NAME only for credentials.",
+            "Unsafe says why: a tool that writes outside the stated scope, or a credential broader than the task needs.",
+            "Name the smallest next verification or handoff and who runs it, instead of claiming completion from narration.",
+        ),
         extra_quality_bar=(
             f"On Hermes, count a native tool as present when {native_tool_presence_clause('it')}: a tool deferred "
             "behind tool_search is reached through `tool_call` and is never listed as missing, and a Hermes version "
@@ -2272,6 +2293,7 @@ _FEATURE_SURFACE_SKILLS = (
         phase="skill-scout",
         next_action="prepare_skill_scout",
         boundary="A skill scout report is not skill installation, external source trust, marketplace mutation, file copy, network retrieval, credential use, implementation, review, CI, or proof that a candidate is safe to adopt.",
+        good_why="Reuse is judged by candidate and source trust; the scout installs nothing.",
         good_prompt="skill-scout find existing skill candidates before we create a release-note workflow skill.",
         bad_prompt="skill-scout install the best GitHub skill and copy it into the marketplace without review.",
         expected_outputs=(
@@ -2343,6 +2365,7 @@ _FEATURE_SURFACE_SKILLS = (
         phase="skill-health",
         next_action="prepare_skill_health",
         boundary="A skill health dashboard is not install/setup health, live skill execution success, automatic skill mutation, model training, verification, review, CI, or proof that future routing is fixed.",
+        good_why="Drift comes from `lint_warnings` and, on Hermes, the curator ledger, not use counts.",
         good_prompt="skill-health show the OMH skill portfolio dashboard with stale surfaces, failure patterns, pending amendments, and top improvement actions.",
         bad_prompt="skill-health claim every skill is working and patch the failures automatically without observed signals or review.",
         expected_outputs=(

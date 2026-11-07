@@ -1,7 +1,7 @@
 # OMH Skill Common Rail
 
 Every generated OMH workflow skill shares this policy. It is kept here once instead of
-inside each `SKILL.md` so an install does not pay the same bytes 88 times per turn.
+inside each `SKILL.md` so an install does not pay the same bytes in every skill.
 Each workflow skill still states its own harness, its own runtime-record command, its
 own evidence boundary, and a pointer to this file.
 
@@ -65,6 +65,8 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 unavailable, keep the result explicit as `not_available` or `not_observed`. A recorded run is
 preparation, not execution, review, CI, merge-readiness, or merge evidence.
 
+Keep the `run.run_id` printed by the start record: `omh runtime delegate --run <run-id>` needs it. `omh runtime record` only creates a run, so when the work ends, a second record with `--status completed|blocked|failed|cancelled --verification-summary "<what was observed>"` states the outcome; it does not update the started run.
+
 ## Delegation Transparency
 
 - When delegating, show the composed delegate prompt in a fenced code block in the status message; truncate a long prompt to a bounded preview ending with `... [truncated, N chars total]`.
@@ -74,7 +76,7 @@ preparation, not execution, review, CI, merge-readiness, or merge evidence.
 
 ## Waiting On Long-Running Work
 
-Choose the wait strategy before starting long-running work and bind it to a completion signal the host exposes, never to a status loop: a command that fits one tool call runs once in the foreground with a duration-sized timeout; a longer terminal command runs in the background with completion notification armed and no process-status polling; a delegated lane relies on its delivered result while the parent continues independent work or ends the turn; a CI, PR, deploy, file, port, log-line, or external-session condition uses the host's monitor when observed, else exactly ONE bounded watcher or adaptive backoff outside model turns. Record the handle and observation mode at dispatch; every armed wait needs a hard deadline, a cancellation path, and a fallback naming the missing capability. Each wait closes in one terminal state with bounded evidence; an unbounded idle or busy-wait is a defect and a lost notification times out. One decision-changing midpoint peek and any user-requested status check stay allowed; neither is the wait mechanism. Ladder and terminal states: shared rail.
+Choose the wait strategy before starting long-running work and bind it to a completion signal the host exposes, never to a status loop: a command that fits one tool call runs once in the foreground with a duration-sized timeout; a longer terminal command runs in the background with completion notification armed and no process-status polling; a delegated lane relies on its delivered result while the parent continues independent work or ends the turn; a CI, PR, deploy, file, port, log-line, or external-session condition uses the host's monitor when observed, else exactly ONE bounded watcher or adaptive backoff outside model turns. Record the handle and observation mode at dispatch; every armed wait needs a hard deadline, a cancellation path, and a fallback naming the missing capability. Each wait closes in one terminal state with bounded evidence; an unbounded idle or busy-wait is a defect and a lost notification times out. One decision-changing midpoint peek and any user-requested status check stay allowed; neither is the wait mechanism.
 
 Pick the row that matches the work, then the best mechanism the host actually supports. Degrade down the
 column and say which capability was missing; never degrade silently, and never substitute a status loop for a

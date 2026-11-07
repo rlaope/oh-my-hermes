@@ -167,6 +167,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 533907 -> 533903 and the digest re-derived: the application-threat-model
             # asset-register output line drops a word (-4), and the `inference-serving` and `security-event-response` rows change in content at the same length; the pin
             # before it was d6dfefff...fc71.
+            # 536979 -> 536962 and the digest re-derived: executor-runtime-readiness (-16) and
+            # provider-profile-posture (-14) shorten their first Do-Not-Use line, and capability-toggle's
+            # handoff policy (+13) names `omh capability-policy`; no other row moved. The pin before
+            # it was d6dfefff...1fc71.
             (skill_capabilities, 533913, FULL_ROW_DELTA_CAP,
              '2af3d114df9fd471b650d923c9691f67a52a7de6301fce0f6487f7774f8e5f2a',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
@@ -420,6 +424,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # voice-input move (verdict vocabulary, exact-payload and bulk-change confirmations, page
         # text as data, text read-back, per-string locale checks, renderer order, sprite-forge's free
         # frames); the pin before it was 7e537e8d...b2c.
+        # Host-readiness skills: thirteen bodies name the command or probe behind their evidence; the pin before it was 7e537e8d...4b2c.
         self.assertEqual(_digest(legacy_hashes), '8c5d5eede91c056339f2aee6baeaf93bc9f704be51e228359a89bb8231a29c53')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
@@ -452,6 +457,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # materials-category default lines it no longer repeats leave the repeated total.
         # 124814 -> 123412: five skills' own Completion Checklist replace the generic
         # fallback they repeated; the ceilings keep their headroom.
+        # 124814 -> 123267: host-readiness skills drop generic repeated Do-Not-Use and checklist lines.
         self.assertEqual(legacy['repeated']['bytes'], 123615)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))

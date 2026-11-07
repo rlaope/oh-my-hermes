@@ -31,7 +31,7 @@ Good example:
 
 - Prompt: toolbelt-readiness what MCP or CLI tools do I need for weekly Linear and GitHub triage?
 - Expected behavior: Produce `prepare_toolbelt_readiness` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Why: Linear and GitHub triage needs two read credentials and matching MCP servers or CLIs, listed before the first run.
 
 Bad example:
 
@@ -41,9 +41,9 @@ Bad example:
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- Each required tool is listed once as present, missing, optional, or unsafe, with how it was observed: the tool list or `tool_search` for native tools, `hermes mcp list` on Hermes (else the host's MCP list) for MCP servers, `command -v <cli>` for CLIs, the env-var NAME only for credentials.
+- Unsafe says why: a tool that writes outside the stated scope, or a credential broader than the task needs.
+- Name the smallest next verification or handoff and who runs it, instead of claiming completion from narration.
 
 ## Recovery Notes
 

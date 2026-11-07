@@ -31,7 +31,7 @@ Two host-side consequences follow, both accepted. Host slash commands derive fro
 When a chat message is implementation-shaped and a wrapper wants a concrete executor handoff, run `omh coding delegate` after or instead of generic chat routing:
 
 ```sh
-omh coding delegate --source discord --executor codex --record "risky refactor"
+omh coding delegate --source discord --executor <owner> --record "risky refactor"
 ```
 
 The payload is deterministic local adapter data: recommended workflow, harness, executor/runtime profile, acceptance criteria, verification expectations, and handoff prompt template. Hermes still narrates the user-facing state.
@@ -104,7 +104,7 @@ artifacts; pass only event summaries and refs into Hermes chat context.
 
 Wrappers can run `omh memory inspect`, `omh memory pack`, and `omh memory apply` to review OMH-local or wrapper-supplied context before preparing a handoff. This emits `memory_review_card/v1` and `handoff_context_pack/v1` artifacts only; it does not read or mutate opaque Hermes internal memory.
 
-For planning-shaped requests, wrappers or operators can run `omh hermes plan` to create a deterministic `hermes_plan/v1` scaffold. The stdout `wrapper_contract` is the adapter contract for follow-on work; after acceptance, pass the accepted plan artifact or generated context pack to `omh coding delegate --from-plan` instead of treating Discord/channel summary text as the executor plan.
+For planning-shaped requests, wrappers or operators can run `omh hermes plan` to create a deterministic `hermes_plan/v1` scaffold. The stdout `wrapper_contract` is the adapter contract for follow-on work; after acceptance, pass the accepted plan artifact or generated context pack to `omh coding delegate --from-plan <artifact> --executor <the owner the user chose>` (leaving `--executor` out selects codex) instead of treating Discord/channel summary text as the executor plan.
 
 ## Backend Boundary
 

@@ -28,6 +28,19 @@ All notable changes will be documented here.
   `mute_only` turns it down per profile. DMs, slash commands and other
   platforms are untouched.
 
+- **Host-readiness skills now say what their commands do and stop
+  promising what they cannot.** Turning off a capability family reports what
+  the disable actually does (memory stops; the other families are only
+  withheld, which `omh capability-policy status` shows), names the command,
+  and drops a flag that never existed. `omh uninstall`, from a chat phrase or
+  a wrapper card, is previewed with `--dry-run` and confirmed first. Wrappers
+  pass the chosen owner with `--from-plan`. A web-search setup is not called
+  verified while a keyed backend has no key. Doctor, toolbelt, executor,
+  provider-profile and prompt-import skills name the command or probe that
+  produces their evidence, a started run record says how to state its
+  outcome, and generated references no longer end in a literal `\n` or print
+  an ellipsis followed by a period.
+
 - **Several features or stages asked to be built are offered as a dag-ulw
   graph, in Korean as in English.** A request that names three or more
   features as one build verb's object, with a feature noun after the list

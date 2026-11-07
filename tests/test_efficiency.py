@@ -248,6 +248,10 @@ class EfficiencyContractTests(unittest.TestCase):
         # 88,000 -> 90,000: the coding-core audit round gives `plan` its own Do Not Use lines
         # and examples and reworks `deep-interview`'s stop rules and `ultrawork`'s hand-offs. Main
         # measures 87,926 and this tree 88,401 (+475); the ceiling restores ~1.6k headroom.
+        # 88,000 -> 89,000: the core `doctor`, `skill`, `oh-my-hermes` and
+        # `executor-runtime-readiness` bodies name the command or probe that
+        # produces their evidence. Main measures 87,926 and this tree 88,345;
+        # the ceiling leaves ~0.6k headroom.
         self.assertLess(core["skill_body"]["bytes"], 90_000)
         # 815,000 -> 825,000: one new installable body (`web-research`) plus the
         # sentence that split `best-practice-research`'s boundary in two. Set to

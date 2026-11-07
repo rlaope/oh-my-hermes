@@ -10,6 +10,7 @@ metadata:
     phase: runtime-selection
     role: handoff-guide
     quality_tier: workflow-surface-gated
+    related_skills: [omh-external-connector-readiness, omh-toolbelt-readiness]
 ---
 
 # Executor Runtime Readiness
@@ -22,9 +23,8 @@ This is a Hermes-native `executor-runtime-readiness` workflow skill.
 
 ## Do Not Use When
 
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- A named plugin or API to adopt; use `omh-external-connector-readiness`.
+- Which tool or credential is missing for work already chosen; use `omh-toolbelt-readiness`.
 
 ## Examples
 
@@ -32,7 +32,7 @@ Good example:
 
 - Prompt: executor-runtime-readiness can this task run in Codex, Claude Code, or Hermes coding?
 - Expected behavior: Produce `prepare_executor_runtime_readiness` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Why: The choice depends on which CLI is on PATH and the flags it accepts.
 
 Bad example:
 
@@ -47,11 +47,12 @@ Bad example:
 - The final status cites observed runtime evidence or keeps the work prepared_not_observed.
 - When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
 - Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
+- Run `omh coding executor-readiness --executor <profile>`; report status and `auth_signal` separately, since ready is a PATH probe, not login proof.
 
 ## Recovery Notes
 
-- If the scratch-edit probe is denied, keep the denial, mark permission unresolved; hand back the grant needed.
-- If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the JSON flag.
+- If the scratch-edit probe (see Delegation transparency) is denied, keep the denial, mark permission unresolved; hand back the grant needed.
+- If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the output flag (`--output-format json` for Claude Code, `--json` for Codex).
 
 ## Workflow Lane
 
