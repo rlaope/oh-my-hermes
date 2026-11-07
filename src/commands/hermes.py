@@ -11,6 +11,11 @@ from ..hermes_planning import (
     build_hermes_plan_payload,
     read_hermes_plan_artifact,
     update_hermes_plan_status,
+    apply_reviewed_body_to_payload,
+    mark_payload_as_planning_input,
+    outside_repository_targets,
+    outside_targets_note,
+    read_plan_file,
     write_hermes_plan,
     write_plan_handoff_context_pack,
 )
@@ -68,10 +73,32 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
             limit=args.limit,
             source_metadata=source_metadata,
         )
+        plan_file = getattr(args, "plan_file", None)
+        input_bundle = bool(getattr(args, "input_bundle", False))
+        if (plan_file is not None or input_bundle) and not args.record:
+            raise ValueError("--plan-file and --input-bundle need --record")
+        if input_bundle and plan_file is None:
+            raise ValueError("--input-bundle needs --plan-file")
+        reviewed_body = read_plan_file(plan_file) if plan_file is not None else None
+        if reviewed_body is not None and not input_bundle:
+            apply_reviewed_body_to_payload(payload)
         if args.record:
-            artifact = write_hermes_plan(_paths(args), payload)
+            artifact = write_hermes_plan(
+                _paths(args), payload, reviewed_body=reviewed_body, input_bundle=input_bundle
+            )
             payload["artifact"] = artifact
             attach_plan_artifact_to_wrapper_contract(payload, artifact)
+            if input_bundle:
+                mark_payload_as_planning_input(payload)
+            elif reviewed_body is not None:
+                outside = outside_repository_targets(reviewed_body)
+                if outside:
+                    payload["say"] = " ".join(filter(None, (str(payload.get("say", "")), outside_targets_note(outside))))
+            elif reviewed_body is None:
+                payload["say"] = (
+                    "Recorded the generated scaffold only; the reviewed plan is not in the file. "
+                    "Re-run with --plan-file <reviewed-plan.md> to record it."
+                )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     _print_json(payload)
@@ -86,8 +113,17 @@ def _maybe_handle_plan_lifecycle_alias(args: argparse.Namespace) -> dict[str, ob
     looks_like_path = path.exists() or words[1].endswith(".md") or "/" in words[1]
     if not looks_like_path:
         return None
-    if args.stdin or args.event_json or args.record:
-        raise ValueError("omh hermes plan accept/revise/cancel cannot be combined with --stdin, --event-json, or --record")
+    if (
+        args.stdin
+        or args.event_json
+        or args.record
+        or getattr(args, "plan_file", None) is not None
+        or getattr(args, "input_bundle", False)
+    ):
+        raise ValueError(
+            "omh hermes plan accept/revise/cancel cannot be combined with --stdin, --event-json, --record, "
+            "--plan-file or --input-bundle"
+        )
     status_by_action = {"accept": "accepted", "revise": "revised", "cancel": "cancelled"}
     return update_hermes_plan_status(_paths(args), path, status=status_by_action[words[0]])
 
@@ -319,6 +355,17 @@ def _add_hermes_commands(sub) -> None:
         "--record",
         action="store_true",
         help="Write the plan under <repo>/.omh/plans, or the OMH home when outside a repository.",
+    )
+    plan.add_argument(
+        "--plan-file",
+        default=None,
+        metavar="PATH",
+        help="With --record: the reviewed plan (Markdown) to record in place of the generated sections.",
+    )
+    plan.add_argument(
+        "--input-bundle",
+        action="store_true",
+        help="With --record --plan-file: record the file as planning input (hermes_plan_input/v1), which plan-accept refuses.",
     )
     plan.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     plan.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")

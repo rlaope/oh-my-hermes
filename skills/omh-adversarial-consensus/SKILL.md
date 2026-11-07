@@ -111,7 +111,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- record the distilled bundle with `omh hermes plan --record`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one, so the planner pass consumes a file rather than scrollback
+- record the distilled bundle with `omh hermes plan --record --plan-file <bundle.md> --input-bundle "<proposal>"`, which writes it as `hermes_plan_input/v1` (planning input, marked INPUT TO PLANNING, NOT A PLAN) beside the plans, and which `omh hermes plan-accept` refuses; never record it without `--input-bundle`, because that stores a draft plan scaffold with canned goals and options
 
 Safety rules:
 

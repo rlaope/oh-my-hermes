@@ -133,8 +133,8 @@ Expected outputs:
 
 Artifact expectations:
 
-- record the plan with `omh hermes plan --record`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one
-- mark acceptance with `omh hermes plan-accept <path>` so acceptance_recorded and handoff_ready point at a real artifact
+- write the reviewed plan (options, rejected alternatives, risks, `Success criteria` table, target-state coverage, lanes in node-prompt shape) to a Markdown file outside the repository and the OMH store (the system temp directory is fine), then record it with `omh hermes plan --record --plan-file <file> "<task>"`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one; without `--plan-file` the file holds only a generated scaffold, and its `say` field tells you so
+- mark acceptance with `omh hermes plan-accept <path>` only for a file recorded with `--plan-file` (front matter `plan_body: reviewed`), so acceptance_recorded and handoff_ready point at the reviewed plan; accepting a scaffold-only file returns `reviewed_body: false` and is not a reviewed plan
 
 Safety rules:
 
@@ -143,7 +143,7 @@ Safety rules:
 - Make acceptance criteria testable.
 - Record unresolved tradeoffs explicitly.
 - Keep rejected options and handoff readiness separate from accepted execution evidence.
-- Write plan artifacts only through the named `omh hermes plan` commands under `<repo>/.omh/plans/`; never write plans or planning state into `.omc/**` or any other wrapper's state root — `.omc/` belongs to oh-my-claudecode, a different product.
+- Record plan artifacts only through the named `omh hermes plan` commands (the reviewed text goes in through `--plan-file`, not by editing the recorded file) under `<repo>/.omh/plans/`; never write plans or planning state into `.omc/**` or any other wrapper's state root — `.omc/` belongs to oh-my-claudecode, a different product.
 
 ## Runtime Evidence
 
