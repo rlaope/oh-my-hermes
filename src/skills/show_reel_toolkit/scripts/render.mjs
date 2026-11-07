@@ -3,6 +3,7 @@
  * Explicit local Puppeteer adapter; realpath allowlist replaces prefix server. Upstream quality
  * flags kept: --scale (deviceScaleFactor; >1 supersamples back to the page size), --sub/--shutter
  * (sub-frame motion blur), --crf 16, --preset, --from/--to, --every; serial capture piped to FFmpeg.
+ * Frame-clock throttling is off (browserArgs): capture waits on the seek, not on a vsync tick.
  * Full permission/warranty: ../LICENSE.upstream. Not imported or executed by OMH core. */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -83,6 +84,14 @@ export function shutterTimes(t, fps, sub, shutter, cuts, end) {
   // The guard keeps rounded midpoints strictly below a cut, even for tiny shots.
   const upper=Math.max(start,Math.min(end-1e-4,stop-Number.EPSILON*Math.max(1,Math.abs(stop))));
   return Array.from({length:sub},(_,k)=>Math.max(start,Math.min(upper,left+(k+.5)*width/sub)));
+}
+
+export function browserArgs(origin,port) {
+  // Every capture already waits on the seek, fonts, images and a compositor screenshot. Without the
+  // last two flags each screenshot also waits for the next vsync tick, which costs ~120 ms a frame
+  // at 1080p even on a blank page. A seek captured on its own gives the same pixels either way.
+  return [`--proxy-server=${origin}`,`--proxy-bypass-list=<-loopback>;127.0.0.1:${port}`,'--force-color-profile=srgb','--hide-scrollbars','--disable-lcd-text','--font-render-hinting=none','--disable-background-networking','--disable-component-update','--disable-sync','--no-first-run','--disable-default-apps','--mute-audio',
+    '--disable-gpu-vsync','--disable-frame-rate-limit'];
 }
 
 export function captureSettings(options,config) {
@@ -172,7 +181,7 @@ export async function render(options) {
     loopbackPort=server.address().port;
     const origin=`http://127.0.0.1:${loopbackPort}`;
     launching=puppeteer.launch({executablePath:noLinks(options.browser),headless:true,timeout:Math.min(seconds*1000,30000),protocolTimeout:Math.min(seconds*1000,30000),
-      args:[`--proxy-server=${origin}`,`--proxy-bypass-list=<-loopback>;127.0.0.1:${loopbackPort}`,'--force-color-profile=srgb','--hide-scrollbars','--disable-lcd-text','--font-render-hinting=none','--disable-background-networking','--disable-component-update','--disable-sync','--no-first-run','--disable-default-apps','--mute-audio']});
+      args:browserArgs(origin,loopbackPort)});
     browser=await launching;browserPid=browser.process().pid;
     if(cancelled)throw Error('cancelled after browser launch');
     const browserVersion=await browser.version();
