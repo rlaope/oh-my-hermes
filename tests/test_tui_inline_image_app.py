@@ -15,11 +15,13 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from test_tui_image_tokens import CTRL_V, FakeHermes
 from test_tui_modes import SID, drawn, make_app, notices, type_text
 from omh.tui import gateway_contract as contract
-from omh.tui.app import QUIET_EXPIRY_METHODS, UNSENT_BACK_SWITCH, Attachment, image_caption
+from omh.tui.gateway import Event
+from omh.tui.app import PREVIEW_WAIT_SECONDS, QUIET_EXPIRY_METHODS, UNSENT_BACK_SWITCH, Attachment, image_caption
 from omh.tui.inline_image import PLACEHOLDER, PREVIEW_MAX_ROWS, UPPER_HALF
 from omh.tui.keys import ENTER, Key
 from omh.tui.style import COLOR_256, TRUECOLOR
@@ -31,10 +33,11 @@ APC = re.compile(r"\x1b_G[^\x1b]*\x1b\\")  # what the VT model in the tests cann
 
 
 def kitty_result(image_id: int = IMAGE_ID, cols: int = 3, rows: int = 2) -> dict:
-    """A kitty answer as Hermes' `render_inline_image` gives it, its transmit in two chunks."""
-    data = base64.standard_b64encode(bytes(range(24))).decode("ascii")
-    transmit = (f"\x1b_Ga=T,U=1,i={image_id},c={cols},r={rows},f=100,q=2,m=1;{data[:16]}\x1b\\"
-                f"\x1b_Gm=0;{data[16:]}\x1b\\")
+    """A kitty answer as Hermes' `render_inline_image` gives it, its transmit in two chunks (the first 4096
+    characters, as Hermes' `_kitty_apc` cuts them)."""
+    data = base64.standard_b64encode(bytes(range(256)) * 13).decode("ascii")  # 4440 characters
+    transmit = (f"\x1b_Ga=T,U=1,i={image_id},c={cols},r={rows},f=100,q=2,m=1;{data[:4096]}\x1b\\"
+                f"\x1b_Gm=0;{data[4096:]}\x1b\\")
     return {
         "mode": "kitty", "cols": cols, "rows": rows, "color": "#%06x" % (image_id & 0xFFFFFF), "transmit": transmit,
         "placeholder": [PLACEHOLDER + DIACRITICS[row] + PLACEHOLDER * (cols - 1) for row in range(rows)],
@@ -46,11 +49,22 @@ def unicode_result() -> dict:
     return {"mode": "unicode", "cols": 3, "rows": 2, "cells": [[[255, 0, 0, 255, 0, 0, 255, 255]] * 3] * 2}
 
 
+KITTY = {"KITTY_WINDOW_ID": "1", "COLORTERM": "truecolor"}
+# Where the TUI asks for half-blocks: Hermes' `display.inline_images: kitty` still answers kitty there unless the ask
+# says no graphics.
+HALF_BLOCK_TERMINALS = (
+    ("Terminal.app", {"TERM_PROGRAM": "Apple_Terminal", "TERM": "xterm-256color"}),
+    ("tmux", {"TMUX": "/tmp/tmux-1/default,1,0", "COLORTERM": "truecolor"}),
+    ("kitty at 256 colours", {"KITTY_WINDOW_ID": "1", "TERM": "xterm-kitty"}),
+)
+
+
 class PreviewTestCase(unittest.TestCase):
     def start(self, cols: int = 80, environ: dict | None = None) -> None:
         home = tempfile.TemporaryDirectory()
         self.addCleanup(home.cleanup)
-        self.app, self.client = make_app(cols=cols, environ=environ or {})
+        self.now = [1000.0]
+        self.app, self.client = make_app(cols=cols, environ=environ or {}, clock=lambda: self.now[0])
         terminal = self.app.terminal
         feed = terminal.screen.feed  # type: ignore[attr-defined]
         terminal.screen.feed = lambda text: feed(APC.sub("", text))  # type: ignore[attr-defined]
@@ -74,13 +88,25 @@ class PreviewTestCase(unittest.TestCase):
     def users(self) -> list[UserBlock]:
         return [block for block in self.app.transcript.blocks if isinstance(block, UserBlock)]
 
+    def written(self) -> str:
+        return "".join(self.app.terminal.writes)  # type: ignore[attr-defined]
+
+    def step(self, seconds: float) -> None:
+        """One turn of the loop with `seconds` gone by and nothing typed."""
+        def read(timeout: float, wake: int | None = None) -> bytes:
+            self.now[0] += seconds
+            return b""
+
+        with mock.patch.object(self.app.terminal, "read", read):
+            self.app._step()
+
 
 class RequestTests(PreviewTestCase):
     def test_a_paste_asks_hermes_once_for_a_preview_of_the_path_it_staged(self) -> None:
         self.start()
         self.paste()
         path = list(self.hermes.files)[0]
-        self.assertEqual(self.renders(), [{"path": path, "cols": 64, "rows": PREVIEW_MAX_ROWS, "graphics": True,
+        self.assertEqual(self.renders(), [{"path": path, "cols": 64, "rows": PREVIEW_MAX_ROWS, "graphics": False,
                                            "terminal": "unicode"}])
         methods = [method for method, _params in self.client.calls]
         self.assertLess(methods.index("image.detach"), methods.index("image.render"))
@@ -116,6 +142,15 @@ class RequestTests(PreviewTestCase):
                 self.paste()
                 self.assertEqual([render["terminal"] for render in self.renders()], ["unicode"])
 
+    def test_graphics_is_asked_only_where_kitty_placeholders_paint(self) -> None:
+        for name, environ in (*HALF_BLOCK_TERMINALS, ("kitty at truecolor", KITTY)):
+            with self.subTest(name):
+                self.start(environ=environ)
+                self.paste()
+                (render,) = self.renders()
+                self.assertEqual(render["graphics"], environ is KITTY)
+                self.assertEqual(render["terminal"], "kitty" if environ is KITTY else "unicode")
+
     def test_the_call_is_declared_optional_and_its_expiry_says_nothing(self) -> None:
         self.assertIn("image.render", contract.OPTIONAL_METHODS)
         self.assertIn("image.render", QUIET_EXPIRY_METHODS)
@@ -132,6 +167,19 @@ class AnswerTests(PreviewTestCase):
         self.assertEqual(sorted(self.app.previews), ["[Image #1]", "[Image #2]"])
         self.assertTrue(all(preview.transmit == "" for preview in self.app.previews.values()))  # not kept
         self.assertEqual(self.app.inline_placed, {IMAGE_ID})
+
+    def test_a_kitty_answer_to_a_half_block_ask_writes_nothing_and_keeps_no_preview(self) -> None:
+        for name, environ in HALF_BLOCK_TERMINALS:
+            with self.subTest(name):
+                self.start(environ=environ)
+                self.paste()
+                self.hermes.respond("image.render", kitty_result())  # Hermes' config pins kitty
+                self.send()
+                self.hermes.admit()
+                drawn(self.app)
+                self.assertEqual((self.transmits(), self.app.inline_placed, self.app.previews), ([], set(), {}))
+                self.assertEqual(self.users()[-1].previews, (None,))
+                self.assertNotIn(PLACEHOLDER, self.written())
 
     def test_a_forged_transmit_writes_nothing_and_draws_no_preview(self) -> None:
         self.start(environ={"KITTY_WINDOW_ID": "1", "COLORTERM": "truecolor"})
@@ -188,7 +236,7 @@ class AnswerTests(PreviewTestCase):
         self.start()
         self.paste()
         self.send()
-        drawn(self.app)  # the echo is taken into scrollback
+        self.step(PREVIEW_WAIT_SECONDS)  # the wait is over: the echo is taken into scrollback
         self.hermes.respond("image.render", unicode_result())
         self.assertEqual(self.users()[-1].previews, (None,))
         self.assertIn("[Image #1]", self.app.previews)  # kept, for nothing printed now
@@ -229,6 +277,116 @@ class AnswerTests(PreviewTestCase):
         self.assertEqual(len(self.app.previews), 32)
         self.assertNotIn("[Image #1]", self.app.previews)
         self.assertIn("[Image #34]", self.app.previews)
+
+
+class EchoWaitTests(PreviewTestCase):
+    """The echo of a prompt sent with an image is printed once its preview answers, or `PREVIEW_WAIT_SECONDS` on."""
+
+    def test_paste_enter_then_a_frame_then_the_answer_prints_the_echo_with_its_preview(self) -> None:
+        self.start()
+        self.paste()
+        self.send()
+        self.hermes.admit()
+        drawn(self.app)  # a frame before Hermes rendered it: the echo is not printed yet
+        self.hermes.respond("image.render", unicode_result())
+        (user,) = self.users()
+        self.assertEqual([preview.rows for preview in user.previews], [2])
+        mark = len(self.app.terminal.writes)  # type: ignore[attr-defined]
+        drawn(self.app)
+        printed = "".join(self.app.terminal.writes[mark:])  # type: ignore[attr-defined]
+        self.assertIn("[Image #1] image_1.png", printed)
+        self.assertIn(UPPER_HALF * 3, printed)
+        self.assertFalse(user.waiting)
+
+    def test_with_no_answer_the_echo_prints_after_the_wait_with_its_caption_and_what_followed_after_it(self) -> None:
+        self.start()
+        self.paste()
+        self.send("first")
+        self.hermes.admit()
+        self.app._on_event(Event("message.delta", SID, {"text": "a reply"}))
+        self.app._on_event(Event("message.complete", SID, {"text": "a reply"}))
+        self.step(PREVIEW_WAIT_SECONDS / 2)
+        self.assertTrue(self.users()[-1].waiting)  # half the wait: still held, and the reply with it
+        self.step(PREVIEW_WAIT_SECONDS / 2)
+        self.assertFalse(self.users()[-1].waiting)
+        self.assertEqual(self.app.preview_waits, [])
+        screen = "\n".join(drawn(self.app))
+        self.assertLess(screen.index("[Image #1] image_1.png"), screen.index("a reply"))
+        self.assertEqual(self.users()[-1].previews, (None,))
+
+    def test_a_refusal_lets_the_echo_print_at_once(self) -> None:
+        self.start()
+        self.paste()
+        self.send()
+        self.assertTrue(self.users()[-1].waiting)
+        self.hermes.respond("image.render", error={"code": contract.METHOD_NOT_FOUND, "message": "unknown method"})
+        self.assertFalse(self.users()[-1].waiting)
+        self.assertEqual(self.app.preview_waits, [])
+
+    def test_an_echo_whose_preview_answered_first_does_not_wait(self) -> None:
+        self.start()
+        self.paste()
+        self.hermes.respond("image.render", unicode_result())
+        self.send()
+        self.assertFalse(self.users()[-1].waiting)
+
+    def test_flush_rule_stays_in_the_transcript(self) -> None:
+        source = (Path(__file__).resolve().parents[1] / "src/tui/app.py").read_text(encoding="utf-8")
+        self.assertNotIn("transcript._cursor", source)
+        self.assertNotIn("transcript._version", source)
+
+
+class AlternateScreenTests(PreviewTestCase):
+    """kitty keeps one image store per screen: a transmit goes only to the main one, where the placeholders are."""
+
+    def test_an_answer_while_the_pager_is_open_is_written_once_after_it_closes(self) -> None:
+        self.start(environ=KITTY)
+        self.paste()
+        self.app._open_pager("history", [()])
+        self.hermes.respond("image.render", kitty_result())
+        self.assertEqual((self.transmits(), self.app.inline_placed), ([], set()))
+        self.app._leave_pager()
+        self.assertEqual(self.transmits(), [kitty_result()["transmit"]])
+        self.assertEqual(self.app.inline_placed, {IMAGE_ID})
+        self.paste()
+        self.hermes.respond("image.render", kitty_result())  # the same image again: already on the main screen
+        self.assertEqual(len(self.transmits()), 1)
+
+    def test_an_answer_while_the_model_chains_picker_is_open_waits_for_it_to_close(self) -> None:
+        self.start(environ=KITTY)
+        self.paste()
+        self.app.chains_open = True
+        self.hermes.respond("image.render", kitty_result())
+        self.assertEqual(self.transmits(), [])
+        self.app.chains_open = False
+        self.app._write_owed_transmits()
+        self.assertEqual(len(self.transmits()), 1)
+
+    def test_history_shows_a_kitty_preview_as_its_caption_only(self) -> None:
+        self.start(environ=KITTY)
+        self.paste()
+        self.hermes.respond("image.render", kitty_result())
+        self.send()
+        self.hermes.admit()
+        drawn(self.app)
+        mark = len(self.app.terminal.writes)  # type: ignore[attr-defined]
+        self.app._history("")
+        drawn(self.app)
+        shown = "".join(self.app.terminal.writes[mark:])  # type: ignore[attr-defined]
+        self.assertIn("[Image #1] image_1.png", shown)
+        self.assertNotIn(PLACEHOLDER, shown)
+
+    def test_history_still_shows_a_half_block_preview(self) -> None:
+        self.start()
+        self.paste()
+        self.hermes.respond("image.render", unicode_result())
+        self.send()
+        self.hermes.admit()
+        drawn(self.app)
+        mark = len(self.app.terminal.writes)  # type: ignore[attr-defined]
+        self.app._history("")
+        drawn(self.app)
+        self.assertIn(UPPER_HALF * 3, "".join(self.app.terminal.writes[mark:]))  # type: ignore[attr-defined]
 
 
 class CaptionTests(unittest.TestCase):

@@ -63,17 +63,48 @@ class BoundaryDocTests(unittest.TestCase):
             "placeholder rows are kept for the transcript. A half-block preview is ordinary coloured cells.",
             boundary,
         )
-        self.assertEqual(inline_image.TRANSMIT_MAX_CHARS, 8 * 1024 * 1024)
         self.assertEqual(app.PREVIEW_KEEP, 32)
+
+    def test_graphics_is_asked_only_with_a_kitty_ask(self) -> None:
+        boundary = prose("docs/OMH-TUI-BOUNDARY.md")
+        self.assertIn(
+            "It sends `graphics` true only with a kitty ask, so Hermes answers half-blocks to a half-block ask even "
+            "when its config pins kitty, and a kitty answer to a half-block ask is dropped.",
+            boundary,
+        )
+
+    def test_the_echo_waits_at_most_two_seconds(self) -> None:
+        boundary = prose("docs/OMH-TUI-BOUNDARY.md")
+        self.assertIn(
+            "The echo of a prompt sent with an image stays in the live region until its previews answer, at most "
+            "2 seconds, and is then printed with what it has.",
+            boundary,
+        )
+        self.assertEqual(app.PREVIEW_WAIT_SECONDS, 2.0)
+
+    def test_no_transmit_on_the_alternate_screen_and_the_cap(self) -> None:
+        boundary = prose("docs/OMH-TUI-BOUNDARY.md")
+        self.assertIn(
+            "A transmit over 2 MiB is refused unread. No transmit is written while the pager or a picker holds the "
+            "alternate screen, whose image store is not the main screen's: it is written once the main screen is "
+            "back, and the pager shows a kitty preview as its caption only.",
+            boundary,
+        )
+        self.assertEqual(inline_image.TRANSMIT_MAX_CHARS, 2 * 1024 * 1024)
 
 
 class InstallationDocTests(unittest.TestCase):
     def test_the_user_sees_a_preview_and_can_turn_it_off(self) -> None:
         installation = prose("docs/INSTALLATION.md")
         self.assertIn(
-            "with a small preview under each: real pixels on kitty and Ghostty, coloured half-blocks "
-            "elsewhere (tmux, Terminal.app, iTerm2, WezTerm, VS Code), none under `NO_COLOR`; "
-            "`display.inline_images: off` in Hermes' config turns it off.",
+            "with a small preview under each: real pixels on kitty and Ghostty at truecolor, coloured half-blocks "
+            "elsewhere (tmux, Terminal.app, iTerm2, WezTerm, VS Code), even where Hermes' config names kitty, none "
+            "under `NO_COLOR`; `display.inline_images: off` in Hermes' config turns it off.",
+            installation,
+        )
+        self.assertIn(
+            "The prompt waits up to 2 seconds for its previews before it is printed, and prints with only the image "
+            "names when they do not come in time. `/history` shows a kitty preview as its name only.",
             installation,
         )
         self.assertEqual(inline_graphics({"GHOSTTY_RESOURCES_DIR": "/g"}), INLINE_KITTY)

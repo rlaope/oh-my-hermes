@@ -19,13 +19,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import re
 from typing import Any
-import unicodedata
 
 from .style import Line, Span, Style
 
 PREVIEW_MAX_COLS = 64  # Hermes' cap (methods_images._MAX_PREVIEW_COLS)
 PREVIEW_MAX_ROWS = 16
-TRANSMIT_MAX_CHARS = 8 * 1024 * 1024
+# The most previews the TUI keeps: of attached images by label (`App.previews`), and of prompts in the transcript.
+PREVIEW_KEEP = 32
+# Hermes' largest transmit, a 64x16 preview, measured about 922 KB; a longer one is not Hermes' and is not walked.
+TRANSMIT_MAX_CHARS = 2 * 1024 * 1024
 
 MODE_KITTY = "kitty"
 MODE_UNICODE = "unicode"
@@ -36,6 +38,12 @@ LOWER_HALF = "▄"
 OPAQUE_ALPHA = 32  # an alpha at or above this paints its half, as Hermes' own TUI paints it (cellImage.tsx)
 
 _CHUNK_PAYLOAD_MAX = 4096
+# Row r of a placeholder carries kitty's r-th row diacritic: the first 16 of kitty's `rowcolumn-diacritics`, as
+# Hermes' `agent/terminal_image.py` (`_ROWCOL_DIACRITICS`) copies them.
+ROW_DIACRITICS = (
+    0x0305, 0x030D, 0x030E, 0x0310, 0x0312, 0x033D, 0x033E, 0x033F,
+    0x0346, 0x034A, 0x034B, 0x034C, 0x0350, 0x0351, 0x0352, 0x0357,
+)
 _COLOR = re.compile(r"#[0-9a-fA-F]{6}")
 # One chunk of a kitty transmit. ASCII only, so `\d` is 0-9 and nothing else a terminal might read as a digit.
 _CHUNK = re.compile(
@@ -66,17 +74,23 @@ def _hex(red: int, green: int, blue: int) -> str:
     return f"#{red:02x}{green:02x}{blue:02x}"
 
 
-def _cell_span(cell: list[int]) -> Span:
-    """One half-block cell: the upper half on top, the lower below, as Hermes' own TUI paints them."""
+def _cell_span(cell: list[int], spans: dict[tuple[str, str | None, str | None], Span]) -> Span:
+    """One half-block cell: the upper half on top, the lower below, as Hermes' own TUI paints them. Cells that look
+    the same share one span (`spans`, one per preview), so a preview holds a span per colour pair, not per cell."""
     top, bottom = cell[:4], cell[4:]
     top_opaque, bottom_opaque = top[3] >= OPAQUE_ALPHA, bottom[3] >= OPAQUE_ALPHA
     if top_opaque and bottom_opaque:
-        return Span(UPPER_HALF, Style(fg=_hex(*top[:3]), bg=_hex(*bottom[:3]), gutter=True))
-    if top_opaque:
-        return Span(UPPER_HALF, Style(fg=_hex(*top[:3]), gutter=True))
-    if bottom_opaque:
-        return Span(LOWER_HALF, Style(fg=_hex(*bottom[:3]), gutter=True))
-    return Span(" ", Style(gutter=True))
+        key = (UPPER_HALF, _hex(*top[:3]), _hex(*bottom[:3]))
+    elif top_opaque:
+        key = (UPPER_HALF, _hex(*top[:3]), None)
+    elif bottom_opaque:
+        key = (LOWER_HALF, _hex(*bottom[:3]), None)
+    else:
+        key = (" ", None, None)
+    span = spans.get(key)
+    if span is None:
+        span = spans[key] = Span(key[0], Style(fg=key[1], bg=key[2], gutter=True))
+    return span
 
 
 def _is_cell(cell: object) -> bool:
@@ -88,23 +102,20 @@ def _unicode_lines(cells: object, cols: int, rows: int) -> tuple[Line, ...] | No
         return None
     if not all(isinstance(row, list) and len(row) == cols and all(map(_is_cell, row)) for row in cells):
         return None
-    return tuple(tuple(_cell_span(cell) for cell in row) for row in cells)
+    spans: dict[tuple[str, str | None, str | None], Span] = {}
+    return tuple(tuple(_cell_span(cell, spans) for cell in row) for row in cells)
 
 
 def _kitty_lines(placeholder: object, color: str, cols: int, rows: int) -> tuple[Line, ...] | None:
-    """The placeholder rows, each one placeholder with its row's diacritic and then `cols - 1` more."""
+    """The placeholder rows, row r one placeholder with kitty's r-th row diacritic and then `cols - 1` more."""
     if not isinstance(placeholder, list) or len(placeholder) != rows:
         return None
     rest = PLACEHOLDER * (cols - 1)
-    diacritics = []
-    for row in placeholder:
+    for index, row in enumerate(placeholder):
         if not isinstance(row, str) or len(row) != cols + 1 or row[0] != PLACEHOLDER or row[2:] != rest:
             return None
-        if unicodedata.category(row[1]) != "Mn":
+        if row[1] != chr(ROW_DIACRITICS[index]):
             return None
-        diacritics.append(row[1])
-    if len(set(diacritics)) != rows:
-        return None
     return tuple((Span(row, Style(fg=color, gutter=True)),) for row in placeholder)
 
 
@@ -113,7 +124,8 @@ def _transmit_image_id(transmit: object, cols: int, rows: int) -> int | None:
 
     The whole string is chunks back to back: the first, and only the first, carries the transmit-and-place control
     for a virtual placement; every chunk but the last says more follows (`m=1`), the last says it is done (`m=0`);
-    no payload is over 4096 characters."""
+    as Hermes' `_kitty_apc` cuts them, every payload but the last is exactly 4096 characters and the last is 1 to 4096.
+    """
     if not isinstance(transmit, str) or not transmit or len(transmit) > TRANSMIT_MAX_CHARS:
         return None
     image_id = None
@@ -132,7 +144,7 @@ def _transmit_image_id(transmit: object, cols: int, rows: int) -> int | None:
             if int(found_cols) != cols or int(found_rows) != rows:
                 return None
             image_id = int(found_id)
-        if len(payload) > _CHUNK_PAYLOAD_MAX:
+        if not payload or len(payload) > _CHUNK_PAYLOAD_MAX or (more == "1" and len(payload) != _CHUNK_PAYLOAD_MAX):
             return None
         done = more == "0"
         position = chunk.end()

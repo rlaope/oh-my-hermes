@@ -27,7 +27,9 @@ from omh.tui.inline_image import (
 from omh.tui.style import Style
 from omh.tui.width import line_width
 
-DIACRITICS = ("\u0305", "\u030d", "\u030e", "\u0310")  # the first of kitty's row/column diacritics, category Mn
+# kitty's row/column diacritics in order (its `rowcolumn-diacritics`), as Hermes' `_ROWCOL_DIACRITICS` starts.
+DIACRITICS = tuple(map(chr, (0x0305, 0x030D, 0x030E, 0x0310, 0x0312, 0x033D, 0x033E, 0x033F,
+                             0x0346, 0x034A, 0x034B, 0x034C, 0x0350, 0x0351, 0x0352, 0x0357)))
 IMAGE_ID = 0x9A2B3C  # Hermes' image ids lie in [0x8000, 0xFFFFFF] (agent/terminal_image.py `_IMAGE_ID_BASE`)
 COLOR = "#%06x" % (IMAGE_ID & 0xFFFFFF)
 OSC_52 = "\x1b]52;c;aGVsbG8=\x07"
@@ -43,9 +45,10 @@ def control(image_id: int = IMAGE_ID, cols: int = 3, rows: int = 2) -> str:
 
 
 def chunks(image_id: int = IMAGE_ID, cols: int = 3, rows: int = 2) -> list[str]:
-    """A transmit in three chunks, so a first (with the control), a middle and a last are all exercised."""
-    data = base64.standard_b64encode(bytes(range(30))).decode("ascii")
-    parts = [data[:12], data[12:24], data[24:]]
+    """A transmit in three chunks, so a first (with the control), a middle and a last are all exercised; as Hermes'
+    `_kitty_apc` cuts them, every payload but the last is 4096 characters."""
+    data = base64.standard_b64encode(bytes(range(256)) * 24).decode("ascii")  # 8192 characters
+    parts = [data[:4096], data[4096:], data[:12]]
     return [
         chunk(part, more=index < len(parts) - 1, control=control(image_id, cols, rows) if index == 0 else "")
         for index, part in enumerate(parts)
@@ -128,6 +131,11 @@ class UnicodePreviewTests(unittest.TestCase):
             with self.subTest(name):
                 self.assertIsNone(preview_from(unicode_result(cells=broken)))
 
+    def test_cells_that_look_the_same_share_one_span(self) -> None:
+        cells = [[OPAQUE_RED + OPAQUE_BLUE] * PREVIEW_MAX_COLS for _ in range(PREVIEW_MAX_ROWS)]
+        preview = preview_from(unicode_result(cols=PREVIEW_MAX_COLS, rows=PREVIEW_MAX_ROWS, cells=cells))
+        self.assertEqual(len({id(span.style) for line in preview.lines for span in line}), 1)
+
     def test_a_value_out_of_a_byte_draws_nothing(self) -> None:
         for value in (256, -1, True, False, 1.0, "1", None):
             with self.subTest(value=value):
@@ -191,6 +199,9 @@ class KittyPreviewTests(unittest.TestCase):
             ("diacritic Me", [rows[0], PLACEHOLDER + "\u20dd" + PLACEHOLDER * 2]),
             ("diacritic is an escape", [rows[0], PLACEHOLDER + "\x1b" + PLACEHOLDER * 2]),
             ("repeated diacritic", [rows[0], rows[0]]),
+            ("rows swapped", [rows[1], rows[0]]),
+            ("an Mn mark kitty does not number rows with", [rows[0], PLACEHOLDER + "\u0300" + PLACEHOLDER * 2]),
+            ("a later row's diacritic", [rows[0], PLACEHOLDER + DIACRITICS[2] + PLACEHOLDER * 2]),
             ("other cell character", [rows[0], PLACEHOLDER + DIACRITICS[1] + PLACEHOLDER + "x"]),
             ("does not start with a placeholder", [rows[0], "x" + rows[1][1:]]),
             ("not a string", [rows[0], 7]),
@@ -226,11 +237,11 @@ class TransmitTests(unittest.TestCase):
 
     def test_a_first_chunk_without_the_control_is_refused(self) -> None:
         _first, middle, last = chunks()
-        self.assert_refused(chunk("AAAA", more=True) + middle + last)
+        self.assert_refused(chunk("A" * 4096, more=True) + middle + last)
 
     def test_a_last_chunk_that_says_more_follows_is_refused(self) -> None:
         first, middle, _last = chunks()
-        self.assert_refused(first + middle + chunk("AAAA", more=True))
+        self.assert_refused(first + middle + chunk("A" * 4096, more=True))
 
     def test_a_middle_chunk_that_says_it_is_the_last_is_refused(self) -> None:
         first, _middle, last = chunks()
@@ -266,7 +277,7 @@ class TransmitTests(unittest.TestCase):
 
     def test_a_payload_chunk_over_4096_characters_is_refused(self) -> None:
         self.assert_refused(chunk("A" * 4097, more=True, control=control()) + chunk("AAAA", more=False))
-        self.assert_refused(chunk("AAAA", more=True, control=control()) + chunk("A" * 4097, more=False))
+        self.assert_refused(chunk("A" * 4096, more=True, control=control()) + chunk("A" * 4097, more=False))
 
     def test_a_transmit_over_the_limit_is_refused(self) -> None:
         transmit = "".join(chunks())
@@ -274,6 +285,35 @@ class TransmitTests(unittest.TestCase):
             self.assertIsNotNone(preview_from(kitty_result(transmit=transmit)))
         with patch.object(inline_image, "TRANSMIT_MAX_CHARS", len(transmit) - 1):
             self.assert_refused(transmit)
+
+    def test_an_empty_payload_chunk_is_refused(self) -> None:
+        first, middle, last = chunks()
+        self.assert_refused(first + chunk("", more=True) + middle + last)
+        self.assert_refused(first + middle + chunk("", more=False))
+        self.assert_refused(chunk("", more=False, control=control()))
+
+    def test_a_short_chunk_before_the_last_is_refused(self) -> None:
+        first, middle, last = chunks()
+        self.assert_refused(first + chunk("A" * 4092, more=True) + last)
+        self.assert_refused(chunk("AAAA", more=True, control=control()) + middle + last)
+
+    def test_a_transmit_over_two_mib_is_refused(self) -> None:
+        self.assertEqual(inline_image.TRANSMIT_MAX_CHARS, 2 * 1024 * 1024)
+        first = chunk("A" * 4096, more=True, control=control())
+        middle = chunk("A" * 4096, more=True)
+        count = inline_image.TRANSMIT_MAX_CHARS // len(middle) + 1
+        self.assert_refused(first + middle * count + chunk("AAAA", more=False))
+
+    def test_hermes_largest_shape_is_accepted(self) -> None:
+        """A 64x16 transmit near the size Hermes' largest measured one has (about 922 KB), cut as `_kitty_apc` cuts."""
+        data = "A" * (900 * 1024 + 7)
+        pieces = [data[start : start + 4096] for start in range(0, len(data), 4096)]
+        transmit = "".join(chunk(piece, more=index < len(pieces) - 1,
+                                 control=control(cols=PREVIEW_MAX_COLS, rows=PREVIEW_MAX_ROWS) if index == 0 else "")
+                           for index, piece in enumerate(pieces))
+        result = kitty_result(cols=PREVIEW_MAX_COLS, rows=PREVIEW_MAX_ROWS, transmit=transmit,
+                              placeholder=placeholder_rows(PREVIEW_MAX_COLS, PREVIEW_MAX_ROWS))
+        self.assertEqual(preview_from(result).transmit, transmit)
 
     def test_a_transmit_that_is_not_a_string_is_refused(self) -> None:
         for transmit in ("", None, b"".join(part.encode() for part in chunks()), ["".join(chunks())]):

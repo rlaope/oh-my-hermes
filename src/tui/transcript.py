@@ -123,7 +123,7 @@ from .escapes import strip_escapes
 from .gateway import Event
 from . import gateway_contract as contract
 from .gateway_contract import TOOL_CALL_BRIDGE
-from .inline_image import Preview
+from .inline_image import MODE_KITTY, PREVIEW_KEEP, Preview
 from .markdown import (
     GrowingLine,
     MarkdownState,
@@ -264,6 +264,10 @@ class UserBlock:
     # What to draw under each label, by the same index: a checked preview (`inline_image.preview_from`), or None
     # (or nothing, for an image past the end) where there is none.
     previews: tuple[Preview | None, ...] = ()
+    # While a preview for one of its images is still being rendered (`Transcript.stop_waiting` ends it): it is not
+    # taken into scrollback, and the blocks after it wait in the live region with it. It is still `done`, so nothing
+    # appended after it closes it as it closes a live block.
+    waiting: bool = False
 
 
 @dataclass
@@ -983,11 +987,14 @@ def _marked_spans(text: str, style: Style, theme: Theme, above: str = "") -> lis
     return [Span(text, style)] if text else []
 
 
-def _user_rows(block: UserBlock, width: int, theme: Theme, pending: bool = False) -> list[Line]:
+def _user_rows(
+    block: UserBlock, width: int, theme: Theme, pending: bool = False, kitty_previews: bool = True,
+) -> list[Line]:
     """Your prompt on a dim rail, behind a dim `❯`, in the muted colour (dim while it is a steer the turn has not
     taken in, `pending`); a `/name` that resolved to a command or skill bold in its colour (`slash_spans`);
     `⧗ from queue` when the queue sent it; under it `  ⎿  [Image #1]` for each image it went with, and under that
-    label the image's preview rows when it has one. Every row, a wrapped or blank one too, runs on
+    label the image's preview rows when it has one (a kitty one only with `kitty_previews`: its placeholders show
+    the image only on the screen it was sent to, the main one). Every row, a wrapped or blank one too, runs on
     `theme.prompt_band` to the right edge, its words measured against the band (`on_band`); a preview cell keeps
     its own background (a half-block's lower colour) and takes the band only where it has none."""
     band = theme.prompt_band
@@ -1009,7 +1016,7 @@ def _user_rows(block: UserBlock, width: int, theme: Theme, pending: bool = False
     for index, label in enumerate(block.images):
         rows.append((*_output_leads(theme)[0], Span(label, theme.muted)))
         preview = block.previews[index] if index < len(block.previews) else None
-        if preview is not None:
+        if preview is not None and (kitty_previews or preview.mode != MODE_KITTY):
             indent = _output_leads(theme)[1]
             previewed.update(range(len(rows), len(rows) + len(preview.lines)))
             rows.extend((*indent, *line) for line in preview.lines)
@@ -1553,9 +1560,10 @@ def _tool_rows(
 
 def block_rows(
     block: Block, width: int, theme: Theme, expanded: bool = False, max_rows: int | None = None,
-    now: float | None = None, glint: bool = False,
+    now: float | None = None, glint: bool = False, kitty_previews: bool = True,
 ) -> list[Line]:
     """The rows one block shows at `width`; `expanded` adds thinking text, tool result summaries, whole diffs.
+    Without `kitty_previews` (the pager, on the alternate screen) a prompt's kitty image previews are left out.
 
     `max_rows` lets a block whose rows end the same either way (thinking
     text) render only its last rows; the rows returned may start lower.
@@ -1564,7 +1572,7 @@ def block_rows(
     """
     width = max(1, width)
     if isinstance(block, UserBlock):
-        return _user_rows(block, width, theme)
+        return _user_rows(block, width, theme, kitty_previews=kitty_previews)
     if isinstance(block, NoticeBlock):
         return _notice_rows(block, width, theme)
     if isinstance(block, CommandBlock):
@@ -1662,11 +1670,47 @@ class Transcript:
 
     def add_user(
         self, text: str, from_queue: bool = False, known: frozenset[str] = frozenset(), recorded: bool = False,
-        images: tuple[str, ...] = (), previews: tuple[Preview | None, ...] = (),
-    ) -> None:
-        """Your prompt; `known` names the commands and skills a `/name` in it is drawn for (`slash.known_names`);
-        `recorded` for one from the session's history; `images` the labels of the images it went with, `previews` what is drawn under each."""
-        self._append(UserBlock(text, from_queue=from_queue, known=known, recorded=recorded, images=images, previews=previews))
+        images: tuple[str, ...] = (), previews: tuple[Preview | None, ...] = (), waiting: bool = False,
+    ) -> UserBlock:
+        """Your prompt, as the block it is; `known` names the commands and skills a `/name` in it is drawn for
+        (`slash.known_names`); `recorded` for one from the session's history; `images` the labels of the images it
+        went with, `previews` what is drawn under each; `waiting` holds it out of scrollback until `stop_waiting`."""
+        block = UserBlock(text, from_queue=from_queue, known=known, recorded=recorded, images=images,
+                          previews=previews, waiting=waiting)
+        self._append(block)
+        self._keep_previews()
+        return block
+
+    def set_user_previews(self, lookup: Callable[[str], Preview | None]) -> None:
+        """Every prompt not yet taken takes the preview `lookup` gives for each of its images (by what `images`
+        holds for it; one it has already stays where `lookup` gives none); the live region draws them at the next frame. At most
+        `PREVIEW_KEEP` prompts keep previews: an older one past them keeps only its labels."""
+        for block in self.blocks[self._cursor :]:
+            if not isinstance(block, UserBlock) or not block.images:
+                continue
+            old = block.previews
+            previews = tuple(lookup(label) or (old[index] if index < len(old) else None)
+                             for index, label in enumerate(block.images))
+            if previews != old:
+                block.previews = previews
+                self._version += 1
+        self._keep_previews()
+
+    def stop_waiting(self, block: UserBlock) -> None:
+        """`block` waits no more for its previews: the next take prints it, with what it has, and the blocks after it."""
+        if block.waiting:
+            block.waiting = False
+            self._version += 1
+
+    def _keep_previews(self) -> None:
+        """Only the newest `PREVIEW_KEEP` prompts that have previews keep them."""
+        kept = 0
+        for block in reversed(self.blocks):
+            if isinstance(block, UserBlock) and any(block.previews):
+                kept += 1
+                if kept > PREVIEW_KEEP:
+                    block.previews = ()
+                    self._version += 1
 
     def resolve_recorded_prompts(self, known: frozenset[str], width: int, theme: Theme, max_rows: int) -> bool:
         """The history's prompts take `known`, the session's catalog, which answers after they are drawn (`App.startup`
@@ -2225,6 +2269,8 @@ class Transcript:
         while self._cursor < len(self.blocks):
             block = self.blocks[self._cursor]
             index = self._cursor - first
+            if isinstance(block, UserBlock) and block.waiting and not final:
+                break  # it and what follows stay live until its previews answer (`stop_waiting`); at exit it goes
             if isinstance(block, AssistantBlock) and not (block.done and index < len(held)):
                 taken.extend(self._take_assistant(block, width, theme, final, live_rows))
             elif block.done:

@@ -6,8 +6,8 @@ from dataclasses import replace
 import unittest
 
 from _tui_lines import lines_text
-from omh.tui.inline_image import Preview, preview_from
-from omh.tui.style import Style
+from omh.tui.inline_image import PREVIEW_KEEP, Preview, preview_from
+from omh.tui.style import Span, Style
 from omh.tui.theme import DEFAULT_THEME
 from omh.tui.transcript import OUTPUT_INDENT, OUTPUT_MARK, RAIL, Transcript, UserBlock, block_rows
 from omh.tui.width import line_width
@@ -110,6 +110,60 @@ class PreviewRowsTests(unittest.TestCase):
         block = transcript.blocks[-1]
         self.assertIsInstance(block, UserBlock)
         self.assertEqual(block.previews, (preview,))
+
+
+class HeldEchoTests(unittest.TestCase):
+    """A prompt waiting for its previews stays out of scrollback, with every block after it, in order."""
+
+    def test_a_waiting_prompt_holds_itself_and_what_follows_until_it_stops_waiting(self) -> None:
+        transcript = Transcript()
+        transcript.add_notice("before")
+        block = transcript.add_user("look", images=("[Image #1]",), waiting=True)
+        transcript.add_assistant("a reply")
+        taken = lines_text(transcript.take_stable_lines(60, DEFAULT_THEME))
+        self.assertIn("· before", taken)
+        self.assertFalse(any("look" in row or "a reply" in row for row in taken))
+        live = lines_text(transcript.live_lines(60, DEFAULT_THEME))
+        self.assertLess(live.index("┃ ❯ look"), next(i for i, row in enumerate(live) if "a reply" in row))
+        transcript.set_user_previews(lambda caption: unicode_preview())
+        transcript.stop_waiting(block)
+        taken = lines_text(transcript.take_stable_lines(60, DEFAULT_THEME))
+        self.assertEqual(taken[1:4], ["┃ ❯ look", "┃   ⎿  [Image #1]", "┃      ▀▀▄"])
+        self.assertTrue(any("a reply" in row for row in taken[4:]))
+        self.assertEqual(lines_text(transcript.live_lines(60, DEFAULT_THEME)), [])
+
+    def test_the_take_at_exit_prints_a_waiting_prompt(self) -> None:
+        transcript = Transcript()
+        transcript.add_user("look", images=("[Image #1]",), waiting=True)
+        self.assertIn("┃ ❯ look", lines_text(transcript.take_stable_lines(60, DEFAULT_THEME, final=True)))
+
+    def test_previews_set_on_a_prompt_already_taken_change_nothing(self) -> None:
+        transcript = Transcript()
+        transcript.add_user("look", images=("[Image #1]",))
+        transcript.take_stable_lines(60, DEFAULT_THEME)
+        transcript.set_user_previews(lambda caption: unicode_preview())
+        self.assertEqual(transcript.blocks[-1].previews, ())
+
+
+class PreviewBoundTests(unittest.TestCase):
+    def test_only_the_newest_prompts_keep_their_previews(self) -> None:
+        transcript = Transcript()
+        for number in range(PREVIEW_KEEP + 2):
+            transcript.add_user(f"p{number}", images=(f"[Image #{number}]",), previews=(unicode_preview(),))
+        users = [block for block in transcript.blocks if isinstance(block, UserBlock)]
+        self.assertEqual([bool(block.previews) for block in users], [False, False, *[True] * PREVIEW_KEEP])
+        self.assertEqual(users[0].images, ("[Image #0]",))  # the caption stays
+
+
+class PagerRowsTests(unittest.TestCase):
+    def test_without_kitty_previews_a_kitty_preview_is_its_caption_only(self) -> None:
+        kitty = Preview("kitty", 2, 1, ((Span("\U0010eeee\u0305\U0010eeee", Style(fg="#9a2b3c")),),))
+        block = UserBlock("look", images=("[Image #1]", "[Image #2]"), previews=(kitty, unicode_preview()))
+        rows = lines_text(block_rows(block, 60, DEFAULT_THEME, kitty_previews=False))
+        self.assertEqual(rows[:3], ["┃ ❯ look", "┃   ⎿  [Image #1]", "┃   ⎿  [Image #2]"])
+        self.assertEqual(len(rows), 5)  # the half-block preview's two rows are still drawn
+        self.assertFalse(any("\U0010eeee" in row for row in rows))
+        self.assertTrue(any("\U0010eeee" in row for row in lines_text(block_rows(block, 60, DEFAULT_THEME))))
 
 
 if __name__ == "__main__":

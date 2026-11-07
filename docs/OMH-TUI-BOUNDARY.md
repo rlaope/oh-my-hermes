@@ -86,10 +86,15 @@ When the person attaches an image, it also sends `image.render` once for that
 image, naming only the path Hermes staged and answered, to draw a preview under
 the prompt that sends it: it asks for at most 64 columns by 16 rows, for kitty
 graphics only on a kitty-family terminal at truecolor and otherwise for
-half-blocks, and not at all under `NO_COLOR`. It reads nothing else for the
-preview and sends nothing on its own. The preview follows Hermes'
-`display.inline_images` (off draws none), and a Hermes that does not know the
-call, or an answer that does not check out, draws no preview and says nothing.
+half-blocks, and not at all under `NO_COLOR`. It sends `graphics` true only
+with a kitty ask, so Hermes answers half-blocks to a half-block ask even when
+its config pins kitty, and a kitty answer to a half-block ask is dropped. It
+reads nothing else for the preview and sends nothing on its own. The preview
+follows Hermes' `display.inline_images` (off draws none), and a Hermes that
+does not know the call, or an answer that does not check out, draws no preview
+and says nothing. The echo of a prompt sent with an image stays in the live
+region until its previews answer, at most 2 seconds, and is then printed with
+what it has.
 
 ## Leaving a session, approvals and session settings
 
@@ -177,7 +182,10 @@ graphics transmit of an image the person attached, and only after it matches
 the kitty APC chunk form for the image Hermes named (`src/tui/inline_image.py`);
 it is written once per image, to the terminal only and never to disk or a log,
 and only the placeholder rows are kept for the transcript. A half-block preview
-is ordinary coloured cells.
+is ordinary coloured cells. A transmit over 2 MiB is refused unread. No
+transmit is written while the pager or a picker holds the alternate screen,
+whose image store is not the main screen's: it is written once the main screen
+is back, and the pager shows a kitty preview as its caption only.
 
 ## Agent views
 

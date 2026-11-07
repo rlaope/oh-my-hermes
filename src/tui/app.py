@@ -147,7 +147,7 @@ from . import gateway_contract as contract
 from .composer import COMPLETE, EXIT, IMAGE_LABEL, INTERRUPT, SUBMIT, VIM_INSERT, VIM_NORMAL, Composer, ComposerAction
 from .frame import INFO_INSET, MODE_NORMAL, MODE_SHELL, Frame, badge_forms, branch_forms, build_frame, sticky_line
 from .git_status import GitWatcher
-from .inline_image import MODE_KITTY, PREVIEW_MAX_COLS, PREVIEW_MAX_ROWS, Preview, preview_from
+from .inline_image import MODE_KITTY, PREVIEW_KEEP, PREVIEW_MAX_COLS, PREVIEW_MAX_ROWS, Preview, preview_from
 from .history import SEARCH_ACCEPT, SEARCH_CANCEL, SEARCH_HINTS, HistorySearch, append_entry, history_path, load_history
 from .gateway import (
     CANCEL_POLL_SECONDS,
@@ -1128,8 +1128,9 @@ PATH_COMPLETE_DEBOUNCE_SECONDS = 0.12
 ATTACH_LEFT_NOTICE = "Hermes queued {name} in the session you left, so it is not attached here."
 # The most bytes of one image the TUI keeps for its token: what the gateway child stages at most (`gateway_attach`).
 IMAGE_KEEP_BYTES = 20 * 1024 * 1024
-# The most attached images whose preview (`App._request_preview`) the TUI keeps for the prompt that sends them.
-PREVIEW_KEEP = 32
+# How long the echo of a prompt sent with images waits out of scrollback for their previews (`App._request_preview`)
+# before it is printed with what it has.
+PREVIEW_WAIT_SECONDS = 2.0
 IMAGE_LABEL_NUMBERS = re.compile(r"\[Image #(\d+)\]")  # the numbers a resumed session's prompts already gave
 IMAGE_UNREADABLE_NOTICE = "{name} could not be read for its token (over 20 MB, or gone), so it is not attached."
 IMAGE_NOT_SENT_NOTICE = "{label} did not go with the prompt: Hermes did not take it ({reason})."
@@ -1805,9 +1806,17 @@ def caption_label(caption: str) -> str:
 
 def preview_at(preview: Preview, depth: str) -> Preview:
     """`preview` with every span painted at `depth`: `preview_from` builds its styles at truecolor, which a
-    256-colour or 16-colour terminal must not be sent."""
-    lines = tuple(tuple(Span(span.text, replace(span.style, depth=depth)) for span in line) for line in preview.lines)
-    return replace(preview, lines=lines)
+    256-colour or 16-colour terminal must not be sent. Spans that were one stay one (`preview_from` shares a span
+    among the cells of one look)."""
+    painted: dict[Span, Span] = {}
+
+    def at(span: Span) -> Span:
+        found = painted.get(span)
+        if found is None:
+            found = painted[span] = Span(span.text, replace(span.style, depth=depth))
+        return found
+
+    return replace(preview, lines=tuple(tuple(at(span) for span in line) for line in preview.lines))
 
 
 def read_image(path: str) -> bytes | None:
@@ -2385,7 +2394,13 @@ class App(ModesMixin, AgentViewMixin):
         # The preview of each attached image Hermes rendered (`_request_preview`), by its `[Image #N]` label, at most
         # PREVIEW_KEEP of the newest, without the transmit; and the kitty image ids already sent to the terminal.
         self.previews: dict[str, Preview] = {}
-        self.inline_placed: set[int] = set()
+        self.inline_placed: set[int] = set()  # sent to the main screen's image store, the one its placeholders show
+        self.rendering: set[str] = set()  # the labels whose `image.render` is still out
+        # Echoes of prompts sent with an image still rendering, each with the transcript it is in and the time it is
+        # printed by at the latest (`_release_previews`).
+        self.preview_waits: list[tuple[Transcript, UserBlock, float]] = []
+        # Kitty transmits answered while the alternate screen was up: written once the main screen is back.
+        self.transmits_owed: list[tuple[int, str]] = []
         self.picker: SessionPicker | None = None
         self.path_word = ""  # the `@` token `complete.path` was last scheduled for
         self.path_due: float | None = None  # when that call goes out (debounced)
@@ -2937,6 +2952,7 @@ class App(ModesMixin, AgentViewMixin):
         self._auto_continue_when_due()  # after the gateway's news: a turn started meanwhile drops it
         self._drain_when_hermes_next_missed()  # likewise: the turn Hermes runs next starting drops the wait
         self._expire_calls()
+        self._release_previews()
         self._expire_notification()
         self._expire_escape()
         self._expire_exit()
@@ -3013,6 +3029,7 @@ class App(ModesMixin, AgentViewMixin):
             due.append(tail)
         if self.notification is not None and self.notification.expires_at < math.inf:
             due.append(self.notification.expires_at)
+        due.extend(until for _transcript, _block, until in self.preview_waits)
         if self.copy_noted_at is not None:
             due.append(self.copy_noted_at + COPY_NOTE_SECONDS)
         if self.escape_armed is not None:
@@ -3057,6 +3074,7 @@ class App(ModesMixin, AgentViewMixin):
                 self.pager = None
                 self._stop_board_reader()
                 self.terminal.write(ALT_SCREEN_OFF + SHOW_CURSOR)
+                self._write_owed_transmits()  # the echo the last take prints may show it
                 if self.redraw_after_pager:  # owed while it showed: what is left is the session as it now stands
                     self.redraw_after_pager = False
                     self._full_redraw()
@@ -5845,9 +5863,13 @@ class App(ModesMixin, AgentViewMixin):
     ) -> None:
         """`prompt.submit`, with `images` staged in Hermes under `paths`; nothing else is staged until Hermes has
         taken them (`_claimed`)."""
-        self.transcript.add_user(shown or text, from_queue=queued, known=self.known_slash,
-                                 images=tuple(image_caption(image) for image in images),
-                                 previews=tuple(self.previews.get(image.label) for image in images))
+        waiting = any(image.label in self.rendering for image in images)
+        echo = self.transcript.add_user(shown or text, from_queue=queued, known=self.known_slash,
+                                        images=tuple(image_caption(image) for image in images),
+                                        previews=tuple(self.previews.get(image.label) for image in images),
+                                        waiting=waiting)
+        if waiting:  # its previews are still rendering: it is printed once they answer, or at most this much later
+            self.preview_waits.append((self.transcript, echo, self.clock() + PREVIEW_WAIT_SECONDS))
         self.launch_layout = False
         if notice:
             self.transcript.add_aside(NoticeBlock(notice))
@@ -6082,6 +6104,8 @@ class App(ModesMixin, AgentViewMixin):
         if self._give_back_unsent():
             self.transcript.add_notice(UNSENT_BACK_NOTICE.format(why=why), NOTICE_WARN)
         self.image_epoch += 1
+        self.rendering.clear()  # an answer to a render out now is dropped (`image_epoch`): no echo waits for it
+        self._release_previews()
         self.after_claim.clear()
         self.intakes = []
         self.staged, self.claim = [], CLAIM_OPEN
@@ -7142,6 +7166,11 @@ class App(ModesMixin, AgentViewMixin):
         if leaving:
             self._turn_off_yolo_set_here(old)
             self._request("session.close", {"session_id": old}, lambda result: None, lambda error: True)
+        if self._release_previews(everything=True) and self.pager is None:
+            # An echo that waited for its previews is printed before its transcript goes, as it would have been.
+            stable = self.transcript.take_stable_lines(self.size[0], self.theme, live_rows=self.size[1])
+            if stable:
+                self.region.flush_above(stable, self.size[0], self.size[1])
         self.transcript = Transcript(self.clock, under_output=self.transcript.taken_any)
         if left:
             self.transcript.add_notice(SIDE_ANSWERS_LEFT_NOTICE.format(tasks=", ".join(left), session=old), NOTICE_WARN)
@@ -7510,32 +7539,73 @@ class App(ModesMixin, AgentViewMixin):
         if terminal == INLINE_KITTY and self.color_depth != TRUECOLOR:
             terminal = INLINE_UNICODE
         cols = max(1, min(PREVIEW_MAX_COLS, self.size[0] - len(RAIL) - len(OUTPUT_INDENT) - len(OUTPUT_MARK)))
-        epoch = self.image_epoch
-        params = {"path": attachment.path, "cols": cols, "rows": PREVIEW_MAX_ROWS, "graphics": True,
-                  "terminal": terminal}
-        self._request("image.render", params, lambda result: self._on_preview(epoch, attachment.label, result),
-                      on_error=lambda error: True)
+        epoch, label = self.image_epoch, attachment.label
+        # Graphics only for a kitty ask: Hermes answers half-blocks when it is told no graphics, even where its own
+        # `display.inline_images` names kitty.
+        params = {"path": attachment.path, "cols": cols, "rows": PREVIEW_MAX_ROWS,
+                  "graphics": terminal == INLINE_KITTY, "terminal": terminal}
+        request_id = self._request(
+            "image.render", params, lambda result: self._on_preview(epoch, label, terminal, result),
+            on_error=lambda error: self._preview_over(label), on_expiry=lambda seconds: self._preview_over(label),
+        )
+        if request_id is not None:
+            self.rendering.add(label)
 
-    def _on_preview(self, epoch: int, label: str, result: dict[str, Any]) -> None:
+    def _preview_over(self, label: str) -> bool:
+        """The render for `label` is over (answered, refused or unanswered): an echo that waited for it may print."""
+        self.rendering.discard(label)
+        self._release_previews()
+        return True
+
+    def _on_preview(self, epoch: int, label: str, asked: str, result: dict[str, Any]) -> None:
         """Keep the preview Hermes rendered for the image `label` names, painted at the TUI's colour depth; a kitty
-        image goes to the terminal once (its transmit, checked by `preview_from`), and only its placeholder rows are
-        kept. A prompt already sent with that image shows it too while its echo is not yet printed."""
+        image goes to the main screen once (its transmit, checked by `preview_from`), and only its placeholder rows
+        are kept. A kitty answer to a half-block ask (`asked`) is dropped: the terminal cannot show it. A prompt
+        already sent with that image shows it too while its echo is not yet printed."""
         preview = preview_from(result) if epoch == self.image_epoch else None
-        if preview is None:
+        if preview is not None and preview.mode == MODE_KITTY and asked != INLINE_KITTY:
+            preview = None
+        if preview is not None:
+            preview = preview_at(preview, self.color_depth)
+            if preview.mode == MODE_KITTY:
+                self._send_transmit(preview.image_id, preview.transmit)
+            self.previews.pop(label, None)
+            self.previews[label] = replace(preview, transmit="")
+            while len(self.previews) > PREVIEW_KEEP:
+                del self.previews[next(iter(self.previews))]
+            self.transcript.set_user_previews(lambda caption: self.previews.get(caption_label(caption)))
+        self._preview_over(label)
+
+    def _send_transmit(self, image_id: int, transmit: str) -> None:
+        """Write a kitty image to the terminal once, on the main screen: while the pager or a picker holds the
+        alternate screen (whose image store is another, cleared as it is entered) it is owed until that closes."""
+        if image_id in self.inline_placed or any(owed == image_id for owed, _transmit in self.transmits_owed):
             return
-        preview = preview_at(preview, self.color_depth)
-        if preview.mode == MODE_KITTY and preview.image_id not in self.inline_placed:
-            self.terminal.write(preview.transmit)
-            self.inline_placed.add(preview.image_id)
-        self.previews.pop(label, None)
-        self.previews[label] = replace(preview, transmit="")
-        while len(self.previews) > PREVIEW_KEEP:
-            del self.previews[next(iter(self.previews))]
-        transcript = self.transcript
-        for block in transcript.blocks[transcript._cursor :]:  # blocks not taken yet: their rows can still change
-            if isinstance(block, UserBlock) and label in map(caption_label, block.images):
-                block.previews = tuple(self.previews.get(caption_label(image)) for image in block.images)
-                transcript._version += 1  # the live region draws it again
+        if self.pager is not None or self.chains_open:
+            self.transmits_owed.append((image_id, transmit))
+            return
+        self.terminal.write(transmit)
+        self.inline_placed.add(image_id)
+
+    def _write_owed_transmits(self) -> None:
+        """The kitty images answered while the alternate screen was up, now that the main screen is back."""
+        owed, self.transmits_owed = self.transmits_owed, []
+        for image_id, transmit in owed:
+            self._send_transmit(image_id, transmit)
+
+    def _release_previews(self, everything: bool = False) -> bool:
+        """Let go of each echo whose previews are all answered (or refused, or expired), or that has waited
+        `PREVIEW_WAIT_SECONDS`, or of every one (`everything`): the next take prints it. True when one went."""
+        now, released = self.clock(), False
+        for wait in list(self.preview_waits):
+            transcript, block, until = wait
+            if everything or now >= until or not any(caption_label(image) in self.rendering for image in block.images):
+                self.preview_waits.remove(wait)
+                transcript.stop_waiting(block)
+                released = True
+        if released:
+            self.dirty = True
+        return released
 
     def _on_image_attached(self, sid: str, result: dict[str, Any]) -> None:
         attachment = attachment_from(result) if result.get("attached") is True else None
@@ -7600,7 +7670,8 @@ class App(ModesMixin, AgentViewMixin):
         blocks, dropped = transcript.shown_blocks(), transcript.dropped  # what the pager holds, as it opens
 
         def rows(index: int, width: int, theme: Theme) -> list[Line]:
-            shown = block_rows(blocks[index], width, theme, expanded=True)
+            # The alternate screen's image store holds no kitty image: a kitty preview is its caption only there.
+            shown = block_rows(blocks[index], width, theme, expanded=True, kitty_previews=False)
             return [*transcript.dropped_rows(width, theme, dropped), *shown] if index == 0 else shown
 
         pager = HistoryPager("history", count=len(blocks), render=rows)
@@ -8156,6 +8227,7 @@ class App(ModesMixin, AgentViewMixin):
         finally:
             self.terminal.write(ALT_SCREEN_OFF + self._caret_visibility())
             closed_for_question, self.chains_open, self.chains_closing = self.chains_closing, False, False
+            self._write_owed_transmits()
         self._take_size()
         if self.size != before:
             self._full_redraw()
@@ -8226,6 +8298,7 @@ class App(ModesMixin, AgentViewMixin):
         self.log_agent = ""
         self._stop_board_reader()
         self.terminal.write(ALT_SCREEN_OFF + self._caret_visibility())
+        self._write_owed_transmits()
         self.composer._drop_pending()
         if self.redraw_after_pager:
             self.redraw_after_pager = False
