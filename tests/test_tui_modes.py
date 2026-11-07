@@ -1960,7 +1960,8 @@ class LeftSessionStateTests(unittest.TestCase):
             answer(app, client, {**self.SHOT, "path": str(path)})
         ((label, image),) = app.composer.images.values()
         self.assertEqual((label, image.name, image.data), ("[Image #1]", "shot.png", b"\x89PNG\r\n\x1a\n"))
-        self.assertEqual(client.calls[-1], ("image.detach", {"session_id": SID, "path": str(path)}))
+        # Hermes is told to let go of it; the preview asked after it (`image.render`) is `test_tui_inline_image_app`'s.
+        self.assertEqual(client.calls[-2], ("image.detach", {"session_id": SID, "path": str(path)}))
         self.assertEqual(notices(app), [])
 
 

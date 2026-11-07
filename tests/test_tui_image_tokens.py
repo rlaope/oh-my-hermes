@@ -266,10 +266,11 @@ class SendTests(ImageTestCase):
         self.hermes.admit()
         self.assertEqual(self.hermes.turns, [("[Image #1] and [Image #2] like this", [first, second])])
         (user,) = self.users()
-        self.assertEqual(user.images, ("[Image #1]", "[Image #2]"))
+        self.assertEqual(user.images, ("[Image #1] image_1.png · 4×3 · 1 KB", "[Image #2] image_2.png · 4×3 · 1 KB"))
         rows = lines_text(block_rows(user, 60, DEFAULT_THEME))
         # Under the prompt, on its rail: one row for each image.
-        self.assertEqual([row.rstrip() for row in rows[-2:]], ["┃   ⎿  [Image #1]", "┃   ⎿  [Image #2]"])
+        self.assertEqual([row.rstrip() for row in rows[-2:]],
+                         ["┃   ⎿  [Image #1] image_1.png · 4×3 · 1 KB", "┃   ⎿  [Image #2] image_2.png · 4×3 · 1 KB"])
         self.assertEqual(self.hermes.held, [])
 
     def test_the_prompt_waits_for_hermes_to_answer_every_staging_before_it_goes(self) -> None:
@@ -293,7 +294,7 @@ class SendTests(ImageTestCase):
         self.hermes.pump()
         self.hermes.admit()
         self.assertEqual(self.hermes.turns, [("[Image #1] [Image #2] ", [kept])])
-        self.assertEqual(self.users()[-1].images, ("[Image #1]",))
+        self.assertEqual(self.users()[-1].images, ("[Image #1] image_1.png · 4×3 · 1 KB",))
         self.assertIn(IMAGE_NOT_SENT_NOTICE.format(label="[Image #2]", reason="unsupported image"),
                       notices(self.app, NOTICE_WARN))
 
@@ -415,7 +416,7 @@ class GateTests(ImageTestCase):
                         self.hermes.admit()
                     image = list(self.hermes.files.values())[0]
                     self.assertEqual(self.hermes.turns, [("describe this [Image #1]", [image])])
-                    self.assertEqual(self.users()[-1].images, ("[Image #1]",))
+                    self.assertEqual(self.users()[-1].images, ("[Image #1] image_1.png · 4×3 · 1 KB",))
                     self.assertEqual(self.shown(), "")
                     self.assertEqual(self.hermes.held, [])
 

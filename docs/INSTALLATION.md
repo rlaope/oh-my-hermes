@@ -1237,7 +1237,13 @@ run and approval decision stays Hermes'; the screen is OMH's.
   Ctrl+K, Ctrl+C, Esc Esc) removes the image, and an undo puts both back.
   The prompt keeps the `[Image #N]` labels in its text so the model can name
   them, and the transcript lists under it each image Hermes accepted for it
-  (`⎿  [Image #1]`). A `!` line or a command that sends no prompt gives its
+  (`⎿  [Image #1]`), with a small preview under each: real pixels on kitty and
+  Ghostty at truecolor, coloured half-blocks elsewhere (tmux, Terminal.app,
+  iTerm2, WezTerm, VS Code), even where Hermes' config names kitty, none under
+  `NO_COLOR`; `display.inline_images: off` in Hermes' config turns it off. The
+  prompt waits up to 2 seconds for its previews before it is printed, and
+  prints with only the image names when they do not come in time. `/history`
+  shows a kitty preview as its name only. A `!` line or a command that sends no prompt gives its
   tokens back to the composer. Enter right after a paste or a drop waits for
   Hermes to answer it, under `waiting for the image…`, and the prompt goes
   with that image (a one-line paste shaped like a path joins it the same
