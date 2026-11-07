@@ -1743,7 +1743,6 @@ class ModelChainPickerTests(unittest.TestCase):
         self.assertIn("Model chains", written[0])
         self.assertEqual(list(root.iterdir()), [])
 
-
 FRESH_LIVE_ID = "fresh01"
 FRESH_STORED_ID = "20261013_140000_fresh"
 

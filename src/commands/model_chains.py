@@ -61,9 +61,8 @@ from ..plugin_bundle.omh.hermes_delegation import (
     unknown_route_labels,
 )
 from ..plugin_bundle.omh.model_chain_picker import (
-    chain_text,
     apply_picker_changes,
-    effort_option_resolver,
+    chain_text,
     picker_rows,
     read_override_document,
 )
@@ -436,20 +435,12 @@ def cmd_model_chains_pick(args: argparse.Namespace) -> int:
         return cmd_model_chains_show(args)
     paths = _paths(args)
     omh_home = paths.omh_home
-    # The picker paints one row per model; the resolver is what tells it
-    # which rungs that model may actually step through. It is rebuilt after
-    # the picker closes for the save check, so a model-efforts.json edit made
-    # while the picker was open cannot be bypassed.
-    effort_options, effort_status = effort_option_resolver(
-        omh_home, contract_option=contract_effort_option, hermes_home=paths.hermes_home
-    )
     payload = picker_rows(
         omh_home,
         hermes_home=paths.hermes_home,
         labels=MODEL_DISPLAY_LABELS,
         purposes=CHAIN_SURFACE_PURPOSES,
-        effort_options=effort_options,
-        effort_status=effort_status,
+        contract_option=contract_effort_option,
     )
     changes = pick_chains_interactively(payload, use_color=_use_color(), palette=_active_palette(paths))
     if changes is None:
@@ -458,23 +449,15 @@ def cmd_model_chains_pick(args: argparse.Namespace) -> int:
     if not changes:
         print("No changes.")
         return 0
-    effort_options, effort_status = effort_option_resolver(
-        omh_home, contract_option=contract_effort_option, hermes_home=paths.hermes_home
-    )
     result = apply_picker_changes(
-        omh_home,
-        changes,
-        hermes_home=paths.hermes_home,
-        effort_options=effort_options,
-        effort_status=effort_status,
+        omh_home, changes, hermes_home=paths.hermes_home, contract_option=contract_effort_option
     )
     if "error" in result:
-        print(f"omh: picker save incomplete: {result['error']}", file=sys.stderr)
+        print(f"omh: did not save: {result['error']}", file=sys.stderr)
         return 2
     if result.get("warning"):
         print(f"omh: warning: {result['warning']}", file=sys.stderr)
-    category_count = len(result.get("categories_changed", []))
-    print(f"Saved {category_count} categor{'y' if category_count == 1 else 'ies'} to {result['path']}.")
+    print(f"Saved {len(changes)} categor{'y' if len(changes) == 1 else 'ies'} to {result['path']}.")
     _print_state(_state(omh_home, paths.hermes_home))
     return 0
 

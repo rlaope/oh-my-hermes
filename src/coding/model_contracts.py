@@ -1857,17 +1857,6 @@ def model_contract_projection(model_id: str) -> dict[str, str] | None:
     }
 
 
-def _contract_projection_provenance(projection: Mapping[str, str]) -> str:
-    """Recover the contract projection origin without reading route metadata."""
-    canonical = str(projection["canonical_model_id"])
-    contract_id = str(projection["contract_model_id"])
-    if canonical == contract_id:
-        return "exact"
-    if dated_snapshot_base(canonical):
-        return "dated_snapshot"
-    return "declared_inheritance"
-
-
 def contract_model_id(model_id: str) -> str:
     """Return the exact/declared contract key, or the normalized unknown id."""
     projection = model_contract_projection(model_id)
@@ -2008,66 +1997,35 @@ def dynamic_effort_guidance(model_id: str, executor_profile: str) -> dict[str, o
     return policy
 
 
-def _selectable_effort_vocabulary() -> tuple[str, ...]:
-    """The picker's vocabulary, derived from the canonical ladder.
-
-    `off` is OMH's older spelling of the no-thinking rung; the Hermes
-    boundary (and the picker) spell it `none`. Imported lazily because
-    `model_routing` imports this module at load time.
-    """
-    from .model_routing import REASONING_EFFORT_LADDER
-
-    return tuple("none" if rung == "off" else rung for rung in REASONING_EFFORT_LADDER)
+# Contracts that document turning thinking off without listing `none` as a
+# rung: Haiku 5.5's documented_traits and DeepSeek V4.1 Flash's
+# effort_mapping.note. Named here rather than parsed out of English prose.
+_THINKING_DISABLE_WITHOUT_A_RUNG = frozenset({"claude-haiku-5-5", "deepseek-v4.1-flash"})
 
 
-def contract_effort_option(model_id: str, *, surface: str = "hermes") -> dict[str, object] | None:
+def contract_effort_option(model_id: str) -> dict[str, object] | None:
     """The built-in selectable effort ladder for one model id, or None.
 
-    The list is the contract's documented `reasoning_efforts` (or the
-    contract's `surface_efforts` for ``surface`` when one is recorded), in
-    canonical vocabulary order. None means the contract table has no
-    authority for the id — never "every rung": an unknown model stays
-    unconfigured in the picker.
-
-    `none` is added only for a documented disable capability: an explicit
-    rung, Haiku 5.5's documented_traits, or DeepSeek V4.1 Flash's
-    effort_mapping.note. Absence from unsupported_efforts is not evidence
-    of support. The latter two facts are named explicitly rather than
-    inferred by parsing English prose or widening the contract schema.
+    The list is the contract's documented `reasoning_efforts` in canonical
+    order, and `off` in the canonical ladder is spelled `none`, as the Hermes
+    boundary spells it. None means the contract table has no authority for the
+    id; the picker then keeps the shared steps and marks the ladder not known.
+    A rung outside the vocabulary is dropped: one bad rung must not take the
+    whole picker down, and a test holds the shipped table to the vocabulary.
     """
+    # Imported here because `model_routing` imports this module at load time.
+    from .model_routing import REASONING_EFFORT_LADDER
+
     projection = model_contract_projection(model_id)
     if projection is None:
         return None
-    contract_id = str(projection["contract_model_id"])
-    contract = MODEL_CONTRACTS.get(contract_id)
-    if contract is None:
-        return None
-    surface_ladder = contract_surface_efforts(model_id, surface) if surface else None
-    raw_rungs = surface_ladder if surface_ladder is not None else contract.get("reasoning_efforts")
-    if not isinstance(raw_rungs, (list, tuple)) or not raw_rungs:
-        # No documented ladder (the non-generative contract) is no authority,
-        # not an explicit empty choice.
-        return None
-    vocabulary = _selectable_effort_vocabulary()
-    rungs = tuple(str(rung) for rung in raw_rungs)
-    unknown = [rung for rung in rungs if rung not in vocabulary]
-    if unknown:
-        raise ValueError(
-            f"contract {contract_id!r} declares efforts outside the selectable vocabulary: {unknown}"
-        )
-    efforts = tuple(rung for rung in vocabulary if rung in set(rungs))
-    thinking_disable = "none" in rungs or (
-        surface_ladder is None and contract_id in {"claude-haiku-5-5", "deepseek-v4.1-flash"}
+    contract_id = projection["contract_model_id"]
+    rungs = MODEL_CONTRACTS[contract_id].get("reasoning_efforts") or ()
+    offered = {*rungs, "none"} if contract_id in _THINKING_DISABLE_WITHOUT_A_RUNG else rungs
+    efforts = tuple(
+        rung for rung in ("none" if name == "off" else name for name in REASONING_EFFORT_LADDER) if rung in offered
     )
-    if thinking_disable and "none" not in efforts:
-        efforts = ("none",) + efforts
-    return {
-        "efforts": efforts,
-        "source": "contract",
-        "model_id": contract_id,
-        "provenance": _contract_projection_provenance(projection),
-        "thinking_disable": thinking_disable,
-    }
+    return {"efforts": efforts, "source": "contract"} if efforts else None
 
 
 __all__ = [

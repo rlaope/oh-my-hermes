@@ -47,12 +47,12 @@ from omh.plugin_bundle.omh.hermes_delegation import (
 from omh.plugin_bundle.omh.model_chain_picker import (
     EFFORT_VOCABULARY,
     MODEL_EFFORT_OPTIONS_SCHEMA_VERSION,
+    PICKER_EFFORT_RING,
     PICKER_SCHEMA_VERSION,
     PickerChanges,
     apply_picker_changes,
     chain_from_entries,
     compose_override_document,
-    effort_option_resolver,
     known_model_aliases,
     picker_rows,
     read_override_document,
@@ -92,45 +92,25 @@ def _write_entitlements(root: Path, providers: dict[str, str]) -> None:
     path.write_text(json.dumps(document), encoding="utf-8")
 
 
-def _write_identities(root: Path, identities: dict[str, dict[str, object]]) -> None:
-    path = _omh_home(root) / "routing" / "identities.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({"schema_version": "omh_identity_profiles/v1", "identities": identities}),
-        encoding="utf-8",
-    )
-
-
 def _write_efforts(root: Path, models: dict[str, list[str]]) -> None:
     path = _omh_home(root) / "routing" / "model-efforts.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {
-                "schema_version": MODEL_EFFORT_OPTIONS_SCHEMA_VERSION,
-                "models": {name: {"efforts": efforts} for name, efforts in models.items()},
-            }
-        ),
-        encoding="utf-8",
-    )
+    document = {
+        "schema_version": MODEL_EFFORT_OPTIONS_SCHEMA_VERSION,
+        "models": {name: {"efforts": efforts} for name, efforts in models.items()},
+    }
+    path.write_text(json.dumps(document), encoding="utf-8")
 
 
 def _payload(root: Path, *, labels: bool = True) -> dict[str, object]:
     # A Hermes home with nothing linked, so only what a test records counts.
-    store = _omh_home(root)
-    effort_options, effort_status = effort_option_resolver(store, contract_option=contract_effort_option)
     return picker_rows(
-        store,
+        _omh_home(root),
         hermes_home=root / ".hermes",
         labels=MODEL_DISPLAY_LABELS if labels else None,
         purposes=CHAIN_SURFACE_PURPOSES if labels else None,
-        effort_options=effort_options,
-        effort_status=effort_status,
+        contract_option=contract_effort_option,
     )
-
-
-def _row_index(payload, name: str) -> int:
-    return [row["category"] for row in payload["categories"]].index(name)
 
 
 def _drive(payload, keys: list[str], *, use_color: bool = False, width: int = 120):
@@ -149,6 +129,25 @@ def _chains(payload) -> dict[str, tuple[tuple[str, str], ...]]:
     return {row["category"]: chain_from_entries(row["chain"]) for row in payload["categories"]}
 
 
+def _row_index(payload, name: str) -> int:
+    return [row["category"] for row in payload["categories"]].index(name)
+
+
+def _down_to(payload, name: str) -> list[str]:
+    return [KEY_DOWN] * _row_index(payload, name)
+
+
+def _rights_to(payload, start: str, target: str) -> list[str]:
+    aliases = [row["alias"] for row in payload["models"]]
+    return [KEY_RIGHT] * ((aliases.index(target) - aliases.index(start)) % len(aliases))
+
+
+def _frame(payload, name: str, width: int = 200) -> list[str]:
+    return render_frame(payload, _chains(payload), _row_index(payload, name), use_color=False, width=width)
+
+
+def _row_of(lines, name: str) -> str:
+    return next(line for line in lines if f" {name} " in line)
 
 
 class PickerModelTests(unittest.TestCase):
@@ -173,17 +172,14 @@ class PickerModelTests(unittest.TestCase):
         )
         self.assertEqual(by_name["deep"]["origin"], "default")
         self.assertEqual(by_name["deep"]["purpose"], CHAIN_SURFACE_PURPOSES["deep"])
-        self.assertEqual(payload["effort_vocabulary"], list(EFFORT_VOCABULARY))
+        models = {row["alias"]: row for row in payload["models"]}
+        self.assertEqual(models["gpt-6-astra"]["efforts"], ["low", "medium", "high", "xhigh", "max"])
+        self.assertEqual(models["gpt-6-astra"]["efforts_source"], "contract")
+        self.assertTrue(models["gpt-6-astra"]["efforts_configured"])
+        self.assertEqual(models["glm-5.3"]["efforts"], list(PICKER_EFFORT_RING))
+        self.assertEqual(models["glm-5.3"]["efforts_source"], "unknown")
+        self.assertFalse(models["glm-5.3"]["efforts_configured"])
         self.assertEqual(payload["document_status"], "applied")
-        by_alias = {row["alias"]: row for row in payload["models"]}
-        self.assertEqual(
-            by_alias["gpt-6-astra"]["efforts"],
-            ["low", "medium", "high", "xhigh", "max"],
-        )
-        self.assertIsNone(by_alias["glm-5.3"]["efforts"])
-        self.assertFalse(by_alias["glm-5.3"]["efforts_configured"])
-
-
 
     def test_a_none_store_binds_to_the_named_hermes_home_not_the_ambient_one(self) -> None:
         """Naming no store means the store `hermes_home` dispatches from.
@@ -212,12 +208,8 @@ class PickerModelTests(unittest.TestCase):
             ):
                 os.environ.pop("OMH_HOME", None)
                 self.assertEqual(Path(picker_rows(None, hermes_home=named)["path"]), document)
-                effort_options, _status = effort_option_resolver(document.parent.parent, contract_option=contract_effort_option)
                 result = apply_picker_changes(
-                    None,
-                    {"deep": [{"model": "kimi-k3", "reasoning_effort": "high"}]},
-                    hermes_home=named,
-                    effort_options=effort_options,
+                    None, PickerChanges({"deep": (("kimi-k3", "high"),)}), hermes_home=named
                 )
                 self.assertEqual(Path(result["path"]), document)
                 self.assertTrue(document.exists())
@@ -225,10 +217,7 @@ class PickerModelTests(unittest.TestCase):
                 (named / "config.yaml").write_text(
                     "plugins:\n  entries:\n    omh:\n      settings:\n        omh_home: true\n", encoding="utf-8"
                 )
-                self.assertIn(
-                    "not a path string",
-                    apply_picker_changes(None, {}, hermes_home=named, effort_options=lambda alias: None)["error"],
-                )
+                self.assertIn("not a path string", apply_picker_changes(None, PickerChanges({}), hermes_home=named)["error"])
 
     def test_rows_carry_the_stored_chain_not_the_entitlement_shaped_one(self) -> None:
         # `show` reorders a chain so served entries lead; the picker must not,
@@ -284,15 +273,12 @@ class PickerModelTests(unittest.TestCase):
         astra = next(row for row in labelled["models"] if row["alias"] == "gpt-6-astra")
         self.assertEqual(astra["label"], MODEL_DISPLAY_LABELS["gpt-6-astra"])
 
-    def test_effort_vocabulary_mirrors_model_routing_with_none_for_off(self) -> None:
-        # The bundle cannot import src/coding, so it carries the vocabulary;
-        # this is the one place the copy is held to the original. `off` is
-        # the old OMH spelling and Hermes spells the same no-thinking rung
-        # `none`, so the picker's vocabulary carries `none` in its slot.
-        self.assertEqual(
-            EFFORT_VOCABULARY,
-            tuple("none" if rung == "off" else rung for rung in REASONING_EFFORT_LADDER),
-        )
+    def test_effort_ladder_mirrors_model_routing(self) -> None:
+        # The bundle cannot import src/coding, so it carries a copy; this is
+        # the one place the copy is held to the original. Hermes spells the
+        # no-thinking rung `none` where the canonical ladder says `off`.
+        self.assertEqual(EFFORT_VOCABULARY, tuple("none" if r == "off" else r for r in REASONING_EFFORT_LADDER))
+        self.assertEqual(PICKER_EFFORT_RING, tuple(r for r in REASONING_EFFORT_LADDER if r in PICKER_EFFORT_RING))
 
     def test_step_head_model_wraps_and_dedupes_the_tail(self) -> None:
         ring = ("a", "b", "c")
@@ -309,44 +295,47 @@ class PickerModelTests(unittest.TestCase):
         self.assertEqual(step_head_model((), ring, 1), ())
         self.assertEqual(step_head_model((("a", ""),), (), 1), (("a", ""),))
 
-    def test_step_effort_clamps_inside_the_model_ladder(self) -> None:
+    def test_step_effort_clamps_and_enters_the_ring(self) -> None:
         tail = (("t", "low"),)
+        ring = PICKER_EFFORT_RING
+        self.assertEqual(step_effort((("m", "medium"),) + tail, 1, ring), (("m", "high"),) + tail)
+        self.assertEqual(step_effort((("m", "medium"),) + tail, -1, ring), (("m", "low"),) + tail)
+        self.assertEqual(step_effort((("m", "low"),), -1, ring), (("m", "low"),))
+        self.assertEqual(step_effort((("m", "xhigh"),), 1, ring), (("m", "xhigh"),))
+        self.assertEqual(step_effort((("m", ""),), 1, ring), (("m", "low"),))
+        self.assertEqual(step_effort((("m", ""),), -1, ring), (("m", "low"),))
+        self.assertEqual(step_effort((("m", "minimal"),), 1, ring), (("m", "low"),))
+        self.assertEqual(step_effort((("m", "none"),), -1, ring), (("m", "low"),))
+        self.assertEqual(step_effort((("m", "max"),), 1, ring), (("m", "max"),))
+        self.assertEqual(step_effort((("m", "max"),), -1, ring), (("m", "xhigh"),))
+        self.assertEqual(step_effort((), 1, ring), ())
+
+    def test_step_effort_walks_the_models_own_ladder(self) -> None:
         haiku = ("none", "low", "medium", "high", "xhigh", "max")
-        self.assertEqual(step_effort((("m", "xhigh"),) + tail, 1, haiku), (("m", "max"),) + tail)
+        self.assertEqual(step_effort((("m", "xhigh"),), 1, haiku), (("m", "max"),))
         self.assertEqual(step_effort((("m", "low"),), -1, haiku), (("m", "none"),))
         self.assertEqual(step_effort((("m", "none"),), -1, haiku), (("m", "none"),))
-        self.assertEqual(step_effort((("m", "none"),), 1, haiku), (("m", "low"),))
         self.assertEqual(step_effort((("m", "max"),), 1, haiku), (("m", "max"),))
-        self.assertEqual(step_effort((("m", "max"),), -1, haiku), (("m", "xhigh"),))
-        self.assertEqual(step_effort((("m", ""),), 1, haiku), (("m", "none"),))
-        self.assertEqual(step_effort((("m", "auto"),), 1, haiku), (("m", "none"),))
-        self.assertEqual(step_effort((), 1, haiku), ())
-        # An empty or absent ladder refuses to move: that is the unconfigured
-        # model and the explicit no-knob case, not a fallback ring.
+        self.assertEqual(step_effort((("m", "auto"),), -1, haiku), (("m", "none"),))
         self.assertEqual(step_effort((("m", "low"),), 1, ()), (("m", "low"),))
-        self.assertEqual(step_effort((("m", "low"),), 1, None), (("m", "low"),))
 
-    def test_step_effort_lands_mapping_aliases_on_the_next_real_rung(self) -> None:
-        # DeepSeek's documented table maps medium/xhigh to high; they are not
-        # independent ladder rungs, so the first +/- moves to a real rung.
+    def test_step_effort_lands_a_value_off_the_ladder_on_the_next_rung_that_way(self) -> None:
         deepseek = ("none", "low", "high", "max")
-        self.assertEqual(step_effort((("d", "low"),), 1, deepseek), (("d", "high"),))
-        self.assertEqual(step_effort((("d", "high"),), 1, deepseek), (("d", "max"),))
         self.assertEqual(step_effort((("d", "medium"),), 1, deepseek), (("d", "high"),))
         self.assertEqual(step_effort((("d", "medium"),), -1, deepseek), (("d", "low"),))
         self.assertEqual(step_effort((("d", "xhigh"),), 1, deepseek), (("d", "max"),))
         self.assertEqual(step_effort((("d", "xhigh"),), -1, deepseek), (("d", "high"),))
-        kimi = ("low", "high", "max")
-        self.assertEqual(step_effort((("k", "medium"),), 1, kimi), (("k", "high"),))
-        self.assertEqual(step_effort((("k", "medium"),), -1, kimi), (("k", "low"),))
+        # Nothing above holds rather than falling back down the ladder.
+        self.assertEqual(step_effort((("g", "xhigh"),), 1, ("low", "medium", "high")), (("g", "xhigh"),))
+        self.assertEqual(step_effort((("g", "xhigh"),), -1, ("low", "medium", "high")), (("g", "high"),))
+        # Nothing below enters at the lowest rung.
+        self.assertEqual(step_effort((("k", "minimal"),), -1, ("low", "high")), (("k", "low"),))
 
-    def test_step_effort_reads_old_off_as_none_and_writes_the_hermes_spelling(self) -> None:
-        haiku = ("none", "low", "high")
-        self.assertEqual(step_effort((("m", "off"),), 1, haiku), (("m", "low"),))
-        self.assertEqual(step_effort((("m", "off"),), -1, haiku), (("m", "none"),))
-        no_disable = ("low", "high")
-        self.assertEqual(step_effort((("m", "off"),), 1, no_disable), (("m", "low"),))
-        self.assertEqual(step_effort((("m", "off"),), -1, no_disable), (("m", "low"),))
+    def test_step_effort_reads_old_off_as_none(self) -> None:
+        self.assertEqual(step_effort((("m", "off"),), 1, ("none", "low")), (("m", "low"),))
+        self.assertEqual(step_effort((("m", "off"),), -1, ("none", "low")), (("m", "none"),))
+        self.assertEqual(step_effort((("m", "off"),), 1, ("low", "high")), (("m", "low"),))
+        self.assertEqual(step_effort((("m", "off"),), -1, ("low", "high")), (("m", "low"),))
 
     def test_compose_clears_a_default_and_preserves_untouched_overrides(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -393,18 +382,14 @@ class PickerNavigationTests(unittest.TestCase):
         self.root = Path(self._tmp.name)
         self.addCleanup(self._tmp.cleanup)
 
-
     def test_right_and_plus_edit_the_cursor_row_only(self) -> None:
         payload = _payload(self.root)
         original = _chains(payload)
         ring = tuple(row["alias"] for row in payload["models"])
-        efforts = {
-            row["alias"]: tuple(row["efforts"]) if row["efforts"] is not None else None
-            for row in payload["models"]
-        }
+        ladders = {row["alias"]: tuple(row["efforts"]) for row in payload["models"]}
         result, frames = _drive(payload, [KEY_DOWN, KEY_RIGHT, KEY_PLUS, KEY_ENTER])
         moved = step_head_model(original["deep"], ring, 1)
-        deep = step_effort(moved, 1, efforts.get(moved[0][0]))
+        deep = step_effort(moved, 1, ladders[moved[0][0]])
         self.assertEqual(result, {"deep": deep})
         # One frame per accepted key: initial, then down, right, plus.
         self.assertEqual(len(frames), 4)
@@ -416,16 +401,12 @@ class PickerNavigationTests(unittest.TestCase):
         payload = _payload(self.root)
         original = _chains(payload)
         ring = tuple(row["alias"] for row in payload["models"])
-        efforts = {
-            row["alias"]: tuple(row["efforts"]) if row["efforts"] is not None else None
-            for row in payload["models"]
-        }
+        ladders = {row["alias"]: tuple(row["efforts"]) for row in payload["models"]}
         last = payload["categories"][-1]["category"]
         result, _ = _drive(payload, [KEY_NONE, KEY_LEFT, KEY_MINUS, KEY_ENTER])
         first = payload["categories"][0]["category"]
         moved = step_head_model(original[first], ring, -1)
-        expected = step_effort(moved, -1, efforts.get(moved[0][0]))
-        self.assertEqual(result, {first: expected})
+        self.assertEqual(result, {first: step_effort(moved, -1, ladders[moved[0][0]])})
         result, frames = _drive(payload, [KEY_LEFT, KEY_LEFT, KEY_ENTER])
         self.assertNotEqual(result, {})
         result, frames = _drive(payload, ["up", KEY_ENTER])
@@ -493,33 +474,34 @@ class PickerNavigationTests(unittest.TestCase):
             self.assertIn("…", visible[0])
 
     def test_the_frame_shows_labels_effort_bar_chain_and_default_for_the_cursor_row(self) -> None:
-        _write_overrides(self.root, {"ultrabrain": (("claude-opus-5-5", "medium"), ("gpt-6-astra", "xhigh"))})
+        _write_overrides(self.root, {"ultrabrain": (("claude-fable-5-1", "medium"), ("gpt-6-astra", "xhigh"))})
         payload = _payload(self.root)
         chains = _chains(payload)
         lines = render_frame(payload, chains, 0, use_color=False, width=200)
         row = next(line for line in lines if " ultrabrain " in line)
-        opus = ("low", "medium", "high", "xhigh", "max")
         self.assertTrue(row.startswith(f" {CURSOR_MARK} "))
-        self.assertIn(f"◂ {MODEL_DISPLAY_LABELS['claude-opus-5-5']} ▸", row)
-        self.assertIn(f"− {effort_bar('medium', opus):<8} +", row)
-        self.assertIn("medium", row)
+        self.assertIn(f"◂ {MODEL_DISPLAY_LABELS['claude-fable-5-1']} ▸", row)
+        self.assertIn(f"− {effort_bar('medium')} +   medium?", row)
         self.assertTrue(row.rstrip().endswith("◆ override"))
-        self.assertIn("   chain             claude-opus-5-5:medium, gpt-6-astra:xhigh", lines)
+        self.assertIn("   chain             claude-fable-5-1:medium, gpt-6-astra:xhigh", lines)
         self.assertIn(
             f"   shipped default   {', '.join(m + ':' + e for m, e in HERMES_MIXTURE_CATEGORY_CHAINS['ultrabrain'])}",
             lines,
         )
-        self.assertIn("   effort            low, medium, high, xhigh, max  (contract)", lines)
         self.assertTrue(lines[0].startswith(" ⚚ OMH · Model chains"))
         self.assertEqual(lines[1], "   providers  none linked to Hermes yet · every model counts as served")
         self.assertIn("CATEGORY", lines[3])
         self.assertIn("↑↓ category   ←→ head model   −/+ effort   d default   ⏎ save   esc cancel", lines[-1])
-        self.assertEqual(effort_bar("low", opus), "■□□□□")
-        self.assertEqual(effort_bar("xhigh", opus), "■■■■□")
-        self.assertEqual(effort_bar("max", opus), "■■■■■")
-        self.assertEqual(effort_bar("", opus), "□□□□□")
-        self.assertEqual(effort_bar("none", ("none", "low")), "□□")
-        self.assertEqual(effort_bar("low"), "")
+        self.assertEqual(effort_bar("low"), "■□□□")
+        self.assertEqual(effort_bar("xhigh"), "■■■■")
+        self.assertEqual(effort_bar("max"), "■■■■")
+        self.assertEqual(effort_bar(""), "□□□□")
+        # A cell per rung of the model's own ladder, and `none` never takes one.
+        self.assertEqual(effort_bar("high", ("low", "high", "max")), "■■□")
+        self.assertEqual(effort_bar("low", ("none", "low", "high")), "■□")
+        self.assertEqual(effort_bar("none", ("none", "low", "high")), "□□")
+        self.assertEqual(effort_bar("max", ("low", "high")), "■■")
+        self.assertEqual(effort_bar("medium", ("low", "high")), "□□")
 
     def test_the_providers_line_names_every_counted_provider_and_where_it_was_found(self) -> None:
         _write_entitlements(self.root, {"zai": "zai"})
@@ -622,473 +604,423 @@ class PickerNavigationTests(unittest.TestCase):
 
 
 class EffortPickerTests(unittest.TestCase):
-    """Model-dependent +/- across the CLI picker, the TUI save and cancel paths."""
+    """Each model's -/+ through the real picker loop both surfaces share."""
 
     def setUp(self) -> None:
         self._tmp = TemporaryDirectory()
         self.root = Path(self._tmp.name)
         self.addCleanup(self._tmp.cleanup)
 
-    def _index(self, payload, name: str) -> int:
-        return [row["category"] for row in payload["categories"]].index(name)
-
-    def test_haiku_xhigh_plus_reaches_max_and_then_holds(self) -> None:
-        _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "xhigh"),)})
+    def test_a_contract_head_steps_its_own_ladder_and_says_so(self) -> None:
+        _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "xhigh"),), "deep": (("deepseek-flash", "high"),)})
         payload = _payload(self.root)
-        index = self._index(payload, "quick")
-        result, frames = _drive(payload, [KEY_DOWN] * index + [KEY_PLUS, KEY_ENTER])
+        result, frames = _drive(payload, _down_to(payload, "quick") + [KEY_PLUS, KEY_PLUS, KEY_ENTER])
         self.assertEqual(result, {"quick": (("claude-haiku-5-5", "max"),)})
         self.assertIn("effort            none, low, medium, high, xhigh, max  (contract)", frames[-1])
-        result, _frames = _drive(payload, [KEY_DOWN] * index + [KEY_PLUS, KEY_PLUS, KEY_ENTER])
-        self.assertEqual(result, {"quick": (("claude-haiku-5-5", "max"),)})
-
-    def test_deepseek_steps_low_high_max_and_never_offers_mapping_aliases(self) -> None:
-        _write_overrides(self.root, {"deep": (("deepseek-flash", "low"),)})
-        payload = _payload(self.root)
-        index = self._index(payload, "deep")
-        result, frames = _drive(payload, [KEY_DOWN] * index + [KEY_PLUS, KEY_PLUS, KEY_ENTER])
-        self.assertEqual(result, {"deep": (("deepseek-flash", "max"),)})
-        self.assertIn("effort            none, low, high, max  (contract)", frames[-1])
-        # `medium` is a documented provider mapping, not a rung; stepping down
-        # from `high` lands on `low`, not on the alias.
-        _write_overrides(self.root, {"deep": (("deepseek-flash", "high"),)})
-        payload = _payload(self.root)
-        index = self._index(payload, "deep")
-        result, _frames = _drive(payload, [KEY_DOWN] * index + [KEY_MINUS, KEY_ENTER])
+        # DeepSeek's `medium` is a provider mapping, not a rung to stop on.
+        result, frames = _drive(payload, _down_to(payload, "deep") + [KEY_MINUS, KEY_ENTER])
         self.assertEqual(result, {"deep": (("deepseek-flash", "low"),)})
+        self.assertIn("effort            none, low, high, max  (contract)", frames[-1])
 
-    def test_none_is_written_as_none_and_old_off_normalizes_on_edit(self) -> None:
-        _write_overrides(self.root, {"quick": (("deepseek-flash", "off"),)})
-        payload = _payload(self.root)
-        index = self._index(payload, "quick")
-        result, frames = _drive(payload, [KEY_DOWN] * index + [KEY_MINUS, KEY_ENTER])
-        self.assertEqual(result, {"quick": (("deepseek-flash", "none"),)})
-        self.assertIn("legacy spelling of `none`", frames[index])
-        result, frames = _drive(payload, [KEY_DOWN] * index + [KEY_PLUS, KEY_ENTER])
-        self.assertEqual(result, {"quick": (("deepseek-flash", "low"),)})
-        _write_overrides(self.root, {"quick": (("deepseek-flash", "none"),)})
-        payload = _payload(self.root)
-        result, frames = _drive(payload, [KEY_DOWN] * self._index(payload, "quick") + [KEY_ENTER])
-        self.assertEqual(result, {})
-        self.assertIn("explicit no thinking (`none`)", frames[-1])
+    def test_old_off_is_explained_truthfully_and_moves_onto_the_list_on_a_press(self) -> None:
+        # Measured per ladder: only `-` on a ladder holding `none` reaches it.
+        cases = (
+            ("claude-opus-5-5", KEY_PLUS, "low", "so the provider default runs"),
+            ("claude-opus-5-5", KEY_MINUS, "low", "so the provider default runs"),
+            ("gpt-6-luna", KEY_PLUS, "low", "so the provider default runs"),
+            ("gpt-6-luna", KEY_MINUS, "none", "so the provider default runs"),
+        )
+        for model, key, landed, said in cases:
+            with self.subTest(model=model, key=key):
+                _write_overrides(self.root, {"quick": ((model, "off"),)})
+                payload = _payload(self.root)
+                result, frames = _drive(payload, _down_to(payload, "quick") + [key, KEY_ENTER])
+                self.assertEqual(result, {"quick": ((model, landed),)})
+                before_press = frames[-2]
+                self.assertIn("off!", before_press)
+                self.assertIn(said, before_press)
+                self.assertNotIn("rewrites", before_press)
 
-    def test_unset_and_auto_are_distinguished_from_explicit_none(self) -> None:
+    def test_unset_auto_and_none_each_say_what_they_are(self) -> None:
         for effort, needle in (
-            ("", "unset: the model/provider default applies"),
+            ("", "unset: the model or provider default applies"),
             ("auto", "`auto` is the provider default"),
+            ("none", "explicit no thinking"),
         ):
             with self.subTest(effort=effort):
                 _write_overrides(self.root, {"quick": (("deepseek-flash", effort),)})
                 payload = _payload(self.root)
-                frames = render_frame(
-                    payload, _chains(payload), self._index(payload, "quick"), use_color=False, width=200
-                )
-                self.assertTrue(any(needle in line for line in frames), frames[-6:])
-                self.assertFalse(any("explicit no thinking" in line for line in frames))
-                result, _frames = _drive(payload, [KEY_DOWN] * self._index(payload, "quick") + [KEY_ENTER])
+                frame = _frame(payload, "quick")
+                self.assertEqual(sum(needle in line for line in frame), 1, frame)
+                result, _ = _drive(payload, _down_to(payload, "quick") + [KEY_ENTER])
                 self.assertEqual(result, {})
 
-    def test_an_unknown_head_disables_both_effort_keys_and_keeps_the_value(self) -> None:
-        _write_overrides(self.root, {"quick": (("glm-5.3", "high"),)})
-        payload = _payload(self.root)
-        by_alias = {row["alias"]: row for row in payload["models"]}
-        self.assertIsNone(by_alias["glm-5.3"]["efforts"])
-        index = self._index(payload, "quick")
-        result, frames = _drive(payload, [KEY_DOWN] * index + [KEY_PLUS, KEY_MINUS, KEY_ENTER])
-        self.assertEqual(result, {})
-        self.assertEqual(len(frames), 1 + index)  # both keys were refused, not repainted
-        row = next(line for line in frames[-1].splitlines() if " quick " in line)
-        self.assertIn("unconfigured", row)
-        self.assertIn("high", row)
-        self.assertIn("unconfigured · no contract or override names this model; +/- disabled", frames[-1])
+    def test_an_unconfigured_head_keeps_stepping_the_shared_ring(self) -> None:
+        # The owner's rule: nobody on a custom model is stuck writing JSON.
+        cases = (
+            ("my-custom", "low", KEY_PLUS, "medium"),
+            ("glm-5.3-flash", "low", KEY_PLUS, "medium"),
+            ("grok-4.7", "high", KEY_PLUS, "xhigh"),
+            ("claude-fable-5-1", "high", KEY_MINUS, "medium"),
+        )
+        for model, stored, key, landed in cases:
+            with self.subTest(model=model):
+                _write_overrides(self.root, {"swarm": ((model, stored),)})
+                payload = _payload(self.root)
+                row = next(row for row in payload["models"] if row["alias"] == model)
+                self.assertEqual(row["efforts"], list(PICKER_EFFORT_RING))
+                self.assertFalse(row["efforts_configured"])
+                result, _ = _drive(payload, _down_to(payload, "swarm") + [key, KEY_ENTER])
+                self.assertEqual(result, {"swarm": ((model, landed),)})
+                self.assertEqual(result.effort_edits, frozenset({"swarm"}))
 
-    def test_an_explicit_empty_list_is_a_no_knob_and_not_unknown(self) -> None:
-        _write_overrides(self.root, {"quick": (("glm-5.3", "high"),)})
-        _write_efforts(self.root, {"glm-5.3": []})
+    def test_shipped_heads_with_no_contract_step_from_a_clean_install(self) -> None:
         payload = _payload(self.root)
-        by_alias = {row["alias"]: row for row in payload["models"]}
-        self.assertEqual(by_alias["glm-5.3"]["efforts"], [])
-        self.assertTrue(by_alias["glm-5.3"]["efforts_configured"])
-        self.assertEqual(by_alias["glm-5.3"]["efforts_source"], "user")
-        index = self._index(payload, "quick")
-        result, frames = _drive(payload, [KEY_DOWN] * index + [KEY_PLUS, KEY_ENTER])
-        self.assertEqual(result, {})
-        self.assertIn("no adjustable effort", frames[-1])
-        row = next(line for line in frames[-1].splitlines() if " quick " in line)
-        self.assertIn("no knob", row)
+        result, _ = _drive(payload, _down_to(payload, "quick") + [KEY_PLUS, KEY_ENTER])
+        self.assertEqual(result["quick"][0], ("glm-5.3-flash", "medium"))
+        result, _ = _drive(payload, _down_to(payload, "x-search") + [KEY_PLUS, KEY_ENTER])
+        self.assertEqual(result["x-search"][0], ("grok-4.7", "xhigh"))
 
-    def test_a_user_override_replaces_the_ladder_for_a_known_model(self) -> None:
-        _write_efforts(self.root, {"claude-haiku-5-5": ["low", "max"]})
-        _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "low"),)})
+    def test_an_unconfigured_value_is_marked_not_known_and_never_called_wrong(self) -> None:
+        for stored in ("low", "xhigh", "max", "auto"):
+            with self.subTest(stored=stored):
+                _write_overrides(self.root, {"swarm": (("my-custom", stored),)})
+                payload = _payload(self.root)
+                frame = _frame(payload, "swarm")
+                row = _row_of(frame, "swarm")
+                self.assertIn(f" {stored}? ", row)
+                self.assertNotIn("!", row)
+                self.assertIn(
+                    "   effort            low, medium, high, xhigh  "
+                    "(ladder not known: shared steps, not checked for this model)",
+                    frame,
+                )
+                self.assertFalse(any(line.lstrip().startswith("! ") for line in frame), frame)
+                self.assertIn(f"− {effort_bar(stored)} +", row)
+        _write_overrides(self.root, {"swarm": (("my-custom", ""),)})
         payload = _payload(self.root)
-        by_alias = {row["alias"]: row for row in payload["models"]}
-        self.assertEqual(by_alias["claude-haiku-5-5"]["efforts"], ["low", "max"])
-        self.assertEqual(by_alias["claude-haiku-5-5"]["efforts_source"], "user")
-        index = self._index(payload, "quick")
-        result, frames = _drive(payload, [KEY_DOWN] * index + [KEY_PLUS, KEY_PLUS, KEY_ENTER])
-        # `medium`/`high`/`xhigh` are not in the user's replacement list.
+        frame = _frame(payload, "swarm")
+        self.assertIn(" -? ", _row_of(frame, "swarm"))
+
+    def test_a_contract_head_shows_neither_mark_on_a_rung_of_its_own(self) -> None:
+        _write_overrides(self.root, {"swarm": (("gpt-6-astra", "xhigh"),)})
+        payload = _payload(self.root)
+        frame = _frame(payload, "swarm")
+        row = _row_of(frame, "swarm")
+        self.assertIn(" xhigh ", row)
+        self.assertNotIn("xhigh?", row)
+        self.assertNotIn("xhigh!", row)
+
+    def test_max_on_the_ring_holds_on_plus_and_enters_xhigh_on_minus(self) -> None:
+        _write_overrides(self.root, {"swarm": (("my-custom", "max"),)})
+        payload = _payload(self.root)
+        result, _ = _drive(payload, _down_to(payload, "swarm") + [KEY_PLUS, KEY_ENTER])
+        self.assertEqual(result, {})
+        self.assertEqual(result.effort_edits, frozenset())
+        result, _ = _drive(payload, _down_to(payload, "swarm") + [KEY_MINUS, KEY_ENTER])
+        self.assertEqual(result, {"swarm": (("my-custom", "xhigh"),)})
+
+    def test_no_thinking_on_an_unconfigured_head_is_marked_wrong_not_unknown(self) -> None:
+        for stored in ("none", "off"):
+            with self.subTest(stored=stored):
+                _write_overrides(self.root, {"swarm": (("my-custom", stored),)})
+                payload = _payload(self.root)
+                frame = _frame(payload, "swarm")
+                row = _row_of(frame, "swarm")
+                self.assertIn(f" {stored}! ", row)
+                self.assertNotIn("?", row)
+                self.assertTrue(any(line.lstrip().startswith("! ") for line in frame), frame)
+
+    def test_an_explicit_empty_list_is_the_one_way_to_turn_the_keys_off(self) -> None:
+        for model in ("glm-5.3", "claude-opus-5-5"):
+            with self.subTest(model=model):
+                _write_overrides(self.root, {"swarm": ((model, "high"),)})
+                _write_efforts(self.root, {model: []})
+                payload = _payload(self.root)
+                row = next(row for row in payload["models"] if row["alias"] == model)
+                self.assertEqual((row["efforts"], row["efforts_configured"], row["efforts_source"]), ([], True, "user"))
+                result, frames = _drive(payload, _down_to(payload, "swarm") + [KEY_PLUS, KEY_MINUS, KEY_ENTER])
+                self.assertEqual(result, {})
+                self.assertIn("fixed: this model's list is empty", frames[-1])
+                line = _row_of(frames[-1].splitlines(), "swarm")
+                self.assertIn("fixed", line)
+                self.assertNotIn("−", line)
+                self.assertNotIn("+", line)
+
+    def test_a_user_entry_replaces_the_ladder_and_marks_a_stored_value_it_left_out(self) -> None:
+        _write_efforts(self.root, {"claude-haiku-5-5": ["low", "max"], "my-custom": ["none", "max"]})
+        _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "low"),), "swarm": (("my-custom", "none"),)})
+        payload = _payload(self.root)
+        result, frames = _drive(payload, _down_to(payload, "quick") + [KEY_PLUS, KEY_ENTER])
         self.assertEqual(result, {"quick": (("claude-haiku-5-5", "max"),)})
-        self.assertIn("low, max  (user)", frames[index])
-        # A stored value outside the replacement list is marked, not rewritten.
+        self.assertIn("low, max  (user)", frames[-1])
+        # A user entry can name what the shared steps cannot, and it counts as known.
+        result, frames = _drive(payload, _down_to(payload, "swarm") + [KEY_PLUS, KEY_ENTER])
+        self.assertEqual(result, {"swarm": (("my-custom", "max"),)})
+        self.assertNotIn("none!", frames[-2])
         _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "high"),)})
         payload = _payload(self.root)
-        frames = render_frame(payload, _chains(payload), self._index(payload, "quick"), use_color=False, width=200)
-        row = next(line for line in frames if " quick " in line)
-        self.assertIn("high!", row)
-        self.assertTrue(any("chosen effort `high` is not selectable" in line for line in frames))
+        frame = _frame(payload, "quick")
+        self.assertIn("high!", _row_of(frame, "quick"))
+        self.assertTrue(any("! `high` is not on this list" in line for line in frame), frame)
 
-    def test_switching_a_head_keeps_an_out_of_list_effort_until_the_next_plus(self) -> None:
+    def test_switching_a_head_keeps_an_off_list_effort_until_the_next_press(self) -> None:
         _write_overrides(self.root, {"quick": (("claude-opus-5-5", "xhigh"),)})
         payload = _payload(self.root)
-        index = self._index(payload, "quick")
-        ring = tuple(row["alias"] for row in payload["models"])
-        moved = step_head_model(step_head_model((("claude-opus-5-5", "xhigh"),), ring, 1), ring, 1)
-        self.assertEqual(moved[0], ("deepseek-flash", "xhigh"))
-        result, frames = _drive(payload, [KEY_DOWN] * index + [KEY_RIGHT, KEY_RIGHT, KEY_ENTER])
+        moves = _down_to(payload, "quick") + _rights_to(payload, "claude-opus-5-5", "deepseek-flash")
+        result, frames = _drive(payload, moves + [KEY_ENTER])
         self.assertEqual(result, {"quick": (("deepseek-flash", "xhigh"),)})
-        self.assertIn("not selectable for this model", frames[-1])
-        result, _frames = _drive(payload, [KEY_DOWN] * index + [KEY_RIGHT, KEY_RIGHT, KEY_PLUS, KEY_ENTER])
+        self.assertIn("! `xhigh` is not on this list", frames[-1])
+        result, _ = _drive(payload, moves + [KEY_PLUS, KEY_ENTER])
         self.assertEqual(result, {"quick": (("deepseek-flash", "max"),)})
 
-
-    def test_an_invalid_effort_document_is_painted_and_custom_heads_stay_unconfigured(self) -> None:
+    def test_a_document_broken_at_open_turns_the_keys_off_and_says_so(self) -> None:
         path = _omh_home(self.root) / "routing" / "model-efforts.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{", encoding="utf-8")
-        _write_overrides(self.root, {"quick": (("my-custom", "high"),)})
+        _write_overrides(self.root, {"swarm": (("gpt-6-astra", "high"),)})
         payload = _payload(self.root)
-        self.assertTrue(str(payload["effort_document_status"]).startswith("invalid:"))
-        frames = render_frame(payload, _chains(payload), self._index(payload, "quick"), use_color=False, width=200)
-        self.assertTrue(any("model-efforts.json ignored" in line for line in frames))
-        row = next(line for line in frames if " quick " in line)
-        self.assertIn("unconfigured", row)
-        result, _frames = _drive(payload, [KEY_DOWN] * self._index(payload, "quick") + [KEY_PLUS, KEY_ENTER])
+        moves = _down_to(payload, "swarm")
+        result, frames = _drive(payload, moves + [KEY_PLUS, KEY_MINUS, KEY_ENTER])
         self.assertEqual(result, {})
+        self.assertEqual(len(frames), 1 + len(moves))  # neither key was accepted
+        self.assertIn("! model-efforts.json ignored: unreadable JSON · −/+ are off until it is fixed", frames[-1])
+        self.assertNotIn("− ■", frames[-1])
+        # A head switch is still open, and it saves through the broken file.
+        result, _ = _drive(payload, moves + [KEY_RIGHT, KEY_ENTER])
+        self.assertEqual(set(result), {"swarm"})
+        self.assertEqual(result.effort_edits, frozenset())
+
+    def test_every_frame_fits_its_width_with_columns_aligned(self) -> None:
+        _write_efforts(self.root, {"fixed-model": [], "wide-model": ["minimal", "low", "medium", "high", "xhigh", "max"]})
+        _write_overrides(
+            self.root,
+            {
+                "ultrabrain": (("gpt-6-astra", "xhigh"),),
+                "deep": (("my-custom", "minimal"),),
+                "quick": (("deepseek-flash", "medium"),),
+                "swarm": (("claude-opus-5-5", "off"),),
+                "review": (("fixed-model", "high"),),
+                "forensics": (("wide-model", "max"),),
+            },
+        )
+        payload = _payload(self.root)
+        for width in (60, 80, 110, 160):
+            for cursor in range(len(payload["categories"])):
+                with self.subTest(width=width, cursor=cursor):
+                    lines = render_frame(payload, _chains(payload), cursor, use_color=False, width=width)
+                    self.assertTrue(all(len(line) <= width for line in lines), max(lines, key=len))
+                    colored = render_frame(payload, _chains(payload), cursor, use_color=True, width=max(width, 80))
+                    visible = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in colored]
+                    self.assertTrue(all(len(line) <= max(width, 80) for line in visible), max(visible, key=len))
+                    if width >= 110:
+                        states = {line.index(glyph) for line in lines for glyph in ("· default", "◆ override") if glyph in line}
+                        self.assertEqual(len(states), 1, lines)
+
+    def test_a_marked_value_touches_neither_the_handle_nor_the_state(self) -> None:
+        for model, stored, shown in (
+            ("claude-opus-5-5", "off", "off!"),
+            ("deepseek-flash", "medium", "medium!"),
+            ("my-custom", "medium", "medium?"),
+            ("my-custom", "minimal", "minima?"),
+        ):
+            with self.subTest(shown=shown):
+                _write_overrides(self.root, {"swarm": ((model, stored),)})
+                payload = _payload(self.root)
+                self.assertRegex(_row_of(_frame(payload, "swarm", width=120), "swarm"), rf"\+ +{re.escape(shown)} +◆ override")
 
 
 class EffortSaveTests(unittest.TestCase):
-    """The two save entrances re-check only the +/- changes against live config."""
+    """The save rechecks only what a press produced, against the file as it is now."""
 
     def setUp(self) -> None:
         self._tmp = TemporaryDirectory()
         self.root = Path(self._tmp.name)
         self.addCleanup(self._tmp.cleanup)
+        self.document = _omh_home(self.root) / "routing" / "model-chains.json"
+
+    def _apply(self, changes) -> dict[str, object]:
+        return apply_picker_changes(_omh_home(self.root), changes, contract_option=contract_effort_option)
 
     def _stored(self, name: str = "quick") -> list[dict[str, str]]:
-        document = json.loads((_omh_home(self.root) / "routing" / "model-chains.json").read_text(encoding="utf-8"))
-        return document["categories"][name]
+        return json.loads(self.document.read_text(encoding="utf-8"))["categories"][name]
 
-    def test_model_only_switch_preserves_a_shifted_legacy_tail(self) -> None:
-        _write_overrides(self.root, {"quick": (
-            ("claude-opus-5-5", "high"),
-            ("claude-sonnet-5-5", "low"),
-            ("deepseek-flash", "medium"),
-        )})
-        payload = _payload(self.root)
-        changes, _frames = _drive(
-            payload, [KEY_DOWN] * _row_index(payload, "quick") + [KEY_RIGHT, KEY_ENTER]
-        )
-        expected = (("claude-sonnet-5-5", "high"), ("deepseek-flash", "medium"))
-        self.assertEqual(changes, {"quick": expected})
-        resolver, status = effort_option_resolver(_omh_home(self.root), contract_option=contract_effort_option)
-        result = apply_picker_changes(
-            _omh_home(self.root), changes, effort_options=resolver, effort_status=status
-        )
-        self.assertNotIn("error", result)
-        self.assertEqual(self._stored(), [
-            {"model": model, "reasoning_effort": effort} for model, effort in expected
-        ])
-
-    def test_switched_head_effort_round_trip_is_rechecked_against_live_options(self) -> None:
-        _write_overrides(self.root, {"quick": (("claude-opus-5-5", "high"),)})
-        document = _omh_home(self.root) / "routing" / "model-chains.json"
-        before = document.read_bytes()
-        payload = _payload(self.root)
-        changes, _frames = _drive(
-            payload, [KEY_DOWN] * _row_index(payload, "quick")
-            + [KEY_RIGHT, KEY_RIGHT, KEY_MINUS, KEY_PLUS, KEY_ENTER]
-        )
-        self.assertEqual(changes, {"quick": (("deepseek-flash", "high"),)})
-        _write_efforts(self.root, {"deepseek-flash": ["low"]})
-        resolver, status = effort_option_resolver(_omh_home(self.root), contract_option=contract_effort_option)
-        result = apply_picker_changes(
-            _omh_home(self.root), changes, effort_options=resolver, effort_status=status
-        )
-        self.assertIn("not selectable", result.get("error", ""))
-        self.assertEqual(document.read_bytes(), before)
-
-    def test_both_entrances_preserve_real_picker_effort_provenance(self) -> None:
+    def _surfaces(self, changes_for) -> dict[str, str]:
+        """What each entrance reports when the real picker's session is `changes_for`."""
         from omh.tui.app import run_model_chain_picker
         from omh.tui.theme import DEFAULT_THEME
 
-        for surface in ("cli", "tui"):
-            with self.subTest(surface=surface):
-                _write_overrides(self.root, {"quick": (("claude-opus-5-5", "high"),)})
-                _write_efforts(self.root, {"deepseek-flash": ["low", "high", "max"]})
-                document = _omh_home(self.root) / "routing" / "model-chains.json"
-                before = document.read_bytes()
-
-                def pick_then_narrow(payload, **_kwargs):
-                    changes, _frames = _drive(
-                        payload, [KEY_DOWN] * _row_index(payload, "quick")
-                        + [KEY_RIGHT, KEY_RIGHT, KEY_MINUS, KEY_PLUS, KEY_ENTER]
-                    )
-                    self.assertEqual(changes, {"quick": (("deepseek-flash", "high"),)})
-                    _write_efforts(self.root, {"deepseek-flash": ["low"]})
-                    return changes
-
-                if surface == "cli":
-                    with (
-                        patch("omh.commands.model_chains.picker_available", return_value=True),
-                        patch("omh.commands.model_chains.pick_chains_interactively", side_effect=pick_then_narrow),
-                    ):
-                        status, _stdout, message = run_cli(
-                            ["--omh-home", str(_omh_home(self.root)), "model-chains"], output_json=False
-                        )
-                    self.assertEqual(status, 2)
-                else:
-                    with patch("omh.commands.model_chain_picker.run_picker", side_effect=pick_then_narrow):
-                        message = run_model_chain_picker(
-                            {"OMH_HOME": str(_omh_home(self.root)), "HERMES_HOME": str(self.root / ".hermes")},
-                            DEFAULT_THEME, read_key=lambda: KEY_QUIT, write=lambda _text: None, width=100,
-                        )
-                self.assertIn("not selectable", message)
-                self.assertEqual(document.read_bytes(), before)
-
-    def test_reset_then_model_switch_does_not_retain_an_earlier_effort_edit(self) -> None:
-        _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "high"),)})
-        payload = _payload(self.root)
-        changes, _frames = _drive(
-            payload, [KEY_DOWN] * _row_index(payload, "quick")
-            + [KEY_MINUS, KEY_DEFAULT, KEY_RIGHT, KEY_ENTER]
-        )
-        self.assertTrue(changes)
-        self.assertEqual(changes.effort_edits, frozenset())
-        effort_path = _omh_home(self.root) / "routing" / "model-efforts.json"
-        effort_path.write_text("{", encoding="utf-8")
-        resolver, status = effort_option_resolver(_omh_home(self.root), contract_option=contract_effort_option)
-        result = apply_picker_changes(
-            _omh_home(self.root), changes, effort_options=resolver, effort_status=status
-        )
-        self.assertNotIn("error", result)
-        self.assertIn("model-efforts.json ignored", result["warning"])
-        self.assertEqual(self._stored(), [
-            {"model": model, "reasoning_effort": effort} for model, effort in changes["quick"]
-        ])
-
-    def test_a_model_switch_keeps_an_unsupported_effort_but_an_effort_edit_is_refused(self) -> None:
-        _write_overrides(self.root, {"quick": (("claude-opus-5-5", "xhigh"),)})
-        resolver, _status = effort_option_resolver(_omh_home(self.root), contract_option=contract_effort_option)
-        switched = apply_picker_changes(
-            _omh_home(self.root),
-            {"quick": (("deepseek-flash", "xhigh"),)},
-            effort_options=resolver,
-        )
-        self.assertNotIn("error", switched)
-        self.assertEqual(self._stored(), [{"model": "deepseek-flash", "reasoning_effort": "xhigh"}])
-        resolver, _status = effort_option_resolver(_omh_home(self.root), contract_option=contract_effort_option)
-        refused = apply_picker_changes(
-            _omh_home(self.root),
-            PickerChanges({"quick": (("deepseek-flash", "medium"),)}, effort_edits=frozenset({"quick"})),
-            effort_options=resolver,
-        )
-        self.assertIn("not selectable", refused["error"])
-        self.assertEqual(self._stored(), [{"model": "deepseek-flash", "reasoning_effort": "xhigh"}])
-
-    def test_an_unknown_or_empty_ladder_refuses_a_new_effort(self) -> None:
-        _write_overrides(self.root, {"quick": (("glm-5.3", "high"),)})
-        resolver, _status = effort_option_resolver(_omh_home(self.root), contract_option=contract_effort_option)
-        refused = apply_picker_changes(
-            _omh_home(self.root),
-            PickerChanges({"quick": (("glm-5.3", "low"),)}, effort_edits=frozenset({"quick"})),
-            effort_options=resolver,
-        )
-        self.assertIn("no configured effort options", refused["error"])
-        _write_efforts(self.root, {"glm-5.3": []})
-        resolver, _status = effort_option_resolver(_omh_home(self.root), contract_option=contract_effort_option)
-        refused = apply_picker_changes(
-            _omh_home(self.root),
-            PickerChanges({"quick": (("glm-5.3", "low"),)}, effort_edits=frozenset({"quick"})),
-            effort_options=resolver,
-        )
-        self.assertIn("no selectable efforts", refused["error"])
-        self.assertEqual(self._stored(), [{"model": "glm-5.3", "reasoning_effort": "high"}])
-
-
-    def test_save_rechecks_the_live_effort_document(self) -> None:
-        _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "low"),)})
-        # The picker was opened while `high` was selectable...
-        picker_resolver, _status = effort_option_resolver(_omh_home(self.root), contract_option=contract_effort_option)
-        self.assertIn("high", picker_resolver("claude-haiku-5-5")["efforts"])
-        # ...then the person restricts the model while the picker is open.
-        _write_efforts(self.root, {"claude-haiku-5-5": ["low"]})
-        save_resolver, _status = effort_option_resolver(_omh_home(self.root), contract_option=contract_effort_option)
-        refused = apply_picker_changes(
-            _omh_home(self.root),
-            PickerChanges({"quick": (("claude-haiku-5-5", "high"),)}, effort_edits=frozenset({"quick"})),
-            effort_options=save_resolver,
-        )
-        self.assertIn("not selectable", refused["error"])
-        self.assertEqual(self._stored(), [{"model": "claude-haiku-5-5", "reasoning_effort": "low"}])
-
-    def test_both_entrances_refuse_the_same_stale_edit_without_writing(self) -> None:
-        _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "low"),)})
-        _write_efforts(self.root, {"claude-haiku-5-5": ["low"]})
-        base = ["--omh-home", str(_omh_home(self.root))]
-        changes = PickerChanges({"quick": (("claude-haiku-5-5", "high"),)}, effort_edits=frozenset({"quick"}))
+        outcome = {}
         with (
             patch("omh.commands.model_chains.picker_available", return_value=True),
-            patch("omh.commands.model_chains.pick_chains_interactively", return_value=changes),
+            patch("omh.commands.model_chains.pick_chains_interactively", side_effect=changes_for),
         ):
-            status, stdout, stderr = run_cli(base + ["model-chains"], output_json=False)
-        self.assertEqual(status, 2, stdout)
-        self.assertIn("picker save incomplete", stderr)
-        self.assertIn("not selectable", stderr)
-        self.assertEqual(self._stored(), [{"model": "claude-haiku-5-5", "reasoning_effort": "low"}])
-
-        from omh.tui.app import run_model_chain_picker
-        from omh.tui.theme import DEFAULT_THEME
-
-        environ = {
-            "OMH_HOME": str(_omh_home(self.root)),
-            "HERMES_HOME": str(self.root / ".hermes"),
-            "NO_COLOR": "1",
-        }
-        with patch("omh.commands.model_chain_picker.run_picker", return_value=changes):
-            message = run_model_chain_picker(
-                environ,
-                DEFAULT_THEME,
-                read_key=lambda: "quit",
-                write=lambda _text: None,
-                width=100,
-            )
-        self.assertIn("/omh-model save incomplete", message)
-        self.assertIn("not selectable", message)
-        self.assertEqual(self._stored(), [{"model": "claude-haiku-5-5", "reasoning_effort": "low"}])
-
-
-
-    def test_both_entrances_refuse_an_effort_edit_when_the_document_turned_malformed(self) -> None:
-        # The review's F2: the save-time resolver silently fell back to the
-        # built-in ladder. A new effort must instead be refused with the
-        # document named, in both entrances, and nothing written.
-        _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "low"),)})
-        _write_efforts(self.root, {"claude-haiku-5-5": ["low", "high"]})
-        changes = PickerChanges({"quick": (("claude-haiku-5-5", "high"),)}, effort_edits=frozenset({"quick"}))
-        effort_path = _omh_home(self.root) / "routing" / "model-efforts.json"
-        document = _omh_home(self.root) / "routing" / "model-chains.json"
-        before = document.read_bytes()
-
-        def break_document(*_args, **_kwargs):
-            effort_path.write_text("{", encoding="utf-8")
-            return changes
-
-        base = ["--omh-home", str(_omh_home(self.root))]
-        with (
-            patch("omh.commands.model_chains.picker_available", return_value=True),
-            patch("omh.commands.model_chains.pick_chains_interactively", side_effect=break_document),
-        ):
-            status, stdout, stderr = run_cli(base + ["model-chains"], output_json=False)
-        self.assertEqual(status, 2, stdout)
-        self.assertIn("model-efforts.json is invalid", stderr)
-        self.assertEqual(document.read_bytes(), before)
-
-        from omh.tui.app import run_model_chain_picker
-        from omh.tui.theme import DEFAULT_THEME
-
-        _write_efforts(self.root, {"claude-haiku-5-5": ["low", "high"]})
-        before = document.read_bytes()
-
-        def break_and_return(*_args, **_kwargs):
-            effort_path.write_text("{", encoding="utf-8")
-            return changes
-
-        with patch("omh.commands.model_chain_picker.run_picker", side_effect=break_and_return):
-            message = run_model_chain_picker(
-                {
-                    "OMH_HOME": str(_omh_home(self.root)),
-                    "HERMES_HOME": str(self.root / ".hermes"),
-                    "NO_COLOR": "1",
-                },
+            status, stdout, stderr = run_cli(["--omh-home", str(_omh_home(self.root)), "model-chains"], output_json=False)
+        outcome["cli"] = (status, stdout + stderr)
+        with patch("omh.commands.model_chain_picker.run_picker", side_effect=changes_for):
+            outcome["tui"] = run_model_chain_picker(
+                {"OMH_HOME": str(_omh_home(self.root)), "HERMES_HOME": str(self.root / ".hermes"), "NO_COLOR": "1"},
                 DEFAULT_THEME,
                 read_key=lambda: KEY_QUIT,
                 write=lambda _text: None,
                 width=100,
             )
-        self.assertIn("/omh-model save incomplete", message)
-        self.assertIn("model-efforts.json is invalid", message)
-        self.assertEqual(document.read_bytes(), before)
+        return outcome
 
+    def test_a_press_recorded_by_either_sign_is_rechecked_against_a_file_edited_meanwhile(self) -> None:
+        for key, landed in ((KEY_PLUS, "xhigh"), (KEY_MINUS, "medium")):
+            with self.subTest(key=key):
+                _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "high"),)})
+                before = self.document.read_bytes()
+                _write_efforts(self.root, {})
+                payload = _payload(self.root)
+                changes, _ = _drive(payload, _down_to(payload, "quick") + [key, KEY_ENTER])
+                self.assertEqual(changes, {"quick": (("claude-haiku-5-5", landed),)})
+                _write_efforts(self.root, {"claude-haiku-5-5": ["high"]})
+                self.assertIn("is not selectable", self._apply(changes)["error"])
+                self.assertEqual(self.document.read_bytes(), before)
 
-    def test_default_reset_is_not_revalidated_as_an_effort_edit(self) -> None:
-        # `quick` ships with GLM 5.3 Flash, which has no contract. A `d`
-        # reset to that shipped chain must still save: it is explicit and
-        # does not produce a stray selectable effort.
+    def test_an_effort_press_saves_over_a_tail_off_its_own_ladder(self) -> None:
+        # Only the head was pressed. Shipped: gpt-6.1-sol:medium leads a tail
+        # with kimi-k3.1-pro:medium, a rung Kimi's contract does not list.
+        tail = HERMES_MIXTURE_CATEGORY_CHAINS["unspecified-high"][1:]
+        self.assertIn(("kimi-k3.1-pro", "medium"), tail)
+        self.assertNotIn("medium", contract_effort_option("kimi-k3.1-pro")["efforts"])
+        payload = _payload(self.root)
+        changes, _ = _drive(payload, _down_to(payload, "unspecified-high") + [KEY_PLUS, KEY_ENTER])
+        self.assertEqual(changes, {"unspecified-high": (("gpt-6.1-sol", "high"),) + tail})
+        self.assertNotIn("error", self._apply(changes))
+        self.assertEqual(self._stored("unspecified-high")[0], {"model": "gpt-6.1-sol", "reasoning_effort": "high"})
+
+    def test_a_model_only_switch_preserves_a_shifted_old_tail(self) -> None:
+        _write_overrides(
+            self.root, {"quick": (("claude-opus-5-5", "high"), ("claude-sonnet-5-5", "low"), ("deepseek-flash", "medium"))}
+        )
+        payload = _payload(self.root)
+        changes, _ = _drive(payload, _down_to(payload, "quick") + [KEY_RIGHT, KEY_ENTER])
+        expected = (("claude-sonnet-5-5", "high"), ("deepseek-flash", "medium"))
+        self.assertEqual(changes, {"quick": expected})
+        self.assertNotIn("error", self._apply(changes))
+        self.assertEqual(self._stored(), [{"model": model, "reasoning_effort": effort} for model, effort in expected])
+
+    def test_an_effort_stepped_away_and_back_after_a_switch_is_still_rechecked(self) -> None:
+        _write_overrides(self.root, {"quick": (("claude-opus-5-5", "high"),)})
+        before = self.document.read_bytes()
+        payload = _payload(self.root)
+        moves = _rights_to(payload, "claude-opus-5-5", "deepseek-flash")
+        changes, _ = _drive(payload, _down_to(payload, "quick") + moves + [KEY_MINUS, KEY_PLUS, KEY_ENTER])
+        self.assertEqual(changes, {"quick": (("deepseek-flash", "high"),)})
+        _write_efforts(self.root, {"deepseek-flash": ["low"]})
+        self.assertIn("is not selectable", self._apply(changes)["error"])
+        self.assertEqual(self.document.read_bytes(), before)
+
+    def test_reset_drops_the_earlier_press(self) -> None:
         _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "high"),)})
         payload = _payload(self.root)
-        changes, _frames = _drive(
-            payload, [KEY_DOWN] * _row_index(payload, "quick") + [KEY_MINUS, KEY_DEFAULT, KEY_ENTER]
-        )
+        changes, _ = _drive(payload, _down_to(payload, "quick") + [KEY_MINUS, KEY_DEFAULT, KEY_ENTER])
         self.assertEqual(changes, {"quick": HERMES_MIXTURE_CATEGORY_CHAINS["quick"]})
         self.assertEqual(changes.effort_edits, frozenset())
-        resolver, _status = effort_option_resolver(
-            _omh_home(self.root), contract_option=contract_effort_option
-        )
-        result = apply_picker_changes(
-            _omh_home(self.root),
-            changes,
-            effort_options=resolver,
-        )
-        self.assertNotIn("error", result)
-        document = json.loads(
-            (_omh_home(self.root) / "routing" / "model-chains.json").read_text(encoding="utf-8")
-        )
-        self.assertNotIn("quick", document["categories"])
+        self.assertNotIn("error", self._apply(changes))
+        self.assertNotIn("quick", json.loads(self.document.read_text(encoding="utf-8"))["categories"])
 
-    def test_both_surfaces_receive_the_same_resolved_effort_metadata(self) -> None:
-        base = ["--omh-home", str(_omh_home(self.root))]
-        with (
-            patch("omh.commands.model_chains.picker_available", return_value=True),
-            patch("omh.commands.model_chains.pick_chains_interactively", return_value={}) as cli_picker,
-        ):
-            status, _stdout, _stderr = run_cli(base + ["model-chains"], output_json=False)
-        self.assertEqual(status, 0)
-        cli_payload = cli_picker.call_args.args[0]
-        cli_models = {row["alias"]: row for row in cli_payload["models"]}
-        self.assertIn("none", cli_models["claude-haiku-5-5"]["efforts"])
+    def test_a_switch_saves_what_a_press_would_have_refused(self) -> None:
+        _write_overrides(self.root, {"quick": (("claude-opus-5-5", "xhigh"),)})
+        switched = self._apply(PickerChanges({"quick": (("deepseek-flash", "xhigh"),)}))
+        self.assertNotIn("error", switched)
+        self.assertEqual(self._stored(), [{"model": "deepseek-flash", "reasoning_effort": "xhigh"}])
+        pressed = PickerChanges({"quick": (("deepseek-flash", "medium"),)}, effort_edits=frozenset({"quick"}))
+        self.assertIn("is not selectable", self._apply(pressed)["error"])
+        self.assertEqual(self._stored(), [{"model": "deepseek-flash", "reasoning_effort": "xhigh"}])
 
-        from omh.tui.app import run_model_chain_picker
-        from omh.tui.theme import DEFAULT_THEME
+    def test_the_shared_steps_are_what_an_unconfigured_press_is_checked_against(self) -> None:
+        for model in ("glm-5.3", "my-custom"):
+            for effort in PICKER_EFFORT_RING:
+                with self.subTest(model=model, effort=effort):
+                    changes = PickerChanges({"quick": ((model, effort),)}, effort_edits=frozenset({"quick"}))
+                    self.assertNotIn("error", self._apply(changes))
+                    self.assertEqual(self._stored(), [{"model": model, "reasoning_effort": effort}])
+            for effort in ("none", "max"):
+                with self.subTest(model=model, effort=effort):
+                    changes = PickerChanges({"quick": ((model, effort),)}, effort_edits=frozenset({"quick"}))
+                    self.assertIn("is not selectable", self._apply(changes)["error"])
+                    self.assertEqual(self._stored()[0]["reasoning_effort"], PICKER_EFFORT_RING[-1])
 
-        captured: dict[str, object] = {}
+    def test_an_empty_list_written_while_open_refuses_a_press(self) -> None:
+        _write_overrides(self.root, {"quick": (("glm-5.3", "high"),)})
+        _write_efforts(self.root, {"glm-5.3": []})
+        refused = self._apply(PickerChanges({"quick": (("glm-5.3", "low"),)}, effort_edits=frozenset({"quick"})))
+        self.assertIn("is not selectable", refused["error"])
+        self.assertEqual(self._stored(), [{"model": "glm-5.3", "reasoning_effort": "high"}])
+
+    def test_both_entrances_save_a_rung_only_the_contract_lists(self) -> None:
+        changes = PickerChanges({"quick": (("claude-opus-5-5", "max"),)}, effort_edits=frozenset({"quick"}))
+        outcome = self._surfaces(lambda *_args, **_kwargs: changes)
+        self.assertEqual(outcome["cli"][0], 0, outcome["cli"][1])
+        self.assertIn("Saved 1 category", outcome["tui"])
+
+    def test_both_entrances_read_the_file_again_after_the_picker_closes(self) -> None:
+        _write_overrides(self.root, {"quick": (("claude-opus-5-5", "high"),)})
+        before = self.document.read_bytes()
+
+        def pick_then_narrow(payload, **_kwargs):
+            _write_efforts(self.root, {})
+            fresh = _payload(self.root)
+            changes, _ = _drive(fresh, _down_to(fresh, "quick") + [KEY_MINUS, KEY_ENTER])
+            self.assertEqual(changes, {"quick": (("claude-opus-5-5", "medium"),)})
+            _write_efforts(self.root, {"claude-opus-5-5": ["high"]})
+            return changes
+
+        outcome = self._surfaces(pick_then_narrow)
+        self.assertEqual(outcome["cli"][0], 2)
+        self.assertIn("omh: did not save: effort 'medium' is not selectable", outcome["cli"][1])
+        self.assertIn("/omh-model did not save: effort 'medium' is not selectable", outcome["tui"])
+        self.assertEqual(self.document.read_bytes(), before)
+
+    def test_both_entrances_refuse_a_press_when_the_file_broke_while_open(self) -> None:
+        _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "low"),)})
+        before = self.document.read_bytes()
+        changes = PickerChanges({"quick": (("claude-haiku-5-5", "high"),)}, effort_edits=frozenset({"quick"}))
+        effort_path = _omh_home(self.root) / "routing" / "model-efforts.json"
+
+        def break_document(*_args, **_kwargs):
+            effort_path.write_text("{", encoding="utf-8")
+            return changes
+
+        outcome = self._surfaces(break_document)
+        self.assertEqual(outcome["cli"][0], 2)
+        self.assertIn("model-efforts.json is invalid", outcome["cli"][1])
+        self.assertIn("/omh-model did not save: model-efforts.json is invalid", outcome["tui"])
+        self.assertEqual(self.document.read_bytes(), before)
+
+    def test_a_model_only_edit_saves_through_a_broken_file_and_both_entrances_warn(self) -> None:
+        effort_path = _omh_home(self.root) / "routing" / "model-efforts.json"
+        effort_path.parent.mkdir(parents=True, exist_ok=True)
+        effort_path.write_text("{", encoding="utf-8")
+        changes = PickerChanges({"quick": (("deepseek-flash", "xhigh"),)})
+        outcome = self._surfaces(lambda *_args, **_kwargs: changes)
+        self.assertEqual(outcome["cli"][0], 0)
+        self.assertIn("model-efforts.json ignored: unreadable JSON", outcome["cli"][1])
+        self.assertIn("Saved 1 category", outcome["tui"])
+        self.assertIn("Warning: model-efforts.json ignored: unreadable JSON", outcome["tui"])
+        self.assertEqual(self._stored(), [{"model": "deepseek-flash", "reasoning_effort": "xhigh"}])
+
+    def test_both_entrances_hand_the_picker_the_same_resolved_ladders(self) -> None:
+        captured = []
 
         def capture(payload, **_kwargs):
-            captured.update(payload)
+            captured.append(payload["models"])
             return None
 
-        environ = {
-            "OMH_HOME": str(_omh_home(self.root)),
-            "HERMES_HOME": str(self.root / ".hermes"),
-            "NO_COLOR": "1",
-        }
-        with patch("omh.commands.model_chain_picker.run_picker", side_effect=capture):
-            message = run_model_chain_picker(
-                environ,
-                DEFAULT_THEME,
-                read_key=lambda: "quit",
-                write=lambda _text: None,
-                width=100,
-            )
-        self.assertTrue(message.startswith("Cancelled;"), message)
-        tui_models = {row["alias"]: row for row in captured["models"]}
-        self.assertEqual(tui_models["claude-haiku-5-5"], cli_models["claude-haiku-5-5"])
-        self.assertEqual(tui_models["glm-5.3"]["efforts"], None)
+        self._surfaces(capture)
+        self.assertEqual(captured[0], captured[1])
+        by_alias = {row["alias"]: row for row in captured[0]}
+        self.assertIn("none", by_alias["claude-haiku-5-5"]["efforts"])
+        self.assertFalse(by_alias["glm-5.3"]["efforts_configured"])
 
-    def test_model_chains_set_keeps_its_no_subset_validation_semantics(self) -> None:
+    def test_model_chains_set_keeps_its_unchecked_semantics(self) -> None:
         base = ["--omh-home", str(_omh_home(self.root))]
         status, stdout, stderr = run_cli(base + ["model-chains", "set", "quick", "deepseek-flash:medium"], output_json=False)
         self.assertEqual((status, stderr), (0, ""), stdout)
-        self.assertIn("quick: deepseek-flash:medium (override)", stdout)
         self.assertEqual(self._stored(), [{"model": "deepseek-flash", "reasoning_effort": "medium"}])
 
 
@@ -1118,7 +1050,7 @@ class PickerCommandTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write_overrides(root, {"writing": (("qwen3-coder", "high"),)})
-            changes = {"quick": OVERRIDE_QUICK, "writing": HERMES_MIXTURE_CATEGORY_CHAINS["writing"]}
+            changes = PickerChanges({"quick": OVERRIDE_QUICK, "writing": HERMES_MIXTURE_CATEGORY_CHAINS["writing"]})
             with (
                 patch("omh.commands.model_chains.picker_available", return_value=True),
                 patch("omh.commands.model_chains.pick_chains_interactively", return_value=changes) as picker,
