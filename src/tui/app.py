@@ -147,6 +147,7 @@ from . import gateway_contract as contract
 from .composer import COMPLETE, EXIT, IMAGE_LABEL, INTERRUPT, SUBMIT, VIM_INSERT, VIM_NORMAL, Composer, ComposerAction
 from .frame import INFO_INSET, MODE_NORMAL, MODE_SHELL, Frame, badge_forms, branch_forms, build_frame, sticky_line
 from .git_status import GitWatcher
+from .inline_image import MODE_KITTY, PREVIEW_MAX_COLS, PREVIEW_MAX_ROWS, Preview, preview_from
 from .history import SEARCH_ACCEPT, SEARCH_CANCEL, SEARCH_HINTS, HistorySearch, append_entry, history_path, load_history
 from .gateway import (
     CANCEL_POLL_SECONDS,
@@ -305,11 +306,14 @@ from .slash import (
 from .style import CSI, NO_COLOR, TRUECOLOR, Line, Span, Style, color_depth
 from .subagents import Hit, Roster
 from .terminal import (
+    INLINE_KITTY,
+    INLINE_UNICODE,
     Terminal,
     background_from_colorfgbg,
     background_restore,
     background_set,
     colorfgbg_names_dark,
+    inline_graphics,
     terminal_name,
     terminal_supported,
 )
@@ -350,6 +354,7 @@ from .transcript import (
     OUTPUT_INDENT,
     OUTPUT_MARK,
     OUTPUT_MARKED,
+    RAIL,
     STEER_QUEUED,
     STEER_REFUSED,
     STEER_TAKEN,
@@ -358,6 +363,7 @@ from .transcript import (
     NoticeBlock,
     SteerBlock,
     Transcript,
+    UserBlock,
     as_text,
     block_rows,
     compact_count,
@@ -1019,7 +1025,7 @@ CURSOR_POSITION_REQUEST = f"{CSI}6n"
 # QUIET_EXPIRY_METHODS, which a person never waits on, are forgotten without a notice.
 CALL_ANSWER_SECONDS = 120.0
 CALL_ANSWER_SECONDS_BY_METHOD = {"subagent.tail": TAIL_ANSWER_SECONDS}
-QUIET_EXPIRY_METHODS = frozenset({"subagent.tail", "complete.path", "config.get"})
+QUIET_EXPIRY_METHODS = frozenset({"subagent.tail", "complete.path", "config.get", "image.render"})
 CALL_EXPIRED_NOTICE = "Hermes has not answered {method} in {seconds:g} s; the OMH TUI stopped waiting for it."
 CURSOR_REPORT_START = b"\x1b["
 CURSOR_REPORT_FINAL = b"R"
@@ -1122,6 +1128,8 @@ PATH_COMPLETE_DEBOUNCE_SECONDS = 0.12
 ATTACH_LEFT_NOTICE = "Hermes queued {name} in the session you left, so it is not attached here."
 # The most bytes of one image the TUI keeps for its token: what the gateway child stages at most (`gateway_attach`).
 IMAGE_KEEP_BYTES = 20 * 1024 * 1024
+# The most attached images whose preview (`App._request_preview`) the TUI keeps for the prompt that sends them.
+PREVIEW_KEEP = 32
 IMAGE_LABEL_NUMBERS = re.compile(r"\[Image #(\d+)\]")  # the numbers a resumed session's prompts already gave
 IMAGE_UNREADABLE_NOTICE = "{name} could not be read for its token (over 20 MB, or gone), so it is not attached."
 IMAGE_NOT_SENT_NOTICE = "{label} did not go with the prompt: Hermes did not take it ({reason})."
@@ -1783,6 +1791,25 @@ def attachment_from(result: Mapping[str, Any]) -> Attachment | None:
     return Attachment(path, as_text(result.get("name")) or os.path.basename(path) or path, f"{width}×{height}" if sized else "")
 
 
+def image_caption(image: Attachment) -> str:
+    """What a sent prompt's echo says of an image under it: `[Image #1] shot.png · 1280×720 · 84 KB` (no size when
+    the gateway could not read the dimensions; at least 1 KB)."""
+    facts = [image.name, image.size, f"{max(1, len(image.data) // 1024)} KB"]
+    return f"{image.label} {' · '.join(fact for fact in facts if fact)}"
+
+
+def caption_label(caption: str) -> str:
+    """The `[Image #N]` token an echo's image caption (`image_caption`) opens with."""
+    return caption[: caption.find("]") + 1] if "]" in caption else caption
+
+
+def preview_at(preview: Preview, depth: str) -> Preview:
+    """`preview` with every span painted at `depth`: `preview_from` builds its styles at truecolor, which a
+    256-colour or 16-colour terminal must not be sent."""
+    lines = tuple(tuple(Span(span.text, replace(span.style, depth=depth)) for span in line) for line in preview.lines)
+    return replace(preview, lines=lines)
+
+
 def read_image(path: str) -> bytes | None:
     """The bytes of the image file Hermes staged at `path`, read once so the TUI holds it; None when it cannot be read,
     is no regular file (a link is not followed, a FIFO never blocks the loop), is empty, or is over
@@ -2355,6 +2382,10 @@ class App(ModesMixin, AgentViewMixin):
         self.held_submits: list[HeldSubmit] = []  # submits waiting on the pastes they were typed with
         self.unsent: list[UnsentPrompt] = []
         self.image_epoch = 0  # moves on with each new gateway or session: a staging answered after it sends nothing
+        # The preview of each attached image Hermes rendered (`_request_preview`), by its `[Image #N]` label, at most
+        # PREVIEW_KEEP of the newest, without the transmit; and the kitty image ids already sent to the terminal.
+        self.previews: dict[str, Preview] = {}
+        self.inline_placed: set[int] = set()
         self.picker: SessionPicker | None = None
         self.path_word = ""  # the `@` token `complete.path` was last scheduled for
         self.path_due: float | None = None  # when that call goes out (debounced)
@@ -5815,7 +5846,8 @@ class App(ModesMixin, AgentViewMixin):
         """`prompt.submit`, with `images` staged in Hermes under `paths`; nothing else is staged until Hermes has
         taken them (`_claimed`)."""
         self.transcript.add_user(shown or text, from_queue=queued, known=self.known_slash,
-                                 images=tuple(image.label for image in images))
+                                 images=tuple(image_caption(image) for image in images),
+                                 previews=tuple(self.previews.get(image.label) for image in images))
         self.launch_layout = False
         if notice:
             self.transcript.add_aside(NoticeBlock(notice))
@@ -7463,8 +7495,47 @@ class App(ModesMixin, AgentViewMixin):
             return
         self.image_count += 1
         attachment = replace(attachment, label=IMAGE_LABEL.format(number=self.image_count), data=data)
+        self._request_preview(attachment)
         if not self._join_held(self.intake_answering, attachment):
             self._draft().insert_image(attachment.label, attachment)
+
+    def _request_preview(self, attachment: Attachment) -> None:
+        """Ask Hermes to render `attachment` for the prompt echo (`image.render`, by the path it staged it at): kitty
+        placeholders where they paint at truecolor, else half-blocks; none under `NO_COLOR` or without a session. An
+        answer after a new gateway or session (`image_epoch`), one that draws nothing, a refusal (a Hermes without
+        the method) and no answer at all say nothing."""
+        if self.color_depth == NO_COLOR or not self.sid:
+            return
+        terminal = inline_graphics(self.environ)
+        if terminal == INLINE_KITTY and self.color_depth != TRUECOLOR:
+            terminal = INLINE_UNICODE
+        cols = max(1, min(PREVIEW_MAX_COLS, self.size[0] - len(RAIL) - len(OUTPUT_INDENT) - len(OUTPUT_MARK)))
+        epoch = self.image_epoch
+        params = {"path": attachment.path, "cols": cols, "rows": PREVIEW_MAX_ROWS, "graphics": True,
+                  "terminal": terminal}
+        self._request("image.render", params, lambda result: self._on_preview(epoch, attachment.label, result),
+                      on_error=lambda error: True)
+
+    def _on_preview(self, epoch: int, label: str, result: dict[str, Any]) -> None:
+        """Keep the preview Hermes rendered for the image `label` names, painted at the TUI's colour depth; a kitty
+        image goes to the terminal once (its transmit, checked by `preview_from`), and only its placeholder rows are
+        kept. A prompt already sent with that image shows it too while its echo is not yet printed."""
+        preview = preview_from(result) if epoch == self.image_epoch else None
+        if preview is None:
+            return
+        preview = preview_at(preview, self.color_depth)
+        if preview.mode == MODE_KITTY and preview.image_id not in self.inline_placed:
+            self.terminal.write(preview.transmit)
+            self.inline_placed.add(preview.image_id)
+        self.previews.pop(label, None)
+        self.previews[label] = replace(preview, transmit="")
+        while len(self.previews) > PREVIEW_KEEP:
+            del self.previews[next(iter(self.previews))]
+        transcript = self.transcript
+        for block in transcript.blocks[transcript._cursor :]:  # blocks not taken yet: their rows can still change
+            if isinstance(block, UserBlock) and label in map(caption_label, block.images):
+                block.previews = tuple(self.previews.get(caption_label(image)) for image in block.images)
+                transcript._version += 1  # the live region draws it again
 
     def _on_image_attached(self, sid: str, result: dict[str, Any]) -> None:
         attachment = attachment_from(result) if result.get("attached") is True else None
