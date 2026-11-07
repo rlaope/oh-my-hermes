@@ -213,6 +213,15 @@ class ProfileStoreChoiceTests(_IsolatedHome):
         self.assertNotIn("omh_home", self.profile_config(plain))
         self.assertNotIn("omh_home", self.profile_config(exported))
 
+    def test_a_profile_with_an_empty_env_omh_home_is_given_the_setting(self) -> None:
+        # `OMH_HOME=` names no store, and the plugin refuses a blank path.
+        empty = self.profile("empty", env="OMH_HOME=\n")
+        store = self.root / "isolated-omh"
+
+        self.setup_at(store)
+
+        self.assertEqual(plugin_omh_home_setting(self.profile_config(empty)), store.as_posix())
+
     def test_a_default_primary_names_its_store_in_a_profile_with_none(self) -> None:
         # Before #2037 nothing was written here, and every multiplexed
         # process refused to load the plugin for this profile.

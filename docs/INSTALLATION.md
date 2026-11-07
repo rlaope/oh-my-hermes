@@ -2748,9 +2748,10 @@ Which providers and subscriptions a machine holds is a third, separate
 question. The interactive `omh setup` asks it as one ticked list of the
 services you have an account, key, or login for: every provider family, plus
 each provider id in Hermes' config (`providers.<id>` and `model.provider`,
-except `auto`) and each builtin provider whose key NAME appears in
-`$HERMES_HOME/.env` or the environment (`ANTHROPIC_API_KEY`,
-`OPENAI_API_KEY`, ...; values are never read), plus OpenGateway — OMH's own
+except `auto`) and each builtin provider whose key has a value in
+`$HERMES_HOME/.env` or whose key NAME appears in the environment
+(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, ...; `X=` is no key, and a value is
+never copied or shown), plus OpenGateway — OMH's own
 gateway, offered whether or not `OPENGATEWAY_API_KEY` is set yet, because a
 row that appears only once the key exists is a row nobody discovers. Rows
 found on the machine arrive ticked, because a found config key or variable

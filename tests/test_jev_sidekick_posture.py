@@ -6,7 +6,7 @@ may not. It may say a plugin directory exists, that Hermes' config lists the
 name, and that a credential NAME appears in the env file. It may quote what a
 catalog entry declares, naming where the quote was read. It may not say the
 plugin ran, that Jev is served, or that anything left the machine -- and it may
-never read a credential value, which the fixtures below prove by writing one
+never copy a credential value, which the fixtures below prove by writing one
 and asserting it reaches no output.
 
 The check is appended on every run, in both branches, because an optional
@@ -415,7 +415,7 @@ class PostureTests(unittest.TestCase):
             self.assertEqual(posture["status"], "absent")
             self.assertEqual(posture["plugins"], [])
             self.assertEqual(posture["skipped"], [])
-            self.assertIn("never reads credential values", str(posture["claim_boundary"]))
+            self.assertIn("never copies or reports credential values", str(posture["claim_boundary"]))
             self.assertIn(posture["status"], POSTURE_STATUSES)
 
     def test_a_missing_hermes_home_is_absent_rather_than_an_error(self) -> None:

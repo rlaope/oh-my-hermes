@@ -50,7 +50,7 @@ from .metadata import PROVIDED_HOOKS
 JEV_TOOL_PREFIX: Final = "jev_"
 
 # Vendor-documented (docs.typesafe.ai/models) plus the route two catalog
-# entries declare. NAMES only: no value is ever read, here or anywhere below.
+# entries declare. NAMES only: no value is ever copied, here or anywhere below.
 JEV_CREDENTIAL_ENV_NAMES: Final[frozenset[str]] = frozenset({"TYPESAFE_API_KEY", "OPENROUTER_API_KEY"})
 
 # The date every record below was transcribed. A record is a quote with a

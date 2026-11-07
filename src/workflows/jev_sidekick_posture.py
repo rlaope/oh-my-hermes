@@ -9,10 +9,10 @@ the model carrying two nominations.
 
 This builder answers that from three local reads and nothing else: the plugin
 directories under ``$HERMES_HOME/plugins``, Hermes' ``plugins.enabled`` list,
-and the NAMES (never the values) in ``$HERMES_HOME/.env``. It imports no
-plugin, spawns nothing, opens no socket, and writes nothing anywhere. The
-`omh_jev_ask` block beside it reports OMH's own opt-in Jev tool from names,
-the operator setting, and the local ask ledger, and it reads no value either.
+and the NAMES of filled lines (never the values) in ``$HERMES_HOME/.env``. It
+imports no plugin, spawns nothing, opens no socket, and writes nothing anywhere.
+The `omh_jev_ask` block beside it reports OMH's own opt-in Jev tool from names,
+the operator setting, and the local ask ledger, and it copies no value either.
 
 What the tiers mean, and what they do not. ``installed`` means a directory
 with a manifest exists. ``enabled`` means Hermes' config lists the name.
@@ -108,7 +108,7 @@ MAX_PLUGIN_NAME_CHARS: Final = 128
 # in the surface an operator actually sees.
 CLAIM_BOUNDARY: Final = (
     "Presence of a plugin directory, an enabled name, or a credential NAME is not evidence that Jev is "
-    "served, that the plugin ran, or that any request left the machine; this check never reads credential values."
+    "served, that the plugin ran, or that any request left the machine; this check never copies or reports credential values."
 )
 
 
@@ -128,7 +128,7 @@ def omh_jev_ask_posture(
     Kept beside, not inside, the third-party posture rule above: a
     `TYPESAFE_API_KEY` exists only for Jev, so its name is read whether or
     not a plugin was detected, while an OpenRouter key counts only when the
-    operator setting turned that route on. No value is read.
+    operator setting turned that route on. No value is copied.
     """
     names = set(env_key_names(Path(hermes_home), environ, allowed=JEV_ENV_NAMES))
     credential_names = names & JEV_CREDENTIAL_ENV_NAMES
