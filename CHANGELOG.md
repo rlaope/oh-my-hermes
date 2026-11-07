@@ -360,6 +360,26 @@ All notable changes will be documented here.
   `gateway-intent-card` and `automation-blueprint`, `harness-session-inventory`
   and `workspace-audit`, `agent-board` and `running-work-board` each name the
   other for the requests that belong to it.
+- **Memory, learning, agent and Jev skills now give steps that run.** A
+  fact with a relative date ("next Friday") is captured again with an absolute
+  date in the same turn instead of waiting for a review nobody does, and the
+  memory tool names the right next step for each reason it holds a capture
+  (protected content says there is nothing to approve). Recovering from
+  one wrong memory source archives live records with `omh memory attention
+  --tier archive` or the `omh_memory` retire action (the old `omh memory
+  retire` step refuses a live record), and says that hard delete
+  accepts only an expired volatile record. `decision-recall` names its command
+  and required flags and says an empty result is normal on a default install;
+  "what was decided" now goes to `omh_memory` recall, not to the rejected-only
+  store. `jev-action-check` treats a missing tool or a non-answer as a hold,
+  `jev-review-gate` sends the matching test diff with each file and says what
+  to do past eight files or an over-size diff, and `jev-done-check` and
+  `jev-route` cover the over-limit and no-route-question cases. The
+  instrumentation ladder grades one way, `workflow-learning` names
+  `omh learning route-signal`, `instinct-ledger` and `rules-distill` count
+  observations the same way, and `agent-instructions` gains a size rule for
+  Hermes' context-file cap. The full-profile skill-body ceiling is re-derived
+  by its written policy.
 
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node

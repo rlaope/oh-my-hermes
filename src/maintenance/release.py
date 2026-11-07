@@ -968,6 +968,11 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # the per-owner `exports` list (+10). Measured from the producer; no headroom.
 # 536979 -> 536985: the `plan`, `ralplan` and `adversarial-consensus` rows only; their artifact
 # lines name `--plan-file` (+6 net). Measured from the producer; no headroom.
+# 536979 -> 537213: five rows grow. memory-new's and memory-sync's descriptions name omh_memory
+# recall beside decision-recall for a past decision; decision-recall gains two Do Not Use lines;
+# jev-action-check's third safety rule reads as a hold instead of "continue without Jev";
+# jev-review-gate's required input and quality bar name the matching test diff. Measured from
+# the producer; no headroom.
 FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536985
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
@@ -2175,6 +2180,11 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # `test_one_more_ordinary_lane_member_fits_every_body_budget` found that the
 # largest lane-mate copy (`ultrawork`, +26,456) no longer fits.
 # 1,477,231 plus 10%, rounded up to the next 50,000, is 1,650,000.
+# 1336920 -> 1477514 (measured; the ceiling 1500000 -> 1650000): the pack had grown to
+# 1,471,273 across merges that each left the stale measurement alone, so the largest
+# lane-mate copy (`ultrawork`, +26,456) fit by 2,727 chars. The memory, learning, agent and
+# Jev skill fixes (+6,241) take it to 1,477,514, where `ultrawork` no longer fits.
+# 1,477,514 plus 10%, rounded up to the next 50,000, is 1,650,000.
 FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1480299
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000

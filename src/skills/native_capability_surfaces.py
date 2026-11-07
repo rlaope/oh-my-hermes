@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .catalog_types import HERMES_USAGE_SURFACES_CLAUSE
+from .catalog_types import HERMES_USAGE_SURFACES_CLAUSE, PortableLine
 
 
 def native_capability_skill_definitions(feature_surface_skill: Callable[..., object]) -> tuple[object, ...]:
@@ -27,7 +27,7 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
             expected_outputs=("rejected_decision_recall/v1", "scoped rejected-decision matches", "claim boundary"),
             artifact_expectations=("rejected_decision_recall/v1 metadata-only recall result",),
             final_checklist=(
-                "The query, scope, tags, stale policy, and match limit are explicit.",
+                "The query and scope are explicit, and any tags, stale policy, or match limit that were set are stated.",
                 "Only reviewed rejected candidates are returned; expired candidates stay excluded.",
                 "Recall output is not presented as approved memory, source freshness, or execution evidence.",
             ),
@@ -39,8 +39,17 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
                 "options we decided against",
                 "why an approach was dismissed",
             ),
+            do_not_use_when=(
+                PortableLine(
+                    "The user asks what was decided or why an approved decision was made; recall it with the omh_memory tool's recall action, because only decisions a person rejected are stored here.",
+                    "The user asks what was decided or why an approved decision was made; recall it with omh memory recall \"<query>\", because only decisions a person rejected are stored here.",
+                ),
+            ),
             recovery_notes=(
-                "If the query, scope, tags, stale policy, or match limit is unspecified, no rejected-decision match stands yet; mark recall unresolved and hand back one question fixing the missing filter.",
+                "Run `omh memory rejected-recall --scope-kind project --scope-ref <id> [--tag <tag>] [--include-stale] [--limit <n>] <query words>`; `--scope-kind` and `--scope-ref` are required. Get the `prj:` id yourself from `omh memory project-identity show`, and ask the user only for a missing query, never for the scope.",
+                "An empty result on a default install is expected: memory is approved on capture, so rejected decisions exist only after a person rejected a staged candidate. Say \"no reviewed rejection is on record for this project\", not \"nothing was rejected\", and offer to recall alternatives that were only discussed or captured as ordinary memory.",
+                "If `omh memory project-identity show` reports `state: unresolved` (no project identity exists, for example a git repository with no remote that was never initialised), there is no project to look in from here: say so and do not run the recall with an empty scope ref.",
+                "If the query is missing, no rejected-decision match stands yet; mark recall unresolved and hand back one question for the query. The scope comes from the project identity, and tags, stale policy, and match limit default when unset.",
                 "If a candidate's reviewed-rejected status or expiry cannot be checked, retain only matches that passed those checks, mark remaining recall unresolved, and hand back rejected_decision_recall/v1 with the claim boundary and missing checks.",
             ),
         ),

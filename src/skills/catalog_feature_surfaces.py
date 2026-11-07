@@ -193,7 +193,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "memory-new",
-        "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, and for a past decision use decision-recall.",
+        "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, and for a past decision use omh_memory recall or decision-recall.",
         (
             "memory-new",
             "new memory",
@@ -243,7 +243,7 @@ _FEATURE_SURFACE_SKILLS = (
         portable_overrides={
             # `omh-memory-sync` ships only on Hermes.
             "description": (
-                "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a past decision use decision-recall.",
+                "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a past decision use omh memory recall or decision-recall.",
             ),
             "safety_rules": (
                 "An OMH project-memory candidate is prepared local context only, not an approved record or native host-memory mutation. External provider/vector and host context is not_omh_reviewed and can nominate a candidate only.",
@@ -253,18 +253,18 @@ _FEATURE_SURFACE_SKILLS = (
             ),
         },
         portable_override_shadows={
-            "description": "665cad64b43113a52b3f7a3bd5840245a1e83a67938ca67400409c6292f27924",
+            "description": "7dd7346a78a06ab1a85764704af10b9b2be4f890a3eb7099310e84d865d2bddb",
             "safety_rules": "1339e73ae4df4feb34e2bfe93e42f0e6945e8a83176c0602b6778b2842ffc354",
         },
         recovery_notes=(
             "If project versus user scope or lasting versus temporary retention is ambiguous, retain the bounded summary as a candidate, mark capture unresolved, and hand back one scope-or-durability question without claiming a write.",
             "If omh_memory returns error, retain memory_new_candidate/v1 as prepared only, mark the write not_observed, and hand back the bounded summary, record_type, tags, scope, and retention_class for the omh memory capture fallback.",
-            "If capture returns pending_review, retain the staged memory_new_candidate/v1, mark approval not_observed, and hand back the stated review reason without treating an unsafe or relative-time phrase as an approved record.",
+            "If capture returns pending_review with review_reason relative_time_phrase, restate the fact with an absolute date and capture it again in the same turn; for any other review_reason, retain the staged memory_new_candidate/v1, mark approval not_observed, and hand back the stated reason without treating it as an approved record.",
         ),
     ),
     _feature_surface_skill(
         "memory-sync",
-        "Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use decision-recall.",
+        "Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use omh_memory recall or decision-recall.",
         (
             "memory-sync",
             "memory curation",
@@ -315,7 +315,8 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         do_not_use_when=(
             "The user states a new fact to remember; capture it with `memory-new`.",
-            "The user asks what was decided or rejected before; use `decision-recall`.",
+            "The user asks what was decided before; recall it with the omh_memory tool's recall action.",
+            "The user asks what was rejected before; use `decision-recall`.",
             "The user wants a memory provider enabled, switched, paused, or removed; use `external-connector-readiness`, which owns the provider slot.",
         ),
         situations=(
@@ -1983,6 +1984,12 @@ _FEATURE_SURFACE_SKILLS = (
             "is the ai work any good",
             "blockers in agent tasks",
         ),
+        final_checklist=(
+            "Each run is listed as prepared, observed, or not_observed, with the evidence behind observed.",
+            "Blockers and failed quality gates carry an owner or next action.",
+            "Throughput claims cite a measurement or say none exists.",
+            "An instrumentation audit gives every ladder row PASS, FAIL, or PARTIAL with its location.",
+        ),
         recovery_notes=(
             "If only a prepared handoff exists, mark coding progress not_observed; hand back the missing stage.",
             "If P0 capture fails its audit, keep the tier checks, mark readiness unresolved; hand back quick wins.",
@@ -2181,11 +2188,12 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         final_checklist=(
             "Each instinct is atomic: one trigger, one action, one scope, confidence, evidence refs, and review state.",
+            "Confidence is the count of independent observations (different runs, sessions, or projects; one session counts once): 1 is an anecdote, 2 is tentative, 3 or more with no contradicting observation is a promotion candidate. Show the count and evidence refs beside every instinct. Instincts live only in this conversation's `instinct_candidate/v1` list until a store route accepts one; say so.",
             "Project-specific conventions, global practices, project/global promotion candidates, imports, and exports are separated.",
             "No hooks, memory writes, skill edits, global promotion, import/export, or behavior-change claims are made without observed approval and implementation evidence.",
             PortableLine(
-                "A promoted instinct leaves as a store route, `memory_candidate` for `memory-new` or `skill_update_candidate` for `workflow-learning`, never as a parallel store of its own.",
-                "A promoted instinct leaves as a store route, `memory_candidate` for `memory-new` or a `skill_update_candidate`, never as a parallel store of its own.",
+                "A promoted instinct leaves as a store route, `memory_candidate` for `memory-new`, `skill_update_candidate` for `workflow-learning`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.",
+                "A promoted instinct leaves as a store route, `memory_candidate` for `memory-new`, a `skill_update_candidate`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.",
             ),
             f"On Hermes, the skill audit ledger ({_CURATOR_LEDGER_FILE}) is observed evidence of what the agent or its background review already wrote; an instinct that matches a ledger entry no store route accounts for is reported as `unreviewed_native_write` (OMH holds no record of that write, which is not to say nobody reviewed it), never counted as repeated evidence for the instinct.",
         ),
@@ -2424,7 +2432,8 @@ _FEATURE_SURFACE_SKILLS = (
             "Native write policy `required` stops promotion as unsupported and `not_required` is not an approval; drift unlinks only the managed SKILL.md and keeps generations and receipts, and an incomplete promotion resumes only via explicit `retry --receipt-id`.",
         ),
         final_checklist=(
-            f"Read Hermes' skill audit ledger read-only ({_CURATOR_LEDGER_FILE}, or `hermes curator ledger --limit <n>`, {_CURATOR_LEDGER_LIMIT}) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. {_CURATOR_LEDGER_EMPTY}",
+            "Classify a lesson before any write: `omh learning route-signal \"<one-line lesson>\"` names the destination (memory, skill, wiki, failure-retrospective, or automation review); add `--record` only after the user agrees to keep the route. Show the destination and why, list pending routes with `omh learning store-routes`, and leave `omh learning review-route` to the person. A fact goes to `memory-new` and a skill change stays a `skill_update_candidate`; this skill writes none of those stores.",
+            f"Read Hermes' skill audit ledger read-only ({_CURATOR_LEDGER_FILE}, or `hermes curator ledger --limit <n>`, {_CURATOR_LEDGER_LIMIT}) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. {_CURATOR_LEDGER_EMPTY} A trimmed ledger is incomplete too: from Hermes v2026.9.24 the oldest entries are dropped past `skills.ledger_max_bytes`, so report the window you read (entry count, oldest timestamp) and treat an older write as not_observed, not clean.",
             "Mark an approved `skill_update_candidate` landed only from a `skill_manage` result for that skill that succeeded without `staged: true`, or from a ledger entry that is dated after the approval, has `actor` `agent` or `user` and `action` `create`, `edit`, `patch`, or `write_file`, and lists the approved target file in its `after` manifest. An entry by `curator`, or one that deletes, archives, rolls back, or purges, never marks it landed, and a staged result waits in `/skills pending` for the person and has not landed.",
             "The ledger records skill writes only: a memory write by Hermes' background review is visible only when Hermes staged it under `pending/memory/` with `origin: background_review`, and is `not_observed` otherwise.",
             "Point the user to `/journey` in the Hermes CLI for Hermes' own view of what it learned; reading the ledger or the journey changes nothing, and undoing an entry (`hermes curator rollback <id>`) is the person's own step, never OMH's.",

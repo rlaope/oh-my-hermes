@@ -146,6 +146,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 533907 -> 533913 and the digest re-derived: ulw-plan's, omh-plan's and
             # adversarial-consensus's artifact lines name `--plan-file` (+6 net, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was d6dfefff...fc71.
+            # 533907 -> 534141 and the digest re-derived: the memory-new and memory-sync descriptions
+            # name omh_memory recall, the decision-recall row gains its Do Not Use lines, the
+            # jev-action-check row's third safety rule reads as a hold and the jev-review-gate row
+            # names the matching test diff, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT; no
+            # other row moved, and the pin before it was d6dfefff...fc71.
             (skill_capabilities, 533913, FULL_ROW_DELTA_CAP,
              '2af3d114df9fd471b650d923c9691f67a52a7de6301fce0f6487f7774f8e5f2a',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
@@ -385,6 +390,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # running-work-board, agent-board, achievements, context-budget-review, ops-review,
         # feedback-triage, workspace-audit, automation-blueprint, parallel-tools, run-efficiency and
         # failure-signal-audit move their own bodies only; the pin before it was 7e537e8d...4b2c.
+        # Memory, learning, agent and Jev bodies (the audit fix round): memory-new, memory-sync,
+        # decision-recall, instinct-ledger, jit-learn, workflow-learning, rules-distill,
+        # agent-evaluation, agent-ops-review and four jev-* bodies move; nothing else, and the
+        # pin before it was 7e537e8d...4b2c.
         self.assertEqual(_digest(legacy_hashes), '8c5d5eede91c056339f2aee6baeaf93bc9f704be51e228359a89bb8231a29c53')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
@@ -405,6 +414,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 124814 -> 123079: gateway-intent-card, ops-review, achievements, context-budget-review and
         # feedback-triage write their own Completion Checklist in place of the category default they
         # repeated (-1,735); the ceilings are unchanged.
+        # 124814 -> 124355: agent-ops-review's own Completion Checklist replaces the operator
+        # default it repeated (-459); swapping only that body back to main's restores 124814.
+        # 124355 -> 124221: the memory, decision and Jev fixes' own Recovery Notes replace default text
+        # other bodies repeat (-134); swapping those bodies back to main's restores 124355.
         self.assertEqual(legacy['repeated']['bytes'], 123615)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))

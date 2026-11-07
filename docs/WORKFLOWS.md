@@ -483,7 +483,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `jit-learn`, `learn next`, `learn now`, `blocker-specific learning target`, `highest-leverage learning target`, `immediate learning payoff`, `immediately applicable learning brief`, `source-backed learning brief`, `학습 주제`, `도움 되는 학습 주제`, `당장 적용할 학습 목표`, `책 팟캐스트 크리에이터 강의 학습 브리프`, `объясни с нуля`, `разжуй тему`, `выучи и расскажи`
 - Good example:
   - Prompt: What should I learn next to solve my current onboarding blocker? Recommend books, podcasts, creators, and courses I can apply this week.
-  - Expected behavior: Ask one confirmation question, confirm the immediate target, then prepare a source-backed four-section learning brief ranked by fit and time-to-first-value.
+  - Expected behavior: Ask one confirmation question, confirm the immediate target, then prepare a source-backed learning brief ranked by fit and time-to-first-value.
   - Why: The user needs target selection and immediate transfer, not a generic curriculum or popularity-ranked resource list.
 - Bad example:
   - Prompt: Design a six-week Python syllabus with weekly assessments.
@@ -3855,6 +3855,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Report which outputs are prepared, observed, blocked, or missing.
   - Name the smallest next verification or handoff instead of claiming completion from narration.
 - Recovery notes:
+  - Receipts: `omh coding paired-run dispatch --decision <paired_run_decision/v1 file> --dry-run` prints the plan; the built-in receipt-capable adapter runs only `hermes` arms and refuses Codex, Claude Code, and generic arms before any child starts. For those arms the comparison can be designed and the runs supplied as observed artifacts, but the result stays ungrounded until a caller adapter returns the authenticated receipt: give a per-scenario recommendation labelled ungrounded, never a ranking.
   - If observed_at lacks receipt-authenticated provenance, retain the task set, rubric, and input digests, mark the comparison not_observed, and hand back paired_run_decision/v1 with the provenance gap rather than a pass or fail.
   - If candidate inputs or success criteria differ outside the variable under test, retain the observed runs, mark executor selection tentative, and hand back the mismatched digests or criteria and a matched rerun budget.
   - If a judge has no measured agreement against human labels, retain the prewritten rubric and observed executable checks, mark judgment unresolved and unqualified, and hand back the missing agreement measurements instead of a correctness claim.
@@ -3893,7 +3894,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep principle extraction and candidate review in Hermes. Editing AGENTS.md, catalog data, prompts, skills, or docs requires explicit approved implementation work and verification.
-- Why this exists: `rules-distill` gives OMH a disciplined way to learn from large skill ecosystems like ECC without wholesale copying: extract principles, review them, then patch OMH only through explicit verified work.
+- Why this exists: `rules-distill` exists because a repeated lesson buried in traces, reviews, and skill text changes behaviour only once it is written down as a rule, and a rule written from one anecdote does the opposite: it extracts candidate rules from a corpus the user names, checks them against what is already written, and hands approved ones to the destination the user chose; the method is adapted from ECC's rules-distill without wholesale copying.
 - Use when: Use when Hermes should turn repeated workflow lessons, skill behavior, review comments, or failure traces into candidate rules that humans can review before docs or catalog changes.
 - Do not use when:
   - The user wants a single workflow route regression; use `workflow-learning`.
@@ -3916,7 +3917,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Require review approval before any patch handoff or generated-skill update.
   - On Hermes, read a curator run report (`logs/curator/<run>/REPORT.md` and `run.json` under the active profile's Hermes home) as a source like a review or a trace: it records which skills the curator consolidated, archived, or created in that run, and one report is one observation, never repeated evidence by itself.
 - Completion checklist:
-  - Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on; a candidate resting on one observation stays needs-evidence in review_queue/v1.
+  - Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on, counted as independent runs, sessions, or sources (one session counts once); a candidate resting on one observation stays needs-evidence in review_queue/v1, and two is tentative.
   - Every candidate is classed mechanical or judgement before it is worded. A mechanical candidate is a miss a machine can find from the text alone (a forbidden call, a disallowed import, a file in the wrong place), and its destination is a check (a linter rule, test, hook, or CI step); when the repository already has a check for it that never runs or no longer fails, the candidate is repairing that check, not adding another. Its approved_patch_handoff/v1 names the check and where it is wired, and sets as an acceptance criterion the run the implementer must observe: the check fails with the violation injected and passes once it is reverted. A mechanical candidate outside the chosen destination boundary is reported as a check proposal outside the boundary, never reworded as prose. Only judgement candidates, which need a reader (consistency across files, fit with the code around them), are worded as prose.
   - duplication_conflict_report/v1 names the existing rule or check each candidate repeats or contradicts, or says none was found and where it looked.
   - Nothing reached a destination without an approval recorded in review_queue/v1.
@@ -9686,7 +9687,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expected behavior: Route to `code-review`: the PR is about Jev, and nobody asked Jev anything.
   - Why: Talking about Jev is not addressing it.
 - Quality bar:
-  - Each ask carries one file's diff; the union of flags is reported per file.
+  - Each ask carries one file's diff with its matching test diff when one exists; the union of flags is reported per file.
   - A non-answer is `not_observed`, never `no_flags`.
 - Completion checklist:
   - Every file sent was named to the user first.
@@ -9694,9 +9695,9 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If `omh_jev_ask` is not in the tool list, say Jev is unavailable, point at the `plugin_jev_sidekick` line of `omh doctor`, and continue as main_model through the partner workflow.
   - If the tool returns `consent_not_observed`, nothing was sent; offer the ask in one line naming what would be sent and wait for the user to reply `ask jev`.
-  - If the tool refuses `credential_like_content`, remove the secret-looking text from `state` rather than redacting it silently, and tell the user what was removed.
+  - If the tool refuses a diff as `credential_like_content`, the diff adds credential-like text: report that as an OMH security flag on the file, and do not send a stripped diff as if it were the file.
 - Required inputs:
-  - the diff, one file per ask
+  - the diff, one file per ask with its matching test diff
   - the review the flags feed
 - Expected outputs:
   - `review_flags/v1` flags per file
@@ -9747,9 +9748,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The outcome was one of hold, refuse_recommended, or no_extra_hold, with its rule.
   - Nothing was run on the strength of `no_extra_hold` alone.
 - Recovery notes:
-  - If `omh_jev_ask` is not in the tool list, say Jev is unavailable, point at the `plugin_jev_sidekick` line of `omh doctor`, and continue as main_model through the partner workflow.
+  - If `omh_jev_ask` is not in the tool list, say Jev is unavailable and the screen did not run (a `hold`, rule `not_answered:tool_unavailable`), point at the `plugin_jev_sidekick` line of `omh doctor`, and run the command only if the user says so after that.
   - If the tool returns `consent_not_observed`, nothing was sent; offer the ask in one line naming what would be sent and wait for the user to reply `ask jev`.
-  - If the tool refuses `credential_like_content`, remove the secret-looking text from `state` rather than redacting it silently, and tell the user what was removed.
+  - If the tool refuses `credential_like_content` because the command itself carries a credential, report a `hold` (the command carries a credential) first; screen a version with the value replaced by a placeholder only if the user asks, and say the screen did not see the real command.
 - Required inputs:
   - the command or write
   - the working directory
@@ -9762,7 +9763,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Safety rules:
   - Call `omh_jev_ask` only after the user asked for Jev in this turn; a skill loaded from the index is not a request.
   - Before the first ask, tell the user in one line what `state` will carry and that it leaves the machine.
-  - A non-answer status is never an answer: report it and continue without Jev.
+  - A non-answer status is never an answer: report it as a `hold`, tell the user the screen did not run, and run the command only if they say so after that.
   - The check can only add a hold: `no_extra_hold` means the host's normal approval still applies, never that the command is approved.
   - Every non-answer is a hold labelled `not_answered:<status>`, so the user can see it came from a failure and not from Jev.
 
@@ -9951,7 +9952,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### memory-new
 
-[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, and for a past decision use decision-recall.
+[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, and for a past decision use omh_memory recall or decision-recall.
 
 - Category: `memory`
 - Phase: `candidate-capture`
@@ -9992,7 +9993,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If project versus user scope or lasting versus temporary retention is ambiguous, retain the bounded summary as a candidate, mark capture unresolved, and hand back one scope-or-durability question without claiming a write.
   - If omh_memory returns error, retain memory_new_candidate/v1 as prepared only, mark the write not_observed, and hand back the bounded summary, record_type, tags, scope, and retention_class for the omh memory capture fallback.
-  - If capture returns pending_review, retain the staged memory_new_candidate/v1, mark approval not_observed, and hand back the stated review reason without treating an unsafe or relative-time phrase as an approved record.
+  - If capture returns pending_review with review_reason relative_time_phrase, restate the fact with an absolute date and capture it again in the same turn; for any other review_reason, retain the staged memory_new_candidate/v1, mark approval not_observed, and hand back the stated reason without treating it as an approved record.
 - Required inputs:
   - user request
   - target context
@@ -10013,7 +10014,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### memory-sync
 
-[omh] Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use decision-recall.
+[omh] Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use omh_memory recall or decision-recall.
 
 - Category: `memory`
 - Phase: `curation-review`
@@ -10031,7 +10032,8 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Use when: Use when existing Hermes USER.md, MEMORY.md, or accumulated skill memories need an English-canonical, claim-by-claim review. It prepares native write guidance only; no OMH surface invokes, applies, or observes a native write — a user-approved diff is applied by Hermes's own native memory tool. Do not use for new project or product candidates.
 - Do not use when:
   - The user states a new fact to remember; capture it with `memory-new`.
-  - The user asks what was decided or rejected before; use `decision-recall`.
+  - The user asks what was decided before; recall it with the omh_memory tool's recall action.
+  - The user asks what was rejected before; use `decision-recall`.
   - The user wants a memory provider enabled, switched, paused, or removed; use `external-connector-readiness`, which owns the provider slot.
 - Strong routing signals: `memory-sync`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`, `curate memory`, `stale memory`, `hermes remembers`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `what you remember about me`, `your memory about me`, `your memories`, `memory interview`, `memories still true`, `기억하고 있는`, `기억하고 있는 프로젝트 맥락`, `기억하는 맥락`, `현재 hermes가 기억하는 맥락`, `현재 헤르메스가 기억하는 맥락`, `헤르메스가 기억하는 맥락`, `오래된 맥락`, `오래된 기억`, `기억 점검`, `기억 정리`, `메모리 업데이트`, `메모리 검사`, `메모리 점검`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `맥락 피드백`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`, `나에 대해 잘못 알고`, `저장된 내 정보`, `너한테 저장된`, `저장된 프로필`, `기억 바로잡`, `메모리 인터뷰`, `기억 인터뷰`, `что у тебя в памяти`, `что ты помнишь про меня`, `память устарела`, `старые записи в памяти`
 - Good example:
@@ -11416,9 +11418,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Audit coverage in priority order - P0 (telemetry init, LLM-call capture, tool-call capture, error capture) before P1 (tokens, cost attribution, agent identity, multi-agent links) before P2 (memory/RAG spans, human-in-the-loop, evaluation runs) - and rank remediation as quick win (under an hour), medium, or larger.
   - Check the audited setup against the anti-pattern checklist in the same reference; an anti-pattern hit is a finding with its location and fix, never a style remark.
 - Completion checklist:
-  - The local command, managed path, config surface, and state artifact inspected are named.
-  - Blocking issues, warnings, and optional surfaces are separated.
-  - The next repair action is explicit and does not claim a reload or runtime observation.
+  - Each run is listed as prepared, observed, or not_observed, with the evidence behind observed.
+  - Blockers and failed quality gates carry an owner or next action.
+  - Throughput claims cite a measurement or say none exists.
+  - An instrumentation audit gives every ladder row PASS, FAIL, or PARTIAL with its location.
 - Recovery notes:
   - If only a prepared handoff exists, mark coding progress not_observed; hand back the missing stage.
   - If P0 capture fails its audit, keep the tier checks, mark readiness unresolved; hand back quick wins.
@@ -11619,9 +11622,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
   - Each instinct is atomic: one trigger, one action, one scope, confidence, evidence refs, and review state.
+  - Confidence is the count of independent observations (different runs, sessions, or projects; one session counts once): 1 is an anecdote, 2 is tentative, 3 or more with no contradicting observation is a promotion candidate. Show the count and evidence refs beside every instinct. Instincts live only in this conversation's `instinct_candidate/v1` list until a store route accepts one; say so.
   - Project-specific conventions, global practices, project/global promotion candidates, imports, and exports are separated.
   - No hooks, memory writes, skill edits, global promotion, import/export, or behavior-change claims are made without observed approval and implementation evidence.
-  - A promoted instinct leaves as a store route, `memory_candidate` for `memory-new` or `skill_update_candidate` for `workflow-learning`, never as a parallel store of its own.
+  - A promoted instinct leaves as a store route, `memory_candidate` for `memory-new`, `skill_update_candidate` for `workflow-learning`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.
   - On Hermes, the skill audit ledger (`skills/.curator_ledger.jsonl` under the active profile's Hermes home) is observed evidence of what the agent or its background review already wrote; an instinct that matches a ledger entry no store route accounts for is reported as `unreviewed_native_write` (OMH holds no record of that write, which is not to say nobody reviewed it), never counted as repeated evidence for the instinct.
 - Recovery notes:
   - If the request is a single missed route or run trace, route to workflow-learning first.
@@ -11808,7 +11812,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
-  - Read Hermes' skill audit ledger read-only (`skills/.curator_ledger.jsonl` under the active profile's Hermes home, or `hermes curator ledger --limit <n>`, which lists only the 20 newest entries by default) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. An empty ledger is unknown, not clean, because `skills.ledger: false` turns it off.
+  - Classify a lesson before any write: `omh learning route-signal "<one-line lesson>"` names the destination (memory, skill, wiki, failure-retrospective, or automation review); add `--record` only after the user agrees to keep the route. Show the destination and why, list pending routes with `omh learning store-routes`, and leave `omh learning review-route` to the person. A fact goes to `memory-new` and a skill change stays a `skill_update_candidate`; this skill writes none of those stores.
+  - Read Hermes' skill audit ledger read-only (`skills/.curator_ledger.jsonl` under the active profile's Hermes home, or `hermes curator ledger --limit <n>`, which lists only the 20 newest entries by default) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. An empty ledger is unknown, not clean, because `skills.ledger: false` turns it off. A trimmed ledger is incomplete too: from Hermes v2026.9.24 the oldest entries are dropped past `skills.ledger_max_bytes`, so report the window you read (entry count, oldest timestamp) and treat an older write as not_observed, not clean.
   - Mark an approved `skill_update_candidate` landed only from a `skill_manage` result for that skill that succeeded without `staged: true`, or from a ledger entry that is dated after the approval, has `actor` `agent` or `user` and `action` `create`, `edit`, `patch`, or `write_file`, and lists the approved target file in its `after` manifest. An entry by `curator`, or one that deletes, archives, rolls back, or purges, never marks it landed, and a staged result waits in `/skills pending` for the person and has not landed.
   - The ledger records skill writes only: a memory write by Hermes' background review is visible only when Hermes staged it under `pending/memory/` with `origin: background_review`, and is `not_observed` otherwise.
   - Point the user to `/journey` in the Hermes CLI for Hermes' own view of what it learned; reading the ledger or the journey changes nothing, and undoing an entry (`hermes curator rollback <id>`) is the person's own step, never OMH's.
@@ -11851,9 +11856,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Why this exists: `decision-recall` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 - Use when: Use for scoped reviewed rejected-decision context; it is not approved memory or execution evidence.
 - Do not use when:
-  - The request is already handled by a narrower explicit skill with stronger evidence.
-  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+  - The user asks what was decided or why an approved decision was made; recall it with the omh_memory tool's recall action, because only decisions a person rejected are stored here.
 - Strong routing signals: `decision-recall`, `rejected decision recall`, `rejected decisions`, `why was this rejected`, `previously rejected alternative`, `거절된 결정`, `기각된 대안`
 - Good example:
   - Prompt: Show rejected decisions for this project before we choose an alternative.
@@ -11868,11 +11871,14 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
-  - The query, scope, tags, stale policy, and match limit are explicit.
+  - The query and scope are explicit, and any tags, stale policy, or match limit that were set are stated.
   - Only reviewed rejected candidates are returned; expired candidates stay excluded.
   - Recall output is not presented as approved memory, source freshness, or execution evidence.
 - Recovery notes:
-  - If the query, scope, tags, stale policy, or match limit is unspecified, no rejected-decision match stands yet; mark recall unresolved and hand back one question fixing the missing filter.
+  - Run `omh memory rejected-recall --scope-kind project --scope-ref <id> [--tag <tag>] [--include-stale] [--limit <n>] <query words>`; `--scope-kind` and `--scope-ref` are required. Get the `prj:` id yourself from `omh memory project-identity show`, and ask the user only for a missing query, never for the scope.
+  - An empty result on a default install is expected: memory is approved on capture, so rejected decisions exist only after a person rejected a staged candidate. Say "no reviewed rejection is on record for this project", not "nothing was rejected", and offer to recall alternatives that were only discussed or captured as ordinary memory.
+  - If `omh memory project-identity show` reports `state: unresolved` (no project identity exists, for example a git repository with no remote that was never initialised), there is no project to look in from here: say so and do not run the recall with an empty scope ref.
+  - If the query is missing, no rejected-decision match stands yet; mark recall unresolved and hand back one question for the query. The scope comes from the project identity, and tags, stale policy, and match limit default when unset.
   - If a candidate's reviewed-rejected status or expiry cannot be checked, retain only matches that passed those checks, mark remaining recall unresolved, and hand back rejected_decision_recall/v1 with the claim boundary and missing checks.
 - Required inputs:
   - user request
