@@ -241,6 +241,7 @@ class TurnEndTests(FailedWaitTestCase):
             "ko": "CI가 다시 실패했어. 원인은 줄 끝 공백이야.",
             "ja": "CIがまた失敗しました。原因は行末の空白です。",
             "zh": "持续集成再次失败，原因是行尾空格。",
+            "zh-Hant": "持續整合再次失敗，原因是行尾空白。",
         }
         for index, (language, reply) in enumerate(replies.items()):
             with self.subTest(language=language):
@@ -355,11 +356,11 @@ class TextTests(unittest.TestCase):
         self.assertEqual(len(FAILED_WAIT_TEXT.format(process="proc_9bf1", code=1)), 415)
         self.assertEqual(
             {language: len(text) for language, text in FAILED_WAIT_STOP_TEXTS.items()},
-            {"en": 80, "ko": 48, "ja": 46, "zh": 26},
+            {"en": 80, "ko": 48, "ja": 46, "zh": 26, "zh-Hant": 29},
         )
 
     def test_each_stop_sentence_is_in_its_own_language(self) -> None:
-        self.assertEqual(sorted(FAILED_WAIT_STOP_TEXTS), ["en", "ja", "ko", "zh"])
+        self.assertEqual(sorted(FAILED_WAIT_STOP_TEXTS), ["en", "ja", "ko", "zh", "zh-Hant"])
         for language, text in FAILED_WAIT_STOP_TEXTS.items():
             with self.subTest(language=language):
                 self.assertEqual(reply_language(text), language)
