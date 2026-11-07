@@ -19,14 +19,14 @@ DEFINITION = SkillDefinition(
     delegation_boundary="retained-catalog-intent", progressive_disclosure=True,
     required_inputs=_INPUTS, expected_outputs=_OUTPUTS,
     expert_questions=(
-        ExpertQuestion(_INPUTS[0], "Which prepared, rights-cleared single-ligand and rigid-receptor PDBQT files are authorized?", "Which prepared, rights-cleared single-ligand and rigid-receptor PDBQT files are authorized?"),
-        ExpertQuestion(_INPUTS[1], "What are the center and box dimensions in angstrom, and which protonation, charge, tautomer and preparation choices produced these files?", "What are the center and box dimensions in angstrom, and which protonation, charge, tautomer and preparation choices produced these files?"),
-        ExpertQuestion(_INPUTS[2], "Which isolated optional backend, finite host deadline and new evidence directory are approved?", "Which isolated optional backend, finite host deadline and new evidence directory are approved?"),
+        ExpertQuestion(_INPUTS[0], "Which prepared, rights-cleared single-ligand and rigid-receptor PDBQT files are authorized?", "사용이 허가된, 준비를 마친 단일 리간드와 강체 수용체 PDBQT 파일은 무엇인가요?"),
+        ExpertQuestion(_INPUTS[1], "What are the center and box dimensions in angstrom, and which protonation, charge, tautomer and preparation choices produced these files?", "박스 중심과 크기(옹스트롬)는 얼마이고, 어떤 양성자화, 전하, 호변이성질체, 준비 방식으로 이 파일들을 만들었나요?"),
+        ExpertQuestion(_INPUTS[2], "Which isolated optional backend, finite host deadline and new evidence directory are approved?", "승인된 격리 선택 백엔드, 유한한 호스트 제한 시간, 새 증거 폴더는 무엇인가요?"),
     ),
     why_this_exists="Input validation and tutorial numbers are not measured docking. Require a real engine search and digest-bound poses, finite energies and replay settings.",
     opening_steps=(
         "Read `toolkit/README.md` and `references/execution-and-qa.md`. Use the explicitly invoked standalone Vina Python helper, not an invented ToolUniverse tool or hidden core execution service.",
-        "Recover prepared file paths, source/license and preparation receipts, angstrom binding box, seed, CPU, new output directory and host deadline. Never guess a site, silently prepare a molecule or install dependencies on skill load.",
+        "Recover prepared file paths, source/license and preparation receipts, angstrom binding box, seed, CPU, new output directory and host deadline. Never guess a site, silently prepare a molecule or install dependencies on skill load. If the person has a SMILES or a PDB id rather than PDBQT, stop and list the preparation steps they must approve (protonation state, charges, tautomer, receptor cleanup, box) with a named converter such as Meeko or ADFR; do not convert silently.",
         "Use `--validate-only` for dependency-free prerequisites, or explicitly invoke actual docking in an approved environment with a host-enforced timeout and stdout/stderr capture. Missing dependencies must refuse, not produce guessed findings.",
     ),
     handoff_policy="Keep framing and evidence assessment with the host. Report actual docking only after reading genuine pose/score/version/log/hash/replay evidence. Optional dependency or native failures remain BLOCKED for that run; preflight, source inspection and a successful install alone are not execution. No ToolUniverse execution is claimed.",
@@ -57,6 +57,7 @@ DEFINITION = SkillDefinition(
         "Never infer efficacy, safety, affinity certainty, target validation, dosing or treatment advice. PDBQT syntax validation is not chemical validity or a preparation review.",
         "No hidden execution, network, credentials, global install or paid compute. Dependencies are optional and task-isolated; discovery, routing and skill installation never execute the helper.",
         "ToolUniverse registrations were inspected, not invoked. This toolkit uses standalone AutoDock Vina Python only; do not invent a ToolUniverse adapter or tool name.",
+        "Exhaustiveness is capped at 4 here (Vina's default is 8): treat energies as one under-sampled run, never as a ranking or a comparison across ligands. Before reporting a site, redock the co-crystal ligand when one exists and report its pose RMSD to the crystal pose; with none, say the site is unvalidated.",
     ),
     quality_bar=(
         "Reject symlinks, existing output directories, unsupported formats, non-finite inputs and resource-cap violations before output writes. Preserve existing user files and keep failed-run partial files distinct from success manifests.",
@@ -72,7 +73,7 @@ DEFINITION = SkillDefinition(
         "Input/format/resource checks and exact input hashes are observed; source rights and preparation assumptions remain explicit.",
         "Actual poses, finite matching energies, backend version/settings, host logs/exit/deadline and replay manifest are read back, or the run is reported BLOCKED without invented results.",
     ),
-    recovery_notes=("Preserve failed setup receipts. On this host, one authorized correction of the existing native build supplied CONDA_DEFAULT_ENV as well as CONDA_PREFIX/PATH, then Vina 1.2.7 built and the real 1IEP smoke passed; this is not a promise for other platforms.", "If a native run fails or times out, retain its logs and partial files without a success claim; review the backend failure before retrying in a new output directory."),
+    recovery_notes=("Preserve failed setup receipts. PyPI ships Vina 1.2.7 wheels only for x86_64 Linux, so macOS arm64 needs a source build with Boost and SWIG, and its setup.py checks CONDA_DEFAULT_ENV, not only CONDA_PREFIX. If the build fails, return the failure log and do not retry blindly; the observed 1IEP smoke is one platform, not a promise for others.", "If a native run fails or times out, retain its logs and partial files without a success claim; review the backend failure before retrying in a new output directory."),
     situations=("prepared receptor files need a measured pose search", "a search box needs a bounded run budget", "a docking result has no genuine pose file", "tutorial numbers are being mistaken for measured scores", "a saved pose energy differs from the engine output"),
 )
 

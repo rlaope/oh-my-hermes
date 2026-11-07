@@ -10,7 +10,7 @@ metadata:
     phase: research-department
     role: researcher
     quality_tier: research-ops-gated
-    related_skills: [ulw-research, omh-research-brief, omh-automation-blueprint, competitor-news-monitor, arxiv]
+    related_skills: [omh-web-research, ulw-research, omh-research-brief, omh-automation-blueprint, competitor-news-monitor, arxiv]
 ---
 
 # Research Department
@@ -23,7 +23,7 @@ This is a Hermes-native `research-department` workflow skill.
 
 ## Do Not Use When
 
-- The user only needs a one-off current-source lookup; use `ulw-research`.
+- The user only needs a one-off current-source lookup; use `omh-web-research` for one cited round, or `ulw-research` for a reference-implementation study with a depth budget.
 - The user only needs a one-off business synthesis; use `omh-research-brief`.
 - The request is pure scheduling with no source collection or synthesis; use `omh-automation-blueprint`.
 - The user asks for coding implementation; prepare a selected executor/runtime handoff after the research plan is accepted.
@@ -46,9 +46,10 @@ Bad example:
 
 ## Completion Checklist
 
-- The research question, source boundaries, recency assumptions, and confidence level are named.
-- Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
-- Follow-up planning or handoff uses the research summary without calling it execution evidence.
+- research_department_plan/v1 names topic, cadence, delivery target, knowledge store and synthesis-tool readiness, each as supplied or missing.
+- Scout, Analyst and Briefer each map to a loadable skill; source_inbox/v1 has separate raw, processed, brief, conflict and verification buckets.
+- The watchlist, the materiality threshold and one cutoff per source are written down before the first run.
+- Any schedule is `not_observed` unless a `cronjob_manage` result or a cron listing was read.
 
 ## Recovery Notes
 

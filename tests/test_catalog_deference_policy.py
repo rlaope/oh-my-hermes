@@ -323,9 +323,18 @@ NON_SKILL_BACKTICKS = frozenset(
 # `systematic-review` defers topic discovery to `source-finder`, one supplied
 # paper to `paper-learning` and a HellaSwag log check to `repro-audit`; no
 # sibling gains a statement pointing back. Three cases, three pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 410
-EXPECTED_DEFERENCE_PAIRS = 426
-EXPECTED_DEFERRING_OWNERS = 121
+# Research-lane boundaries: `data-analysis` defers polygon overlay to
+# `geospatial-analysis`, accounting-period work to `finance-analysis` and a
+# deck or workbook to `materials-package`; `live-info-operator` defers a
+# broad current-facts question to `web-research`, a ledger to `finance-analysis`
+# and an app write to `connector-operator`; `research-brief` defers recurring
+# multi-role research to `research-department`; `source-finder` and
+# `research-department` defer a cited lookup to `web-research`, and
+# `research-brief` defers fresh links or current facts to it as well. Seven cases,
+# eleven pairs, two new owners.
+EXPECTED_DEFERENCE_CASES = 417
+EXPECTED_DEFERENCE_PAIRS = 437
+EXPECTED_DEFERRING_OWNERS = 123
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

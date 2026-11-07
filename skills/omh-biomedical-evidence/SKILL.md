@@ -10,7 +10,7 @@ metadata:
     phase: biomedical-evidence
     role: operator
     quality_tier: evidence-gated
-    related_skills: [omh-paper-learning, ulw-research, grounded-citations]
+    related_skills: [omh-paper-learning, ulw-research, omh-web-research, grounded-citations]
 ---
 
 # Biomedical Evidence

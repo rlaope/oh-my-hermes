@@ -920,6 +920,8 @@ _FEATURE_SURFACE_SKILLS = (
         next_action="prepare_live_info_operator_card",
         boundary="A live information card is not provider availability, API access, live data retrieval, weather, market price, sports score, exchange-rate, time-zone, map, or place-result evidence unless observed live-info result evidence records it.",
         good_prompt="live-info-operator check today's Seoul weather with freshness, units, and provider boundaries before answering.",
+        good_expected="Run the lookup with an available tool, then state the resolved place, the provider's observation time, units and local time zone; produce `prepare_live_info_operator_card` only when no tool can reach a provider.",
+        good_why="The value is retrieved and checked, not recalled, and the card is the fallback rather than the answer.",
         bad_prompt="live-info-operator invent the latest stock price without provider evidence or timestamp.",
         expected_outputs=(
             "live_info_task_card/v1",
@@ -935,15 +937,30 @@ _FEATURE_SURFACE_SKILLS = (
             "freshness_boundary/v1 separating requested recency, provider timestamp, source quality, and stale-result handling",
             "live_info_result_manifest/v1 only when provider response, timestamp, quote/source id, or rendered result is observed",
         ),
+        why_this_exists=(
+            "`live-info-operator` exists because a live number answered from recall, or from a quote with no timestamp, "
+            "is wrong in a way the reader cannot see: it runs the lookup with an available tool and then checks what came back "
+            "for provider, time, units and staleness before it is stated."
+        ),
+        do_not_use_when=(
+            "The question is a broad current-facts or citation question rather than one live value; use `web-research`.",
+            "A supplied ledger, budget or close needs analysis rather than a live rate; use `finance-analysis`.",
+            "The request would create, update, send or mutate state in an external app; use `connector-operator`.",
+        ),
         final_checklist=(
+            "The lookup was run with an available tool - a maps or time-zone tool, a quotes tool, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.",
             "Domain, location or symbol, time window, provider preference, freshness, units, and stop condition are explicit.",
+            "Weather names the resolved place (and the match when ambiguous), the provider's observation or forecast time, units and local time zone; a forecast is not an observation.",
+            "A price or rate names the symbol or pair, venue, currency, quote timestamp, and whether the feed is delayed (free equity feeds often are, by about 15 minutes) or the market is closed.",
+            "A score says live, final or scheduled, with the kickoff time zone; a time-zone answer uses an IANA zone name and the date the offset applies to (daylight saving).",
+            "If the provider timestamp is older than the window the person needs (name it), say so instead of answering.",
             "Provider setup, API access, source quality, stale data, and missing location/symbol decisions are gated or marked missing.",
             "Weather, price, score, exchange-rate, time-zone, map, place, and traffic facts are reported only from observed provider evidence.",
         ),
         recovery_notes=(
-            "If the provider, plugin, API key, or connector is missing, route to toolbelt-readiness before preparing result claims.",
-            "If the request asks for citations, best practices, docs, or broad current-source synthesis, route to research instead.",
-            "If the request would create, update, invite, send, or mutate external provider state, route to connector-operator instead.",
+            "If the provider, plugin, API key, or connector is missing, route to `toolbelt-readiness` before preparing result claims.",
+            "If the request asks for citations, best practices, docs, or broad current-source synthesis, route to `research` instead.",
+            "If the request would create, update, invite, send, or mutate external provider state, route to `connector-operator` instead.",
         ),
         situations=(
             "what is the weather in seoul",
@@ -1553,7 +1570,19 @@ _FEATURE_SURFACE_SKILLS = (
         next_action="prepare_data_analysis_card",
         boundary="A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, hallucination-safe numeric evidence, association, or causality unless observed data and method evidence records it.",
         good_prompt="data-analysis analyze this CSV and summarize anomalies by segment.",
-        bad_prompt="data-analysis invent trends from an unavailable spreadsheet.",
+        bad_prompt="data-analysis is the Q3 lift significant? (two columns of five numbers each)",
+        bad_expected="Compute the comparison with code and report n per group, the effect size and an interval or test with its assumptions, flagging that five per group makes the result fragile, instead of calling the gap significant or refusing for lack of data.",
+        bad_why="The data was supplied; the failure is a comparison reported without n, an effect size or an interval.",
+        why_this_exists=(
+            "`data-analysis` exists because a model that reads a table by eye returns means, trends and anomalies that look "
+            "observed and are wrong, and a gap between two groups reads as a finding with no test, sample size or "
+            "interval: every number here comes from a command output that can be named, and every comparison carries its evidence."
+        ),
+        do_not_use_when=(
+            "Polygon overlay and area computation from supplied layers; use `geospatial-analysis`.",
+            "Budget variance, cash or close analysis with accounting periods and controls; use `finance-analysis`.",
+            "The table must become a deck, workbook or exported report; use `materials-package` after the analysis scope is clear.",
+        ),
         expected_outputs=(
             "data_analysis_task_card/v1",
             "dataset_scope/v1",
@@ -1574,14 +1603,16 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         final_checklist=(
             "Dataset or corpus source, record scope, schema or extraction method, join assumptions, analysis question, method, and stop condition are explicit.",
+            "The data was loaded with code (pandas, SQL or a spreadsheet tool) and shape, dtypes, null counts, duplicate rows and the min and max of key columns were printed before any claim; every number in the answer comes from a command output you can name. With no code tool, say so and analyse only what fits in context, labelled as read by eye.",
             "Numeric claims, anomalies, trends, segments, and log patterns are reported only from observed data or supplied evidence.",
-            "Causal claims require observed identification evidence.",
+            "Every comparison states n per group, the effect size and an interval or test (named, with its assumptions); the answer says how many segments were looked at, and the headline is checked against its major subgroups.",
+            "Causal claims require observed identification evidence: a randomized or explicitly identified design. Otherwise report association as association.",
             "Source acquisition, file conversion, report generation, and code fixes are routed to the narrower workflow when stronger.",
         ),
         recovery_notes=(
             "If the data itself is missing, ask for the smallest dataset sample, schema, or query output needed.",
-            "If the user wants datasets found online, route to source-finder before analysis.",
-            "If the user wants a PPT/PDF/XLSX report generated from data, route to materials-package or deliverable-package after analysis scope is clear.",
+            "If the user wants datasets found online, route to `source-finder` before analysis.",
+            "If the user wants a PPT/PDF/XLSX report generated from data, route to `materials-package` or `deliverable-package` after analysis scope is clear.",
         ),
         situations=(
             "what does this csv show",

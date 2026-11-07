@@ -14,7 +14,11 @@ promised. Skill loading and resource materialization only read inert text.
 - Choose an appropriate projected metre CRS. Area and perimeter are planar in
   that CRS, not automatically equal-area, geodesic or ground-truth measurements.
   EPSG:3857 is used only for the declared local synthetic fixture, not a general
-  recommendation for public-world measurement. Geographic and feet-based target
+  recommendation for public-world measurement: the helper refuses Web Mercator and
+  Mercator for any layer that is not one of the shipped example files (checked by digest), because they
+  inflate area by 1/cos^2(latitude); never add or edit `data_class` or `fixture_id`
+  on a real layer to pass that check. Use an equal-area CRS for the extent or the
+  local UTM zone / national grid. Geographic and feet-based target
   CRS are refused. Geographic inputs must be reprojected before measurement.
 - Require finite 2D Polygon/MultiPolygon coordinates, closed rings, nonempty
   valid geometry and a bounded candidate-pair budget. No automatic `make_valid`

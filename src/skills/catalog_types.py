@@ -795,6 +795,9 @@ class HermesReferenceLine(str):
 # with a catalog skill or its display label, which a test holds. A name
 # outside this set is refused, so a typo or an upstream rename fails when the
 # catalog loads instead of shipping a line naming a skill Hermes cannot load.
+# `llm-wiki` moved to `optional-skills/` on upstream main on 2026-10-28 (commit
+# 183b5ddd5f); it stays bundled at the floor tag, so its handoff line is conditional
+# on the skill being installed.
 HERMES_BUNDLED_SKILL_NAMES = frozenset(
     {
         "architecture-diagram",
@@ -1477,6 +1480,10 @@ def _feature_surface_skill(
     extra_do_not_use_when: tuple[str, ...] = (),
     why_this_exists: str = "",
     do_not_use_when: tuple[str, ...] = (),
+    good_expected: str = "",
+    good_why: str = "",
+    bad_expected: str = "",
+    bad_why: str = "",
     situations: tuple[str, ...] = (),
     portable_overrides: Mapping[str, tuple[str, ...]] | None = None,
     portable_override_shadows: Mapping[str, str] | None = None,
@@ -1532,13 +1539,15 @@ def _feature_surface_skill(
         ),
         good_example=SkillExample(
             prompt=good_prompt,
-            expected=f"Produce `{next_action}` with required context, wrapper actions, and not-evidence boundaries.",
-            why="The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.",
+            expected=good_expected
+            or f"Produce `{next_action}` with required context, wrapper actions, and not-evidence boundaries.",
+            why=good_why or "The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.",
         ),
         bad_example=SkillExample(
             prompt=bad_prompt,
-            expected="Report the missing observed evidence or authority instead of claiming the external step happened.",
-            why="Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.",
+            expected=bad_expected
+            or "Report the missing observed evidence or authority instead of claiming the external step happened.",
+            why=bad_why or "Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.",
         ),
         final_checklist=final_checklist or (),
         recovery_notes=recovery_notes or (),

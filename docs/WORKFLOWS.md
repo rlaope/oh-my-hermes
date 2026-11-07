@@ -915,7 +915,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Keep historical-capture evidence and live-page evidence as two typed surfaces for a point-in-time or then-versus-now question; capture time, publication time, and retrieval time are independent clocks and none substitutes for another.
   - When Hermes' bundled `grounded-citations` skill is available, load it and register each source in its ledger when it is retrieved (`scripts/sources.py add`), before any prose is written; cite a source only by the id the ledger gave it, written `[n]`. Keep the run's ledger in a file of its own, passed as `--ledger <path>` before the subcommand on every call: the default ledger is shared by the whole profile, and another run's reset rebinds its ids. Mark background that rests on model knowledge `[unverified]` instead of citing it: the marker is for background the answer does not rest on and never carries the answer, and a contested claim with a single source keeps its citation and is stated as uncorroborated. The ledger id sits beside the source class and the retrieval date and replaces neither. Without the skill, list each source when it is retrieved and cite it at the claim it supports.
   - When that ledger is in use, report the citation check from a run, or as `not_observed`: the exit status of `sources.py verify <draft>` is the observed check - `0` is a pass and any other status is not - and `verify --evidence` also fails a draft whose cited source carries no verbatim quote. An exit `0` whose `info: stats:` line reads `0 distinct source(s) cited` checked nothing and is reported as `not_observed`, and so is an answer given only in chat: `verify` reads a draft file and exits `2` without one, so write the answer to a file first when the check matters. The run compares cited ids and the Sources block with the ledger; it does not test whether a claim is true, so a passing citation check is never reported as fact verification. After that verify, run `omh research receipts verify --citations <ledger> --draft <draft>` and report its fetched coverage from the run, or as `not_observed`; a receipt proves only that the page was opened in this session tree, never that it supports the claim. Without the ledger the citation check is `not_observed`.
-  - Stop at the answer: one retrieval round settles a lookup, and an expanding lead list means the request belongs to `research`.
+  - Stop at the answer: one retrieval round settles a lookup, plus at most the one follow-up the plan issues; a follow-up that still leaves required conditions unsupported, or an expanding lead list, means the request belongs to `research`.
   - Report what retrieval did not yield rather than closing the gap from recall.
 - Completion checklist:
   - The research question, source boundaries, recency assumptions, and confidence level are named.
@@ -927,7 +927,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If the web is unreachable, name the retrieval gap and stop rather than substituting recalled facts.
   - If no archive access exists or the capture provider's paid authority is exhausted, record a temporal retrieval gap with no network action and keep the as-of claim in the annex; never substitute the current page for it.
   - If sources conflict, present both with their retrieval dates and say which one is primary.
-  - If leads keep expanding past one round, hand the question to `research` with the sources already gathered.
+  - If the follow-up round the plan issues still leaves required conditions unsupported, or leads keep expanding, hand the question to `research` with the sources already gathered.
 - Required inputs:
   - question
   - freshness or version constraints
@@ -1039,7 +1039,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The requested output is factual findings, comparison, or a summary rather than a typed candidate inventory and acquisition status; use `research`.
   - The user needs a business decision brief with evidence-versus-inference treatment; use `research-brief`.
-  - The user asks for current citations, fact-finding, or source-backed synthesis; use `research`.
+  - The user asks for a cited answer to a current-facts question; use `web-research`, and for a reference-implementation study with a depth budget use `research`.
   - The user supplies a paper/PDF/arXiv/DOI/excerpt and wants explanation; use `paper-learning`.
   - The user asks for recurring monitoring, source inbox, or Scout/Analyst/Briefer operations; use `research-department`.
   - The user asks to export, convert, render, package, or attach a file; use `materials-package` or `deliverable-package`.
@@ -1059,7 +1059,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate candidate preparation, observed link, observed download, file hash, text extraction, license check, verification, and downstream selection.
   - Attach observation provenance before treating any acquisition state as evidence.
   - For `paper` candidates, when Hermes' bundled `arxiv` skill is available, search through it - by topic, author, category, or paper id - and record each entry it returns as `link_observed` with `hermes_tool` provenance. A search result is an observed link and nothing more: download, text extraction, and verification stay unclaimed until their own run is observed. Without the skill, a paper candidate stays `candidate_prepared` until a link is observed another way.
-  - Vary search angles across official docs, academic work, implementations, datasets, and criticism until each requested source kind has candidates or another angle change adds nothing new.
+  - Vary search angles across official docs, academic work, implementations, datasets, and criticism within the plan's budget (3 queries, 10 external attempts and one follow-up for an explore search), and name the source kinds still without candidates when the budget ends.
   - Recommend the next downstream workflow without pretending that downstream work already ran.
 - Completion checklist:
   - Source kinds, source boundaries, and downstream intent are named.
@@ -1106,21 +1106,22 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep business research in Hermes; prepare a selected executor/runtime handoff only after a later accepted plan requires code changes.
-- Why this exists: `research-brief` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+- Why this exists: `research-brief` exists because a decision brief goes wrong when a vendor claim, a source's date and the analyst's inference share one sentence: it keeps each evidence row typed observed, vendor-asserted or inferred, with its source date, so the decision owner can see what would change the answer.
 - Use when: Use when Hermes should scope a business question, gather or summarize source-backed evidence, and preserve evidence/inference boundaries before strategy or handoff.
 - Do not use when:
   - The user needs to decide whether a customer problem deserves product investment with evidence typing and customer re-entry; use `product-discovery-validation`.
-  - The request is only fresh links, citations, or current facts without a business question or decision audience; use `research`.
+  - The request is only fresh links, citations, or current facts without a business question or decision audience; use `web-research` for one cited lookup, or `research` for a depth-budget study.
   - Sources have not yet been selected and the user wants source types, candidates, or acquisition state; use `source-finder`.
+  - The research is recurring and run by several roles; use `research-department`.
 - Strong routing signals: `research-brief`, `business-research`, `business research`, `research brief`, `decision brief`, `pricing decision brief`, `decision-ready brief`, `source-backed business research`, `customer feedback trends`, `feedback trends`, `market evidence`, `data search`, `source scan`, `자료 조사`, `데이터 서치`, `근거 조사`, `피드백 추세`, `고객 피드백 추세`
 - Good example:
   - Prompt: research-brief: compare three onboarding analytics vendors using customer notes and confidence gaps.
   - Expected behavior: Prepare a source-backed brief with evidence, inference, confidence, and retrieval gaps separated.
   - Why: The user needs business research synthesis, not recurring operations or coding.
 - Bad example:
-  - Prompt: research-brief: treat casual chat or unaccepted work as if this workflow already produced verified results.
-  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `research-brief`.
-  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+  - Prompt: research-brief: how big is the dental-clinic software market, TAM, SAM and SOM?
+  - Expected behavior: Hand the sizing to `market-research`; return here only for the audience synthesis.
+  - Why: Sizing is a model with units and calculation receipts, not a brief.
 - Quality bar:
   - State the research question, source boundaries, and recency assumptions before synthesis.
   - Record each material claim as a compact evidence row: claim, source, source class (upstream official, practitioner heuristic, or unattributed), source date, confidence, and unresolved conflict.
@@ -1174,7 +1175,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Why this exists: `research-department` exists so Hermes users can start complex research-ops patterns without manually designing profiles, cron, knowledge storage, synthesis tooling, and delivery glue, while OMH keeps every runtime claim observed-only.
 - Use when: Use when Hermes should turn an ongoing or recurring research request into a prepared Scout -> Analyst -> Briefer workflow with source inbox, knowledge-store and synthesis-tool readiness, and briefing status without claiming research execution.
 - Do not use when:
-  - The user only needs a one-off current-source lookup; use `research`.
+  - The user only needs a one-off current-source lookup; use `web-research` for one cited round, or `research` for a reference-implementation study with a depth budget.
   - The user only needs a one-off business synthesis; use `research-brief`.
   - The request is pure scheduling with no source collection or synthesis; use `automation-blueprint`.
   - The user asks for coding implementation; prepare a selected executor/runtime handoff after the research plan is accepted.
@@ -1205,9 +1206,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When a material event needs sizing, customer/JTBD, or comparable pricing work, hand the bounded analysis to `market-research` with snapshot IDs, source dates, cutoff, gaps and budget; return findings to `research-brief` before Briefer delivery. A prepared handoff does not prove any analysis ran.
   - Outreach, paid sources, and schedule creation require separate explicit approval; research-operation setup is not permission to contact customers, buy data, schedule a watch, or approve a product investment.
 - Completion checklist:
-  - The research question, source boundaries, recency assumptions, and confidence level are named.
-  - Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
-  - Follow-up planning or handoff uses the research summary without calling it execution evidence.
+  - research_department_plan/v1 names topic, cadence, delivery target, knowledge store and synthesis-tool readiness, each as supplied or missing.
+  - Scout, Analyst and Briefer each map to a loadable skill; source_inbox/v1 has separate raw, processed, brief, conflict and verification buckets.
+  - The watchlist, the materiality threshold and one cutoff per source are written down before the first run.
+  - Any schedule is `not_observed` unless a `cronjob_manage` result or a cron listing was read.
 - Recovery notes:
   - If one watch source cannot be read, retain covered sources' findings and the failed source's previous cutoff, mark its coverage unresolved, and hand back that source and uncovered window rather than reporting a quiet period.
   - If the synthesis tool cannot process collected findings, retain raw findings in source_inbox/v1, mark synthesis not_observed, and hand back research_department_plan/v1 with the synthesis-tool readiness gap.
@@ -1270,10 +1272,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Preserve the coverage policy `coverage_preserving_not_lossy_summary` through a section-by-section ledger.
   - Explain by chunks when the source is long; keep each chunk linked to coverage_ledger status.
   - Set source_state from how the paper was acquired, not from the request. An entry that Hermes' bundled `arxiv` skill returned (search or id lookup) is `metadata_only` until paper text is read. Text that the bundled `pdf` skill's `pdf_read.py <file> --text` run returned is `file_text_extraction_observed` for the pages that came back with text, and a page that came back empty is listed as missing. Without those skills, the state is whatever the supplied text supports.
-  - For a paper past one read budget, when the `long-document-reading` skill is available, take the chunks from its page ranges - its page-count probe and page-anchored extraction - instead of a second chunking scheme, and map each covered range onto the coverage ledger's sections; without it, plan numbered page ranges before reading.
+  - For a paper past one read budget, when the `long-document-reading` skill is available, take the chunks from its page ranges - its page-count probe and page-anchored extraction - instead of a second chunking scheme, and map each covered range onto the coverage ledger's sections; without it, plan numbered page ranges before reading. Record the plan once with `omh_document_plan` (see Recovery Notes) so one ledger holds the ranges.
   - List missing sections and not-observed claims before presenting the explanation as complete.
 - Completion checklist:
-  - The selected explanation level is one of: very_easy, moderate, expert, choose.
+  - The explanation level is very_easy, moderate or expert, asked or stated before the first chunk; `choose` is only the unanswered state.
   - The source_state is recorded and scoped to observed text or extraction evidence.
   - The coverage ledger lists observed, missing, or prepared sections before claiming completion.
   - The explanation is section-aware and does not compress away claims, equations, figures, limitations, or reproducibility notes.
@@ -1298,7 +1300,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - section-by-section explanation outline
   - missing-section and not-observed list
 - Artifact expectations:
-  - record the card with `omh paper plan --title <title> --source <path or url> --level <level> --source-state <state>`, which writes paper_learning_card/v1 to `$OMH_HOME/paper-learning/<paper_id>/card.json` and hashes a local source file without parsing it
+  - record the card with `omh paper plan --title <title> --source <path or url> --level <level> --source-state <state>` (add `--section` once per section, in reading order, when the paper is not shaped like the ten default sections - a proof-based, systems or survey paper), which writes paper_learning_card/v1 to `$OMH_HOME/paper-learning/<paper_id>/card.json` and hashes a local source file without parsing it
   - record each explained chunk with `omh paper progress <paper_id> --covered <section> --next <section> [--missing <section>] [--note <text>]`, which updates the coverage ledger and appends one line to `ledger.jsonl`; `omh paper validate` checks the store
 - Safety rules:
   - Do not claim full PDF extraction, figure OCR, external citation checking, math validation, code reproduction, peer review, or full-paper coverage without observed evidence.
@@ -1519,6 +1521,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user wants pipeline coverage, deal health, or a seller forecast scenario rather than authoritative revenue or close reporting; use `sales-pipeline-review`.
   - The user needs an enterprise or product direction decision after analysis; route that decision to `strategy-brief`.
   - The ask is testing whether an internal control operated -- a SOX or ICFR sample, re-performance, or a deficiency's severity; use `internal-audit`.
+  - The ask is a valuation, DCF, multiples or a stock comparison from published statements; this procedure does not cover it. A host valuation skill does, when installed (Hermes ships optional finance skills); otherwise compute ratios with code from the supplied statements, state the formulas, give no recommendation, and stop at facts.
 - Strong routing signals: `finance analysis`, `budget variance`, `budget vs actual`, `month-end close`, `재무 분석`, `예산 대비 실적`, `월마감`
 - Good example:
   - Prompt: Compare Q2 actuals against budget, explain the biggest expense variances, and flag cash risks for the CFO.
@@ -1532,9 +1535,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate supplied numbers, assumptions, and missing finance evidence.
   - Keep decision and escalation questions explicit.
 - Completion checklist:
-  - Confirm the workflow target, evidence boundary, and stop condition are named.
-  - Report which outputs are prepared, observed, blocked, or missing.
-  - Name the smallest next verification or handoff instead of claiming completion from narration.
+  - finance_scope_source_record/v1 names entity, period, cutoff, currency and units, accounting basis and comparator version.
+  - Totals tie to the source, or the unreconciled gap is listed; the brief is not called reconciled otherwise.
+  - Every formula and policy is supplied or marked an unapproved assumption.
+  - Recalculation ran with a tool and its result is quoted; the disposition is PASS or HOLD with an escalation owner.
 - Recovery notes:
   - If period, currency, basis, or comparator version conflicts, retain the supplied source provenance, mark comparability unresolved, and hand back finance_scope_source_record/v1 with the conflicting attributes.
   - If totals or account mappings do not tie out, retain the confirmed scope and source record, mark reconciliation unresolved, and hand back finance_reconciliation_analysis_schedule/v1 with unreconciled gaps.
@@ -1599,7 +1603,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Input refs: `supplied finance source`, `calculation assumptions`, `decision question`
     - Output refs: `finance_reconciliation_analysis_schedule/v1`
     - Check IDs: `finance_policy_assumption_check`
-    - Instruction: Recalculate comparable variances with supplied formulas and thresholds, separating facts, approved policy, proposed assumptions, and material decision effects.
+    - Instruction: Recalculate comparable variances with supplied formulas and thresholds using a code or calculator tool and keep its output, state the sign convention (variance = actual - budget, each line labelled favourable or unfavourable by revenue versus cost) with absolute and percent variance against the stated base, and separate facts, approved policy, proposed assumptions, and material decision effects.
   - `finance_interpret_conditionally` (`analysis`)
     - Input refs: `supplied finance source`, `calculation assumptions`, `decision question`
     - Output refs: `finance_risk_register/v1`
@@ -1907,9 +1911,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Tie outcomes to scope, sequence, activities, assessments, and completion evidence.
   - Keep instructional design distinct from exported materials or LMS actions.
 - Completion checklist:
-  - The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
-  - Draft recommendations, accepted decisions, and executor handoffs are separate states.
-  - Rejected options or unresolved tradeoffs are recorded before handoff.
+  - Every outcome states performance, conditions and criterion; each has assessment evidence and rubric criteria, and the alignment map lists orphan outcomes and orphan assessments.
+  - The sequence shows diagnosis, modeling, guided practice, feedback and independent transfer, with the hours per week totalled against the stated schedule.
+  - Each accessibility adaptation names the learner barrier and an equivalent demonstration path.
+  - Validation is PASS, REVISE or BLOCKED per criterion; learner review and pilot stay prepared until observed.
 - Recovery notes:
   - If an outcome lacks acceptable assessment evidence, retain curriculum_learner_outcome_brief/v1, mark curriculum_alignment_map/v1 tentative, and hand back the orphan outcomes or assessment mismatches for revision.
   - If an access or technology barrier has no equivalent demonstration path, retain the aligned outcomes and assessments, mark curriculum_sequence_design/v1 unresolved, and hand back the barrier and required adaptation.
@@ -5559,12 +5564,12 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run directly in Hermes as wiki design and retained knowledge capture; prepare connector/runtime handoff only when a separate observed external write or coding task is explicitly required.
-- Why this exists: `wiki` exists to keep `knowledge` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+- Why this exists: `wiki` exists because a wiki fails by its audience and its upkeep, not its folder names: it sizes the structure to who reads and who maintains it, and names what would break the chosen model before any page is written.
 - Use when: Use to design a wiki someone can start today - model, skeleton, conventions, seed pages, and maintenance sized to a personal, small-group, team, or organization audience - and to capture durable knowledge into markdown vaults, Obsidian, Notion, Google Drive/Docs, databases, or local folders.
 - Do not use when:
   - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
-  - The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' bundled `llm-wiki` skill instead of this one.
+  - The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' `llm-wiki` skill instead of this one when it is installed (bundled through Hermes v0.22.5 and the floor v2026.9.7, optional from v0.22.6; hermes skills browse --source official finds it); when it is not installed, say so and offer to install it rather than imitating it.
 - Strong routing signals: `wiki`, `project wiki`, `build a wiki`, `start a wiki`, `organize my notes`, `external knowledge store`, `knowledge base`, `Obsidian`, `markdown vault`, `Notion knowledge base`, `Google Drive wiki`, `옵시디언`, `마크다운 볼트`, `노션 지식베이스`, `위키`, `위키 만들`, `지식베이스`, `지식 정리 체계`
 - Good example:
   - Prompt: wiki: six of us keep re-answering the same questions in chat; help me stand up a wiki in Notion.
@@ -5583,6 +5588,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Never present prepared wiki guidance as an observed external write, store creation, or memory mutation.
   - Mark stale or uncertain knowledge instead of presenting it as permanent truth.
   - Extract separate coding tasks instead of burying them in notes.
+  - Before writing a page to a shared or synced store, strip credentials and personal data from it, or ask: a note's destination decides who can read it.
 - Completion checklist:
   - Audience scale, destination, knowledge types, and maintenance owner are recorded or named as missing.
   - The proposed model carries its rationale, breaking conditions, and one alternative.
@@ -6532,7 +6538,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expected behavior: Route to `materials-package`: the user wants a produced file, not a page-anchored reading of the document; the page count alone does not make it a reading request.
   - Why: Reading and producing are different lanes; a deck request is file output work.
 - Quality bar:
-  - Get the page count and scanned flags first with `pdf_read.py --meta`; each script names its own missing dependency (`pdfplumber` for `pdf_read.py`, `pypdf` for `pdf_split.py`, `pymupdf` for `extract_pymupdf.py`, `pypdfium2` or poppler `pdftoppm` for `pdf_page_image.py`); install it once, and say so.
+  - Get the page count and scanned flags first with `pdf_read.py --meta`; each script names its own missing dependency (`pdfplumber` and, for `--meta`, `pypdf` for `pdf_read.py`; `pypdf` for `pdf_split.py`; `pymupdf` for `extract_pymupdf.py`; `pypdfium2` or poppler `pdftoppm` for `pdf_page_image.py`); run them with the interpreter the `pdf` skill's Prerequisites give (a task-local virtual environment where it gives none) and never `pip install` into Hermes' own interpreter.
   - Size ranges to the read budget: about 60 pages per 100,000-character call at typical density; halve the range when a probe read truncates.
   - Extract each range with page selection (`extract_pymupdf.py --pages` or `read_file` on a `pdf_split.py` output) so every note carries a page anchor.
   - Delegate ranges to `delegate_task` children with the fixed per-range brief when the plan has more than 4 ranges; read sequentially otherwise.
@@ -6545,10 +6551,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Scanned ranges are read, declined with a reason, or listed as missing.
   - Not-observed boundaries remain visible: page_count, text_extraction, scanned_page_ocr, range_delegation, hosted_ocr, cross_range_consistency.
 - Recovery notes:
-  - If a script reports a missing dependency, install the one it names once with `pip install` (`pdfplumber`, `pypdf`, `pymupdf`, or `pypdfium2`; poppler `pdftoppm` is the system alternative for rendering), rerun, and record the install.
-  - If a range read truncates, halve the range, record the observed characters per page, and re-plan the remaining ranges from that measurement.
-  - If the context was compacted or the session resumed, reread the ledger and continue from the `next` range; do not restart from page 1.
-  - If the document is encrypted, ask for the password or stop; `pdf_read.py` and `pdf_split.py` accept `--password`.
+  - If a script reports a missing dependency, rerun it with the interpreter the protocol resolved (the `pdf` skill's documents or `pdf-pymupdf` environment where it gives one, else a task-local virtual environment) instead of installing anything into Hermes' interpreter; poppler `pdftoppm` is the system alternative for rendering.
+  - If a range read truncates, halve the range, record the observed characters per page in the range's ledger note, and read the range in two halves; do not plan again with new numbers, which creates a new plan with an empty ledger.
+  - If the context was compacted or the session resumed, call `omh_document_plan action=show` (or reread the ledger file) and continue from the `next` range; do not restart from page 1.
+  - If the document is encrypted, ask for the password or stop; `pdf_read.py` and `pdf_split.py` accept `--password`, `extract_pymupdf.py` does not, so split the ranges with `pdf_split.py --password` first.
   - If most pages are scanned and the goal needs them all, stop and get approval for the per-page OCR job before spending one vision call per page.
 - Required inputs:
   - document path or attachment reference
@@ -8251,19 +8257,19 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Expert clarification questions:
   - `decision and audience`
     - English: Which decision must this inform, for which audience and decision owner?
-    - Korean: Which decision must this inform, for which audience and decision owner?
+    - Korean: 이 조사가 뒷받침할 의사결정은 무엇이고, 대상 청중과 결정권자는 누구인가요?
   - `buyer segment and geography`
     - English: Which buyer versus user segment, geography, alternatives, and exclusions define the market?
-    - Korean: Which buyer versus user segment, geography, alternatives, and exclusions define the market?
+    - Korean: 시장을 정의하는 구매자와 사용자 구분, 지역, 대안, 제외 대상은 무엇인가요?
   - `period currency units and source cutoff`
     - English: Which observation period, currency/base year, units/denominator, and source cutoff apply?
-    - Korean: Which observation period, currency/base year, units/denominator, and source cutoff apply?
+    - Korean: 어떤 관측 기간, 통화와 기준 연도, 단위와 분모, 자료 기준일을 적용하나요?
   - `available evidence and source boundary`
     - English: Which evidence is supplied, which sources may be retrieved, and which access/privacy limits apply?
-    - Korean: Which evidence is supplied, which sources may be retrieved, and which access/privacy limits apply?
+    - Korean: 어떤 근거가 제공되었고, 어떤 출처를 조회할 수 있으며, 접근과 개인정보 제한은 무엇인가요?
   - `research budget and stop condition`
     - English: What time/source/cost budget and stop condition bound the work?
-    - Korean: What time/source/cost budget and stop condition bound the work?
+    - Korean: 시간, 출처, 비용 예산과 중단 조건은 무엇인가요?
 - Expected outputs:
   - market scope and source ledger
   - TAM SAM SOM model and sensitivity
@@ -8884,10 +8890,11 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Handoff policy: Hermes owns the protocol conversation, the two reviewer children and the report. `omh research screening` only freezes, prepares and merges local files; it makes no model or network call and never decides a record itself.
 - Why this exists: Two reviewers screening the same records only count as dual review when neither sees the other's answers and the merge is mechanical. This workflow freezes the criteria first, keeps each reviewer blind, and never turns a missing answer into an exclusion.
 - First steps:
-  - Agree the inclusion and exclusion criteria and the ordered exclusion codes with the person before any record is read; nothing is frozen until they say the criteria are final.
+  - Records must be deduplicated across databases first (DOI or PMID, else normalized title plus year); record the identified, duplicate-removed and screened counts, because the PRISMA flow needs them and this workflow does not deduplicate.
+  - Agree the inclusion and exclusion criteria and the ordered exclusion codes with the person before any record is read; nothing is frozen until they say the criteria are final. To pilot the criteria, freeze a throwaway DIR, prepare it on 25 to 50 records, review the conflicts, then freeze the real DIR.
   - Call `omh research screening freeze --criteria FILE --codes FILE --out DIR`. The protocol is write-once: a criteria change after freeze means a new DIR, never an edited protocol.json.
   - Call `omh research screening prepare --dir DIR --records FILE --seed N`, then read DIR/manifest.json for the batch list.
-  - When `delegate_task` is in your tool list or tool_search finds it, dispatch two children, A and B: give each only its own `DIR/tasks/<A|B>/` files and tell it to write answer lines to `DIR/answers/<A|B>/`. Never pass one child the other's tasks, answers or name; without the tool, ask the person to run the two reviewers separately.
+  - When `delegate_task` is in your tool list or tool_search finds it, dispatch two children, A and B: give each only its own `DIR/tasks/<A|B>/` files and tell it to write answer lines to `DIR/answers/<A|B>/`. Never pass one child the other's tasks, answers or name; without the tool, ask the person to run the two reviewers separately. By default a child runs on the session's model (or the `delegation.model` pin) and `delegate_task` takes no per-child model, so A and B are then recorded as the same model: pass the real model for both and report `broken_independence`. Where the host routes each delegated task to a different model (a delegation backend or `omh_delegate_route`), give B another route and record the model it reports; otherwise ask the person to run reviewer B in a session on another model. Never write a model name you did not observe.
   - Call `omh research screening merge --dir DIR --answers-a DIR/answers/A --answers-b DIR/answers/B --reviewer-models A=<model>,B=<model> --json`. Exit 1 means conflicts or pending records remain; exit 2 is an input error to fix, not a result.
   - Show the conflict and pending ids to the person, or give a third child only the conflict records and the frozen criteria; pass its lines with `--adjudication` and merge again.
 - Use when: Use when records for a systematic, scoping or rapid review must be screened against the person's inclusion and exclusion criteria by two independent reviewers, with every conflict and missing decision kept visible.
@@ -8895,6 +8902,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Finding candidate papers, datasets or repositories on a topic belongs to `source-finder`.
   - Explaining one supplied paper section by section belongs to `paper-learning`.
   - Checking a HellaSwag log against the paper's reported conditions belongs to `repro-audit`.
+  - Full-text screening, search-string building, risk-of-bias and data extraction are not covered; this skill screens title and abstract only.
   - Drafting the manuscript itself is paper writing: load Hermes' optional research-paper-writing skill when it is installed.
 - Strong routing signals: `systematic-review`, `systematic review`, `systematic literature review`, `scoping review`, `rapid review`, `prisma screening`, `title and abstract screening`, `inclusion and exclusion criteria screening`, `dual reviewer screening`, `체계적 문헌고찰 스크리닝`, `초록 선별`, `두 명이 선별`
 - Good example:
@@ -8951,7 +8959,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Why this exists: Polygon computations can return plausible but wrong numbers when CRS, coordinate units or geometry are invalid. This skill couples fail-closed checks to a runnable optional overlay producer and inspectable replay artifacts.
 - First steps:
   - Read `toolkit/README.md` and `references/execution-and-qa.md` before executing `toolkit/scripts/analyze.py`; installation and skill discovery never run it.
-  - Confirm the two layers, explicit EPSG declarations, study extent, projected metre CRS, output directory and finite host timeout; never guess a missing CRS.
+  - Confirm the two layers, explicit EPSG declarations, study extent, projected metre CRS, output directory and finite host timeout; never guess a missing CRS. The helper reads GeoJSON only: for a shapefile, GeoPackage or KML ask for a GeoJSON export with the CRS stated, or offer a separately approved conversion (for example `ogr2ogr`).
   - Use the original synthetic rectangle fixture only for backend QA; do not describe it as a public flood, facility or site-suitability finding.
 - Use when: Use when supplied polygon layers need actual intersection and measured overlap, not a narrative report or a decorative map.
 - Do not use when:
@@ -8986,13 +8994,13 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Expert clarification questions:
   - `input and overlay polygon layers`
     - English: Which two polygon layers, source permissions, and study extent define the overlap question?
-    - Korean: Which two polygon layers, source permissions, and study extent define the overlap question?
+    - Korean: 겹침을 구할 두 폴리곤 레이어는 무엇이고, 사용 권한과 분석 범위는 어떻게 되나요?
   - `explicit source and metric target CRS`
     - English: What are the authoritative source CRS declarations and an appropriate projected metre CRS for measurement?
-    - Korean: What are the authoritative source CRS declarations and an appropriate projected metre CRS for measurement?
+    - Korean: 각 레이어의 공식 좌표계(CRS) 선언은 무엇이고, 면적을 잴 미터 단위 투영 좌표계는 무엇으로 할까요?
   - `new output directory and execution budget`
     - English: Which new directory receives outputs, which optional backend is installed, and what host timeout bounds execution?
-    - Korean: Which new directory receives outputs, which optional backend is installed, and what host timeout bounds execution?
+    - Korean: 결과를 쓸 새 폴더는 어디이고, 어떤 선택 백엔드가 설치되어 있으며, 실행 제한 시간은 얼마인가요?
 - Expected outputs:
   - result GeoJSON
   - measured summary JSON
@@ -9006,7 +9014,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Refuse geographic-degree area/distance and non-metre targets; choose a suitable local/equal-area projected CRS rather than treating map units as ground truth.
   - Do not auto-install optional libraries, import the companion on skill load, open a network connection, silently repair invalid geometry or overwrite existing outputs.
   - No result is observed until the actual domain backend exits successfully and its output files are inspected. Missing backend, validation failure and timeout are not zero-overlap findings.
-  - Keep confidential locations and source data out of shared reports; carry only permitted evidence references. No map, raster/NoData, buffer, spatial statistics or nearest-distance capability is promised.
+  - Keep confidential locations and source data out of shared reports; carry only permitted evidence references. No map, raster/NoData, buffer, spatial statistics or nearest-distance capability is promised: for point, line, distance or buffer work, say the helper does not cover it and offer a separately approved Shapely/GeoPandas script under the same rules (explicit CRS, metre target, recorded versions).
+  - Web Mercator (EPSG:3857) and Mercator distort area (about 1.6x at 38 degrees latitude) and the helper refuses them for real layers: choose an equal-area CRS for the extent (for example EPSG:6933 or a regional Albers/LAEA) or the local UTM zone or national projected grid for a small extent, and state the choice in the report. Never add or edit `data_class` or `fixture_id` on a real layer to pass the guard; World Equidistant Cylindrical (EPSG:4087) is not equal-area either.
 - Procedure checks:
   - `gis_input_check`
     - Required result fields: `layer_hashes`, `source_crs`, `geometry_validity`, `target_units`
@@ -9163,7 +9172,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Run `toolkit/scripts/reconcile.py` only against a hash-checked local capture envelope; never execute provider text or install an upstream skill pack.
 - Use when: Use when public gene/variant and disease assertions must be cross-checked against ClinVar and trial registry records, preserving source failures and disagreements rather than inferring a clinical conclusion.
 - Do not use when:
-  - For explaining one supplied paper, use `paper-learning`; for broad literature discovery, use `research`.
+  - For explaining one supplied paper, use `paper-learning`; for broad literature discovery or a clinical-evidence question with no named gene or variant (this skill covers ClinVar and ClinicalTrials.gov records only), use `research`, and for a cited answer to one such question use `web-research`.
   - For generic server configuration and connection diagnostics, load the host's MCP setup guidance instead.
   - For sequence analysis or omics pipelines, select an available computational biology specialist instead; this method does not implement those analyses.
   - For citation verification and source attribution alone, load Hermes' bundled `grounded-citations` skill.
@@ -9269,7 +9278,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Why this exists: Input validation and tutorial numbers are not measured docking. Require a real engine search and digest-bound poses, finite energies and replay settings.
 - First steps:
   - Read `toolkit/README.md` and `references/execution-and-qa.md`. Use the explicitly invoked standalone Vina Python helper, not an invented ToolUniverse tool or hidden core execution service.
-  - Recover prepared file paths, source/license and preparation receipts, angstrom binding box, seed, CPU, new output directory and host deadline. Never guess a site, silently prepare a molecule or install dependencies on skill load.
+  - Recover prepared file paths, source/license and preparation receipts, angstrom binding box, seed, CPU, new output directory and host deadline. Never guess a site, silently prepare a molecule or install dependencies on skill load. If the person has a SMILES or a PDB id rather than PDBQT, stop and list the preparation steps they must approve (protonation state, charges, tautomer, receptor cleanup, box) with a named converter such as Meeko or ADFR; do not convert silently.
   - Use `--validate-only` for dependency-free prerequisites, or explicitly invoke actual docking in an approved environment with a host-enforced timeout and stdout/stderr capture. Missing dependencies must refuse, not produce guessed findings.
 - Use when: Use when prepared receptor/ligand files and an explicit binding box need a bounded rigid-receptor computational run.
 - Do not use when:
@@ -9291,7 +9300,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Input/format/resource checks and exact input hashes are observed; source rights and preparation assumptions remain explicit.
   - Actual poses, finite matching energies, backend version/settings, host logs/exit/deadline and replay manifest are read back, or the run is reported BLOCKED without invented results.
 - Recovery notes:
-  - Preserve failed setup receipts. On this host, one authorized correction of the existing native build supplied CONDA_DEFAULT_ENV as well as CONDA_PREFIX/PATH, then Vina 1.2.7 built and the real 1IEP smoke passed; this is not a promise for other platforms.
+  - Preserve failed setup receipts. PyPI ships Vina 1.2.7 wheels only for x86_64 Linux, so macOS arm64 needs a source build with Boost and SWIG, and its setup.py checks CONDA_DEFAULT_ENV, not only CONDA_PREFIX. If the build fails, return the failure log and do not retry blindly; the observed 1IEP smoke is one platform, not a promise for others.
   - If a native run fails or times out, retain its logs and partial files without a success claim; review the backend failure before retrying in a new output directory.
 - Required inputs:
   - prepared receptor and ligand PDBQT paths
@@ -9300,13 +9309,13 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Expert clarification questions:
   - `prepared receptor and ligand PDBQT paths`
     - English: Which prepared, rights-cleared single-ligand and rigid-receptor PDBQT files are authorized?
-    - Korean: Which prepared, rights-cleared single-ligand and rigid-receptor PDBQT files are authorized?
+    - Korean: 사용이 허가된, 준비를 마친 단일 리간드와 강체 수용체 PDBQT 파일은 무엇인가요?
   - `binding box and preparation provenance`
     - English: What are the center and box dimensions in angstrom, and which protonation, charge, tautomer and preparation choices produced these files?
-    - Korean: What are the center and box dimensions in angstrom, and which protonation, charge, tautomer and preparation choices produced these files?
+    - Korean: 박스 중심과 크기(옹스트롬)는 얼마이고, 어떤 양성자화, 전하, 호변이성질체, 준비 방식으로 이 파일들을 만들었나요?
   - `approved local resource budget`
     - English: Which isolated optional backend, finite host deadline and new evidence directory are approved?
-    - Korean: Which isolated optional backend, finite host deadline and new evidence directory are approved?
+    - Korean: 승인된 격리 선택 백엔드, 유한한 호스트 제한 시간, 새 증거 폴더는 무엇인가요?
 - Expected outputs:
   - molecular_docking_preflight/v1
   - molecular_docking_run/v1 and real pose/score files
@@ -9316,6 +9325,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Never infer efficacy, safety, affinity certainty, target validation, dosing or treatment advice. PDBQT syntax validation is not chemical validity or a preparation review.
   - No hidden execution, network, credentials, global install or paid compute. Dependencies are optional and task-isolated; discovery, routing and skill installation never execute the helper.
   - ToolUniverse registrations were inspected, not invoked. This toolkit uses standalone AutoDock Vina Python only; do not invent a ToolUniverse adapter or tool name.
+  - Exhaustiveness is capped at 4 here (Vina's default is 8): treat energies as one under-sampled run, never as a ranking or a comparison across ligands. Before reporting a site, redock the co-crystal ligand when one exists and report its pose RMSD to the crystal pose; with none, say the site is unvalidated.
 - Procedure checks:
   - `docking_input_check`
     - Required result fields: `file_hashes`, `format_validation`, `source_license`, `preparation_choices`, `binding_box`
@@ -10586,17 +10596,17 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when users ask to prepare or supervise read-only weather, finance, sports, map, place, exchange-rate, or time-zone lookups without claiming live data retrieval.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
-- Why this exists: `live-info-operator` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+- Why this exists: `live-info-operator` exists because a live number answered from recall, or from a quote with no timestamp, is wrong in a way the reader cannot see: it runs the lookup with an available tool and then checks what came back for provider, time, units and staleness before it is stated.
 - Use when: Use when Hermes should prepare or supervise read-only live information lookups without claiming provider availability, API access, freshness, retrieval, or result correctness.
 - Do not use when:
-  - The request is already handled by a narrower explicit skill with stronger evidence.
-  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+  - The question is a broad current-facts or citation question rather than one live value; use `web-research`.
+  - A supplied ledger, budget or close needs analysis rather than a live rate; use `finance-analysis`.
+  - The request would create, update, send or mutate state in an external app; use `connector-operator`.
 - Strong routing signals: `live-info-operator`, `live info operator`, `live information`, `real time information`, `real-time information`, `weather today`, `current weather`, `weather forecast`, `stock price`, `crypto price`, `btc price`, `exchange rate`, `sports score`, `game score`, `time zone`, `timezone`, `time in`, `map directions`, `directions to`, `near me`, `nearby restaurants`, `traffic now`, `오늘 날씨`, `현재 날씨`, `날씨 예보`, `주가`, `코인 가격`, `환율`, `스포츠 점수`, `경기 결과`, `시간대`, `현재 시간`, `지도`, `길찾기`, `주변 식당`
 - Good example:
   - Prompt: live-info-operator check today's Seoul weather with freshness, units, and provider boundaries before answering.
-  - Expected behavior: Produce `prepare_live_info_operator_card` with required context, wrapper actions, and not-evidence boundaries.
-  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+  - Expected behavior: Run the lookup with an available tool, then state the resolved place, the provider's observation time, units and local time zone; produce `prepare_live_info_operator_card` only when no tool can reach a provider.
+  - Why: The value is retrieved and checked, not recalled, and the card is the fallback rather than the answer.
 - Bad example:
   - Prompt: live-info-operator invent the latest stock price without provider evidence or timestamp.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
@@ -10606,13 +10616,18 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
+  - The lookup was run with an available tool - a maps or time-zone tool, a quotes tool, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.
   - Domain, location or symbol, time window, provider preference, freshness, units, and stop condition are explicit.
+  - Weather names the resolved place (and the match when ambiguous), the provider's observation or forecast time, units and local time zone; a forecast is not an observation.
+  - A price or rate names the symbol or pair, venue, currency, quote timestamp, and whether the feed is delayed (free equity feeds often are, by about 15 minutes) or the market is closed.
+  - A score says live, final or scheduled, with the kickoff time zone; a time-zone answer uses an IANA zone name and the date the offset applies to (daylight saving).
+  - If the provider timestamp is older than the window the person needs (name it), say so instead of answering.
   - Provider setup, API access, source quality, stale data, and missing location/symbol decisions are gated or marked missing.
   - Weather, price, score, exchange-rate, time-zone, map, place, and traffic facts are reported only from observed provider evidence.
 - Recovery notes:
-  - If the provider, plugin, API key, or connector is missing, route to toolbelt-readiness before preparing result claims.
-  - If the request asks for citations, best practices, docs, or broad current-source synthesis, route to research instead.
-  - If the request would create, update, invite, send, or mutate external provider state, route to connector-operator instead.
+  - If the provider, plugin, API key, or connector is missing, route to `toolbelt-readiness` before preparing result claims.
+  - If the request asks for citations, best practices, docs, or broad current-source synthesis, route to `research` instead.
+  - If the request would create, update, invite, send, or mutate external provider state, route to `connector-operator` instead.
 - Required inputs:
   - user request
   - target context
@@ -11031,34 +11046,36 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when users ask to analyze supplied CSV, JSON, logs, tables, or metric-like data with schema, method, and hallucination guards.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
-- Why this exists: `data-analysis` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+- Why this exists: `data-analysis` exists because a model that reads a table by eye returns means, trends and anomalies that look observed and are wrong, and a gap between two groups reads as a finding with no test, sample size or interval: every number here comes from a command output that can be named, and every comparison carries its evidence.
 - Use when: Use when Hermes should prepare supplied structured, unstructured, or mixed data analysis without unsupported numeric or causal claims.
 - Do not use when:
-  - The request is already handled by a narrower explicit skill with stronger evidence.
-  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+  - Polygon overlay and area computation from supplied layers; use `geospatial-analysis`.
+  - Budget variance, cash or close analysis with accounting periods and controls; use `finance-analysis`.
+  - The table must become a deck, workbook or exported report; use `materials-package` after the analysis scope is clear.
 - Strong routing signals: `data-analysis`, `data analysis`, `dataset analysis`, `csv analysis`, `json analysis`, `log analysis`, `table analysis`, `analyze csv`, `analyze this csv`, `analyze json`, `analyze logs`, `summarize anomalies`, `anomaly analysis`, `trend analysis`, `segment analysis`, `column analysis`, `schema check`, `table to chart`, `chart with an executive summary`, `spreadsheet delta analysis`, `cohort analysis`, `retention analysis`, `correlation analysis`, `causal analysis`, `causality check`, `데이터 분석`, `csv 분석`, `json 분석`, `로그 분석`, `이상치 분석`, `추세 분석`, `오류 패턴`, `컬럼 분석`, `전환율 델타`, `차트 요약`, `상관관계 분석`, `인과 분석`, `인과관계`, `проанализируй данные`, `анализ логов`, `разбери логи`, `анализ таблицы`, `посчитай метрики`, `проанализируй csv`, `анализ данных`
 - Good example:
   - Prompt: data-analysis analyze this CSV and summarize anomalies by segment.
   - Expected behavior: Produce `prepare_data_analysis_card` with required context, wrapper actions, and not-evidence boundaries.
   - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 - Bad example:
-  - Prompt: data-analysis invent trends from an unavailable spreadsheet.
-  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+  - Prompt: data-analysis is the Q3 lift significant? (two columns of five numbers each)
+  - Expected behavior: Compute the comparison with code and report n per group, the effect size and an interval or test with its assumptions, flagging that five per group makes the result fragile, instead of calling the gap significant or refusing for lack of data.
+  - Why: The data was supplied; the failure is a comparison reported without n, an effect size or an interval.
 - Quality bar:
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
   - Dataset or corpus source, record scope, schema or extraction method, join assumptions, analysis question, method, and stop condition are explicit.
+  - The data was loaded with code (pandas, SQL or a spreadsheet tool) and shape, dtypes, null counts, duplicate rows and the min and max of key columns were printed before any claim; every number in the answer comes from a command output you can name. With no code tool, say so and analyse only what fits in context, labelled as read by eye.
   - Numeric claims, anomalies, trends, segments, and log patterns are reported only from observed data or supplied evidence.
-  - Causal claims require observed identification evidence.
+  - Every comparison states n per group, the effect size and an interval or test (named, with its assumptions); the answer says how many segments were looked at, and the headline is checked against its major subgroups.
+  - Causal claims require observed identification evidence: a randomized or explicitly identified design. Otherwise report association as association.
   - Source acquisition, file conversion, report generation, and code fixes are routed to the narrower workflow when stronger.
 - Recovery notes:
   - If the data itself is missing, ask for the smallest dataset sample, schema, or query output needed.
-  - If the user wants datasets found online, route to source-finder before analysis.
-  - If the user wants a PPT/PDF/XLSX report generated from data, route to materials-package or deliverable-package after analysis scope is clear.
+  - If the user wants datasets found online, route to `source-finder` before analysis.
+  - If the user wants a PPT/PDF/XLSX report generated from data, route to `materials-package` or `deliverable-package` after analysis scope is clear.
 - Required inputs:
   - user request
   - target context

@@ -10,6 +10,7 @@ metadata:
     phase: live-info-task
     role: guide
     quality_tier: workflow-surface-gated
+    related_skills: [omh-web-research, omh-finance-analysis, omh-apps]
 ---
 
 # Live Info Operator
@@ -18,21 +19,21 @@ This is a Hermes-native `live-info-operator` workflow skill.
 
 ## Why This Exists
 
-`live-info-operator` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+`live-info-operator` exists because a live number answered from recall, or from a quote with no timestamp, is wrong in a way the reader cannot see: it runs the lookup with an available tool and then checks what came back for provider, time, units and staleness before it is stated.
 
 ## Do Not Use When
 
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- The question is a broad current-facts or citation question rather than one live value; use `omh-web-research`.
+- A supplied ledger, budget or close needs analysis rather than a live rate; use `omh-finance-analysis`.
+- The request would create, update, send or mutate state in an external app; use `omh-apps`.
 
 ## Examples
 
 Good example:
 
 - Prompt: live-info-operator check today's Seoul weather with freshness, units, and provider boundaries before answering.
-- Expected behavior: Produce `prepare_live_info_operator_card` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Expected behavior: Run the lookup with an available tool, then state the resolved place, the provider's observation time, units and local time zone; produce `prepare_live_info_operator_card` only when no tool can reach a provider.
+- Why: The value is retrieved and checked, not recalled, and the card is the fallback rather than the answer.
 
 Bad example:
 
@@ -42,15 +43,20 @@ Bad example:
 
 ## Completion Checklist
 
+- The lookup was run with an available tool - a maps or time-zone tool, a quotes tool, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.
 - Domain, location or symbol, time window, provider preference, freshness, units, and stop condition are explicit.
+- Weather names the resolved place (and the match when ambiguous), the provider's observation or forecast time, units and local time zone; a forecast is not an observation.
+- A price or rate names the symbol or pair, venue, currency, quote timestamp, and whether the feed is delayed (free equity feeds often are, by about 15 minutes) or the market is closed.
+- A score says live, final or scheduled, with the kickoff time zone; a time-zone answer uses an IANA zone name and the date the offset applies to (daylight saving).
+- If the provider timestamp is older than the window the person needs (name it), say so instead of answering.
 - Provider setup, API access, source quality, stale data, and missing location/symbol decisions are gated or marked missing.
 - Weather, price, score, exchange-rate, time-zone, map, place, and traffic facts are reported only from observed provider evidence.
 
 ## Recovery Notes
 
-- If the provider, plugin, API key, or connector is missing, route to toolbelt-readiness before preparing result claims.
-- If the request asks for citations, best practices, docs, or broad current-source synthesis, route to research instead.
-- If the request would create, update, invite, send, or mutate external provider state, route to connector-operator instead.
+- If the provider, plugin, API key, or connector is missing, route to `omh-toolbelt-readiness` before preparing result claims.
+- If the request asks for citations, best practices, docs, or broad current-source synthesis, route to `ulw-research` instead.
+- If the request would create, update, invite, send, or mutate external provider state, route to `omh-apps` instead.
 
 ## Workflow Lane
 

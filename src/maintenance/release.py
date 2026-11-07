@@ -2159,10 +2159,18 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # body (+11,249), merged over the Vietnamese pack. Its own measurement on
 # 32878e25d (1,332,345) and this pack's (1,325,671) each raised the ceiling to
 # 1,500,000; together they read 1,336,920, whose 10% still rounds to it.
-FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1336920
+# 1336920 -> 1480299 (measured; the ceiling 1500000 -> 1650000): the pack had grown to
+# 1,471,273 on main without a re-measure, because a floor the producer reads above fires
+# no re-derive signal. The research-lane skill fixes add 9,026 (the long-document
+# protocol's environment rule and durable ledger, data-analysis's statistical checklist,
+# live-info's provider gates, the finance and wiki boundaries), where
+# `test_one_more_ordinary_lane_member_fits_every_body_budget` found that the largest
+# lane-mate copy (`ultrawork`, +26,456) no longer fits. 1,480,299 plus 10%, rounded up to
+# the next 50,000, is 1,650,000.
+FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1480299
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1500000
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1650000
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # Repeated bytes: characters of full-profile SKILL.md `##` sections that are
 # byte-identical to the same section in another skill -- the second and later

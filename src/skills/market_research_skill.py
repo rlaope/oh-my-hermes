@@ -44,13 +44,19 @@ DEFINITION = SkillDefinition(
 
     required_inputs=_INPUTS,
     expert_questions=tuple(
-        ExpertQuestion(key, question, question)
-        for key, question in zip(_INPUTS, (
+        ExpertQuestion(key, question, korean)
+        for key, question, korean in zip(_INPUTS, (
             "Which decision must this inform, for which audience and decision owner?",
             "Which buyer versus user segment, geography, alternatives, and exclusions define the market?",
             "Which observation period, currency/base year, units/denominator, and source cutoff apply?",
             "Which evidence is supplied, which sources may be retrieved, and which access/privacy limits apply?",
             "What time/source/cost budget and stop condition bound the work?",
+        ), (
+            "이 조사가 뒷받침할 의사결정은 무엇이고, 대상 청중과 결정권자는 누구인가요?",
+            "시장을 정의하는 구매자와 사용자 구분, 지역, 대안, 제외 대상은 무엇인가요?",
+            "어떤 관측 기간, 통화와 기준 연도, 단위와 분모, 자료 기준일을 적용하나요?",
+            "어떤 근거가 제공되었고, 어떤 출처를 조회할 수 있으며, 접근과 개인정보 제한은 무엇인가요?",
+            "시간, 출처, 비용 예산과 중단 조건은 무엇인가요?",
         ))
     ),
     expected_outputs=_OUTPUTS,
