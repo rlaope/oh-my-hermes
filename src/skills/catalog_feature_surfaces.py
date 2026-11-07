@@ -1965,6 +1965,9 @@ _FEATURE_SURFACE_SKILLS = (
         (
             "agent-ops-review",
             "agent ops review",
+            "tracing audit",
+            "telemetry audit",
+            "instrumentation audit",
             "agent productivity",
             "operator productivity",
             "manager view",

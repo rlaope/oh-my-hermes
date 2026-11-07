@@ -8737,6 +8737,7 @@ _DEFINITIONS = [
         (
             "wiki",
             "project wiki",
+            "write a handover guide",
             "build a wiki",
             "start a wiki",
             "organize my notes",
@@ -11011,6 +11012,9 @@ _DEFINITIONS.append(
         (
             "security-event-response",
             "security event response",
+            "exfiltrating customer data",
+            "suspected unauthorized access",
+            "account takeover",
             "cve",
             "triage this cve",
             "cve in our dependency",

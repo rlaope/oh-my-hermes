@@ -10067,6 +10067,18 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("reach-ko-weekly-not-stock-price", "A trigger narrowed in the reach round no longer takes this", "팀 주간 운영 리듬 만들어줘", "answer_clarification", "", "live-info-operator"),
     RoutingPrecisionCase("reach-time-instead-not-live-info", "A trigger narrowed in the reach round no longer takes this", "Can you read these five files at the same time instead of one by one?", "answer_file_lookup", "file_or_text", "live-info-operator"),
     RoutingPrecisionCase("reach-payment-failed-retry-not-spend", "A trigger narrowed in the reach round no longer takes this", "payment failed, retry", "answer_directly", "direct_answer", "spend-gate"),
+    # The audit's named reach phrases, in another sense: asks at most, as on main.
+    RoutingPrecisionCase("named-reach-sales-account-takeover", "Taking over a sales account is not an incident", "the sales account takeover from Jim went smoothly", "answer_directly", "direct_answer"),
+    RoutingPrecisionCase("named-reach-thriller-exfiltration", "A thriller's plot is not an incident", "the movie's hacker keeps exfiltrating customer data in act two", "answer_clarification", ""),
+    RoutingPrecisionCase("named-reach-babysitter-handover", "A babysitter's handover is not a project wiki", "write a handover guide for the babysitter", "answer_clarification", ""),
+    RoutingPrecisionCase("named-reach-oboe-instrumentation", "A music school's instrumentation is not agent ops", "the music school's instrumentation audit found too few oboes", "answer_clarification", ""),
+    RoutingPrecisionCase("named-reach-korean-market-worry", "Worrying about a market's size asks for no method", "시장 규모가 작아서 걱정이야", "answer_clarification", "", "market-research"),
+    RoutingPrecisionCase("named-reach-korean-market-slide", "Sending a slide is not sizing a market", "시장 규모 슬라이드 보내줘", "answer_clarification", "", "market-research"),
+    RoutingPrecisionCase("named-reach-korean-competitor-meeting", "Booking a meeting is not analysing competitors", "경쟁사 분석 회의 잡아줘", "answer_clarification", "", "market-research"),
+    # What failed the same test and stays out: everyday sentences these phrases would have moved.
+    RoutingPrecisionCase("named-reach-korean-bus-stopped", "Buses stopped by snow cancel nothing", "눈이 와서 버스가 다 멈춰 섰어", "answer_clarification", "", "cancel"),
+    RoutingPrecisionCase("named-reach-korean-wallpaper-job", "A wallpaper job is not a workflow to cancel", "도배 작업 취소해줘", "answer_clarification", "", "cancel"),
+    RoutingPrecisionCase("named-reach-school-play-handover", "A school play's handover is not a project wiki", "write a project handover for the school play", "answer_clarification", ""),
     RoutingPrecisionCase("native-debugging-dap-handshake", "A dap between friends is not a debugger session", "give me a dap, nice work today", "answer_clarification", ""),
     RoutingPrecisionCase("native-debugging-printf-opinion", "An opinion on printf and debuggers asks at most", "debugger or printf, which do people prefer", "answer_clarification", ""),
 )
@@ -20908,6 +20920,13 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     # The reach round: `release gate` left both skills that shared it, lengthened on one.
     RoutingInterventionCase("release-gate-asks", "Bare `release gate` is no skill's whole phrase, so it asks", "release gate", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "deploy-and-monitor"),
     RoutingInterventionCase("run-the-release-gate-is-verification", "Running the release gate is verification-gate's", "run the release gate on this branch", "dispatch", "verification-gate", "prepare_verification_gate", "verification_gate"),
+    # The audit's named reach phrases: each names its skill as the first option.
+    RoutingInterventionCase("named-reach-account-takeover", "An account takeover reaches security event response", "we have an account takeover on an admin user", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "security-event-response"),
+    RoutingInterventionCase("named-reach-unauthorized-access", "Suspected unauthorized access reaches security event response", "suspected unauthorized access on our server", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "security-event-response"),
+    RoutingInterventionCase("named-reach-telemetry-audit", "A telemetry audit reaches agent ops review", "telemetry audit please", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "agent-ops-review"),
+    RoutingInterventionCase("named-reach-korean-handover", "A Korean project handover reaches wiki", "이 프로젝트 인수인계 문서 써줘", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "wiki"),
+    RoutingInterventionCase("named-reach-korean-market-size", "A Korean market size request reaches market research", "치과 시장 규모 추정해줘", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "market-research"),
+    RoutingInterventionCase("named-reach-korean-competitors", "A Korean competitor analysis request reaches market research", "우리 앱 경쟁사 분석 정리해줘", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "market-research"),
     RoutingInterventionCase("release-gate-in-a-film-stays-out", "A release gate in a film asks at most", "the movie had a scene with a release gate at a racetrack", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "deploy-and-monitor"),
     RoutingInterventionCase("native-debugging-dap-still-asks-for-it", "Asking for a dap debugger still reaches native debugging though no route promises one", "use a dap debugger on this core dump", "dispatch", "native-debugging", "prepare_native_debug_plan", "native_debug_plan"),
 )

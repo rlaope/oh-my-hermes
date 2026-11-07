@@ -230,7 +230,13 @@ FROZEN_HANGUL_TRIGGERS_BY_SKILL: dict[str, int] = {
     "research": 10,
     "web-research": 10,
     "websearch-setup": 4,
-    "wiki": 7,
+    # 7 -> 8 (2026-11-07, skill audit): a project handover had no signal in Korean;
+    # `인수인계 문서 써줘` carries the request, and its words are held back.
+    "wiki": 8,
+    # 0 -> 2 (2026-11-07, skill audit): the skill could not be reached in Korean at all.
+    # `시장 규모` and `경쟁사 분석` are terms of the job, held back word by word and read
+    # only under a request verb of `_market_research_korean_request`.
+    "market-research": 2,
     "workflow-learning": 11,
     "workspace-audit": 4,
     "workspace-file-operator": 12,

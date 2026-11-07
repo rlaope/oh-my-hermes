@@ -47,5 +47,17 @@ class ToolbeltGapWordTests(unittest.TestCase):
                 self.assertEqual(_route(message)["selected_skill"], "toolbelt-readiness")
 
 
+class MarketResearchKoreanTests(unittest.TestCase):
+    def test_a_korean_request_for_the_method_names_the_skill(self) -> None:
+        for message in ("치과 시장 규모 추정해줘", "우리 앱 경쟁사 분석 정리해줘"):
+            with self.subTest(message=message):
+                self.assertEqual(_route(message)["candidate_skill"], "market-research")
+
+    def test_the_words_under_another_verb_or_no_request_do_not(self) -> None:
+        for message in ("시장 규모 슬라이드 보내줘", "시장 규모가 작아서 걱정이야", "경쟁사 분석 회의 잡아줘", "경쟁사 분석 보고서 번역해줘"):
+            with self.subTest(message=message):
+                self.assertNotEqual(_route(message)["candidate_skill"], "market-research")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -411,7 +411,10 @@ All notable changes will be documented here.
   video words on the connector card no longer pull a turn. Missing or unset words
   alone no longer open toolbelt readiness, "주간" no longer reads as "주가", and "time
   instead" no longer reads as "time in". native-debugging's routed text stops
-  promising a debug adapter Hermes does not have.
+  promising a debug adapter Hermes does not have. A few phrases the skill audits
+  named now reach their skill: `account takeover` and `suspected unauthorized
+  access`, `telemetry audit`, `write a handover guide` and `인수인계 문서 써줘`,
+  and in Korean `시장 규모` and `경쟁사 분석` under a request to size or analyse.
 
 - **Business and operations skills now check what a practitioner checks.**
   The morning brief no longer claims a Gmail connection is draft-only from

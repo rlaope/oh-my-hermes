@@ -95,7 +95,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # OMH ignoring files, and a filler adverb, a why-question about a
         # parser and "Hermes with OMH" before a task stay off it too.
         # systematic-review adds six review, screening and criteria controls.
-        self.assertEqual(payload["summary"]["case_count"], 1426)
+        self.assertEqual(payload["summary"]["case_count"], 1436)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -170,7 +170,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # The rendered-scene lane's crime-scene control is a direct answer (+1).
         # show-reel's quoted idea-video ask is translation input, answered directly (+1).
         # A concept question under a busy-path gateway origin is answered directly (+1).
-        self.assertEqual(payload["summary"]["direct_answer_count"], 358)
+        self.assertEqual(payload["summary"]["direct_answer_count"], 359)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
@@ -255,7 +255,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # before an add-tests request keeps ultrawork, and two reports quoting
         # the user's own migrate / rewrite ask reach workflow-learning.
         # systematic-review adds four screening requests and two owner-keeping controls.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1252)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1258)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

@@ -1155,14 +1155,14 @@
 },
 {
 "anchors":"base driv googl knowledg live markdown notion obsidian organiz shar stor system vault wiki",
-"hangul":"노션 다운 디언 마크 베이 볼트 시디 식베 옵시 위키 이스 정리 지식 체계 크다",
-"hangul_anchors":"노션 다운 디언 마크 베이 볼트 시디 식베 옵시 위키 이스 정리 지식 체계 크다",
+"hangul":"노션 다운 디언 마크 문서 베이 볼트 수인 시디 식베 옵시 위키 이스 인계 인수 정리 지식 체계 크다",
+"hangul_anchors":"노션 다운 디언 마크 문서 베이 볼트 수인 시디 식베 옵시 위키 이스 인계 인수 정리 지식 체계 크다",
 "label":"omh-wiki",
 "name":"wiki",
 "situation":"Scattered knowledge needing a wiki",
 "terms":{
 "1":"audienc awar blueprint connection construction convention databas design destination durabl folder group guidanc local maintenanc model need organization page personal retain scatter seed sized skeleton small today",
-"2":"answer base build captur keep live project question set shar stor system",
+"2":"answer base build captur guid handover keep live project question set shar stor system writ",
 "3":"doc driv external googl markdown start team",
 "4":"knowledg note organiz",
 "5":"notion obsidian vault",
@@ -1510,7 +1510,7 @@
 "situation":"Security event on the code already shipped -- a CVE in a dependency, a secret committed to the repo, a license question, an advisory",
 "terms":{
 "1":"call contact contain containment exist fit forc happen major noth output question registry rotat rotation scan step version",
-"2":"agpl alert already analysis audit aws befor clos code compatibility compatibl critical dependabot ended env file flag git github history issu key library log4j never npm observ ok order packag public reachabl scanner servic severity token vulnerability vulnerabl",
+"2":"access account agpl alert already analysis audit aws befor clos code compatibility compatibl critical customer data dependabot ended env exfiltrat file flag git github history issu key library log4j never npm observ ok order packag public reachabl scanner servic severity suspect takeover token unauthoriz vulnerability vulnerabl",
 "3":"credential leak product push repo ship triag",
 "4":"advisory api commit cve dependency gpl licens reachability secret",
 "5":"respons",
@@ -1717,8 +1717,8 @@
 },
 {
 "anchors":"addressabl assumption demand pain purchas quantify rival seat side synthesiz trigger",
-"hangul":"",
-"hangul_anchors":"",
+"hangul":"경쟁 규모 분석 시장 쟁사",
+"hangul_anchors":"경쟁 규모 분석 시장 쟁사",
 "label":"omh-market-research",
 "name":"market-research",
 "situation":"Market sizing or customer/competitive analysis",
@@ -2391,7 +2391,7 @@
 "situation":"AI agent progress for managers",
 "terms":{
 "1":"action explain herm inspect lever next",
-"2":"ce codex coding dashboard est gate good ist los operator output pass productiv productivity qu qui se status summary task updat view week",
+"2":"audit ce codex coding dashboard est gate good instrumentation ist los operator output pass productiv productivity qu qui se status summary task telemetry trac updat view week",
 "4":"blocker throughput",
 "5":"manager ops review work",
 "6":"ai progress quality",

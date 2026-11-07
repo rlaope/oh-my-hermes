@@ -2,6 +2,7 @@
   "schema_version": "trigger_language_pack/v1",
   "language": "ko",
   "skills": {
+    "market-research": ["시장 규모", "경쟁사 분석"],
     "show-reel": ["제품 쇼케이스 영상"],
     "sprite-forge": ["도트 캐릭터", "스프라이트 시트", "도트 스프라이트"],
     "systematic-review": ["체계적 문헌고찰 스크리닝", "초록 선별", "두 명이 선별"],
@@ -700,7 +701,8 @@
       "위키",
       "위키 만들",
       "지식베이스",
-      "지식 정리 체계"
+      "지식 정리 체계",
+      "인수인계 문서 써줘"
     ],
     "ask": [
       "claude 의견",
@@ -1195,6 +1197,8 @@
     ]
   },
   "whole_phrase_only_tokens": {
+    "market-research": ["시장", "규모", "경쟁사", "분석"],
+    "wiki": ["인수인계", "문서", "써줘"],
     "feedback-triage": ["결제", "오류"],
     "parallel-tools": ["쓰려고"],
     "running-work-board": ["있어", "지금"],

@@ -105,7 +105,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `inference-serving`: `inference-serving`, `inference serving`, `serve this model`, `serve the model`, `model serving`, `serving endpoint`, `vllm`, `llama.cpp`, `llama cpp`
 - `model-optimization`: `model-optimization`, `onboard new model`, `calibrate new model`, `new model calibration`, `model calibration`
 - `ultraperf`: `ultraperf`, `$ultraperf`, `ulw-perf`, `performance audit`, `performance bottleneck`, `find the bottleneck`, `profile the hot path`, `memory leak investigation`, `token cost hotspot`
-- `wiki`: `wiki`, `project wiki`, `build a wiki`, `start a wiki`, `organize my notes`, `external knowledge store`, `knowledge base`, `Obsidian`, `markdown vault`
+- `wiki`: `wiki`, `project wiki`, `write a handover guide`, `build a wiki`, `start a wiki`, `organize my notes`, `external knowledge store`, `knowledge base`, `Obsidian`
 - `ask`: `ask`, `$ask`, `external advisor`, `ask claude`, `ask gemini`, `consult claude`, `consult gemini`, `opinion from claude`, `opinion from gemini`
 - `cancel`: `cancel`, `$cancel`, `stop the workflow`, `abort the run`, `cancel the loop`
 - `skill`: `skill`, `$skill`, `skills`, `manage skills`
@@ -126,7 +126,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `commit-pr-authoring`: `commit-pr-authoring`, `commit message`, `commit messages`, `write the commit message`, `draft the commit message`, `commit body`, `squash message`, `pr body`, `pr description`
 - `git-workflow`: `git-workflow`, `git workflow`, `merge conflict`, `merge conflicts`, `rebase conflict`, `resolve the conflict`, `resolve this conflict`, `conflict markers`, `git bisect`
 - `relational-db`: `relational-db`, `relational database`, `online migration`, `migration for a large table`, `lock-safe ddl`, `alter table`, `took a lock`, `table lock`, `lock during deploy`
-- `security-event-response`: `security-event-response`, `security event response`, `cve`, `triage this cve`, `cve in our dependency`, `cve in a dependency`, `security advisory`, `dependabot alert`, `dependabot security`
+- `security-event-response`: `security-event-response`, `security event response`, `exfiltrating customer data`, `suspected unauthorized access`, `account takeover`, `cve`, `triage this cve`, `cve in our dependency`, `cve in a dependency`
 - `agent-instructions`: `agent-instructions`, `agents.md`, `claude.md`, `gemini.md`, `copilot-instructions.md`, `.cursorrules`, `cursor rules`, `cursor rule`, `agent instruction file`
 - `iac-change`: `iac-change`, `iac change`, `infrastructure as code`, `infrastructure-as-code`, `terraform plan`, `terraform apply`, `terraform state`, `terraform drift`, `terraform module`
 - `data-pipelines`: `data-pipelines`, `data pipeline`, `data pipelines`, `etl`, `elt`, `etl pipeline`, `etl job`, `etl backfill`, `airflow dag`
@@ -179,7 +179,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `harness-session-inventory`: `harness-session-inventory`, `harness session inventory`, `session inventory`, `session adapter`, `session adapters`, `harness sessions`, `mcp inventory`, `mcp config inventory`, `mcp drift`
 - `ops-observability-card`: `ops-observability-card`, `observability card`, `operations command board`, `ops command board`, `service quality board`, `service quality`, `external metric provider`, `metric provider`, `prometheus metrics`
 - `achievements`: `achievements`, `achievement`, `badges`, `badge`, `my badges`, `show achievements`, `achievement summary`, `unlocked badges`, `badge progress`
-- `agent-ops-review`: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`
+- `agent-ops-review`: `agent-ops-review`, `agent ops review`, `tracing audit`, `telemetry audit`, `instrumentation audit`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`
 - `agent-debug`: `agent-debug`, `agent debug`, `agent debugging`, `agent introspection`, `agent self-debug`, `self-debug`, `self debugging`, `looping agent`, `agent loop failure`
 - `failure-signal-audit`: `failure-signal-audit`, `failure signal audit`, `silent failure`, `silent failures`, `silent failure hunter`, `swallowed error`, `swallowed errors`, `empty catch`, `ignored exception`
 - `instinct-ledger`: `instinct-ledger`, `instinct ledger`, `project instincts`, `project-scoped instincts`, `project scoped instincts`, `global instincts`, `instinct review`, `instinct candidate`, `instinct candidates`

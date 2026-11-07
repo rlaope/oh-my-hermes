@@ -996,8 +996,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # of a pointed-at software object, logging practices and our test
             # coverage stay off it too (+10).
             # The reach round adds what its narrowed triggers no longer take, and two sentences that say dap
-            # or printf in passing beside native-debugging's wording.
-            expected=1426,
+            # or printf in passing beside native-debugging's wording. Its named reach phrases add seven sentences
+            # using their words in another sense, and three more for the phrases that failed that test.
+            expected=1436,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1592,8 +1593,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # statin-trial review and a telehealth scoping review reach it, and a
             # plain PR review clarifies toward code-review (+4).
             # The reach round takes out the Korean Hermes update cue, and adds `release gate` asking, the same
-            # words in a film, the lengthened phrase dispatching, and a person asking for a dap debugger.
-            expected=1252,
+            # words in a film, the lengthened phrase dispatching, and a person asking for a dap debugger; and
+            # six requests that its named reach phrases carry.
+            expected=1258,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
