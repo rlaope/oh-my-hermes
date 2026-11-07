@@ -3330,7 +3330,7 @@ Category: `{definition.category}`. Phase: `{definition.phase}`. Hermes role: `{d
 
 - Load the full-contract checklist and `references/render-qa-delivery.md` before claiming completion; separate generated, attached, received and published.
 - Preserve the user's stop conditions, language choices and literal tokens. Keep the host's reply language and persona independent of content language.
-- Report actual files, source package, observed checks and every missing required check; publication and spending need separate exact-target approval.
+- Report actual files, source package, observed checks and every missing required check; publication needs separate exact-target approval, and a paid call on the user's own credits (ElevenLabs narration or voice) runs only after `omh-spend-gate`'s card and their typed yes to it.
 
 ## Recovery Notes
 
@@ -4936,6 +4936,7 @@ Load this before money moves. OMH prepares the card and checks the receipt; the 
 | booking or deposit | the price breakdown: unit price, taxes, fees, deposit against balance, and the free-cancellation deadline | the booking reference from the provider | the cancellation window, stated as a date and time |
 | paid data endpoint or metered API | the price per call times the planned call count, with a ceiling on calls | the provider's usage record or invoice line for the run | usually none; stop at the ceiling |
 | subscription or renewal | the first charge, the renewal amount, the cadence, and the next charge date | the provider's invoice or subscription receipt | cancellation before the next charge date |
+| subscription credits or plan usage (a paid generation call on the person's own key or login) | the provider's credit price times the planned characters, seconds, or images, and the credits left on the plan when the key can read them | the generated output, with the credits left read again after the call | none; regenerate only what changed |
 
 A wallet transfer card shows the whole destination address, never a shortened one, and the person confirms the address as well as the amount: a lookalike address that shares the first and last characters is a known way to lose a transfer.
 

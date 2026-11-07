@@ -322,6 +322,7 @@ class SpendGateContractTests(unittest.TestCase):
                         "booking or deposit",
                         "paid data endpoint or metered API",
                         "subscription or renewal",
+                        "subscription credits or plan usage (a paid generation call on the person's own key or login)",
                     },
                 )
                 for row in rows:
@@ -329,6 +330,41 @@ class SpendGateContractTests(unittest.TestCase):
                     self.assertEqual(len(cells), 4)
                     self.assertTrue(all(cell.strip() for cell in cells))
         self.assertInBoth(REFERENCE_PATH, _bodies())
+
+    def test_subscription_credits_count_as_a_spend_in_both_projections(self) -> None:
+        # A generation call on the person's own key spends their credits with
+        # no checkout page; the gate's scope has to say so, or a skill that
+        # sends it here finds no rule that applies.
+        for projection, body in _bodies().items():
+            with self.subTest(projection=projection):
+                self.assertIn("A paid call billed to the person's own subscription credits or plan usage", body)
+                self.assertIn("with the expected credits or cost; the call runs only after the typed yes", body)
+
+    def test_show_reel_sends_its_paid_calls_through_the_gate(self) -> None:
+        # show-reel's ElevenLabs and codex scripts spend the user's own
+        # credits; each place that runs them or names the spend approval names
+        # this gate, and the gate's typed yes is that run's exact-target approval.
+        hermes_body = next(template.content for template in builtin_skill_templates() if template.name == "show-reel")
+        portable_body = next(template.content for template in agent_skill_templates() if template.name == "omh-show-reel")
+        hermes_refs = {
+            template.relative_path: template.content
+            for template in builtin_skill_reference_templates()
+            if template.skill_name == "show-reel"
+        }
+        portable_refs = {
+            template.relative_path: template.content
+            for template in agent_skill_reference_templates()
+            if template.skill_name == "omh-show-reel"
+        }
+        self.assertIn("runs only after `omh-spend-gate`'s card and their typed yes to it", hermes_body)
+        self.assertIn("goes through `omh-spend-gate` first", hermes_refs["references/full-contract.md"])
+        self.assertIn("goes through `omh-spend-gate` first", portable_body)
+        for projection, refs in (("hermes", hermes_refs), ("portable", portable_refs)):
+            with self.subTest(projection=projection):
+                audio = refs["references/audio-production.md"]
+                self.assertIn("so it goes through `omh-spend-gate` before it runs", audio)
+                self.assertIn("That yes is the exact-target approval for that run", audio)
+                self.assertIn("goes through `omh-spend-gate`'s card and typed yes first", refs["references/render-qa-delivery.md"])
 
     def test_each_sibling_is_named_once(self) -> None:
         mine = _definition(SKILL).do_not_use_when
