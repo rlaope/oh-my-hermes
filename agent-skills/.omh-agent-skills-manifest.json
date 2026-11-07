@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "f88db0eee39cc7597741340abe0c3058b09169a276b22f30072f22b12941313c",
+  "catalog_revision": "e4da55ae75d4bf0b4d51e7fcefd7137f88e228ddf95ad869acee67988a8501ac",
   "files": {
     "omh-accessibility-audit/SKILL.md": "d76572f7d695dc8a936afd6e61db7108e2dcb17bed432c59382008b363f25b29",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -177,7 +177,7 @@
     "omh-molecular-docking/toolkit/examples/settings.json": "bc82519f57c91e9fb97f69029b2be1f54be5003700348aa074e9aacfe9c46cc5",
     "omh-molecular-docking/toolkit/scripts/dock.py": "e27d15c921543849de47023bf21417efa73d94620d54cb158378fab998c65f41",
     "omh-molecular-docking/toolkit/upstream-manifest.json": "3fc34932681e4f696c33072b3fb2b826cdc8b5d996131eb492a68e9250b4adff",
-    "omh-native-debugging/SKILL.md": "e6c30ec475ae7db6273087b964bc439dc3780146a7853c1a3b27928ca73c0f7d",
+    "omh-native-debugging/SKILL.md": "7ade31b2d1a7a49f542413e109bc3197581b8e5baaa543ea489c90faa681d12e",
     "omh-native-debugging/references/native-debug-loop.md": "8170ee94b652708f559ef33208dfec32902f9645a5dc97ba6296b7aaf1d1cafc",
     "omh-operating-rhythm/SKILL.md": "1980ac41e7a5d5c9c7d77a13d0d41862db1c9990572f419334fc12ba9aaf20d3",
     "omh-ops-observability-card/SKILL.md": "df437b7a9e915efa5781543e6f0c17dd600d2da78e6a0fd1a739d8bb393e69ae",

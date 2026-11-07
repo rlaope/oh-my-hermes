@@ -1224,7 +1224,7 @@ _SKILL_POLICIES = {
         ),
         wrapper_guidance=(
             "Prepare native_fault_statement/v1, hypothesis_set/v1 with at least three hypotheses on distinct axes, "
-            "distinguishing_observation_plan/v1, and debugger_session_plan/v1 naming the DAP adapter, breakpoints, "
+            "distinguishing_observation_plan/v1, and debugger_session_plan/v1 naming the instrument, breakpoints, "
             "watchpoints, threads, frames, and values the executor reads at each stop."
         ),
     ),

@@ -10077,6 +10077,8 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("reach-offer-market-stall", "An offer-only phrase said in passing asks at most", "size the market stall awning", "answer_clarification", "", ""),
     RoutingPrecisionCase("reach-offer-ko-checklist-people", "An offer-only phrase said in passing asks at most", "체크리스트 만들기 좋아하는 사람 많더라", "answer_clarification", "", ""),
     RoutingPrecisionCase("reach-offer-ko-stop", "An offer-only phrase said in passing asks at most", "일단 다 멈춰 있는 사진이야", "answer_clarification", "", ""),
+    RoutingPrecisionCase("native-debugging-dap-handshake", "A dap between friends is not a debugger session", "give me a dap, nice work today", "answer_clarification", ""),
+    RoutingPrecisionCase("native-debugging-printf-opinion", "An opinion on printf and debuggers asks at most", "debugger or printf, which do people prefer", "answer_clarification", ""),
 )
 
 
@@ -20943,6 +20945,7 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("reach-ko-fine-tuning", "An offer-only phrase names its skill as the candidate and asks", "작은 모델 파인튜닝하고 싶어", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "model-finetuning"),
     RoutingInterventionCase("reach-native-mac", "An offer-only phrase names its skill as the candidate and asks", "give me a native mac app design direction", "clarify", "oh-my-hermes", "answer_clarification", "clarification", "apple-design"),
     RoutingInterventionCase("reach-release-gate-is-verification", "Only verification-gate owns this phrase now", "release gate", "dispatch", "verification-gate", "prepare_verification_gate", "verification_gate"),
+    RoutingInterventionCase("native-debugging-dap-still-asks-for-it", "Asking for a dap debugger still reaches native debugging though no route promises one", "use a dap debugger on this core dump", "dispatch", "native-debugging", "prepare_native_debug_plan", "native_debug_plan"),
 )
 
 

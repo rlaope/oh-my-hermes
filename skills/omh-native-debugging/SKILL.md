@@ -1,6 +1,6 @@
 ---
 name: "omh-native-debugging"
-description: "[omh] Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a DAP debugger instead of printf. Use when the user says: native-debugging, native debugging, native binary, segfault, segmentation fault, core dump, stack corruption, memory corruption."
+description: "[omh] Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a debugger instead of printf. Use when the user says: native-debugging, native debugging, native binary, segfault, segmentation fault, core dump, stack corruption, memory corruption."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:
@@ -65,7 +65,7 @@ Bad example:
 
 ## When to Use
 
-Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a DAP-driven evidence plan for the executor.
+Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a debugger-driven evidence plan for the executor.
 
     Strong routing signals: `native-debugging`, `native debugging`, `native binary`, `segfault`, `segmentation fault`, `core dump`, `stack corruption`, `memory corruption`, `heap corruption`, `use after free`, `null pointer dereference`, `stripped binary`, `disassembly`, `lldb`, `gdb`, `dap debugger`, `breakpoint`, `watchpoint`, `backtrace`, `セグメンテーション違反`, `コアダンプ`, `メモリ破壊`, `ヒープ破壊`, `解放後使用`, `逆アセンブル`, `네이티브 디버깅`, `세그폴트`, `코어 덤프`, `메모리 손상`, `역어셈블`, `중단점`, `段错误`, `核心转储`, `内存破坏`, `释放后使用`, `反汇编`, `bantu debug segfault ini`, `analisis core dump`, `telusuri penyebab use after free`, `debug crash pada binary native`, `giúp debug lỗi segfault này`, `phân tích core dump`, `truy nguyên nhân use after free`, `debug crash trên binary native`
 

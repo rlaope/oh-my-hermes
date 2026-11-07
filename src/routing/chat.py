@@ -4092,7 +4092,7 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "메모리 손상",
         ),
         "operator_surface_fast_path:native_debugging",
-        "Clear native-binary fault or crash-debugging request; prepare competing hypotheses, distinguishing observations, and a DAP-driven debugger session plan.",
+        "Clear native-binary fault or crash-debugging request; prepare competing hypotheses, distinguishing observations, and a debugger session plan.",
     ),
     (
         "accessibility-audit",

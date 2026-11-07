@@ -995,8 +995,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # A Korean manuscript, paper search and PRISMA diagram, five reviews
             # of a pointed-at software object, logging practices and our test
             # coverage stay off it too (+10).
-            # The reach round adds what its narrowed triggers no longer take and offer-only phrases said in passing.
-            expected=1433,
+            # The reach round adds what its narrowed triggers no longer take and offer-only phrases said in passing,
+            # and two sentences that say dap or printf in passing beside native-debugging's wording.
+            expected=1435,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1590,8 +1591,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # keep their own owners (+6). A Korean two-reviewer abstract screen, a
             # statin-trial review and a telehealth scoping review reach it, and a
             # plain PR review clarifies toward code-review (+4).
-            # The reach round adds offer-only phrases naming their skill and takes out the Korean Hermes update cue.
-            expected=1277,
+            # The reach round adds offer-only phrases naming their skill and takes out the Korean Hermes update cue,
+            # and a person asking for a dap debugger, which still reaches native-debugging.
+            expected=1278,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

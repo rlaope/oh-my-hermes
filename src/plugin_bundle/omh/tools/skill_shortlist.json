@@ -650,9 +650,9 @@
 "situation":"Native program crashes or corrupts memory",
 "terms":{
 "1":"compet distinguish driv evidenc herm hypothes hypothesis instead instruct level low observation plan printf program",
-"2":"11 after backtrac breakpoint build core corruption dereferenc disassembly driven executor free freed get heap null pointer prepar read releas segmentation signal stack startup strip watchpoint",
-"3":"corrupt debugger fault",
-"4":"crash dap dump gdb lldb segfault",
+"2":"11 after backtrac breakpoint build core corruption dap dereferenc disassembly driven executor free freed get heap null pointer prepar read releas segmentation signal stack startup strip watchpoint",
+"3":"corrupt fault",
+"4":"crash debugger dump gdb lldb segfault",
 "6":"binary memory",
 "7":"nativ",
 "9":"debug"

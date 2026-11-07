@@ -3238,7 +3238,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### native-debugging
 
-[omh] Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a DAP debugger instead of printf.
+[omh] Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a debugger instead of printf.
 
 - Category: `verification`
 - Phase: `native-debugging`
@@ -3253,7 +3253,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep the fault statement, hypothesis set, distinguishing observations, and the debugger plan in Hermes. Record every breakpoint hit, register or memory read, backtrace, and reproduction only from executor or wrapper observed evidence.
 - Why this exists: `native-debugging` closes OMH's zero-coverage low-level domain by preparing a hypothesis-driven, DAP-first debugging plan for native binaries, while OMH itself continues to execute nothing.
-- Use when: Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a DAP-driven evidence plan for the executor.
+- Use when: Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a debugger-driven evidence plan for the executor.
 - Do not use when:
   - The failure is a build or CI failure rather than a runtime fault in a binary; use `build-failure-triage`.
   - The subject is an agent or workflow misbehaving rather than a native binary; use `agent-debug`.

@@ -5244,7 +5244,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "native-debugging",
-        "Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a DAP debugger instead of printf.",
+        "Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a debugger instead of printf.",
         (
             "native-debugging",
             "native debugging",
@@ -5266,7 +5266,7 @@ _DEFINITIONS = [
             "watchpoint",
             "backtrace",
         ),
-        "Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a DAP-driven evidence plan for the executor.",
+        "Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a debugger-driven evidence plan for the executor.",
         category="verification",
         phase="native-debugging",
         hermes_role="retained-cognition",

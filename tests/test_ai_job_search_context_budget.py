@@ -148,8 +148,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # readings is exact on the merged tree, and the pin before it was d6dfefff...fc71.
             # Digest re-derived for the reach round: the rows of the skills whose triggers,
             # description, or use-when moved; removing those edits reproduces a5d1c988...3e03.
-            (skill_capabilities, 536086, FULL_ROW_DELTA_CAP,
-             '65f6ca11207f7d9837f78db183908e6a5fa51da92b85f753d8bad73e8cfeddd4',
+            (skill_capabilities, 536082, FULL_ROW_DELTA_CAP,
+             '54c674134c373c36a63a77ef515c3791d02c1c8105ab396426753e6ddc67a338',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -385,7 +385,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The skill audit round moves the bodies each lane edited and nothing else: the union of the
         # lanes' moved lists equals the merged tree's. Plan, ralplan and adversarial-consensus name
         # `--plan-file` / `--input-bundle`; the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '47b6898f56f7b517be9ad2adc7e4595f743a83b295bc74136bb7468845b86234')
+        self.assertEqual(_digest(legacy_hashes), '7709744d76e5ed973f059bfb7e2a8a51a0045f172302bf1fa369aee14da7a85d')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
