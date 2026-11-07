@@ -18,6 +18,7 @@ import unittest
 from pathlib import Path
 
 from omh.plugin_bundle.omh.delegation_routing import read_delegation_route
+from omh.plugin_bundle.omh.hermes_delegation import PROVIDER_ENTITLEMENTS_SCHEMA_VERSION, provider_entitlements_path
 from omh.plugin_bundle.omh.tools.delegate_route_tool import omh_delegate_route_handler
 
 SESSION_CONFIG = (
@@ -176,6 +177,81 @@ class ProviderConsentTest(unittest.TestCase):
         self.assertEqual(result["skipped_unconfigured"], [{"alias": "egress", "provider": "openrouter"}])
         self.assertNotEqual(read_delegation_route(self.hermes_home).get("provider"), "openrouter")
         self.assertNotIn("openrouter", self.config.read_text(encoding="utf-8"))
+
+
+class RouteOnlyProviderConsentTest(unittest.TestCase):
+    """A relay key lets a route name its provider and enrols nothing else (#2635)."""
+
+    ROUTE = {"action": "set", "model": "deepseek/deepseek-v4-pro", "provider": "commandcode"}
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        self.hermes_home = root / "hermes"
+        self.omh_home = root / "omh"
+        self.hermes_home.mkdir()
+        self.omh_home.mkdir()
+        self.config = self.hermes_home / "config.yaml"
+        self.config.write_text(SESSION_CONFIG, encoding="utf-8")
+
+    def env(self, text: str) -> None:
+        (self.hermes_home / ".env").write_text(text, encoding="utf-8")
+
+    def record(self, **document: object) -> None:
+        path = provider_entitlements_path(self.omh_home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"schema_version": PROVIDER_ENTITLEMENTS_SCHEMA_VERSION, **document}), encoding="utf-8")
+
+    def call(self) -> dict:
+        return json.loads(
+            omh_delegate_route_handler(
+                {"hermes_home": str(self.hermes_home), "omh_home": str(self.omh_home), **self.ROUTE},
+                session_id="consent-session",
+                task_id="consent-task",
+            )
+        )
+
+    def assert_routed(self) -> None:
+        payload = self.call()
+        self.assertEqual(payload["status"], "routed", payload)
+        route = read_delegation_route(self.hermes_home)
+        self.assertEqual(route["provider"], "commandcode")
+        self.assertEqual(route["model"], "deepseek/deepseek-v4-pro")
+
+    def assert_refused(self) -> None:
+        before = self.config.read_bytes()
+        payload = self.call()
+        self.assertEqual(payload["reason"], "provider_not_configured", payload)
+        self.assertEqual(self.config.read_bytes(), before)
+
+    def test_the_key_in_env_lets_a_route_name_the_provider(self) -> None:
+        self.env("COMMANDCODE_API_KEY=placeholder-key\n")
+        self.assert_routed()
+
+    def test_no_env_file_is_refused(self) -> None:
+        self.assert_refused()
+
+    def test_a_commented_key_is_refused(self) -> None:
+        self.env("# COMMANDCODE_API_KEY=placeholder-key\n")
+        self.assert_refused()
+
+    def test_the_models_dev_name_alone_is_refused(self) -> None:
+        # Hermes' registry reads only COMMANDCODE_API_KEY for this provider.
+        self.env("CMD_API_KEY=placeholder-key\n")
+        self.assert_refused()
+
+    def test_an_excluded_provider_is_refused_with_the_key_present(self) -> None:
+        self.env("COMMANDCODE_API_KEY=placeholder-key\n")
+        self.record(providers={"anthropic": "anthropic"}, excluded_providers=["commandcode"])
+        self.assert_refused()
+
+    def test_a_recorded_gateway_does_not_cover_the_key(self) -> None:
+        # An env row of kind `gateway` was dropped as already held when the
+        # document recorded a gateway of its own, which refused this route.
+        self.env("COMMANDCODE_API_KEY=placeholder-key\n")
+        self.record(providers={"og": "gateway"})
+        self.assert_routed()
 
 
 if __name__ == "__main__":

@@ -73,6 +73,32 @@ class TableTests(unittest.TestCase):
                 bool(_CHAIN_TOKEN_RE.fullmatch(token)),
             )
 
+    def test_a_route_only_name_has_a_kind_and_never_joins_the_detection_table(self) -> None:
+        self.assertTrue(detection.ROUTE_ONLY_ENV_KEY_PROVIDERS)
+        for name, provider_id in detection.ROUTE_ONLY_ENV_KEY_PROVIDERS.items():
+            with self.subTest(name=name):
+                self.assertIn(provider_id, detection.HERMES_PROVIDER_KINDS)
+                self.assertNotIn(name, detection.HERMES_ENV_KEY_PROVIDERS)
+                self.assertNotIn(provider_id, detection.HERMES_ENV_KEY_PROVIDERS.values())
+
+    def test_a_route_only_key_leaves_detection_and_the_chains_alone(self) -> None:
+        # In the detection table this key is an account of kind `gateway`,
+        # which serves every alias: shaping would fall back to the shipped
+        # order and a key-holder's working category routes would refuse.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            without, with_key = root / "without" / "hermes", root / "with" / "hermes"
+            _write(without / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+            _write(with_key / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\nCOMMANDCODE_API_KEY={KEY_VALUE}\n")
+            self.assertEqual(
+                [row["id"] for row in detection.detect_linked_providers(with_key)],
+                ["deepseek"],
+            )
+            self.assertEqual(
+                effective_mixture_category_chains(root / "with" / "omh", with_key),
+                effective_mixture_category_chains(root / "without" / "omh", without),
+            )
+
     def test_generic_and_implicit_tokens_are_not_provider_evidence(self) -> None:
         # Hermes' registry lists CLAUDE_CODE_OAUTH_TOKEN under its implicit
         # variables: Claude Code sets it, the operator did not configure

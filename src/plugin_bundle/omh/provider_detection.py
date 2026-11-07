@@ -81,7 +81,6 @@ HERMES_PROVIDER_KINDS: dict[str, str] = {
     "opencode-zen": "opencode",
     "opencode-go": "opencode",
     "opencode-free": "opencode",
-    "commandcode": "gateway",
     "zai": "zai",
     "kimi-coding": "kimi-coding",
     "kimi-coding-cn": "kimi-coding",
@@ -98,6 +97,7 @@ HERMES_PROVIDER_KINDS: dict[str, str] = {
     "copilot-acp": "gateway",
     "ai-gateway": "gateway",
     "kilocode": "gateway",
+    "commandcode": "gateway",
     "nvidia": "gateway",
     "ollama-cloud": "gateway",
     "bedrock": "gateway",
@@ -139,12 +139,20 @@ HERMES_ENV_KEY_PROVIDERS: dict[str, str] = {
     "ALIBABA_CODING_PLAN_API_KEY": "alibaba-coding-plan",
     "OPENCODE_ZEN_API_KEY": "opencode-zen",
     "OPENCODE_GO_API_KEY": "opencode-go",
-    "COMMANDCODE_API_KEY": "commandcode",
     "COPILOT_GITHUB_TOKEN": "copilot",
     "AI_GATEWAY_API_KEY": "ai-gateway",
     "KILOCODE_API_KEY": "kilocode",
     "NVIDIA_API_KEY": "nvidia",
     "OLLAMA_API_KEY": "ollama-cloud",
+}
+
+# Variable NAME -> Hermes provider id, read only by the consent check in
+# `omh_delegate_route`, never by `detect_linked_providers`. A relay's key in
+# the table above counts as an account of kind `gateway`, which serves every
+# alias, so chain shaping turns off for everyone holding it. A name here only
+# lets a route that names the provider pass.
+ROUTE_ONLY_ENV_KEY_PROVIDERS: dict[str, str] = {
+    "COMMANDCODE_API_KEY": "commandcode",
 }
 
 # `model.provider: auto` is Hermes' resolution mode, not an account.
