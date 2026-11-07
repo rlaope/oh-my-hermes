@@ -3,11 +3,12 @@
 One row per mixture category. Up and down move the cursor, stopping at the
 first and the last row as every OMH list does; on the selected row, left and
 right step the head model through the aliases chains name today, `-` and `+`
-step its reasoning effort, and `d` restores the shipped default. Enter hands
-every edited category back to the command, which writes them through the
-same validated document `omh model-chains set` writes; Esc, q or Ctrl-C
-hands back nothing, so a cancelled picker cannot have touched the file by
-construction.
+step its reasoning effort along that model's ladder, and `d` restores the
+shipped default. Enter hands every edited category back to the command, which
+writes them through the same validated document `omh model-chains set` writes,
+unless a pressed effort is off its head's list: then the picker stays open and
+says which row. Esc, q or Ctrl-C hands back nothing, so a cancelled picker
+cannot have touched the file by construction.
 
 The chain rules — which aliases the ring holds, how an effort steps, how a
 save composes the document — live in the plugin bundle's
@@ -19,8 +20,10 @@ arrive as arguments, and the raw-mode reader is shared with that picker.
 The frame is painted in the OMH theme's palette so it reads as part of the
 same product as the OMH TUI: the cursor row sits on the skin's selection
 background with `◂ model ▸` and `− effort +` markers showing which keys act
-on which cell, effort bars are toned by rung, and a row's state is a glyph
-plus a word (`● edited`, `◆ override`, `· default`). NO_COLOR or a
+on which cell, effort bars are toned by rung, a value carries `?` when the
+model's ladder is not known and `!` when the value is off its list, and a
+row's state is a glyph plus a word (`● edited`, `◆ override`, `· default`).
+NO_COLOR or a
 non-terminal keeps the exact same text with no escape bytes. Every line is
 built from fixed-width cells sized to the terminal, and the free-text lines
 are cut with an ellipsis, so a frame never wraps — a wrapped line would put
@@ -37,6 +40,7 @@ from typing import Any, TextIO
 
 from ..plugin_bundle.omh.model_chain_picker import (
     Chain,
+    PickerChanges,
     chain_from_entries,
     chain_text,
     step_effort,
@@ -86,7 +90,8 @@ _MARGIN = 3
 _CATEGORY_WIDTH = 19
 _PURPOSE_WIDTH = 30
 _MODEL_WIDTH = 24
-_EFFORT_WIDTH = 16
+_BAR_WIDTH = 6  # the longest ladder has six rungs above `none`
+_EFFORT_WIDTH = 2 + _BAR_WIDTH + 2 + 9
 _STATE_WIDTH = 11
 _PURPOSE_MIN_WIDTH = _MARGIN + _CATEGORY_WIDTH + _PURPOSE_WIDTH + _MODEL_WIDTH + _EFFORT_WIDTH + _STATE_WIDTH
 
@@ -96,14 +101,15 @@ def default_palette() -> dict[str, str]:
 
 
 def effort_bar(effort: str, ring: tuple[str, ...] = ("low", "medium", "high", "xhigh")) -> str:
-    """One cell per ring rung; `max` fills all of them, nothing fills none."""
+    """One cell per rung above `none`; `max` fills all of them, nothing fills none."""
+    cells = tuple(rung for rung in ring if rung != "none")
     if effort == "max":
-        filled = len(ring)
-    elif effort in ring:
-        filled = ring.index(effort) + 1
+        filled = len(cells)
+    elif effort in cells:
+        filled = cells.index(effort) + 1
     else:
         filled = 0
-    return "■" * filled + "□" * (len(ring) - filled)
+    return "■" * filled + "□" * (len(cells) - filled)
 
 
 def _fit(text: str, width: int) -> str:
@@ -149,6 +155,22 @@ def row_status(row: Mapping[str, Any], chain: Chain) -> str:
     return str(row["origin"])
 
 
+def _effort_keys_on(payload: Mapping[str, Any]) -> bool:
+    """A `model-efforts.json` broken at open turns -/+ off: its ladders are unknown."""
+    return not str(payload.get("effort_document_status") or "").startswith("invalid:")
+
+
+def _effort_mark(effort: str, model: Mapping[str, Any]) -> str:
+    """`!` on a value the route or a known ladder will not take, `?` on any other
+    value of a model whose ladder is not known."""
+    no_thinking = effort in ("none", "off")
+    if no_thinking and (model["refuses_none"] or not model["efforts_configured"]):
+        return "!"
+    if not model["efforts_configured"]:
+        return "?"
+    return "!" if effort and effort not in model["efforts"] else ""
+
+
 def _short_path(path: str) -> str:
     home = str(Path.home())
     return "~" + path[len(home):] if path.startswith(home) else path
@@ -161,7 +183,8 @@ def _row_cells(
     cursor: bool,
     labels: Mapping[str, str],
     served: Mapping[str, bool],
-    ring: tuple[str, ...],
+    models: Mapping[str, Mapping[str, Any]],
+    effort_keys: bool,
     with_purpose: bool,
 ) -> list[tuple[str, str]]:
     """The row as (text, tone) cells; tones are palette tokens for the painter."""
@@ -182,11 +205,16 @@ def _row_cells(
     cells.append((model_text, "ui_error" if unserved else "banner_text"))
     cells.append((f" {RIGHT_MARK}" if cursor else "  ", "ui_accent"))
     cells.append((" " * (_MODEL_WIDTH - 4 - len(model_text)), None))
-    tone = EFFORT_TONES.get(head_effort, "banner_dim")
-    cells.append(("− " if cursor else "  ", "ui_accent"))
-    cells.append((effort_bar(head_effort, ring), "ui_accent" if cursor else tone))
-    cells.append((" +" if cursor else "  ", "ui_accent"))
-    cells.append((f" {head_effort or '-':<7}", tone))
+    allowed = tuple(models[head_model]["efforts"])
+    mark = _effort_mark(head_effort, models[head_model])
+    tone = "ui_error" if mark == "!" else EFFORT_TONES.get(head_effort, "banner_dim")
+    bar = effort_bar(head_effort, allowed) if allowed else "fixed"
+    keys = cursor and effort_keys and bool(allowed)
+    cells.append(("− " if keys else "  ", "ui_accent"))
+    cells.append((bar, "ui_accent" if cursor else tone))
+    cells.append((" +" if keys else "  ", "ui_accent"))
+    cells.append((" " * (_BAR_WIDTH - len(bar)), None))
+    cells.append((f" {(head_effort or '-')[: 7 - len(mark)] + mark:<8}", tone))
     cells.append((f"{STATE_GLYPHS[state]} {state:<{_STATE_WIDTH - 2}}", STATE_TONES[state]))
     return cells
 
@@ -199,12 +227,14 @@ def render_frame(
     use_color: bool,
     width: int,
     palette: Mapping[str, str] | None = None,
+    notice: str = "",
 ) -> list[str]:
     """One full repaint: title, column header, one row per category, the
     cursor row's detail, then the key hints. Every line fits `width`."""
     paint = _Painter(palette or default_palette(), use_color)
     rows = payload["categories"]
-    ring = tuple(payload.get("efforts") or ("low", "medium", "high", "xhigh"))
+    models = {row["alias"]: row for row in payload["models"]}
+    effort_keys = _effort_keys_on(payload)
     labels = {row["alias"]: row["label"] for row in payload["models"]}
     served = {row["alias"]: bool(row["served"]) for row in payload["models"]}
     with_purpose = width >= _PURPOSE_MIN_WIDTH
@@ -264,11 +294,18 @@ def render_frame(
             " " * _MARGIN
             + paint(_clip(f"! model-chains.json ignored: {reason} · every category shows its shipped default", inner), "ui_warn")
         )
+    if not effort_keys:
+        reason = str(payload["effort_document_status"])[len("invalid:"):].strip()
+        lines.append(
+            " " * _MARGIN
+            + paint(_clip(f"! model-efforts.json ignored: {reason} · −/+ are off until it is fixed", inner), "ui_warn")
+        )
     lines += [rule, header]
     for index, row in enumerate(rows):
         is_cursor = index == cursor
         cells = _row_cells(
-            row, chains[row["category"]], cursor=is_cursor, labels=labels, served=served, ring=ring, with_purpose=with_purpose
+            row, chains[row["category"]], cursor=is_cursor, labels=labels, served=served, models=models,
+            effort_keys=effort_keys, with_purpose=with_purpose,
         )
         if is_cursor:
             lines.append("".join(paint(text, tone, bg="selection_bg", bold=True) for text, tone in cells))
@@ -285,16 +322,41 @@ def render_frame(
         heading += paint(f" · {_clip(str(current['purpose']), inner - len(str(current['category'])) - 3)}", "banner_dim")
     lines.append(" " * _MARGIN + heading)
     lines.append(" " * _MARGIN + paint(_fit("chain", 18), "banner_dim") + paint(_clip(chain_text(chain), inner - 18), "banner_text"))
+    head_model, head_effort = chain[0]
+    model = models[head_model]
+    if not model["efforts_configured"]:
+        effort_text = ", ".join(model["efforts"]) + "  (ladder not known: shared steps, not checked for this model)"
+    elif model["efforts"]:
+        effort_text = ", ".join(model["efforts"]) + f"  ({model['efforts_source']})"
+    else:
+        effort_text = "fixed: this model's list is empty, so −/+ do nothing"
+    lines.append(" " * _MARGIN + paint(_fit("effort", 18) + _clip(effort_text, width - _MARGIN - 18), "banner_text"))
+    explained = {
+        "none": "explicit no thinking; an unset effort is a different thing and inherits",
+        "": "unset: the model or provider default applies, which is not the same as `none`",
+        "auto": "`auto` is the provider default, not a rung",
+    }.get(head_effort)
+    if explained:
+        lines.append(" " * _MARGIN + paint(_fit("", 18) + _clip(explained, inner - 18), "banner_dim"))
+    if _effort_mark(head_effort, model) == "!" and model["efforts"]:
+        if model["refuses_none"] and head_effort in ("none", "off"):
+            warning = f"! the route refuses `{head_effort}` on {head_model}: thinking is always on; −/+ moves it"
+        elif head_effort == "off":
+            warning = "! `off` is the old spelling; Hermes does not read it, so the provider default runs; −/+ moves it"
+        else:
+            warning = f"! `{head_effort}` is not on this list; −/+ moves it onto the list"
+        lines.append(" " * _MARGIN + paint(_clip(warning, width - _MARGIN), "ui_warn"))
     default_text = "✓ same as shipped" if chain == default_chain else _clip(chain_text(default_chain), inner - 18)
     lines.append(" " * _MARGIN + paint(_fit("shipped default", 18) + default_text, "banner_dim"))
     if changed:
         lines.append(" " * _MARGIN + paint(f"{changed} unsaved change{'s' if changed != 1 else ''} · ⏎ writes the file", "ui_warn"))
     else:
         lines.append(" " * _MARGIN + paint("no unsaved changes · ⏎ or esc leaves the file as it is", "banner_dim"))
-    head_model = chain[0][0]
     if not served.get(head_model, True):
         note = _clip(f"! {labels.get(head_model, head_model)} is not served by this machine's providers", inner)
         lines.append(" " * _MARGIN + paint(note, "ui_error"))
+    if notice:
+        lines.append(" " * _MARGIN + paint(_clip(notice, inner), "ui_error", bold=True))
     lines.append(rule)
     hints = "   ".join(paint(keys, "ui_accent", bold=True) + " " + paint(what, "banner_dim") for keys, what in KEY_HINTS)
     lines.append(" " * _MARGIN + hints)
@@ -307,6 +369,28 @@ def render_frame(
     return [line if len(line) <= width else line[: max(0, width - 1)] + "…" for line in lines]
 
 
+def _refused_edit(
+    rows: list[Mapping[str, Any]],
+    chains: Mapping[str, Chain],
+    original: Mapping[str, Chain],
+    effort_edits: set[str],
+    ladders: Mapping[str, tuple[str, ...]],
+) -> tuple[int, str] | None:
+    """The first row a save would refuse, as (its index, the sentence), or None.
+
+    A pressed effort must be on its head's list; switching the head afterwards
+    can carry it off. An untouched value and a model-only switch never count.
+    """
+    for index, row in enumerate(rows):
+        name = row["category"]
+        if name in effort_edits and chains[name] != original[name]:
+            model, effort = chains[name][0]
+            if effort not in ladders[model]:
+                keys = "−/+ or d" if ladders[model] else "←→ or d"
+                return index, f"! {name}: {effort} is not on {model}'s list; {keys}"
+    return None
+
+
 def run_picker(
     payload: Mapping[str, Any],
     *,
@@ -316,17 +400,21 @@ def run_picker(
     width: int = 110,
     palette: Mapping[str, str] | None = None,
     max_keys: int = 4000,
-) -> dict[str, Chain] | None:
+) -> PickerChanges | None:
     """Drive the cursor until Enter or cancel.
 
     Returns the edited categories (possibly none) on Enter, or None on
-    cancel. Writes nothing but frames: applying the result is the caller's
-    job.
+    cancel. Enter with a pressed effort off its head's list stays open, on that
+    row, so the session's other edits are not lost to a refused save. Writes
+    nothing but frames: applying the result is the caller's job.
     """
     rows = payload["categories"]
     if not rows:
         return None
     aliases = tuple(row["alias"] for row in payload["models"])
+    ladders = {row["alias"]: tuple(row["efforts"]) for row in payload["models"]}
+    effort_keys = _effort_keys_on(payload)
+    effort_edits: set[str] = set()
     original = {row["category"]: chain_from_entries(row["chain"]) for row in rows}
     chains = dict(original)
     cursor = 0
@@ -338,10 +426,17 @@ def run_picker(
         key = read_key()
         if key == KEY_QUIT:
             return None
-        if key == KEY_ENTER:
-            return {name: chain for name, chain in chains.items() if chain != original[name]}
+        notice = ""
         name = rows[cursor]["category"]
-        if key == KEY_UP:
+        if key == KEY_ENTER:
+            refused = _refused_edit(rows, chains, original, effort_edits, ladders)
+            if refused is None:
+                return PickerChanges(
+                    {name: chain for name, chain in chains.items() if chain != original[name]},
+                    effort_edits=frozenset(effort_edits),
+                )
+            cursor, notice = refused
+        elif key == KEY_UP:
             cursor = max(cursor - 1, 0)
         elif key == KEY_DOWN:
             cursor = min(cursor + 1, len(rows) - 1)
@@ -349,17 +444,23 @@ def run_picker(
             chains[name] = step_head_model(chains[name], aliases, -1)
         elif key == KEY_RIGHT:
             chains[name] = step_head_model(chains[name], aliases, 1)
-        elif key == KEY_MINUS:
-            chains[name] = step_effort(chains[name], -1)
-        elif key == KEY_PLUS:
-            chains[name] = step_effort(chains[name], 1)
+        elif key in (KEY_MINUS, KEY_PLUS):
+            if not effort_keys:
+                continue
+            stepped = step_effort(chains[name], 1 if key == KEY_PLUS else -1, ladders[chains[name][0][0]])
+            if stepped != chains[name]:
+                effort_edits.add(name)
+            chains[name] = stepped
         elif key == KEY_DEFAULT:
             chains[name] = chain_from_entries(rows[cursor]["default_chain"])
+            effort_edits.discard(name)
         else:
             continue
         previous_rows = len(frame)
-        frame = render_frame(payload, chains, cursor, use_color=use_color, width=width, palette=palette)
-        write(cursor_up(previous_rows) + "".join(f"{CLEAR_LINE}{line}\n" for line in frame))
+        frame = render_frame(payload, chains, cursor, use_color=use_color, width=width, palette=palette, notice=notice)
+        # The frame's height follows the head's effort and the notice, so a
+        # shorter one must clear what the taller one left below it.
+        write(cursor_up(previous_rows) + "".join(f"{CLEAR_LINE}{line}\n" for line in frame) + f"{ESC}[J")
     return None
 
 
@@ -370,7 +471,7 @@ def pick_chains_interactively(
     palette: Mapping[str, str] | None = None,
     stdin: TextIO | None = None,
     stdout: TextIO | None = None,
-) -> dict[str, Chain] | None:
+) -> PickerChanges | None:
     """`run_picker` wired to the real terminal, cursor hidden for the duration."""
     source = stdin if stdin is not None else sys.stdin
     sink = stdout if stdout is not None else sys.stdout

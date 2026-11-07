@@ -519,6 +519,17 @@ All notable changes will be documented here.
   vendor's list price. `deepseek-v4.1-flash-1017`, the version
   `deepseek-flash` has served since 2026-10-17, uses the V4.1 Flash contract,
   price and calibration, and its runs keep the pointer's category.
+- **The model-chain picker steps each model through its own efforts.**
+  `-`/`+` in `omh model-chains` and `/omh-model` now follow the ladder the
+  model's contract documents, so Kimi K3.1 Pro walks `low, high, max` and
+  `none` appears only where thinking can be turned off. A model OMH has no
+  contract for keeps the shared steps `low` to `xhigh`, marked `?` because its
+  ladder is not known, so nobody on a custom model has to write a file to
+  change an effort. An optional `~/.omh/routing/model-efforts.json` replaces a model's
+  list, and an empty list turns its keys off. Pressing Enter on a value the
+  head can't take (`+` to `xhigh`, then a switch to Gemini 4 Argon) keeps the
+  picker open on that row, with every other edit intact, until you fix it or
+  cancel. Stored values nobody touched are left as they are and marked.
 - **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
   `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
   or Enter opens sessions or bots, folds the plan, searches history, cycles

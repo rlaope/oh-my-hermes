@@ -1997,6 +1997,37 @@ def dynamic_effort_guidance(model_id: str, executor_profile: str) -> dict[str, o
     return policy
 
 
+# Contracts that document turning thinking off without listing `none` as a
+# rung: Haiku 5.5's documented_traits and DeepSeek V4.1 Flash's
+# effort_mapping.note. Named here rather than parsed out of English prose.
+_THINKING_DISABLE_WITHOUT_A_RUNG = frozenset({"claude-haiku-5-5", "deepseek-v4.1-flash"})
+
+
+def contract_effort_option(model_id: str) -> dict[str, object] | None:
+    """The built-in selectable effort ladder for one model id, or None.
+
+    The list is the contract's documented `reasoning_efforts` in canonical
+    order, and `off` in the canonical ladder is spelled `none`, as the Hermes
+    boundary spells it. None means the contract table has no authority for the
+    id; the picker then keeps the shared steps and marks the ladder not known.
+    A rung outside the vocabulary is dropped: one bad rung must not take the
+    whole picker down, and a test holds the shipped table to the vocabulary.
+    """
+    # Imported here because `model_routing` imports this module at load time.
+    from .model_routing import REASONING_EFFORT_LADDER
+
+    projection = model_contract_projection(model_id)
+    if projection is None:
+        return None
+    contract_id = projection["contract_model_id"]
+    rungs = MODEL_CONTRACTS[contract_id].get("reasoning_efforts") or ()
+    offered = {*rungs, "none"} if contract_id in _THINKING_DISABLE_WITHOUT_A_RUNG else rungs
+    efforts = tuple(
+        rung for rung in ("none" if name == "off" else name for name in REASONING_EFFORT_LADDER) if rung in offered
+    )
+    return {"efforts": efforts, "source": "contract"} if efforts else None
+
+
 __all__ = [
     "DATA_HANDLING_ACCOUNT_SCOPE",
     "DATA_HANDLING_RETENTION_VALUES",
@@ -2018,6 +2049,7 @@ __all__ = [
     "MODEL_CONTRACT_SCHEMA_VERSION",
     "contract_documents_effort",
     "contract_effort_floor",
+    "contract_effort_option",
     "contract_model_id",
     "contract_surface_efforts",
     "dynamic_effort_guidance",
