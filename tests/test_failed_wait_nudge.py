@@ -44,7 +44,6 @@ from omh.plugin_bundle.omh.hooks.result_transforms import (  # noqa: E402
 from omh.plugin_bundle.omh.remote_wait_nudge import (  # noqa: E402
     FAILED_WAIT_STOP_TEXTS,
     FAILED_WAIT_TEXT,
-    HONEST_STOP_TEXTS,
     PROCESS_RECORD_FILENAME,
     failed_processes,
     failed_wait_context,
@@ -360,7 +359,7 @@ class TextTests(unittest.TestCase):
         )
 
     def test_each_stop_sentence_is_in_its_own_language(self) -> None:
-        self.assertEqual(sorted(FAILED_WAIT_STOP_TEXTS), sorted(HONEST_STOP_TEXTS))
+        self.assertEqual(sorted(FAILED_WAIT_STOP_TEXTS), ["en", "ja", "ko", "zh"])
         for language, text in FAILED_WAIT_STOP_TEXTS.items():
             with self.subTest(language=language):
                 self.assertEqual(reply_language(text), language)

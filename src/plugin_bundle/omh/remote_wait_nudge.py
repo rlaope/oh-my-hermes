@@ -71,11 +71,15 @@ directive is delivered on the call that starts the remote work rather than at
 the turn's end, which is the earliest point at which the fact is known and the
 last point at which the model can still act on it cheaply.
 
-A turn that receives the directive, arms nothing anyway, and ends is caught
-once more at `transform_llm_output`, the one host seam after the tool loop:
-`honest_stop_output` appends a sentence telling the person the session has
-stopped. It keys on the directive's own per-turn latch and a fresh read of
-the process record, never on the final response's wording.
+A turn that receives the directive, arms nothing anyway, and ends is left
+alone. An earlier version appended a sentence to the person's reply at
+`transform_llm_output` ("the session has stopped, send a message"), and it
+landed on very nearly every successful push -- a README edit pushed to main
+included, where nothing was ever going to be waited on. The owner rejected it
+as noise repeated on every push (2026-11-07), and it also contradicted the
+model when the model had just said it would stop writing that line. The
+in-loop directive is the whole mechanism for a push now; the end-of-turn
+sentence survives only on a turn a FAILED watcher opened (see `FAILED WAIT`).
 
 The directive drives to neither exit by force. It names arming a watcher and
 telling the person plainly, and it says not to poll in the foreground -- a
@@ -230,9 +234,6 @@ APPROVAL_GATE_CAUSE: Final = "remote_wait_approval"
 # The residual is stated rather than hidden: a session that arms a watcher for
 # one piece of work and later pushes a second without arming gets nothing.
 # That is a directive not issued, which is the direction this module fails in.
-# The end-of-turn sentence (`honest_stop_output`) does not catch it either: it
-# speaks only on a turn whose directive was delivered, and it honours the same
-# latch, for the reason given there.
 ARMS_WATCHERS_LATCH: Final = "remote_wait_arms_watchers"
 
 # ---------------------------------------------------------------------------
@@ -399,35 +400,6 @@ APPROVAL_GATE_TEXT: Final = (
 _declines: "Counter[str]" = Counter()
 
 
-# The end-of-turn half (#1721). The directive above rides a tool result while
-# the model can still act on it; this sentence is for the turn that received
-# the directive, armed nothing anyway, and ended. It is written to the PERSON
-# reading the final response, and it states only what the records show: this
-# turn started remote work, nothing is armed, and a session resumes only on a
-# message. It deliberately does not say the remote work is still running --
-# a foreground poll may already have seen it finish -- and it does not say the
-# model claimed to be waiting, because nothing here reads what the model said.
-#
-# The sentence is in the reply's own language (owner decision, 2026-09-28) and
-# carries no OMH vocabulary: no `[OMH]` head, no "armed". The language comes
-# from the response text alone -- see `reply_language` -- and never from the OS
-# locale. The copy is vendored here because this bundle cannot import `omh.*`.
-HONEST_STOP_TEXTS: Final[dict[str, str]] = {
-    "en": (
-        "This session has stopped: the remote work it started will not wake it "
-        "when it finishes, so send a message to pick it back up."
-    ),
-    "ko": (
-        "원격 작업이 끝나도 이 세션은 자동으로 다시 시작되지 않습니다. "
-        "이어서 하려면 메시지를 보내 주세요."
-    ),
-    "ja": (
-        "リモートの作業が終わっても、このセッションは自動では再開しません。"
-        "続けるには、メッセージを送ってください。"
-    ),
-    "zh": "远程工作完成后，此会话不会自动恢复。如需继续，请发送一条消息。",
-}
-HONEST_STOP_TEXT: Final = HONEST_STOP_TEXTS["en"]
 
 # The turn-start directive for a turn a failed process opened. Rides the
 # fenced `pre_llm_call` context, so the model reads it before its first call,
@@ -442,9 +414,12 @@ FAILED_WAIT_TEXT: Final = (
     "Otherwise end by saying plainly that the session has stopped and what the person "
     "has to decide."
 )
-# The end-of-turn sentence for that turn when it re-armed nothing. Same rules
-# as `HONEST_STOP_TEXTS`: the reply's language, no OMH vocabulary, appended.
-# It does not mention remote work this turn started, because it started none.
+# The end-of-turn sentence for that turn when it re-armed nothing, and the
+# only sentence OMH still appends to a reply here. It is written to the
+# PERSON, in the reply's own language (owner decision, 2026-09-28; see
+# `reply_language`), carries no OMH vocabulary, and is appended rather than
+# rewritten. It does not mention remote work this turn started, because it
+# started none.
 FAILED_WAIT_STOP_TEXTS: Final[dict[str, str]] = {
     "en": "Nothing is set to wake this session again, so send a message to pick it back up.",
     "ko": "이 세션을 다시 깨울 작업이 걸려 있지 않습니다. 이어서 하려면 메시지를 보내 주세요.",
@@ -713,35 +688,19 @@ def _consider_unarmed_wait(
 def honest_stop_output(
     *, response_text: object, session_id: object, turn_id: object, hermes_home: str = ""
 ) -> str | None:
-    """Return *response_text* ending in the honest-stop sentence, or ``None``.
+    """Return *response_text* ending in the failed-wait stop sentence, or ``None``.
 
     Hermes fires ``transform_llm_output`` once per turn, after the tool loop,
-    with the final response and the turn's own ``turn_id`` -- the same value
-    every tool hook of that turn received (`agent/turn_context.py` binds it
-    once as ``agent._current_turn_id``). It can replace the text; it cannot
-    re-enter the loop, so it can deliver the honest stop and never the
-    arm-a-watcher half. Those are the two honest exits the directive named,
-    and this is the only one still reachable once the turn has ended.
+    with the final response and the turn's own ``turn_id``. Only a turn a
+    failed watcher's notice opened can end on a sentence here: that latch is
+    recorded by ``failed_wait_context`` at turn start. A turn that pushed with
+    nothing armed is left alone -- the in-loop directive already told the
+    model, and the person does not need a line about it on every push.
 
-    The decision reads two records and never ``response_text``:
-
-    * this turn's per-turn latch for ``UNARMED_WAIT_CAUSE``, recorded only when
-      the in-loop directive was actually carried onto a result, so it means
-      "this turn started remote work while nothing was armed";
-    * the process record, re-read now, through the same
-      ``armed_waiter_present`` the directive used. Arming a watcher after the
-      directive is exactly the exit it asked for, and that turn is left alone.
-
-    A session observed arming a notifying watcher at any point is also left
-    alone, even when that watcher has already exited: a process that finished
-    during the turn queued a completion notice that will still wake it, and
-    the record no longer shows it. That is ``ARMS_WATCHERS_LATCH``, the same
-    evidence the directive honours.
-
-    Appended rather than rewritten, because the CLI prints only the suffix of
-    a transformed response when the new text starts with the streamed one
-    (`cli.py::_post_stream_transform_output`); anything else re-prints the
-    whole response under a "transformed" banner. Fail-open like every other
+    The decision reads records and never ``response_text``. Appended rather
+    than rewritten, because the CLI prints only the suffix of a transformed
+    response when the new text starts with the streamed one
+    (`cli.py::_post_stream_transform_output`). Fail-open like every other
     entry here: any failure is counted and the response passes through.
     """
     try:
@@ -772,20 +731,10 @@ def _honest_stop(
         return None
     if turn_cause_fired(session_id=session, turn_id=turn, cause=FAILED_WAIT_CAUSE):
         return _failed_wait_stop(response_text, session=session, turn=turn, hermes_home=hermes_home)
-    if not turn_cause_fired(session_id=session, turn_id=turn, cause=UNARMED_WAIT_CAUSE):
-        _declines["end_of_turn_no_unarmed_wait"] += 1
-        return None
-    if engagement_count(session, ARMS_WATCHERS_LATCH):
-        _declines["end_of_turn_session_arms_watchers"] += 1
-        return None
-    armed = armed_waiter_present(session_id=session, hermes_home=hermes_home)
-    if armed is None:
-        _declines["end_of_turn_record_unreadable"] += 1
-        return None
-    if armed:
-        _declines["end_of_turn_waiter_armed"] += 1
-        return None
-    return f"{response_text}\n\n{HONEST_STOP_TEXTS[reply_language(response_text)]}"
+    # A push with nothing armed is not announced to the person: see the
+    # module docstring for why that sentence was removed.
+    _declines["end_of_turn_no_failed_wait"] += 1
+    return None
 
 
 def _failed_wait_stop(response_text: str, *, session: str, turn: str, hermes_home: str) -> str | None:
