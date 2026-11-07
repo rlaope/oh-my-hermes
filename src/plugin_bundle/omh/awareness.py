@@ -7325,10 +7325,13 @@ def _compact_workflow_context_cards_line() -> str:
 
 
 def _compact_generic_tool_checkpoint_line() -> str:
+    # Each target is the label `skill_view` loads, written out because this bundle
+    # cannot import `omh` to derive it; the per-turn primer carries this line as is.
     return (
-        "image->img-summary; frontend->frontend/accessibility-audit/visual-qa; paper->paper-learning; content->content-operator; media->media-input-operator; file->materials-package; "
-        "search->research; live->live-info-operator; audit->workspace-audit/production-audit/security-safety-review; "
-        "failures->build-failure-triage; verify->verification-gate; code->codegraph-refresh/codebase-onboarding/ultrawork"
+        "image->omh-image-cards; frontend->omh-frontend/omh-accessibility-audit/omh-visual-qa; paper->omh-paper-learning; "
+        "content->omh-content-operator; media->omh-media-input; file->omh-materials-package; "
+        "search->ulw-research; live->omh-live-info; audit->omh-workspace-audit/omh-production-audit/omh-security-safety-review; "
+        "failures->omh-build-failure-triage; verify->omh-verification-gate; code->omh-codegraph-refresh/omh-codebase-onboarding/ulw-work"
     )
 
 

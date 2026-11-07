@@ -4776,7 +4776,9 @@ def _score_definition(
         matched.add("direct:llm_app_dev")
     # `리스크` and `블로커` are held back one by one, so either word alone names
     # nothing; said together, in any order or joiner, they are this review's pair.
-    if definition.name == "ops-review" and all(word in normalized_query for word in _OPS_REVIEW_KOREAN_PAIR):
+    if definition.name == "ops-review" and all(
+        contains_cue_phrase(normalized_query, (word,)) for word in _OPS_REVIEW_KOREAN_PAIR
+    ):
         score += 12
         matched.add("direct:ops_review_risks_and_blockers")
     if definition.name == "todo-checklist" and _todo_checklist_explicit_match(normalized_query):
