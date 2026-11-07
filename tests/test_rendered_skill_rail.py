@@ -141,5 +141,21 @@ class RenderedSkillRailTests(unittest.TestCase):
         self.assertEqual(sorted(set(missing)), [], "a rendered file names a references file the skill does not ship")
 
 
+class RenderedReferenceShapeTests(unittest.TestCase):
+    def test_no_reference_ends_in_a_literal_escape(self):
+        from omh.skills.render import _router_human_voice_reference
+
+        self.assertFalse(_router_human_voice_reference().endswith("\\n"))
+
+    def test_rendered_harness_registry_never_stacks_dots(self):
+        registry = next(
+            t.content
+            for t in builtin_skill_reference_templates()
+            if t.skill_name == "oh-my-hermes" and t.relative_path == "references/harness-registry.md"
+        )
+        self.assertNotIn("....", registry)
+        self.assertNotIn("..:", registry)
+
+
 if __name__ == "__main__":
     unittest.main()

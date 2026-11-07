@@ -81,8 +81,10 @@ class DataShareReviewCatalogTests(unittest.TestCase):
         self.assertEqual(
             scan,
             "residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class "
-            "with zero hits or each remaining hit accepted by name, and its verdict: redacted, not redacted with the "
-            "counts while a hit remains unaccepted, or not_observed when no scan ran",
+            "with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, the free-text "
+            "sample the reviewer read, and its verdict: redacted, not redacted with the counts while a hit remains "
+            "unaccepted, or not_observed when no scan ran, no free-text sample was read or its digest differs from "
+            "the share record's",
         )
 
     def test_the_mapping_stays_local_and_the_record_holds_no_value(self) -> None:
@@ -95,8 +97,9 @@ class DataShareReviewCatalogTests(unittest.TestCase):
         record = next(line for line in mine.artifact_expectations if line.startswith("share_record/v1"))
         self.assertEqual(
             record,
-            "share_record/v1 is metadata only -- destination, date, fields shipped, row count, and the sha256 digest "
-            "of the shipped file -- and holds no value from it",
+            "share_record/v1 is metadata only -- destination, date, fields shipped, row count, the sha256 digest of "
+            "the shipped file, and its data_state (pseudonymized, still personal data, when identifiers were "
+            "pseudonymized) -- and holds no value from it",
         )
 
     def test_rows_are_read_only_when_shape_counts_leave_a_field_unclear(self) -> None:
@@ -151,9 +154,9 @@ class DataShareReviewCatalogTests(unittest.TestCase):
 
         self.assertEqual(
             first_cells(classes),
-            ["direct identifier", "quasi-identifier", "secret", "free text", "not personal"],
+            ["direct identifier", "quasi-identifier", "secret", "free text", "sensitive category", "not personal"],
         )
-        self.assertEqual(first_cells(scan), ["direct identifier", "secret", "quasi-identifier", "free text"])
+        self.assertEqual(first_cells(scan), ["direct identifier", "secret", "quasi-identifier", "sensitive category", "free text"])
         self.assertIn(REFERENCE_PATH, _body())
 
     def test_the_reference_and_the_why_use_the_skills_own_words(self) -> None:

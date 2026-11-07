@@ -33,7 +33,14 @@ must agree with the flags. A geographic or feet-based measurement target is
 refused. Pick an appropriate projected metre CRS for the study extent: this
 helper does not choose a scientifically suitable projection for you.
 EPSG:3857 here is only a local synthetic analytical coordinate plane, not an
-area-preserving recommendation for real-world data.
+area-preserving recommendation for real-world data: Web Mercator and Mercator
+inflate area by 1/cos^2(latitude), about 1.6x at 38 degrees, so the helper
+refuses them as the target CRS unless both layers are the shipped example
+files (checked by their digests); never add or edit `data_class` or `fixture_id` on your own layer to pass
+that check. World Equidistant Cylindrical (EPSG:4087) is not equal-area either. For real layers use an equal-area CRS for the study extent (for
+example EPSG:6933, or a regional Albers or Lambert azimuthal equal-area CRS),
+or the local UTM zone or national projected grid for a small extent, and state
+the choice in the report.
 
 ## Supported inputs and refusal
 

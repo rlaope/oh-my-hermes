@@ -8,8 +8,9 @@ ends, and a required next action when it does not.
 
 ## The verdict shape
 
-A round returns one JSON object and nothing else — no prose above it, no
-commentary after it:
+A round is recorded as one JSON object and nothing else — no prose above it,
+no commentary after it. The reply to the user states the verdict, the score
+and the top differences in the host's own voice; the object is the record:
 
 ```json
 {

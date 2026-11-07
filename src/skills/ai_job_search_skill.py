@@ -22,10 +22,13 @@ DEFINITION = SkillDefinition(
     category='operations', phase='career-workflow', hermes_role='operator',
     delegation_boundary='retained-catalog-intent', progressive_disclosure=True,
     reasoning_demand='heavy', required_inputs=_INPUTS, expected_outputs=_OUTPUTS,
-    expert_questions=tuple(ExpertQuestion(key, question, question) for key, question in (
-        (_INPUTS[0], 'Which career action is needed now: discovery, fit, tailoring, interview preparation or tracking?'),
-        (_INPUTS[1], 'Which user-selected facts and explicit preferences support this action, and which remain unknown?'),
-        (_INPUTS[2], 'Which private destination, source permissions and finite retrieval budget are approved?'),
+    expert_questions=tuple(ExpertQuestion(key, question, korean) for key, question, korean in (
+        (_INPUTS[0], 'Which career action is needed now: discovery, fit, tailoring, interview preparation or tracking?',
+         '지금 필요한 구직 작업은 무엇인가요: 공고 탐색, 적합도 판단, 서류 맞춤 작성, 면접 준비, 지원 현황 관리 중 어느 것인가요?'),
+        (_INPUTS[1], 'Which user-selected facts and explicit preferences support this action, and which remain unknown?',
+         '이 작업에 쓸 수 있도록 직접 고르신 사실과 분명한 선호는 무엇이고, 아직 모르는 것은 무엇인가요?'),
+        (_INPUTS[2], 'Which private destination, source permissions and finite retrieval budget are approved?',
+         '어떤 비공개 저장 위치, 출처 사용 권한, 정해진 조회 횟수 한도를 승인하셨나요?'),
     )),
     opening_steps=(
         'Read `toolkit/README.md` and `references/execution-and-qa.md`; load only the relevant profile/discovery, fit/drafting or interview/outcomes reference for the current action.',
@@ -94,9 +97,9 @@ DEFINITION = SkillDefinition(
     good_example=SkillExample('Find library coordinator opportunities and tailor my supported experience to a selected posting.',
                              'Capture verified sources, preserve unknown constraints, draft evidence-mapped documents and review them privately.',
                              'Career evidence and application state need a coherent method.'),
-    bad_example=SkillExample('Debug a failed cron job in the application server.',
-                            'Use the debugging owner; do not collect career facts.',
-                            'Generic task vocabulary does not establish a career request.'),
+    bad_example=SkillExample('Screen these 40 resumes for our backend opening and rank them.',
+                            'Route to `people-ops`; this skill serves the candidate, not the employer.',
+                            'Hiring vocabulary appears in both, but only the candidate side is a career request here.'),
     final_checklist=('Requested private artifacts were written and inspected; public delivery contains only safe summaries.',
                      'Unknowns, source failures, draft versions and reviewer identity remain explicit.',
                      'Actual helper exits and tracker read-back support every count and event claim, or the blocker is stated.'),
@@ -134,6 +137,7 @@ Default maximum: 8 search queries, 20 posting-detail reads, 40 seconds per retri
 one attempt per source URL, no automatic retries. Record unenforceable tool timeout
 limits honestly. Respect access controls; no login/anti-bot bypass. Stop at bounds;
 a broader run needs approval. Search snippets are leads, not live-status evidence.
+Mark a posting `suspect` when it asks for payment, moves to a private messenger, shows no match on the company's own site, or offers pay far above the role norm; send no personal documents to a suspect source.
 Verify shortlisted postings at the employer/original source; retrieval time is not
 source update time or proof a vacancy remains open. Cached and user-provided text
 stay unverified unless separately checked. Missing dates remain null, never guessed.
@@ -206,7 +210,9 @@ it does not establish submission. Follow-up messages are drafts, not sends.
 ## Preparation tied to evidence
 Write `interview-prep.md` from the exact posting capture and selected application
 version, recording both references. Include role-specific questions, real STAR examples
-with profile evidence refs, missing evidence and honest bridge answers. Distinguish
+with profile evidence refs, missing evidence and honest bridge answers, three to five
+questions for the interviewer tied to the posting, and a compensation answer built from
+the user's stated range or `ask for the range first`, never a guessed number. Distinguish
 practice answers from achievements. Include sourced company facts with retrieval dates;
 no invented interviewer biography. Optional `skill-gaps.md` prioritizes learnable gaps,
 bounded exercises and a checkable next artifact; no hiring guarantee or unnecessary

@@ -22,7 +22,7 @@ Polygon computations can return plausible but wrong numbers when CRS, coordinate
 ## First Steps
 
 - Read `toolkit/README.md` and `references/execution-and-qa.md` before executing `toolkit/scripts/analyze.py`; installation and skill discovery never run it.
-- Confirm the two layers, explicit EPSG declarations, study extent, projected metre CRS, output directory and finite host timeout; never guess a missing CRS.
+- Confirm the two layers, explicit EPSG declarations, study extent, projected metre CRS, output directory and finite host timeout; never guess a missing CRS. The helper reads GeoJSON only: for a shapefile, GeoPackage or KML ask for a GeoJSON export with the CRS stated, or offer a separately approved conversion (for example `ogr2ogr`).
 - Use the original synthetic rectangle fixture only for backend QA; do not describe it as a public flood, facility or site-suitability finding.
 
 ## Do Not Use When
@@ -87,7 +87,7 @@ Required inputs:
 Expert clarification questions:
 - `input and overlay polygon layers`
   - English: Which two polygon layers, source permissions, and study extent define the overlap question?
-  - Korean: Which two polygon layers, source permissions, and study extent define the overlap question?
+  - Korean: 겹침을 구할 두 폴리곤 레이어는 무엇이고, 사용 권한과 분석 범위는 어떻게 되나요?
 
 Expected outputs:
 
@@ -107,7 +107,8 @@ Safety rules:
 - Refuse geographic-degree area/distance and non-metre targets; choose a suitable local/equal-area projected CRS rather than treating map units as ground truth.
 - Do not auto-install optional libraries, import the companion on skill load, open a network connection, silently repair invalid geometry or overwrite existing outputs.
 - No result is observed until the actual domain backend exits successfully and its output files are inspected. Missing backend, validation failure and timeout are not zero-overlap findings.
-- Keep confidential locations and source data out of shared reports; carry only permitted evidence references. No map, raster/NoData, buffer, spatial statistics or nearest-distance capability is promised.
+- Keep confidential locations and source data out of shared reports; carry only permitted evidence references. No map, raster/NoData, buffer, spatial statistics or nearest-distance capability is promised: for point, line, distance or buffer work, say the helper does not cover it and offer a separately approved Shapely/GeoPandas script under the same rules (explicit CRS, metre target, recorded versions).
+- Web Mercator (EPSG:3857) and Mercator distort area (about 1.6x at 38 degrees latitude) and the helper refuses them for real layers: choose an equal-area CRS for the extent (for example EPSG:6933 or a regional Albers/LAEA) or the local UTM zone or national projected grid for a small extent, and state the choice in the report. Never add or edit `data_class` or `fixture_id` on a real layer to pass the guard; World Equidistant Cylindrical (EPSG:4087) is not equal-area either.
 
 Procedure: load `references/procedure.md`.
 

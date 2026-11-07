@@ -3,6 +3,12 @@
 Upstream `0xNyk/awesome-hermes-agent` entries whose OMH coverage names the `wiki` surface, derived from the
 catalog snapshot retrieved 2026-07-27 at commit `27389ad544f9`.
 
+Check Hermes' own skills first: the bundled `obsidian` skill (`skills/note-taking/obsidian`), the `llm-wiki`
+skill (bundled through Hermes v0.22.5, optional from v0.22.6, so not installed by default there), and Notion
+through Hermes' optional MCP entry `optional-mcps/notion` (the `notion` skill was dropped from current Hermes).
+The list below is a community snapshot, several entries are documentation about Hermes rather than wiki or
+vault skills, and it ages: re-check an entry's repository before relying on it.
+
 Check this list before designing a bespoke structure. Route a promising candidate to `omh-skill-scout` for
 evaluation; adopting one is a separate decision with its own evidence.
 

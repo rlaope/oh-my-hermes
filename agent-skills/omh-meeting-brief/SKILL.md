@@ -24,6 +24,7 @@ This is an OMH `meeting-brief` workflow skill, projected for Agent Skills hosts 
 - The user needs observed meeting minutes, decisions, or action items but has not provided notes.
 - The request is strategy synthesis without a meeting audience, agenda, or decision ceremony.
 - The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.
+- The user wants minutes, scrum history or a decision log for a recurring meeting; use `omh-operating-rhythm`.
 
 ## Examples
 
@@ -48,7 +49,6 @@ Bad example:
 ## Recovery Notes
 
 - If decision topics lack known context, retain the supplied meeting goal and audience, mark the agenda tentative, and hand back discussion prompts and the decisions-needed list with its open questions.
-- If action owners, due dates, or acceptance conditions are absent from a meeting record, retain the prepared agenda and prompts, mark action ownership not_observed, and hand back the action-item template with those columns marked unknown.
 - If follow-up coding lacks observed decisions or an accepted plan, retain the meeting brief, mark the coding handoff unresolved, and hand back the decisions needed rather than an implementation claim.
 
 
@@ -71,14 +71,15 @@ Quality bar:
 - Turn context into agenda topics, prompts, decisions needed, and a record template.
 - Keep prep distinct from actual meeting minutes or accepted decisions.
 - Identify missing context that would change the meeting structure.
+- Give each agenda item a time box that sums to the meeting length, an owner and an intended outcome (decide, discuss, inform); name pre-reads and who reads them; for a decision item name the decider and what each option costs; say so when a message would meet the goal.
 - Give the record template's action-item rows outcome, owner, due date, dependency, acceptance condition, and source columns, each marked unknown until the meeting record fills it.
 
 Required inputs:
 
-- meeting goal
+- meeting goal, date and length
 - audience
 - known context
-- decision topics
+- decision topics and who decides
 
 Expected outputs:
 

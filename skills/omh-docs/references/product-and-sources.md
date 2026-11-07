@@ -27,18 +27,16 @@ them.
 
 ## Product Identity
 
-Ground the summary in the live repository description and current README. The
-identity to verify is a Hermes-native coding harness and engineering-
-intelligence layer: natural-language intake in Hermes, optimized coding
-packages and subagents, broad workflow skills, model-routing settings, local
-state, and a long-term memory system. Do not freeze those claims into a
-permanent marketing paragraph; retrieve the current wording and qualify any
-interpretation.
+Ground the summary in the live repository description and current README: quote
+the opening lines of `README.md` and `docs/DIRECTION.md` at the disclosed ref and
+do not paraphrase the product from memory or from an earlier tagline. Do not
+freeze those claims into a permanent marketing paragraph; retrieve the current
+wording and qualify any interpretation.
 
 Keep user-facing emphasis on what the product helps people do. Validation
 contracts and status evidence boundaries matter when a question asks about
-them, but they must not displace the coding-harness, engineering-intelligence,
-model-routing, local-state, and memory identity.
+them, but they must not displace what the current README and direction page
+say the product is.
 
 ## Disclosure
 

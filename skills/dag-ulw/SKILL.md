@@ -36,6 +36,7 @@ This is a Hermes-native `dag-ulw` workflow skill.
 - One small change with one owner and one check: run it directly, or use `ulw-work` when the person named it.
 - The plan itself is still undecided and needs a reviewed decision record first; use `ulw-plan`.
 - Workers must talk to each other mid-run rather than hand off through files; use `ulw-work` coordinated lanes.
+- The graph tool (omh_dag) is not in your tool list: say so and offer `ulw-work` for the same plan; do not simulate the graph in chat.
 
 ## Examples
 

@@ -76,7 +76,36 @@ Confirm the current state by retrieval rather than recall. Separate durable prin
 
 The output language is declared by the requester and never inferred from the language of the request. Body prose, role labels, chapter headings, and appendix captions follow the declared language together -- a Korean briefing under English section captions is a half-translated document. Identifiers, schema ids, file paths, command names, and code stay as written. The language declaration is required; omission is refused.
 
-OMH holds no translation table for the scaffolding, because one would have to be maintained for every language the engine can write in. Supply the labels with the payload instead: `role_labels` maps a role to its label in the document's language, `captions` supplies headings, metadata labels and the displayed evidence boundary. Explicit `en` may use English defaults; non-English output requires caller-supplied translations for every role and caption actually rendered. Unused labels need no translation. Translating the body while leaving rendered captions unset is refused. Structured receipt values and schema boundaries stay unchanged; only display labels are translated.
+OMH holds no translation table for the scaffolding, because one would have to be maintained for every language the engine can write in. Render with `omh hermes briefing --input <payload.json> [--markdown out.md] [--page out.html]`, which validates the payload, prints the first five errors it finds, and writes the markdown, the print-ready page, or both. `title` and `question` are both required (both renderers print `title`), `claim_boundary` must be the exact sentence below, `export` must map each format to `prepared`, `handoff_prepared` or `rendered_observed`, each section needs a lowercase `role` from the closed list, a `title` and at least one paragraph, and `figures`, `sources`, `role_labels` and `captions` are optional (`role_labels` and `captions` are required for a non-English `language`). The smallest payload that renders:
+
+```json
+{
+  "schema_version": "research_briefing/v1",
+  "audience": "human_briefing",
+  "output_formats": [
+    "markdown"
+  ],
+  "language": "en",
+  "title": "Cache eviction options",
+  "question": "Which cache fits?",
+  "as_of": "2026-11-07",
+  "sections": [
+    {
+      "role": "concept",
+      "title": "Cache eviction",
+      "paragraphs": [
+        "Eviction removes the least recently used entry first."
+      ]
+    }
+  ],
+  "export": {
+    "markdown": "prepared"
+  },
+  "claim_boundary": "A research briefing is prepared decision context. It is not execution, review, CI, merge-readiness, or merge evidence, and a rendered page is not a rendered PDF without observed file evidence."
+}
+```
+
+Supply the labels with the payload instead: `role_labels` maps a role to its label in the document's language, `captions` supplies headings, metadata labels and the displayed evidence boundary. Explicit `en` may use English defaults; non-English output requires caller-supplied translations for every role and caption actually rendered. Unused labels need no translation. Translating the body while leaving rendered captions unset is refused. Structured receipt values and schema boundaries stay unchanged; only display labels are translated.
 
 ## Evidence boundary
 

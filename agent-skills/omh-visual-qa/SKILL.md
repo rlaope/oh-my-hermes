@@ -49,8 +49,8 @@ Bad example:
 
 ## Recovery Notes
 
-- If no capture exists, produce the QA plan and mark verdict BLOCKED_BY_MISSING_RENDER_EVIDENCE.
-- If capture lineage is missing or mismatched, keep HOLD and request the smallest matching recapture set.
+- If no capture exists, produce the QA plan and return verdict BLOCK with blocker `missing_render_evidence`.
+- If capture lineage is missing or mismatched, return BLOCK with blocker `lineage_mismatch` and request the smallest matching recapture set.
 
 
 
@@ -151,7 +151,7 @@ Safety rules:
 - Pixel diff localizes hotspots only; it never produces the score or verdict, and objective diffs are evidence, not verdicts: review visual hierarchy, layout, CJK text, state coverage, and product intent separately.
 - Do not excuse diff hotspots as animation; capture settled frames and motion frames separately.
 - Claim high confidence only with two read-only reviews: design-system/functional integrity and visual fidelity/CJK precision.
-- Operator-supplied blocking criteria (CJK clipping, broken wrapping, overlapping UI, invisible text, unusable controls, offscreen critical content) block PASS until `_validate_pass` sees passing evidence refs.
+- Operator-supplied blocking criteria (CJK clipping, broken wrapping, overlapping UI, invisible text, unusable controls, offscreen critical content) block PASS until each has a passing evidence ref in the package, which `omh web-qa` validation checks.
 - Do not launch, poll, or watch browsers, image tools, LLMs, or external services from OMH core; the selected host or executor adapter does that work.
 - A host receipt is observation, not permission: a missing channel keeps BLOCK, unequal condition digests are not_comparable, and a completed run is reused, not recollected.
 

@@ -24,7 +24,8 @@ DEFAULT_KEY = "FF00FF"
 DEFAULT_TOLERANCE = 30
 ALPHA_OPAQUE_THRESHOLD = 128
 SMALL_COMPONENT_FRACTION = 0.05
-THRESHOLDS = {"body_scale_cv": 0.08, "anchor_y_std": 0.05}
+THRESHOLDS = {"body_scale_cv": 0.08, "anchor_y_max_dev": 0.05, "free_height_ratio_dev": 0.3}
+MAX_FREE_SHARE = 3  # at most one frame in three may be freed
 SCHEMA = "sprite_forge_qc/v1"
 
 
@@ -40,6 +41,11 @@ def parser():
     proc.add_argument("--key", default=DEFAULT_KEY)
     proc.add_argument("--tolerance", type=int, default=DEFAULT_TOLERANCE)
     proc.add_argument("--target-height", type=int, default=None)
+    proc.add_argument("--free-frames", default="",
+                      help="comma-separated 0-based frame indices that keep the place their "
+                           "source cell gave them (jump, fall, lunge). Decided from the "
+                           "art-direction record BEFORE the run, never after a REGENERATE. "
+                           "Every other frame stays gated on feet alignment")
     test = sub.add_parser("selftest", help="run the built-in synthetic self test")
     test.add_argument("--output", required=True)
     return cli
@@ -95,6 +101,19 @@ def validate_process(args):
     if source.stat().st_size > MAX_FILE_BYTES:
         raise ValueError(f"input file exceeds the maximum size ({MAX_FILE_BYTES} bytes)")
     return key, source, output
+
+
+def parse_free_frames(value, count):
+    """Parse --free-frames into a set of valid 0-based frame indices."""
+    free = set()
+    for part in str(value).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if not part.isdigit() or int(part) >= count:
+            raise ValueError(f"--free-frames entry {part!r} is not a frame index below {count}")
+        free.add(int(part))
+    return free
 
 
 def cell_mask(cell_bytes, cw, ch, alpha_input, key, tolerance):
@@ -195,7 +214,17 @@ def process_cell(cell_index, row, col, cell_bytes, cw, ch, alpha_input, key, tol
                 body[di + 1] = cell_bytes[si + 1]
                 body[di + 2] = cell_bytes[si + 2]
                 body[di + 3] = 255
-    return {"bbox": [x0, y0, x1, y1], "width": bw, "height": bh, "body": bytes(body)}
+    spill = 0
+    if not alpha_input:
+        kr, kg, kb = key
+        wide = 2 * tolerance
+        for i in range(0, len(body), 4):
+            if (body[i + 3] and abs(body[i] - kr) <= wide and abs(body[i + 1] - kg) <= wide
+                    and abs(body[i + 2] - kb) <= wide):
+                spill += 1
+    opaque = sum(1 for i in range(3, len(body), 4) if body[i])
+    return {"bbox": [x0, y0, x1, y1], "width": bw, "height": bh, "body": bytes(body),
+            "spill": spill, "opaque": opaque}
 
 
 def png_bytes(image):
@@ -264,26 +293,73 @@ def run_process(args, argv):
     scale = 1.0 if args.target_height is None else args.target_height / median
     scaled = [(c, max(1, int(round(c["width"] * scale))),
                max(1, int(round(c["height"] * scale)))) for c in cells]
-    frame_w = max(s[1] for s in scaled)
-    frame_h = max(s[2] for s in scaled)
-    baseline_y = frame_h - 1
+    # Alignment is judged on the INPUT: the lowest opaque row of each retained
+    # body inside its own cell, as a share of the cell height. Measuring the
+    # output would only read back the row the code just chose.
+    free = parse_free_frames(args.free_frames, len(cells))
+    gated = [i for i in range(len(cells)) if i not in free]
+    if len(free) > len(cells) // MAX_FREE_SHARE:
+        raise ValueError(
+            f"--free-frames may free at most one frame in {MAX_FREE_SHARE} "
+            f"({len(cells) // MAX_FREE_SHARE} of {len(cells)}); a sheet that needs more "
+            "should be regenerated or split by animation")
+    if len(gated) < 2:
+        raise ValueError("--free-frames must leave at least two gated frames")
+    feet_in = [c["bbox"][3] for c in cells]
+    gated_feet = [feet_in[i] for i in gated]
+    feet_median = statistics.median(gated_feet)
+    anchor_y_std = statistics.pstdev(gated_feet) / ch
+    # The gate is the largest deviation from the median, not the spread: a
+    # standard deviation dilutes one lifted frame among many.
+    anchor_y_max_dev = max(abs(f - feet_median) for f in gated_feet) / ch
+    centre_x = [(c["bbox"][0] + c["bbox"][2]) / 2 for c in cells]
+    centre_median = statistics.median(centre_x[i] for i in gated)
+    gated_height_median = statistics.median(heights[i] for i in gated)
+    # A freed frame is a pose, not a scale change: its body height stays near the
+    # gated frames' median or the sheet is regenerated.
+    free_height_ratio_dev = max(
+        (abs(heights[i] / gated_height_median - 1) for i in free), default=0.0)
+    if free:
+        frame_w = max(1, int(round(cw * scale)))
+        frame_h = max(1, int(round(ch * scale)))
+        baseline_y = min(frame_h - 1, int(round(feet_median * scale)))
+    else:
+        frame_w = max(s[1] for s in scaled)
+        frame_h = max(s[2] for s in scaled)
+        baseline_y = frame_h - 1
 
-    frames, feet_rows = [], []
-    for cell, nw, nh in scaled:
+    frames = []
+    for index, (cell, nw, nh) in enumerate(scaled):
         body_img = Image.frombytes("RGBA", (cell["width"], cell["height"]),
                                    cell["body"]).resize((nw, nh), Image.NEAREST)
         frame = Image.new("RGBA", (frame_w, frame_h), (0, 0, 0, 0))
-        frame.paste(body_img, ((frame_w - nw) // 2, frame_h - nh))
-        abox = frame.getchannel("A").getbbox()
-        feet_rows.append(frame_h - 1 if abox is None else abox[3] - 1)
+        if index in free:
+            # Relative to the gated frames' pivot (median centre x, median feet row),
+            # so a jump keeps its offset from the others instead of its raw cell place.
+            feet_at = baseline_y + (feet_in[index] - feet_median) * scale
+            at = ((frame_w - nw) // 2 + int(round((centre_x[index] - centre_median) * scale)),
+                  int(round(feet_at - nh + 1)))
+        elif free:
+            at = ((frame_w - nw) // 2, baseline_y - nh + 1)
+        else:
+            at = ((frame_w - nw) // 2, frame_h - nh)
+        if at[0] < 0 or at[1] < 0 or at[0] + nw > frame_w or at[1] + nh > frame_h:
+            raise ValueError(f"frame {index} does not fit the shared canvas; "
+                             "regenerate the sheet with margins inside each cell")
+        frame.paste(body_img, at)
         frames.append(frame)
-    anchor_y_std = statistics.pstdev(feet_rows) / frame_h
-    mean_h = statistics.fmean(heights)
+    gated_heights = [heights[i] for i in gated]
+    mean_h = statistics.fmean(gated_heights)
     if mean_h <= 0:
         raise ValueError("degenerate body heights")
-    body_scale_cv = statistics.pstdev(heights) / mean_h
+    body_scale_cv = statistics.pstdev(gated_heights) / mean_h
     verdict = ("PASS" if body_scale_cv <= THRESHOLDS["body_scale_cv"]
-               and anchor_y_std <= THRESHOLDS["anchor_y_std"] else "REGENERATE")
+               and anchor_y_max_dev <= THRESHOLDS["anchor_y_max_dev"]
+               and free_height_ratio_dev <= THRESHOLDS["free_height_ratio_dev"] else "REGENERATE")
+    if verdict == "PASS" and free:
+        verdict = "PASS_FREE_FRAMES"
+    spill = sum(c["spill"] for c in cells)
+    kept_px = sum(c["opaque"] for c in cells)
 
     sheet = Image.new("RGBA", (frame_w * args.cols, frame_h * args.rows), (0, 0, 0, 0))
     for i, frame in enumerate(frames):
@@ -324,17 +400,37 @@ def run_process(args, argv):
         "frames": frames_qc,
         "body_scale_cv": body_scale_cv,
         "anchor_y_std": anchor_y_std,
+        "anchor_y_max_dev": anchor_y_max_dev,
+        "free_height_ratio_dev": free_height_ratio_dev,
+        "free_frames": sorted(free),
+        "gated_frames": gated,
+        "key_spill_pixels": None if alpha_input else spill,
+        "key_spill_share": None if alpha_input else ((spill / kept_px) if kept_px else 0.0),
         "thresholds": dict(THRESHOLDS),
         "metric_definitions": {
             "body_height": ("pixel rows spanned by the opaque bbox of the retained "
                             "components in a cell, measured before common scaling"),
             "body_scale_cv": ("population std / mean of the per-frame body heights, "
                               "measured before common scaling"),
-            "feet_row": "lowest opaque row of the frame after alignment",
-            "anchor_y_std": ("population std of per-frame feet rows after alignment, "
-                             "divided by the frame height"),
-            "verdict": ("PASS when body_scale_cv <= 0.08 and anchor_y_std <= 0.05, "
-                        "otherwise REGENERATE the source sheet; never retouch frames"),
+            "feet_row": "lowest opaque row of each retained body inside its source cell",
+            "anchor_y_std": ("population std of the gated frames' feet rows measured on "
+                             "the input sheet, divided by the cell height; reported only"),
+            "anchor_y_max_dev": ("largest distance of a gated frame's feet row from the median "
+                                 "feet row on the input sheet, divided by the cell height; "
+                                 "the gate. REGENERATE here means a pose stands off the "
+                                 "baseline in the source image, not that outputs are misaligned"),
+            "key_spill_pixels": ("retained opaque pixels within twice the tolerance of the "
+                                 "key colour: fringe or key-coloured costume; reported, "
+                                 "not gated"),
+            "free_height_ratio_dev": ("largest |height / gated median height - 1| over the "
+                                      "freed frames; gated at 0.3 so a freed frame is a pose, "
+                                      "not a scale change"),
+            "verdict": ("PASS when body_scale_cv <= 0.08 and anchor_y_max_dev <= 0.05 over the "
+                        "gated frames and free_height_ratio_dev <= 0.3, otherwise REGENERATE the "
+                        "source sheet; never retouch frames. PASS_FREE_FRAMES is the same "
+                        "pass when frames named in free_frames (at most one in three, at least "
+                        "two frames stay gated) were excluded from both feet and scale gates; "
+                        "they keep their offset from the gated frames' pivot"),
         },
         "input_sha256": input_sha,
         "output_sha256s": output_shas,
@@ -347,12 +443,17 @@ def run_process(args, argv):
     blob = (json.dumps(qc, indent=2, sort_keys=True, ensure_ascii=True) + "\n").encode("utf-8")
     write_new(output / "qc.json", blob)
 
-    print(json.dumps({"status": "ok" if verdict == "PASS" else "regenerate",
+    status = {"PASS": "ok", "PASS_FREE_FRAMES": "ok_free_frames"}.get(verdict, "regenerate")
+    print(json.dumps({"status": status,
                       "output_dir": str(output), "verdict": verdict,
                       "frame_count": len(frames), "frame_size": [frame_w, frame_h],
                       "body_scale_cv": round(body_scale_cv, 6),
-                      "anchor_y_std": round(anchor_y_std, 6)}))
-    return 0 if verdict == "PASS" else 3
+                      "anchor_y_std": round(anchor_y_std, 6),
+                      "anchor_y_max_dev": round(anchor_y_max_dev, 6),
+                      "free_frames": sorted(free),
+                      "gated_frames": gated,
+                      "key_spill_pixels": None if alpha_input else spill}))
+    return 0 if verdict in ("PASS", "PASS_FREE_FRAMES") else 3
 
 
 def run_selftest(output_value):

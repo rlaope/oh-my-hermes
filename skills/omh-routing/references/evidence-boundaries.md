@@ -11,7 +11,7 @@ Prepared routing, plans, task cards, and handoffs are not execution evidence. `p
 When local shell access or a bot wrapper is available, record prepared handoffs and observed workflow evidence under `.omh/runtime/`:
 
 ```sh
-omh coding delegate --source discord --executor codex --record "risky refactor"
+omh coding delegate --source discord --executor <owner> --record "risky refactor"
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

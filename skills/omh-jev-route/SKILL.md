@@ -24,10 +24,10 @@ Contract: `references/full-contract.md`.
 
 ## Procedure
 
-1. Confirm the route carries `route_question` and the ladder lists `omh_jev_ask`; tell the user their message leaves the machine.
+1. Confirm the route carries `route_question` and the ladder lists `omh_jev_ask`; tell the user their message leaves the machine. With no `route_question` block, say there is no open route question and continue the normal route; offer `omh-jev-ask` with a typed Choice if they want Jev's pick among named options.
 2. Call `omh_jev_ask` with the block unchanged as `route_question` and the message as `state`.
 3. Offer Jev's top pick to the user as a question; the block's thresholds only shape the wording.
-4. Record it with `omh_route_answer`, `answered_by: omh_jev_ask`, and the returned `ask_id`.
+4. Record it with `omh_route_answer`: the block's `question_digest`, `answered_by: omh_jev_ask`, the returned `ask_id`, and Jev's `route_choice`, probabilities, and fits exactly as returned.
 
 ## Completion Checklist
 

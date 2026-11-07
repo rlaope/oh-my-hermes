@@ -323,9 +323,47 @@ NON_SKILL_BACKTICKS = frozenset(
 # `systematic-review` defers topic discovery to `source-finder`, one supplied
 # paper to `paper-learning` and a HellaSwag log check to `repro-audit`; no
 # sibling gains a statement pointing back. Three cases, three pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 410
-EXPECTED_DEFERENCE_PAIRS = 426
-EXPECTED_DEFERRING_OWNERS = 121
+# Research-lane boundaries: `data-analysis` defers polygon overlay to
+# `geospatial-analysis`, accounting-period work to `finance-analysis` and a
+# deck or workbook to `materials-package`; `live-info-operator` defers a
+# broad current-facts question to `web-research`, a ledger to `finance-analysis`
+# and an app write to `connector-operator`; `research-brief` defers recurring
+# multi-role research to `research-department`; `source-finder` and
+# `research-department` defer a cited lookup to `web-research`, and
+# `research-brief` defers fresh links or current facts to it as well. Seven cases,
+# eleven pairs, two new owners.
+# The operations-and-boards audit adds six statements, each with a statement pointing back:
+# `gateway-intent-card` <-> `automation-blueprint` (a scheduled delivery against a single
+# in-session one), `harness-session-inventory` <-> `workspace-audit` (cross-harness drift
+# against one workspace's own surfaces) and `agent-board` <-> `running-work-board` (changing a
+# task against only seeing what runs). Six cases, six pairs, four new owners.
+# The business-operations skill audit adds six cases, eight pairs and one
+# owner (internal-audit now defers an engagement plan; people-ops, meeting-brief, cto-loop,
+# report-package and operating-rhythm gain boundaries); re-derived from the catalog.
+# The coding-core skill audit adds declining statements: `plan` defers a risky change to `ralplan`,
+# vague requirements to `deep-interview` and a decided refactor to `refactor-plan`; `ralplan` defers an
+# ordinary change to `plan`; `strategy-brief` defers technical choices to `decision-prototype`, `plan`
+# and `adversarial-consensus`; `ask` defers a multi-perspective attack to `adversarial-consensus`;
+# `ultrawork` defers an unplanned request to `ralplan`; `ultraperf` is rewritten to name `maestro`.
+# Eight cases, ten pairs (`ultrawork` also defers to `plan`), one new owner (`plan`).
+# `voice-operator` and `media-input-operator` each name the other (a spoken
+# instruction versus spoken material), `connector-operator` sends a local
+# desktop application to `command-operator`, and `show-reel` sends trimming or
+# caption burn-in to `command-operator`: three cases, four pairs, two new
+# owners.
+# `model-optimization` defers weight-level optimization to `inference-serving`
+# (serving format and quantization) and `model-finetuning` (distillation); no
+# sibling gains a statement pointing back. Two cases, two pairs, one owner.
+# `reliability-review` defers a go or hold verdict before launch to
+# `production-audit`; one case, one pair, no new owner.
+# `executor-runtime-readiness` defers a named plugin or API to
+# `external-connector-readiness` and a missing tool to `toolbelt-readiness`;
+# `provider-profile-posture` defers connector adoption, the tool inventory and
+# a model-provider login to those two and `model-setup`; no sibling gains a
+# statement pointing back. Five cases, five pairs, two new owners.
+EXPECTED_DEFERENCE_CASES = 448
+EXPECTED_DEFERENCE_PAIRS = 473
+EXPECTED_DEFERRING_OWNERS = 133
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

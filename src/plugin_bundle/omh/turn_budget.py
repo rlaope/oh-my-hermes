@@ -142,7 +142,8 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # re-ask variant (255) rides only the person's turn after a clarify timed
 # out, measured alone by the new `clarify_timed_out` scenario (374 fenced),
 # under `all_surfaces`. Re-derived from the producer.
-PRE_LLM_CALL_CONTEXT_CHAR_LIMIT = 6041
+# 6041 -> 5977: the delegation prompt rule drops its rationale tail (-64) in the coding-core audit round.
+PRE_LLM_CALL_CONTEXT_CHAR_LIMIT = 5977
 # The same scenario set on the fallback: a session the awareness section did
 # not render for (a restart resume, a legacy id-rotating compaction, a refused
 # section, an older host) still gets the primer in the fenced context, so its
@@ -176,7 +177,8 @@ PRE_LLM_CALL_CONTEXT_CHAR_LIMIT = 6041
 # from the producer.
 # 7184 -> 7593 (2026-11-05): the same console choices line on the same
 # console first turn (+409). Re-derived from the producer.
-PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT = 7593
+# 7593 -> 7529: the same rule, same -64.
+PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT = 7529
 
 SLOT_LIMITS: dict[str, int] = {
     "primer": AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,

@@ -35,14 +35,14 @@ Use the current projection, whose public families are:
 5. Delegate coding and ship.
 6. Operate and observe.
 
-Representative exact public skills across the engineering-intelligence catalog:
+Representative exact public skills across the catalog:
 
 | Area | Public skill examples |
 | --- | --- |
 | Operations | `omh-support-operations`, `omh-deploy-and-monitor` |
 | Design | `omh-design-orchestration`, `omh-design-quality-gate` |
 | Frontend | `omh-frontend`, `omh-frontend-refactor` |
-| Finance and financial statements | `omh-finance-analysis` |
+| Budget variance, cash and close risk | `omh-finance-analysis` |
 | Planning | `ulw-plan`, `ulw-interview`, `ulw-context` |
 | Research | `ulw-research`, `omh-web-research`, `omh-source-finder` |
 | Inference serving | `omh-inference-serving` |

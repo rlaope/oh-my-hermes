@@ -17,13 +17,13 @@ This is an OMH `data-analysis` workflow skill, projected for Agent Skills hosts 
 
 ## Why This Exists
 
-`data-analysis` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+`data-analysis` exists because a model that reads a table by eye returns means, trends and anomalies that look observed and are wrong, and a gap between two groups reads as a finding with no test, sample size or interval: every number here comes from a command output that can be named, and every comparison carries its evidence.
 
 ## Do Not Use When
 
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Polygon overlay and area computation from supplied layers; use `omh-geospatial-analysis`.
+- Budget variance, cash or close analysis with accounting periods and controls; use `omh-finance-analysis`.
+- The table must become a deck, workbook or exported report; use `omh-materials-package` after the analysis scope is clear.
 
 ## Examples
 
@@ -35,22 +35,24 @@ Good example:
 
 Bad example:
 
-- Prompt: data-analysis invent trends from an unavailable spreadsheet.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Prompt: data-analysis is the Q3 lift significant? (two columns of five numbers each)
+- Expected behavior: Compute the comparison with code and report n per group, the effect size and an interval or test with its assumptions, flagging that five per group makes the result fragile, instead of calling the gap significant or refusing for lack of data.
+- Why: The data was supplied; the failure is a comparison reported without n, an effect size or an interval.
 
 ## Completion Checklist
 
 - Dataset or corpus source, record scope, schema or extraction method, join assumptions, analysis question, method, and stop condition are explicit.
+- The data was loaded with code (pandas, SQL or a spreadsheet tool) and shape, dtypes, null counts, duplicate rows and the min and max of key columns were printed before any claim; every number in the answer comes from a command output you can name. With no code tool, say so and analyse only what fits in context, labelled as read by eye.
 - Numeric claims, anomalies, trends, segments, and log patterns are reported only from observed data or supplied evidence.
-- Causal claims require observed identification evidence.
+- Every comparison states n per group, the effect size and an interval or test (named, with its assumptions); the answer says how many segments were looked at, and the headline is checked against its major subgroups.
+- Causal claims require observed identification evidence: a randomized or explicitly identified design. Otherwise report association as association.
 - Source acquisition, file conversion, report generation, and code fixes are routed to the narrower workflow when stronger.
 
 ## Recovery Notes
 
 - If the data itself is missing, ask for the smallest dataset sample, schema, or query output needed.
-- If the user wants datasets found online, route to source-finder before analysis.
-- If the user wants a PPT/PDF/XLSX report generated from data, route to materials-package or deliverable-package after analysis scope is clear.
+- If the user wants datasets found online, route to `omh-source-finder` before analysis.
+- If the user wants a PPT/PDF/XLSX report generated from data, route to `omh-materials-package` or `omh-deliverable-package` after analysis scope is clear.
 
 
 

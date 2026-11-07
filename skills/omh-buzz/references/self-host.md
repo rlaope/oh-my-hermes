@@ -1,7 +1,8 @@
 # Self-hosted Buzz Relay
 
 Use this lane to inspect or guide a Buzz relay deployed with the official
-Compose topology. Guide, don't drive: present state-changing commands and let
+Compose topology (the Compose file in the relay's own repository; if it cannot
+be opened, mark the topology `not_observed` and ask for the file). Guide, don't drive: present state-changing commands and let
 the user approve and run them unless execution was explicitly requested.
 
 ## Read-only Failure Tree

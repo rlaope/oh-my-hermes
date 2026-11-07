@@ -28,17 +28,38 @@ python scripts/forge.py process --input sheet.png --rows 2 --cols 3 \
 ```
 
 The helper keeps the largest component per cell plus components >= 5% of it,
-applies one common scale (nearest-neighbor) and aligns every body's feet on a
-shared baseline. An empty cell or a body touching the cell edge (bleed) is
-refused with the cell index.
+applies one common scale (nearest-neighbor), pins every body's lowest row to
+one baseline and centres it. Frames that leave the ground on purpose (jump,
+fall, lunge) are named before the run from the art-direction record with
+`--free-frames 2,5`: those keep their offset from the gated frames' pivot and are
+excluded from the feet and scale-drift gates (their height must still stay within
+30% of the gated median), every other frame stays gated. At most one frame in
+three may be freed and at least two stay gated. A pass with freed frames is
+`PASS_FREE_FRAMES`, never a bare PASS. The helper cannot see the order of events,
+so the rule is structural: the freed frames are the record's list, and a
+REGENERATE is never answered by adding frames to it. An empty cell or a body
+touching the cell edge (bleed) is refused with the cell index.
 
 ## Read back and decide
 
-Exit codes: 0 PASS, 2 refusal (no outputs), 3 REGENERATE (outputs written as
+Exit codes: 0 PASS or PASS_FREE_FRAMES, 2 refusal (no outputs), 3 REGENERATE (outputs written as
 evidence). On exit 0 or 3, read `qc.json` (`sprite_forge_qc/v1`), every
 `frame_NNN.png` and `sheet.png`, and recompute their sha256 against the receipt.
 
-- `body_scale_cv` <= 0.08 and `anchor_y_std` <= 0.05 give PASS.
+- `body_scale_cv` <= 0.08 and `anchor_y_max_dev` <= 0.05 give PASS. `anchor_y_max_dev`
+  is the largest distance of any gated frame's feet row from the median feet
+  row in the SOURCE cells, as a share of the cell height (output alignment
+  would hide it, and a standard deviation dilutes one lifted frame). REGENERATE
+  on it means a pose stands off the baseline in the source image; the output
+  frames themselves are aligned.
+- `body_scale_cv` compares body heights over the gated frames, so a crouch or
+  hit-react pose raises it. Put such poses on their own sheet, or name them in
+  `--free-frames` before the run when the record says they leave the baseline on
+  purpose; there is no after-the-fact accepted-drift path.
+- `key_spill_share` in qc.json is reported, not gated, and is null on alpha
+  input. It has no fixed threshold: compare it with a clean sheet of the same
+  character and look at the edge on a dark ground. A fringe or a costume colour
+  near the key means regenerate on another flat key (`--key 00FF00`).
 - REGENERATE means the source drifted: ask the host image tool for a new sheet
   with tighter pose and scale instructions. Never hand-patch, redraw or shift
   produced frames to pass the gate.

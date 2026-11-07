@@ -22,10 +22,11 @@ Two reviewers screening the same records only count as dual review when neither 
 
 ## First Steps
 
-- Agree the inclusion and exclusion criteria and the ordered exclusion codes with the person before any record is read; nothing is frozen until they say the criteria are final.
+- Records must be deduplicated across databases first (DOI or PMID, else normalized title plus year); record the identified, duplicate-removed and screened counts, because the PRISMA flow needs them and this workflow does not deduplicate.
+- Agree the inclusion and exclusion criteria and the ordered exclusion codes with the person before any record is read; nothing is frozen until they say the criteria are final. To pilot the criteria, freeze a throwaway DIR, prepare it on 25 to 50 records, review the conflicts, then freeze the real DIR.
 - Call `omh research screening freeze --criteria FILE --codes FILE --out DIR`. The protocol is write-once: a criteria change after freeze means a new DIR, never an edited protocol.json.
 - Call `omh research screening prepare --dir DIR --records FILE --seed N`, then read DIR/manifest.json for the batch list.
-- When `delegate_task` is in your tool list or tool_search finds it, dispatch two children, A and B: give each only its own `DIR/tasks/<A|B>/` files and tell it to write answer lines to `DIR/answers/<A|B>/`. Never pass one child the other's tasks, answers or name; without the tool, ask the person to run the two reviewers separately.
+- When `delegate_task` is in your tool list or tool_search finds it, dispatch two children, A and B: give each only its own `DIR/tasks/<A|B>/` files and tell it to write answer lines to `DIR/answers/<A|B>/`. Never pass one child the other's tasks, answers or name; without the tool, ask the person to run the two reviewers separately. By default a child runs on the session's model (or the `delegation.model` pin) and `delegate_task` takes no per-child model, so A and B are then recorded as the same model: pass the real model for both and report `broken_independence`. Where the host routes each delegated task to a different model (a delegation backend or `omh_delegate_route`), give B another route and record the model it reports; otherwise ask the person to run reviewer B in a session on another model. Never write a model name you did not observe.
 - Call `omh research screening merge --dir DIR --answers-a DIR/answers/A --answers-b DIR/answers/B --reviewer-models A=<model>,B=<model> --json`. Exit 1 means conflicts or pending records remain; exit 2 is an input error to fix, not a result.
 - Show the conflict and pending ids to the person, or give a third child only the conflict records and the frozen criteria; pass its lines with `--adjudication` and merge again.
 
@@ -34,6 +35,7 @@ Two reviewers screening the same records only count as dual review when neither 
 - Finding candidate papers, datasets or repositories on a topic belongs to `omh-source-finder`.
 - Explaining one supplied paper section by section belongs to `omh-paper-learning`.
 - Checking a HellaSwag log against the paper's reported conditions belongs to `omh-repro-audit`.
+- Full-text screening, search-string building, risk-of-bias and data extraction are not covered; this skill screens title and abstract only.
 - Drafting the manuscript itself is paper writing: load Hermes' optional research-paper-writing skill when it is installed.
 
 ## Examples

@@ -41,9 +41,9 @@ Good example:
 
 Bad example:
 
-- Prompt: Debug a failed cron job in the application server.
-- Expected behavior: Use the debugging owner; do not collect career facts.
-- Why: Generic task vocabulary does not establish a career request.
+- Prompt: Screen these 40 resumes for our backend opening and rank them.
+- Expected behavior: Route to `omh-people-ops`; this skill serves the candidate, not the employer.
+- Why: Hiring vocabulary appears in both, but only the candidate side is a career request here.
 
 ## Completion Checklist
 
@@ -86,7 +86,7 @@ Required inputs:
 Expert clarification questions:
 - `requested career action`
   - English: Which career action is needed now: discovery, fit, tailoring, interview preparation or tracking?
-  - Korean: Which career action is needed now: discovery, fit, tailoring, interview preparation or tracking?
+  - Korean: 지금 필요한 구직 작업은 무엇인가요: 공고 탐색, 적합도 판단, 서류 맞춤 작성, 면접 준비, 지원 현황 관리 중 어느 것인가요?
 
 Expected outputs:
 

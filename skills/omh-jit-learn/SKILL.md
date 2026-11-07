@@ -34,7 +34,7 @@ This is a Hermes-native `jit-learn` workflow skill.
 Good example:
 
 - Prompt: What should I learn next to solve my current onboarding blocker? Recommend books, podcasts, creators, and courses I can apply this week.
-- Expected behavior: Ask one confirmation question, confirm the immediate target, then prepare a source-backed four-section learning brief ranked by fit and time-to-first-value.
+- Expected behavior: Ask one confirmation question, confirm the immediate target, then prepare a source-backed learning brief ranked by fit and time-to-first-value.
 - Why: The user needs target selection and immediate transfer, not a generic curriculum or popularity-ranked resource list.
 
 Bad example:
@@ -142,6 +142,8 @@ Start with the confirmed target statement and a short source-boundary note. Then
 - `## Podcasts`
 - `## Creators`
 - `## Courses`
+
+When the target names a tool, API, or library, add `## Docs and References` ahead of them (official documentation, API reference, changelog, source repository), since for a technical blocker that is usually the fastest source; it follows the same source gate and fields.
 
 Under every heading, list only candidates that passed the source gate. If none passed, say why - for example, insufficient authority, stale or unavailable evidence, poor immediate fit, or an unresolved retrieval gap - rather than padding the section.
 
