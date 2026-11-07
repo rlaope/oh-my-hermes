@@ -138,7 +138,7 @@ python3 $S/music_tools.py plan <project>/audio/music/spec.json # music spec → 
 python3 $S/synth_music.py <project>/audio/music/spec.json --out <project>/audio/music/music.wav   # default, local
 #   only when the user asked for ElevenLabs Music and has their own key: python3 $S/eleven.py music <project>/audio/music/music.mp3 --plan <project>/audio/music/plan.json
 python3 $S/music_tools.py analyze <project>/audio/music/music.wav   # tempo and hits → align segment boundaries to the hits
-python3 $S/eleven.py sfx-kit <project>/audio/sfx --names impact,riser   # only where a generic preset is needed (synthesized: synth_music.py sfx). For sounds that match a segment's material, eleven.py sfx "prompt"
+python3 $S/eleven.py sfx-kit <project>/audio/sfx --names impact,riser   # only where a generic preset is needed (synthesized: `tick`/`boom`/`whoosh` events in the `synth_music.py` spec). For sounds that match a segment's material, eleven.py sfx "prompt"
 python3 $S/timeline.py <project>/script.json --music-analysis audio/music/analysis.json
 ```
 
@@ -210,7 +210,7 @@ Do not put reverb on the narration. A video that used a 2.4-second hall at `--ha
 ## 11. Automated QA and delivery report
 
 ```bash
-python3 $S/qa_check.py <project>/out/<name>.mp4 --timeline <project>/timeline.json --script <project>/script.json --stt
+python3 $S/qa_check.py <project>/out/<name>.mp4 --audio-mode music-only --policy <project>/qa-policy.json   # --audio-mode is required in this kit; no --timeline/--script/--stt
 ```
 
 It checks the format, loudness, overly dark stretches, flashes, frozen screens, and a transcription of the finished mix (including number misrecognition), and creates `qa/qa_report.md` and the final sheet. Handle every "to fix" item, look at the final sheet with Read, and then deliver. For a line that STT got wrong only once, run it once more, and fix it if it is wrong both times.

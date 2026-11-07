@@ -104,7 +104,7 @@ These are defects that actually occurred in past productions.
 ## How to read the automated review (qa_check.py)
 
 ```bash
-python3 $S/qa_check.py out/<name>.mp4 --timeline timeline.json --script script.json --stt
+python3 $S/qa_check.py out/<name>.mp4 --audio-mode music-only --policy qa-policy.json --ffmpeg /explicit/ffmpeg --ffprobe /explicit/ffprobe   # this kit: --audio-mode is required; no --timeline/--script/--stt
 ```
 
 - **Excessive flashing**: more than 3 sudden brightness changes per second. Reduce the flash intensity and count (risk of photosensitive seizures).
