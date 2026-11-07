@@ -143,36 +143,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            # 533907 -> 533913 and the digest re-derived: ulw-plan's, omh-plan's and
-            # adversarial-consensus's artifact lines name `--plan-file` (+6 net, itemized at
-            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was d6dfefff...fc71.
-            # 533907 -> 534141 and the digest re-derived: the memory-new and memory-sync descriptions
-            # name omh_memory recall, the decision-recall row gains its Do Not Use lines, the
-            # jev-action-check row's third safety rule reads as a hold and the jev-review-gate row
-            # names the matching test diff, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT; no
-            # other row moved, and the pin before it was d6dfefff...fc71.
-            # 533907 -> 534254 and the digest re-derived: the business-operations skill audit
-            # adds required-input words and a redline rule to ten rows (+347, itemized at
-            # 533907 -> 535114 and the digest re-derived: the coding-core skill audit round edits the
-            # ultraperf, ultraqa, ask, strategy-brief, plan, ralplan, loop, ultrawork, maestro and research
-            # quality bars, safety rules and inputs (+1207 net, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT);
-            # the pin before it was d6dfefff...fc71.
-            # Digest re-derived, length unchanged: sprite-forge's quality bar names the largest
-            # feet deviation (`anchor_y_max_dev`) where it named `anchor_y_std`, with four
-            # characters cut elsewhere in the line; no other row moved, and the pin before it
-            # was d6dfefff...fc71.
-            # 533903 -> 533934 and the digest re-derived: `security-event-response` names
-            # suspected unauthorized access in its first required input (+31); no other
-            # row moved, and the pin before it was 5aa1db27...1d90.
-            # 533907 -> 533903 and the digest re-derived: the application-threat-model
-            # asset-register output line drops a word (-4), and the `inference-serving` and `security-event-response` rows change in content at the same length; the pin
-            # before it was d6dfefff...fc71.
-            # 536979 -> 536962 and the digest re-derived: executor-runtime-readiness (-16) and
-            # provider-profile-posture (-14) shorten their first Do-Not-Use line, and capability-toggle's
-            # handoff policy (+13) names `omh capability-policy`; no other row moved. The pin before
-            # it was d6dfefff...1fc71.
-            (skill_capabilities, 533913, FULL_ROW_DELTA_CAP,
-             '2af3d114df9fd471b650d923c9691f67a52a7de6301fce0f6487f7774f8e5f2a',
+            # 533907 -> 536196 and the digest re-derived: the skill audit round's rows, +2,289
+            # (itemized by lane at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the sum of the lanes'
+            # readings is exact on the merged tree, and the pin before it was d6dfefff...fc71.
+            (skill_capabilities, 536196, FULL_ROW_DELTA_CAP,
+             'a5d1c98868990aef117ac9373851d1a32090ffb70a011d712e459853085b3e03',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -404,28 +379,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then the render rail: every body names its siblings by the label `skill_view`
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
-        # The plan, ralplan and adversarial-consensus bodies name `--plan-file` / `--input-bundle`; only those
-        # three move, and the pin before it was 7e537e8d...4b2c.
-        # Operations-and-boards audit fixes: gateway-intent-card, harness-session-inventory, cancel,
-        # running-work-board, agent-board, achievements, context-budget-review, ops-review,
-        # feedback-triage, workspace-audit, automation-blueprint, parallel-tools, run-efficiency and
-        # failure-signal-audit move their own bodies only; the pin before it was 7e537e8d...4b2c.
-        # Memory, learning, agent and Jev bodies (the audit fix round): memory-new, memory-sync,
-        # decision-recall, instinct-ledger, jit-learn, workflow-learning, rules-distill,
-        # agent-evaluation, agent-ops-review and four jev-* bodies move; nothing else, and the
-        # pin before it was 7e537e8d...4b2c.
-        # The business-operations skill audit rewrites sixteen bodies (checklists, boundaries and
-        # practitioner checks); the pin before it was 7e537e8d...4b2c.
-        # The coding-core audit round moves fourteen bodies (adversarial-consensus, ask, dag-ulw, deep-interview,
-        # loop, maestro, plan, ralplan, research, research-brief, strategy-brief, ultraperf, ultraqa, ultrawork);
-        # the pin before it was 7e537e8d...4b2c.
-        # Design, media and operator skill review: bodies of accessibility-audit, apps, browser,
-        # files, image-cards, localization-review, media-input, show-reel, terminal, visual-qa and
-        # voice-input move (verdict vocabulary, exact-payload and bulk-change confirmations, page
-        # text as data, text read-back, per-string locale checks, renderer order, sprite-forge's free
-        # frames); the pin before it was 7e537e8d...b2c.
-        # Host-readiness skills: thirteen bodies name the command or probe behind their evidence; the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '8c5d5eede91c056339f2aee6baeaf93bc9f704be51e228359a89bb8231a29c53')
+        # The skill audit round moves the bodies each lane edited and nothing else: the union of the
+        # lanes' moved lists equals the merged tree's. Plan, ralplan and adversarial-consensus name
+        # `--plan-file` / `--input-bundle`; the pin before it was 7e537e8d...4b2c.
+        self.assertEqual(_digest(legacy_hashes), '49189871872c2013aeaac9cd6c38a6775f9d7ea66272b44536a5e0ccac37a29a')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -440,25 +397,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
         # 122431 -> 124814: the render rail writes each sibling under its loadable label
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
-        # 124814 -> 123615: research-department, finance-analysis and curriculum-design state their
-        # own Completion Checklist, so they stop repeating the category default.
-        # 124814 -> 123079: gateway-intent-card, ops-review, achievements, context-budget-review and
-        # feedback-triage write their own Completion Checklist in place of the category default they
-        # repeated (-1,735); the ceilings are unchanged.
-        # 124814 -> 124355: agent-ops-review's own Completion Checklist replaces the operator
-        # default it repeated (-459); swapping only that body back to main's restores 124814.
-        # 124355 -> 124221: the memory, decision and Jev fixes' own Recovery Notes replace default text
-        # other bodies repeat (-134); swapping those bodies back to main's restores 124355.
-        # 124814 -> 123214: the business-operations skill audit replaces repeated default
-        # checklists and generic Why lines with each skill's own (-1600).
-        # 124814 -> 124568: the coding-core audit round rewords the repeated sections of the ultraperf, ultraqa,
-        # ask, strategy-brief, plan, loop, ultrawork, maestro and dag-ulw bodies (-246 net); the ceilings keep their headroom.
-        # 124814 -> 123563 (-1251): img-summary states its own completion checklist, so the
-        # materials-category default lines it no longer repeats leave the repeated total.
-        # 124814 -> 123412: five skills' own Completion Checklist replace the generic
-        # fallback they repeated; the ceilings keep their headroom.
-        # 124814 -> 123267: host-readiness skills drop generic repeated Do-Not-Use and checklist lines.
-        self.assertEqual(legacy['repeated']['bytes'], 123615)
+        # 124814 -> 115494: the skill audit round's own Completion Checklist, Why and Recovery
+        # lines replace the defaults those bodies repeated (itemized by lane at
+        # FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS); the ceilings are re-derived there.
+        self.assertEqual(legacy['repeated']['bytes'], 115494)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -492,8 +434,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1650000,  # Re-derived from 1480299 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
-            'full_profile_skill_body_repeated_chars': 140000,
+            'full_profile_skill_body_chars': 1700000,  # Re-derived from 1511394 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
+            'full_profile_skill_body_repeated_chars': 130000,  # Re-derived from 117436 measured, +10%, up to the next 10,000.
             'skill_density_filler_hits': 0,
         }
         metrics = {m.name: m for m in budget_metrics()}

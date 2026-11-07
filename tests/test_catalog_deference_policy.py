@@ -361,9 +361,9 @@ NON_SKILL_BACKTICKS = frozenset(
 # `provider-profile-posture` defers connector adoption, the tool inventory and
 # a model-provider login to those two and `model-setup`; no sibling gains a
 # statement pointing back. Five cases, five pairs, two new owners.
-EXPECTED_DEFERENCE_CASES = 417
-EXPECTED_DEFERENCE_PAIRS = 437
-EXPECTED_DEFERRING_OWNERS = 123
+EXPECTED_DEFERENCE_CASES = 448
+EXPECTED_DEFERENCE_PAIRS = 473
+EXPECTED_DEFERRING_OWNERS = 133
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

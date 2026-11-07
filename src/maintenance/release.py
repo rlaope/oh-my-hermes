@@ -966,28 +966,19 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # 536969 -> 536979: the `dag-ulw` row only. Its handoff policy names the third
 # way an external coding owner is chosen (naming it in a dag-ulw request) and
 # the per-owner `exports` list (+10). Measured from the producer; no headroom.
-# 536979 -> 536985: the `plan`, `ralplan` and `adversarial-consensus` rows only; their artifact
-# lines name `--plan-file` (+6 net). Measured from the producer; no headroom.
-# 536979 -> 537213: five rows grow. memory-new's and memory-sync's descriptions name omh_memory
-# recall beside decision-recall for a past decision; decision-recall gains two Do Not Use lines;
-# jev-action-check's third safety rule reads as a hold instead of "continue without Jev";
-# jev-review-gate's required input and quality bar name the matching test diff. Measured from
-# the producer; no headroom.
-# 536979 -> 537326: the business-operations skill audit adds required-input
-# words (a quota or target, a support tier or SLA, a meeting length and who
-# decides, targets for a report) and the playbook-free redline rule to the
-# capability rows (+347; the later review adds the countries whose formats apply and the
-# redline playbook question). Measured from the producer; no headroom.
-# 536979 -> 538186: the coding-core audit round edits quality-bar, safety-rule and input lines on ten
-# skills (+1207 net). Measured from the producer; no headroom.
-# 536979 -> 536975: the `application-threat-model` asset-register output line
-# drops a word (-4); the `inference-serving` and `security-event-response` rows change in content at the same length.
-# 536975 -> 537006: `security-event-response` names suspected unauthorized
-# access in its first required input (+31); no other row moved.
-# 536979 -> 536962: `executor-runtime-readiness` (-16) and `provider-profile-posture` (-14)
-# shorten their first Do-Not-Use line, and `capability-toggle`'s handoff policy (+12) and expected outputs (+1) name
-# `omh capability-policy`; no other row moved. Measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536985
+# 536979 -> 539268: the skill audit round, +2,289 net, each lane read at its own head against
+# main and the sum exact on the merged tree. Plan record +6 (the plan, ralplan and
+# adversarial-consensus artifact lines name `--plan-file`); research +485
+# (biomedical-evidence +190, data-analysis +2, live-info-operator +23, long-document-reading
+# +174, research-department +96); memory and Jev +234 (the memory-new and memory-sync
+# descriptions, decision-recall's Do Not Use lines, jev-action-check's third safety rule, the
+# jev-review-gate test diff); business +347 (required-input words and the redline rule); coding
+# core +1,207 (quality bars, safety rules and inputs on ten skills); build, infra and security
+# +27 (application-threat-model -4, security-event-response +31); host readiness -17
+# (executor-runtime-readiness -16, provider-profile-posture -14, capability-toggle +13). The
+# operations lane moves no row, and design and media moves sprite-forge at the same length.
+# Measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 539268
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -2178,53 +2169,18 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # body (+11,249), merged over the Vietnamese pack. Its own measurement on
 # 32878e25d (1,332,345) and this pack's (1,325,671) each raised the ceiling to
 # 1,500,000; together they read 1,336,920, whose 10% still rounds to it.
-# 1336920 -> 1480299 (measured; the ceiling 1500000 -> 1650000): the pack had grown to
-# 1,471,273 on main without a re-measure, because a floor the producer reads above fires
-# no re-derive signal. The research-lane skill fixes add 9,026 (the long-document
-# protocol's environment rule and durable ledger, data-analysis's statistical checklist,
-# live-info's provider gates, the finance and wiki boundaries), where
-# `test_one_more_ordinary_lane_member_fits_every_body_budget` found that the largest
-# lane-mate copy (`ultrawork`, +26,456) no longer fits. 1,480,299 plus 10%, rounded up to
-# the next 50,000, is 1,650,000.
-# 1336920 -> 1477231 (measured; the ceiling 1500000 -> 1650000): main reads
-# 1,471,273 after the skills that merged since the last measurement, and the
-# operations-and-boards audit fixes (gateway delivery grammar, session recovery
-# steps, per-skill completion checklists, the cron stop commands) add 5,958,
-# which took the pack to 1,477,231, where
-# `test_one_more_ordinary_lane_member_fits_every_body_budget` found that the
-# largest lane-mate copy (`ultrawork`, +26,456) no longer fits.
-# 1,477,231 plus 10%, rounded up to the next 50,000, is 1,650,000.
-# 1336920 -> 1477514 (measured; the ceiling 1500000 -> 1650000): the pack had grown to
-# 1,471,273 across merges that each left the stale measurement alone, so the largest
-# lane-mate copy (`ultrawork`, +26,456) fit by 2,727 chars. The memory, learning, agent and
-# Jev skill fixes (+6,241) take it to 1,477,514, where `ultrawork` no longer fits.
-# 1,477,514 plus 10%, rounded up to the next 50,000, is 1,650,000.
-# 1336920 -> 1477013 (measured; the ceiling 1500000 -> 1650000): main had grown to 1,471,273
-# without a re-derive, which left 2,271 chars under the 26,456 the largest
-# lane-mate copy (`ultrawork`) needs. The business-operations skill audit adds
-# its checklists, boundaries and practitioner checks and took the pack to the
-# measured value below; that plus 10%, rounded up to the next 50,000, is
-# 1,650,000, the value the other skill-audit lanes re-derived too.
-# 1336920 -> 1473872 (measured; the ceiling 1500000 -> 1650000): the pack had grown to 1,471,273 across
-# the bodies merged since the last re-derive, leaving 1,778 chars under the point where
-# `test_one_more_ordinary_lane_member_fits_every_body_budget` finds that the largest lane-mate copy
-# (`ultrawork`, +26,949) no longer fits. The coding-core audit round adds 2,599 net across fourteen
-# bodies, which tipped it. 1,474,123 plus 10%, rounded up to the next 50,000, is 1,650,000.
-# 1336920 -> 1473602 (measured; the ceiling 1500000 -> 1650000): main had grown
-# to a reading whose worst lane-mate copy (`ultrawork`, +26,456) left no
-# margin, and the design, media and operator lane's body additions (read-back,
-# exact-payload and bulk-change confirmations, page text as data, per-string
-# locale checks) take it to 1,473,602. 1,473,602 plus 10%, rounded up to the
-# next 50,000, is 1,650,000.
-# 1336920 -> 1474071 (measured; the ceiling 1500000 -> 1650000): main had grown
-# margin, and the build, infrastructure and security lane's body additions
-# (the generic fallback text of four skills replaced by their own, the review
-# fixes) take it to 1,474,071. 1,474,071 plus 10%, rounded up to the next
-# 50,000, is 1,650,000.
-FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1480299
+# 1336920 -> 1511394 (measured; the ceiling 1500000 -> 1700000): the pack had grown to
+# 1,471,273 on main without a re-measure, because a floor the producer reads above fires no
+# re-derive signal, and `test_one_more_ordinary_lane_member_fits_every_body_budget` found that
+# the largest lane-mate copy (`ultrawork`) no longer fits. The skill audit round adds 40,121,
+# each lane read at its own head against main and the sum exact on the merged tree: plan
+# record +843, research +11,359, operations +5,958, memory and Jev +6,241, business +5,740,
+# coding core +2,599, design and media +2,329, build, infra and security +2,798, host
+# readiness +2,254. 1,511,394 plus 10%, rounded up to the next 50,000, is 1,700,000.
+FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1511394
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1650000
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1700000
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # Repeated bytes: characters of full-profile SKILL.md `##` sections that are
 # byte-identical to the same section in another skill -- the second and later
@@ -2322,9 +2278,17 @@ FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # +512) then took the reading to 113,986.
 # Three compact science bodies and their shared lane/evidence rails cross the
 # ceiling: reading 122343; plus 10%, rounded up to 10000, derives 140000.
-FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 122343
+# 122343 -> 117436 (the ceiling 140000 -> 130000): the skill audit round gives skills their own
+# Completion Checklist, Why and Recovery lines in place of the defaults they repeated, so the
+# reading falls below this floor. From main's 126,756 it falls 9,320: research -1,199,
+# operations -1,735, memory and Jev -593, business -1,600, coding core -246, design and media
+# -1,251, build, infra and security -1,402, host readiness -1,547, each lane read at its own
+# head; the merged tree is 253 above that sum, all under `Completion Checklist`, whose last
+# copy of a default stops counting as a duplicate only once. 117,436 plus 10%, rounded up to
+# the next 10,000, is 130,000.
+FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 117436
 FULL_PROFILE_SKILL_BODY_REPEATED_CEILING_STEP_CHARS = 10000
-FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT = 140000
+FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT = 130000
 
 
 @dataclass(frozen=True)
