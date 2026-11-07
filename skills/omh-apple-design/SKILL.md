@@ -53,7 +53,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
+- Current lane: **Materials and visual summaries** - web, accessibility, visual QA, files, and packages.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
@@ -76,7 +76,7 @@ Quality bar:
 - Start with mode, target, convention, and available evidence; choose directions before visuals when open.
 - Load `references/platform-foundations.md`, `references/materials-and-accessibility.md`, `references/product-visual-production.md`, `references/web-production-libraries.md`, and `references/review-playbook.md` for their named boundaries.
 - For product work, use reference -> actual production -> same-subject comparison -> revision. Motion needs frames, video, or browser evidence and a reduced-motion alternative; do not award an Apple score.
-- Findings name evidence, impact, source/applicability, fix, owner, and missing check; route implementation to the selected owner and proof to accessibility-audit or visual-qa.
+- Findings name evidence, impact, source/applicability, fix, owner, and missing check; route implementation to the selected owner and proof to `omh-accessibility-audit` or `omh-visual-qa`.
 
 Handoff policy:
 
@@ -94,7 +94,7 @@ Expected outputs:
 - apple_visual_direction/v1
 - apple_design_finding/v1 with severity, location/evidence, impact, source/applicability, fix, owner, and missing checks
 - two to four design directions before visual work when direction is open
-- composed remediation route to frontend, design-quality-gate, accessibility-audit, visual-qa, or award-bar-score
+- composed remediation route to `omh-frontend`, `omh-design-quality-gate`, `omh-accessibility-audit`, `omh-visual-qa`, or `omh-award-bar-score`
 
 Artifact expectations:
 

@@ -50,13 +50,13 @@ Bad example:
 
 ## Recovery Notes
 
-- If the request is about setup or installed skill repair, route to doctor.
-- If the request is a portfolio health dashboard, route to skill-health.
-- If the request is an approved skill mutation or creation task, route to skill or implementation after the scout decision.
+- If the request is about setup or installed skill repair, route to `omh-doctor`.
+- If the request is a portfolio health dashboard, route to `omh-skill-health`.
+- If the request is an approved skill mutation or creation task, route to `omh-skill` or implementation after the scout decision.
 
 ## Workflow Lane
 
-- Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
+- Current lane: **Automation and status** - schedules, status, health, and ops review.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 

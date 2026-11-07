@@ -57,7 +57,7 @@ class PlanOffersDagUlwTests(unittest.TestCase):
         # Recovery Notes render siblings under their loadable labels, so the
         # `ultrawork` follow-on reads as `ulw-work` in the Hermes body.
         self.assertIn("(`dag-ulw` when the accepted lanes form a graph with a verification lane, `ulw-work`", hermes)
-        self.assertIn("so `dag-ulw` nodes or `ultrawork` board rows come from the plan", hermes)
+        self.assertIn("so `dag-ulw` nodes or `ulw-work` board rows come from the plan", hermes)
         self.assertNotIn("dag-ulw", _portable_body("ulw-plan/SKILL.md"))
 
     def test_refactor_plan_approval_gate_names_dag_ulw_in_hermes_only(self) -> None:

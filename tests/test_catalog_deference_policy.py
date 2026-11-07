@@ -367,9 +367,9 @@ NON_SKILL_BACKTICKS = frozenset(
 # picture to `codebase-uml` and the index to `codegraph-refresh`, `github-issue-intake` names `feedback-triage` and
 # `github-event-ops` with their labels, and `github-event-ops` defers a patch or minor bump to `verification-gate`;
 # no sibling gains a pointing-back statement. Seven cases, nine pairs, four new owners.
-EXPECTED_DEFERENCE_CASES = 455
-EXPECTED_DEFERENCE_PAIRS = 482
-EXPECTED_DEFERRING_OWNERS = 137
+EXPECTED_DEFERENCE_CASES = 458
+EXPECTED_DEFERENCE_PAIRS = 486
+EXPECTED_DEFERRING_OWNERS = 138
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

@@ -58,7 +58,8 @@ class SkillDensityGateTests(unittest.TestCase):
       measured worst legitimate case (`llm-app-dev`, 10.03 -- the largest body
       with the most narrative framing). Set at today's worst it would fail on
       the next rounding; set at the median it would fail a third of the
-      catalog for style.
+      catalog for style. Now 7.9 by the same rule (`meeting-brief`, 8.79): the
+      lane line's sample of sibling names had been counted as payload.
 
     Nothing is exempted: `DENSITY_REVIEWED_EXEMPTIONS` is empty and the gate
     passes on today's corpus.

@@ -1,7 +1,7 @@
 # Forms and Input
 
 Load this before writing a form, a text composer (chat box, comment field),
-or a dialog. The accessibility-audit skill's FORM rules check the same ground
+or a dialog. The `omh-accessibility-audit` skill's FORM rules check the same ground
 after the code exists; these rules put it in the first draft, where it costs
 least.
 
@@ -68,7 +68,7 @@ least.
   idempotency key created once per user intent and reused on retry, so a
   retry after a timeout does not create the record twice.
 - An optimistic submit follows the cancel / snapshot / apply, restore on
-  error, invalidate on settle triple in the frontend-refactor skill's
+  error, invalidate on settle triple in the `omh-frontend-refactor` skill's
   `omh-frontend-refactor/references/state-discipline.md`, section 6.
 
 ## Enter to submit, and IME composition

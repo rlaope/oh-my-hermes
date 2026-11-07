@@ -99,7 +99,7 @@ attached, sent or published.
   Trimming, converting or burning in captions: plain ffmpeg through
   `command-operator`.
 - An animation inside an app's own UI (a button, modal, page transition or
-  loading state): `frontend`.
+  loading state): `omh-frontend`.
 """,
     "brief-and-locales": """# Brief and locale decisions
 

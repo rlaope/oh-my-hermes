@@ -561,7 +561,7 @@ _CATEGORY_FINAL_CHECKLISTS = {
     "verification": (
         "The scenario, expected behavior, observed result, and pass/fail basis are named.",
         "Proposed fixes are separated from observed QA evidence.",
-        "Missing or failed verification routes back to plan, fix, or a narrower test.",
+        "Missing or failed verification routes back to `plan`, fix, or a narrower test.",
     ),
 }
 
@@ -891,10 +891,10 @@ _ENGINE_FIT_LEAD = (
     "path that fits the work's shape — "
 )
 _ENGINE_FIT_TAIL = (
-    "`ultrawork` durable checkpoints for progress that must survive "
-    "sessions as a checkpointed ledger, `ultrawork` coordinated lanes for an accepted plan split into "
-    "disjoint parallel lanes, `ultrawork` single-owner persistence for one already-scoped task with a "
-    "single owner, `ultrawork` for one bounded delivery cycle, or "
+    "`ulw-work` durable checkpoints for progress that must survive "
+    "sessions as a checkpointed ledger, `ulw-work` coordinated lanes for an accepted plan split into "
+    "disjoint parallel lanes, `ulw-work` single-owner persistence for one already-scoped task with a "
+    "single owner, `ulw-work` for one bounded delivery cycle, or "
     "a direct selected executor/runtime handoff for a single prepared coding change — state the fit "
     "reason in one line, and start it only after the user's explicit go-ahead."
 )

@@ -46,7 +46,7 @@ Record actors, roles, facts, instrument set and precedence, governing law, forum
 
 ### `legal_trace_authority` (validation)
 
-Create a citation ledger using only supplied or observed sources, exact pinpoints and effective status; route absent authority to research or counsel instead of filling it in.
+Create a citation ledger using only supplied or observed sources, exact pinpoints and effective status; route absent authority to `ulw-research` or counsel instead of filling it in.
 
 - Input refs: `supplied authority`, `document or process version`
 - Output refs: `legal_scope_authority_record/v1`

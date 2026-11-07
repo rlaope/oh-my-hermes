@@ -2,7 +2,7 @@
 
 Each locked string prevents a specific failure: a record written for a
 routine choice, an accepted record edited in place, a rejected record
-deleted out from under decision-recall, a consequences section with no
+deleted from the decision log its readers rely on, a consequences section with no
 negatives, or a silent file write before the user approved it. A rewrite
 that drops one should fail here rather than ship.
 """
@@ -24,8 +24,8 @@ class DecisionRecordsReferenceTests(unittest.TestCase):
         row, which located `templates[0]` by making it the only row. That is a
         stronger claim than any case here needs: every assertion below is about
         the decision-records document specifically -- the `docs/adr/`
-        convention, the Proposed/Accepted lifecycle, the `decision-recall`
-        corpus -- so a second reference on the skill sits outside their subject
+        convention, the Proposed/Accepted lifecycle, the kept Rejected
+        records -- so a second reference on the skill sits outside their subject
         rather than violating it. `test_the_packaged_set_includes_it` already
         asks the membership question the right way, with `assertIn`. Selecting
         by name keeps every locked string and stops a later reference from
@@ -74,7 +74,9 @@ class DecisionRecordsReferenceTests(unittest.TestCase):
         self.assertIn("`Proposed -> Accepted -> Deprecated | Superseded`", content)
         self.assertIn("An accepted record is never edited", content)
         self.assertIn("status moves to Superseded with a forward link", content)
-        self.assertIn("Rejected\n  records are the corpus `omh-decision-recall` reads", content)
+        self.assertIn("Rejected\n  records stay in the decision log", content)
+        # `omh-decision-recall` reads memory candidates a person rejected, never these files.
+        self.assertIn("They do\n  not feed `omh-decision-recall`", content)
         self.assertIn("deleting one deletes the warning", content)
 
     def test_the_approval_and_evidence_boundary_survives(self) -> None:
@@ -88,7 +90,8 @@ class DecisionRecordsReferenceTests(unittest.TestCase):
         self.assertIn("omh-decide/references/decision-records.md", quality_bar)
         self.assertIn("all three or no record", quality_bar)
         self.assertIn("Never edit an accepted record", quality_bar)
-        self.assertIn("`decision-recall` reads later", quality_bar)
+        self.assertIn("a Rejected record stays in the decision log", quality_bar)
+        self.assertIn("`decision-recall` covers memory candidates a person rejected, not these records", quality_bar)
 
 
 if __name__ == "__main__":

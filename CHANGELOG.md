@@ -454,7 +454,7 @@ All notable changes will be documented here.
   The browser, terminal, files and connector operators confirm the exact
   payload and the paths a bulk change touches, and image cards read
   generated text back.
-- **The build, infrastructure and security skills fix an audit's findings.**
+- **The build, infrastructure and security skills give safer, more exact steps.**
   A leaked secret that is compromised (pushed publicly, or used) is revoked
   before its replacement is deployed, matching the rotation reference, and a
   planned rotation keeps its overlap window. Model optimization means
@@ -472,6 +472,23 @@ All notable changes will be documented here.
   production-audit lose their generic fallback text, and the incident,
   security-event, threat-model and safety-review references close their
   contradictions and gaps.
+
+- **A skill now hands work only to a sibling it can load, and skills agree
+  with each other about who does what.** Hand-offs written in plain text, the
+  ones the earlier rewrite missed and each body's `Current lane` sample of names
+  no longer point at a name `skill_view` refuses; the shared rail's generic-tool
+  checkpoint speaks loadable labels too. An accepted plan leaves `omh-cto-loop`
+  for `ulw-work` instead of going back to planning. `omh-decide` keeps Rejected
+  records in the decision log and no longer says `omh-decision-recall` reads
+  them. `dag-ulw` keeps an accepted plan in `omh_todo`. `closing-a-story.md` maps
+  `ship`, `no_ship` and QA pass or fail onto the PASS, HOLD or BLOCK a record
+  accepts, and says what each does to completeness, checked against the store.
+  `omh-rules-distill` names the memory skills, `omh-instinct-ledger` the
+  artifact `omh-memory-new` declares, and `omh-workflow-learning` every
+  `route-signal` destination. Script paths in `omh-sprite-forge` and
+  `omh-show-reel` references resolve from the skill's folder, and portable
+  readers are told which steps need Hermes. The payload-density floor is
+  re-derived, because those sample names had been counted as payload.
 
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node

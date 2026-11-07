@@ -50,9 +50,9 @@ Bad example:
 ## Recovery Notes
 
 - If the media or transcript is missing, ask for the smallest source, file, transcript, or provider result needed.
-- If the request is broad current-source research about a video topic, route to research or source-finder before summary.
-- If the user wants a PPT/PDF/report generated from the media summary, route to materials-package after media input evidence is clear.
-- If the request is about whether a live duplex voice connector keeps whole spoken turns, route to external-connector-readiness for a realtime_voice_trial_receipt/v1 rather than treating a supplied recording as that evidence.
+- If the request is broad current-source research about a video topic, route to `ulw-research` or `omh-source-finder` before summary.
+- If the user wants a PPT/PDF/report generated from the media summary, route to `omh-materials-package` after media input evidence is clear.
+- If the request is about whether a live duplex voice connector keeps whole spoken turns, route to `omh-external-connector-readiness` for a realtime_voice_trial_receipt/v1 rather than treating a supplied recording as that evidence.
 
 
 

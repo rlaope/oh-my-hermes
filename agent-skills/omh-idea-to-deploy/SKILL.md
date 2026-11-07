@@ -71,7 +71,7 @@ Quality bar:
 - Prepare coding handoffs only after plan acceptance and selected executor/runtime choice.
 - Mark deploy, monitoring, and rollback as unobserved until the wrapper or operator records evidence.
 - For a fresh, empty, or newly `git init`-ed target that is expected to outlive the session, run the greenfield bootstrap pass before or alongside delivery planning - load `references/project-bootstrap.md` for the six-step order (git and .gitignore, LICENSE, README, agent context file, CI skeleton, docs/ seed) and its per-file verify line; explicitly skip it for throwaway or scratch work instead of silently running it.
-- Name the skill per stage: `backend`, `omh-relational-db`, `omh-frontend`, `omh-application-threat-model`, `omh-iac-change`, `omh-production-audit`, `omh-release-cut`, `omh-deploy-and-monitor`. Settle where it runs, how secrets are provided, and the first environment before deploy.
+- Name the skill per stage: `omh-backend`, `omh-relational-db`, `omh-frontend`, `omh-application-threat-model`, `omh-iac-change`, `omh-production-audit`, `omh-release-cut`, `omh-deploy-and-monitor`. Settle where it runs, how secrets are provided, and the first environment before deploy.
 
 Required inputs:
 

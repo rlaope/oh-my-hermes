@@ -140,7 +140,7 @@ operator-approved environment that has Pillow. Write into a new output
 directory; an existing directory is refused and never overwritten.
 
 ```sh
-python scripts/forge.py process --input sheet.png --rows 2 --cols 3 \\
+python <skill_dir>/toolkit/scripts/forge.py process --input sheet.png --rows 2 --cols 3 \\
   --output new-frames --key FF00FF --tolerance 30 --target-height 128
 ```
 

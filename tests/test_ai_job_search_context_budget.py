@@ -148,8 +148,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # readings is exact on the merged tree, and the pin before it was d6dfefff...fc71.
             # 536196 -> 537857 and the digest re-derived: the code-quality skills fix round, +1,661 on the merged
             # tree (itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was a5d1c988...3e03.
-            (skill_capabilities, 537857, FULL_ROW_DELTA_CAP,
-             '41011a72e619f09494defd7b782feca172c487d133f63eb3cf1d3c819e973bc7',
+            # 537857 -> 537954 and the digest re-derived: the cross-lane rail fix writes sibling hand-offs in
+            # backticks or as labels in the rows that carry them (itemized at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was 41011a72...3bc7.
+            (skill_capabilities, 537954, FULL_ROW_DELTA_CAP,
+             'b1ad64a54867268a24e7d38c67f7bf46df8d9f1651d58c98c46f2f02a126590b',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -209,22 +212,15 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         sections = dict(_split_sections(feature[0].content))
         # 497 -> 496: the hand-back line names the router by its loadable label,
         # `omh-routing`, one character shorter than `oh-my-hermes`.
-        self.assertEqual(len(sections['Workflow Lane']), 496)
+        # 496 -> 341: the lane line drops its sample of member names, which did not load.
+        self.assertEqual(len(sections['Workflow Lane']), 341)
         self.assertEqual(len(sections['Runtime Evidence']), 1446)
         self.assertLessEqual(len(feature[0].content.encode()), 5735)
         legacy_templates = [t for t in templates if t.name != FEATURE]
         legacy_hashes = {}
         for template in legacy_templates:
-            parts = _split_sections(template.content)
-            # The renderer changes only research lane cardinality +25 -> +26.
-            # Reconstruct that one measured, same-length membership change.
-            # The vi trigger rewording also moved five lane bodies, which is
-            # why this digest is no longer the clean-base one.
-            # repro-audit's own lane membership makes it +27 -> +26, and
-            # systematic-review's makes it +28 -> +27.
-            restored = ''.join(body.replace('`+28 more`', '`+27 more`')
-                               if heading == 'Workflow Lane' and '**Research and company ops**' in body
-                               else body for heading, body in parts)
+            # The lane line no longer carries a member count, so a new skill moves no sibling body.
+            restored = ''.join(body for _heading, body in _split_sections(template.content))
             legacy_hashes[template.name] = hashlib.sha256(restored.encode()).hexdigest()
         # Re-derived from both sources: the vi rewordings above plus
         # model-setup's nine Kimi K3 -> Kimi K3.1 Pro mentions on main.
@@ -388,7 +384,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # frontend-refactor, github-event-ops, github-issue-intake and ultraqa among them); the pin before it was 49189871...a29a. Its second review then reworded
         # the origin rerun rule, the lldb crash recipe's neighbours and a few sibling labels; the pin before that was 55b2226e...25eb. The third review's two command fixes (the codegraph reflog
         # time and the job-log endpoint) move build-failure-triage and codegraph-refresh only; the pin before it was 460133f6...abb.
-        self.assertEqual(_digest(legacy_hashes), 'ffca16e261cfc58cbe7ac443ef273c95a0a47e02daf0c0065658872bde02d704')
+        # The cross-lane rail fix then moves almost every body: the lane line drops its sample of member
+        # names, and sibling hand-offs gain backticks or labels; the pin before it was ffca16e2...d704.
+        # agent-instructions then names `ulw-context`, the label that loads, in place of `omh-context`
+        # (same length); only that body moves, and the pin before it was 0ac3cd4c...17f7.
+        self.assertEqual(_digest(legacy_hashes), '0ae5f905692c0dfb31f777d2e8e2c28a4c7e9cc1a42292cc01963e21451ebc5f')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -409,7 +409,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 115494 -> 114629: agent-debug states its own Why and Do Not Use When, and github-event-ops and
         # github-issue-intake their own Completion Checklists, in place of the feature-surface defaults those
         # bodies repeated (-865).
-        self.assertEqual(legacy['repeated']['bytes'], 114629)
+        # 114629 -> 92262: the lane line's sample of member names was the same text in every lane mate.
+        self.assertEqual(legacy['repeated']['bytes'], 92262)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -443,8 +444,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1700000,  # Re-derived from 1511394 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
-            'full_profile_skill_body_repeated_chars': 130000,  # Re-derived from 117436 measured, +10%, up to the next 10,000.
+            'full_profile_skill_body_chars': 1650000,  # Re-derived from 1499208 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
+            'full_profile_skill_body_repeated_chars': 110000,  # Re-derived from 94049 measured, +10%, up to the next 10,000.
             'skill_density_filler_hits': 0,
         }
         metrics = {m.name: m for m in budget_metrics()}

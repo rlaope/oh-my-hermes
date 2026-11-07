@@ -2507,7 +2507,7 @@ _FEATURE_SURFACE_HARNESSES = (
     ),
     _feature_surface_harness(
         "memory-sync",
-        "English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff; no OMH surface invokes, applies, or observes a native write — a user-approved diff is applied by Hermes's own native memory tool. For a new fact use memory-new.",
+        "English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff; no OMH surface invokes, applies, or observes a native write — a user-approved diff is applied by Hermes's own native memory tool. For a new fact use `memory-new`.",
         "Use when existing Hermes USER.md, MEMORY.md, or accumulated skill memories need an English-canonical, claim-by-claim review; it prepares native write guidance only, and no OMH surface invokes, applies, or observes a native write.",
         ("native memory source", "claims to review", "staleness/conflict signal", "review owner"),
         ("memory_curation_review/v1", "native write diff guidance", "not_omh_reviewed disclosure", "write boundary"),

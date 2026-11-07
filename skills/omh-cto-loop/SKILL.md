@@ -10,7 +10,7 @@ metadata:
     phase: operating-loop
     role: operator
     quality_tier: decision-gated
-    related_skills: [omh-decide, omh-production-audit, ulw-plan, omh-idea-to-deploy]
+    related_skills: [omh-decide, omh-production-audit, ulw-work, omh-idea-to-deploy]
 ---
 
 # Cto Loop
@@ -25,7 +25,7 @@ This is a Hermes-native `cto-loop` workflow skill.
 
 - The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly or use `omh-decide` for a decision brief instead of starting a leadership operating loop.
 - A launch-readiness audit of one named service or release with deploy, security, observability and rollback evidence; use `omh-production-audit`. Prioritisation and risk ranking across workstreams stays here.
-- An accepted plan is ready for build; use `ulw-plan` or `omh-idea-to-deploy`.
+- An accepted plan is ready for build; use `ulw-work` or `omh-idea-to-deploy`.
 
 ## Examples
 
@@ -53,7 +53,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
+- Current lane: **Coding handoff** - coding owners, handoffs, review, CI, and merge evidence.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 

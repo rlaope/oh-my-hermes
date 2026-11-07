@@ -49,7 +49,7 @@ Bad example:
 ## Recovery Notes
 
 - If the request is about setup or installed skill repair, it is outside this skill.
-- If the request is a portfolio health dashboard, route to skill-health.
+- If the request is a portfolio health dashboard, route to `omh-skill-health`.
 - If the request is an approved skill mutation or creation task, route to implementation after the scout decision.
 
 

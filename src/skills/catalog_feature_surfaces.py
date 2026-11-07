@@ -191,7 +191,7 @@ _FEATURE_SURFACE_SKILLS = (
             "No native `kanban_dispatch` tool exists: dispatch stays `unavailable` and an operator claim is the observed path. A positive `request_changes` needs a review-claimed run from the host's own review dispatcher.",
         ),
         extra_do_not_use_when=(
-            "A multi-lane implementation of an accepted plan is ultrawork, which prepares its durable lanes through this board.",
+            "A multi-lane implementation of an accepted plan; use `ultrawork`, which prepares its durable lanes through this board.",
             "The user only wants to see what is running right now, without creating or changing a task; use `running-work-board`.",
             HermesSkillLine(
                 "The turn is a Kanban worker that the review dispatcher started on a review-lane task to verify a review-requested handoff; that worker loads Hermes' bundled `sdlc-review` skill, not this one.",
@@ -208,7 +208,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "memory-new",
-        "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, and for a past decision use omh_memory recall or decision-recall.",
+        "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, and for a past decision use omh_memory recall or `decision-recall`.",
         (
             "memory-new",
             "new memory",
@@ -258,7 +258,7 @@ _FEATURE_SURFACE_SKILLS = (
         portable_overrides={
             # `omh-memory-sync` ships only on Hermes.
             "description": (
-                "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a past decision use omh memory recall or decision-recall.",
+                "Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a past decision use omh memory recall or `decision-recall`.",
             ),
             "safety_rules": (
                 "An OMH project-memory candidate is prepared local context only, not an approved record or native host-memory mutation. External provider/vector and host context is not_omh_reviewed and can nominate a candidate only.",
@@ -268,18 +268,21 @@ _FEATURE_SURFACE_SKILLS = (
             ),
         },
         portable_override_shadows={
-            "description": "7dd7346a78a06ab1a85764704af10b9b2be4f890a3eb7099310e84d865d2bddb",
+            "description": "edd5988fa50b791f60a43e6a39170a23832131c040121aef7179a2551629c84c",
             "safety_rules": "1339e73ae4df4feb34e2bfe93e42f0e6945e8a83176c0602b6778b2842ffc354",
         },
         recovery_notes=(
             "If project versus user scope or lasting versus temporary retention is ambiguous, retain the bounded summary as a candidate, mark capture unresolved, and hand back one scope-or-durability question without claiming a write.",
-            "If omh_memory returns error, retain memory_new_candidate/v1 as prepared only, mark the write not_observed, and hand back the bounded summary, record_type, tags, scope, and retention_class for the omh memory capture fallback.",
+            PortableLine(
+                "If omh_memory returns error, retain memory_new_candidate/v1 as prepared only, mark the write not_observed, and hand back the bounded summary, record_type, tags, scope, and retention_class for the omh memory capture fallback.",
+                "If `omh memory capture` is unavailable or fails, retain memory_new_candidate/v1 as prepared only, mark the write not_observed, and hand back the bounded summary, record_type, tags, scope, and retention_class. On Hermes the same applies when omh_memory returns error.",
+            ),
             "If capture returns pending_review with review_reason relative_time_phrase, restate the fact with an absolute date and capture it again in the same turn; for any other review_reason, retain the staged memory_new_candidate/v1, mark approval not_observed, and hand back the stated reason without treating it as an approved record.",
         ),
     ),
     _feature_surface_skill(
         "memory-sync",
-        "Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use omh_memory recall or decision-recall.",
+        "Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use `memory-new`, and for a past decision use omh_memory recall or `decision-recall`.",
         (
             "memory-sync",
             "memory curation",
@@ -320,7 +323,7 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         extra_quality_bar=(
             "State that Hermes-native and external provider/vector context is not_omh_reviewed, can nominate a candidate only, and may receive rendered OMH prefetch content through a configured Hermes runtime model request.",
-            "Send memory-provider lifecycle questions -- enabling, switching, pausing, retention, deletion, export, or failed synchronization -- to external-connector-readiness, which owns the provider posture this review cannot establish.",
+            "Send memory-provider lifecycle questions -- enabling, switching, pausing, retention, deletion, export, or failed synchronization -- to `external-connector-readiness`, which owns the provider posture this review cannot establish.",
         ),
         why_this_exists=(
             "`memory-sync` exists because Hermes' memory files are small, capped, and written by more than one hand -- "
@@ -404,7 +407,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "executor-runtime-readiness",
-        "Unsure whether Codex or Claude Code is ready: executor runtime readiness - compare Codex, Claude Code, Hermes coding, and oh-my runtimes by tools and handoff mode; use external-connector-readiness for a named plugin or API, and toolbelt-readiness for the whole capability inventory.",
+        "Unsure whether Codex or Claude Code is ready: executor runtime readiness - compare Codex, Claude Code, Hermes coding, and oh-my runtimes by tools and handoff mode; use `external-connector-readiness` for a named plugin or API, and `toolbelt-readiness` for the whole capability inventory.",
         (
             "executor-runtime-readiness",
             "executor readiness",
@@ -550,7 +553,7 @@ _FEATURE_SURFACE_SKILLS = (
             "The speech is material to transcribe or summarize; use `media-input-operator`.",
         ),
         extra_safety_rules=(
-            "This card is not realtime voice connector readiness. It may read the tool-safety verdict of a supplied realtime_voice_trial_receipt/v1 when one exists, and it never creates, infers, or upgrades one; route realtime voice adoption to external-connector-readiness.",
+            "This card is not realtime voice connector readiness. It may read the tool-safety verdict of a supplied realtime_voice_trial_receipt/v1 when one exists, and it never creates, infers, or upgrades one; route realtime voice adoption to `external-connector-readiness`.",
         ),
         situations=(
             "quick request from my phone",
@@ -637,7 +640,7 @@ _FEATURE_SURFACE_SKILLS = (
             f"Sign-ins, one-time codes, and saved cards go through `browser_vault` when {native_tool_presence_clause('browser_vault', code=True)} (`list` first; `fill` for a saved login, card, or address; `enter_code` for a one-time code after the password; `save_login` when nothing is saved for the site, so the user types it into Hermes' masked prompt; Hermes asks the user before it fills a card and refuses that in a headless run, and that answer sits beside `omh-spend-gate`'s typed yes, never in place of it): no password, card number, card security code, or one-time code is asked for, typed, or echoed in chat; record only its `success` and `filled_fields`, and never retry a `payment_declined`. Without it, the sign-in is the user's own step and a named gap.",
         ),
         recovery_notes=(
-            "Missing target/confirmation: ask; visual correctness: visual-qa.",
+            "Missing target/confirmation: ask; visual correctness: `visual-qa`.",
             "Refresh stale state once; never replay unknown work. Reuse acquisitions; only owner adapter/version reaps. Release needs observed cleanup, not mutation approval.",
             "Host receipt BLOCK: production click/submit, retry after auth/4xx/assertion/mutation failure, or over two transient read-only retries.",
             "POSIX native agent-browser collector: cold-desktop anonymous read-only Chromium only; other engine/profile/fixture/locale/timezone: named blocker (unsupported_browser_engine_webkit), never substitution.",
@@ -732,7 +735,7 @@ _FEATURE_SURFACE_SKILLS = (
         recovery_notes=(
             "If the target path or folder is missing, ask for the smallest path scope needed before preparing the operation.",
             "If delete, overwrite, move, rename, chmod, or irreversible cleanup is requested, require an explicit confirmation gate.",
-            "If the request is file conversion, deck/PDF export, or attachment delivery, route to materials-package or deliverable-package instead.",
+            "If the request is file conversion, deck/PDF export, or attachment delivery, route to `materials-package` or `deliverable-package` instead.",
             "On Hermes, when a checkpoint covers the change, the user's `/rollback` restores it and `/diff session` shows what the session changed since the checkpoint baseline; cite either only after the user runs it.",
             "On Hermes, a write that its own file guards refuse or hold for approval (a sensitive system path, a protected instruction file) is that gate's outcome to record, `blocked` or the user's answer, never a write to retry through another tool.",
         ),
@@ -814,7 +817,7 @@ _FEATURE_SURFACE_SKILLS = (
             "If the command is irreversible or externally visible, require an explicit confirmation gate in chat before the run, whether or not the host flags it: deleting or overwriting user data, discarding history or force-pushing, deleting a remote branch, dropping, deleting from, truncating, or flushing a database, a credentialed or networked mutation, device actuation, an install, a deploy, a production change, or an external send.",
             f"On Hermes, record the terminal result's `approval` note beside that confirmation as additional evidence, never in place of it: a note that the command \"was approved by the user\" is the person's answer to Hermes' own prompt for that command, while \"auto-approved by smart approval\" or no note at all is not a person's consent, and a `pending_approval` status means the command has not run and will not run on its own ({HERMES_PENDING_APPROVAL_CLAUSE}), so it is never re-run or reworded and goes to a person's turn.",
             "On Hermes, a cron job, a one-shot `-q` run, or a webhook run denies a flagged command by default (`approvals.cron_mode`, `approvals.single_query_mode`, `approvals.unattended_mode`): record the block as the gate's outcome and hand the command to a person's turn, never rephrase it to get past the gate. Nobody can answer the chat confirmation in those runs either, so an irreversible or externally visible command that Hermes does not flag is not run: it is handed to a person's turn and its confirmation is recorded as missing.",
-            "If the user supplied failed command output and asks for root cause, route to build-failure-triage or agent-debug instead of preparing a fresh command.",
+            "If the user supplied failed command output and asks for root cause, route to `build-failure-triage` or `agent-debug` instead of preparing a fresh command.",
         ),
         # The timeout and stop condition this surface already requires say when
         # a command must give up. They do not say how the session learns that it
@@ -911,9 +914,9 @@ _FEATURE_SURFACE_SKILLS = (
             "Message ids, ticket ids, provider responses, delivery receipts, and API effects are reported only from observed connector evidence.",
         ),
         recovery_notes=(
-            f"If the connector, credentials, or permission is missing: on Hermes, when {native_tool_presence_clause('manage_connections', code=True)}, use it for the app the user named (`status`, then `connect`) and take each app's answer as given: `connected` proceeds, `skipped` means continue without that app or ask in chat, never calling it again on your own or reaching the app another way, and `not_connected` stays a named gap. Otherwise route to toolbelt-readiness before preparing action success claims.",
+            f"If the connector, credentials, or permission is missing: on Hermes, when {native_tool_presence_clause('manage_connections', code=True)}, use it for the app the user named (`status`, then `connect`) and take each app's answer as given: `connected` proceeds, `skipped` means continue without that app or ask in chat, never calling it again on your own or reaching the app another way, and `not_connected` stays a named gap. Otherwise route to `toolbelt-readiness` before preparing action success claims.",
             PortableLine(
-                "If the request is only chat thread delivery policy for Discord, Slack, or Telegram, route to gateway-intent-card instead.",
+                "If the request is only chat thread delivery policy for Discord, Slack, or Telegram, route to `gateway-intent-card` instead.",
                 "If the request is only chat thread delivery policy for Discord, Slack, or Telegram, it is outside this skill.",
             ),
             "If the external app action would create, send, invite, mutate, or delete provider state, require an explicit confirmation gate in chat before the call. Hermes asks the person before such a call only in some configurations (a write-capable tool on an MCP server set to `trust: untrusted`, or a plugin hook that escalates the call), so a host prompt that does appear is recorded as additional evidence and never replaces the chat confirmation.",
@@ -1023,7 +1026,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "external-connector-readiness",
-        "Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use executor-runtime-readiness for coding-owner choice and toolbelt-readiness for missing capability inventory.",
+        "Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `executor-runtime-readiness` for coding-owner choice and `toolbelt-readiness` for missing capability inventory.",
         (
             "external-connector-readiness",
             "external connector readiness",
@@ -1142,11 +1145,11 @@ _FEATURE_SURFACE_SKILLS = (
         # `executor-runtime-readiness` ships only on Hermes.
         portable_overrides={
             "description": (
-                "Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use toolbelt-readiness for missing capability inventory.",
+                "Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `toolbelt-readiness` for missing capability inventory.",
             ),
         },
         portable_override_shadows={
-            "description": "751662656f553783f9b6a83f6eea7925e16ec42447f33350dab8054b041d1e7a",
+            "description": "9132088527b4133b3d86b362839fd9f03fec62a2ff4630eeae89c14d6421f4fa",
         },
         boundary="An external connector readiness card is not connector installation, credential validation, provider access, API invocation, multimodal capture, live-data retrieval, external mutation, cost authorization, or successful trial evidence unless observed connector-trial evidence records it.",
         good_why="Two named weather connectors need a cost, freshness, and fallback comparison before either is enabled; no provider has been called.",
@@ -1194,7 +1197,7 @@ _FEATURE_SURFACE_SKILLS = (
             "If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to `toolbelt-readiness`.",
             "If a specific provider action is already selected, route read-only live data to `live-info-operator` or write/mutation tasks to `connector-operator`.",
             PortableLine(
-                "If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to memory-sync as not_omh_reviewed context rather than importing it into OMH review.",
+                "If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to `memory-sync` as not_omh_reviewed context rather than importing it into OMH review.",
                 "If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; keep the result as not_omh_reviewed context rather than importing it into OMH review.",
             ),
             "If a realtime voice connector has no supplied realtime_voice_trial_receipt/v1, route the setup and the trial run to the host, connector, or operator that owns the microphone, call, or room, then consume only the returned receipt.",
@@ -1234,7 +1237,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "prompt-import-readiness",
-        "Importing prompt files for Hermes: prompt import readiness - review and normalize external CLI-agent prompt files before offering slash-command candidates; use external-connector-readiness for plugin or API adoption and toolbelt-readiness for missing runtime capabilities.",
+        "Importing prompt files for Hermes: prompt import readiness - review and normalize external CLI-agent prompt files before offering slash-command candidates; use `external-connector-readiness` for plugin or API adoption and `toolbelt-readiness` for missing runtime capabilities.",
         (
             "prompt-import-readiness",
             "prompt import readiness",
@@ -1328,7 +1331,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "physical-device-readiness",
-        "Agent control of a robot, 3D printer, or IoT relay: gate robots, 3D printers, IoT relays, sensors, and lab hardware before trials; use external-connector-readiness for provider or connector adoption and toolbelt-readiness for missing control tools.",
+        "Agent control of a robot, 3D printer, or IoT relay: gate robots, 3D printers, IoT relays, sensors, and lab hardware before trials; use `external-connector-readiness` for provider or connector adoption and `toolbelt-readiness` for missing control tools.",
         (
             "physical-device-readiness",
             "physical device readiness",
@@ -1577,9 +1580,9 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         recovery_notes=(
             "If the media or transcript is missing, ask for the smallest source, file, transcript, or provider result needed.",
-            "If the request is broad current-source research about a video topic, route to research or source-finder before summary.",
-            "If the user wants a PPT/PDF/report generated from the media summary, route to materials-package after media input evidence is clear.",
-            "If the request is about whether a live duplex voice connector keeps whole spoken turns, route to external-connector-readiness for a realtime_voice_trial_receipt/v1 rather than treating a supplied recording as that evidence.",
+            "If the request is broad current-source research about a video topic, route to `research` or `source-finder` before summary.",
+            "If the user wants a PPT/PDF/report generated from the media summary, route to `materials-package` after media input evidence is clear.",
+            "If the request is about whether a live duplex voice connector keeps whole spoken turns, route to `external-connector-readiness` for a realtime_voice_trial_receipt/v1 rather than treating a supplied recording as that evidence.",
         ),
         extra_safety_rules=(
             "A media_result_manifest/v1 describes a supplied recording or transcript. It is never a live duplex session, one-input-to-one-dispatch integrity, audible response behavior, or realtime voice readiness, and it cannot be promoted into one.",
@@ -1682,7 +1685,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "toolbelt-readiness",
-        "Which tools and credentials a workflow needs: inventory which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs; use external-connector-readiness to assess one named integration and executor-runtime-readiness to choose the coding owner.",
+        "Which tools and credentials a workflow needs: inventory which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs; use `external-connector-readiness` to assess one named integration and `executor-runtime-readiness` to choose the coding owner.",
         (
             "toolbelt-readiness",
             "mcp readiness",
@@ -1720,11 +1723,11 @@ _FEATURE_SURFACE_SKILLS = (
         # `executor-runtime-readiness` ships only on Hermes.
         portable_overrides={
             "description": (
-                "Which tools and credentials a workflow needs: inventory which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs; use external-connector-readiness to assess one named integration.",
+                "Which tools and credentials a workflow needs: inventory which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs; use `external-connector-readiness` to assess one named integration.",
             ),
         },
         portable_override_shadows={
-            "description": "f66547a196acbfd1e96a5e3a6c6b6ccb2d280ab44df8b4ed8aee01c5bc603bf3",
+            "description": "ca31084265359c5fe73c5657d8311734b0cb15da5d0377198098b347422e29f2",
         },
         boundary="A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
         good_prompt="toolbelt-readiness what MCP or CLI tools do I need for weekly Linear and GitHub triage?",
@@ -2107,12 +2110,12 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         recovery_notes=(
             PortableLine(
-                "If the request is install/setup health, route to doctor.",
+                "If the request is install/setup health, route to `doctor`.",
                 "If the request is install/setup health, it is outside this skill.",
             ),
-            "If the request is a manager status or throughput review, route to agent-ops-review.",
+            "If the request is a manager status or throughput review, route to `agent-ops-review`.",
             PortableLine(
-                "If the request is a durable self-improvement record after diagnosis, route to workflow-learning.",
+                "If the request is a durable self-improvement record after diagnosis, route to `workflow-learning`.",
                 "If the request is a durable self-improvement record after diagnosis, it is outside this skill.",
             ),
         ),
@@ -2258,18 +2261,18 @@ _FEATURE_SURFACE_SKILLS = (
             "Project-specific conventions, global practices, project/global promotion candidates, imports, and exports are separated.",
             "No hooks, memory writes, skill edits, global promotion, import/export, or behavior-change claims are made without observed approval and implementation evidence.",
             PortableLine(
-                "A promoted instinct leaves as a store route, `memory_candidate` for `memory-new`, `skill_update_candidate` for `workflow-learning`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.",
-                "A promoted instinct leaves as a store route, `memory_candidate` for `memory-new`, a `skill_update_candidate`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.",
+                "A promoted instinct leaves as a store route, `memory_new_candidate/v1` for `memory-new`, `skill_update_candidate` for `workflow-learning`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.",
+                "A promoted instinct leaves as a store route, `memory_new_candidate/v1` for `memory-new`, a `skill_update_candidate`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.",
             ),
             f"On Hermes, the skill audit ledger ({_CURATOR_LEDGER_FILE}) is observed evidence of what the agent or its background review already wrote; an instinct that matches a ledger entry no store route accounts for is reported as `unreviewed_native_write` (OMH holds no record of that write, which is not to say nobody reviewed it), never counted as repeated evidence for the instinct.",
         ),
         recovery_notes=(
             PortableLine(
-                "If the request is a single missed route or run trace, route to workflow-learning first.",
+                "If the request is a single missed route or run trace, route to `workflow-learning` first.",
                 "If the request is a single missed route or run trace, it is outside this skill.",
             ),
-            "If the request is to mutate durable rules, prompts, skills, or AGENTS guidance, route to rules-distill or implementation after review approval.",
-            "If evidence comes from a stuck run, use agent-debug before converting lessons into instincts.",
+            "If the request is to mutate durable rules, prompts, skills, or AGENTS guidance, route to `rules-distill` or implementation after review approval.",
+            "If evidence comes from a stuck run, use `agent-debug` before converting lessons into instincts.",
         ),
         why_this_exists=(
             "`instinct-ledger` exists because a lesson seen once is an anecdote and one seen across runs or projects is a "
@@ -2346,12 +2349,12 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         recovery_notes=(
             PortableLine(
-                "If the request is about setup or installed skill repair, route to doctor.",
+                "If the request is about setup or installed skill repair, route to `doctor`.",
                 "If the request is about setup or installed skill repair, it is outside this skill.",
             ),
-            "If the request is a portfolio health dashboard, route to skill-health.",
+            "If the request is a portfolio health dashboard, route to `skill-health`.",
             PortableLine(
-                "If the request is an approved skill mutation or creation task, route to skill or implementation after the scout decision.",
+                "If the request is an approved skill mutation or creation task, route to `skill` or implementation after the scout decision.",
                 "If the request is an approved skill mutation or creation task, route to implementation after the scout decision.",
             ),
         ),
@@ -2408,7 +2411,7 @@ _FEATURE_SURFACE_SKILLS = (
         final_checklist=(
             "Dashboard scope, source surfaces, stale/duplicate criteria, and stop condition are explicit.",
             PortableLine(
-                "Install/setup health is routed to doctor; catalog operations are routed to skill; failure retrospectives are routed to workflow-learning.",
+                "Install/setup health is routed to `doctor`; catalog operations are routed to `skill`; failure retrospectives are routed to `workflow-learning`.",
                 "Install/setup health, catalog operations, and failure retrospectives stay out of the health card.",
             ),
             "No skill, prompt, doc, memory, or model behavior is claimed changed until a reviewed implementation records evidence.",
@@ -2418,11 +2421,11 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         recovery_notes=(
             PortableLine(
-                "If the request is about OMH setup, install, stale package paths, or command availability, route to doctor.",
+                "If the request is about OMH setup, install, stale package paths, or command availability, route to `doctor`.",
                 "If the request is about OMH setup, install, stale package paths, or command availability, it is outside this skill.",
             ),
             PortableLine(
-                "If the request is a missed-route or self-improvement trace, route to workflow-learning before adding health actions.",
+                "If the request is a missed-route or self-improvement trace, route to `workflow-learning` before adding health actions.",
                 "If the request is a missed-route or self-improvement trace, it is outside this skill.",
             ),
         ),
@@ -2500,7 +2503,7 @@ _FEATURE_SURFACE_SKILLS = (
             "Native write policy `required` stops promotion as unsupported and `not_required` is not an approval; drift unlinks only the managed SKILL.md and keeps generations and receipts, and an incomplete promotion resumes only via explicit `retry --receipt-id`.",
         ),
         final_checklist=(
-            "Classify a lesson before any write: `omh learning route-signal \"<one-line lesson>\"` names the destination (memory, skill, wiki, failure-retrospective, or automation review); add `--record` only after the user agrees to keep the route. Show the destination and why, list pending routes with `omh learning store-routes`, and leave `omh learning review-route` to the person. A fact goes to `memory-new` and a skill change stays a `skill_update_candidate`; this skill writes none of those stores.",
+            "Classify a lesson before any write: `omh learning route-signal \"<one-line lesson>\"` names the destination (memory, skill, wiki, failure-retrospective, automation review, `manual_review_candidate` for an ambiguous signal, or `discard_transient` for private or transient content); add `--record` only after the user agrees to keep the route. Show the destination and why, list pending routes with `omh learning store-routes`, and leave `omh learning review-route` to the person. A fact goes to `memory-new` and a skill change stays a `skill_update_candidate`; this skill writes none of those stores.",
             f"Read Hermes' skill audit ledger read-only ({_CURATOR_LEDGER_FILE}, or `hermes curator ledger --limit <n>`, {_CURATOR_LEDGER_LIMIT}) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. {_CURATOR_LEDGER_EMPTY} A trimmed ledger is incomplete too: from Hermes v2026.9.24 the oldest entries are dropped past `skills.ledger_max_bytes`, so report the window you read (entry count, oldest timestamp) and treat an older write as not_observed, not clean.",
             "Mark an approved `skill_update_candidate` landed only from a `skill_manage` result for that skill that succeeded without `staged: true`, or from a ledger entry that is dated after the approval, has `actor` `agent` or `user` and `action` `create`, `edit`, `patch`, or `write_file`, and lists the approved target file in its `after` manifest. An entry by `curator`, or one that deletes, archives, rolls back, or purges, never marks it landed, and a staged result waits in `/skills pending` for the person and has not landed.",
             "The ledger records skill writes only: a memory write by Hermes' background review is visible only when Hermes staged it under `pending/memory/` with `origin: background_review`, and is `not_observed` otherwise.",

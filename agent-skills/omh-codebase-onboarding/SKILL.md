@@ -77,7 +77,7 @@ Quality bar:
 - Name the audience, depth, repo root, read-only boundary, and stop condition.
 - Separate observed files and commands from inferred architecture and unknowns.
 - Produce a practical reading path and first-task runway rather than a flat file tour.
-- Route follow-up implementation to plan, ultrawork, verification-gate, or workspace-audit as needed.
+- Route follow-up implementation to `omh-plan`, `ulw-work`, `omh-verification-gate`, or `omh-workspace-audit` as needed.
 - Take build, test, and lint commands in this order: CI config (`.github/workflows`, `.gitlab-ci.yml`), the task runner (`Makefile`, `justfile`, `package.json` scripts), the manifest, then contributor docs; read `CODEOWNERS` and the top-churn files for ownership; the README comes last, and where it disagrees with CI trust CI and record the disagreement.
 
 Required inputs:

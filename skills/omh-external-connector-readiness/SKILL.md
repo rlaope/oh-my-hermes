@@ -1,6 +1,6 @@
 ---
 name: "omh-external-connector-readiness"
-description: "[omh] Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use executor-runtime-readiness for coding-owner choice and toolbelt-readiness for missing capability inventory. Use when the user says: external-connector-readiness, external connector readiness, connector readiness matrix, plugin readiness matrix, provider readiness, api readiness, connector adoption, external plugin adoption."
+description: "[omh] Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `omh-executor-runtime-readiness` for coding-owner choice and `omh-toolbelt-readiness` for missing capability inventory. Use when the user says: external-connector-readiness, external connector readiness, connector readiness matrix, plugin readiness matrix, provider readiness, api readiness, connector adoption, external plugin adoption."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:
@@ -57,12 +57,12 @@ Bad example:
 - If the candidate list is unknown, route to `omh-skill-scout` or `omh-source-finder` before readiness scoring.
 - If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to `omh-toolbelt-readiness`.
 - If a specific provider action is already selected, route read-only live data to `omh-live-info` or write/mutation tasks to `omh-apps`.
-- If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to memory-sync as not_omh_reviewed context rather than importing it into OMH review.
+- If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to `omh-memory-sync` as not_omh_reviewed context rather than importing it into OMH review.
 - If a realtime voice connector has no supplied realtime_voice_trial_receipt/v1, route the setup and the trial run to the host, connector, or operator that owns the microphone, call, or room, then consume only the returned receipt.
 
 ## Workflow Lane
 
-- Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
+- Current lane: **Automation and status** - schedules, status, health, and ops review.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 

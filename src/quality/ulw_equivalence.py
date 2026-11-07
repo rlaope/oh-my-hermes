@@ -639,12 +639,12 @@ _ULTRAPROCESS_OBLIGATIONS = (
         "Do not continue into a repeated feedback loop; recommend `loop` when the user wants ongoing cycles.",
         "unique",
         "missing_loop_boundary",
-        (SectionRequirement("Safety rules", ("repeated feedback loop", "recommend `loop`")),),
+        (SectionRequirement("Safety rules", ("repeated feedback loop", "recommend `ulw-loop`")),),
         carried=(
             CarriedEntry(
                 "safety_rules",
                 "[capability:delivery_boundary] Do not continue into a repeated feedback loop; recommend "
-                "`loop` when the user wants ongoing cycles.",
+                "`ulw-loop` when the user wants ongoing cycles.",
             ),
         ),
     ),
@@ -685,11 +685,11 @@ _ULTRAPROCESS_OBLIGATIONS = (
         "Run code-review as a gate after implementation evidence exists; review preparation alone is not review evidence.",
         "unique",
         "missing_review_gate",
-        (SectionRequirement("Quality bar", ("code-review as a gate",)),),
+        (SectionRequirement("Quality bar", ("`omh-code-review` as a gate",)),),
         carried=(
             CarriedEntry(
                 "quality_bar",
-                "[capability:delivery_boundary] Run code-review as a gate after implementation evidence "
+                "[capability:delivery_boundary] Run `code-review` as a gate after implementation evidence "
                 "exists; review preparation alone is not review evidence.",
             ),
         ),

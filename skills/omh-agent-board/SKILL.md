@@ -10,7 +10,7 @@ metadata:
     phase: board-status
     role: tracker
     quality_tier: workflow-surface-gated
-    related_skills: [omh-running-work-board, sdlc-review]
+    related_skills: [ulw-work, omh-running-work-board, sdlc-review]
 ---
 
 # Agent Board
@@ -26,7 +26,7 @@ This is a Hermes-native `agent-board` workflow skill.
 - The request is already handled by a narrower explicit skill with stronger evidence.
 - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
 - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- A multi-lane implementation of an accepted plan is ultrawork, which prepares its durable lanes through this board.
+- A multi-lane implementation of an accepted plan; use `ulw-work`, which prepares its durable lanes through this board.
 - The user only wants to see what is running right now, without creating or changing a task; use `omh-running-work-board`.
 - The turn is a Kanban worker that the review dispatcher started on a review-lane task to verify a review-requested handoff; that worker loads Hermes' bundled `sdlc-review` skill, not this one.
 
@@ -59,7 +59,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
+- Current lane: **Automation and status** - schedules, status, health, and ops review.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
