@@ -4955,6 +4955,7 @@ Run `git fetch` before reading the remote column; a stale remote-tracking ref ma
 - Run `git status --porcelain` first. A dirty tree is a recovery point of its own: `git stash push -u`, or a WIP commit on a throwaway branch, and note it. `git reset --hard` discards uncommitted tracked changes with no way back.
 - `git branch backup/<name>-<date> <branch>` before a rebase, reset, amend, or filter.
 - Or note the reflog entry: `git reflog show <branch> -n 5`, and write down the entry to return to.
+- Mid-rebase, run `git rebase --abort` first: `git switch -C` refuses while rebasing, and `reset --hard` leaves the rebase in progress.
 - Recovery is `git switch -C <branch> backup/<name>-<date>` (or `git reset --hard backup/<name>-<date>` on a clean tree), or `git reset --hard <branch>@{N}` on a clean tree, and it comes before trying anything else.
 
 ## 3. Conflicts
@@ -4963,13 +4964,13 @@ Run `git fetch` before reading the remote column; a stale remote-tracking ref ma
 - Decide each hunk by what both changes were for, not by which side is newer.
 - **Generated or counted files are never picked.** Take either side, finish the merge, then re-run the producer and commit its output. A count pinned in two places conflicts whenever both sides added a case, and neither side is right.
 - Lockfiles: resolve the manifest, then regenerate the lockfile with the package manager.
-- A rebase replays commits one at a time; the same hunk can conflict at every step. `git rerere` records resolutions so the repeats resolve themselves, once enabled with `git config rerere.enabled true`; by default it records nothing.
+- A rebase replays commits one at a time; the same hunk can conflict at every step. `git rerere` records resolutions so the repeats resolve themselves, once enabled with `git config rerere.enabled true`; by default it records nothing. The rebase still stops on a replayed resolution (`Resolved ... using previous resolution`): check the file, `git add` it and continue, or set `rerere.autoUpdate true` to stage it.
 - Verify after resolving: the build and the tests that cover the conflicted files, observed.
 
 ## 4. Bisect
 
 1. Name a known-good commit and a known-bad commit, each confirmed by one observed run.
-2. Name the exact command that tells them apart. `git bisect run` reads its exit code: 0 is good, 125 skips the commit, 128 to 255 aborts the bisection, and every other code from 1 to 127 is bad. Wrap the test so a build failure exits 125 (otherwise a commit that does not build is named the culprit) and a missing tool or setup error exits 128 or higher (a command-not-found 127 marks every commit bad).
+2. Name the exact command that tells them apart. `git bisect run` reads its exit code: 0 is good, 125 skips the commit, 128 to 255 aborts the bisection, and every other code from 1 to 127 is bad. Wrap the test so a build failure exits 125 (otherwise a commit that does not build is named the culprit) and a missing tool or setup error exits 128 or higher (a tool that is missing only on later commits reads as bad; on a `good` revision git aborts with `bogus exit code 127`).
 3. Bisect checks out commits in the working tree: use a clean tree or a throwaway worktree (`git worktree add --detach ../bisect <bad>`). `git bisect start <bad> <good>`, then `git bisect run <command>`.
 4. Record the first bad commit and the command's output at it and at its parent.
 5. `git bisect reset` to return.
@@ -5002,9 +5003,9 @@ Each starts with the pushed-state inventory and a recovery point.
 
 - **Cherry-pick**: `git cherry-pick -x <sha>` records the source commit in the message. A merge commit needs `-m 1` (the parent to diff against). On a conflict resolve as in section 3, then `git cherry-pick --continue`, or `git cherry-pick --abort` to return.
 - **Detached HEAD**: commits made there belong to no branch. Before switching away, `git switch -c rescue/<name>` keeps them.
-- **A lost commit or deleted branch**: `git reflog` (and `git reflog show <branch>`) lists where HEAD and the branch were; `git branch rescue/<name> <sha>` brings the commit back. Unreachable reflog entries expire (30 days by default; reachable ones 90), so do this first. When the reflog has nothing, `git fsck --lost-found` lists dangling commits.
+- **A lost commit or deleted branch**: `git reflog` lists where HEAD was (a deleted branch's own reflog is deleted with it, so use the HEAD reflog); `git branch rescue/<name> <sha>` brings the commit back. Unreachable reflog entries expire (30 days by default; reachable ones 90), so do this first. When the reflog has nothing, `git fsck --lost-found` lists dangling commits.
 - **Undo the last commit**: unpushed, keep the changes: `git reset --soft HEAD~1`; pushed: `git revert <sha>`.
-- **A secret was committed**: rotate it first, because every clone and fork keeps the old history; then remove it with `git filter-repo --replace-text`, force-push with a lease, and tell collaborators to re-clone. Route the incident to `security-event-response`.
+- **A secret was committed**: rotate it first, because every clone and fork keeps the old history. Whether the value must also leave the repository, and how, belongs to `security-event-response` (its containment order decides; GitHub's own procedure uses `git filter-repo --sensitive-data-removal` in a fresh clone, then a push of every rewritten ref as that page documents, and a request to Support for cached views and pull-request refs). `git filter-repo` refuses to run outside a fresh clone and removes the `origin` remote, so a bare `--force-with-lease` has nothing to compare against after it. Do not improvise the rewrite here.
 
 ## 8. Shared checkouts and worktrees
 
@@ -5072,7 +5073,7 @@ A row is `observed` only when a run record exists. "It should pass", "CI will ru
 - Body: why the change exists and what is now true, not a restated diff. Measured before/after values belong here when the change is about a measurement.
 - In a PR body, when the change reshapes structure (files moved, a module split, a call path rerouted), show the smallest view of the new shape: a short file tree, a call tree, or a diff sketch of either, holding only the nodes the change touches and the ones needed to place them. A picture the reader can check in ten seconds replaces a paragraph that restates the diff.
 - Reversibility: in a PR body always, in the no-template fallback or under a section the template already has for risk or rollout (never as a heading the template lacks; when the template has neither a risk nor a rollout section, one sentence at the end of its summary or description section); in a commit message only when the recent log already carries a risk or rollback line or trailer (such as `Scope-risk:`). Say whether a revert undoes the whole change, or name what it leaves behind, such as persisted data, an applied migration, a published package or artifact, a sent message, or a changed external setting. Then name which surfaces a bad merge would reach. That one-way door is the fact that should slow a merge, so state the answer even when it is "a revert undoes all of it".
-- `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`. GitHub needs the keyword per issue (`Closes #1, #2` closes only #1) and acts only when the change reaches the default branch. In a squash-merge repository the PR body becomes the commit message, so trailers belong in the last paragraph block of the body.
+- `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`. GitHub needs the keyword per issue (`Closes #1, #2` closes only #1) and acts only when the change reaches the default branch. In a squash-merge repository, check `gh api repos/{owner}/{repo} --jq .squash_merge_commit_message`: with `PR_BODY` the PR body becomes the commit message and trailers belong in its last paragraph block; with `COMMIT_MESSAGES` (GitHub's default for a multi-commit PR) the commits' own messages are used.
 
 ## 5. Trailers and sign-off
 
@@ -7283,7 +7284,6 @@ The change is **escalated** if it adds, moves, or modifies any of:
 - `Pin` projection written by hand rather than through a derive
 - a `#[repr(...)]` change on a type that crosses an FFI or transmute boundary
 - a non-test edit in a module, or to a type, that contains `unsafe` or an `unsafe impl` which depends on it: struct fields, constructors, `Drop`, visibility, `Deref`, or a length or capacity update. Soundness is module-wide, so a safe edit there can break the invariant an unchanged `unsafe` block relies on
-- a new or bumped dependency that brings `unsafe`-heavy code into a hot path
 
 If the change cannot be inspected well enough to answer, the verdict is **escalated**. A conservative verdict is correct and is labelled conservative; an unmeasured "not escalated" is a false clean.
 
@@ -7295,7 +7295,7 @@ An escalated change is not ready for handoff until all four are named as blockin
 
 1. **The invariant.** Every `unsafe` block states, in a comment the change ships with, what it asserts and why the assertion holds. An `unsafe` block with no stated invariant is an unreviewable one -- the compiler stopped checking, so the comment is the only remaining specification.
 2. **Miri.** The affected tests run under Miri (`rustup +nightly component add miri`, then `cargo +nightly miri test <filter>`; add `MIRIFLAGS="-Zmiri-strict-provenance"` for provenance). Miri is the oracle for aliasing, use-after-free, uninitialized reads, invalid values, misalignment, out-of-bounds access, provenance, and double free.
-3. **A sanitizer**, where Miri cannot reach -- anything crossing FFI or doing real I/O. Address, leak, thread, and memory sanitizers each cover a different class; name which one and why. Sanitizers need nightly and a rebuilt standard library: `RUSTFLAGS="-Zsanitizer=address" cargo +nightly test -Zbuild-std --target <host-triple>` (`thread` and `memory` likewise; memory needs Linux).
+3. **A sanitizer**, where Miri cannot reach -- anything crossing FFI or doing real I/O. Address, leak, thread, and memory sanitizers each cover a different class; name which one and why. Sanitizers need nightly, the `rust-src` component (`rustup +nightly component add rust-src`), and a rebuilt standard library: `RUSTFLAGS="-Zsanitizer=address" RUSTDOCFLAGS="-Zsanitizer=address" cargo +nightly test -Zbuild-std --target <host-triple>` (`thread` and `memory` likewise; memory needs Linux). Without `RUSTDOCFLAGS` the unit tests pass and the doctests fail at link with undefined `__asan_init`.
 4. **Concurrency testing** for anything lock-free or atomic-ordering-sensitive: a loom-style exhaustive interleaving check (`RUSTFLAGS="--cfg loom" cargo test --release <loom tests>`, with the code under test built against `loom`'s types), not a stress loop. A stress test that passes ten thousand times has sampled the interleaving space, not covered it.
 
 ## 3. Categories and where each is caught
@@ -7386,20 +7386,20 @@ Choose the instrument the fault needs before planning a session. A breakpoint fi
 | Uninitialised read | `-fsanitize=memory` (clang, Linux) or Valgrind | reports the first use of the value |
 | Intermittent crash | `rr record --chaos` until it fails, then `rr replay` and reverse-step from the crash | a recorded failure can be stepped backwards, which a live session cannot |
 | A crash already happened, a core file or crash log exists | open the core: `gdb <binary> <core>` or `lldb -c <core> <binary>`, then read the backtrace, the faulting frame, and its locals before anything else | no rerun is needed |
-| Hang | attach or open a live process and read every thread's backtrace (`thread apply all bt`) | shows who waits on whom |
+| Hang | attach or open a live process and read every thread's backtrace (gdb: `thread apply all bt`; lldb: `bt all`) | shows who waits on whom |
 
 Rules for all of them:
 
 - Sanitizers, Valgrind and rr are slower and change layout and timing. A fault that vanishes under one is not fixed; say which instrument hid it.
 - Debug builds: `-g -O0` for stepping, `-g -O1` with frame pointers for sanitizers. At `-O2` locals read `<optimized out>`; say so instead of reporting empty values.
-- Cores must exist before the crash: `ulimit -c unlimited`, and on Linux check `/proc/sys/kernel/core_pattern` (systemd-coredump uses `coredumpctl`); on macOS cores go to `/cores` and are off by default. A missing core is a blocker to record, not a finding.
+- Cores must exist before the crash: `ulimit -c unlimited`, and on Linux check `/proc/sys/kernel/core_pattern` (systemd-coredump uses `coredumpctl`); on macOS cores go to `/cores`, which must be writable (it is `root:wheel 755` by default, so a core may never appear) and are off by default. A missing core is a blocker to record, not a finding.
 - Match the core to the exact binary that produced it (build id or checksum); a core read against another build gives wrong frames.
 - rr needs Linux and hardware performance counters; it is often unavailable in containers and VMs. Valgrind does not support recent macOS or Apple silicon. Record an unavailable instrument as unavailable.
-- Sanitizers need the compiler's runtime; Linux `ptrace` attach may be refused (`ptrace_scope`), and macOS attach needs code signing or `get-task-allow`. A refusal is reported as blocked.
+- Sanitizers need the compiler's runtime; Linux `ptrace` attach may be refused (`ptrace_scope`), and macOS attach needs code signing or `get-task-allow`. A refusal is reported as blocked. macOS needs Developer Mode on for a debugger to launch or attach (`DevToolsSecurity -status`); when it is off, a debugger run can hang or raise an authorization prompt, so run it under a timeout, do not retry in a loop, and report it as blocked. An ASan binary whose symbolizer hangs can be run with `ASAN_OPTIONS=symbolize=0` and symbolicated afterwards.
 
 ## 4. Plan the debugger session, do not print
 
-Run the session the way the executor can reach it. Hermes has no built-in debug-adapter client, so the default is a scripted debugger run in the terminal: `lldb --batch -o 'breakpoint set ...' -o run -o bt -o 'frame variable' -- ./prog args` or `gdb -batch -ex 'break ...' -ex run -ex bt -ex 'info locals' --args ./prog args`, with the plan's breakpoints, watchpoints and reads passed as `-o` or `-ex` commands. Use a DAP debug adapter (`lldb-dap`, `codelldb`, a gdb adapter) only when the host exposes one, for example through an MCP server the user configured. Either reads state without rebuilding, and reads state the source never printed.
+Run the session the way the executor can reach it. Hermes has no built-in debug-adapter client, so the default is a scripted debugger run in the terminal: `lldb --batch -o 'breakpoint set ...' -o run -k bt -k 'frame variable' -- ./prog args` or `gdb -batch -ex 'break ...' -ex run -ex bt -ex 'info locals' --args ./prog args`, with the plan's breakpoints and watchpoints passed as `-o` or `-ex` commands. In lldb batch mode a crash stops the remaining `-o` commands and leaves the session at its prompt (`--batch` sets stop-on-crash), so the reads that must happen at the crash go in `-k` (`--one-line-on-crash`), which runs only if the target crashes; `lldb --help` lists the option. Use a DAP debug adapter (`lldb-dap`, `codelldb`, a gdb adapter) only when the host exposes one, for example through an MCP server the user configured. Either reads state without rebuilding, and reads state the source never printed.
 
 Print-and-rebuild is the fallback, for when no debugger can attach or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting. Every print it adds carries one tag chosen for the session, such as `[DBG-7f3a]`, and an observed search for that tag returns nothing before the fix is handed over.
 
@@ -9499,7 +9499,7 @@ one mistake reverts all three.
 | Duplication | The same decision encoded twice; near-identical helpers with drifted edges. | Keep one owner, delete the copies; lookalikes encoding different decisions stay. |
 | Dead code | Unused symbols and imports; unreachable branches; commented-out blocks (version control preserves history); feature flags nothing reads. | Delete outright once the caller check below clears it; no deprecation shims for code with zero callers. |
 | Needless abstraction | Layers and wrappers that only forward, rename, or re-wrap; single-implementation interfaces; config for values that never vary. | Run the deletion test first: inline only when deleting the module makes its complexity vanish. When the same complexity would reappear at the call sites, the module stays, whatever its caller count. A single-implementation interface stays only when the tests use a second adapter. |
-| Boundary violation | Reaching into another module's internals; circular imports; logic in the wrong layer. | Repair the boundary with the existing surface; a boundary-CHANGING fix routes to `refactor-plan` when the direction is decided, or `ralplan` when it is still contested. |
+| Boundary violation | Reaching into another module's internals; circular imports; logic in the wrong layer. | Repair the boundary with the existing surface; a boundary-CHANGING fix routes to `refactor-plan` when the direction is decided; when it is still contested it goes to `ralplan`. |
 | Missing tests | Behavior with no lock; tests asserting implementation details or nothing at all. | Add the behavior lock in pass 0, before any edit; delete assert-nothing tests as dead code in pass 4. |
 | Templated defaults | Boilerplate comments restating the code, placeholder docstrings, copy-pasted config blocks nothing uses. | Delete; a comment survives only when it states what the code cannot. |
 
@@ -9812,7 +9812,7 @@ owns it - check this before reaching for memoization. Lift state only when a
 second component actually reads it. Context carries slow-changing values
 (theme, locale, flags); a frequently-updated value in context re-renders every
 consumer on every change. Shareable view state (filters, tabs, selection worth
-a link) belongs in the URL.
+a link) belongs in the URL [behavior-changing: it adds history entries and deep links].
 
 ## 3. Derive, don't sync
 
@@ -9831,7 +9831,7 @@ values, and user events are not external. If not external, in order:
 - Resetting state when a prop changes -> a `key` on the component [behavior-changing: it remounts the subtree and drops focus, scroll, uncontrolled input values, and child effect state].
 - Fetching -> the query cache (section 5); an unavoidable fetch effect carries
   a stale-response guard in its cleanup.
-- Notifying a parent -> call the callback in the same handler as the setState.
+- Notifying a parent -> call the callback in the same handler as the setState [behavior-changing: the notification moves from after render to the event, which changes its timing].
 - An effect that sets state to trigger another effect -> one handler plus
   derivation; each chained effect is another full render pass.
 - Subscribing to an external store -> the store-subscription hook, not manual
@@ -9869,12 +9869,12 @@ that swallows the error it rolls back from, fails review.
 Items marked [behavior-changing] in this ladder are never applied under the
 refactor invariants. List each in Notes with the observable change it causes.
 
-- Ephemeral UI state in a global store -> local state.
+- Ephemeral UI state in a global store -> local state [behavior-changing: it now resets on unmount].
 - The same fact stored in two places -> one owner, derive the rest.
 - Prop drilling four levels or more -> context (if slow-changing) or a store
   slice.
-- No state reset on logout -> a root reset action plus cache clear; shared-
-  device data leaks are a finding, not a nit.
+- No state reset on logout -> a root reset action plus cache clear [behavior-changing: it adds a behavior]; shared-
+  device data leaks are a finding, not a nit, so report it and send the fix to `omh-frontend` or a feature request.
 
 ## Boundary
 
@@ -11373,13 +11373,18 @@ Before any dimension, establish the observed baseline:
 - **Stack truth** - read the manifests (package/build/dependency files), never
   memory of the tree.
 - **Churn ranking** - the most-changed files are where debt costs the most, but
-  an all-history count is led by changelogs, lockfiles, and generated docs. Use
-  a window, skip merges, drop those paths, and keep only files that still exist:
-  `git log --since=12.months --no-merges --format= --name-only | grep -v -E
-  '(^|/)(CHANGELOG[^/]*|package-lock\\.json|yarn\\.lock|pnpm-lock\\.yaml|Cargo\\.lock|poetry\\.lock|uv\\.lock)$|\\.snap$|\\.min\\.'
-  | sort | uniq -c | sort -rn | awk '{print $2}' | while read f; do [ -e "$f" ]
-  && echo "$f"; done | head -30`. Also drop every path the repository declares
-  generated.
+  an all-history count is led by changelogs, lockfiles, and generated docs. Use a
+  window, skip merges, drop those paths, keep only files that still exist, keep
+  the count, and run it from the repository top level (paths are relative to it).
+  Also drop every path the repository declares generated:
+
+  ```sh
+  cd "$(git rev-parse --show-toplevel)"
+  git -c core.quotePath=false log --since=12.months --no-merges --format= --name-only \\
+    | grep -v -E '(^|/)(CHANGELOG[^/]*|package-lock\\.json|yarn\\.lock|pnpm-lock\\.yaml|Cargo\\.lock|poetry\\.lock|uv\\.lock)$|\\.snap$|\\.min\\.' \\
+    | sort | uniq -c | sort -rn \\
+    | while read -r n f; do [ -e "$f" ] && echo "$n $f"; done | head -30
+  ```
 - **Size ranking** - the largest source files by line count.
 - **Gate inventory** - the test suites, typecheckers, linters, and CI entry
   points that already exist; debt findings that a gate already catches are

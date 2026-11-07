@@ -143,10 +143,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            # 533907 -> 535116 and the digest re-derived: the code-quality skills fix round grows the rows
-            # itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT (+1209); the pin before it was d6dfefff...fc71.
-            (skill_capabilities, 535116, FULL_ROW_DELTA_CAP,
-             '96a3494eb99a6c0bae1bafcc2e47bb5b47c021f50d0d79dd87ba834e6ee4cb49',
+            # 533907 -> 535568 and the digest re-derived: the code-quality skills fix round and its review round grow
+            # the rows itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT (+1661); the pin before it was d6dfefff...fc71.
+            (skill_capabilities, 535568, FULL_ROW_DELTA_CAP,
+             '83738ff3b26f8bbe9e143d1bc97420b74dee3c1d24da16caadc1753db07f6b7b',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -381,7 +381,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Code-quality skills fix round: build-failure-triage, verification-gate, codebase-onboarding, codebase-uml,
         # codegraph-refresh, frontend-refactor, native-debugging, rust, refactor-plan and the rest of that lane move
         # (bodies and references); the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '3b70cfb4ad9ceef1d192eecde4e4f904083efc86c6a644703d9b6df8e001a3f6')
+        self.assertEqual(_digest(legacy_hashes), '27e36068f20ca4327635714fc0b40688a0935cdb52f17063883777c3a7bf6d68')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

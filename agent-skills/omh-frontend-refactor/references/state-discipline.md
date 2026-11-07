@@ -21,7 +21,7 @@ owns it - check this before reaching for memoization. Lift state only when a
 second component actually reads it. Context carries slow-changing values
 (theme, locale, flags); a frequently-updated value in context re-renders every
 consumer on every change. Shareable view state (filters, tabs, selection worth
-a link) belongs in the URL.
+a link) belongs in the URL [behavior-changing: it adds history entries and deep links].
 
 ## 3. Derive, don't sync
 
@@ -40,7 +40,7 @@ values, and user events are not external. If not external, in order:
 - Resetting state when a prop changes -> a `key` on the component [behavior-changing: it remounts the subtree and drops focus, scroll, uncontrolled input values, and child effect state].
 - Fetching -> the query cache (section 5); an unavoidable fetch effect carries
   a stale-response guard in its cleanup.
-- Notifying a parent -> call the callback in the same handler as the setState.
+- Notifying a parent -> call the callback in the same handler as the setState [behavior-changing: the notification moves from after render to the event, which changes its timing].
 - An effect that sets state to trigger another effect -> one handler plus
   derivation; each chained effect is another full render pass.
 - Subscribing to an external store -> the store-subscription hook, not manual
@@ -78,12 +78,12 @@ that swallows the error it rolls back from, fails review.
 Items marked [behavior-changing] in this ladder are never applied under the
 refactor invariants. List each in Notes with the observable change it causes.
 
-- Ephemeral UI state in a global store -> local state.
+- Ephemeral UI state in a global store -> local state [behavior-changing: it now resets on unmount].
 - The same fact stored in two places -> one owner, derive the rest.
 - Prop drilling four levels or more -> context (if slow-changing) or a store
   slice.
-- No state reset on logout -> a root reset action plus cache clear; shared-
-  device data leaks are a finding, not a nit.
+- No state reset on logout -> a root reset action plus cache clear [behavior-changing: it adds a behavior]; shared-
+  device data leaks are a finding, not a nit, so report it and send the fix to `omh-frontend` or a feature request.
 
 ## Boundary
 

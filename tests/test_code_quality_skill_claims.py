@@ -37,6 +37,24 @@ class DebuggingReferencesTests(unittest.TestCase):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
 
+    def test_lldb_batch_reads_the_crash_through_one_line_on_crash(self):
+        """`lldb --batch` stops the remaining -o commands at a crash; only -k runs there."""
+        text = (ROOT / "skills/omh-native-debugging/references/native-debug-loop.md").read_text(encoding="utf-8")
+        self.assertIn("-k bt -k 'frame variable'", text)
+        self.assertNotIn("-o bt", text)
+        self.assertNotIn("thread apply all bt`)", text.replace("gdb: `thread apply all bt`", ""))
+
+    def test_the_required_checks_come_from_the_ruleset_and_a_missing_one_is_evidence_missing(self):
+        text = _text("omh-verification-gate")
+        self.assertIn("rules/branches/", text)
+        self.assertIn("a required context with no result is missing evidence", text)
+
+    def test_the_merge_commit_is_read_from_the_checkout_log(self):
+        text = _text("omh-build-failure-triage")
+        self.assertIn("HEAD is now at", text)
+        self.assertIn("returns the PR head", text)
+        self.assertIn("introduced` only after one rerun at head fails again", text)
+
     def test_bisect_exit_codes_are_stated(self):
         text = (ROOT / "skills/omh-git-workflow/references/git-repair-method.md").read_text(encoding="utf-8")
         self.assertIn("a build failure exits 125", text)

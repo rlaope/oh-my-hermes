@@ -971,8 +971,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # origin, merge ref), verification-gate (required set, thorough lane, N sizing), github-event-ops
 # (path table and re-read), agent-debug (own why, DNU, inputs, replay), codebase-onboarding,
 # github-issue-intake, frontend-refactor, repro-audit, codegraph-refresh, codebase-uml, rust and the
-# todo-checklist path in three rows (+1209 together). Measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 538188
+# todo-checklist path in three rows (+1209 together). Review round: the rerun rule in the two origin
+# rows, the ruleset required set, the event path and issue re-read, and the lldb crash recipe (+452
+# more, 538640). Measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 538640
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

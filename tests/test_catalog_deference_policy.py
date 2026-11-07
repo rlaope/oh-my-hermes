@@ -326,7 +326,9 @@ NON_SKILL_BACKTICKS = frozenset(
 # The code-quality skills fix round adds Do Not Use When lines that name a sibling: `code-review` defers the
 # evidence matrix to `verification-gate`, `agent-debug` defers application code to `app-debugging` and install
 # health to `doctor`, `repro-audit` defers bug reproduction to `app-debugging`, `codebase-onboarding` defers a
-# picture to `codebase-uml` and the index to `codegraph-refresh`; no sibling gains a pointing-back statement.
+# picture to `codebase-uml` and the index to `codegraph-refresh`, `github-issue-intake` names `feedback-triage` and
+# `github-event-ops` with their labels, and `github-event-ops` defers a patch or minor bump to `verification-gate`;
+# no sibling gains a pointing-back statement.
 EXPECTED_DEFERENCE_CASES = 417
 EXPECTED_DEFERENCE_PAIRS = 435
 EXPECTED_DEFERRING_OWNERS = 125

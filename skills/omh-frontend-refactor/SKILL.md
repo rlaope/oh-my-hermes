@@ -123,7 +123,7 @@ Safety rules:
 
 - Preview is the default: analyze the whole target and emit the plan before touching any file.
 - Outputs, side effects, and error handling stay identical; a dropped branch or weakened handler is a defect, not a simplification.
-- Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits. Changes to props, exports, or file layout, and `[behavior-changing]` items (remounts, new dependencies, caching), are proposals in notes until the user's second decision.
+- Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits. Changes to props, exports, or file layout are proposals in notes until the user's second decision. `[behavior-changing]` items (remounts, new dependencies, caching, URL state, timing, a logout reset) never apply under this skill: they go to notes for `frontend` or a feature request.
 - Do not refactor test files, and do not claim behavior preservation without the before/after test evidence.
 
 ## Runtime Evidence

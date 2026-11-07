@@ -49,7 +49,7 @@ Bad example:
 
 ## Recovery Notes
 
-- The generator reads Python files only. Before generating, check `omh codegraph summary` finds Python files; for a TypeScript, Go, Java, or Rust repository (or an empty model) say the generator cannot read it, stop, and attach nothing. A picture drawn from a description is a different request, not this workflow.
+- The generator reads Python files only. Before generating, check `omh codegraph summary` finds Python files; for a TypeScript, Go, Java, or Rust repository (or an empty model) say the generator cannot read it, stop, and attach nothing. Do the same when Python is a small share of the source (compare the summary's Python file count with `git ls-files | grep -c -E '\.(ts|tsx|js|go|java|rs)$'`): the picture would show only that part, and saying so is the answer. A picture drawn from a description is a different request, not this workflow.
 - If the render plan is blocked, send the PlantUML source path plus the install hint; do not attach a stale or hand-drawn image.
 - If the picture is still unreadable, lower `--max-nodes`, narrow `--focus`, or raise `--depth` by one, and say which knob changed.
 - If Graphviz `dot` is missing, rerun with `--layout smetana`; the layout differs but the content is identical.

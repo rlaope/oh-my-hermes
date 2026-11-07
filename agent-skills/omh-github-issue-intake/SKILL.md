@@ -72,7 +72,7 @@ Quality bar:
 - Classify the report from supplied or observed facts and separate observation from inference.
 - Ask at most three unresolved, decision-changing questions; stop with a specific missing-evidence request instead of filing a vague issue.
 - Present the direction check, require confirmation, and keep prepared packages distinct from observed creation.
-- Search open and closed issues and PRs for duplicates (`gh issue list --repo <r> --state all --search '<keywords> in:title,body'`), record the query and the top hits, and build the body from the matching `.github/ISSUE_TEMPLATE/` form.
+- Search open and closed issues and PRs for duplicates (`gh issue list --repo <r> --state all --search '<keywords> in:title,body'` and the same with `gh pr list`, since `gh issue list` returns issues only), record the query and the top hits, and build the body from the matching `.github/ISSUE_TEMPLATE/` form.
 
 Required inputs:
 

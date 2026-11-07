@@ -19,7 +19,7 @@ This is a Hermes-native `codegraph-refresh` workflow skill.
 
 ## Why This Exists
 
-`codegraph-refresh` adapts ECC-style codemap freshness into OMH's local codegraph commands so operators can refresh navigation context before handoff without pretending code intelligence is execution evidence.
+`codegraph-refresh` exists so the local code index is rebuilt before a handoff and the answer says how old it was, without pretending code intelligence is execution evidence; the freshness posture is credited to ECC's codemap work.
 
 ## Do Not Use When
 
@@ -105,7 +105,7 @@ Expected outputs:
 Artifact expectations:
 
 - codegraph_command_plan/v1 naming `omh codegraph build`, `summary`, `handoff`, `--write`, and `--json` choices
-- staleness_and_scope_report/v1 separating requested refresh scope, observed command output, missing index evidence, and stale artifacts; the artifact is stale when its `generated_at` is older than the newest commit (`git log -1 --format=%cI`) or `git status --porcelain -- '*.py'` is non-empty, and a rebuild is the refresh because the scan is full, not incremental
+- staleness_and_scope_report/v1 separating requested refresh scope, observed command output, missing index evidence, and stale artifacts; the artifact is stale when its `generated_at` is older than the newest commit (`git log -1 --format=%cI`) or a Python file listed by `git status --porcelain -- '*.py'` has an mtime later than `generated_at` (a dirty file older than the artifact is not stale, and the list stays non-empty after a rebuild), and a rebuild is the refresh because the scan is full, not incremental
 - `omh_codegraph_summary/v1` or `.omh/codegraph/codegraph.json` only when the corresponding command output or write is observed
 - codegraph_handoff_context/v1 with task terms, focus files, symbols, entrypoints, warnings, and claim boundary when `omh codegraph handoff` is observed
 

@@ -44,20 +44,20 @@ Choose the instrument the fault needs before planning a session. A breakpoint fi
 | Uninitialised read | `-fsanitize=memory` (clang, Linux) or Valgrind | reports the first use of the value |
 | Intermittent crash | `rr record --chaos` until it fails, then `rr replay` and reverse-step from the crash | a recorded failure can be stepped backwards, which a live session cannot |
 | A crash already happened, a core file or crash log exists | open the core: `gdb <binary> <core>` or `lldb -c <core> <binary>`, then read the backtrace, the faulting frame, and its locals before anything else | no rerun is needed |
-| Hang | attach or open a live process and read every thread's backtrace (`thread apply all bt`) | shows who waits on whom |
+| Hang | attach or open a live process and read every thread's backtrace (gdb: `thread apply all bt`; lldb: `bt all`) | shows who waits on whom |
 
 Rules for all of them:
 
 - Sanitizers, Valgrind and rr are slower and change layout and timing. A fault that vanishes under one is not fixed; say which instrument hid it.
 - Debug builds: `-g -O0` for stepping, `-g -O1` with frame pointers for sanitizers. At `-O2` locals read `<optimized out>`; say so instead of reporting empty values.
-- Cores must exist before the crash: `ulimit -c unlimited`, and on Linux check `/proc/sys/kernel/core_pattern` (systemd-coredump uses `coredumpctl`); on macOS cores go to `/cores` and are off by default. A missing core is a blocker to record, not a finding.
+- Cores must exist before the crash: `ulimit -c unlimited`, and on Linux check `/proc/sys/kernel/core_pattern` (systemd-coredump uses `coredumpctl`); on macOS cores go to `/cores`, which must be writable (it is `root:wheel 755` by default, so a core may never appear) and are off by default. A missing core is a blocker to record, not a finding.
 - Match the core to the exact binary that produced it (build id or checksum); a core read against another build gives wrong frames.
 - rr needs Linux and hardware performance counters; it is often unavailable in containers and VMs. Valgrind does not support recent macOS or Apple silicon. Record an unavailable instrument as unavailable.
-- Sanitizers need the compiler's runtime; Linux `ptrace` attach may be refused (`ptrace_scope`), and macOS attach needs code signing or `get-task-allow`. A refusal is reported as blocked.
+- Sanitizers need the compiler's runtime; Linux `ptrace` attach may be refused (`ptrace_scope`), and macOS attach needs code signing or `get-task-allow`. A refusal is reported as blocked. macOS needs Developer Mode on for a debugger to launch or attach (`DevToolsSecurity -status`); when it is off, a debugger run can hang or raise an authorization prompt, so run it under a timeout, do not retry in a loop, and report it as blocked. An ASan binary whose symbolizer hangs can be run with `ASAN_OPTIONS=symbolize=0` and symbolicated afterwards.
 
 ## 4. Plan the debugger session, do not print
 
-Run the session the way the executor can reach it. Hermes has no built-in debug-adapter client, so the default is a scripted debugger run in the terminal: `lldb --batch -o 'breakpoint set ...' -o run -o bt -o 'frame variable' -- ./prog args` or `gdb -batch -ex 'break ...' -ex run -ex bt -ex 'info locals' --args ./prog args`, with the plan's breakpoints, watchpoints and reads passed as `-o` or `-ex` commands. Use a DAP debug adapter (`lldb-dap`, `codelldb`, a gdb adapter) only when the host exposes one, for example through an MCP server the user configured. Either reads state without rebuilding, and reads state the source never printed.
+Run the session the way the executor can reach it. Hermes has no built-in debug-adapter client, so the default is a scripted debugger run in the terminal: `lldb --batch -o 'breakpoint set ...' -o run -k bt -k 'frame variable' -- ./prog args` or `gdb -batch -ex 'break ...' -ex run -ex bt -ex 'info locals' --args ./prog args`, with the plan's breakpoints and watchpoints passed as `-o` or `-ex` commands. In lldb batch mode a crash stops the remaining `-o` commands and leaves the session at its prompt (`--batch` sets stop-on-crash), so the reads that must happen at the crash go in `-k` (`--one-line-on-crash`), which runs only if the target crashes; `lldb --help` lists the option. Use a DAP debug adapter (`lldb-dap`, `codelldb`, a gdb adapter) only when the host exposes one, for example through an MCP server the user configured. Either reads state without rebuilding, and reads state the source never printed.
 
 Print-and-rebuild is the fallback, for when no debugger can attach or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting. Every print it adds carries one tag chosen for the session, such as `[DBG-7f3a]`, and an observed search for that tag returns nothing before the fix is handed over.
 

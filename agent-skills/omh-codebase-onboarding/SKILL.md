@@ -17,7 +17,7 @@ This is an OMH `codebase-onboarding` workflow skill, projected for Agent Skills 
 
 ## Why This Exists
 
-`codebase-onboarding` adapts ECC's code-tour and onboarding surfaces into an OMH-native first-read workflow so unfamiliar repos become navigable before implementation pressure starts.
+`codebase-onboarding` exists so an unfamiliar repo gets a reading order, a glossary, and a first task that cite files that were opened, before implementation pressure starts; the surface is adapted from ECC's code-tour and onboarding work.
 
 ## Do Not Use When
 

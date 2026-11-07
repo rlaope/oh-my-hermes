@@ -11,13 +11,18 @@ Before any dimension, establish the observed baseline:
 - **Stack truth** - read the manifests (package/build/dependency files), never
   memory of the tree.
 - **Churn ranking** - the most-changed files are where debt costs the most, but
-  an all-history count is led by changelogs, lockfiles, and generated docs. Use
-  a window, skip merges, drop those paths, and keep only files that still exist:
-  `git log --since=12.months --no-merges --format= --name-only | grep -v -E
-  '(^|/)(CHANGELOG[^/]*|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|uv\.lock)$|\.snap$|\.min\.'
-  | sort | uniq -c | sort -rn | awk '{print $2}' | while read f; do [ -e "$f" ]
-  && echo "$f"; done | head -30`. Also drop every path the repository declares
-  generated.
+  an all-history count is led by changelogs, lockfiles, and generated docs. Use a
+  window, skip merges, drop those paths, keep only files that still exist, keep
+  the count, and run it from the repository top level (paths are relative to it).
+  Also drop every path the repository declares generated:
+
+  ```sh
+  cd "$(git rev-parse --show-toplevel)"
+  git -c core.quotePath=false log --since=12.months --no-merges --format= --name-only \
+    | grep -v -E '(^|/)(CHANGELOG[^/]*|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|uv\.lock)$|\.snap$|\.min\.' \
+    | sort | uniq -c | sort -rn \
+    | while read -r n f; do [ -e "$f" ] && echo "$n $f"; done | head -30
+  ```
 - **Size ranking** - the largest source files by line count.
 - **Gate inventory** - the test suites, typecheckers, linters, and CI entry
   points that already exist; debt findings that a gate already catches are
