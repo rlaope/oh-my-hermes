@@ -46,9 +46,6 @@ COLLISION_RATIONALES: dict[str, str] = {
     "R-OMH-ENTRYPOINT": (
         "The `/omh` entrypoint token is the meta-router's job to detect and the router skill's job to describe; both must answer to it."
     ),
-    "R-ACCESSIBILITY-SURFACE": (
-        "Accessibility is a real concern of both the visual frontend surface and the voice operator surface."
-    ),
     "R-GENERATED-FILE-SENSE": (
         "A generated file is two things: the PDF somebody produced and wants attached, which is the delivery lane's, and a checked-in artifact whose source of truth is a generator, which is the verification gate's. The words are identical and the sense is decided by whether the sentence also asks where the file came from, so both own the phrase and `generated_artifact_provenance_before_deliverable_package` separates them."
     ),
@@ -72,12 +69,6 @@ COLLISION_RATIONALES: dict[str, str] = {
     ),
     "R-ISSUE-INTAKE": (
         "Issue triage is both a GitHub operation and a planning intake."
-    ),
-    "R-ENVIRONMENT-INVENTORY": (
-        "MCP inventory is read by both the harness session view and the workspace audit."
-    ),
-    "R-RELEASE-GATE": (
-        "A release gate is enforced by the verification gate and inspected during code review."
     ),
     "R-RELEASE-READINESS": (
         "Release readiness is both an executive loop question and a production-audit subject."
@@ -109,7 +100,6 @@ COLLISION_RATIONALES: dict[str, str] = {
 INTENTIONAL_COLLISIONS: tuple[CollisionDeclaration, ...] = (
     CollisionDeclaration(identity="./omh", owners=("meta-router", "oh-my-hermes",), rationale_id="R-OMH-ENTRYPOINT"),
     CollisionDeclaration(identity="/omh", owners=("meta-router", "oh-my-hermes",), rationale_id="R-OMH-ENTRYPOINT"),
-    CollisionDeclaration(identity="accessibility", owners=("frontend", "voice-operator",), rationale_id="R-ACCESSIBILITY-SURFACE"),
     CollisionDeclaration(identity="autoresearch-goal", owners=("autoresearch-goal", "research",), rationale_id="R-RETIRED-SIBLING-FOLD"),
     CollisionDeclaration(identity="benchmark", owners=("performance-goal", "ultraperf",), rationale_id="R-RETIRED-SIBLING-FOLD"),
     CollisionDeclaration(identity="best practice", owners=("best-practice-research", "web-research",), rationale_id="R-RETIRED-SIBLING-FOLD"),
@@ -131,7 +121,6 @@ INTENTIONAL_COLLISIONS: tuple[CollisionDeclaration, ...] = (
     CollisionDeclaration(identity="latency", owners=("performance-goal", "ultraperf",), rationale_id="R-RETIRED-SIBLING-FOLD"),
     CollisionDeclaration(identity="layout broken", owners=("frontend", "visual-qa",), rationale_id="R-LAYOUT-DEFECT-INTAKE"),
     CollisionDeclaration(identity="make a pr", owners=("ultraprocess", "ultrawork",), rationale_id="R-DELIVERY-CYCLE"),
-    CollisionDeclaration(identity="mcp inventory", owners=("harness-session-inventory", "workspace-audit",), rationale_id="R-ENVIRONMENT-INVENTORY"),
     CollisionDeclaration(identity="official docs", owners=("best-practice-research", "web-research",), rationale_id="R-RETIRED-SIBLING-FOLD"),
     CollisionDeclaration(identity="one-cycle delivery", owners=("ultraprocess", "ultrawork",), rationale_id="R-DELIVERY-CYCLE"),
     CollisionDeclaration(identity="open a pr", owners=("ultraprocess", "ultrawork",), rationale_id="R-DELIVERY-CYCLE"),
@@ -141,7 +130,6 @@ INTENTIONAL_COLLISIONS: tuple[CollisionDeclaration, ...] = (
     CollisionDeclaration(identity="plan implement review docs pr", owners=("ultraprocess", "ultrawork",), rationale_id="R-DELIVERY-CYCLE"),
     CollisionDeclaration(identity="pr-ready", owners=("ultraprocess", "ultrawork",), rationale_id="R-DELIVERY-CYCLE"),
     CollisionDeclaration(identity="prepare a pr", owners=("ultraprocess", "ultrawork",), rationale_id="R-DELIVERY-CYCLE"),
-    CollisionDeclaration(identity="release gate", owners=("code-review", "verification-gate",), rationale_id="R-RELEASE-GATE"),
     CollisionDeclaration(identity="release readiness", owners=("cto-loop", "production-audit",), rationale_id="R-RELEASE-READINESS"),
     CollisionDeclaration(identity="render qa", owners=("materials-package", "visual-qa",), rationale_id="R-RENDER-QA"),
     CollisionDeclaration(identity="research goal", owners=("autoresearch-goal", "research",), rationale_id="R-RETIRED-SIBLING-FOLD"),
@@ -158,7 +146,6 @@ INTENTIONAL_COLLISIONS: tuple[CollisionDeclaration, ...] = (
     CollisionDeclaration(identity="슬랙", owners=("automation-blueprint", "gateway-intent-card",), rationale_id="R-CHAT-GATEWAY"),
     CollisionDeclaration(identity="예약", owners=("automation-blueprint", "spend-gate",), rationale_id="R-SPEND-BESIDE-MONEY"),
     CollisionDeclaration(identity="장기 목표", owners=("loop", "ultragoal",), rationale_id="R-LONG-HORIZON-GOAL"),
-    CollisionDeclaration(identity="접근성", owners=("frontend", "voice-operator",), rationale_id="R-ACCESSIBILITY-SURFACE"),
     CollisionDeclaration(identity="조용히", owners=("automation-blueprint", "gateway-intent-card",), rationale_id="R-CHAT-GATEWAY"),
     CollisionDeclaration(identity="출시 준비", owners=("cto-loop", "production-audit",), rationale_id="R-RELEASE-READINESS"),
     CollisionDeclaration(identity="텔레그램", owners=("automation-blueprint", "gateway-intent-card",), rationale_id="R-CHAT-GATEWAY"),

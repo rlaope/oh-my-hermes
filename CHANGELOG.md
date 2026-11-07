@@ -425,6 +425,16 @@ All notable changes will be documented here.
   Hermes' context-file cap. The full-profile skill-body ceiling is re-derived
   by its written policy.
 
+- **Several too-wide routing words stopped taking turns that were not theirs.**
+  Bare `priorities`, `리스크`, `블로커`, `우선순위`, `risk analysis`, `release gate`,
+  `accessibility` and `접근성` on voice input, and the video words on the connector
+  card no longer pull a turn. Missing or unset words alone no longer
+  open toolbelt readiness unless a connector or tool is named, "주간" no longer reads
+  as a stock price, and "time instead" no longer reads as a time lookup. native-debugging's routed text stops promising a
+  debug adapter Hermes does not have. A few phrases the skill audits named now reach
+  their skill: `account takeover` and `suspected unauthorized access`, `telemetry
+  audit`, `write a handover guide` and `인수인계 문서 써줘`, and in Korean `시장 규모` and
+  `경쟁사 분석` right before a request to size or analyse.
 - **Business and operations skills now check what a practitioner checks.**
   The morning brief no longer claims a Gmail connection is draft-only from
   its scopes (every Gmail scope that creates drafts also sends); it enforces

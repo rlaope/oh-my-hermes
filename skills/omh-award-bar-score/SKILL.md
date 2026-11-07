@@ -65,7 +65,7 @@ Bad example:
 
 ## When to Use
 
-Use when a web surface must be judged against an external award bar: per-axis scores for UI, UX, and innovation, the weighted total against the published threshold, and the one axis holding the score down.
+Use when a web surface must be judged against an external award bar: per-axis scores for the axes the chosen award body publishes, the weighted total against the published threshold, and the one axis holding the score down.
 
     Strong routing signals: `award-bar-score`, `award bar score`, `award winning`, `award-winning`, `award winning website`, `award-winning website`, `award winning design`, `award ready`, `make it award winning`, `design award`, `design awards`, `css design awards`, `cssda`, `awwwards`, `site of the day`, `website of the day`, `wotd`, `score my site`, `어워드`, `디자인 어워드`, `어워드 수준`, `수상작 수준`, `수상 가능한 디자인`, `어워드 받을만한`, `올해의 사이트`
 

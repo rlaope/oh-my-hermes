@@ -69,7 +69,7 @@ from ..plugin_bundle.omh.route_question_mode import ROUTE_QUESTION_MODE_OFF, rou
 from ..plugin_bundle.omh.spend_signals import SPEND_GATE_PHRASES, spend_request_clause
 from .intent import classify_workflow_intent, scrub_diagnostic_status_text
 from .reference_regions import executable_routing_text, reference_regions
-from .localization import normalized_phrase, prepare_routing_text, routing_tokens
+from .localization import normalized_phrase, phrase_is_spoken, prepare_routing_text, routing_tokens
 from .missed_route import is_missed_route_feedback
 from .omh_help import (
     is_omh_docs_question,
@@ -4086,7 +4086,7 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "메모리 손상",
         ),
         "operator_surface_fast_path:native_debugging",
-        "Clear native-binary fault or crash-debugging request; prepare competing hypotheses, distinguishing observations, and a DAP-driven debugger session plan.",
+        "Clear native-binary fault or crash-debugging request; prepare competing hypotheses, distinguishing observations, and a debugger session plan.",
     ),
     (
         "accessibility-audit",
@@ -5370,6 +5370,9 @@ def _operator_surface_fast_path_match(
         if only_skill is not None and skill != only_skill:
             continue
         if skill == "live-info-operator" and normalized_pattern == "환율" and "전환율" in text:
+            continue
+        # "at the same time instead" holds "time in", as a word it does not say.
+        if skill == "live-info-operator" and normalized_pattern == "time in" and not phrase_is_spoken(text, "time in"):
             continue
         if skill == "memory-new" and _memory_new_scope_overroutes_curation(text):
             continue

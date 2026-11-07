@@ -247,6 +247,7 @@ class LoadableSiblingNameTests(unittest.TestCase):
                 "ulw-research",
                 "omh-source-finder",
                 "omh-research-brief",
+                "omh-market-research",
                 "omh-research-department",
                 "omh-websearch-setup",
                 "omh-codebase-onboarding",
@@ -255,7 +256,7 @@ class LoadableSiblingNameTests(unittest.TestCase):
             ),
         )
         self.assertIn(
-            "    related_skills: [ulw-research, omh-source-finder, omh-research-brief, omh-research-department, "
+            "    related_skills: [ulw-research, omh-source-finder, omh-research-brief, omh-market-research, omh-research-department, "
             "omh-websearch-setup, omh-codebase-onboarding, grounded-citations, arxiv]\n",
             self.hermes["web-research"],
         )

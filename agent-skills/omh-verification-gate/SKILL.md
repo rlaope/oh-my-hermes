@@ -1,6 +1,6 @@
 ---
 name: "omh-verification-gate"
-description: "[omh] Proof a change is done before merge: define and record build, lint, typecheck, test, security, docs, generated-output, and CI evidence before completion or merge. Use when the user says: verification-gate, verification gate, quality gate, release gate, test gate, build lint test, lint typecheck tests, verify before merge."
+description: "[omh] Proof a change is done before merge: define and record build, lint, typecheck, test, security, docs, generated-output, and CI evidence before completion or merge. Use when the user says: verification-gate, verification gate, quality gate, run the release gate, release gate check, test gate, build lint test, lint typecheck tests."
 license: MIT
 metadata:
   hermes:
@@ -57,7 +57,7 @@ Bad example:
 
 Use when Hermes must turn a change, PR, release, or claim into a concrete evidence checklist and PASS/HOLD/BLOCK verdict.
 
-    Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `generated file`, `generated artifact`, `generated output`, `source of truth`, `regenerate instead of editing`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `перед мерджем проверь`, `проверь перед пушем`, `гейт проверки`, `проверь перед мерджем`, `докажи что тесты проходят`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`, `verifikasi sebelum merge`, `buktikan perubahan ini sudah selesai`, `cek bukti build lint dan tes`, `pastikan semua pemeriksaan lulus sebelum merge`, `tolong validasi hasil implementasi ini`, `xác minh trước khi gộp`, `xác minh trước khi merge`, `chứng minh thay đổi này đã hoàn thành`, `kiểm tra bằng chứng build lint và kiểm thử`, `đảm bảo mọi kiểm tra đều đạt trước khi gộp`, `đảm bảo tất cả kiểm tra đạt trước khi merge`, `hãy xác thực kết quả thực hiện này`
+    Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `run the release gate`, `release gate check`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `generated file`, `generated artifact`, `generated output`, `source of truth`, `regenerate instead of editing`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `перед мерджем проверь`, `проверь перед пушем`, `гейт проверки`, `проверь перед мерджем`, `докажи что тесты проходят`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`, `verifikasi sebelum merge`, `buktikan perubahan ini sudah selesai`, `cek bukti build lint dan tes`, `pastikan semua pemeriksaan lulus sebelum merge`, `tolong validasi hasil implementasi ini`, `xác minh trước khi gộp`, `xác minh trước khi merge`, `chứng minh thay đổi này đã hoàn thành`, `kiểm tra bằng chứng build lint và kiểm thử`, `đảm bảo mọi kiểm tra đều đạt trước khi gộp`, `đảm bảo tất cả kiểm tra đạt trước khi merge`, `hãy xác thực kết quả thực hiện này`
 
 ## Catalog Metadata
 

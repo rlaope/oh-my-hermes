@@ -95,7 +95,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # OMH ignoring files, and a filler adverb, a why-question about a
         # parser and "Hermes with OMH" before a task stay off it too.
         # systematic-review adds six review, screening and criteria controls.
-        self.assertEqual(payload["summary"]["case_count"], 1406)
+        self.assertEqual(payload["summary"]["case_count"], 1452)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -170,7 +170,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # The rendered-scene lane's crime-scene control is a direct answer (+1).
         # show-reel's quoted idea-video ask is translation input, answered directly (+1).
         # A concept question under a busy-path gateway origin is answered directly (+1).
-        self.assertEqual(payload["summary"]["direct_answer_count"], 356)
+        # 356 -> 359: the reach round's negatives that the router answers directly.
+        self.assertEqual(payload["summary"]["direct_answer_count"], 359)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
@@ -179,7 +180,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # a file lookup (+1), and so is the English one with a courtesy tail (+1).
         # A recruiter question and a contract clause that quote an
         # architecture-deepening phrase are answered as file lookups (+2).
-        self.assertEqual(payload["summary"]["file_lookup_count"], 19)
+        # 19 -> 20: the reach round's `at the same time instead` sentence reads as a file lookup.
+        self.assertEqual(payload["summary"]["file_lookup_count"], 20)
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
@@ -255,7 +257,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # before an add-tests request keeps ultrawork, and two reports quoting
         # the user's own migrate / rewrite ask reach workflow-learning.
         # systematic-review adds four screening requests and two owner-keeping controls.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1249)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1279)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

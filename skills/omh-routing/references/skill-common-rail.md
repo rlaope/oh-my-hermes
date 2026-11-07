@@ -13,7 +13,7 @@ multi-agent target topology, or the generic execution checklist is in play.
 - OMH is a Hermes workflow layer, not a standalone executor.
 - Product context: OMH is a Hermes-native workflow pack: choose skills, shape work, prepare artifacts, show status, and hand off with evidence boundaries.
 - Cross-skill context: every OMH skill: match lane; generic tool can render or execute.
-- Generic-tool checkpoint: image->omh-image-cards; frontend->omh-frontend/a11y/omh-visual-qa; paper->omh-paper-learning; content->omh-content-operator; media->omh-media-input; file->omh-materials-package; search->ulw-research; live->omh-live-info; audit->workspace/production/security; failures->build-failure; verify->omh-verification-gate; code->codegraph/onboarding/ulw-work.
+- Generic-tool checkpoint: image->omh-image-cards; frontend->omh-frontend/omh-accessibility-audit/omh-visual-qa; paper->omh-paper-learning; content->omh-content-operator; media->omh-media-input; file->omh-materials-package; search->ulw-research; live->omh-live-info; audit->omh-workspace-audit/omh-production-audit/omh-security-safety-review; failures->omh-build-failure-triage; verify->omh-verification-gate; code->omh-codegraph-refresh/omh-codebase-onboarding/ulw-work.
 - Coverage: Every generated workflow skill carries this rail.
 - Normal users talk to Hermes; OMH CLI is infra.
 - Boundary: Prepared OMH routing/cards/handoffs/artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
