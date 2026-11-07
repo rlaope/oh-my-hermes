@@ -17,9 +17,11 @@ CSSDA scores an entry on three axes:
 | Innovation | 30% | New development and design ideas |
 
 A jury panel scores each entry, and an entry page exposes the per-judge scores
-alongside the public per-axis vote averages. Award tiers: **8.0 and above**
-takes Website of the Day, **6.0 and above** takes Special Kudos, and the
-public awards need a 6.0 judge average plus at least 20 votes. The 40/30/30
+alongside the public per-axis vote averages. Award tiers
+(cssdesignawards.com/about, read 2026-11-07): Website of the Day needs a judge
+average **above 8.00**, a figure CSSDA says varies with the quality of the
+entries submitted; Special Kudos needs an average **above 6**; the public
+awards need **more than 20 votes** and a judge average above 6. The 40/30/30
 split is reported rather than stated in the jury rules, so when the artifact
 depends on the ratio, mark it reported and score the axes separately too.
 
@@ -28,8 +30,8 @@ depends on the ratio, mark it reported and score the axes separately too.
 Daily winners cluster immediately above the cutoff: most sit between 8.0 and
 8.5, and a score above 8.6 is the exception. The distribution is a spike at the
 threshold because 8.0 is where the award starts. "Award-winning" therefore
-means *cleared 8.0*, not exceptional, and a brief that treats it as exceptional
-overbuilds.
+means *cleared the published floor of 8.0*, not exceptional, and a brief that
+treats it as exceptional overbuilds. The day's cut can sit higher than 8.0.
 
 ## The three axes move together
 
@@ -53,9 +55,10 @@ of site spread**, so judges rate a site, not three independent properties.
 
 Two rules follow, and they bound how this skill reports:
 
-- Never model a lopsided profile. A UI 8.5 / INN 6.5 site is not in the data;
-  a two-point axis gap does not occur. Scoring one axis two points below
-  another means the scoring is wrong, not that a rare site was found.
+- Treat a lopsided profile as a reason to re-read the evidence. In the nine
+  sampled entries the largest gap between a site's own axes was 0.50, so a gap
+  above 1.0 in a self-assessment means re-check the evidence for both axes
+  before reporting it; it is not proof the scoring is wrong.
 - A weak axis is worth naming only near the threshold. MECHA is the case:
   Innovation 0.50 below UX drags a would-be 8.2 to 8.05. Below 8.0 the axis
   gap is not the problem, because **the whole site is the problem** and moving
@@ -112,6 +115,15 @@ The budgets stay authoritative. When an innovation move breaks one:
   scene that degrades to a static poster. `omh-accessibility-audit` and
   `omh-frontend/references/web-vitals-budgets.md` own those budgets.
 
+## Awwwards
+
+Awwwards publishes four criteria instead (awwwards.com/about-evaluation, read
+2026-11-07): Design 40%, Usability 30%, Creativity 20%, Content 10%, with
+honorable mentions at 6.5 or more from the jury. Site of the Day has no published number (the page says only that the highest-scoring sites win it), so report the distance from 6.5 and make no Site of the Day claim. Score those four axes against
+rendered evidence the same way, and never mix them with the CSSDA axes or
+thresholds above. For any other body, ask for its published rules URL and score
+only the axes it publishes.
+
 ## Boundary
 
 Scoring a surface against a published rubric is a self-assessment. A jury
@@ -124,7 +136,7 @@ survey; treat a single row as an example and never as a rule.
 ## Attribution
 
 The judging axes, weights, tiers, and thresholds are factual reporting of CSS
-Design Awards' published rules, read 2026-09-03. Per-axis scores are public
+Design Awards' and Awwwards' published rules, read 2026-11-07 (the sampled scores and stack rows date from 2026-09-03). Per-axis scores are public
 figures from entry pages; stack rows are measured from publicly served assets
 on the same date. No page text, markup, or asset is reproduced here. OMH is
 not affiliated with, endorsed by, or sponsored by CSS Design Awards, any award

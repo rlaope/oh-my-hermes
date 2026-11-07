@@ -151,6 +151,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # jev-action-check row's third safety rule reads as a hold and the jev-review-gate row
             # names the matching test diff, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT; no
             # other row moved, and the pin before it was d6dfefff...fc71.
+            # 533907 -> 534254 and the digest re-derived: the business-operations skill audit
+            # adds required-input words and a redline rule to ten rows (+347, itemized at
             (skill_capabilities, 533913, FULL_ROW_DELTA_CAP,
              '2af3d114df9fd471b650d923c9691f67a52a7de6301fce0f6487f7774f8e5f2a',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
@@ -394,6 +396,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # decision-recall, instinct-ledger, jit-learn, workflow-learning, rules-distill,
         # agent-evaluation, agent-ops-review and four jev-* bodies move; nothing else, and the
         # pin before it was 7e537e8d...4b2c.
+        # The business-operations skill audit rewrites sixteen bodies (checklists, boundaries and
+        # practitioner checks); the pin before it was 7e537e8d...4b2c.
         self.assertEqual(_digest(legacy_hashes), '8c5d5eede91c056339f2aee6baeaf93bc9f704be51e228359a89bb8231a29c53')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
@@ -418,6 +422,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # default it repeated (-459); swapping only that body back to main's restores 124814.
         # 124355 -> 124221: the memory, decision and Jev fixes' own Recovery Notes replace default text
         # other bodies repeat (-134); swapping those bodies back to main's restores 124355.
+        # 124814 -> 123214: the business-operations skill audit replaces repeated default
+        # checklists and generic Why lines with each skill's own (-1600).
         self.assertEqual(legacy['repeated']['bytes'], 123615)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
@@ -429,8 +435,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         self.assertLess(current['repeated']['bytes'] - REPEATED_DELTA_CAP, 131_893)
         feature_refs = [t for t in refs if t.skill_name == FEATURE]
         self.assertEqual(len(feature_refs), 6)
-        self.assertLessEqual(sum(len(t.content.encode()) for t in feature_refs), 19397)
-        self.assertLessEqual(max(len(t.content.encode()) for t in feature_refs), 4039)
+        # 19397 -> 19800: the suspect-posting and interview-prep lines and real Korean questions
+        # (measured 19,731 at the time; the cap keeps the headroom the other lines in this test carry).
+        self.assertLessEqual(sum(len(t.content.encode()) for t in feature_refs), 19800)
+        # 4039 -> 4164: procedure.md's Korean clarification questions were English text; real Korean
+        # is three bytes a character (+125).
+        self.assertLessEqual(max(len(t.content.encode()) for t in feature_refs), 4164)
 
     def test_hard_per_item_schema_and_injection_limits_do_not_move(self) -> None:
         # Career growth moves only the three catalog-total ratchets. Later

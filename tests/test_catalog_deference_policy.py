@@ -337,6 +337,9 @@ NON_SKILL_BACKTICKS = frozenset(
 # in-session one), `harness-session-inventory` <-> `workspace-audit` (cross-harness drift
 # against one workspace's own surfaces) and `agent-board` <-> `running-work-board` (changing a
 # task against only seeing what runs). Six cases, six pairs, four new owners.
+# The business-operations skill audit adds six cases, eight pairs and one
+# owner (internal-audit now defers an engagement plan; people-ops, meeting-brief, cto-loop,
+# report-package and operating-rhythm gain boundaries); re-derived from the catalog.
 EXPECTED_DEFERENCE_CASES = 417
 EXPECTED_DEFERENCE_PAIRS = 437
 EXPECTED_DEFERRING_OWNERS = 123

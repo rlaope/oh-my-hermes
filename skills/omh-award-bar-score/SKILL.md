@@ -45,7 +45,7 @@ Bad example:
 
 ## Completion Checklist
 
-- Each of UI, UX, and innovation carries its own score and the rendered evidence it was read from.
+- Each axis the chosen body publishes carries its own score and the rendered evidence it was read from.
 - The weighted total is computed from the stated weights and compared against the published threshold.
 - The binding constraint names one axis and what moving it requires.
 - Any innovation move that costs accessibility or performance budget is recorded as a tradeoff the user chooses.
@@ -54,6 +54,7 @@ Bad example:
 ## Recovery Notes
 
 - If no rendered evidence exists, keep every axis not_observed and route the capture to visual-qa before scoring.
+- If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.
 - If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.
 
 ## Workflow Lane
@@ -79,7 +80,7 @@ Reasoning demand: `standard`
 Quality bar:
 
 - Score each axis separately with named rendered evidence, then compute the weighted total; an overall impression is not a score and hides which axis is failing.
-- Reserve binding-constraint language for a total within about 0.3 of the threshold. Measured axis spread is roughly a twentieth of site spread, so further below the bar a weak axis is a symptom: report that the site needs a level change, never a one-axis fix.
+- For CSSDA, reserve binding-constraint language for a total within about 0.3 of the threshold. Measured axis spread is roughly a twentieth of site spread, so further below the bar a weak axis is a symptom: report that the site needs a level change, never a one-axis fix.
 - Load `references/award-judging-model.md` for the published axes, weights, and thresholds, the measured per-axis score table, and the stack table that separates entry-fee craft (fluid type, real typography) from optional spend (WebGL).
 - Record what an innovation move costs on the accessibility and performance budgets before recommending it; half the sampled motion-heavy winners drop `prefers-reduced-motion`, and the two highest-scoring entries keep it, so never present the inaccessible path as the higher-scoring one.
 
@@ -90,14 +91,14 @@ Keep axis scoring, the weighted total, the binding-constraint call, and the trad
 Required inputs:
 
 - the target URL, route, or rendered capture being judged
-- the award model and its published axes, weights, and threshold
+- the award body (CSSDA or Awwwards) and its published axes, weights, and threshold
 - the surface's own accessibility and performance budgets
 - audience and primary user task
 
 Expected outputs:
 
 - award_bar_score/v1
-- per-axis scores with named evidence for UI, UX, and innovation
+- per-axis scores with named evidence for each axis the chosen body publishes (UI, UX and innovation for CSSDA)
 - the weighted total and its distance from the published threshold
 - the binding constraint: the axis whose gain moves the total most
 - tradeoff_ledger/v1 when an innovation move costs accessibility or performance budget

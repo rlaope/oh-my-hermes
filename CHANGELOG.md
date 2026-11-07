@@ -381,6 +381,23 @@ All notable changes will be documented here.
   Hermes' context-file cap. The full-profile skill-body ceiling is re-derived
   by its written policy.
 
+- **Business and operations skills now check what a practitioner checks.**
+  The morning brief no longer claims a Gmail connection is draft-only from
+  its scopes (every Gmail scope that creates drafts also sends); it enforces
+  read-and-draft through the mail server's tool list and takes that list as
+  evidence. Pipeline review asks for the quota and keeps stage movement
+  unavailable from a single snapshot. Lifecycle experiments check sample
+  size before approval. Legal review inventories the clauses of a contract
+  and no longer writes redline language without a playbook. Control testing
+  starts with design, tests the reports it relies on, and says what one
+  deviation means. Data sharing scans national-id shapes, counts names only
+  against a known list, ties the scan to the file digest and no longer reads
+  as anonymous. The award score uses CSSDA's published thresholds and adds
+  Awwwards. Buzz setup names the real access keys and the attachment command.
+  Document-skill pointers work on Hermes before and after it folded them into
+  one Office skill. Completion checklists, examples and boundaries of the
+  sales, product, support, people, meeting, cto and content skills are specific
+  to each job.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`

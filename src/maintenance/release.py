@@ -973,6 +973,11 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # jev-action-check's third safety rule reads as a hold instead of "continue without Jev";
 # jev-review-gate's required input and quality bar name the matching test diff. Measured from
 # the producer; no headroom.
+# 536979 -> 537326: the business-operations skill audit adds required-input
+# words (a quota or target, a support tier or SLA, a meeting length and who
+# decides, targets for a report) and the playbook-free redline rule to the
+# capability rows (+347; the later review adds the countries whose formats apply and the
+# redline playbook question). Measured from the producer; no headroom.
 FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 536985
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
@@ -2185,6 +2190,12 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # lane-mate copy (`ultrawork`, +26,456) fit by 2,727 chars. The memory, learning, agent and
 # Jev skill fixes (+6,241) take it to 1,477,514, where `ultrawork` no longer fits.
 # 1,477,514 plus 10%, rounded up to the next 50,000, is 1,650,000.
+# 1336920 -> 1477013 (measured; the ceiling 1500000 -> 1650000): main had grown to 1,471,273
+# without a re-derive, which left 2,271 chars under the 26,456 the largest
+# lane-mate copy (`ultrawork`) needs. The business-operations skill audit adds
+# its checklists, boundaries and practitioner checks and took the pack to the
+# measured value below; that plus 10%, rounded up to the next 50,000, is
+# 1,650,000, the value the other skill-audit lanes re-derived too.
 FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1480299
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000

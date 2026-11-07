@@ -454,8 +454,8 @@ _FEATURE_SURFACE_SKILLS = (
         phase="package-status",
         next_action="prepare_deliverable_package",
         boundary="A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.",
-        good_prompt="deliverable-package turn this research into PPT and PDF with attachment status.",
-        bad_prompt="deliverable-package claim the PDF was attached without observed file evidence.",
+        good_prompt="deliverable-package the deck and PDF are generated; check they were rendered, get my approval of v2, and tell me whether the PDF was attached to the thread.",
+        bad_prompt="deliverable-package tell the client the PDF is attached.",
         extra_quality_bar=(
             DOCUMENT_PRODUCER_QA_RULE,
             DOCUMENT_PRODUCER_RUNGS_RULE,
@@ -1402,8 +1402,8 @@ _FEATURE_SURFACE_SKILLS = (
         phase="content-task",
         next_action="prepare_content_operator_card",
         boundary="A content operator card is not source retrieval, fact verification, hallucination-free copy, stakeholder approval, publishing, email/message sending, file export, delivery, or proof that final copy was accepted unless observed content output evidence records it.",
-        good_prompt="content-operator draft publish-ready release notes with audience, tone, source scope, review gates, and hallucination checks.",
-        bad_prompt="content-operator invent missing facts and claim the customer announcement was sent.",
+        good_prompt="content-operator write customer release notes for 4.2 from the attached changelog; legal reviews them first.",
+        bad_prompt="content-operator send the 4.2 announcement to the customer list.",
         expected_outputs=(
             "content_task_card/v1",
             "source_scope/v1",
@@ -1423,14 +1423,15 @@ _FEATURE_SURFACE_SKILLS = (
         final_checklist=(
             "Audience, channel, language, tone, style guide, length, source scope, fact-risk, review owner, and stop condition are explicit.",
             "Missing facts, source gaps, claims needing citations, legal/compliance needs, approval, publish/send authority, and file-export needs are gated or marked missing.",
+            "Comparative or superlative claims, quoted numbers, named customers or testimonials, price or availability promises and paid or affiliate relationships each carry a source or a legal-review flag before the copy is called publish-ready.",
             "Published, sent, exported, approved, and fact-verified claims are reported only from observed evidence.",
             "Every product fact in the copy (install command, command and flag names, package name, URL, version, count) is copied byte-for-byte from its canonical source, such as the README install block, `--help` output, or the producer of the count, and cited by path; a fact written from memory or an earlier draft is a fact-risk, not a fact.",
             "Every count the copy generates agrees with its noun in each plural category of the content locale (0, 1, and 2 for English: `0 agents`, `1 agent`, `2 agents`) before it ships.",
         ),
         recovery_notes=(
-            "If the request asks for citations, current facts, or source-backed evidence gathering, route to research or source-finder before drafting.",
-            "If the request asks to send, post, invite, ticket, or mutate an external app, route to connector-operator before claiming delivery.",
-            "If the request asks for PDF, PPT, DOCX, HWP, spreadsheet, or attachment packaging, route to materials-package or deliverable-package.",
+            "If the request asks for citations, current facts, or source-backed evidence gathering, route to `research` or `source-finder` before drafting.",
+            "If the request asks to send, post, invite, ticket, or mutate an external app, route to `connector-operator` before claiming delivery.",
+            "If the request asks for PDF, PPT, DOCX, HWP, spreadsheet, or attachment packaging, route to `materials-package` or `deliverable-package`.",
             "If the request is a simple one-off sentence or paragraph transformation, answer directly instead of opening a workflow.",
         ),
         extra_do_not_use_when=(
