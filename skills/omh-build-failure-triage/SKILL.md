@@ -54,7 +54,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If the log is missing or stale, ask for the smallest fresh command output or CI job URL.
+- If the log is missing or stale, fetch it when `gh` is authenticated (`gh run view <id> --log-failed`); otherwise ask for the smallest fresh command output or CI job URL.
 - If the failure looks environmental or credentialed, mark BLOCKED_BY_ENVIRONMENT and avoid patch handoff.
 - If a fix has already been applied, route to verification-gate for fresh evidence instead of re-triaging stale failures.
 
@@ -85,7 +85,8 @@ Quality bar:
 - Prefer targeted reruns before broad expensive checks, then broaden only when the changed surface requires it.
 - Preserve exact observed failure snippets or file references without treating them as current PASS evidence.
 - Give each cluster an origin: `introduced` when the same command passes at the merge-base or the failure points at a line the diff added or changed; `pre_existing` only when an observed run of the same command fails the same way at the merge-base in a clean detached worktree (`git worktree add --detach <dir> <merge-base>`, removed afterwards), never by stashing or checking out the tree the user is working in; otherwise `unknown`. An observed merge-base run outranks a diff-line reading: a check that fails the same way at the merge-base is `pre_existing` even when its failure points at a line the diff changed. Name the proof beside the origin: a merge-base run is an observation, a diff-line reading is an inference.
-- Return FIX_READY only for `introduced` clusters; a `pre_existing` cluster gets its own follow-up handoff outside this change's fix. Clusters of different origins still share one verdict: NEEDS_MORE_LOGS while any cluster is `unknown`, naming the merge-base run as the missing evidence, even beside `introduced` ones; otherwise FIX_READY when at least one is `introduced`; otherwise, with every cluster `pre_existing`, ROUTE_TO_VERIFICATION_GATE.
+- A failure that is unstable across two runs at one commit is a flake: its origin stays `unknown` until its failure rate is measured on head and on the merge-base at the same N, and one green merge-base run never makes it introduced. For a CI-only failure (matrix entry, OS, secrets, services), take the origin from CI, citing the URL: the same job on the merge-base commit or the base branch's latest run (`gh run list --branch <base> --workflow <name> --json conclusion,headSha,url`, `gh pr checks <n>`). A `pull_request` run builds the merge ref `refs/pull/<n>/merge`, not the head, so record which commit it built (`gh run view <id> --json headSha`) and compare against that commit when the base moved.
+- Return FIX_READY only for `introduced` clusters; a `pre_existing` cluster gets its own follow-up handoff outside this change's fix. Clusters of different origins still share one verdict: NEEDS_MORE_LOGS while any cluster is `unknown`, naming the merge-base run as the missing evidence, even beside `introduced` ones; otherwise FIX_READY when at least one is `introduced`; otherwise, with every cluster `pre_existing`, ROUTE_TO_VERIFICATION_GATE. A cluster that is environmental or credentialed takes BLOCKED_BY_ENVIRONMENT ahead of FIX_READY and after NEEDS_MORE_LOGS.
 
 Handoff policy:
 

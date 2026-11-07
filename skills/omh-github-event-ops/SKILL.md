@@ -10,7 +10,7 @@ metadata:
     phase: event-routing
     role: operator
     quality_tier: workflow-surface-gated
-    related_skills: [omh-github-issue-intake, omh-build-failure-triage, omh-security-event-response, omh-refactor-plan, github]
+    related_skills: [omh-github-issue-intake, omh-build-failure-triage, omh-security-event-response, omh-refactor-plan, omh-verification-gate, github]
 ---
 
 # Github Event Ops
@@ -26,7 +26,7 @@ This is a Hermes-native `github-event-ops` workflow skill.
 - One issue to file from a bug report or an idea, with no incoming event to route; use `omh-github-issue-intake`.
 - A failing build log to diagnose, with no event routing left to decide; use `omh-build-failure-triage`.
 - The event is a security advisory, a CVE in a dependency, or a leaked credential; use `omh-security-event-response`, which orders containment and closes only on an observed rotation or fix.
-- The PR is a dependabot or renovate version bump with no advisory; use `omh-refactor-plan`, which decides whether it is safe to merge from the breaking changes against this repository's call sites.
+- The PR is a dependabot or renovate version bump with no advisory. A major or breaking bump goes to `omh-refactor-plan`, which decides whether it is safe to merge from the breaking changes against this repository's call sites; a patch or minor bump with its required checks green takes the review path, with `omh-verification-gate` deciding.
 - The user wants a GitHub operation carried out with the gh CLI - open or label an issue, open or merge a PR, leave review comments, manage a repository - rather than an incoming event routed to a handoff card; load Hermes' bundled `github` skill instead of this one.
 
 ## Examples
@@ -45,9 +45,9 @@ Bad example:
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- The state was re-read from the repository and its head sha is recorded beside the payload's.
+- The chosen path (review, triage, or fix hand-off) is named with the event fields that decided it.
+- Any label, comment, or rerun is listed as prepared, or as observed with its read-back.
 
 ## Recovery Notes
 
@@ -82,6 +82,7 @@ Quality bar:
 - Name the user-facing workflow objective, required context, next action, and stop condition.
 - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
 - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Choose the path from the event, after the re-read: `pull_request` opened or synchronize -> review once required checks settle; failed `check_run` or `workflow_run` -> fix hand-off through `omh-build-failure-triage`; `issues` opened -> triage; a comment that asks for an action -> read the author's association first and ignore it when the author may not command. Re-read with `gh pr view <n> --json state,isDraft,reviewDecision,statusCheckRollup,headRefOid,labels` and `gh run view <id> --log-failed`; when `headRefOid` differs from the payload sha, the event is stale: drop it.
 
 Handoff policy:
 
@@ -89,10 +90,9 @@ Keep this as Hermes-facing orchestration guidance first. Prepare executor, conne
 
 Required inputs:
 
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
+- the event type and action, repository, and PR or issue number
+- the head sha the payload names
+- the route or channel it arrived on, and what the user wants decided (review, triage, or fix hand-off)
 
 Expected outputs:
 

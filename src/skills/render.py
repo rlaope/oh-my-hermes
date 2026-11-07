@@ -3943,7 +3943,7 @@ def _debugging_skill_composition_reference() -> str:
     """Hermes-only: this skill's records when Hermes' own debugging skills drive the method."""
     return """# Composing with Hermes' Debugging Skills
 
-Hermes bundles three skills that meet this one: `systematic-debugging` (MIT, adapted from obra/superpowers), a four-phase root-cause method, and two debugger guides, `python-debugpy` for pdb and debugpy and `node-inspect-debugger` for Node's inspector. When one of them is loaded beside `app-debugging`, follow its method; this skill adds its records and its gates, never a second method.
+Hermes bundles `systematic-debugging` (MIT, adapted from obra/superpowers), a four-phase root-cause method. Two debugger guides, `python-debugpy` for pdb and debugpy and `node-inspect-debugger` for Node's inspector, are optional official skills that are not active unless installed; check `skills_list`, and when one is absent use `pdb` or `node inspect` directly as an observation. When one of them is loaded beside `app-debugging`, follow its method; this skill adds its records and its gates, never a second method.
 
 ## `systematic-debugging`, phase by phase
 
@@ -3990,6 +3990,8 @@ The order never changes: an observed reproduction, then competing hypotheses, th
 | State | observed or not_observed; nothing between |
 
 An intermittent fault is reproduced when its rate is measured, not when it happened once. Run it in a loop first (`for i in $(seq 50); do <cmd> || echo FAIL $i; done`) and record the rate before changing anything; the same loop is what proves the fix later.
+
+**Size N from the rate before the fix.** With a failure rate p, an ineffective fix still passes all N runs with probability (1 - p) to the power N: at p = 0.02 and N = 50 that is 36%, at p = 0.2 and N = 20 it is 1%. Choose N >= ln(0.05) / ln(1 - p), about 3 / p, record it beside the rate (4/20 before gives N >= 14), and run the fix at that N. When N is too costly, say the fix is unproven at that confidence.
 
 If a capture is too redacted to diagnose, record that and ask for a narrower one; never record it unredacted.
 
@@ -4062,7 +4064,7 @@ Before trusting any reading, confirm the process executed the source you are loo
 
 - A stale editable install or build directory serves an older copy of a module; a newly added file is then missing and the failure reads as a regression in whoever added it.
 - A cached bytecode file is validated by timestamp and size, so two edits of equal length in the same second can reuse the old compile.
-- A test that reads its own teardown output, or a lock that times out inside a best-effort swallow, leaves the same trace as the fault being hunted; put the discriminator in the assertion message.
+- A process started before the edit, a container image built from an older commit, or a `PYTHONPATH` or `NODE_PATH` that shadows the checkout serves old code: print the module's file path and version from inside the failing run.
 
 ## 6. After three failed fixes
 
@@ -4950,9 +4952,10 @@ Run `git fetch` before reading the remote column; a stale remote-tracking ref ma
 
 ## 2. Recovery point before every rewrite
 
+- Run `git status --porcelain` first. A dirty tree is a recovery point of its own: `git stash push -u`, or a WIP commit on a throwaway branch, and note it. `git reset --hard` discards uncommitted tracked changes with no way back.
 - `git branch backup/<name>-<date> <branch>` before a rebase, reset, amend, or filter.
 - Or note the reflog entry: `git reflog show <branch> -n 5`, and write down the entry to return to.
-- Recovery is `git reset --hard backup/<name>-<date>` or `git reset --hard <branch>@{N}`, and it comes before trying anything else.
+- Recovery is `git switch -C <branch> backup/<name>-<date>` (or `git reset --hard backup/<name>-<date>` on a clean tree), or `git reset --hard <branch>@{N}` on a clean tree, and it comes before trying anything else.
 
 ## 3. Conflicts
 
@@ -4960,14 +4963,14 @@ Run `git fetch` before reading the remote column; a stale remote-tracking ref ma
 - Decide each hunk by what both changes were for, not by which side is newer.
 - **Generated or counted files are never picked.** Take either side, finish the merge, then re-run the producer and commit its output. A count pinned in two places conflicts whenever both sides added a case, and neither side is right.
 - Lockfiles: resolve the manifest, then regenerate the lockfile with the package manager.
-- A rebase replays commits one at a time; the same hunk can conflict at every step. `git rerere` records resolutions so the repeats resolve themselves.
+- A rebase replays commits one at a time; the same hunk can conflict at every step. `git rerere` records resolutions so the repeats resolve themselves, once enabled with `git config rerere.enabled true`; by default it records nothing.
 - Verify after resolving: the build and the tests that cover the conflicted files, observed.
 
 ## 4. Bisect
 
 1. Name a known-good commit and a known-bad commit, each confirmed by one observed run.
-2. Name the exact command that tells them apart and exits non-zero on bad.
-3. `git bisect start <bad> <good>`, then `git bisect run <command>`; exit code 125 skips an untestable commit.
+2. Name the exact command that tells them apart. `git bisect run` reads its exit code: 0 is good, 125 skips the commit, 128 to 255 aborts the bisection, and every other code from 1 to 127 is bad. Wrap the test so a build failure exits 125 (otherwise a commit that does not build is named the culprit) and a missing tool or setup error exits 128 or higher (a command-not-found 127 marks every commit bad).
+3. Bisect checks out commits in the working tree: use a clean tree or a throwaway worktree (`git worktree add --detach ../bisect <bad>`). `git bisect start <bad> <good>`, then `git bisect run <command>`.
 4. Record the first bad commit and the command's output at it and at its parent.
 5. `git bisect reset` to return.
 
@@ -4993,7 +4996,17 @@ When the base of a stack is rebased or squash-merged, every branch above it stil
 - Never compute the old base with `git merge-base` after the base was rewritten; it finds a commit the rewrite no longer contains and replays the base's commits onto itself.
 - Push each restacked branch with `--force-with-lease`, bottom-up.
 
-## 7. Shared checkouts and worktrees
+## 7. Cherry-pick, detached HEAD, lost commits, committed secrets
+
+Each starts with the pushed-state inventory and a recovery point.
+
+- **Cherry-pick**: `git cherry-pick -x <sha>` records the source commit in the message. A merge commit needs `-m 1` (the parent to diff against). On a conflict resolve as in section 3, then `git cherry-pick --continue`, or `git cherry-pick --abort` to return.
+- **Detached HEAD**: commits made there belong to no branch. Before switching away, `git switch -c rescue/<name>` keeps them.
+- **A lost commit or deleted branch**: `git reflog` (and `git reflog show <branch>`) lists where HEAD and the branch were; `git branch rescue/<name> <sha>` brings the commit back. Unreachable reflog entries expire (30 days by default; reachable ones 90), so do this first. When the reflog has nothing, `git fsck --lost-found` lists dangling commits.
+- **Undo the last commit**: unpushed, keep the changes: `git reset --soft HEAD~1`; pushed: `git revert <sha>`.
+- **A secret was committed**: rotate it first, because every clone and fork keeps the old history; then remove it with `git filter-repo --replace-text`, force-push with a lease, and tell collaborators to re-clone. Route the incident to `security-event-response`.
+
+## 8. Shared checkouts and worktrees
 
 - Two sessions in one checkout share `HEAD`: a `checkout` by one moves the other's next commit onto the wrong branch. Use one worktree per session.
 - Removing a worktree mid-rebase loses the rebase state; finish or abort the rebase first.
@@ -5026,7 +5039,7 @@ Load this while drafting a commit message or a pull-request body. OMH writes the
 | Source | What to take from it | When it is missing |
 | --- | --- | --- |
 | PR template (`.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE/`, `docs/`) | the section headings, in order, and any checkbox list | say no template was found and use a plain summary, why, validation, and reversibility (section 4) |
-| Recent log (`git log -10 --format=%B`) | subject shape (imperative, `type(scope):`, ticket prefix), body width, trailer set | say the log is empty or unreadable, and do not import a convention |
+| Recent log (`git log -20 --no-merges --format='%an <%ae>%n%B%n---'`, skipping bot authors; in a squash-merge repository also the merged PR titles, `gh pr list --state merged -L 10 --json title`) | subject shape (imperative, `type(scope):`, ticket prefix), body width, trailer set | say the log is empty or unreadable, and do not import a convention |
 | Contributor docs (`CONTRIBUTING.md`, `AGENTS.md`) | sign-off rule, required trailers, forbidden lines | record the rule as not found |
 
 Record what was read and what was not in `repo_convention_read/v1`. A convention the repository does not use is not a default to fall back on.
@@ -5059,7 +5072,7 @@ A row is `observed` only when a run record exists. "It should pass", "CI will ru
 - Body: why the change exists and what is now true, not a restated diff. Measured before/after values belong here when the change is about a measurement.
 - In a PR body, when the change reshapes structure (files moved, a module split, a call path rerouted), show the smallest view of the new shape: a short file tree, a call tree, or a diff sketch of either, holding only the nodes the change touches and the ones needed to place them. A picture the reader can check in ten seconds replaces a paragraph that restates the diff.
 - Reversibility: in a PR body always, in the no-template fallback or under a section the template already has for risk or rollout (never as a heading the template lacks; when the template has neither a risk nor a rollout section, one sentence at the end of its summary or description section); in a commit message only when the recent log already carries a risk or rollback line or trailer (such as `Scope-risk:`). Say whether a revert undoes the whole change, or name what it leaves behind, such as persisted data, an applied migration, a published package or artifact, a sent message, or a changed external setting. Then name which surfaces a bad merge would reach. That one-way door is the fact that should slow a merge, so state the answer even when it is "a revert undoes all of it".
-- `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`.
+- `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`. GitHub needs the keyword per issue (`Closes #1, #2` closes only #1) and acts only when the change reaches the default branch. In a squash-merge repository the PR body becomes the commit message, so trailers belong in the last paragraph block of the body.
 
 ## 5. Trailers and sign-off
 
@@ -5067,7 +5080,7 @@ A row is `observed` only when a run record exists. "It should pass", "CI will ru
 | --- | --- | --- |
 | DCO | `Signed-off-by: Name <email>` | add only when the repository requires it, with the configured author |
 | Decision trailers | `Constraint:`, `Rejected:`, `Confidence:`, `Scope-risk:`, `Directive:` | use when the log shows them; each `Rejected:` names the alternative and why |
-| Evidence trailers | `Tested:`, `Not-tested:` | projected from the ledger, never written freehand |
+| Evidence trailers | `Tested:`, `Not-tested:` | projected from the ledger, never written freehand; only when the recent log carries them. Otherwise add none: put the observed rows in the PR body's validation section (or one body line in the commit) and the unrun rows under "Not run", in the template's own headings |
 
 Never add attribution lines the repository forbids, and never put credentials, tokens, private URLs, or raw transcripts in either text.
 
@@ -6924,6 +6937,14 @@ def _domain_engineering_reference_templates_cached() -> tuple[SkillReferenceTemp
     )
 
 
+_RUST_ATTRIBUTION = """## Attribution
+
+Concept lineage only. The idea of a mandatory per-language reference gate that
+escalates on `unsafe`/FFI contact is adapted from the `programming` skill of an
+upstream coding-agent plugin. No upstream text is reproduced -- the wording,
+the artifact vocabulary, and the `prepared_not_observed` claim boundary are
+OMH's own."""
+
 _DOMAIN_ENGINEERING_ATTRIBUTION = """## Attribution
 
 Concept lineage only. The idea of a mandatory per-language reference gate that
@@ -7236,7 +7257,7 @@ Plain `cargo test` runs doc tests and `cargo test --all-targets` does not, so a 
 | A CLI panics on bad input or logs into its stdout | The command line was treated as private | Apply §4: error and exit code, stdout for data only |
 | `unsafe` used to end a borrow argument | The change silently became a UB-risk change | Escalate; the compiler stopped checking |
 
-{_DOMAIN_ENGINEERING_ATTRIBUTION}
+{_RUST_ATTRIBUTION}
 
 The binary test shape and the rule that a trait with one implementation is not a seam adapt ideas from Matt Pocock's `codebase-design` and `tdd` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock.
 """
@@ -7261,6 +7282,8 @@ The change is **escalated** if it adds, moves, or modifies any of:
 - a hand-written lock-free primitive, or any direct use of `core::sync::atomic` ordering weaker than `SeqCst`
 - `Pin` projection written by hand rather than through a derive
 - a `#[repr(...)]` change on a type that crosses an FFI or transmute boundary
+- a non-test edit in a module, or to a type, that contains `unsafe` or an `unsafe impl` which depends on it: struct fields, constructors, `Drop`, visibility, `Deref`, or a length or capacity update. Soundness is module-wide, so a safe edit there can break the invariant an unchanged `unsafe` block relies on
+- a new or bumped dependency that brings `unsafe`-heavy code into a hot path
 
 If the change cannot be inspected well enough to answer, the verdict is **escalated**. A conservative verdict is correct and is labelled conservative; an unmeasured "not escalated" is a false clean.
 
@@ -7271,9 +7294,9 @@ Ordinary Rust that touches none of the above is **not escalated**, and `referenc
 An escalated change is not ready for handoff until all four are named as blocking items:
 
 1. **The invariant.** Every `unsafe` block states, in a comment the change ships with, what it asserts and why the assertion holds. An `unsafe` block with no stated invariant is an unreviewable one -- the compiler stopped checking, so the comment is the only remaining specification.
-2. **Miri.** The affected tests run under Miri. Miri is the oracle for aliasing, use-after-free, uninitialized reads, invalid values, misalignment, out-of-bounds access, provenance, and double free.
-3. **A sanitizer**, where Miri cannot reach -- anything crossing FFI or doing real I/O. Address, leak, thread, and memory sanitizers each cover a different class; name which one and why.
-4. **Concurrency testing** for anything lock-free or atomic-ordering-sensitive: a loom-style exhaustive interleaving check, not a stress loop. A stress test that passes ten thousand times has sampled the interleaving space, not covered it.
+2. **Miri.** The affected tests run under Miri (`rustup +nightly component add miri`, then `cargo +nightly miri test <filter>`; add `MIRIFLAGS="-Zmiri-strict-provenance"` for provenance). Miri is the oracle for aliasing, use-after-free, uninitialized reads, invalid values, misalignment, out-of-bounds access, provenance, and double free.
+3. **A sanitizer**, where Miri cannot reach -- anything crossing FFI or doing real I/O. Address, leak, thread, and memory sanitizers each cover a different class; name which one and why. Sanitizers need nightly and a rebuilt standard library: `RUSTFLAGS="-Zsanitizer=address" cargo +nightly test -Zbuild-std --target <host-triple>` (`thread` and `memory` likewise; memory needs Linux).
+4. **Concurrency testing** for anything lock-free or atomic-ordering-sensitive: a loom-style exhaustive interleaving check (`RUSTFLAGS="--cfg loom" cargo test --release <loom tests>`, with the code under test built against `loom`'s types), not a stress loop. A stress test that passes ten thousand times has sampled the interleaving space, not covered it.
 
 ## 3. Categories and where each is caught
 
@@ -7312,7 +7335,7 @@ Coverage is the limit on all of them: Miri proves things about the code paths a 
 
 If the executor cannot run Miri or the needed sanitizer, the change stays blocked. Name the smallest substitute proof -- a narrower test that Miri can run, a safe wrapper that shrinks the `unsafe` surface, or a review of the invariant comment by a second reader -- and keep the verdict escalated. Downgrading the verdict because the tool is unavailable is the failure this reference exists to prevent.
 
-{_DOMAIN_ENGINEERING_ATTRIBUTION}
+{_RUST_ATTRIBUTION}
 """
 
 
@@ -7351,17 +7374,40 @@ One hypothesis makes every reading confirmatory. Three force observations that *
 
 For each hypothesis write: the claim in one sentence; the single observation that would **refute** it and where to read it; and, if it is true, the fix in two words. Two hypotheses with the same distinguishing observation are one hypothesis -- collapse them and find a real third.
 
-## 3. Plan the debugger session, do not print
+## 3. Pick the instrument by fault class
 
-Prefer a DAP debug adapter -- `lldb-dap`, `codelldb`, or a gdb adapter -- driven by the executor's own debugging surface. It reads state without rebuilding, and it reads state the source never printed.
+Choose the instrument the fault needs before planning a session. A breakpoint finds a fault you can place; it does not find a write nobody suspects.
 
-Print-and-rebuild is the fallback, for when no adapter is available or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting. Every print it adds carries one tag chosen for the session, such as `[DBG-7f3a]`, and an observed search for that tag returns nothing before the fix is handed over.
+| Fault | First instrument | Why |
+| --- | --- | --- |
+| Heap overflow, use after free, double free, leak | rebuild with `-fsanitize=address -g -O1 -fno-omit-frame-pointer` (Valgrind `memcheck` when a rebuild is impossible) and run the reproduction | the report names the bad access, the allocation, and the free; corruption shows far from its cause |
+| Undefined behaviour (overflow, bad shift, misaligned access) | `-fsanitize=undefined`, with `-fno-sanitize-recover` so the first hit stops | the report names the line |
+| Data race, deadlock | `-fsanitize=thread`; or `rr record` and replay the failing run | the interleaving is reported or replayed exactly |
+| Uninitialised read | `-fsanitize=memory` (clang, Linux) or Valgrind | reports the first use of the value |
+| Intermittent crash | `rr record --chaos` until it fails, then `rr replay` and reverse-step from the crash | a recorded failure can be stepped backwards, which a live session cannot |
+| A crash already happened, a core file or crash log exists | open the core: `gdb <binary> <core>` or `lldb -c <core> <binary>`, then read the backtrace, the faulting frame, and its locals before anything else | no rerun is needed |
+| Hang | attach or open a live process and read every thread's backtrace (`thread apply all bt`) | shows who waits on whom |
+
+Rules for all of them:
+
+- Sanitizers, Valgrind and rr are slower and change layout and timing. A fault that vanishes under one is not fixed; say which instrument hid it.
+- Debug builds: `-g -O0` for stepping, `-g -O1` with frame pointers for sanitizers. At `-O2` locals read `<optimized out>`; say so instead of reporting empty values.
+- Cores must exist before the crash: `ulimit -c unlimited`, and on Linux check `/proc/sys/kernel/core_pattern` (systemd-coredump uses `coredumpctl`); on macOS cores go to `/cores` and are off by default. A missing core is a blocker to record, not a finding.
+- Match the core to the exact binary that produced it (build id or checksum); a core read against another build gives wrong frames.
+- rr needs Linux and hardware performance counters; it is often unavailable in containers and VMs. Valgrind does not support recent macOS or Apple silicon. Record an unavailable instrument as unavailable.
+- Sanitizers need the compiler's runtime; Linux `ptrace` attach may be refused (`ptrace_scope`), and macOS attach needs code signing or `get-task-allow`. A refusal is reported as blocked.
+
+## 4. Plan the debugger session, do not print
+
+Run the session the way the executor can reach it. Hermes has no built-in debug-adapter client, so the default is a scripted debugger run in the terminal: `lldb --batch -o 'breakpoint set ...' -o run -o bt -o 'frame variable' -- ./prog args` or `gdb -batch -ex 'break ...' -ex run -ex bt -ex 'info locals' --args ./prog args`, with the plan's breakpoints, watchpoints and reads passed as `-o` or `-ex` commands. Use a DAP debug adapter (`lldb-dap`, `codelldb`, a gdb adapter) only when the host exposes one, for example through an MCP server the user configured. Either reads state without rebuilding, and reads state the source never printed.
+
+Print-and-rebuild is the fallback, for when no debugger can attach or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting. Every print it adds carries one tag chosen for the session, such as `[DBG-7f3a]`, and an observed search for that tag returns nothing before the fix is handed over.
 
 The plan names, concretely:
 
 | Element | What to specify |
 | --- | --- |
-| Adapter and target | which adapter, which binary, launch or attach |
+| Debugger and target | batch lldb or gdb (or an adapter the host exposes), which binary, launch or attach, core file if any |
 | Breakpoints | file:line or symbol, plus any condition that skips uninteresting hits |
 | Watchpoints | the address or expression whose change is the event, for corruption faults |
 | Threads and frames | which thread, how far up the stack, what to read in each frame |
@@ -7370,17 +7416,17 @@ The plan names, concretely:
 
 A plan that says "set a breakpoint and look around" hands the thinking back to the executor. Name the reads.
 
-## 4. When symbols are missing
+## 5. When symbols are missing
 
 A stripped binary changes the evidence available, not the method. The hypotheses and the distinguishing observations still come first. What changes:
 
 - Identify the file format, architecture, and linkage before anything else; the answer decides which tools apply at all.
 - Recover coarse structure from imported symbols and embedded strings, and treat both as hints rather than as a map.
-- Prefer syscall- and library-level tracing for a first pass -- it shows what the binary actually does without needing to know where.
+- Prefer syscall- and library-level tracing for a first pass (`strace -f` on Linux; `dtruss` on macOS needs SIP relaxed, so it may be blocked; `ltrace` for library calls) -- it shows what the binary actually does without needing to know where.
 - Note when platform protections block a technique, and say the technique was blocked rather than reporting an empty result as a finding.
 - Only attach to, trace, or modify a binary the user owns or operates. If provenance is unclear, that is a blocker, not a detail.
 
-## 5. Evidence boundary
+## 6. Evidence boundary
 
 | Claim | Evidence |
 | --- | --- |
@@ -8833,6 +8879,11 @@ HEAD_SHA=$(git rev-parse HEAD)
 the last. Record BASE before the work starts; deriving it afterwards from the
 log is guesswork the moment a merge or a fixup lands.
 
+If `origin/main` does not exist (another default branch, no remote, a stacked
+branch), take the PR's base ref (`gh pr view --json baseRefName`) or the commit
+recorded before the work started; if neither is known, ask for the base and do
+not guess.
+
 State both SHAs in the request. A review whose range is unstated cannot be
 re-run, and cannot be shown to have covered anything.
 
@@ -9004,8 +9055,9 @@ restate the requirement, or start working.
 
 From round two, the review is a ratchet: new findings on ground the previous
 round already settled need a stated reason they were not visible earlier, and a
-finding carried forward keeps the severity it was raised at. See `REVIEW.md` for
-the full rule set; this file only covers the reviewee's side.
+finding carried forward keeps the severity it was raised at. If the repository
+has no `REVIEW.md`, apply these two rules as written; this file only covers the
+reviewee's side.
 
 ## Boundary
 
@@ -9445,10 +9497,10 @@ one mistake reverts all three.
 | Category | What it looks like | Default treatment |
 | --- | --- | --- |
 | Duplication | The same decision encoded twice; near-identical helpers with drifted edges. | Keep one owner, delete the copies; lookalikes encoding different decisions stay. |
-| Dead code | Unused symbols and imports; unreachable branches; commented-out blocks (version control preserves history); feature flags nothing reads. | Delete outright; no deprecation shims for code with zero callers. |
+| Dead code | Unused symbols and imports; unreachable branches; commented-out blocks (version control preserves history); feature flags nothing reads. | Delete outright once the caller check below clears it; no deprecation shims for code with zero callers. |
 | Needless abstraction | Layers and wrappers that only forward, rename, or re-wrap; single-implementation interfaces; config for values that never vary. | Run the deletion test first: inline only when deleting the module makes its complexity vanish. When the same complexity would reappear at the call sites, the module stays, whatever its caller count. A single-implementation interface stays only when the tests use a second adapter. |
-| Boundary violation | Reaching into another module's internals; circular imports; logic in the wrong layer. | Repair the boundary with the existing surface; a boundary-CHANGING fix routes to `ralplan` first. |
-| Missing tests | Behavior with no lock; tests asserting implementation details or nothing at all. | Add the behavior lock in the test-reinforcement pass; delete assert-nothing tests as dead code. |
+| Boundary violation | Reaching into another module's internals; circular imports; logic in the wrong layer. | Repair the boundary with the existing surface; a boundary-CHANGING fix routes to `refactor-plan` when the direction is decided, or `ralplan` when it is still contested. |
+| Missing tests | Behavior with no lock; tests asserting implementation details or nothing at all. | Add the behavior lock in pass 0, before any edit; delete assert-nothing tests as dead code in pass 4. |
 | Templated defaults | Boilerplate comments restating the code, placeholder docstrings, copy-pasted config blocks nothing uses. | Delete; a comment survives only when it states what the code cannot. |
 
 ## Detection, when no smell was named
@@ -9466,17 +9518,31 @@ prepared_not_observed until their exit status and output are seen:
   imports is the first deletion candidate.
 
 Detector output is a candidate list, not a verdict: every candidate gets a
-caller check before it enters the inventory.
+caller check before it enters the inventory. No in-repo caller does not mean
+dead. Rule out each of these before a symbol is deletable, and otherwise list it
+under remaining risks:
+
+- a public export of a published package or library;
+- an entry point or plugin registration in the manifest (`pyproject.toml`,
+  `package.json`, `setup.cfg`);
+- a string or reflective lookup (`getattr`, a registry keyed by name): grep the
+  name as a string too;
+- a name a framework discovers (route handlers, signal receivers, test
+  fixtures, ORM models, serializers);
+- callers in another repository.
 
 ## The passes, in order
 
+0. **Lock** - for every file in scope, name the check that goes red if its
+   behavior changes. Where none exists, write a characterization test first or
+   cut the scope to code that has one. No pass below runs on unlocked code.
 1. **Dead code** - deletion only. No renames, no moves. The diff should be
    almost entirely red. Re-verify.
 2. **Duplicates** - collapse each duplicated decision to one owner; call sites
    move to the survivor. Re-verify.
 3. **Naming and error handling** - rename what misleads, surface what is
    swallowed; no structural moves in this pass. Re-verify.
-4. **Test reinforcement** - add the missing behavior locks found in pass 1-3,
+4. **Test reinforcement** - add the extra locks the cleaned shape needs,
    delete tests that assert nothing. Re-verify.
 
 Stop between passes when the regression checks fail: fix or revert that pass
@@ -9638,6 +9704,14 @@ Notes, never half-applied.
 - Never refactor: export names, signatures or parameter order, file merges or
   splits, async execution models (a `.then` chain expressing parallelism stays),
   algorithmic logic that would merely get shorter, or test files.
+- The line between apply and Notes: a change inside one file that keeps every
+  component's props, exports, and file layout is applied. A change that alters
+  props, exports, or events, or adds, merges, or splits a file, is a breaking
+  change: it goes to Notes as a proposal and is applied only on the user's
+  explicit second decision. The macro tiers below are read through this line.
+- Never in a refactor: a new dependency, or a change in observable timing,
+  remounting, caching, or network behavior. Such items are marked
+  `[behavior-changing]` and go to Notes for `omh-frontend` or a feature request.
 
 ## Preview output, per change
 
@@ -9658,10 +9732,13 @@ Run categories in this order and finish one before starting the next:
 3. **SIMPLIFY** - guard clauses over nested precondition `if`s; early returns
    over inverted pyramids; `flag === true` to `flag`; an if/else assigning one
    variable to a conditional expression.
-4. **MODERN** - `var` to `const`/`let`; `.then` chains to async/await except
-   where the chain expresses parallelism or fire-and-forget; spread over
-   `Object.assign({}, ...)`; arrows for callbacks that use neither `this` nor
-   `arguments`.
+4. **MODERN** - `var` to `const`/`let` only when no use precedes the
+   declaration, nothing is redeclared, and no closure captures a loop variable
+   (hoisting, the temporal dead zone, and per-iteration binding change
+   behavior); `.then` chains to async/await except where the chain expresses
+   parallelism or fire-and-forget; spread over `Object.assign({}, ...)` only
+   when the target has no setters; arrows for callbacks that use none of
+   `this`, `arguments`, `new`, or `bind`.
 
 ## The macro pass — architecture, ordered by impact
 
@@ -9751,7 +9828,7 @@ values, and user events are not external. If not external, in order:
 
 - Deriving data -> compute inline during render.
 - Responding to a user event -> the event handler, never an effect.
-- Resetting state when a prop changes -> a `key` on the component.
+- Resetting state when a prop changes -> a `key` on the component [behavior-changing: it remounts the subtree and drops focus, scroll, uncontrolled input values, and child effect state].
 - Fetching -> the query cache (section 5); an unavoidable fetch effect carries
   a stale-response guard in its cleanup.
 - Notifying a parent -> call the callback in the same handler as the setState.
@@ -9765,6 +9842,10 @@ list.
 
 ## 5. Server state is not UI state
 
+Adopting a query cache is [behavior-changing]: it adds a dependency and changes
+caching, deduplication, retry, and refetch-on-focus behavior. In a refactor,
+name it in Notes; do not apply it.
+
 Remote data is asynchronous, shared, and stale-able; it belongs in a query
 cache (keyed queries, stale times, retry policy), not in per-component
 fetch effects or a global store. Every mutation names the query keys it
@@ -9773,6 +9854,10 @@ red flag that the cache is missing.
 
 ## 6. The optimistic-update contract
 
+Adding an optimistic update is a new feature, not a refactor [behavior-changing].
+This contract is the review rule for one that already exists, and the shape a
+feature request must meet.
+
 Optimistic writes come as one triple: before the request, cancel in-flight
 reads, snapshot the current data, apply the optimistic value; on error,
 restore the snapshot and surface the error; on settle, invalidate so the
@@ -9780,6 +9865,9 @@ server answer wins. An optimistic update without its rollback path, or one
 that swallows the error it rolls back from, fails review.
 
 ## 7. Closing checks
+
+Items marked [behavior-changing] in this ladder are never applied under the
+refactor invariants. List each in Notes with the observable change it causes.
 
 - Ephemeral UI state in a global store -> local state.
 - The same fact stored in two places -> one owner, derive the rest.
@@ -10152,7 +10240,10 @@ def _adaptation_quality_reference() -> str:
     return """# Adaptation Quality Preservation
 
 Load this only when importing, porting, wrapping, or replacing an existing
-capability. Unrelated tasks do not require upstream execution. This procedure
+capability, meaning a skill, plugin, or tool whose output quality a user sees
+(media, rendering, generation). An ordinary code port or API wrapper is not one:
+verify it with the requirement coverage map. Unrelated tasks do not require
+upstream execution. This procedure
 uses the existing plan, requirement coverage map, node prompts, and verification
 matrix; it adds no engine, executable schema, or automatic service call.
 
@@ -10321,7 +10412,7 @@ A boundary that no stand-in can reach without patching deep inside the code is a
 A regression test earns its place only when it reproduces the conditions the bug needed, not just the function it lived in. A lost update needs two writers inside one transaction window; a fault that appears only when the retry wrapper re-enters the handler needs that re-entry. A test that drives the same code without those conditions passes on the pre-fix code and guards nothing with a fix attached.
 
 1. First try to run the pattern at the seam you can reach: concurrent callers released together through a barrier at an existing injection point, or the real call chain driven from its entry point instead of the innermost function.
-2. When the pattern is probabilistic, measure the test's hit rate on the pre-fix code over N runs before calling it red. "Fails before the fix" means a measured rate, and "passes after" means zero failures over enough runs to beat that rate.
+2. When the pattern is probabilistic, measure the test's hit rate on the pre-fix code over N runs before calling it red. "Fails before the fix" means a measured rate, and "passes after" means zero failures over enough runs to beat that rate: size N from the pre-fix rate p as N >= ln(0.05) / ln(1 - p), about 3 / p, and record it.
 3. Only when the pattern cannot run at any reachable seam, record `regression_seam: none_correct` with the reason and the attempts that failed. Keep the reproduction loop as the fix's verification, observed red before the fix and green after it, and report the missing seam as an architecture finding (an `omh-refactor-plan` candidate). Do not write the shallow test, and do not bend it until it happens to fail before the fix.
 
 ## Attribution
@@ -10869,6 +10960,16 @@ its own rollback:
 Shims that run on both versions go first, so the bump stays a two-file revert
 and every call site is covered while the adapt stage lands.
 
+When no dual-version shim is possible (an ESM-only or peer-dependency major, a
+framework whose old and new APIs cannot be imported together, a runtime or
+language upgrade), say so, run the upgrade on a branch or behind a flag, and
+make the rollback that branch plus the previous lockfile.
+
+A runtime or toolchain upgrade (Python, Node, JDK, a compiler) adds its own
+inputs: the version fields (`engines`, `requires-python`, `rust-version`), the
+CI matrix, the base image, native-extension wheels or prebuilt binaries for the
+new version, and the peer-dependency ranges of every direct dependency.
+
 ## Boundary
 
 Advisory identifiers, licence text, and changelog entries are read from what
@@ -10902,6 +11003,11 @@ Map the territory before ordering the work:
 - **Blast radius** - the observable surfaces that could change if a phase goes
   wrong: public APIs, CLI output, generated artifacts, persisted schemas.
   The radius decides the verification depth, not optimism.
+- **Regression gates** - the tests, typecheck, and generated-artifact checks
+  that cover the affected files today. Where none cover them, the plan opens
+  with a Phase 0 of characterization tests for the blast-radius surfaces, and
+  every later phase's verification is that suite. If the user declines them,
+  say each phase is unverified and stop at the approval gate.
 
 ## The phase order
 
@@ -10931,6 +11037,14 @@ precede tests, tests precede cleanup:
 
 Every phase ends at a commit that could ship. A phase that cannot end green
 is split further or its plan is wrong.
+
+A phase that changes a persisted or wire shape (a table, a stored format, a
+queue payload, a config shape) follows expand, migrate or dual-write, switch
+reads, then contract; each step runs with the code of the step before it,
+because old and new code meet during a rolling deploy. A code revert does not
+undo data already written in the new shape. For each phase say whether its
+rollback is a code revert or a data restore, and name the point after which
+only a restore works.
 
 ## The plan's table
 
@@ -11258,8 +11372,14 @@ Before any dimension, establish the observed baseline:
 
 - **Stack truth** - read the manifests (package/build/dependency files), never
   memory of the tree.
-- **Churn ranking** - `git log --format= --name-only | sort | uniq -c |
-  sort -rn | head -30`: the most-changed files are where debt costs the most.
+- **Churn ranking** - the most-changed files are where debt costs the most, but
+  an all-history count is led by changelogs, lockfiles, and generated docs. Use
+  a window, skip merges, drop those paths, and keep only files that still exist:
+  `git log --since=12.months --no-merges --format= --name-only | grep -v -E
+  '(^|/)(CHANGELOG[^/]*|package-lock\\.json|yarn\\.lock|pnpm-lock\\.yaml|Cargo\\.lock|poetry\\.lock|uv\\.lock)$|\\.snap$|\\.min\\.'
+  | sort | uniq -c | sort -rn | awk '{print $2}' | while read f; do [ -e "$f" ]
+  && echo "$f"; done | head -30`. Also drop every path the repository declares
+  generated.
 - **Size ranking** - the largest source files by line count.
 - **Gate inventory** - the test suites, typecheckers, linters, and CI entry
   points that already exist; debt findings that a gate already catches are
@@ -11278,7 +11398,7 @@ High-churn plus high-size plus low-test is the audit's priority corner.
 | Dependency and configuration debt | unpinned or abandoned dependencies, drifted config copies, secrets handling by convention |
 | Performance and resource debt | unbounded caches and queues, N+1 access patterns, sync work on hot paths |
 | Error-handling and observability debt | swallowed exceptions, bare retries, failures invisible to logs or metrics |
-| Security hygiene | credentials in the tree, injectable string building, permissive defaults |
+| Security hygiene | injectable string building, permissive defaults; a live-looking credential in the tree is not a ledger row (see below) |
 | Documentation drift | READMEs and comments contradicting the code, dead runbooks, stale generated artifacts |
 
 Per-stack detection commands (linters, dead-code finders, dependency and
@@ -11297,6 +11417,11 @@ orientation; they stay prepared_not_observed until run through the operator.
 - A `critical`/`L` finding routes to `refactor-plan`; the ledger never
   recommends a rewrite.
 
+A live-looking credential found in the tree stops the ledger. Cite path and
+line only, never the value; route to `security-event-response` (rotate, then
+clean history). Placeholders and test fixtures go on the looks-bad-but-fine
+list with the reason.
+
 ## The ledger (`tech_debt_ledger/v1`)
 
 One row per finding: `id`, `dimension`, `file:line`, `severity`, `effort`,
@@ -11307,6 +11432,11 @@ and the mandatory **looks bad but is actually fine** section - deliberate
 patterns that pattern-match to debt (a generated file, an intentional
 duplication, a documented workaround) stay off the ledger with their reason
 recorded, so the next audit does not rediscover them.
+
+Write the ledger to a file the user names (default `docs/tech-debt-ledger.md`)
+as a Markdown table carrying the stable ids, and end the reply with its path.
+On a rerun with no path given, look for that file; when none exists, say this
+is a first audit.
 
 ## Rerun reconciliation
 

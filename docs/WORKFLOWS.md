@@ -3028,6 +3028,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If no tests exist, write the characterization checks first or hand the user the smallest set to approve; do not start the macro pass on unlocked behavior.
   - If a change turns out to alter behavior mid-apply, revert that change, record it as a finding, and keep the rest of the pass.
   - If the component resists extraction because state is tangled, run the state ladder first and re-attempt decomposition after.
+  - If the framework is not React, run only the micro pass and the characterization-test gate, say the hook, effect, and context content does not apply, and use the state ladder's principles (derive, colocate, one owner) only where the framework has the same idea.
 - Required inputs:
   - the target files or component, and the framework in use
   - current behavior evidence: tests, or the characterization checks to write first
@@ -3042,7 +3043,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Safety rules:
   - Preview is the default: analyze the whole target and emit the plan before touching any file.
   - Outputs, side effects, and error handling stay identical; a dropped branch or weakened handler is a defect, not a simplification.
-  - Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits.
+  - Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits. Changes to props, exports, or file layout, and `[behavior-changing]` items (remounts, new dependencies, caching), are proposals in notes until the user's second decision.
   - Do not refactor test files, and do not claim behavior preservation without the before/after test evidence.
 
 ### backend
@@ -3211,7 +3212,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - compiler, clippy, test, Miri, sanitizer, and loom results only when observed
 - Safety rules:
   - Do not claim compilation, clippy cleanliness, passing tests, a Miri run, a sanitizer run, or a loom run from a prepared Rust contract.
-  - The UB escalation is deterministic, not a judgment call: if the change touches `unsafe`, `*mut`/`*const`, FFI or `extern`, `MaybeUninit`, `unsafe impl Send`/`Sync`, `transmute`, or a hand-written lock-free primitive, escalate.
+  - The UB escalation is deterministic, not a judgment call: if the change touches `unsafe`, `*mut`/`*const`, FFI or `extern`, `MaybeUninit`, `unsafe impl Send`/`Sync`, `transmute`, a hand-written lock-free primitive, or non-test code in a module whose existing `unsafe` depends on it (fields, constructors, `Drop`, visibility), escalate.
   - When escalated, a change is not ready for handoff until the UB checklist names the Miri, sanitizer, and concurrency-testing requirement for it.
   - Never present `unsafe` as safe because it compiles: the compiler does not check the invariant an `unsafe` block asserts.
   - Do not silence a borrow-checker error with a clone, `Rc<RefCell<_>>`, or `unsafe` without naming the ownership decision that made it necessary.
@@ -3233,7 +3234,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep the fault statement, hypothesis set, distinguishing observations, and the debugger plan in Hermes. Record every breakpoint hit, register or memory read, backtrace, and reproduction only from executor or wrapper observed evidence.
-- Why this exists: `native-debugging` closes OMH's zero-coverage low-level domain by preparing a hypothesis-driven, DAP-first debugging plan for native binaries, while OMH itself continues to execute nothing.
+- Why this exists: `native-debugging` closes OMH's zero-coverage low-level domain by preparing a hypothesis-driven, instrument-first debugging plan for native binaries, while OMH itself continues to execute nothing.
 - Use when: Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a DAP-driven evidence plan for the executor.
 - Do not use when:
   - The failure is a build or CI failure rather than a runtime fault in a binary; use `build-failure-triage`.
@@ -3244,29 +3245,29 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `native-debugging`, `native debugging`, `native binary`, `segfault`, `segmentation fault`, `core dump`, `stack corruption`, `memory corruption`, `heap corruption`, `use after free`, `null pointer dereference`, `stripped binary`, `disassembly`, `lldb`, `gdb`, `dap debugger`, `breakpoint`, `watchpoint`, `backtrace`, `セグメンテーション違反`, `コアダンプ`, `メモリ破壊`, `ヒープ破壊`, `解放後使用`, `逆アセンブル`, `네이티브 디버깅`, `세그폴트`, `코어 덤프`, `메모리 손상`, `역어셈블`, `중단점`, `段错误`, `核心转储`, `内存破坏`, `释放后使用`, `反汇编`, `bantu debug segfault ini`, `analisis core dump`, `telusuri penyebab use after free`, `debug crash pada binary native`, `giúp debug lỗi segfault này`, `phân tích core dump`, `truy nguyên nhân use after free`, `debug crash trên binary native`
 - Good example:
   - Prompt: This binary segfaults on the third request; help me debug it.
-  - Expected behavior: Prepare native_fault_statement/v1, three competing hypotheses with distinguishing observations, and a debugger_session_plan/v1 naming the DAP adapter, breakpoints, and values to read.
+  - Expected behavior: Prepare native_fault_statement/v1, three competing hypotheses with distinguishing observations, and a debugger_session_plan/v1 naming the instrument, breakpoints, and values to read.
   - Why: The request is a runtime fault in a native binary where the plan, not the guess, is what OMH can prepare.
 - Bad example:
   - Prompt: Add some printfs and tell me it is fixed once the crash stops.
-  - Expected behavior: Name the DAP-driven observation plan, and keep reproduction, root cause, and fix as separate not_observed states.
+  - Expected behavior: Name the debugger-driven observation plan, and keep reproduction, root cause, and fix as separate not_observed states.
   - Why: A disappearing symptom is not a root cause, and printf-via-rebuild is the fallback rather than the method.
 - Quality bar:
   - State the fault as an observed symptom with its reproduction command before naming any cause.
   - Load `references/native-debug-loop.md` and follow its hypothesis, observation, and escalation order rather than improvising a search.
   - Write at least three hypotheses on distinct axes, each with the single observation that would refute it and the exact place to read that observation.
-  - Plan the debugger session concretely: adapter, breakpoints, watchpoints, threads, frames, and the values read at each stop — the executor should not have to invent the session.
+  - Plan the debugger session concretely: debugger, breakpoints, watchpoints, threads, frames, and the values read at each stop — the executor should not have to invent the session.
   - Prefer debugger-observed state over added print statements; a rebuild-and-print loop is the fallback, not the method.
   - Keep reproduction, debugger output, root cause, and fix as separate observed states.
 - Completion checklist:
   - The fault is stated as an observed symptom with a reproduction command, separate from any assumed cause.
   - At least three hypotheses span distinct axes and each carries its refuting observation.
-  - The debugger session plan names the DAP adapter, breakpoints, watchpoints, threads, frames, and values to read.
+  - The debugger session plan names the debugger or instrument, breakpoints, watchpoints, threads, frames, and values to read.
   - The handoff says the executor drives the debugger and OMH executes nothing.
   - Reproduction, debugger output, root cause, and fix are reported as separate observed or not_observed states.
   - Any print-and-rebuild probe carried the session's probe tag, and an observed search for that tag returns nothing.
 - Recovery notes:
   - If the fault does not reproduce, make reproduction the first hypothesis and plan the observation that would establish it, rather than debugging a fault no one can trigger.
-  - If no debug adapter or symbols are available, say so, plan the coarser evidence path, and keep root cause unclaimed instead of upgrading a guess.
+  - If no debugger, core file, or symbols are available, say so, plan the coarser evidence path, and keep root cause unclaimed instead of upgrading a guess.
 - Required inputs:
   - the binary, crash signature, or fault symptom
   - whether source and debug symbols are available
@@ -3285,12 +3286,12 @@ These surfaces are generated command references, not installed Hermes workflow s
   - native_fault_statement/v1 separates the observed symptom from the assumed cause, names the reproduction command, quotes the observed failure beside the reported one (`symptom_match`), and records the `minimised` reproduction
   - hypothesis_set/v1 spans distinct axes — caller-side misuse, callee invariant, memory lifetime, concurrency, build/runtime mismatch — not three phrasings of one guess
   - distinguishing_observation_plan/v1 pairs each hypothesis with the one observation that refutes it, and where to read it
-  - debugger_session_plan/v1 names the adapter (lldb or gdb via DAP), the breakpoints and watchpoints, the frames and threads to inspect, and the values to read at each stop
+  - debugger_session_plan/v1 names the instrument chosen for the fault class (sanitizer build, Valgrind, rr, core file, or a batch lldb or gdb session; a DAP adapter only when the host exposes one), the breakpoints and watchpoints, the frames and threads to inspect, and the values to read at each stop
   - native_debug_handoff/v1 states that the executor drives the debugger and OMH executes nothing
   - breakpoint hits, memory and register reads, backtraces, and confirmed reproductions only when observed
 - Safety rules:
   - Do not claim a reproduction, a breakpoint hit, a read value, a root cause, or a fix from a prepared debugging plan.
-  - Instruct the executor to drive a DAP debug adapter — lldb-dap, codelldb, or a gdb adapter — with breakpoints, stepping, and thread and frame inspection, and to reach for print-and-rebuild only when no adapter is available.
+  - Instruct the executor to use the instrument the fault class needs (sanitizer, Valgrind, rr, or the core file) and then a debugger session, scripted in batch lldb or gdb unless the host exposes a DAP adapter, and to reach for print-and-rebuild only when no debugger can attach.
   - Require at least three hypotheses on distinct axes before any observation is planned; a single hypothesis makes every reading confirmatory.
   - Never treat a symptom's disappearance as a root cause; an unexplained fix is an open fault.
   - Treat attaching to, patching, or bypassing protections on a binary the user does not own or operate as out of scope.
@@ -3542,7 +3543,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Prefer targeted reruns before broad expensive checks, then broaden only when the changed surface requires it.
   - Preserve exact observed failure snippets or file references without treating them as current PASS evidence.
   - Give each cluster an origin: `introduced` when the same command passes at the merge-base or the failure points at a line the diff added or changed; `pre_existing` only when an observed run of the same command fails the same way at the merge-base in a clean detached worktree (`git worktree add --detach <dir> <merge-base>`, removed afterwards), never by stashing or checking out the tree the user is working in; otherwise `unknown`. An observed merge-base run outranks a diff-line reading: a check that fails the same way at the merge-base is `pre_existing` even when its failure points at a line the diff changed. Name the proof beside the origin: a merge-base run is an observation, a diff-line reading is an inference.
-  - Return FIX_READY only for `introduced` clusters; a `pre_existing` cluster gets its own follow-up handoff outside this change's fix. Clusters of different origins still share one verdict: NEEDS_MORE_LOGS while any cluster is `unknown`, naming the merge-base run as the missing evidence, even beside `introduced` ones; otherwise FIX_READY when at least one is `introduced`; otherwise, with every cluster `pre_existing`, ROUTE_TO_VERIFICATION_GATE.
+  - A failure that is unstable across two runs at one commit is a flake: its origin stays `unknown` until its failure rate is measured on head and on the merge-base at the same N, and one green merge-base run never makes it introduced. For a CI-only failure (matrix entry, OS, secrets, services), take the origin from CI, citing the URL: the same job on the merge-base commit or the base branch's latest run (`gh run list --branch <base> --workflow <name> --json conclusion,headSha,url`, `gh pr checks <n>`). A `pull_request` run builds the merge ref `refs/pull/<n>/merge`, not the head, so record which commit it built (`gh run view <id> --json headSha`) and compare against that commit when the base moved.
+  - Return FIX_READY only for `introduced` clusters; a `pre_existing` cluster gets its own follow-up handoff outside this change's fix. Clusters of different origins still share one verdict: NEEDS_MORE_LOGS while any cluster is `unknown`, naming the merge-base run as the missing evidence, even beside `introduced` ones; otherwise FIX_READY when at least one is `introduced`; otherwise, with every cluster `pre_existing`, ROUTE_TO_VERIFICATION_GATE. A cluster that is environmental or credentialed takes BLOCKED_BY_ENVIRONMENT ahead of FIX_READY and after NEEDS_MORE_LOGS.
 - Completion checklist:
   - The failing command/job, freshness, exit status, and log/source boundary are explicit.
   - Failure clusters separate syntax/type/lint/test/dependency/config/environment/DCO causes.
@@ -3551,7 +3553,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The rerun ladder names targeted, broad local, CI, and DCO checks without claiming they already passed.
   - The final verdict is FIX_READY, NEEDS_MORE_LOGS, BLOCKED_BY_ENVIRONMENT, or ROUTE_TO_VERIFICATION_GATE.
 - Recovery notes:
-  - If the log is missing or stale, ask for the smallest fresh command output or CI job URL.
+  - If the log is missing or stale, fetch it when `gh` is authenticated (`gh run view <id> --log-failed`); otherwise ask for the smallest fresh command output or CI job URL.
   - If the failure looks environmental or credentialed, mark BLOCKED_BY_ENVIRONMENT and avoid patch handoff.
   - If a fix has already been applied, route to verification-gate for fresh evidence instead of re-triaging stale failures.
 - Required inputs:
@@ -3757,10 +3759,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Tie every completion claim to the smallest check that proves it, then broaden for shared surfaces.
   - When a diff touches a declared generated path, name its source of truth and regeneration command before the edit rather than after a byte gate rejects it; a diff touching a generator and its output together is the correct shape, not a violation — load `references/generated-artifact-provenance.md` for the declaration and reporting rules.
   - Record every field the `observed_check_results/v1` artifact expectation below names, for each observed result (`origin` on a failing check only); a field left out is a gap in the record, not a shorter record.
-  - For native `omh_todo` checkpoints, load the todo-checklist closing recipe; `record` then `recall` this verification declaration. Stored declarations are not proof.
+  - For native `omh_todo` checkpoints, load `omh-todo-checklist/references/closing-a-story.md`; `record` then `recall` this verification declaration. Stored declarations are not proof.
   - When the change answers to a written spec, plan, or issue, load `references/requirement-coverage-map.md` and map requirement to task to evidence under stable ids before claiming coverage.
   - Give each failing check an `origin`: `introduced` when the same command passes at the merge-base or the failure points at a line the diff added or changed; `pre_existing` only when an observed run of the same command fails the same way at the merge-base in a clean detached worktree (`git worktree add --detach <dir> <merge-base>`, removed afterwards), never by stashing or checking out the tree the user is working in; otherwise `unknown`. An observed merge-base run outranks a diff-line reading: a check that fails the same way at the merge-base is `pre_existing` even when its failure points at a line the diff changed. Name the proof beside the origin: a merge-base run is an observation, a diff-line reading is an inference.
-  - A fix claim whose evidence is a new or changed test needs a regression witness: an observed red of that test, for the bug's reason, on the pre-fix tree (the fix commit's parent, or the merge-base when the fix is the whole change), recorded with its source -- a run in a clean detached worktree at that tree, a CI job on a commit that adds only the test, or the debugging session's run before the fix. A collection or import error there is not a witness. For an intermittent fault the witness is the failure rate over N runs before beside 0/N at the same N after. When the test calls a seam the fix added, force the red by reverting only the behavioural lines, keep the seam, and show that diff. When the fix changes only test code, the witness is the old test's measured failure rate on the pre-fix tree beside the new test's 0/N at the same N. A fix test only ever observed green is HOLD with `regression_witness_missing`. A fix recorded with `regression_seam: none_correct` and its reason has no fix test; its evidence is the reproduction loop observed red before and green after (for an intermittent fault, its rate over N runs before beside 0/N after), and the test witness rule does not apply.
+  - A fix claim whose evidence is a new or changed test needs a regression witness: an observed red of that test, for the bug's reason, on the pre-fix tree (the fix commit's parent, or the merge-base when the fix is the whole change), recorded with its source -- a run in a clean detached worktree at that tree, a CI job on a commit that adds only the test, or the debugging session's run before the fix. A collection or import error there is not a witness. For an intermittent fault the witness is the failure rate over N runs before beside 0/N at the same N after, with N sized from the pre-fix rate p as N >= ln(0.05) / ln(1 - p), about 3 / p. When the test calls a seam the fix added, force the red by reverting only the behavioural lines, keep the seam, and show that diff. When the fix changes only test code, the witness is the old test's measured failure rate on the pre-fix tree beside the new test's 0/N at the same N. A fix test only ever observed green is HOLD with `regression_witness_missing`. A fix recorded with `regression_seam: none_correct` and its reason has no fix test; its evidence is the reproduction loop observed red before and green after (for an intermittent fault, its rate over N runs before beside 0/N after), and the test witness rule does not apply.
+  - Take the required set from the repository, not from what happened to run: branch protection or ruleset required status checks (`gh api repos/{owner}/{repo}/branches/{base}/protection/required_status_checks`, `gh pr checks <n> --required`), the CI workflow, and the contributor docs; name which source defined required.
   - Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `pre_existing` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `unknown` is HOLD with the merge-base run named as the missing evidence.
   - Keep fixes, reruns, review, CI, and merge as separate observed states.
 - Completion checklist:
@@ -3794,7 +3797,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Read generated paths from a map the repository declares; where none exists report `map_not_declared` and never infer one from filename patterns, directory names, or a generated-file header, because a false positive redirects correct work while the miss it prevents only costs a rerun.
   - Do not collapse build, lint, tests, security, generated docs, review, CI, DCO, merge-readiness, or merge into one claim.
   - Failed or unavailable checks must produce HOLD/BLOCK with a rerun or remediation path.
-  - A change touching an authentication, secrets/config, schema/migration, or payment/crypto path escalates to the thorough verification lane regardless of diff size.
+  - A change touching an authentication, secrets/config, schema/migration, or payment/crypto path escalates to the thorough verification lane regardless of diff size: add a negative test that fails if the guard is removed, a migration run up and down on a copy, a secrets scan of the diff, and a second reader (`code-review`); the verdict stays HOLD until each is observed or listed as missing.
   - Refuse completion, do not merely report it, when the claim carries an unlinked TODO/FIXME/stub marker in changed code, a suppressed test with no linked reason, placeholder or self-referential evidence ('TBD', 'works as expected'), or a proof word ('fixed', 'verified', 'passing') with no observed evidence naming a command; each refusal names its category, the offending excerpt, and the remedy.
   - Before a diff deletes a validation/refusal/sanitization/permission/allowlist check at a trust boundary, or a negative test named for it ('refuses', 'rejects', 'denies', 'blocks', 'invalid'), require a named adversarial or regression case proving the boundary still refuses what it should; a guard that only moves elsewhere in the same diff is not a deletion, but a deletion with no negative case behind it -- in the diff or named in evidence -- earns no completion claim.
 
@@ -3958,6 +3961,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user already named a concrete implementation task and acceptance criteria; use `ultrawork` or `idea-to-deploy`.
   - The user needs a whole-workspace capability inventory; use `workspace-audit`.
   - The user wants a code diff review; use `code-review`.
+  - The user wants a picture of the structure; use `codebase-uml`. The user wants the code index refreshed or a task-scoped handoff pack; use `codegraph-refresh`.
 - Strong routing signals: `codebase-onboarding`, `codebase onboarding`, `repo onboarding`, `repository onboarding`, `codebase tour`, `code tour`, `new repo orientation`, `understand this repo`, `how this repo works`, `first task runway`, `개발자 온보딩`, `레포 온보딩`, `코드베이스 온보딩`, `처음 보는 레포`, `레포 구조 설명`, `разберись в репозитории`, `объясни репозиторий`, `как устроен репозиторий`, `тур по репо`, `изучи кодовую базу`, `карта репозитория`
 - Good example:
   - Prompt: codebase-onboarding 처음 보는 레포라서 구조, 주요 모듈, 테스트, 첫 작업 후보를 잡아줘.
@@ -3972,6 +3976,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate observed files and commands from inferred architecture and unknowns.
   - Produce a practical reading path and first-task runway rather than a flat file tour.
   - Route follow-up implementation to plan, ultrawork, verification-gate, or workspace-audit as needed.
+  - Take build, test, and lint commands in this order: CI config (`.github/workflows`, `.gitlab-ci.yml`), the task runner (`Makefile`, `justfile`, `package.json` scripts), the manifest, then contributor docs; read `CODEOWNERS` and the top-churn files for ownership; the README comes last, and where it disagrees with CI trust CI and record the disagreement.
 - Completion checklist:
   - repo_map/v1 cites an observed path for every directory, entrypoint, generated surface, and test location it names; what was inferred is marked inferred, and what was never opened is listed as unread.
   - reading_path/v1 is an ordered list of real files, each with why it comes at that point and what the reader knows after it.
@@ -3980,6 +3985,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Every first_task_runway/v1 task names the files it touches and its verification command, and says whether that command was run during onboarding.
   - The stop condition named at the start is met, or the reply names what was left unread.
 - Recovery notes:
+  - If the audience or depth is not given, assume a new contributor and an architecture tour, read-only, and state the assumption in the first line.
   - If the repository is too large for the stated depth, narrow to the entrypoint the audience touches first and record the rest as unread rather than summarizing it from file names.
   - If a build, test, or setup command could not run (read-only mode, missing toolchain, secrets), list it in first_task_runway/v1 as not run with the reason, never as a known-good command. A command that installs or syncs dependencies as a side effect (`npm ci`, `uv sync`, and `uv run`, which syncs first) counts as setup and stays not run.
   - If docs and code disagree, report what the code does, cite both, and add the disagreement to risk_and_unknowns_map/v1 instead of trusting the docs.
@@ -4053,6 +4059,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If the codegraph command is unavailable, route to doctor or toolbelt-readiness before claiming freshness.
   - If no task focus is supplied, prepare build/summary guidance and ask for focus only when a handoff pack would otherwise be misleading.
   - If the index is stale or missing, report the stale/missing state and next safe command rather than treating prior summaries as current.
+  - The codegraph indexes Python files only; when `omh codegraph summary` shows no Python files, say so, navigate with `rg` or `ast-grep`, and present no handoff pack.
 - Required inputs:
   - repo root or current workspace
   - refresh depth: build, summary, write artifact, or task-scoped handoff
@@ -4067,7 +4074,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - not-evidence boundary
 - Artifact expectations:
   - codegraph_command_plan/v1 naming `omh codegraph build`, `summary`, `handoff`, `--write`, and `--json` choices
-  - staleness_and_scope_report/v1 separating requested refresh scope, observed command output, missing index evidence, and stale artifacts
+  - staleness_and_scope_report/v1 separating requested refresh scope, observed command output, missing index evidence, and stale artifacts; the artifact is stale when its `generated_at` is older than the newest commit (`git log -1 --format=%cI`) or `git status --porcelain -- '*.py'` is non-empty, and a rebuild is the refresh because the scan is full, not incremental
   - `omh_codegraph_summary/v1` or `.omh/codegraph/codegraph.json` only when the corresponding command output or write is observed
   - codegraph_handoff_context/v1 with task terms, focus files, symbols, entrypoints, warnings, and claim boundary when `omh codegraph handoff` is observed
 - Safety rules:
@@ -4115,12 +4122,14 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Read the legend back to the user in one line: units shown, units folded, edges pruned, symbols hidden - so nobody mistakes 16 boxes for the whole system.
   - Answer follow-up exploration by re-running with a narrower `--focus` or `--level module` rather than describing what the first picture omitted from memory.
   - Keep the omh theme unless the user asks for `--theme mono`; the theme exists so every OMH diagram reads as one family.
+  - The picture is a package or module dependency view with ranked public symbols, not a class diagram: say so when the user asked for classes or inheritance.
 - Completion checklist:
   - The view (package, focus, or module) matches the question asked, and only one view was rendered unless more were requested.
   - The render command and its observed result are recorded before the image is claimed.
   - The legend's omissions were read back to the user in the reply.
   - Follow-up exploration used narrower generated views, not recollection of the first picture.
 - Recovery notes:
+  - The generator reads Python files only. Before generating, check `omh codegraph summary` finds Python files; for a TypeScript, Go, Java, or Rust repository (or an empty model) say the generator cannot read it, stop, and attach nothing. A picture drawn from a description is a different request, not this workflow.
   - If the render plan is blocked, send the PlantUML source path plus the install hint; do not attach a stale or hand-drawn image.
   - If the picture is still unreadable, lower `--max-nodes`, narrow `--focus`, or raise `--depth` by one, and say which knob changed.
   - If Graphviz `dot` is missing, rerun with `--layout smetana`; the layout differs but the content is identical.
@@ -4756,7 +4765,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The closing brief scales to the change: one or two sentences for a simple change. Lead with the result and validation; omit abandoned approaches unless they explain a tradeoff, and internal bookkeeping. Disclose requested-but-not-done work and material prepared/unmerged work; omit unrelated non-action footers. Required accounting stays outside this scaling. Order: result -> relevant evidence/limits -> observed accounting (when required) -> specific question (if useful). For a real unresolved user decision or a useful briefing discussion, offer one specific, content-linked question. Completed work needs no question; discussion grants no authority. Never estimate usage.
   - Generate hostile scenarios from changed behavior and known risk areas.
   - Report pass/fail evidence separately from proposed fixes.
-  - For native `omh_todo` checkpoints, load the todo-checklist closing recipe; `record` then `recall` this qa declaration. Stored declarations are not proof.
+  - For native `omh_todo` checkpoints, load `omh-todo-checklist/references/closing-a-story.md`; `record` then `recall` this qa declaration. Stored declarations are not proof.
   - Delegate code mutations discovered by QA to the selected coding executor.
   - A check no automation can hold gets a manual test guide, never a done claim: load `references/manual-test-guide.md` for the step shape (setup, do, expect, broken), the four reasons a step may stay manual, and why it stays `prepared_not_observed` until a run records a fresh `observed_check_results/v1`. `code-story` phase `VI. Manual test guide`; rendered surfaces go to `visual-qa`.
   - For probes that must run in Hermes-owned isolation or outlive this session, load `references/board-fanin.md`: one probe row per scenario in its own worktree, one fixer row whose `parents` is every probe, re-verification through the review lane, and findings only through bounded readback.
@@ -5051,6 +5060,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user asks to implement the fix rather than review existing code or claims.
   - There is no diff, file set, claim, artifact, or expected behavior to review.
   - The request is broad product critique, strategy, or planning rather than code or evidence review.
+  - The user wants build, lint, test, and CI results collected into a PASS/HOLD/BLOCK evidence matrix before merge; use `verification-gate`. This skill supplies findings that matrix may cite.
   - A kanban review worker needs its card's transition decided: Hermes' bundled `sdlc-review` owns approve, request-changes, and escalate there, and this skill only supplies the findings that decision cites.
   - The user wants their own uncommitted changes checked before a commit or push, with a security scan, quality gates, and fixes applied in place; load Hermes' bundled `requesting-code-review` skill for that pre-commit pass instead of this one.
 - Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `コードレビュー`, `バグを見つけて`, `実際に何をしたか`, `리뷰`, `코드 리뷰`, `리뷰까지`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`, `сделай ревью кода`, `ревью моего кода`, `ревью изменений`, `проверь код на баги`, `проревьюй`, `ревью пул реквеста`, `проверь мой код`, `проверить мой код`, `сделай код ревью`, `найди баги`, `ревьюни`, `ревью этого кода`, `代码评审`, `代码审查`, `找出缺陷`, `tinjau kode`, `review kode ini`, `bantu tinjau kode PR ini`, `tolong periksa diff ini untuk mencari bug`, `cek perubahan kode sebelum merge`, `ulas pull request ini`, `cari bug di perubahan ini`, `review PR ini dong`, `rà soát mã nguồn`, `review mã nguồn này`, `giúp rà soát PR này`, `hãy kiểm tra diff này tìm bug`, `kiểm tra đoạn code trước khi ráp vô`, `phân tích pull request này`, `tìm bug trong thay đổi này`, `review PR này giúp mình`
@@ -5076,7 +5086,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Select depth by changed risk, not diff size; record selected and omitted checks, reasons, actual coverage, and budget. Deduplicate candidates by root cause and validate before final findings; retain unresolved protected risks separately. Say `independent validation unavailable` when no different reader participated.
   - Hermes handles two parts of a review itself; load `omh-code-review/references/native-review-contract.md` for both. When `delegate_task` is in your tool list or tool_search finds it, pass the findings schema as the reviewer task's `output_schema`. The host validates the return, but its `schema_valid` record reaches you only when the call returns its results in the same turn; a result that arrives later as a completion message carries none, so check that summary against the schema yourself and never read `completed` as validated. A return that fails the contract is `not_observed`, never a pass. Inside a kanban review worker, `no_ship` becomes the request-changes transition that `sdlc-review` makes.
   - When the reviewed work ran in a Hermes session, cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) to scope which workspace files its read_file, write_file, and patch calls touched, with the outcome Hermes recorded; it is file lineage, never file-content, diff, test, review, CI, or merge evidence.
-  - For native `omh_todo` checkpoints, load the todo-checklist closing recipe; `record` then `recall` this review declaration. Stored declarations are not proof.
+  - For native `omh_todo` checkpoints, load `omh-todo-checklist/references/closing-a-story.md`; `record` then `recall` this review declaration. Stored declarations are not proof.
 - Completion checklist:
   - Findings come first: rank ordinary findings by severity; keep gaps unranked in `verification_gaps`.
   - Every finding cites file, diff, command output, artifact, or expected behavior evidence.
@@ -5147,7 +5157,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Quality bar:
   - Lock current behavior with regression checks before non-trivial cleanup.
   - Classify before deleting: every finding names one category from the slop taxonomy - duplication, dead code, needless abstraction, boundary violation, missing tests, or templated defaults - so the pass order below can own it.
-  - Run single-smell passes in fixed order, re-verifying between passes and never bundling categories: dead-code deletion, then duplicate removal, then naming and error handling, then test reinforcement; the full contract is `omh-ai-slop-cleaner/references/cleanup-passes.md`.
+  - Run single-smell passes in fixed order, re-verifying between passes and never bundling categories: dead-code deletion, then duplicate removal, then naming and error handling, then test reinforcement, after a pass 0 that names the check locking each file's behavior; the full contract is `omh-ai-slop-cleaner/references/cleanup-passes.md`.
   - When the user names no target smell, run detection first and hand back the inventory: prepared linter and dead-code commands are named per stack in the reference and stay prepared_not_observed until run.
   - When the cleanup target is written English rather than code, load `omh-ai-slop-cleaner/references/prose-lexicon.md` for the word tiers, the pattern severities, and the context profile that decides which rules apply.
   - Review mode (`deslop review`, or a request to judge a drafted cleanup without editing) edits nothing: read the writer pass's plan, its diff, and the before/after checks it ran against the six taxonomy categories and return findings in the `code-review` shape - P0-P3 severity and a ship or no_ship verdict - never a new verdict format; the checklist is in `cleanup-passes.md`.
@@ -5231,6 +5241,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If the import graph is unavailable, build the codegraph first or reduce the plan's confidence and say which files are unverified.
   - If a phase cannot be made independently green, split it further; two half-phases beat one unabortable one.
+  - If no regression gate covers the affected files, open the plan with a Phase 0 of characterization tests, or say each phase is unverified and stop at the approval gate.
   - If reconnaissance finds the direction itself is unsettled, route back to `ralplan` before ordering phases.
   - If the module to deepen is chosen but its interface is not, shape it under contrasting constraints and recommend one design before phase 1; that is not a contested direction.
 - Required inputs:
@@ -5249,7 +5260,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The plan comes from observed repo evidence, never from memory of the tree.
   - An upgrade plan is not ready while any breaking change lacks its call sites or an observed empty search, or any stage lacks its rollback; name the open rows instead of calling the bump safe to merge.
   - Every phase ends at a commit that could ship; a phase that cannot end green is split further.
-  - Nothing is deleted before the cleanup phase, and cleanup starts from a tagged rollback point.
+  - No production code is deleted before the cleanup phase (phase 4 may delete a test only when an interface-level test covers the same behavior, named in the plan), and cleanup starts from a tagged rollback point.
   - Do not begin implementing any phase without the user's explicit approval of the plan.
 
 ### tech-debt-audit
@@ -5306,7 +5317,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - the previous ledger when one exists, so the rerun can reconcile instead of restart
 - Expected outputs:
   - orientation summary: manifests read, churn ranking, largest files, test and CI entry points
-  - findings table per `tech_debt_ledger/v1`: id, category, file:line, severity, effort, recommendation
+  - findings table per `tech_debt_ledger/v1`: id, dimension, file:line, severity, effort, recommendation
   - top fixes ranked by severity and the quick wins ranked by payoff-per-effort
   - the looks-bad-but-is-actually-fine list, and the RESOLVED/NEW/CARRIED reconciliation on rerun
 - Artifact expectations:
@@ -6436,8 +6447,8 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Why this exists: `github-issue-intake` exists so a public support-chat report can become a verified GitHub issue through one bounded, confirmation-gated lane instead of ad hoc chat narration or an unscoped bot write.
 - Use when: Use when a public chat report should become a new GitHub issue: classify it, ask at most three decision-changing questions, search duplicates, confirm the direction, and hand the scoped creation to an authorized connector.
 - Do not use when:
-  - The report only wants classification or signal clustering; use feedback-triage instead.
-  - The event concerns an already-existing issue, PR, review, or CI run; use github-event-ops instead.
+  - The report only wants classification or signal clustering; use `feedback-triage` instead.
+  - The event concerns an already-existing issue, PR, review, or CI run; use `github-event-ops` instead.
   - The user wants implementation; coding stays a separate follow-up lane with its own maintainer authority.
   - The report describes a security vulnerability; redirect to the private SECURITY.md path.
   - The issue is already decided and the user only wants it filed or edited with the gh CLI, with no chat report to classify, question, or de-duplicate; load Hermes' bundled `github` skill instead of this one.
@@ -6454,10 +6465,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Classify the report from supplied or observed facts and separate observation from inference.
   - Ask at most three unresolved, decision-changing questions; stop with a specific missing-evidence request instead of filing a vague issue.
   - Present the direction check, require confirmation, and keep prepared packages distinct from observed creation.
+  - Search open and closed issues and PRs for duplicates (`gh issue list --repo <r> --state all --search '<keywords> in:title,body'`), record the query and the top hits, and build the body from the matching `.github/ISSUE_TEMPLATE/` form.
 - Completion checklist:
-  - Confirm the workflow target, evidence boundary, and stop condition are named.
-  - Report which outputs are prepared, observed, blocked, or missing.
-  - Name the smallest next verification or handoff instead of claiming completion from narration.
+  - github_issue_intake/v1 carries the report type, smallest outcome, scope, evidence versus inference, and the duplicate query with its result.
+  - Confirmation was taken on the complete direction check before any connector handoff.
+  - Creation is reported only with the connector's read-back URL; otherwise it is stated as prepared, not created.
 - Recovery notes:
   - If reproduction evidence is still missing after three questions, retain the report classification and observed facts, mark the direction unresolved, and hand back the missing steps, versions, or logs without filing.
   - If duplicate search cannot finish, retain the scoped report summary, mark duplicate status unresolved, and hand back the explicit repository and pending search; do not confirm or dispatch creation.
@@ -6492,7 +6504,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - No external mutation before the direction check and an explicit confirmation; a maintainer file-now requires authenticated-wrapper actor/evidence identity and never bypasses duplicate, template, security, or read-back gates.
   - Confirmation requires a complete direction check - type, user-visible problem, source summary, smallest desired outcome, included and excluded scope, observed evidence versus inference, and duplicate status - plus a completed duplicate search; any blocker (security redirect, missing evidence, connector unavailable, or credentials missing) stops confirmation and handoff and cannot be cleared by a later observed result.
   - A public reporter authorizes exactly one scoped create_issue against an explicit repository; code, configuration, branch, commit, PR, merge, deployment, and coding-executor mutations stay in their own maintainer-gated lanes.
-  - Security vulnerability reports redirect to the private SECURITY.md reporting path instead of a public issue.
+  - Security vulnerability reports redirect to the private SECURITY.md reporting path instead of a public issue. When the repository has no SECURITY.md and private vulnerability reporting is off (`gh api repos/{owner}/{repo}/private-vulnerability-reporting`), point the reporter to a private maintainer contact, file nothing publicly, and do not restate the exploit details in the reply.
   - Core OMH never calls GitHub; only a checked-in issue-form builder can produce an authorized create_issue request. An authorized connector receives one stable idempotency-keyed request, must enforce that key externally, and returns observed result evidence bound to that request; dispatch consumes the core handoff, so dispatched or observed artifacts cannot hand off again.
   - A prepared issue package is not creation evidence; only connector read-back of repository, author, title, body, labels, and URL is observed evidence.
   - The target repository must be explicit or safely configured; never infer a cross-repository target from context.
@@ -6871,8 +6883,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Put `Closes #N` on its own line only when every success criterion of that issue is met.
 - Completion checklist:
   - The convention read names the template and log sample it drew from.
-  - Every `Tested:` entry maps to an observed ledger row with its exit status.
-  - Every prepared, skipped, or unobserved command is under `Not-tested:` with its reason.
+  - Every `Tested:` entry (or the validation line of a repository whose log has no such trailer) maps to an observed ledger row with its exit status.
+  - Every prepared, skipped, or unobserved command is under `Not-tested:` (or "Not run" where the log has no trailers) with its reason.
   - The draft lists the paths to stage, and any state-claiming subject prefix maps to an observed ledger row.
   - Nothing was committed, pushed, or opened by OMH.
 - Recovery notes:
@@ -8813,7 +8825,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep source mapping and local evidence comparison in Hermes. Never launch a model, tokenizer, evaluator, subprocess or network request from the audit feature.
-- Why this exists: A displayed score is not evidence that evaluation conditions match. This workflow compares retained source claims without executing an evaluator or inventing missing conditions.
+- Why this exists: A displayed score is not evidence that evaluation conditions match. This audit covers lm-eval HellaSwag results only. This workflow compares retained source claims without executing an evaluator or inventing missing conditions.
 - First steps:
   - Ask which metric the person means if acc versus acc_norm is not explicit; never substitute one for the other.
   - Use only supplied local files. If no evaluation record is available, ask for one; do not run or fetch a model.
@@ -8823,6 +8835,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Call `omh paper audit --case CASE --out NEW_REPORT`; read validation.json and report.json, then explain blockers and the offline report. Exit 0 means an audit artifact was written, not that conditions match.
 - Use when: Use when supplied evaluation logs must be compared with paper conditions, not when a new evaluation must run.
 - Do not use when:
+  - A bug report whose reproduction steps need checking is software debugging, not an evaluation audit; use `app-debugging`.
+  - A results file for any benchmark other than HellaSwag (the importer reads only the HellaSwag task); say it is unsupported and do not map it onto HellaSwag.
   - A supplied article needs section-by-section explanation rather than comparison of retained records.
   - A pull request needs code correctness review rather than research evidence mapping.
   - The request requires running an evaluator, downloading weights or verifying scientific reproduction.
@@ -9823,7 +9837,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - One issue to file from a bug report or an idea, with no incoming event to route; use `github-issue-intake`.
   - A failing build log to diagnose, with no event routing left to decide; use `build-failure-triage`.
   - The event is a security advisory, a CVE in a dependency, or a leaked credential; use `security-event-response`, which orders containment and closes only on an observed rotation or fix.
-  - The PR is a dependabot or renovate version bump with no advisory; use `refactor-plan`, which decides whether it is safe to merge from the breaking changes against this repository's call sites.
+  - The PR is a dependabot or renovate version bump with no advisory. A major or breaking bump goes to `refactor-plan`, which decides whether it is safe to merge from the breaking changes against this repository's call sites; a patch or minor bump with its required checks green takes the review path, with `verification-gate` deciding.
   - The user wants a GitHub operation carried out with the gh CLI - open or label an issue, open or merge a PR, leave review comments, manage a repository - rather than an incoming event routed to a handoff card; load Hermes' bundled `github` skill instead of this one.
 - Strong routing signals: `github-event-ops`, `github event ops`, `github ops`, `github triage`, `github pr`, `github review`, `github action`, `github actions`, `pr opened`, `pull request opened`, `pull request review`, `pr review`, `ci failed`, `check failed`, `checks failed`, `failing checks`, `issue opened`, `issue triage`, `pull request webhook`, `github webhook`, `github issue`, `github issue to pr`, `auto review pr`, `label issue`, `label pr`, `ci analysis`, `fix handoff`, `review handoff`, `깃허브`, `깃허브 pr`, `깃허브 이슈`, `github issue 들어온`, `이슈 라벨`, `pr 리뷰`, `리뷰 라벨`, `픽스 핸드오프`, `ci 실패`, `новый issue на гитхабе`, `событие гитхаба`, `следи за репозиторием`, `пр в репозитории`, `новый пул реквест`, `события github`
 - Good example:
@@ -9838,10 +9852,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+  - Choose the path from the event, after the re-read: `pull_request` opened or synchronize -> review once required checks settle; failed `check_run` or `workflow_run` -> fix hand-off through `build-failure-triage`; `issues` opened -> triage; a comment that asks for an action -> read the author's association first and ignore it when the author may not command. Re-read with `gh pr view <n> --json state,isDraft,reviewDecision,statusCheckRollup,headRefOid,labels` and `gh run view <id> --log-failed`; when `headRefOid` differs from the payload sha, the event is stale: drop it.
 - Completion checklist:
-  - Confirm the workflow target, evidence boundary, and stop condition are named.
-  - Report which outputs are prepared, observed, blocked, or missing.
-  - Name the smallest next verification or handoff instead of claiming completion from narration.
+  - The state was re-read from the repository and its head sha is recorded beside the payload's.
+  - The chosen path (review, triage, or fix hand-off) is named with the event fields that decided it.
+  - Any label, comment, or rerun is listed as prepared, or as observed with its read-back.
 - Recovery notes:
   - If required context is missing, ask one blocking question or route back to the narrower workflow.
   - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
@@ -9849,10 +9864,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - On Hermes, a webhook run has nobody to answer an approval prompt, so Hermes denies a flagged command there by default (`approvals.unattended_mode`); a fix that needs one becomes a fix hand-off for a person's turn, never a rephrased command.
   - On Hermes, a `github_comment` reply reaches the PR only when the route's delivery names the repository and PR number (`deliver_extra` `repo` and `pr_number`, which the subscribe command does not set); report the comment as posted only after reading it back.
 - Required inputs:
-  - user request
-  - target context
-  - delivery or status expectation
-  - known missing evidence
+  - the event type and action, repository, and PR or issue number
+  - the head sha the payload names
+  - the route or channel it arrived on, and what the user wants decided (review, triage, or fix hand-off)
 - Expected outputs:
   - github-event-ops/v1 card or guidance
   - next action
@@ -11418,12 +11432,12 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when an agent run is stuck, looping, drifting, or failing repeatedly and needs evidence-bounded diagnosis plus contained recovery guidance.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
-- Why this exists: `agent-debug` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+- Why this exists: `agent-debug` exists because an agent that loops, drifts, or burns tokens is explained by its session record (tool errors, identical retries, compaction boundaries, silent turn ends), not by the latest symptom or by memory of what happened.
 - Use when: Use when an agent run is stuck, looping on tools, burning tokens without progress, drifting from the objective, losing context, or failing on recoverable environment/tool assumptions.
 - Do not use when:
-  - The request is already handled by a narrower explicit skill with stronger evidence.
-  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+  - The misbehaving thing is application code the agent only called, not the agent's own run; use `app-debugging`.
+  - The request is install or gateway health rather than one agent run; use `doctor`.
+  - A diagnosis would need the user's session read, a rerun, or an export and they have not agreed; ask first.
 - Strong routing signals: `agent-debug`, `agent debug`, `agent debugging`, `agent introspection`, `agent self-debug`, `self-debug`, `self debugging`, `looping agent`, `agent loop failure`, `agent run stuck`, `agent failure capture`, `tool retry loop`, `repeated tool calls`, `context drift`, `prompt drift`, `token burn`, `에이전트 디버그`, `에이전트 실패`, `에이전트 반복 실패`, `반복 실패`, `도구 반복`, `컨텍스트 드리프트`, `토큰 낭비`, `агент зациклился`, `агент завис`, `агент повторяет одно и то же`, `агент снова упал`
 - Good example:
   - Prompt: agent-debug capture why this agent is looping on the same tool and prepare the smallest safe recovery action.
@@ -11442,7 +11456,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Order probes cheapest-discriminating-first: run the cheapest check that splits the surviving hypotheses before any expensive capture, rerun, or restart.
   - When a run that used to work now fails, bisect from last-known-good to first-bad change (prompt, config, tool, model, or environment) instead of debugging the newest symptom.
   - Name a cause only after revert-verify: remove the suspect change and observe the failure disappear, or state that causation is unproven.
-  - Reproduce the failure before preparing any recovery action; a fix without a reproduced failure first is a guess.
+  - Reproduce the failure before preparing any recovery action; a fix without a reproduced failure first is a guess. An agent run is stochastic and a rerun costs money, so reproduced means the recorded failing step recurs when the same tool result is replayed, or the failure rate over N reruns (state N) is above the baseline; replay needs the user's go-ahead. When it is declined or too costly, report causes as supported by the record with causation unproven, keep the two competing hypotheses, and propose only the smallest reversible action.
 - Completion checklist:
   - Failure state, intended goal, recent tool sequence, and context pressure are captured.
   - Diagnosis distinguishes repeated command/tool loops, context drift, environment mismatch, service errors, and wrong-hypothesis tests.
@@ -11452,10 +11466,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If the request is a manager status or throughput review, route to agent-ops-review.
   - If the request is a durable self-improvement record after diagnosis, route to workflow-learning.
 - Required inputs:
-  - user request
-  - target context
-  - delivery or status expectation
-  - known missing evidence
+  - session id or record path, and the turn range if known
+  - what the user expected the run to do, and what they saw instead
+  - the one thing to measure (the `--observable` kind: looping, repeated_work, goal_drift, context_loss, tool_stall, unexpected_cost)
 - Expected outputs:
   - agent_debug_report/v1
   - agent_failure_capture/v1

@@ -143,8 +143,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            (skill_capabilities, 533907, FULL_ROW_DELTA_CAP,
-             'd6dfefff9df440fda6bdeb7fa17b920ad28c1fcfe2676e049210c6df7751fc71',
+            # 533907 -> 535116 and the digest re-derived: the code-quality skills fix round grows the rows
+            # itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT (+1209); the pin before it was d6dfefff...fc71.
+            (skill_capabilities, 535116, FULL_ROW_DELTA_CAP,
+             '96a3494eb99a6c0bae1bafcc2e47bb5b47c021f50d0d79dd87ba834e6ee4cb49',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -376,7 +378,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then the render rail: every body names its siblings by the label `skill_view`
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
-        self.assertEqual(_digest(legacy_hashes), '7e537e8dbd4e8d9a0104d0bba4b7eb5d645e14f031baea6674df7c01e1884b2c')
+        # Code-quality skills fix round: build-failure-triage, verification-gate, codebase-onboarding, codebase-uml,
+        # codegraph-refresh, frontend-refactor, native-debugging, rust, refactor-plan and the rest of that lane move
+        # (bodies and references); the pin before it was 7e537e8d...4b2c.
+        self.assertEqual(_digest(legacy_hashes), '3b70cfb4ad9ceef1d192eecde4e4f904083efc86c6a644703d9b6df8e001a3f6')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -391,7 +396,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
         # 122431 -> 124814: the render rail writes each sibling under its loadable label
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
-        self.assertEqual(legacy['repeated']['bytes'], 124814)
+        # 124814 -> 123949: agent-debug states its own Why and Do Not Use When, and github-event-ops and
+        # github-issue-intake their own Completion Checklists, in place of the feature-surface defaults those
+        # bodies repeated (-865); all ceilings unchanged.
+        self.assertEqual(legacy['repeated']['bytes'], 123949)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -421,7 +429,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1500000,
+            'full_profile_skill_body_chars': 1650000,
             'full_profile_skill_body_repeated_chars': 140000,
             'skill_density_filler_hits': 0,
         }

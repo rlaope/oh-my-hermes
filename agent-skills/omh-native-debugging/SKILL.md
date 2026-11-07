@@ -17,7 +17,7 @@ This is an OMH `native-debugging` workflow skill, projected for Agent Skills hos
 
 ## Why This Exists
 
-`native-debugging` closes OMH's zero-coverage low-level domain by preparing a hypothesis-driven, DAP-first debugging plan for native binaries, while OMH itself continues to execute nothing.
+`native-debugging` closes OMH's zero-coverage low-level domain by preparing a hypothesis-driven, instrument-first debugging plan for native binaries, while OMH itself continues to execute nothing.
 
 ## Do Not Use When
 
@@ -32,20 +32,20 @@ This is an OMH `native-debugging` workflow skill, projected for Agent Skills hos
 Good example:
 
 - Prompt: This binary segfaults on the third request; help me debug it.
-- Expected behavior: Prepare native_fault_statement/v1, three competing hypotheses with distinguishing observations, and a debugger_session_plan/v1 naming the DAP adapter, breakpoints, and values to read.
+- Expected behavior: Prepare native_fault_statement/v1, three competing hypotheses with distinguishing observations, and a debugger_session_plan/v1 naming the instrument, breakpoints, and values to read.
 - Why: The request is a runtime fault in a native binary where the plan, not the guess, is what OMH can prepare.
 
 Bad example:
 
 - Prompt: Add some printfs and tell me it is fixed once the crash stops.
-- Expected behavior: Name the DAP-driven observation plan, and keep reproduction, root cause, and fix as separate not_observed states.
+- Expected behavior: Name the debugger-driven observation plan, and keep reproduction, root cause, and fix as separate not_observed states.
 - Why: A disappearing symptom is not a root cause, and printf-via-rebuild is the fallback rather than the method.
 
 ## Completion Checklist
 
 - The fault is stated as an observed symptom with a reproduction command, separate from any assumed cause.
 - At least three hypotheses span distinct axes and each carries its refuting observation.
-- The debugger session plan names the DAP adapter, breakpoints, watchpoints, threads, frames, and values to read.
+- The debugger session plan names the debugger or instrument, breakpoints, watchpoints, threads, frames, and values to read.
 - The handoff says the executor drives the debugger and OMH executes nothing.
 - Reproduction, debugger output, root cause, and fix are reported as separate observed or not_observed states.
 - Any print-and-rebuild probe carried the session's probe tag, and an observed search for that tag returns nothing.
@@ -53,7 +53,7 @@ Bad example:
 ## Recovery Notes
 
 - If the fault does not reproduce, make reproduction the first hypothesis and plan the observation that would establish it, rather than debugging a fault no one can trigger.
-- If no debug adapter or symbols are available, say so, plan the coarser evidence path, and keep root cause unclaimed instead of upgrading a guess.
+- If no debugger, core file, or symbols are available, say so, plan the coarser evidence path, and keep root cause unclaimed instead of upgrading a guess.
 
 
 
@@ -75,7 +75,7 @@ Quality bar:
 - State the fault as an observed symptom with its reproduction command before naming any cause.
 - Load `references/native-debug-loop.md` and follow its hypothesis, observation, and escalation order rather than improvising a search.
 - Write at least three hypotheses on distinct axes, each with the single observation that would refute it and the exact place to read that observation.
-- Plan the debugger session concretely: adapter, breakpoints, watchpoints, threads, frames, and the values read at each stop — the executor should not have to invent the session.
+- Plan the debugger session concretely: debugger, breakpoints, watchpoints, threads, frames, and the values read at each stop — the executor should not have to invent the session.
 - Prefer debugger-observed state over added print statements; a rebuild-and-print loop is the fallback, not the method.
 - Keep reproduction, debugger output, root cause, and fix as separate observed states.
 
@@ -102,14 +102,14 @@ Artifact expectations:
 - native_fault_statement/v1 separates the observed symptom from the assumed cause, names the reproduction command, quotes the observed failure beside the reported one (`symptom_match`), and records the `minimised` reproduction
 - hypothesis_set/v1 spans distinct axes — caller-side misuse, callee invariant, memory lifetime, concurrency, build/runtime mismatch — not three phrasings of one guess
 - distinguishing_observation_plan/v1 pairs each hypothesis with the one observation that refutes it, and where to read it
-- debugger_session_plan/v1 names the adapter (lldb or gdb via DAP), the breakpoints and watchpoints, the frames and threads to inspect, and the values to read at each stop
+- debugger_session_plan/v1 names the instrument chosen for the fault class (sanitizer build, Valgrind, rr, core file, or a batch lldb or gdb session; a DAP adapter only when the host exposes one), the breakpoints and watchpoints, the frames and threads to inspect, and the values to read at each stop
 - native_debug_handoff/v1 states that the executor drives the debugger and OMH executes nothing
 - breakpoint hits, memory and register reads, backtraces, and confirmed reproductions only when observed
 
 Safety rules:
 
 - Do not claim a reproduction, a breakpoint hit, a read value, a root cause, or a fix from a prepared debugging plan.
-- Instruct the executor to drive a DAP debug adapter — lldb-dap, codelldb, or a gdb adapter — with breakpoints, stepping, and thread and frame inspection, and to reach for print-and-rebuild only when no adapter is available.
+- Instruct the executor to use the instrument the fault class needs (sanitizer, Valgrind, rr, or the core file) and then a debugger session, scripted in batch lldb or gdb unless the host exposes a DAP adapter, and to reach for print-and-rebuild only when no debugger can attach.
 - Require at least three hypotheses on distinct axes before any observation is planned; a single hypothesis makes every reading confirmatory.
 - Never treat a symptom's disappearance as a root cause; an unexplained fix is an open fault.
 - Treat attaching to, patching, or bypassing protections on a binary the user does not own or operate as out of scope.

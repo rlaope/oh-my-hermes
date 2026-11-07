@@ -292,6 +292,26 @@ All notable changes will be documented here.
   never writes the setting. On a Docker or SSH terminal, where Hermes skips
   isolation, nothing changes; a config that cannot be read counts as off, as
   before.
+- **The code-quality skills now say what to do where they used to dead-end
+  or contradict.** Part of one round over all skills, split per lane for
+  independent review and rollback. `codebase-uml` and `codegraph-refresh`
+  stop on a repository the Python-only generator cannot read, and a stale
+  codegraph is defined by `generated_at` against the newest commit.
+  `native-debugging` picks the instrument by fault class (sanitizer build,
+  Valgrind, rr, core file) and scripts `lldb` or `gdb` in batch because
+  Hermes has no debug-adapter client. `build-failure-triage` no longer calls
+  a flake introduced on one green merge-base run, takes the origin of a
+  CI-only failure from CI history, and notes that a pull-request run builds
+  the merge ref. `verification-gate` defines its thorough lane and where the
+  required checks come from, and flaky-fix runs are sized from the observed
+  rate. `git-workflow` adds the bisect exit codes, a dirty-tree check before
+  `reset --hard`, and cherry-pick, detached HEAD, lost-commit and
+  committed-secret procedures. `refactor-plan`, `ai-slop-cleaner`,
+  `frontend-refactor`, `tech-debt-audit`, `rust`, `commit-pr-authoring`,
+  `github-event-ops`, `github-issue-intake`, `repro-audit`, `agent-debug`,
+  `app-debugging`, `code-review` and `codebase-onboarding` get their own
+  smaller fixes. No backward-compatibility layer: the producers and their
+  generated files ship together.
 - **The dag-ulw offer for several features reads what it can show, and a
   count with its list after the verb gets it.** "기능 네 개 개발해줘: 검색,
   필터, 정렬, 페이징", "다음 기능들 개발해줘: 로그인, 검색, 알림" and "build these

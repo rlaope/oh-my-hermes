@@ -323,9 +323,13 @@ NON_SKILL_BACKTICKS = frozenset(
 # `systematic-review` defers topic discovery to `source-finder`, one supplied
 # paper to `paper-learning` and a HellaSwag log check to `repro-audit`; no
 # sibling gains a statement pointing back. Three cases, three pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 410
-EXPECTED_DEFERENCE_PAIRS = 426
-EXPECTED_DEFERRING_OWNERS = 121
+# The code-quality skills fix round adds Do Not Use When lines that name a sibling: `code-review` defers the
+# evidence matrix to `verification-gate`, `agent-debug` defers application code to `app-debugging` and install
+# health to `doctor`, `repro-audit` defers bug reproduction to `app-debugging`, `codebase-onboarding` defers a
+# picture to `codebase-uml` and the index to `codegraph-refresh`; no sibling gains a pointing-back statement.
+EXPECTED_DEFERENCE_CASES = 417
+EXPECTED_DEFERENCE_PAIRS = 435
+EXPECTED_DEFERRING_OWNERS = 125
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

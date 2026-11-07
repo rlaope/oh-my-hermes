@@ -61,7 +61,7 @@ A boundary that no stand-in can reach without patching deep inside the code is a
 A regression test earns its place only when it reproduces the conditions the bug needed, not just the function it lived in. A lost update needs two writers inside one transaction window; a fault that appears only when the retry wrapper re-enters the handler needs that re-entry. A test that drives the same code without those conditions passes on the pre-fix code and guards nothing with a fix attached.
 
 1. First try to run the pattern at the seam you can reach: concurrent callers released together through a barrier at an existing injection point, or the real call chain driven from its entry point instead of the innermost function.
-2. When the pattern is probabilistic, measure the test's hit rate on the pre-fix code over N runs before calling it red. "Fails before the fix" means a measured rate, and "passes after" means zero failures over enough runs to beat that rate.
+2. When the pattern is probabilistic, measure the test's hit rate on the pre-fix code over N runs before calling it red. "Fails before the fix" means a measured rate, and "passes after" means zero failures over enough runs to beat that rate: size N from the pre-fix rate p as N >= ln(0.05) / ln(1 - p), about 3 / p, and record it.
 3. Only when the pattern cannot run at any reachable seam, record `regression_seam: none_correct` with the reason and the attempts that failed. Keep the reproduction loop as the fix's verification, observed red before the fix and green after it, and report the missing seam as an architecture finding (an `omh-refactor-plan` candidate). Do not write the shallow test, and do not bend it until it happens to fail before the fix.
 
 ## Attribution

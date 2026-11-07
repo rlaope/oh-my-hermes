@@ -20,6 +20,8 @@ The order never changes: an observed reproduction, then competing hypotheses, th
 
 An intermittent fault is reproduced when its rate is measured, not when it happened once. Run it in a loop first (`for i in $(seq 50); do <cmd> || echo FAIL $i; done`) and record the rate before changing anything; the same loop is what proves the fix later.
 
+**Size N from the rate before the fix.** With a failure rate p, an ineffective fix still passes all N runs with probability (1 - p) to the power N: at p = 0.02 and N = 50 that is 36%, at p = 0.2 and N = 20 it is 1%. Choose N >= ln(0.05) / ln(1 - p), about 3 / p, record it beside the rate (4/20 before gives N >= 14), and run the fix at that N. When N is too costly, say the fix is unproven at that confidence.
+
 If a capture is too redacted to diagnose, record that and ask for a narrower one; never record it unredacted.
 
 **Make the loop cheap before trusting it.** A loop that takes minutes per run is the next thing to fix, ahead of any hypothesis: narrow what it runs, skip setup the fault does not need, and assert the reported symptom rather than "it did not crash". What to do about variation depends on the fault:
@@ -91,7 +93,7 @@ Before trusting any reading, confirm the process executed the source you are loo
 
 - A stale editable install or build directory serves an older copy of a module; a newly added file is then missing and the failure reads as a regression in whoever added it.
 - A cached bytecode file is validated by timestamp and size, so two edits of equal length in the same second can reuse the old compile.
-- A test that reads its own teardown output, or a lock that times out inside a best-effort swallow, leaves the same trace as the fault being hunted; put the discriminator in the assertion message.
+- A process started before the edit, a container image built from an older commit, or a `PYTHONPATH` or `NODE_PATH` that shadows the checkout serves old code: print the module's file path and version from inside the failing run.
 
 ## 6. After three failed fixes
 

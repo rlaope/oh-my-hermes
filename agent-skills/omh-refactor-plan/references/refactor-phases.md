@@ -20,6 +20,11 @@ Map the territory before ordering the work:
 - **Blast radius** - the observable surfaces that could change if a phase goes
   wrong: public APIs, CLI output, generated artifacts, persisted schemas.
   The radius decides the verification depth, not optimism.
+- **Regression gates** - the tests, typecheck, and generated-artifact checks
+  that cover the affected files today. Where none cover them, the plan opens
+  with a Phase 0 of characterization tests for the blast-radius surfaces, and
+  every later phase's verification is that suite. If the user declines them,
+  say each phase is unverified and stop at the approval gate.
 
 ## The phase order
 
@@ -49,6 +54,14 @@ precede tests, tests precede cleanup:
 
 Every phase ends at a commit that could ship. A phase that cannot end green
 is split further or its plan is wrong.
+
+A phase that changes a persisted or wire shape (a table, a stored format, a
+queue payload, a config shape) follows expand, migrate or dual-write, switch
+reads, then contract; each step runs with the code of the step before it,
+because old and new code meet during a rolling deploy. A code revert does not
+undo data already written in the new shape. For each phase say whether its
+rollback is a code revert or a data restore, and name the point after which
+only a restore works.
 
 ## The plan's table
 

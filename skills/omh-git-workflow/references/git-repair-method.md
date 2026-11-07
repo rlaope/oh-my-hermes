@@ -12,9 +12,10 @@ Run `git fetch` before reading the remote column; a stale remote-tracking ref ma
 
 ## 2. Recovery point before every rewrite
 
+- Run `git status --porcelain` first. A dirty tree is a recovery point of its own: `git stash push -u`, or a WIP commit on a throwaway branch, and note it. `git reset --hard` discards uncommitted tracked changes with no way back.
 - `git branch backup/<name>-<date> <branch>` before a rebase, reset, amend, or filter.
 - Or note the reflog entry: `git reflog show <branch> -n 5`, and write down the entry to return to.
-- Recovery is `git reset --hard backup/<name>-<date>` or `git reset --hard <branch>@{N}`, and it comes before trying anything else.
+- Recovery is `git switch -C <branch> backup/<name>-<date>` (or `git reset --hard backup/<name>-<date>` on a clean tree), or `git reset --hard <branch>@{N}` on a clean tree, and it comes before trying anything else.
 
 ## 3. Conflicts
 
@@ -22,14 +23,14 @@ Run `git fetch` before reading the remote column; a stale remote-tracking ref ma
 - Decide each hunk by what both changes were for, not by which side is newer.
 - **Generated or counted files are never picked.** Take either side, finish the merge, then re-run the producer and commit its output. A count pinned in two places conflicts whenever both sides added a case, and neither side is right.
 - Lockfiles: resolve the manifest, then regenerate the lockfile with the package manager.
-- A rebase replays commits one at a time; the same hunk can conflict at every step. `git rerere` records resolutions so the repeats resolve themselves.
+- A rebase replays commits one at a time; the same hunk can conflict at every step. `git rerere` records resolutions so the repeats resolve themselves, once enabled with `git config rerere.enabled true`; by default it records nothing.
 - Verify after resolving: the build and the tests that cover the conflicted files, observed.
 
 ## 4. Bisect
 
 1. Name a known-good commit and a known-bad commit, each confirmed by one observed run.
-2. Name the exact command that tells them apart and exits non-zero on bad.
-3. `git bisect start <bad> <good>`, then `git bisect run <command>`; exit code 125 skips an untestable commit.
+2. Name the exact command that tells them apart. `git bisect run` reads its exit code: 0 is good, 125 skips the commit, 128 to 255 aborts the bisection, and every other code from 1 to 127 is bad. Wrap the test so a build failure exits 125 (otherwise a commit that does not build is named the culprit) and a missing tool or setup error exits 128 or higher (a command-not-found 127 marks every commit bad).
+3. Bisect checks out commits in the working tree: use a clean tree or a throwaway worktree (`git worktree add --detach ../bisect <bad>`). `git bisect start <bad> <good>`, then `git bisect run <command>`.
 4. Record the first bad commit and the command's output at it and at its parent.
 5. `git bisect reset` to return.
 
@@ -55,7 +56,17 @@ When the base of a stack is rebased or squash-merged, every branch above it stil
 - Never compute the old base with `git merge-base` after the base was rewritten; it finds a commit the rewrite no longer contains and replays the base's commits onto itself.
 - Push each restacked branch with `--force-with-lease`, bottom-up.
 
-## 7. Shared checkouts and worktrees
+## 7. Cherry-pick, detached HEAD, lost commits, committed secrets
+
+Each starts with the pushed-state inventory and a recovery point.
+
+- **Cherry-pick**: `git cherry-pick -x <sha>` records the source commit in the message. A merge commit needs `-m 1` (the parent to diff against). On a conflict resolve as in section 3, then `git cherry-pick --continue`, or `git cherry-pick --abort` to return.
+- **Detached HEAD**: commits made there belong to no branch. Before switching away, `git switch -c rescue/<name>` keeps them.
+- **A lost commit or deleted branch**: `git reflog` (and `git reflog show <branch>`) lists where HEAD and the branch were; `git branch rescue/<name> <sha>` brings the commit back. Unreachable reflog entries expire (30 days by default; reachable ones 90), so do this first. When the reflog has nothing, `git fsck --lost-found` lists dangling commits.
+- **Undo the last commit**: unpushed, keep the changes: `git reset --soft HEAD~1`; pushed: `git revert <sha>`.
+- **A secret was committed**: rotate it first, because every clone and fork keeps the old history; then remove it with `git filter-repo --replace-text`, force-push with a lease, and tell collaborators to re-clone. Route the incident to `omh-security-event-response`.
+
+## 8. Shared checkouts and worktrees
 
 - Two sessions in one checkout share `HEAD`: a `checkout` by one moves the other's next commit onto the wrong branch. Use one worktree per session.
 - Removing a worktree mid-rebase loses the rebase state; finish or abort the rebase first.

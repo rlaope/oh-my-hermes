@@ -1,6 +1,6 @@
 # Composing with Hermes' Debugging Skills
 
-Hermes bundles three skills that meet this one: `systematic-debugging` (MIT, adapted from obra/superpowers), a four-phase root-cause method, and two debugger guides, `python-debugpy` for pdb and debugpy and `node-inspect-debugger` for Node's inspector. When one of them is loaded beside `app-debugging`, follow its method; this skill adds its records and its gates, never a second method.
+Hermes bundles `systematic-debugging` (MIT, adapted from obra/superpowers), a four-phase root-cause method. Two debugger guides, `python-debugpy` for pdb and debugpy and `node-inspect-debugger` for Node's inspector, are optional official skills that are not active unless installed; check `skills_list`, and when one is absent use `pdb` or `node inspect` directly as an observation. When one of them is loaded beside `app-debugging`, follow its method; this skill adds its records and its gates, never a second method.
 
 ## `systematic-debugging`, phase by phase
 

@@ -32,17 +32,40 @@ One hypothesis makes every reading confirmatory. Three force observations that *
 
 For each hypothesis write: the claim in one sentence; the single observation that would **refute** it and where to read it; and, if it is true, the fix in two words. Two hypotheses with the same distinguishing observation are one hypothesis -- collapse them and find a real third.
 
-## 3. Plan the debugger session, do not print
+## 3. Pick the instrument by fault class
 
-Prefer a DAP debug adapter -- `lldb-dap`, `codelldb`, or a gdb adapter -- driven by the executor's own debugging surface. It reads state without rebuilding, and it reads state the source never printed.
+Choose the instrument the fault needs before planning a session. A breakpoint finds a fault you can place; it does not find a write nobody suspects.
 
-Print-and-rebuild is the fallback, for when no adapter is available or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting. Every print it adds carries one tag chosen for the session, such as `[DBG-7f3a]`, and an observed search for that tag returns nothing before the fix is handed over.
+| Fault | First instrument | Why |
+| --- | --- | --- |
+| Heap overflow, use after free, double free, leak | rebuild with `-fsanitize=address -g -O1 -fno-omit-frame-pointer` (Valgrind `memcheck` when a rebuild is impossible) and run the reproduction | the report names the bad access, the allocation, and the free; corruption shows far from its cause |
+| Undefined behaviour (overflow, bad shift, misaligned access) | `-fsanitize=undefined`, with `-fno-sanitize-recover` so the first hit stops | the report names the line |
+| Data race, deadlock | `-fsanitize=thread`; or `rr record` and replay the failing run | the interleaving is reported or replayed exactly |
+| Uninitialised read | `-fsanitize=memory` (clang, Linux) or Valgrind | reports the first use of the value |
+| Intermittent crash | `rr record --chaos` until it fails, then `rr replay` and reverse-step from the crash | a recorded failure can be stepped backwards, which a live session cannot |
+| A crash already happened, a core file or crash log exists | open the core: `gdb <binary> <core>` or `lldb -c <core> <binary>`, then read the backtrace, the faulting frame, and its locals before anything else | no rerun is needed |
+| Hang | attach or open a live process and read every thread's backtrace (`thread apply all bt`) | shows who waits on whom |
+
+Rules for all of them:
+
+- Sanitizers, Valgrind and rr are slower and change layout and timing. A fault that vanishes under one is not fixed; say which instrument hid it.
+- Debug builds: `-g -O0` for stepping, `-g -O1` with frame pointers for sanitizers. At `-O2` locals read `<optimized out>`; say so instead of reporting empty values.
+- Cores must exist before the crash: `ulimit -c unlimited`, and on Linux check `/proc/sys/kernel/core_pattern` (systemd-coredump uses `coredumpctl`); on macOS cores go to `/cores` and are off by default. A missing core is a blocker to record, not a finding.
+- Match the core to the exact binary that produced it (build id or checksum); a core read against another build gives wrong frames.
+- rr needs Linux and hardware performance counters; it is often unavailable in containers and VMs. Valgrind does not support recent macOS or Apple silicon. Record an unavailable instrument as unavailable.
+- Sanitizers need the compiler's runtime; Linux `ptrace` attach may be refused (`ptrace_scope`), and macOS attach needs code signing or `get-task-allow`. A refusal is reported as blocked.
+
+## 4. Plan the debugger session, do not print
+
+Run the session the way the executor can reach it. Hermes has no built-in debug-adapter client, so the default is a scripted debugger run in the terminal: `lldb --batch -o 'breakpoint set ...' -o run -o bt -o 'frame variable' -- ./prog args` or `gdb -batch -ex 'break ...' -ex run -ex bt -ex 'info locals' --args ./prog args`, with the plan's breakpoints, watchpoints and reads passed as `-o` or `-ex` commands. Use a DAP debug adapter (`lldb-dap`, `codelldb`, a gdb adapter) only when the host exposes one, for example through an MCP server the user configured. Either reads state without rebuilding, and reads state the source never printed.
+
+Print-and-rebuild is the fallback, for when no debugger can attach or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting. Every print it adds carries one tag chosen for the session, such as `[DBG-7f3a]`, and an observed search for that tag returns nothing before the fix is handed over.
 
 The plan names, concretely:
 
 | Element | What to specify |
 | --- | --- |
-| Adapter and target | which adapter, which binary, launch or attach |
+| Debugger and target | batch lldb or gdb (or an adapter the host exposes), which binary, launch or attach, core file if any |
 | Breakpoints | file:line or symbol, plus any condition that skips uninteresting hits |
 | Watchpoints | the address or expression whose change is the event, for corruption faults |
 | Threads and frames | which thread, how far up the stack, what to read in each frame |
@@ -51,17 +74,17 @@ The plan names, concretely:
 
 A plan that says "set a breakpoint and look around" hands the thinking back to the executor. Name the reads.
 
-## 4. When symbols are missing
+## 5. When symbols are missing
 
 A stripped binary changes the evidence available, not the method. The hypotheses and the distinguishing observations still come first. What changes:
 
 - Identify the file format, architecture, and linkage before anything else; the answer decides which tools apply at all.
 - Recover coarse structure from imported symbols and embedded strings, and treat both as hints rather than as a map.
-- Prefer syscall- and library-level tracing for a first pass -- it shows what the binary actually does without needing to know where.
+- Prefer syscall- and library-level tracing for a first pass (`strace -f` on Linux; `dtruss` on macOS needs SIP relaxed, so it may be blocked; `ltrace` for library calls) -- it shows what the binary actually does without needing to know where.
 - Note when platform protections block a technique, and say the technique was blocked rather than reporting an empty result as a finding.
 - Only attach to, trace, or modify a binary the user owns or operates. If provenance is unclear, that is a blocker, not a detail.
 
-## 5. Evidence boundary
+## 6. Evidence boundary
 
 | Claim | Evidence |
 | --- | --- |

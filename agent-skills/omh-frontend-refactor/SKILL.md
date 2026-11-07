@@ -52,6 +52,7 @@ Bad example:
 - If no tests exist, write the characterization checks first or hand the user the smallest set to approve; do not start the macro pass on unlocked behavior.
 - If a change turns out to alter behavior mid-apply, revert that change, record it as a finding, and keep the rest of the pass.
 - If the component resists extraction because state is tangled, run the state ladder first and re-attempt decomposition after.
+- If the framework is not React, run only the micro pass and the characterization-test gate, say the hook, effect, and context content does not apply, and use the state ladder's principles (derive, colocate, one owner) only where the framework has the same idea.
 
 
 
@@ -98,7 +99,7 @@ Safety rules:
 
 - Preview is the default: analyze the whole target and emit the plan before touching any file.
 - Outputs, side effects, and error handling stay identical; a dropped branch or weakened handler is a defect, not a simplification.
-- Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits.
+- Never rename exports, change signatures, merge or split files, or alter async execution models without flagging a breaking change; cross-file renames are notes, not silent edits. Changes to props, exports, or file layout, and `[behavior-changing]` items (remounts, new dependencies, caching), are proposals in notes until the user's second decision.
 - Do not refactor test files, and do not claim behavior preservation without the before/after test evidence.
 
 ## Runtime Evidence

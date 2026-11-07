@@ -37,7 +37,7 @@ values, and user events are not external. If not external, in order:
 
 - Deriving data -> compute inline during render.
 - Responding to a user event -> the event handler, never an effect.
-- Resetting state when a prop changes -> a `key` on the component.
+- Resetting state when a prop changes -> a `key` on the component [behavior-changing: it remounts the subtree and drops focus, scroll, uncontrolled input values, and child effect state].
 - Fetching -> the query cache (section 5); an unavoidable fetch effect carries
   a stale-response guard in its cleanup.
 - Notifying a parent -> call the callback in the same handler as the setState.
@@ -51,6 +51,10 @@ list.
 
 ## 5. Server state is not UI state
 
+Adopting a query cache is [behavior-changing]: it adds a dependency and changes
+caching, deduplication, retry, and refetch-on-focus behavior. In a refactor,
+name it in Notes; do not apply it.
+
 Remote data is asynchronous, shared, and stale-able; it belongs in a query
 cache (keyed queries, stale times, retry policy), not in per-component
 fetch effects or a global store. Every mutation names the query keys it
@@ -59,6 +63,10 @@ red flag that the cache is missing.
 
 ## 6. The optimistic-update contract
 
+Adding an optimistic update is a new feature, not a refactor [behavior-changing].
+This contract is the review rule for one that already exists, and the shape a
+feature request must meet.
+
 Optimistic writes come as one triple: before the request, cancel in-flight
 reads, snapshot the current data, apply the optimistic value; on error,
 restore the snapshot and surface the error; on settle, invalidate so the
@@ -66,6 +74,9 @@ server answer wins. An optimistic update without its rollback path, or one
 that swallows the error it rolls back from, fails review.
 
 ## 7. Closing checks
+
+Items marked [behavior-changing] in this ladder are never applied under the
+refactor invariants. List each in Notes with the observable change it causes.
 
 - Ephemeral UI state in a global store -> local state.
 - The same fact stored in two places -> one owner, derive the rest.

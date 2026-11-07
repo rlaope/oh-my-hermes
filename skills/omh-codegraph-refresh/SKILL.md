@@ -53,6 +53,7 @@ Bad example:
 - If the codegraph command is unavailable, route to doctor or toolbelt-readiness before claiming freshness.
 - If no task focus is supplied, prepare build/summary guidance and ask for focus only when a handoff pack would otherwise be misleading.
 - If the index is stale or missing, report the stale/missing state and next safe command rather than treating prior summaries as current.
+- The codegraph indexes Python files only; when `omh codegraph summary` shows no Python files, say so, navigate with `rg` or `ast-grep`, and present no handoff pack.
 
 ## Workflow Lane
 
@@ -104,7 +105,7 @@ Expected outputs:
 Artifact expectations:
 
 - codegraph_command_plan/v1 naming `omh codegraph build`, `summary`, `handoff`, `--write`, and `--json` choices
-- staleness_and_scope_report/v1 separating requested refresh scope, observed command output, missing index evidence, and stale artifacts
+- staleness_and_scope_report/v1 separating requested refresh scope, observed command output, missing index evidence, and stale artifacts; the artifact is stale when its `generated_at` is older than the newest commit (`git log -1 --format=%cI`) or `git status --porcelain -- '*.py'` is non-empty, and a rebuild is the refresh because the scan is full, not incremental
 - `omh_codegraph_summary/v1` or `.omh/codegraph/codegraph.json` only when the corresponding command output or write is observed
 - codegraph_handoff_context/v1 with task terms, focus files, symbols, entrypoints, warnings, and claim boundary when `omh codegraph handoff` is observed
 

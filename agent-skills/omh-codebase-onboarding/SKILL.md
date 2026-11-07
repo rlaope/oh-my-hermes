@@ -24,6 +24,7 @@ This is an OMH `codebase-onboarding` workflow skill, projected for Agent Skills 
 - The user already named a concrete implementation task and acceptance criteria; use `ulw-work` or `omh-idea-to-deploy`.
 - The user needs a whole-workspace capability inventory; use `omh-workspace-audit`.
 - The user wants a code diff review; use `omh-code-review`.
+- The user wants a picture of the structure; use `omh-codebase-uml`. The user wants the code index refreshed or a task-scoped handoff pack; use `omh-codegraph-refresh`.
 
 ## Examples
 
@@ -50,6 +51,7 @@ Bad example:
 
 ## Recovery Notes
 
+- If the audience or depth is not given, assume a new contributor and an architecture tour, read-only, and state the assumption in the first line.
 - If the repository is too large for the stated depth, narrow to the entrypoint the audience touches first and record the rest as unread rather than summarizing it from file names.
 - If a build, test, or setup command could not run (read-only mode, missing toolchain, secrets), list it in first_task_runway/v1 as not run with the reason, never as a known-good command. A command that installs or syncs dependencies as a side effect (`npm ci`, `uv sync`, and `uv run`, which syncs first) counts as setup and stays not run.
 - If docs and code disagree, report what the code does, cite both, and add the disagreement to risk_and_unknowns_map/v1 instead of trusting the docs.
@@ -76,6 +78,7 @@ Quality bar:
 - Separate observed files and commands from inferred architecture and unknowns.
 - Produce a practical reading path and first-task runway rather than a flat file tour.
 - Route follow-up implementation to plan, ultrawork, verification-gate, or workspace-audit as needed.
+- Take build, test, and lint commands in this order: CI config (`.github/workflows`, `.gitlab-ci.yml`), the task runner (`Makefile`, `justfile`, `package.json` scripts), the manifest, then contributor docs; read `CODEOWNERS` and the top-churn files for ownership; the README comes last, and where it disagrees with CI trust CI and record the disagreement.
 
 Required inputs:
 

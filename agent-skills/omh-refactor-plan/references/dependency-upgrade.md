@@ -96,6 +96,16 @@ its own rollback:
 Shims that run on both versions go first, so the bump stays a two-file revert
 and every call site is covered while the adapt stage lands.
 
+When no dual-version shim is possible (an ESM-only or peer-dependency major, a
+framework whose old and new APIs cannot be imported together, a runtime or
+language upgrade), say so, run the upgrade on a branch or behind a flag, and
+make the rollback that branch plus the previous lockfile.
+
+A runtime or toolchain upgrade (Python, Node, JDK, a compiler) adds its own
+inputs: the version fields (`engines`, `requires-python`, `rust-version`), the
+CI matrix, the base image, native-extension wheels or prebuilt binaries for the
+new version, and the peer-dependency ranges of every direct dependency.
+
 ## Boundary
 
 Advisory identifiers, licence text, and changelog entries are read from what

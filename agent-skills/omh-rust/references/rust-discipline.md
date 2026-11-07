@@ -82,12 +82,9 @@ Plain `cargo test` runs doc tests and `cargo test --all-targets` does not, so a 
 ## Attribution
 
 Concept lineage only. The idea of a mandatory per-language reference gate that
-escalates on `unsafe`/FFI contact, and of a hypothesis-first native debugging
-loop, is adapted from the `programming` and `debugging` skills of an
-upstream coding-agent plugin; the DAP-over-printf preference is adapted from `can1357/oh-my-pi`'s
-first-class debug adapter tooling. No upstream text is reproduced -- the
-wording, the artifact vocabulary, and the `prepared_not_observed` claim
-boundary are OMH's own, and OMH keeps its no-execution boundary: every command
-below is something the executor runs, never OMH.
+escalates on `unsafe`/FFI contact is adapted from the `programming` skill of an
+upstream coding-agent plugin. No upstream text is reproduced -- the wording,
+the artifact vocabulary, and the `prepared_not_observed` claim boundary are
+OMH's own.
 
 The binary test shape and the rule that a trait with one implementation is not a seam adapt ideas from Matt Pocock's `codebase-design` and `tdd` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock.
