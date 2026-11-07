@@ -43,6 +43,7 @@ from .hermes_delegation import (
     parse_mixture_chain_overrides,
     provider_entitlements_path,
 )
+from .tools.delegate_route_tool import _always_thinking_claude
 
 Chain = tuple[tuple[str, str], ...]
 
@@ -252,6 +253,7 @@ def picker_rows(
             "efforts": list(_selectable_efforts(option)),
             "efforts_source": option["source"] if option else "unknown",
             "efforts_configured": option is not None,
+            "refuses_none": _always_thinking_claude(alias),
         }
 
     categories = []

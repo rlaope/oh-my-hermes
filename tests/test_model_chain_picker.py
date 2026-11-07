@@ -646,8 +646,8 @@ class EffortPickerTests(unittest.TestCase):
     def test_old_off_is_explained_truthfully_and_moves_onto_the_list_on_a_press(self) -> None:
         # Measured per ladder: only `-` on a ladder holding `none` reaches it.
         cases = (
-            ("claude-opus-5-5", KEY_PLUS, "low", "so the provider default runs"),
-            ("claude-opus-5-5", KEY_MINUS, "low", "so the provider default runs"),
+            ("claude-opus-5-5", KEY_PLUS, "low", "the route refuses `off` on claude-opus-5-5"),
+            ("claude-opus-5-5", KEY_MINUS, "low", "the route refuses `off` on claude-opus-5-5"),
             ("gpt-6-luna", KEY_PLUS, "low", "so the provider default runs"),
             ("gpt-6-luna", KEY_MINUS, "none", "so the provider default runs"),
         )
@@ -750,7 +750,37 @@ class EffortPickerTests(unittest.TestCase):
                 row = _row_of(frame, "swarm")
                 self.assertIn(f" {stored}! ", row)
                 self.assertNotIn("?", row)
+                # Nothing says the route refuses it: a custom route does not.
+                self.assertFalse(any("refuses" in line for line in frame), frame)
                 self.assertTrue(any(line.lstrip().startswith("! ") for line in frame), frame)
+
+    def test_a_model_switch_onto_an_always_thinking_head_warns_and_still_saves(self) -> None:
+        # Model-only edits are not rechecked, so the row must say what the
+        # route will do with the `none` the switch carried along.
+        for target in ("claude-fable-5-1", "claude-opus-5-5"):
+            with self.subTest(target=target):
+                _write_overrides(self.root, {"swarm": (("gpt-6-luna", "none"),)})
+                payload = _payload(self.root)
+                result, frames = _drive(
+                    payload, _down_to(payload, "swarm") + _rights_to(payload, "gpt-6-luna", target) + [KEY_ENTER]
+                )
+                self.assertEqual(result, {"swarm": ((target, "none"),)})
+                self.assertEqual(result.effort_edits, frozenset())
+                self.assertIn(" none! ", _row_of(frames[-1].splitlines(), "swarm"))
+                self.assertIn(f"! the route refuses `none` on {target}: thinking is always on", frames[-1])
+        _write_overrides(self.root, {"swarm": (("gpt-6-luna", "none"),)})
+        payload = _payload(self.root)
+        frame = _frame(payload, "swarm")
+        self.assertNotIn("none!", "\n".join(frame))
+        self.assertFalse(any("refuses" in line for line in frame), frame)
+
+    def test_a_user_list_naming_none_does_not_talk_the_route_out_of_refusing_it(self) -> None:
+        _write_efforts(self.root, {"claude-opus-5-5": ["none", "low"]})
+        _write_overrides(self.root, {"swarm": (("claude-opus-5-5", "none"),)})
+        payload = _payload(self.root)
+        frame = _frame(payload, "swarm")
+        self.assertIn(" none! ", _row_of(frame, "swarm"))
+        self.assertTrue(any("! the route refuses `none` on claude-opus-5-5" in line for line in frame), frame)
 
     def test_an_explicit_empty_list_is_the_one_way_to_turn_the_keys_off(self) -> None:
         for model in ("glm-5.3", "claude-opus-5-5"):

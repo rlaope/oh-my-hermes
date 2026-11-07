@@ -161,10 +161,13 @@ def _effort_keys_on(payload: Mapping[str, Any]) -> bool:
 
 
 def _effort_mark(effort: str, model: Mapping[str, Any]) -> str:
-    """`!` on a value a known ladder will not take or no-thinking on a head with
-    no known ladder, `?` on any other value of a model whose ladder is not known."""
+    """`!` on a value the route or a known ladder will not take, `?` on any other
+    value of a model whose ladder is not known."""
+    no_thinking = effort in ("none", "off")
+    if no_thinking and (model["refuses_none"] or not model["efforts_configured"]):
+        return "!"
     if not model["efforts_configured"]:
-        return "!" if effort in ("none", "off") else "?"
+        return "?"
     return "!" if effort and effort not in model["efforts"] else ""
 
 
@@ -336,7 +339,9 @@ def render_frame(
     if explained:
         lines.append(" " * _MARGIN + paint(_fit("", 18) + _clip(explained, inner - 18), "banner_dim"))
     if _effort_mark(head_effort, model) == "!" and model["efforts"]:
-        if head_effort == "off":
+        if model["refuses_none"] and head_effort in ("none", "off"):
+            warning = f"! the route refuses `{head_effort}` on {head_model}: thinking is always on; −/+ moves it"
+        elif head_effort == "off":
             warning = "! `off` is the old spelling; Hermes does not read it, so the provider default runs; −/+ moves it"
         else:
             warning = f"! `{head_effort}` is not on this list; −/+ moves it onto the list"
