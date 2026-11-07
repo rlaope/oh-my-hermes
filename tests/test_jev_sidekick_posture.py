@@ -415,7 +415,7 @@ class PostureTests(unittest.TestCase):
             self.assertEqual(posture["status"], "absent")
             self.assertEqual(posture["plugins"], [])
             self.assertEqual(posture["skipped"], [])
-            self.assertIn("never reads credential values", str(posture["claim_boundary"]))
+            self.assertIn("never copies or reports credential values", str(posture["claim_boundary"]))
             self.assertIn(posture["status"], POSTURE_STATUSES)
 
     def test_a_missing_hermes_home_is_absent_rather_than_an_error(self) -> None:

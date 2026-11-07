@@ -26,11 +26,12 @@ pickers can count a provider the moment Hermes can use it:
   Qwen, xAI). Only ids and the `source` label are read; no token, key, or
   timestamp is copied anywhere.
 - `.env`: the variable NAMES Hermes' registry lists for its API-key
-  providers. Values are never read, and the process environment is not: a
-  key exported only in a shell is not something Hermes recorded, and
-  reading it would make the same home answer differently per terminal
-  (and every test answer differently per developer). The setup interview,
-  where a person confirms each row, still offers shell-exported names.
+  providers. A value is only told apart from an empty one and never copied
+  or returned, and the process environment is not read: a key exported only
+  in a shell is not something Hermes recorded, and reading it would make the
+  same home answer differently per terminal (and every test answer
+  differently per developer). The setup interview, where a person confirms
+  each row, still offers shell-exported names.
 
 Detection is read-only and invokes nothing. A found id is evidence that
 Hermes is linked to the provider, not that the account works or has quota;
@@ -367,6 +368,19 @@ def configured_provider_ids(config_text: str) -> list[str]:
     return ids
 
 
+def _env_value_is_empty(raw_value: str) -> bool:
+    """Whether a `.env` value says nothing, by Hermes' own tokenizer.
+
+    Blank, or a quoted blank with at most a comment after it. An unquoted
+    `# note` stays a value, as it does for Hermes.
+    """
+    value = raw_value.strip()
+    if value[:1] not in ("'", '"'):
+        return not value
+    inner, closed, rest = value[1:].partition(value[0])
+    return bool(closed) and not inner.strip() and (not rest.strip() or rest.lstrip().startswith("#"))
+
+
 def env_key_names(
     hermes_home: Path,
     environ: Mapping[str, str] | None = None,
@@ -375,10 +389,12 @@ def env_key_names(
 ) -> list[str]:
     """Variable NAMES present in `<hermes_home>/.env`, plus ``environ`` when given.
 
-    Sorted, values never read. Only names in ``allowed`` are returned, and
-    ``allowed`` defaults to the registry table, so a caller that passes
-    nothing gets exactly the result this function always gave and the name
-    can still be printed beside a provider row. Detection passes no
+    Sorted, and no value is copied or returned. A line with an empty value
+    (`X=`, `X=""`) is not a key, because Hermes then has no credential to use;
+    as in Hermes, the last line for a name decides. ``environ`` names are taken
+    as given. Only names in ``allowed`` are returned, and ``allowed`` defaults
+    to the registry table, so the name can still be printed beside a provider
+    row. Detection passes no
     ``environ`` (see the module docstring); the setup interview passes the
     process environment because a person confirms every row it offers.
 
@@ -392,16 +408,17 @@ def env_key_names(
     """
     permitted = HERMES_ENV_KEY_PROVIDERS if allowed is None else allowed
     names = {name for name in (environ or {}) if name in permitted}
+    filled: dict[str, bool] = {}
     for line in _read_text(hermes_home / ".env").splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         if stripped.startswith("export "):
             stripped = stripped[len("export "):].lstrip()
-        name, separator, _value = stripped.partition("=")
+        name, separator, value = stripped.partition("=")
         if separator and name.strip() in permitted:
-            names.add(name.strip())
-    return sorted(names)
+            filled[name.strip()] = not _env_value_is_empty(value)
+    return sorted(names | {name for name, is_filled in filled.items() if is_filled})
 
 
 def _pool_entry_is_explicit(entry: object, env_names: frozenset[str]) -> bool:
@@ -413,7 +430,7 @@ def _pool_entry_is_explicit(entry: object, env_names: frozenset[str]) -> bool:
     if lowered.startswith("env:"):
         # A stale env-seeded row outlives the variable it was seeded from;
         # Hermes counts it only while the variable still resolves. Without
-        # reading values, "still in .env" is the closest honest check.
+        # keeping values, "still filled in .env" is the closest honest check.
         return source.split(":", 1)[1].strip() in env_names
     return bool(lowered) and (lowered in EXPLICIT_POOL_SOURCES or lowered.startswith("manual:"))
 

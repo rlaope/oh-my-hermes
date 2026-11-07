@@ -236,6 +236,13 @@ class RouteOnlyProviderConsentTest(unittest.TestCase):
         self.env("# COMMANDCODE_API_KEY=placeholder-key\n")
         self.assert_refused()
 
+    def test_an_empty_key_is_refused(self) -> None:
+        # Hermes raises "No usable credentials" on it, after OMH said routed.
+        for line in ("COMMANDCODE_API_KEY=\n", 'COMMANDCODE_API_KEY=""\n', "COMMANDCODE_API_KEY=''\n"):
+            with self.subTest(line=line):
+                self.env(line)
+                self.assert_refused()
+
     def test_the_models_dev_name_alone_is_refused(self) -> None:
         # Hermes' registry reads only COMMANDCODE_API_KEY for this provider.
         self.env("CMD_API_KEY=placeholder-key\n")

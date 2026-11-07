@@ -750,8 +750,9 @@ def _profile_clone(args: argparse.Namespace, primary: OmhPaths, profile_dir: Pat
 def _profile_env_names_omh_home(profile_dir: Path) -> bool:
     """Whether a profile chose its store through its `.env` `OMH_HOME` (#1679).
 
-    Names only, never the value: the choice is the profile's whatever it
-    says, and a setting written beside it would outrank it.
+    The name, never the value: the choice is the profile's whatever it says,
+    and a setting written beside it would outrank it. An empty `OMH_HOME=`
+    names no store, and the plugin refuses a blank path.
     """
     return bool(env_key_names(profile_dir, allowed=("OMH_HOME",)))
 

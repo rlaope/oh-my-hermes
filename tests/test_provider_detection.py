@@ -259,6 +259,45 @@ class DetectionTests(unittest.TestCase):
                 names = detection.env_key_names(home, environ={"KIMI_API_KEY": KEY_VALUE, "PATH": "/bin"})
         self.assertEqual(names, ["GLM_API_KEY", "KIMI_API_KEY", "XAI_API_KEY"])
 
+    def test_an_empty_line_is_not_a_key_and_the_last_line_decides(self) -> None:
+        empty = ("X=", "X=   ", 'X=""', "X=''", 'X="  "', 'X="" # none yet', "X='' # none yet", "export X=")
+        filled = (f"X={KEY_VALUE}", f'X="{KEY_VALUE}"', "X=# note", 'X="', '""x', 'X="" tail')
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "hermes"
+            for line in empty:
+                with self.subTest(empty=line):
+                    _write(home / ".env", line.replace("X", "DEEPSEEK_API_KEY") + "\n")
+                    self.assertEqual(detection.env_key_names(home), [])
+                    self.assertEqual(detection.detect_linked_providers(home), [])
+            for line in filled:
+                with self.subTest(filled=line):
+                    text = line.replace("X", "DEEPSEEK_API_KEY") if "=" in line else f"DEEPSEEK_API_KEY={line}"
+                    _write(home / ".env", text + "\n")
+                    self.assertEqual(detection.env_key_names(home), ["DEEPSEEK_API_KEY"])
+            _write(home / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\nDEEPSEEK_API_KEY=\n")
+            self.assertEqual(detection.env_key_names(home), [])
+            _write(home / ".env", f"DEEPSEEK_API_KEY=\nDEEPSEEK_API_KEY={KEY_VALUE}\n")
+            self.assertEqual(detection.env_key_names(home), ["DEEPSEEK_API_KEY"])
+
+    def test_an_empty_line_stops_counting_for_every_reader_of_the_names(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "hermes"
+            _write(home / ".env", f"ANTHROPIC_API_KEY=\nXAI_API_KEY={KEY_VALUE}\nTYPESAFE_API_KEY=\nOMH_HOME=\n")
+            self.assertEqual([row["id"] for row in detection.detect_linked_providers(home)], ["xai"])
+            self.assertEqual(detection.env_key_names(home, allowed=("TYPESAFE_API_KEY",)), [])
+            self.assertEqual(detection.env_key_names(home, allowed=("OMH_HOME",)), [])
+            # A pool row seeded from the variable lapses with it, as Hermes' does.
+            store = _auth_store(credential_pool={"anthropic": [{"source": "env:ANTHROPIC_API_KEY"}]})
+            self.assertEqual(detection.auth_store_provider_ids(store, detection.env_key_names(home)), [])
+
+    def test_a_filled_line_returns_the_name_and_never_the_value(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "hermes"
+            _write(home / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+            self.assertNotIn(KEY_VALUE, repr(detection.env_key_names(home)))
+            self.assertNotIn(KEY_VALUE, repr(detection.detect_linked_providers(home)))
+
     def test_local_endpoints_are_read_from_their_base_url_line(self) -> None:
         text = (
             "providers:\n  og:\n    base_url: https://apis.example/v1\n  lm:\n    base_url: http://127.0.0.1:1234/v1\n"
