@@ -16,6 +16,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from omh.plugin_bundle.omh.delegation_routing import read_delegation_route
 from omh.plugin_bundle.omh.hermes_delegation import PROVIDER_ENTITLEMENTS_SCHEMA_VERSION, provider_entitlements_path
@@ -231,6 +232,11 @@ class RouteOnlyProviderConsentTest(unittest.TestCase):
 
     def test_no_env_file_is_refused(self) -> None:
         self.assert_refused()
+
+    def test_a_key_only_exported_in_the_shell_is_refused(self) -> None:
+        # Provider detection reads what Hermes recorded, never this process.
+        with patch.dict("os.environ", {"COMMANDCODE_API_KEY": "placeholder-key"}):
+            self.assert_refused()
 
     def test_a_commented_key_is_refused(self) -> None:
         self.env("# COMMANDCODE_API_KEY=placeholder-key\n")
