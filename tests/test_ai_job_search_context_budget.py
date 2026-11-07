@@ -393,7 +393,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # (same length); only that body moves, and the pin before it was 0ac3cd4c...17f7.
         # The routing reach round then moves the skills whose triggers or index text it narrows; the pin
         # before it was 0ae5f905...ebc5f.
-        self.assertEqual(_digest(legacy_hashes), 'd4eb4e54b97d3d9f63ad060fade000feb57da574671317bc790a175459357ed7')
+        # ralplan's acceptance line says plan-accept refuses a scaffold-only file unless
+        # `--allow-scaffold`; only ralplan moves, and the pin before it was d4eb4e54...7ed7.
+        self.assertEqual(_digest(legacy_hashes), '971557b19dbf126ada0a458fac41938cc46873d18a5c7a61dd8d0cb156e42f93')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
