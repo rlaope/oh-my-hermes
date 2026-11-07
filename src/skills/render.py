@@ -1539,7 +1539,7 @@ artifacts; pass only event summaries and refs into Hermes chat context.
 
 Wrappers can run `omh memory inspect`, `omh memory pack`, and `omh memory apply` to review OMH-local or wrapper-supplied context before preparing a handoff. This emits `{MEMORY_REVIEW_SCHEMA}` and `{HANDOFF_CONTEXT_PACK_SCHEMA}` artifacts only; it does not read or mutate opaque Hermes internal memory.
 
-For planning-shaped requests, wrappers or operators can run `omh hermes plan` to create a deterministic `hermes_plan/v1` scaffold. The stdout `wrapper_contract` is the adapter contract for follow-on work; after acceptance, pass the accepted plan artifact or generated context pack to `omh coding delegate --from-plan <artifact> --executor <the owner the user chose>` (leaving `--executor` out selects codex) instead of treating Discord/channel summary text as the executor plan.
+For planning-shaped requests, wrappers or operators can run `omh hermes plan` to create a deterministic `hermes_plan/v1` scaffold. The stdout `wrapper_contract` is the adapter contract for follow-on work; after acceptance, pass the accepted plan artifact or generated context pack to `omh coding delegate --from-plan <artifact> --executor <the owner the user chose>` (leaving `--executor` out resolves the same default as without `--from-plan`: the setup profile's default executor, else `generic`) instead of treating Discord/channel summary text as the executor plan.
 
 ## Backend Boundary
 

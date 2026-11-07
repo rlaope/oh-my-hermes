@@ -43,7 +43,7 @@ from ..workflows.workflow_composition import (
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..installer import OmhError
 from ..system.local_store import utc_now
-from .common import _explicit_source_metadata, _paths, _print_json, _wants_json
+from .common import _explicit_source_metadata, _paths, _print_json, _resolved_executor, _wants_json
 
 
 def cmd_hermes_plan(args: argparse.Namespace) -> int:
@@ -72,6 +72,7 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
             source=args.source,
             limit=args.limit,
             source_metadata=source_metadata,
+            executor_target=_resolved_executor(args, default="generic"),
         )
         plan_file = getattr(args, "plan_file", None)
         input_bundle = bool(getattr(args, "input_bundle", False))
@@ -137,7 +138,7 @@ def cmd_hermes_plan_accept(args: argparse.Namespace) -> int:
             result["context_pack"] = write_plan_handoff_context_pack(
                 paths,
                 artifact,
-                executor_target=args.executor,
+                executor_target=_resolved_executor(args, default="generic"),
             )
     except (OSError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
@@ -376,7 +377,7 @@ def _add_hermes_commands(sub) -> None:
     plan_accept.add_argument("path", help="Path to a hermes_plan/v1 Markdown artifact.")
     plan_accept.add_argument("--summary", default="", help="Optional metadata-only acceptance summary.")
     plan_accept.add_argument("--write-context-pack", action="store_true", help="Write a handoff_context_pack/v1 pointer for the accepted plan.")
-    plan_accept.add_argument("--executor", type=canonical_executor_profile, default="codex", choices=("codex", "generic", "claude-code", "hermes", "omx-runtime", "pi-family-runtime", "omc-runtime"))
+    plan_accept.add_argument("--executor", type=canonical_executor_profile, default=None, choices=("codex", "generic", "claude-code", "hermes", "omx-runtime", "pi-family-runtime", "omc-runtime"))
     plan_accept.set_defaults(func=cmd_hermes_plan_accept)
 
     plan_revise = hermes_sub.add_parser("plan-revise", help="Mark a file-backed Hermes plan as revised.")

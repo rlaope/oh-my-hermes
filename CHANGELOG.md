@@ -435,6 +435,14 @@ All notable changes will be documented here.
   their skill: `account takeover` and `suspected unauthorized access`, `telemetry
   audit`, `write a handover guide` and `인수인계 문서 써줘`, and in Korean `시장 규모` and
   `경쟁사 분석` right before a request to size or analyse.
+- **`omh coding delegate --from-plan` no longer picks Codex when no owner
+  was named.** Leaving out `--executor` used to select Codex with
+  `--from-plan` and `generic` without it. Both now resolve the same default:
+  the setup profile's default executor, else `generic`. Codex is selected
+  only when it is named. The `hermes plan` wrapper template and
+  `plan-accept --write-context-pack` follow the same default instead of
+  writing `codex`, and the `omh-routing` text that said the flag selects
+  Codex now says what it resolves.
 - **Business and operations skills now check what a practitioner checks.**
   The morning brief no longer claims a Gmail connection is draft-only from
   its scopes (every Gmail scope that creates drafts also sends); it enforces
