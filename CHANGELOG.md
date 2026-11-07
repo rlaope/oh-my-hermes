@@ -435,6 +435,17 @@ All notable changes will be documented here.
   their skill: `account takeover` and `suspected unauthorized access`, `telemetry
   audit`, `write a handover guide` and `인수인계 문서 써줘`, and in Korean `시장 규모` and
   `경쟁사 분석` right before a request to size or analyse.
+- **A capability family turned off with `omh capability-policy disable` is no
+  longer routed to.** Its skills used to lose their tools but kept being
+  dispatched, offered as candidates, hinted and listed on the skill-candidate
+  line. Now none of those name them, and a request for that work is answered
+  with the family being off and `omh capability-policy enable <family>`
+  instead of being routed elsewhere. `omh_interact`, `omh chat interact`,
+  `omh_recommend` and the per-turn hint read the policy from the OMH home on
+  every call, so a profile-scoped home answers with its own. A home with
+  nothing turned off routes exactly as before. The operations family's card
+  now also lists `operating-rhythm`, `ops-review` and `reliability-review`,
+  which belonged to it but were missing from the card.
 - **Business and operations skills now check what a practitioner checks.**
   The morning brief no longer claims a Gmail connection is draft-only from
   its scopes (every Gmail scope that creates drafts also sends); it enforces

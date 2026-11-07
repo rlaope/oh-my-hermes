@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import lru_cache
 import hashlib
 import re
@@ -39,6 +39,7 @@ from .hermes_session_commands import (
     loop_timer_verdict,
     person_request_text,
 )
+from .capability_off import capability_off_sentence
 from .installed_skills import skill_not_installed
 from .native_tools import NATIVE_TODO_TOOL, OMH_TODO_HELD_PLANS, native_tool_presence_clause
 from .spend_signals import SPEND_GATE_PHRASES, spend_request_phrases
@@ -6734,6 +6735,48 @@ def route_hint_for_installed_skills(
     if installed is None:
         return payload
     return _route_hint_without(payload, lambda name: skill_not_installed(name, installed))
+
+
+def route_hint_without_disabled_skills(
+    payload: dict[str, object], disabled: Mapping[str, str]
+) -> dict[str, object]:
+    """The route hint with every skill of a turned-off capability family left out (`capability_off`).
+
+    Left out the way an uninstalled skill is: a selected hint goes whole and
+    the next becomes `selected=`; adjacent workflows are cut per hint. Hint
+    workflows may be display labels (`ulw-plan`), so each is read back to its
+    workflow name first. Nothing turned off returns the payload unchanged.
+    """
+    if not disabled:
+        return payload
+    names = _canonical_workflow_by_display_name()
+    return _route_hint_without(payload, lambda name: names.get(name, name) in disabled)
+
+
+CAPABILITY_OFF_HINT_HEAD = "[OMH Capability Off]"
+
+
+def capability_off_hint_context(payload: dict[str, object], disabled: Mapping[str, str]) -> str:
+    """The block for a request whose selected workflow belongs to a turned-off family, or "".
+
+    Read from the unfiltered hint: the person asked for that work, so the
+    model is told it is off and how to turn it on, rather than being handed
+    the next hint as though nothing was asked.
+    """
+    if not disabled or payload.get("status") != "hinted":
+        return ""
+    hints = payload.get("hints")
+    first = hints[0] if isinstance(hints, list) and hints and isinstance(hints[0], dict) else {}
+    workflow = str(first.get("workflow", ""))
+    name = _canonical_workflow_by_display_name().get(workflow, workflow)
+    family_id = disabled.get(name)
+    if not family_id:
+        return ""
+    return (
+        f"{CAPABILITY_OFF_HINT_HEAD} {capability_off_sentence(name, family_id)} "
+        "Do not load it or hand the request to another workflow; tell the person the family is off "
+        "and give them that command."
+    )
 
 
 def route_hint_without_engine_workflows(payload: dict[str, object]) -> dict[str, object]:

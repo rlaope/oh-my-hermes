@@ -16,7 +16,9 @@ from ..awareness import (
     awareness_context_matches_message,
     awareness_route_hint,
     awareness_route_hint_context_from_payload,
+    capability_off_hint_context,
     route_hint_for_installed_skills,
+    route_hint_without_disabled_skills,
     route_hint_without_engine_workflows,
     search_helper_hint,
 )
@@ -39,7 +41,8 @@ from ..dag_open_run_nudge import open_run_line
 from ..hermes_session_commands import host_command_turn, host_context_removed, person_request_text
 from ..host_context import record_active_main_agent_model
 from ..host_observation import observe_plugin_hook_call
-from ..installed_skills import hermes_loadable_skill_names
+from ..capability_off import disabled_skill_families
+from ..installed_skills import hermes_loadable_skill_names, routable_skill_names
 from ..kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
 from ..native_todo import held_native_write_note
 from ..named_owner_choice import record_named_owner_choices
@@ -567,7 +570,11 @@ def _tracker_event_is_present(kwargs: dict) -> bool:
 
 
 def _rendered_route_hint(
-    payload: dict[str, object], installed: frozenset[str] | None, *, delegated: bool
+    payload: dict[str, object],
+    installed: frozenset[str] | None,
+    *,
+    delegated: bool,
+    disabled: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     """The route hint this turn renders: installed skills only, no orchestrating engine for a child.
 
@@ -581,7 +588,7 @@ def _rendered_route_hint(
     included. Only the rendered block is cut -- the payload the brief and the
     candidate line read still records what the message named.
     """
-    hint = route_hint_for_installed_skills(payload, installed)
+    hint = route_hint_without_disabled_skills(route_hint_for_installed_skills(payload, installed), disabled or {})
     return route_hint_without_engine_workflows(hint) if delegated else hint
 
 
@@ -770,11 +777,19 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
     # unfiltered: its direct-invocation hint records that the person named a
     # workflow, installed or not.
     installed_skills = hermes_loadable_skill_names(omh_home) if include_awareness else None
+    # The skills of a capability family this home turned off (`omh
+    # capability-policy disable`) are cut the same way, read per turn from the
+    # setup profile the memory tool reads. Nothing off leaves the set as is.
+    disabled_skills = disabled_skill_families(omh_home) if include_awareness else {}
+    installed_skills = routable_skill_names(installed_skills, disabled_skills)
+    capability_off_context = ""
     rendered_route_hint: dict[str, object] = {}
     if include_awareness:
         if is_first_turn:
             route_hint_payload = awareness_route_hint(request_message, context_removed=host_context_removed(user_message))
-            rendered_route_hint = _rendered_route_hint(route_hint_payload, installed_skills, delegated=delegated)
+            rendered_route_hint = _rendered_route_hint(
+                route_hint_payload, installed_skills, delegated=delegated, disabled=disabled_skills
+            )
             route_hint_context = awareness_route_hint_context_from_payload(rendered_route_hint)
             message_matches_awareness = bool(route_hint_context)
             route_degradation = route_hint_payload.get("degradation")
@@ -793,8 +808,12 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
                 degraded.append((COMPONENT_LOCALIZED_ROUTING_TEXT, match_error))
         if message_matches_awareness and route_hint_payload is None:
             route_hint_payload = awareness_route_hint(request_message, context_removed=host_context_removed(user_message))
-            rendered_route_hint = _rendered_route_hint(route_hint_payload, installed_skills, delegated=delegated)
+            rendered_route_hint = _rendered_route_hint(
+                route_hint_payload, installed_skills, delegated=delegated, disabled=disabled_skills
+            )
             route_hint_context = awareness_route_hint_context_from_payload(rendered_route_hint)
+        if route_hint_payload is not None:
+            capability_off_context = capability_off_hint_context(route_hint_payload, disabled_skills)
         if route_hint_context:
             route_fingerprint = hashlib.sha256(route_hint_context.encode("utf-8")).hexdigest()
             if not claim_route_guidance_delivery(
@@ -892,7 +911,11 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
     # workflow themselves, and it reads `request_message`, so a host-written
     # notice gets none. A session is shown a given candidate set once; the
     # line comes back only when the set changes.
-    if include_awareness:
+    if capability_off_context:
+        # The person asked for work whose family this home turned off: the
+        # turn says so, and lists no other skill in its place.
+        context_parts.append(capability_off_context)
+    elif include_awareness:
         candidates = skill_candidates_for_turn(
             request_message, route_hint_payload=route_hint_payload, installed=installed_skills
         )

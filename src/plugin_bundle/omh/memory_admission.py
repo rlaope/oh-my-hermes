@@ -106,6 +106,7 @@ from .memory_store_io import (
     write_project_memory_record,
     write_project_memory_review_decision,
 )
+from .capability_off import disabled_families_in_profile
 from .project_identity import require_project_identity
 
 PROJECT_MEMORY_POLICY_SCHEMA_VERSION = "project_memory_policy/v1"
@@ -221,15 +222,9 @@ def _retain_knowledge_family_enabled(setup: dict[str, object]) -> bool:
 
     Deliberately not a call into `capabilities.toggles`: that module imports
     the skill catalog, and the memory path must not pull the catalog in just to
-    answer a boolean.
+    answer a boolean. The router reads the same field through the same helper.
     """
-    policy = setup.get("capability_policy")
-    if not isinstance(policy, dict):
-        return True
-    disabled = policy.get("disabled_families", [])
-    if not isinstance(disabled, list):
-        return True
-    return "retain_knowledge" not in {str(value) for value in disabled}
+    return "retain_knowledge" not in disabled_families_in_profile(setup)
 
 
 def capture_project_memory_candidate(

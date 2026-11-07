@@ -52,6 +52,8 @@ from ..routing.localization import normalized_phrase
 from ..routing.route_plan import public_workflow_identifier, with_public_skill_names
 from ..routing.route_question import apply_route_question_mode
 from ..plugin_bundle.omh.route_question_mode import read_route_question_mode
+from ..plugin_bundle.omh.capability_off import disabled_skill_families
+from ..routing.capability_off import CAPABILITY_OFF_KEY
 from ..routing.policy import POINT_IN_TIME_WEB_GUARD
 from ..workflows.realtime_voice_trial_receipts import build_prepared_realtime_voice_chat_state
 from ..workflows.temporal_source_receipts import (
@@ -5713,6 +5715,9 @@ def _build_chat_interaction_payload_uncached(
         include_message=include_message,
         skill_policy=skill_policy,
         active_design_direction_iteration=design_direction_iteration_context,
+        # The families this home turned off, read per call from the field the
+        # memory tool reads: a profile-scoped home is another file.
+        disabled_skills=disabled_skill_families(paths.omh_home) if paths is not None else None,
     )
     resolved_mode = _resolve_mode(mode, route_payload, message=message)
     domain_context = None
@@ -5744,6 +5749,17 @@ def _build_chat_interaction_payload_uncached(
             legacy_thread_key=str(base["thread_key"]),
         )
         base["platform"] = platform_envelope
+    capability_off = route_payload.get(CAPABILITY_OFF_KEY)
+    if isinstance(capability_off, dict):
+        # The person asked for work whose family this home turned off. The
+        # answer says so and names the command that turns it back on; no
+        # picker, plan, handoff or other workflow is offered in its place.
+        base["route"] = route_payload
+        base["chat_response"] = _capability_off_response(
+            capability_off, reason=str(route_payload.get("reason", "")), thread_key=str(base["thread_key"])
+        )
+        base["next_action"] = "show_command_preview"
+        return _finish_interaction(base, target_notice)
     is_catalog_question = _is_generic_skill_catalog_route(message, route_payload)
     if is_catalog_question and _route_recommendation_next_action(route_payload) != "show_command_preview":
         route_payload = _catalog_question_route_payload(route_payload)
@@ -9421,6 +9437,21 @@ def enhance_chat_interaction_with_routing_observation(
         platform_envelope=_nested(updated, "platform") or None,
     )
     return updated
+
+
+def _capability_off_response(record: Mapping[str, object], *, reason: str, thread_key: str) -> dict[str, object]:
+    command = str(record.get("enable_command", ""))
+    return _chat_response(
+        kind="capability_family_off",
+        headline=f"The {record.get('family_label', '')} capability family is turned off in this OMH home.",
+        body=reason,
+        phase="capability_family_off",
+        next_action="show_command_preview",
+        thread_key=thread_key,
+        actions=[_action("show_command_preview", "Turn it back on", "primary", payload={"command": command})],
+        claim_boundary="Nothing was dispatched; the family stays off until the command runs.",
+        extra_state={"capability_family_off": dict(record)},
+    )
 
 
 def _finish_interaction(payload: dict[str, object], target_notice: dict[str, object] | None) -> dict[str, object]:
