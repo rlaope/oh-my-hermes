@@ -30,6 +30,7 @@ import secrets
 from typing import Any
 
 from . import runtime_paths
+from .awareness_delivery import _with_windows_retry
 from .hermes_delegation import (
     HERMES_MIXTURE_CATEGORY_CHAINS,
     MIXTURE_CHAIN_OVERRIDES_SCHEMA_VERSION,
@@ -81,14 +82,11 @@ class PickerChanges(dict[str, Chain]):
         self.effort_edits = effort_edits
 
 
-def model_effort_options_path(omh_home: str | Path | None = None) -> Path:
-    root = Path(omh_home).expanduser() if omh_home else runtime_paths.default_omh_home()
-    return root / "routing" / "model-efforts.json"
+def model_effort_options_path(omh_home: str | Path) -> Path:
+    return Path(omh_home).expanduser() / "routing" / "model-efforts.json"
 
 
-def load_model_effort_options(
-    omh_home: str | Path | None = None,
-) -> tuple[dict[str, tuple[str, ...]], str]:
+def load_model_effort_options(omh_home: str | Path) -> tuple[dict[str, tuple[str, ...]], str]:
     """Read the user's model-effort document.
 
     Returns ``(overrides, status)`` where status is ``absent``, ``applied``,
@@ -328,8 +326,9 @@ def step_effort(chain: Chain, direction: int, allowed: tuple[str, ...]) -> Chain
     stored value the ladder does not list (an old `off`, a provider mapping
     alias, `max` on the shared steps) lands on the next rung that way: `+` with
     no rung above holds, and `-` with no rung below enters at the lowest. `off`
-    reads as `none`, and `auto`, unset or anything unrecognized enter at the
-    lowest rung from either direction.
+    reads as `none`. `auto`, unset or anything unrecognized enter at the lowest
+    rung above `none` from either direction: a press on a value that says
+    nothing must not turn thinking off. Walking down from `low` reaches `none`.
     """
     if not chain or not allowed:
         return chain
@@ -338,7 +337,7 @@ def step_effort(chain: Chain, direction: int, allowed: tuple[str, ...]) -> Chain
     if token in allowed:
         new = allowed[min(max(allowed.index(token) + direction, 0), len(allowed) - 1)]
     elif token not in EFFORT_VOCABULARY:
-        new = allowed[0]
+        new = next((rung for rung in allowed if rung != "none"), allowed[0])
     else:
         position = EFFORT_VOCABULARY.index(token)
         if direction > 0:
@@ -384,12 +383,13 @@ def compose_override_document(
 def write_override_document(omh_home: str | Path | None, document: Mapping[str, Any]) -> Path:
     """Write a composed document where the reader looks for it.
 
-    The `omh model-chains` command keeps the repo-wide atomic writer; this is
-    the bundle's own (the todo store's idiom: a fresh temporary beside the
-    target, then `os.replace`), because a module in the plugin bundle may not
-    import `omh.system` (`tests/test_plugin_bundle_standalone.py`). Validated once
-    more before the bytes land, so an invalid document is never written by
-    either surface.
+    Both picker surfaces save through this; `omh model-chains set` and
+    `interview` keep the repo-wide atomic writer. This is the bundle's own (the
+    todo store's idiom: a fresh temporary beside the target, then a replace that
+    retries a transient Windows denial), because a module in the plugin bundle
+    may not import `omh.system` (`tests/test_plugin_bundle_standalone.py`).
+    Validated once more before the bytes land, so an invalid document is never
+    written by either surface.
     """
     _, status = parse_mixture_chain_overrides(document)
     if status.startswith("invalid"):
@@ -400,7 +400,7 @@ def write_override_document(omh_home: str | Path | None, document: Mapping[str, 
     try:
         with temporary.open("x", encoding="utf-8", newline="") as handle:
             handle.write(json.dumps(document, indent=2, sort_keys=True) + "\n")
-        os.replace(temporary, path)
+        _with_windows_retry(lambda: os.replace(temporary, path))
     finally:
         if temporary.exists() and not temporary.is_symlink():
             temporary.unlink()
@@ -460,7 +460,7 @@ def apply_picker_changes(
     changes: PickerChanges,
     *,
     hermes_home: str | Path | None = None,
-    contract_option: Callable[[str], Mapping[str, Any] | None] | None = None,
+    contract_option: Callable[[str], Mapping[str, Any] | None],
 ) -> dict[str, Any]:
     """The save both picker surfaces make, as one call.
 

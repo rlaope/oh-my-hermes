@@ -15,7 +15,7 @@ import unittest
 from unittest.mock import patch
 
 from omh.coding.model_contracts import MODEL_CONTRACTS, contract_effort_option
-from omh.plugin_bundle.omh.hermes_delegation import MODEL_PROVIDER_ROUTES_SCHEMA_VERSION
+from omh.plugin_bundle.omh.hermes_delegation import MODEL_PROVIDER_ROUTES_SCHEMA_VERSION, load_model_provider_routes
 from omh.plugin_bundle.omh.model_chain_picker import (
     EFFORT_VOCABULARY,
     MODEL_EFFORT_OPTIONS_SCHEMA_VERSION,
@@ -171,6 +171,10 @@ class EffortDocumentTests(unittest.TestCase):
                 self.assertEqual(overrides, {})
                 self.assertTrue(status.startswith("invalid:"), status)
 
+    def test_the_old_off_spelling_is_told_what_to_write(self) -> None:
+        document = {"schema_version": MODEL_EFFORT_OPTIONS_SCHEMA_VERSION, "models": {"m": {"efforts": ["off"]}}}
+        self.assertIn("write 'none'", parse_model_effort_options(document)[1])
+
     def test_duplicate_json_keys_and_unreadable_text_are_invalid(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -187,6 +191,23 @@ class EffortDocumentTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(load_model_effort_options(root), ({}, "invalid: unreadable JSON"))
+
+
+class UnreadableFileTests(unittest.TestCase):
+    def test_a_file_that_cannot_be_read_is_invalid_not_a_crash(self) -> None:
+        for name, loader in (
+            ("model-efforts.json", load_model_effort_options),
+            ("model-providers.json", load_model_provider_routes),
+        ):
+            with self.subTest(name=name), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                path = root / "routing" / name
+                path.parent.mkdir(parents=True)
+                path.write_text("[" * 200_000, encoding="utf-8")  # past the parser's nesting limit
+                self.assertEqual(loader(root), ({}, "invalid: unreadable JSON"))
+                path.unlink()
+                path.mkdir()  # an OSError on every platform, unlike a mode bit
+                self.assertEqual(loader(root), ({}, "invalid: unreadable JSON"))
 
 
 class EffortResolverTests(unittest.TestCase):

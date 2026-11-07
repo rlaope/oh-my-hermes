@@ -230,7 +230,10 @@ class PickerModelTests(unittest.TestCase):
                 os.environ.pop("OMH_HOME", None)
                 self.assertEqual(Path(picker_rows(None, hermes_home=named)["path"]), document)
                 result = apply_picker_changes(
-                    None, PickerChanges({"deep": (("kimi-k3", "high"),)}), hermes_home=named
+                    None,
+                    PickerChanges({"deep": (("kimi-k3", "high"),)}),
+                    hermes_home=named,
+                    contract_option=contract_effort_option,
                 )
                 self.assertEqual(Path(result["path"]), document)
                 self.assertTrue(document.exists())
@@ -238,7 +241,12 @@ class PickerModelTests(unittest.TestCase):
                 (named / "config.yaml").write_text(
                     "plugins:\n  entries:\n    omh:\n      settings:\n        omh_home: true\n", encoding="utf-8"
                 )
-                self.assertIn("not a path string", apply_picker_changes(None, PickerChanges({}), hermes_home=named)["error"])
+                self.assertIn(
+                    "not a path string",
+                    apply_picker_changes(
+                        None, PickerChanges({}), hermes_home=named, contract_option=contract_effort_option
+                    )["error"],
+                )
 
     def test_rows_carry_the_stored_chain_not_the_entitlement_shaped_one(self) -> None:
         # `show` reorders a chain so served entries lead; the picker must not,
@@ -337,8 +345,17 @@ class PickerModelTests(unittest.TestCase):
         self.assertEqual(step_effort((("m", "low"),), -1, haiku), (("m", "none"),))
         self.assertEqual(step_effort((("m", "none"),), -1, haiku), (("m", "none"),))
         self.assertEqual(step_effort((("m", "max"),), 1, haiku), (("m", "max"),))
-        self.assertEqual(step_effort((("m", "auto"),), -1, haiku), (("m", "none"),))
+        self.assertEqual(step_effort((("m", "none"),), 1, haiku), (("m", "low"),))
         self.assertEqual(step_effort((("m", "low"),), 1, ()), (("m", "low"),))
+
+    def test_a_press_on_a_value_that_says_nothing_never_turns_thinking_off(self) -> None:
+        haiku = ("none", "low", "medium", "high", "xhigh", "max")
+        for stored in ("", "auto", "ultra"):
+            for direction in (1, -1):
+                with self.subTest(stored=stored, direction=direction):
+                    self.assertEqual(step_effort((("m", stored),), direction, haiku), (("m", "low"),))
+        # A list holding nothing else still has to land somewhere on it.
+        self.assertEqual(step_effort((("m", ""),), 1, ("none",)), (("m", "none"),))
 
     def test_step_effort_lands_a_value_off_the_ladder_on_the_next_rung_that_way(self) -> None:
         deepseek = ("none", "low", "high", "max")
@@ -723,6 +740,15 @@ class EffortPickerTests(unittest.TestCase):
         frame = _frame(payload, "swarm")
         self.assertIn(" -? ", _row_of(frame, "swarm"))
 
+    def test_an_unset_effort_on_a_contract_head_is_not_off_its_list(self) -> None:
+        _write_overrides(self.root, {"swarm": (("gpt-6-astra", ""),)})
+        payload = _payload(self.root)
+        frame = _frame(payload, "swarm")
+        row = _row_of(frame, "swarm")
+        self.assertIn(" - ", row)
+        self.assertNotIn("!", row)
+        self.assertFalse(any(line.lstrip().startswith("! ") for line in frame), frame)
+
     def test_a_contract_head_shows_neither_mark_on_a_rung_of_its_own(self) -> None:
         _write_overrides(self.root, {"swarm": (("gpt-6-astra", "xhigh"),)})
         payload = _payload(self.root)
@@ -938,6 +964,25 @@ class EnterStaysOpenTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertIn("! deep: xhigh", frames[-1])
 
+    def test_two_refused_rows_are_named_top_down_and_the_second_fix_saves(self) -> None:
+        # deep sits above swarm, and Enter names deep though the cursor is on swarm.
+        _write_overrides(self.root, {"swarm": (("claude-opus-5-5", "high"),)})
+        payload = _payload(self.root)
+        walk = _rights_to(payload, "claude-opus-5-5", "gemini-4-argon")
+        keys = self._carry_xhigh_onto_argon(payload)
+        keys += [KEY_DOWN] * (_row_index(payload, "swarm") - _row_index(payload, "deep"))
+        keys += [KEY_PLUS, *walk, KEY_ENTER]
+        result, frames = _drive(payload, keys)
+        self.assertIsNone(result)
+        self.assertIn("! deep: xhigh is not on", frames[-1])
+        self.assertIn(f" {CURSOR_MARK} deep ", frames[-1])
+        _, frames = _drive(payload, keys + [KEY_MINUS, KEY_ENTER])
+        self.assertIn("! swarm: xhigh is not on", frames[-1])
+        self.assertIn(f" {CURSOR_MARK} swarm ", frames[-1])
+        result, _ = _drive(payload, keys + [KEY_MINUS, KEY_ENTER, KEY_MINUS, KEY_ENTER])
+        self.assertEqual(result["deep"][0], ("gemini-4-argon", "high"))
+        self.assertEqual(result["swarm"][0], ("gemini-4-argon", "high"))
+
     def test_a_list_with_no_rungs_offers_the_keys_that_can_still_move_the_row(self) -> None:
         _write_efforts(self.root, {"gemini-4-argon": []})
         payload = _payload(self.root)
@@ -1005,6 +1050,7 @@ class EffortSaveTests(unittest.TestCase):
         ):
             status, stdout, stderr = run_cli(["--omh-home", str(_omh_home(self.root)), "model-chains"], output_json=False)
         outcome["cli"] = (status, stdout + stderr)
+        outcome["cli_stderr"] = stderr
         with patch("omh.commands.model_chain_picker.run_picker", side_effect=changes_for):
             outcome["tui"] = run_model_chain_picker(
                 {"OMH_HOME": str(_omh_home(self.root)), "HERMES_HOME": str(self.root / ".hermes"), "NO_COLOR": "1"},
@@ -1147,10 +1193,20 @@ class EffortSaveTests(unittest.TestCase):
         changes = PickerChanges({"quick": (("deepseek-flash", "xhigh"),)})
         outcome = self._surfaces(lambda *_args, **_kwargs: changes)
         self.assertEqual(outcome["cli"][0], 0)
-        self.assertIn("model-efforts.json ignored: unreadable JSON", outcome["cli"][1])
+        self.assertIn("omh: warning: model-efforts.json ignored: unreadable JSON", outcome["cli_stderr"])
         self.assertIn("Saved 1 category", outcome["tui"])
         self.assertIn("Warning: model-efforts.json ignored: unreadable JSON", outcome["tui"])
         self.assertEqual(self._stored(), [{"model": "deepseek-flash", "reasoning_effort": "xhigh"}])
+
+    def test_the_replace_goes_through_the_windows_retry(self) -> None:
+        # Windows denies a replace while a reader holds the target, and the CLI
+        # picker saved through a retrying writer before it shared this one.
+        with patch(
+            "omh.plugin_bundle.omh.model_chain_picker._with_windows_retry", side_effect=lambda operation: operation()
+        ) as retry:
+            self.assertNotIn("error", self._apply(PickerChanges({"quick": (("deepseek-flash", "low"),)})))
+        retry.assert_called_once()
+        self.assertEqual(self._stored(), [{"model": "deepseek-flash", "reasoning_effort": "low"}])
 
     def test_both_entrances_hand_the_picker_the_same_resolved_ladders(self) -> None:
         captured = []
