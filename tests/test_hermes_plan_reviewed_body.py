@@ -46,16 +46,52 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             self.assertNotIn("say", accepted)
             self.assertIn("p95 under 200ms", Path(payload["artifact"]["path"]).read_text(encoding="utf-8"))
 
-    def test_recording_without_a_body_says_so_and_accept_says_scaffold(self) -> None:
+    def test_recording_without_a_body_says_so_and_accept_refuses_the_scaffold(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             _, payload, _ = self._run(root, "hermes", "plan", "--record", "Move sessions")
             self.assertIn("scaffold only", payload["say"])
+            self.assertIn("--allow-scaffold", payload["say"])
             self.assertEqual(payload["artifact"]["plan_body"], "scaffold")
-            _, accepted, _ = self._run(root, "hermes", "plan-accept", payload["artifact"]["path"])
+            path = Path(payload["artifact"]["path"])
+            before = path.read_text(encoding="utf-8")
+            for argv in (("hermes", "plan-accept", str(path)), ("hermes", "plan", "accept", str(path))):
+                with self.subTest(argv=argv[:2]):
+                    status, accepted, stderr = self._run(root, *argv)
+                    self.assertNotEqual(status, 0)
+                    self.assertEqual(accepted, {})
+                    self.assertIn("only the generated scaffold", stderr)
+                    self.assertIn("--plan-file", stderr)
+                    self.assertIn("--allow-scaffold", stderr)
+                    # Refused before anything is written: the file stays a draft.
+                    self.assertEqual(path.read_text(encoding="utf-8"), before)
+            from omh.paths import resolve_paths
+            from omh.workflows.observation_journal import read_observation_events_result
+
+            events, _ = read_observation_events_result(resolve_paths(root / "omh", root / "hermes"))
+            self.assertNotIn("plan_accepted", [event.get("event") for event in events])
+
+    def test_allow_scaffold_accepts_the_scaffold_on_purpose_and_says_so(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, payload, _ = self._run(root, "hermes", "plan", "--record", "Move sessions")
+            status, accepted, stderr = self._run(root, "hermes", "plan-accept", "--allow-scaffold", payload["artifact"]["path"])
+            self.assertEqual((status, stderr), (0, ""))
+            self.assertEqual(accepted["artifact"]["status"], "accepted")
             self.assertFalse(accepted["reviewed_body"])
-            self.assertIn("only the generated scaffold", accepted["say"])
+            self.assertIn("generated scaffold on purpose", accepted["say"])
             self.assertIn("scaffold", accepted["journal_event"]["summary"])
+
+    def test_allow_scaffold_changes_nothing_for_a_reviewed_plan(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = root / "reviewed.md"
+            body.write_text(REVIEWED, encoding="utf-8")
+            _, payload, _ = self._run(root, "hermes", "plan", "--record", "--plan-file", str(body), "Move sessions")
+            status, accepted, _ = self._run(root, "hermes", "plan-accept", "--allow-scaffold", payload["artifact"]["path"])
+            self.assertEqual(status, 0)
+            self.assertNotIn("say", accepted)
+            self.assertNotIn("reviewed_body", accepted)
 
     def test_bundle_is_recorded_as_input_and_cannot_be_accepted(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -138,7 +174,8 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             args += ["--plan-file", str(body)]
         _, payload, _ = self._run(root, *args, task)
         path = Path(payload["artifact"]["path"])
-        self._run(root, "hermes", "plan-accept", str(path))
+        accept = ("hermes", "plan-accept", str(path)) if with_body else ("hermes", "plan-accept", "--allow-scaffold", str(path))
+        self.assertEqual(self._run(root, *accept)[0], 0)
         return path
 
     def test_every_task_main_denies_is_denied_with_and_without_a_body(self) -> None:
@@ -211,7 +248,7 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             root = Path(tmp)
             _, payload, _ = self._run(root, "hermes", "plan", "--record", "Add a session store")
             path = payload["artifact"]["path"]
-            self._run(root, "hermes", "plan-accept", path)
+            self.assertEqual(self._run(root, "hermes", "plan-accept", "--allow-scaffold", path)[0], 0)
             delegated = self._delegate(root, path)
             self.assertEqual(delegated["plan_artifact"]["plan_body"], "scaffold")
             self.assertIn("plan_body=scaffold", json.dumps(delegated))
@@ -297,7 +334,7 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             members = _scan_plans(resolve_paths(root / "omh", root / "hermes"))
             self.assertEqual(len(members), 2)
             for _ in range(3):
-                self._run(root, "hermes", "plan-accept", str(path))
+                self.assertEqual(self._run(root, "hermes", "plan-accept", "--allow-scaffold", str(path))[0], 0)
             self.assertTrue(path.read_text(encoding="utf-8").endswith("\n"))
             self.assertFalse(path.read_text(encoding="utf-8").endswith("\n\n"))
 
@@ -329,12 +366,17 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
         from omh.commands.main import build_parser
         from omh.skills.packaging import builtin_skill_templates
 
-        parser = build_parser()
-        for name in ("hermes", "plan"):
-            action = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
-            parser = action.choices[name]
-        options = {option for action in parser._actions for option in action.option_strings}
+        def options_of(*names: str) -> set[str]:
+            parser = build_parser()
+            for name in names:
+                action = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
+                parser = action.choices[name]
+            return {option for action in parser._actions for option in action.option_strings}
+
+        options = options_of("hermes", "plan")
         skills = {t.name: t for t in builtin_skill_templates()}
+        self.assertIn("--allow-scaffold", options_of("hermes", "plan-accept"))
+        self.assertIn("--allow-scaffold", skills["ralplan"].content, "ralplan does not quote --allow-scaffold")
         for skill, flags in {
             "plan": ("--record", "--plan-file"),
             "ralplan": ("--record", "--plan-file"),

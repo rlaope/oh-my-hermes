@@ -534,6 +534,7 @@ def update_hermes_plan_status(
     *,
     status: str,
     summary: str = "",
+    allow_scaffold: bool = False,
 ) -> dict[str, object]:
     if status not in PLAN_STATUSES:
         raise ValueError(f"unsupported plan status: {status}")
@@ -541,6 +542,17 @@ def update_hermes_plan_status(
     current = read_hermes_plan_artifact(plan_path)
     if current.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(f"expected {SCHEMA_VERSION} artifact")
+    # A file recorded without --plan-file holds the generated goals, options
+    # and risks, whatever the plan was. Accepting it would hand an executor
+    # that scaffold as "the accepted plan", so it is refused before anything
+    # is written unless the operator accepts the scaffold on purpose.
+    if status == "accepted" and current.get("plan_body") == "scaffold" and not allow_scaffold:
+        raise ValueError(
+            f"refused to accept {plan_path}: it holds only the generated scaffold (plan_body: scaffold), "
+            "not a reviewed plan. Record the reviewed plan with "
+            '`omh hermes plan --record --plan-file <reviewed-plan.md> "<task>"` and accept that file, '
+            "or run `omh hermes plan-accept --allow-scaffold <path>` to accept the scaffold on purpose."
+        )
     original = plan_path.read_text(encoding="utf-8")
     updated = _replace_frontmatter_status(original, status=status, summary=summary)
     atomic_write_text(plan_path, updated, private=True)
@@ -555,8 +567,8 @@ def update_hermes_plan_status(
     note = ""
     if status == "accepted" and body_state == "scaffold":
         note = (
-            "This plan file holds only the generated scaffold, not a reviewed plan. "
-            "Accepting it accepts the scaffold; record the reviewed plan with --plan-file first."
+            "Accepted the generated scaffold on purpose (--allow-scaffold); it is not a reviewed plan. "
+            "Record the reviewed plan with --plan-file to hand an executor the plan itself."
         )
         result["reviewed_body"] = False
     elif status == "accepted" and body_state == "unknown":

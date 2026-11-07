@@ -1863,8 +1863,10 @@ critic review was observed; it says nothing about whether the body is a scaffold
 The front-matter key `plan_body` says that: `scaffold` (generated sections),
 `reviewed` (the caller's own plan, recorded with `--plan-file`, which replaces the
 generated sections and is a claim by the caller, not a verification), or absent
-(an older file, state unknown). `--plan-file ... --input-bundle` records planning
-input as `hermes_plan_input/v1`, which `plan-accept` refuses.
+(an older file, state unknown). `plan-accept` refuses a `scaffold` file unless
+`--allow-scaffold` is passed, so a scaffold is never accepted as the plan by
+accident. `--plan-file ... --input-bundle` records planning input as
+`hermes_plan_input/v1`, which `plan-accept` refuses.
 
 The plan body and stdout payload include `quality_gate` and `deep_interview`
 blocks. `quality_gate` names readiness, pass conditions, and evidence that must

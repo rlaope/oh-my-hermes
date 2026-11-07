@@ -12222,7 +12222,14 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertEqual(status, 2)
             self.assertIn("requires a hermes_plan/v1 artifact", stderr)
 
-            status, stdout, stderr = run_cli(base + ["hermes", "plan", "accept", str(plan_path)])
+            # The plan was recorded without --plan-file, so it is the generated
+            # scaffold: acceptance is refused unless the operator asks for it.
+            status, _, stderr = run_cli(base + ["hermes", "plan", "accept", str(plan_path)])
+            self.assertEqual(status, 2)
+            self.assertIn("only the generated scaffold", stderr)
+            self.assertIn("status: draft", plan_path.read_text(encoding="utf-8").split("---", 2)[1])
+
+            status, stdout, stderr = run_cli(base + ["hermes", "plan-accept", "--allow-scaffold", str(plan_path)])
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             accepted = json.loads(stdout)
@@ -12231,7 +12238,9 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertEqual(accepted["journal_event"]["target_type"], "plan")
             self.assertIn("status: accepted", plan_path.read_text(encoding="utf-8").split("---", 2)[1])
 
-            status, stdout, stderr = run_cli(base + ["hermes", "plan-accept", str(plan_path), "--write-context-pack"])
+            status, stdout, stderr = run_cli(
+                base + ["hermes", "plan-accept", str(plan_path), "--allow-scaffold", "--write-context-pack"]
+            )
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             context_pack_path = Path(json.loads(stdout)["context_pack"]["path"])

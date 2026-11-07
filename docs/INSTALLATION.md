@@ -5083,7 +5083,7 @@ Lower-level debug surfaces remain available when an adapter needs them:
 ```sh
 omh chat route --source discord --record --json "risky refactor"
 omh chat route --source discord "risky refactor"
-omh hermes plan --source discord --record "risky refactor with review"
+omh hermes plan --source discord --record --plan-file <reviewed-plan.md> "risky refactor with review"
 omh hermes plan-accept .hermes/plans/<accepted-plan.md>
 omh coding delegate --executor codex --source discord --record --from-plan .hermes/plans/<accepted-plan.md>
 omh coding delegate --executor claude-code --source discord --record "risky refactor"
@@ -5103,9 +5103,11 @@ so Hermes can ask one blocking clarification. Review gates remain
 The sections of that file are generated. To record a plan someone reviewed, pass it
 with `--plan-file <path>`: the file replaces the generated sections and the front
 matter says `plan_body: reviewed`. Without it the file says `plan_body: scaffold`,
-and `plan-accept` on it still succeeds but returns `reviewed_body: false` and a
-`say`. `--input-bundle` (with `--plan-file`) records planning input that
-`plan-accept` refuses. Stdout `plan.goals` and `plan.options` stay generated either way;
+and `plan-accept` refuses it with exit code 2 and a message that names the fix:
+record the reviewed plan with `--plan-file` and accept that file. To accept the
+scaffold on purpose, pass `plan-accept --allow-scaffold`; it then returns
+`reviewed_body: false` and a `say`. `--input-bundle` (with `--plan-file`)
+records planning input that `plan-accept` refuses. Stdout `plan.goals` and `plan.options` stay generated either way;
 the recorded file is the plan.
 
 The stdout JSON also includes `wrapper_contract`. Wrappers should use that JSON,

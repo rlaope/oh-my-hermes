@@ -500,6 +500,15 @@ All notable changes will be documented here.
   readers are told which steps need Hermes. The payload-density floor is
   re-derived, because those sample names had been counted as payload.
 
+- **`omh hermes plan-accept` refuses a plan that is only the generated
+  scaffold.** A plan recorded without `--plan-file` holds generated goals,
+  options and risks, not the reviewed plan, and accepting it used to succeed
+  with only a `say`, so a coding handoff could carry the scaffold as the
+  accepted plan. Accepting such a file now exits 2, leaves it a draft, and
+  names the fix: record the reviewed plan with `--plan-file` and accept that
+  file. `--allow-scaffold` accepts the scaffold on purpose and still returns
+  `reviewed_body: false`. The `hermes plan accept <path>` alias refuses the
+  same way. `ulw-plan` and `docs/INSTALLATION.md` describe the refusal.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`
