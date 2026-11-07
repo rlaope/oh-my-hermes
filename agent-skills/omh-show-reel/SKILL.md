@@ -33,7 +33,7 @@ This is an OMH `show-reel` workflow skill, projected for Agent Skills hosts (Cla
 
 - Only a static infographic or summary card is needed; use `omh-image-cards`.
 - The request is a website, landing page or interactive UI build, or an animation inside an app's own UI (a button, modal, page transition or loading state); use `omh-frontend`.
-- Summarizing, transcribing, captioning or trimming a recording that already exists; use `omh-media-input`.
+- Summarizing or transcribing a recording that already exists; use `omh-media-input`. Trimming, converting or burning in captions is plain ffmpeg through `omh-terminal`.
 - The output is a deck, PDF, spreadsheet or office document; use `omh-materials-package`.
 - Only a premium layout quality assessment is wanted; use `omh-design-quality-gate`.
 - The user already has rendered frames and needs a visual verdict, not new production; use `omh-visual-qa`.

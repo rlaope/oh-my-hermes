@@ -17,7 +17,7 @@ This is an OMH `wiki` workflow skill, projected for Agent Skills hosts (Claude C
 
 ## Why This Exists
 
-`wiki` exists to keep `knowledge` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`wiki` exists because a wiki fails by its audience and its upkeep, not its folder names: it sizes the structure to who reads and who maintains it, and names what would break the chosen model before any page is written.
 
 ## Do Not Use When
 
@@ -80,6 +80,7 @@ Quality bar:
 - Never present prepared wiki guidance as an observed external write, store creation, or memory mutation.
 - Mark stale or uncertain knowledge instead of presenting it as permanent truth.
 - Extract separate coding tasks instead of burying them in notes.
+- Before writing a page to a shared or synced store, strip credentials and personal data from it, or ask: a note's destination decides who can read it.
 
 Required inputs:
 

@@ -49,7 +49,7 @@ Bad example:
 
 - The source sheet is a host-generated grid on #FF00FF with a source record; real-person sources carry consent.
 - The actual helper command and exit were observed; frames, sheet and qc.json were read back and hashed, or the blocker is stated.
-- body_scale_cv and anchor_y_std are quoted from qc.json; a REGENERATE verdict led to a new sheet, not frame edits.
+- free_frames were named before the run, never after a REGENERATE; body_scale_cv and anchor_y_max_dev are quoted from qc.json; a REGENERATE verdict led to a new sheet, not frame edits.
 
 ## Recovery Notes
 
@@ -76,7 +76,7 @@ Quality bar:
 
 - Require a grid sheet on flat #FF00FF with exact cell division; strips and packed wide effects are regenerated, not cropped.
 - Record the real interpreter, Pillow version, command, exit and output hashes; QC numbers come from qc.json, not from inspection by eye.
-- Gate on body_scale_cv <= 0.08 and anchor_y_std <= 0.05, and keep technical PASS distinct from art-direction approval.
+- Gate on body_scale_cv <= 0.08 and anchor_y_max_dev <= 0.05; keep technical PASS distinct from art-direction approval.
 
 Required inputs:
 
@@ -87,7 +87,7 @@ Required inputs:
 Expert clarification questions:
 - `grid sheet from the host image tool on flat #FF00FF`
   - English: Which host image tool produces the sheet, which grid (2x2, 2x3, ...) holds which pose, and is the background flat #FF00FF?
-  - Korean: Which host image tool produces the sheet, which grid (2x2, 2x3, ...) holds which pose, and is the background flat #FF00FF?
+  - Korean: 어떤 이미지 도구로 시트를 만들고, 어떤 격자(2x2, 2x3 등)의 어느 칸에 어떤 포즈가 들어가며, 배경은 단색 #FF00FF인가요?
 
 Expected outputs:
 
@@ -97,8 +97,8 @@ Expected outputs:
 
 Artifact expectations:
 
-- Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y`, plus the re-composited aligned `sheet.png`.
-- Authored `sprite_forge_qc/v1` in `qc.json`: frame count, grid, cell/frame size, per-frame bbox, body_scale_cv, anchor_y_std, thresholds, verdict, hashes and argv.
+- Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y` (frames named in `free_frames` keep their offset from the gated pivot), plus the re-composited aligned `sheet.png`.
+- Authored `sprite_forge_qc/v1` in `qc.json`: frame count, grid, cell/frame size, per-frame bbox, body_scale_cv, anchor_y_max_dev, free_frames, thresholds, verdict, hashes and argv.
 - A character art-direction record: identity elements, rejected drafts with reasons, cell size + baseline, and attack-frame timing tied to game data.
 
 Safety rules:

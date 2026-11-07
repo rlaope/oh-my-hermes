@@ -43,7 +43,7 @@ EXPECTED_BUNDLED_DEFERRALS = {
     "github-event-ops": ("github",),
     "github-issue-intake": ("github",),
     "maestro": ("claude-code", "codex", "opencode"),
-    "materials-package": ("pdf", "docx", "powerpoint", "xlsx"),
+    "materials-package": ("pdf", "docx", "powerpoint", "xlsx", "microsoft-office"),
     "meeting-brief": ("meeting-action-items",),
     "research-department": ("competitor-news-monitor", "arxiv"),
     "show-reel": ("manim-video", "ascii-video"),

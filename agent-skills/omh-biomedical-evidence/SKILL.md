@@ -27,7 +27,7 @@ Public sources can disagree about a variant while describing different alleles, 
 
 ## Do Not Use When
 
-- For explaining one supplied paper, use `omh-paper-learning`; for broad literature discovery, use `ulw-research`.
+- For explaining one supplied paper, use `omh-paper-learning`; for broad literature discovery or a clinical-evidence question with no named gene or variant (this skill covers ClinVar and ClinicalTrials.gov records only), use `ulw-research`, and for a cited answer to one such question use `omh-web-research`.
 - For generic server configuration and connection diagnostics, load the host's MCP setup guidance instead.
 - For sequence analysis or omics pipelines, select an available computational biology specialist instead; this method does not implement those analyses.
 - For a patient's diagnosis, care, trial eligibility or treatment choice, stop and refer to an appropriately qualified professional; this toolkit cannot provide that decision.

@@ -68,7 +68,7 @@ non-generative: it answers typed questions about a `state` with probabilities an
 - Confidence is how concentrated the answer is, not permission to act.
 - A Noul threshold does not carry over to a Choice: a Choice is relative among its options, each
   Noul is absolute.
-- Pin `jev-1.13.0` when a threshold was tuned; `jev-latest` moves on the next release.
+- Pin the route's version id when a threshold was tuned (`jev-1.13.0` on TypeSafe, `jev-1.13` on OpenRouter); `jev-latest` moves on the next release.
 - Never ask Jev what code can compute: counts, dates, arithmetic, string checks.
 
 ## Recovery
@@ -78,7 +78,8 @@ non-generative: it answers typed questions about a `state` with probabilities an
 - `consent_not_observed`: nothing was sent; offer the ask in one line naming what would be sent
   and wait for the user to reply `ask jev`.
 - `credential_like_content`: remove the secret-looking text from `state` and tell the user what
-  was removed; the tool refuses rather than redacts.
+  was removed; the tool refuses rather than redacts. A skill's own procedure or recovery line wins
+  over this one: a diff or a command that carries a credential is a finding, not text to strip.
 
 ## Relation to the route-question answerer opt-in (#1816)
 

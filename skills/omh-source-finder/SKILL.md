@@ -10,7 +10,7 @@ metadata:
     phase: source-acquisition
     role: researcher
     quality_tier: source-acquisition-gated
-    related_skills: [ulw-research, omh-research-brief, omh-paper-learning, omh-research-department, omh-materials-package, omh-deliverable-package, omh-image-cards]
+    related_skills: [ulw-research, omh-research-brief, omh-web-research, omh-paper-learning, omh-research-department, omh-materials-package, omh-deliverable-package, omh-image-cards]
 ---
 
 # Source Finder
@@ -29,7 +29,7 @@ This is a Hermes-native `source-finder` workflow skill.
 
 - The requested output is factual findings, comparison, or a summary rather than a typed candidate inventory and acquisition status; use `ulw-research`.
 - The user needs a business decision brief with evidence-versus-inference treatment; use `omh-research-brief`.
-- The user asks for current citations, fact-finding, or source-backed synthesis; use `ulw-research`.
+- The user asks for a cited answer to a current-facts question; use `omh-web-research`, and for a reference-implementation study with a depth budget use `ulw-research`.
 - The user supplies a paper/PDF/arXiv/DOI/excerpt and wants explanation; use `omh-paper-learning`.
 - The user asks for recurring monitoring, source inbox, or Scout/Analyst/Briefer operations; use `omh-research-department`.
 - The user asks to export, convert, render, package, or attach a file; use `omh-materials-package` or `omh-deliverable-package`.
@@ -90,7 +90,7 @@ Quality bar:
 - Separate candidate preparation, observed link, observed download, file hash, text extraction, license check, verification, and downstream selection.
 - Attach observation provenance before treating any acquisition state as evidence.
 - For `paper` candidates, when Hermes' bundled `arxiv` skill is available, search through it - by topic, author, category, or paper id - and record each entry it returns as `link_observed` with `hermes_tool` provenance. A search result is an observed link and nothing more: download, text extraction, and verification stay unclaimed until their own run is observed. Without the skill, a paper candidate stays `candidate_prepared` until a link is observed another way.
-- Vary search angles across official docs, academic work, implementations, datasets, and criticism until each requested source kind has candidates or another angle change adds nothing new.
+- Vary search angles across official docs, academic work, implementations, datasets, and criticism within the plan's budget (3 queries, 10 external attempts and one follow-up for an explore search), and name the source kinds still without candidates when the budget ends.
 - Recommend the next downstream workflow without pretending that downstream work already ran.
 
 Handoff policy:

@@ -25,7 +25,7 @@ Contract: `references/full-contract.md`. Preset: `references/preset.md`.
 ## Procedure
 
 1. Name what leaves the machine: each claim, an excerpt of observed output, and the goal.
-2. Call `omh_jev_ask` with `preset: done_check/v1` and `state` {claim, evidence_excerpt, goal}, one ask per claim, at most 6.
+2. Call `omh_jev_ask` with `preset: done_check/v1` and `state` {claim, evidence_excerpt, goal}, one ask per claim, at most 6; with more, send the 6 the user would act on and list the rest as `not_observed`.
 3. Report each objection with its claim and rule; fix or withdraw an objected claim before reporting completion.
 
 ## Completion Checklist

@@ -20,7 +20,7 @@ known access limits and any separately granted external-transmission authority.
    contracts. Use these signals to choose targeted depth, not to launch every
    specialist automatically:
    - auth, input, and security: inspect trust boundaries, authorization, and
-     untrusted data with the relevant security review guidance.
+     untrusted data against the application-code security checklist: injection, object-level authorization, SSRF, unsafe deserialization, secrets in code, and crypto misuse. `omh-security-safety-review` covers the agent's own runtime, not application code.
    - boundary, API, and type changes: load `references/architecture-delta.md`
      for ownership and producer/consumer compatibility.
    - migrations and rollback: inspect data preservation, mixed-version

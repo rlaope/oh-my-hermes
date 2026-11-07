@@ -1081,7 +1081,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "run_omh_update": ("run_omh_update", "Run omh update"),
     "run_omh_setup": ("run_omh_setup", "Run omh setup"),
     "run_omh_doctor": ("run_omh_doctor", "Run omh doctor"),
-    "run_omh_uninstall": ("run_omh_uninstall", "Run omh uninstall"),
+    "run_omh_uninstall": ("run_omh_uninstall", "Preview omh uninstall"),
     "run_omh_install": ("run_omh_install", "Run omh install"),
     "run_omh_list": ("run_omh_list", "Run omh list"),
     "run_hermes_research": ("run_hermes_research", "Start research"),
@@ -3653,7 +3653,7 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
         "headline": "I can prepare the external app action without claiming it ran.",
         "body": (
             "I will prepare the connector task card: provider, target object, allowed action, recipient or assignee, "
-            "payload summary, credential boundary, confirmation gate, result-evidence slots, and stop condition. "
+            "exact payload, credential boundary, confirmation gate, result-evidence slots, and stop condition. "
             "API calls, message sends, ticket mutations, external writes, webhook delivery, and connector success stay observed-only."
         ),
         "phase": "connector_operator_prepared",
@@ -10676,6 +10676,9 @@ def workflow_explanation_payload(
     # (`prepare_ultraperf_loop`), so spelling one out puts the catalog key back
     # into a sentence every other field here just had it taken out of.
     next_action_label = with_public_skill_names(next_action.replace("_", " "))
+    if next_action == "run_omh_uninstall":
+        # A flagless uninstall is the full purge, so the explanation says the preview, not the purge.
+        next_action_label = "omh uninstall --dry-run"
     not_evidence_yet = _workflow_explanation_not_evidence(state, claim_boundary=claim_boundary)
     payload: dict[str, object] = {
         "schema_version": WORKFLOW_EXPLANATION_SCHEMA_VERSION,

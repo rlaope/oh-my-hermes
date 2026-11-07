@@ -29,7 +29,7 @@ Wait for the release branch's own CI on its last merge before starting the cut. 
 | Partial | 25-50% | one more peak | the same signals hold with more load |
 | Full | 100% | until the rollback window closes | the previous artifact may be retired |
 
-Promotion reads a named signal against a threshold. A clock alone is not a promotion criterion.
+Promotion reads a named signal against a threshold. A clock alone is not a promotion criterion. A stage also states the minimum number of requests it must serve before the signal is read: zero failures in 300 requests only bounds the true failure rate below about 1% at 95% confidence. When traffic cannot reach that count inside the bake time, call the canary coarse and widen the stage or extend the bake.
 
 ## 4. Rollback trigger and command
 
@@ -37,7 +37,7 @@ A rollback trigger is a signal, a threshold, and a window: "5xx rate above 1% fo
 
 | Mechanism | Command shape | Cannot undo |
 | --- | --- | --- |
-| Redeploy the previous artifact | `kubectl rollout undo deployment/<name>`, or redeploy the previous image tag | data the new version already wrote |
+| Redeploy the previous artifact | `kubectl rollout undo deployment/<name>`, or redeploy the previous image tag | data the new version already wrote, and config or secrets changed in the same release (roll those back with the same trigger) |
 | Traffic shift | set the canary weight to 0 | nothing, while the old version still runs |
 | Feature flag | turn the flag off | side effects already emitted |
 | Revert and re-release | revert the merge, then cut a patch | a published package: yank or deprecate it, never delete and reuse the version |

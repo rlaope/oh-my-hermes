@@ -131,4 +131,4 @@ reads well.
 The pattern account adapts concepts from `blader/humanizer` (Siqi Chen, MIT,
 reviewed at 8c307f3, v3.1.0), which is based on Wikipedia's
 "Signs of AI writing" (WikiProject AI Cleanup). The wording, the Korean habits,
-the reply rules and the lint hook are OMH's own.\n
+the reply rules and the lint hook are OMH's own.

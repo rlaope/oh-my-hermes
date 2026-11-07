@@ -28,7 +28,7 @@ The order is the contract. Independence exists only before any seat has read ano
 
 ### Round 1 - independent findings
 
-Each perspective produces its findings without seeing any other perspective's output. Prompt each seat separately with the same problem statement, and give each one the same context: the proposal, the decision it must inform, and the known constraints. Nothing else.
+Each perspective produces its findings without seeing any other perspective's output. Prompt each seat separately with the same problem statement, and give each one the same context: the proposal, the decision it must inform, and the known constraints. Nothing else. When the host can run a seat as a separate subagent or task, do so, so the contexts really are separate; otherwise run the seats in sequence and mark the caveat below.
 
 Every finding names its evidence or labels itself an assumption. "This will not scale" is not a finding; "this holds every session in one process, and the deploy target runs four replicas behind a round-robin balancer" is.
 

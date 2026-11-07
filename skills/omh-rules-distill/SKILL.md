@@ -19,7 +19,7 @@ This is a Hermes-native `rules-distill` workflow skill.
 
 ## Why This Exists
 
-`rules-distill` gives OMH a disciplined way to learn from large skill ecosystems like ECC without wholesale copying: extract principles, review them, then patch OMH only through explicit verified work.
+`rules-distill` exists because a repeated lesson buried in traces, reviews, and skill text changes behaviour only once it is written down as a rule, and a rule written from one anecdote does the opposite: it extracts candidate rules from a corpus the user names, checks them against what is already written, and hands approved ones to the destination the user chose; the method is adapted from ECC's rules-distill without wholesale copying.
 
 ## Do Not Use When
 
@@ -44,7 +44,7 @@ Bad example:
 
 ## Completion Checklist
 
-- Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on; a candidate resting on one observation stays needs-evidence in review_queue/v1.
+- Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on, counted as independent runs, sessions, or sources (one session counts once); a candidate resting on one observation stays needs-evidence in review_queue/v1, and two is tentative.
 - Every candidate is classed mechanical or judgement before it is worded. A mechanical candidate is a miss a machine can find from the text alone (a forbidden call, a disallowed import, a file in the wrong place), and its destination is a check (a linter rule, test, hook, or CI step); when the repository already has a check for it that never runs or no longer fails, the candidate is repairing that check, not adding another. Its approved_patch_handoff/v1 names the check and where it is wired, and sets as an acceptance criterion the run the implementer must observe: the check fails with the violation injected and passes once it is reverted. A mechanical candidate outside the chosen destination boundary is reported as a check proposal outside the boundary, never reworded as prose. Only judgement candidates, which need a reader (consistency across files, fit with the code around them), are worded as prose.
 - duplication_conflict_report/v1 names the existing rule or check each candidate repeats or contradicts, or says none was found and where it looked.
 - Nothing reached a destination without an approval recorded in review_queue/v1.

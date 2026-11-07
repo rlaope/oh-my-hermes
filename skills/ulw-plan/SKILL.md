@@ -10,7 +10,7 @@ metadata:
     phase: reviewed-plan
     role: planner
     quality_tier: reviewed-plan-gated
-    related_skills: [ulw-interview, ulw-work, omh-ai-slop-cleaner, omh-refactor-plan, omh-decision-prototype, ulw-context]
+    related_skills: [ulw-interview, ulw-work, omh-ai-slop-cleaner, omh-refactor-plan, omh-decision-prototype, omh-plan, ulw-context]
 ---
 
 # Ralplan
@@ -33,6 +33,7 @@ This is a Hermes-native `ralplan` workflow skill.
 - The refactor's direction is already decided and what is missing is its execution shape - which files move in which phase, what verifies each phase, where each phase rolls back to; use `omh-refactor-plan`.
 - One plan-blocking choice still needs behavior evidence rather than argument; run `omh-decision-prototype` first and consume its decision receipt without transcript replay.
 - The user wants a pure source lookup, citation check, or paper explanation with no implementation plan.
+- An ordinary feature or fix that needs a plan but not a consensus review (no architectural, regression or user-visible risk the user named); use `omh-plan`.
 - The unresolved work is repository terminology alignment or a project-language decision frontier; use `ulw-context` before planning.
 
 ## Examples
@@ -55,7 +56,7 @@ Bad example:
 - Observed repo facts and source/web evidence gaps are named.
 - At least two options or one chosen option plus rejected alternatives are recorded.
 - Risks, acceptance criteria, and verification commands are testable or explicitly blocked.
-- Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped.
+- Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped: the plan states the count of target-state differences and the count of `Success criteria` rows, and the two are equal or each gap is named as a user-excluded non-goal.
 - When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
 - The plan exists as a recorded file-backed artifact, not only as chat narration.
 - The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.
@@ -63,7 +64,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If requirements are still fuzzy, route back to deep-interview before planning.
+- If requirements are still fuzzy, route back to the `ulw-interview` workflow before planning.
 - If current-source evidence is missing, route a `ulw-research` step before accepting the plan.
 - If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ulw-work` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
 
@@ -133,8 +134,8 @@ Expected outputs:
 
 Artifact expectations:
 
-- record the plan with `omh hermes plan --record`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one
-- mark acceptance with `omh hermes plan-accept <path>` so acceptance_recorded and handoff_ready point at a real artifact
+- write the reviewed plan (options, rejected alternatives, risks, `Success criteria` table, target-state coverage, lanes in node-prompt shape) to a Markdown file outside the repository and the OMH store (the system temp directory is fine), then record it with `omh hermes plan --record --plan-file <file> "<task>"`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one; without `--plan-file` the file holds only a generated scaffold, and its `say` field tells you so
+- mark acceptance with `omh hermes plan-accept <path>` only for a file recorded with `--plan-file` (front matter `plan_body: reviewed`), so acceptance_recorded and handoff_ready point at the reviewed plan; accepting a scaffold-only file returns `reviewed_body: false` and is not a reviewed plan
 
 Safety rules:
 
@@ -143,7 +144,7 @@ Safety rules:
 - Make acceptance criteria testable.
 - Record unresolved tradeoffs explicitly.
 - Keep rejected options and handoff readiness separate from accepted execution evidence.
-- Write plan artifacts only through the named `omh hermes plan` commands under `<repo>/.omh/plans/`; never write plans or planning state into `.omc/**` or any other wrapper's state root — `.omc/` belongs to oh-my-claudecode, a different product.
+- Record plan artifacts only through the named `omh hermes plan` commands (the reviewed text goes in through `--plan-file`, not by editing the recorded file) under `<repo>/.omh/plans/`; never write plans or planning state into `.omc/**` or any other wrapper's state root — `.omc/` belongs to oh-my-claudecode, a different product.
 
 ## Runtime Evidence
 

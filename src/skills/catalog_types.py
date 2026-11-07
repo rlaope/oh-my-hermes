@@ -248,8 +248,7 @@ _HANDOFF_RECOVERY_NOTES = (
 # reaches agents that only ever read `SKILL.md`.
 DELEGATE_PROMPT_DISPLAY_RULE = (
     "When delegating, show the composed delegate prompt in a fenced code block in the status message; "
-    "truncate a long prompt to a bounded preview ending with `... [truncated, N chars total]` — the user "
-    "must see WHAT was asked, not just that something was."
+    "truncate a long prompt to a bounded preview ending with `... [truncated, N chars total]`."
 )
 DELEGATE_MODEL_LABEL_RULE = (
     "Name every delegated or parallel lane's model and, when the host exposes it, its reasoning effort "
@@ -265,8 +264,7 @@ DELEGATE_RESUMABLE_SESSION_RULE = (
     "non-interactive Claude Code pass `--output-format json` and read `session_id` from the result "
     "(resume with `claude -p --resume <session-id>`); for Codex pass `--json` and read `thread_id` "
     "(resume with `codex exec resume <thread-id>`, repeating `--skip-git-repo-check` outside a git "
-    "repo). Never leave a delegate run with no recorded way to resume or steer it — a plain-text "
-    "one-shot that hides its session id strands the work when the run stalls or times out."
+    "repo). Never leave a delegate run with no recorded way to resume or steer it."
 )
 # Words the Hermes install scanner (`tools/skills_guard.py`, rule `crypto_mining`,
 # severity critical) scores on sight, in any file of a skill. A trigger that
@@ -419,7 +417,8 @@ ENGINE_CLOSING_BRIEF_RULE = (
 )
 
 # Hermes bundles the document producers (`skills/productivity/{powerpoint,pdf,
-# xlsx,docx}`, read at tag v2026.9.7 and at upstream main 63d0b94120). Their
+# xlsx,docx}` at tag v2026.9.7 and at upstream main 63d0b94120, folded into
+# `skills/productivity/microsoft-office` from v0.22.6 with the same script names). Their
 # render and recalculation scripts exit 0 when the renderer is absent and say
 # so only in a result field, so the exit code is not the rung. The rung names
 # are `FORMAT_QA_LADDER`'s in `src/workflows/materials.py`. Composed into the
@@ -436,18 +435,18 @@ DOCUMENT_PRODUCER_QA_RULE = (
 # their own strings because `report-package`, whose one binary is a deck,
 # states them without the other producers'.
 DOCUMENT_PRODUCER_POWERPOINT_RUNGS = (
-    "`powerpoint` gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a "
+    "PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a "
     "fresh directory, its image count matching `slide_count`, since it lists every image already in that directory)"
 )
 DOCUMENT_PRODUCER_IMAGES_INSPECTED = "Images that exist are not a render pass until each one has been inspected"
 DOCUMENT_PRODUCER_RUNGS_RULE = (
-    "On Hermes, the bundled skills give these rungs when available: "
+    "On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; `microsoft-office` from v0.22.6; same scripts): "
     f"{DOCUMENT_PRODUCER_POWERPOINT_RUNGS}; "
-    "`pdf` gives `page_count` (`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); `xlsx` gives "
+    "`pdf` gives `page_count` (`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); Excel gives "
     "`sheet_schema` (`xlsx_read.py --sheets`) and `formula_recalculation` (`xlsx_recalc.py --out <copy>`, since "
     "without `--out` it replaces the input and rungs or approvals already recorded were for other bytes, then the "
     "cached results read back with `xlsx_read.py --formulas`, where an error value or a formula with no cached value "
-    "is a finding); `docx` gives `section_structure` and `required_clause_check` (`docx_read.py --structure` and "
+    "is a finding); Word gives `section_structure` and `required_clause_check` (`docx_read.py --structure` and "
     "`--text`) but no `page_count` or appearance until a converted PDF is rendered, and `docx_validate.py` checks "
     f"package health, never rendering. {DOCUMENT_PRODUCER_IMAGES_INSPECTED}, and a producer's `\"ok\": true` is "
     "never the QA verdict."
@@ -795,6 +794,9 @@ class HermesReferenceLine(str):
 # with a catalog skill or its display label, which a test holds. A name
 # outside this set is refused, so a typo or an upstream rename fails when the
 # catalog loads instead of shipping a line naming a skill Hermes cannot load.
+# `llm-wiki` moved to `optional-skills/` on upstream main on 2026-10-28 (commit
+# 183b5ddd5f); it stays bundled at the floor tag, so its handoff line is conditional
+# on the skill being installed.
 HERMES_BUNDLED_SKILL_NAMES = frozenset(
     {
         "architecture-diagram",
@@ -812,6 +814,7 @@ HERMES_BUNDLED_SKILL_NAMES = frozenset(
         "llm-wiki",
         "manim-video",
         "meeting-action-items",
+        "microsoft-office",
         "opencode",
         "pdf",
         "powerpoint",
@@ -1478,6 +1481,10 @@ def _feature_surface_skill(
     required_inputs: tuple[str, ...] | None = None,
     why_this_exists: str = "",
     do_not_use_when: tuple[str, ...] = (),
+    good_expected: str = "",
+    good_why: str = "",
+    bad_expected: str = "",
+    bad_why: str = "",
     situations: tuple[str, ...] = (),
     portable_overrides: Mapping[str, tuple[str, ...]] | None = None,
     portable_override_shadows: Mapping[str, str] | None = None,
@@ -1534,13 +1541,15 @@ def _feature_surface_skill(
         ),
         good_example=SkillExample(
             prompt=good_prompt,
-            expected=f"Produce `{next_action}` with required context, wrapper actions, and not-evidence boundaries.",
-            why="The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.",
+            expected=good_expected
+            or f"Produce `{next_action}` with required context, wrapper actions, and not-evidence boundaries.",
+            why=good_why or "The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.",
         ),
         bad_example=SkillExample(
             prompt=bad_prompt,
-            expected="Report the missing observed evidence or authority instead of claiming the external step happened.",
-            why="Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.",
+            expected=bad_expected
+            or "Report the missing observed evidence or authority instead of claiming the external step happened.",
+            why=bad_why or "Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.",
         ),
         final_checklist=final_checklist or (),
         recovery_notes=recovery_notes or (),

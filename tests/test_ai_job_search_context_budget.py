@@ -143,10 +143,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # catalog index as a `skill_view` call into omh-routing (the file is not its
             # own), which moves that row past the preview cut; no other row moved, and the
             # pin before it was ad1e9c0a...4aa5.
-            # 533907 -> 535568 and the digest re-derived: the code-quality skills fix round and its review round grow
-            # the rows itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT (+1661); the pin before it was d6dfefff...fc71.
-            (skill_capabilities, 535568, FULL_ROW_DELTA_CAP,
-             '83738ff3b26f8bbe9e143d1bc97420b74dee3c1d24da16caadc1753db07f6b7b',
+            # 533907 -> 536196 and the digest re-derived: the skill audit round's rows, +2,289
+            # (itemized by lane at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the sum of the lanes'
+            # readings is exact on the merged tree, and the pin before it was d6dfefff...fc71.
+            # 536196 -> 537857 and the digest re-derived: the code-quality skills fix round, +1,661 on the merged
+            # tree (itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was a5d1c988...3e03.
+            (skill_capabilities, 537857, FULL_ROW_DELTA_CAP,
+             '41011a72e619f09494defd7b782feca172c487d133f63eb3cf1d3c819e973bc7',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -378,10 +381,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then the render rail: every body names its siblings by the label `skill_view`
         # loads, and the bodies that ended in a lost hand-back fragment gain the lane
         # section; the pin before it was 4f552dc5...a07a.
-        # Code-quality skills fix round: build-failure-triage, verification-gate, codebase-onboarding, codebase-uml,
-        # codegraph-refresh, frontend-refactor, native-debugging, rust, refactor-plan and the rest of that lane move
-        # (bodies and references); the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), '27e36068f20ca4327635714fc0b40688a0935cdb52f17063883777c3a7bf6d68')
+        # The skill audit round moves the bodies each lane edited and nothing else: the union of the
+        # lanes' moved lists equals the merged tree's. Plan, ralplan and adversarial-consensus name
+        # `--plan-file` / `--input-bundle`; the pin before it was 7e537e8d...4b2c. The code-quality skills fix round then moves
+        # its lane's bodies (build-failure-triage, verification-gate, codebase-onboarding, codebase-uml, codegraph-refresh,
+        # frontend-refactor, github-event-ops, github-issue-intake and ultraqa among them); the pin before it was 49189871...a29a.
+        self.assertEqual(_digest(legacy_hashes), '55b2226e6fed23c19789f4def34301f38e06aed02c885a6282c82f7b864825eb')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -396,10 +401,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
         # 122431 -> 124814: the render rail writes each sibling under its loadable label
         # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
-        # 124814 -> 123949: agent-debug states its own Why and Do Not Use When, and github-event-ops and
+        # 124814 -> 115494: the skill audit round's own Completion Checklist, Why and Recovery
+        # lines replace the defaults those bodies repeated (itemized by lane at
+        # FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS); the ceilings are re-derived there.
+        # 115494 -> 114629: agent-debug states its own Why and Do Not Use When, and github-event-ops and
         # github-issue-intake their own Completion Checklists, in place of the feature-surface defaults those
-        # bodies repeated (-865); all ceilings unchanged.
-        self.assertEqual(legacy['repeated']['bytes'], 123949)
+        # bodies repeated (-865).
+        self.assertEqual(legacy['repeated']['bytes'], 114629)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -410,8 +418,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         self.assertLess(current['repeated']['bytes'] - REPEATED_DELTA_CAP, 131_893)
         feature_refs = [t for t in refs if t.skill_name == FEATURE]
         self.assertEqual(len(feature_refs), 6)
-        self.assertLessEqual(sum(len(t.content.encode()) for t in feature_refs), 19397)
-        self.assertLessEqual(max(len(t.content.encode()) for t in feature_refs), 4039)
+        # 19397 -> 19800: the suspect-posting and interview-prep lines and real Korean questions
+        # (measured 19,731 at the time; the cap keeps the headroom the other lines in this test carry).
+        self.assertLessEqual(sum(len(t.content.encode()) for t in feature_refs), 19800)
+        # 4039 -> 4164: procedure.md's Korean clarification questions were English text; real Korean
+        # is three bytes a character (+125).
+        self.assertLessEqual(max(len(t.content.encode()) for t in feature_refs), 4164)
 
     def test_hard_per_item_schema_and_injection_limits_do_not_move(self) -> None:
         # Career growth moves only the three catalog-total ratchets. Later
@@ -421,16 +433,16 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         expected = {
             'skill_index_line_max_chars': 100,
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
-            'pre_llm_call_context_chars_max': 6041,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
-            'pre_llm_call_context_fallback_chars_max': 7593,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
+            'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
+            'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 3630,  # Human-voice reply sentence (+110).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1650000,
-            'full_profile_skill_body_repeated_chars': 140000,
+            'full_profile_skill_body_chars': 1700000,  # Re-derived from 1511394 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
+            'full_profile_skill_body_repeated_chars': 130000,  # Re-derived from 117436 measured, +10%, up to the next 10,000.
             'skill_density_filler_hits': 0,
         }
         metrics = {m.name: m for m in budget_metrics()}

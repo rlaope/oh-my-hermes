@@ -26,7 +26,7 @@ Contract: `references/full-contract.md`. Preset: `references/preset.md`.
 
 1. Name what leaves the machine: the command, the working directory, and the stated task.
 2. Call `omh_jev_ask` with `preset: action_check/v1` and `state` {command, cwd, stated_task} before anything runs.
-3. Report the outcome and rule; on `hold` or `refuse_recommended` ask the user before running, and on `no_extra_hold` the host's normal approval still applies.
+3. Report the outcome and rule; on `hold` or `refuse_recommended` ask the user before running, and on `no_extra_hold` the host's normal approval still applies. A non-answer is a `hold` too.
 
 ## Completion Checklist
 
@@ -39,6 +39,7 @@ Contract: `references/full-contract.md`. Preset: `references/preset.md`.
 ## Recovery Notes
 
 - Tool missing, `consent_not_observed`, or refused: follow the rail's recovery section; never simulate an answer.
+- Here a missing tool, a non-answer, or a command refused as credential-like is a `hold`, not permission to continue without the screen: tell the user it did not run.
 
 ## Workflow Lane
 

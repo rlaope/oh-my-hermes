@@ -3508,7 +3508,11 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
                 self.assertEqual(task_card["task_type"], "omh_cli_maintenance")
                 self.assertEqual(task_card["route_level"], "operator_maintenance_command")
                 self.assertEqual(task_card["command"], command)
-                self.assertEqual(task_card["command_argv"], ["omh", command])
+                # A flagless uninstall is the full purge, so its card previews with --dry-run.
+                self.assertEqual(
+                    task_card["command_argv"],
+                    ["omh", command, "--dry-run"] if command == "uninstall" else ["omh", command],
+                )
                 self.assertEqual(task_card["recommended_next_action"], f"run_omh_{command}")
                 self.assertIn("code changes require a separate request", task_card["user_facing_summary"])
                 self.assertTrue(
@@ -5384,6 +5388,39 @@ selected_workflow=ultraprocess
                     route_owner(route_chat_message(message, source="discord"), allow_clarify=message in _REPINNED_DIRECT_TRANSLATION_FALLBACK_DOES_NOT_STEAL_WORKFLOW_REQUESTS),
                     expected_skill,
                 )
+
+
+class MaintenanceUninstallCardTests(unittest.TestCase):
+    def test_uninstall_card_previews_before_the_full_purge(self) -> None:
+        from omh.routing.task_cards import _maintenance_command_card
+
+        card = _maintenance_command_card("uninstall")
+        self.assertEqual(card["command_argv"], ["omh", "uninstall", "--dry-run"])
+        self.assertIn("omh uninstall --dry-run", card["first_safe_action"])
+        self.assertEqual(card["recommended_next_action"], "run_omh_uninstall")
+        for command in ("update", "setup", "doctor", "install", "list"):
+            self.assertNotIn("--dry-run", _maintenance_command_card(command)["command_argv"])
+
+    def test_uninstall_card_carries_a_typed_keep_command_flag(self) -> None:
+        from omh.routing.task_cards import classify_task
+
+        self.assertEqual(classify_task("omh uninstall")["command_argv"], ["omh", "uninstall", "--dry-run"])
+        self.assertEqual(
+            classify_task("omh uninstall --keep-command")["command_argv"],
+            ["omh", "uninstall", "--dry-run", "--keep-command"],
+        )
+        self.assertIn("already shown", classify_task("omh uninstall")["first_safe_action"])
+
+    def test_wrapper_button_and_explanation_preview_instead_of_running_uninstall(self) -> None:
+        from omh.wrapper.contract import build_chat_interaction_payload
+
+        payload = build_chat_interaction_payload("omh uninstall", source="discord")
+        action = payload["chat_response"]["actions"][0]
+        self.assertEqual(action["id"], "run_omh_uninstall")
+        self.assertEqual(action["label"], "Preview omh uninstall")
+        explanation = payload["chat_response"]["state"]["workflow_explanation"]
+        self.assertIn("omh uninstall --dry-run", explanation["primary_action_hint"])
+        self.assertIn("omh uninstall --dry-run", explanation["recommended_reply"])
 
 
 if __name__ == "__main__":

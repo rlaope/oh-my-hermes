@@ -30,7 +30,7 @@ This is a Hermes-native `meta-router` workflow skill.
 Good example:
 
 - Prompt: /omh migrate this service off the deprecated API and add tests
-- Expected behavior: Consult `omh recommend` on the remainder, then chain the recommended plan and executor workflows with explicit observed-vs-prepared evidence boundaries.
+- Expected behavior: Consult `omh recommend` on the remainder, then name the recommended chain and start only its first stage; each later engine waits for the user's go-ahead, with explicit observed-vs-prepared evidence boundaries.
 - Why: A leading /omh command with an imperative remainder is a meta-routing request that reasons over the live catalog rather than a memorized list.
 
 Bad example:

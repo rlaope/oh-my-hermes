@@ -71,7 +71,7 @@ DEFINITION = SkillDefinition(
     quality_tier="evidence-gated",
     quality_bar=("Require observed source receipts and verified helper output hashes, not a mock result or health-only check.", "Retain contradictory source assertions and date/identity gaps without deriving a clinical consensus."),
     do_not_use_when=(
-        "For explaining one supplied paper, use `paper-learning`; for broad literature discovery, use `research`.",
+        "For explaining one supplied paper, use `paper-learning`; for broad literature discovery or a clinical-evidence question with no named gene or variant (this skill covers ClinVar and ClinicalTrials.gov records only), use `research`, and for a cited answer to one such question use `web-research`.",
         "For generic server configuration and connection diagnostics, load the host's MCP setup guidance instead.",
         "For sequence analysis or omics pipelines, select an available computational biology specialist instead; this method does not implement those analyses.",
         HermesSkillLine("For citation verification and source attribution alone, load Hermes' bundled `grounded-citations` skill.", ("grounded-citations",)),

@@ -966,15 +966,22 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # 536969 -> 536979: the `dag-ulw` row only. Its handoff policy names the third
 # way an external coding owner is chosen (naming it in a dag-ulw request) and
 # the per-owner `exports` list (+10). Measured from the producer; no headroom.
-# 536979 -> 538188: the code-quality skills fix round (one owner goal, split per lane). Rows that
-# grew: native-debugging (instrument choice and batch debugger), build-failure-triage (flake, CI-only
-# origin, merge ref), verification-gate (required set, thorough lane, N sizing), github-event-ops
-# (path table and re-read), agent-debug (own why, DNU, inputs, replay), codebase-onboarding,
-# github-issue-intake, frontend-refactor, repro-audit, codegraph-refresh, codebase-uml, rust and the
-# todo-checklist path in three rows (+1209 together). Review round: the rerun rule in the two origin
-# rows, the ruleset required set, the event path and issue re-read, and the lldb crash recipe (+452
-# more, 538640). Measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 538640
+# 536979 -> 539268: the skill audit round, +2,289 net, each lane read at its own head against
+# main and the sum exact on the merged tree. Plan record +6 (the plan, ralplan and
+# adversarial-consensus artifact lines name `--plan-file`); research +485
+# (biomedical-evidence +190, data-analysis +2, live-info-operator +23, long-document-reading
+# +174, research-department +96); memory and Jev +234 (the memory-new and memory-sync
+# descriptions, decision-recall's Do Not Use lines, jev-action-check's third safety rule, the
+# jev-review-gate test diff); business +347 (required-input words and the redline rule); coding
+# core +1,207 (quality bars, safety rules and inputs on ten skills); build, infra and security
+# +27 (application-threat-model -4, security-event-response +31); host readiness -17
+# (executor-runtime-readiness -16, provider-profile-posture -14, capability-toggle +13). The
+# operations lane moves no row, and design and media moves sprite-forge at the same length.
+# 539268 -> 540929: the code-quality skills fix round (+1,661) on top of the audit round, each read at
+# its own head: native-debugging, build-failure-triage, verification-gate, github-event-ops, agent-debug,
+# codebase-onboarding, github-issue-intake, frontend-refactor, repro-audit, codegraph-refresh, codebase-uml,
+# rust, and the todo-checklist path in three rows. Measured from the producer on the merged tree; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 540929
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -2165,16 +2172,20 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # body (+11,249), merged over the Vietnamese pack. Its own measurement on
 # 32878e25d (1,332,345) and this pack's (1,325,671) each raised the ceiling to
 # 1,500,000; together they read 1,336,920, whose 10% still rounds to it.
-# 1336920 -> 1478589 (measured; the ceiling 1500000 -> 1650000): the producer reads
-# 1,478,589 on the tree after the code-quality skills fix round, and
-# `test_one_more_ordinary_lane_member_fits_every_body_budget` found that the largest
-# lane-mate copy (`ultrawork`, +26,456) no longer fits under 1,500,000. The measurement
-# had not been re-taken since it was set; 1,478,589 plus 10%, rounded up to the next
-# 50,000, is 1,650,000.
-FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1478589
+# 1336920 -> 1511394 (measured; the ceiling 1500000 -> 1700000): the pack had grown to
+# 1,471,273 on main without a re-measure, because a floor the producer reads above fires no
+# re-derive signal, and `test_one_more_ordinary_lane_member_fits_every_body_budget` found that
+# the largest lane-mate copy (`ultrawork`) no longer fits. The skill audit round adds 40,121,
+# each lane read at its own head against main and the sum exact on the merged tree: plan
+# record +843, research +11,359, operations +5,958, memory and Jev +6,241, business +5,740,
+# coding core +2,599, design and media +2,329, build, infra and security +2,798, host
+# readiness +2,254. 1,511,394 plus 10%, rounded up to the next 50,000, is 1,700,000.
+# 1511394 -> 1521089 (the ceiling stays 1700000): the code-quality skills fix round adds 9,695 on the merged
+# tree; 1,521,089 plus 10%, rounded up to the next 50,000, is still 1,700,000.
+FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1521089
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1650000
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1700000
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # Repeated bytes: characters of full-profile SKILL.md `##` sections that are
 # byte-identical to the same section in another skill -- the second and later
@@ -2272,9 +2283,20 @@ FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # +512) then took the reading to 113,986.
 # Three compact science bodies and their shared lane/evidence rails cross the
 # ceiling: reading 122343; plus 10%, rounded up to 10000, derives 140000.
-FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 122343
+# 122343 -> 117436 (the ceiling 140000 -> 130000): the skill audit round gives skills their own
+# Completion Checklist, Why and Recovery lines in place of the defaults they repeated, so the
+# reading falls below this floor. From main's 126,756 it falls 9,320: research -1,199,
+# operations -1,735, memory and Jev -593, business -1,600, coding core -246, design and media
+# -1,251, build, infra and security -1,402, host readiness -1,547, each lane read at its own
+# head; the merged tree is 253 above that sum, all under `Completion Checklist`, whose last
+# copy of a default stops counting as a duplicate only once. 117,436 plus 10%, rounded up to
+# the next 10,000, is 130,000.
+# 117436 -> 116571 (the ceiling stays 130000): agent-debug states its own Why and Do Not Use When, and
+# github-event-ops and github-issue-intake their own Completion Checklists, in place of the feature-surface
+# defaults those bodies repeated (-865). 116,571 plus 10%, rounded up to the next 10,000, is still 130,000.
+FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 116571
 FULL_PROFILE_SKILL_BODY_REPEATED_CEILING_STEP_CHARS = 10000
-FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT = 140000
+FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT = 130000
 
 
 @dataclass(frozen=True)

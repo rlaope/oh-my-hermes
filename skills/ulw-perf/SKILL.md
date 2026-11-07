@@ -32,14 +32,14 @@ This is a Hermes-native `ultraperf` workflow skill.
 Good example:
 
 - Prompt: $ultraperf checkout feels slow and the worker memory keeps climbing - find where and fix it
-- Expected behavior: Audit the baseline, name the evaluator command, rank hot-path hypotheses, hand the smallest reversible fix to the selected executor, re-measure, and state the budget delta.
+- Expected behavior: Audit the baseline, name the evaluator command, rank hot-path hypotheses, hand the smallest reversible fix to its owner (the Hermes harness unless an external one was chosen), re-measure, and state the budget delta.
 - Why: The problem is real but unlocalized across more than one domain.
 
 Bad example:
 
-- Prompt: $ultraperf make the recommender p95 under 200ms; baseline 340ms, benchmark is 'make bench'
-- Expected behavior: Skip the discovery audit: record 340ms as the baseline and `make bench` as the evaluator command, then hand the fix to the selected executor and re-measure against the 200ms target.
-- Why: A single declared measurable goal does not need a discovery loop.
+- Prompt: $ultraperf the docstring on parse_user is wrong
+- Expected behavior: Fix the docstring directly; there is no measured cost and no hot path to rank.
+- Why: A wrong comment is a correctness edit, not a performance problem, so no baseline or regression budget applies.
 
 ## Completion Checklist
 
@@ -52,7 +52,7 @@ Bad example:
 
 - If no evaluator command exists, stop the loop and produce one before touching code.
 - If the re-measure does not move, revert the change and re-rank hypotheses instead of stacking fixes.
-- If the goal turns out to be one declared metric with a budget, keep the loop and start from that baseline instead of profiling for a hot path.
+- If the goal turns out to be one declared metric with a budget (for example p95 340ms to 200ms with `make bench`), skip the discovery audit: record the declared baseline and evaluator command, then fix and re-measure against the target.
 
 ## Workflow Lane
 
@@ -78,17 +78,17 @@ Quality bar:
 
 - Record a baseline and name the evaluator command before proposing any optimization edit.
 - Attack only a hot path shown by a measurement or profile; never micro-optimize unmeasured code.
-- Keep every fix the smallest reversible change and route code edits to the selected executor.
-- Re-measure after each change and report deltas only from observed evidence.
+- Keep every fix the smallest reversible change and run its code edit in the Hermes harness, or through `maestro` when the user chose an external coding owner.
+- Re-measure after each change and report deltas only from observed evidence; record the baseline as repeated runs (count and warm-up stated) with median and spread, and treat a delta smaller than the spread as no result.
 - Never present a restart, cache flush, or resource bump as a leak fix; prove causation by revert-verify.
-- Set the regression budget as baseline x (1 + tolerance) and name the CI gate that enforces it.
+- Set the regression budget as baseline x (1 + tolerance) for a lower-is-better metric (latency, memory, cost) or baseline x (1 - tolerance) for a higher-is-better one (throughput), with a tolerance at least the observed spread, and name the CI gate that enforces it.
 - A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it. A mid-run message is the latest steering for the active task, not automatically a replacement objective: it replaces the objective when the user says so and steers the current one otherwise.
 - A follow-up that needs new authority, materially expands the scope, or changes external state not already authorized is described first and started only on the user's approval: the turn ends by naming that next action and asking whether to take it, as one question carrying the choices the user has, never by declaring what will not be done; persistence never broadens the authorized scope. A refused escalation is answered the same way, with a safer alternative inside the boundary or the authorization the boundary asks for — never a workaround or an indirect execution.
 - The closing brief scales to the change: one or two sentences for a simple change. Lead with the result and validation; omit abandoned approaches unless they explain a tradeoff, and internal bookkeeping. Disclose requested-but-not-done work and material prepared/unmerged work; omit unrelated non-action footers. Required accounting stays outside this scaling. Order: result -> relevant evidence/limits -> observed accounting (when required) -> specific question (if useful). For a real unresolved user decision or a useful briefing discussion, offer one specific, content-linked question. Completed work needs no question; discussion grants no authority. Never estimate usage.
 
 Handoff policy:
 
-Hermes owns the audit, baseline, hypothesis, budget, and status; every optimization code edit becomes a selected executor/runtime handoff and returns as observed re-measurement.
+Hermes owns the audit, baseline, hypothesis, budget, and status; each optimization code edit runs in the Hermes harness (a `delegate_task` lane routed with `omh_delegate_route`) unless the user chose an external coding owner, in which case it goes through `ulw-maestro`; either way it returns as observed re-measurement.
 
 Required inputs:
 

@@ -31,13 +31,15 @@ Two rules the table exists to force:
 | Failure mode | Status / code | Body shape | Retryable? | Logged / redacted |
 | --- | --- | --- | --- | --- |
 | bad input | 4xx validation | error envelope with field paths | no | log shape, never values |
-| unauthenticated | 401 | error envelope, no detail | no | log attempt, never the token |
+| unauthenticated | 401 | error envelope, no detail, plus a WWW-Authenticate challenge naming the scheme | no | log attempt, never the token |
 | unauthorized | 403 | error envelope, no resource hint | no | log subject and object |
 | not found vs not permitted | pick one deliberately | must not leak existence | no | log the real reason |
 | conflict / version mismatch | 409 | current version, expected version | after refetch | log both versions |
 | duplicate create (unique constraint) | 409 | error envelope naming the conflicting field | no; a replay with the same idempotency key gets the stored response | log the constraint name, never the value |
 | upstream dependency failure | 5xx or 503 | error envelope, retry hint | yes, with backoff | log upstream identity |
-| timeout | 504 or 408 | error envelope | yes, bounded | log duration and budget |
+| timeout | 504 when a dependency or upstream timed out, 503 when the service sheds load; 408 only for a client that sent its request too slowly | error envelope | yes, bounded | log duration and budget |
+| rate limited / quota | 429 | error envelope naming the limit | yes, after the Retry-After interval | log caller and limit, never the key |
+| payload over the bound | 413 | error envelope naming the bound | no | log the size, never the body |
 
 The two rows that are always argued about and always matter: **not-found versus not-permitted** must be chosen on purpose, because returning 404 for a forbidden object hides existence and returning 403 confirms it; and **retryable** is a contract promise, because a client that retries a non-idempotent write you marked retryable will double-charge someone.
 
@@ -51,6 +53,7 @@ The two rows that are always argued about and always matter: **not-found versus 
 - An offset page reads and discards every row before it, so a surface that pages deep or grows without bound uses a cursor. The index that serves the cursor is a `omh-relational-db` question; name it in the handoff.
 - Time is one representation. Nullability is explicit. An optional field that is sometimes absent and sometimes `null` is two shapes.
 - Versioning: name how a breaking change reaches clients before the first breaking change, not during it.
+- A 429 or 503 carries `Retry-After`, and the contract states the backoff a client is expected to apply; a client that ignores it is the next incident.
 
 ## 5. Integrity under concurrency
 

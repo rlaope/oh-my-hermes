@@ -23,7 +23,6 @@ This is a Hermes-native `websearch-setup` workflow skill.
 ## Do Not Use When
 
 - The user wants Hermes to run a web search now, not configure how web search is set up.
-- No provider key, backend, or tier intent has been named yet.
 - The request needs a repository code change rather than a local `.env` or Hermes config edit.
 
 ## Examples
@@ -46,10 +45,12 @@ Bad example:
 - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
 - The provider API key write and the `web` backend or tier change were verified as two separate, independently-approved changes, each read back from the key Hermes consumes.
 - Nothing was written to `auxiliary.web_extract`, and a leftover block there was reported as ignored rather than counted as configuration.
+- Verified needs every keyed backend or `paid` tier in the merged `web` section to have its key present.
 
 ## Recovery Notes
 
-- If no provider account or key is available, mark the key step "not applicable" and continue with the backend and tier step alone; the keyless free tier needs no key.
+- If no provider account or key is available, mark the key step "not applicable" and continue with the backend and tier step alone, pick a keyless backend or a `provider_tier.<name>: free` tier, never a keyed or `paid` one without its key; offer to reverse an approved keyed backend as its own diff.
+- If nothing is named yet, run the read-only diagnosis first, then ask which paid provider, if any.
 - If either diff is rejected, keep the other step's state independent and do not roll both back together.
 - If the config still holds an `auxiliary.web_extract` block, report it as a leftover Hermes ignores and leave it in place unless the user asks to remove it as its own diff.
 

@@ -133,7 +133,8 @@ class DuplicateContentSuppressionTests(unittest.TestCase):
         # settings path so the Hermes install scanner stops reading it as a
         # shell redirect.
         self.assertEqual(profile["duplicate_count"], 1)
-        self.assertEqual(profile["allowlisted_bytes"], 2470)
+        # 2470 -> 2306 when the delegation prompt rule dropped its rationale tail (-82 per copy, two copies).
+        self.assertEqual(profile["allowlisted_bytes"], 2306)
         self.assertEqual(profile["bytes_saved"], 0)
         self.assertEqual(
             profile["surface_kinds"],

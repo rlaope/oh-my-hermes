@@ -56,7 +56,7 @@ Quality tier: `execution-evidence-gated`
 
 - The source sheet is a host-generated grid on #FF00FF with a source record; real-person sources carry consent.
 - The actual helper command and exit were observed; frames, sheet and qc.json were read back and hashed, or the blocker is stated.
-- body_scale_cv and anchor_y_std are quoted from qc.json; a REGENERATE verdict led to a new sheet, not frame edits.
+- free_frames were named before the run, never after a REGENERATE; body_scale_cv and anchor_y_max_dev are quoted from qc.json; a REGENERATE verdict led to a new sheet, not frame edits.
 
 ## Recovery Notes
 
