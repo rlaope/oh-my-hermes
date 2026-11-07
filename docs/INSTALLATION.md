@@ -2440,23 +2440,23 @@ has none of its own either.
 
 ### Per-model reasoning efforts
 
-`-`/`+` in the picker steps the head model's effort only through the rungs
-that model is configured to offer; left/right still changes the model. The
-built-in list is the source-backed ladder in `src/coding/model_contracts.py`
-for the exact model, a declared alias, or a dated snapshot, with a contract's
-`surface_efforts` read when it records one for the lane. `none` is offered
-only when the contract documents a thinking-disable capability, either as a
-`none` rung or as an accepted thinking-disabled request; models whose thinking
-is always on (Claude Opus and Sonnet 5.5, Kimi K3.1 Pro, GPT-6 Astra) never
-list it. A documented provider mapping is not an independent rung: DeepSeek's
-`medium` and `xhigh` map to `high`, so the picker steps `none -> low -> high -> max`
-and leaves a stored mapping value marked until the person edits that row. A
-model with no contract and no user entry is *unconfigured*: the picker keeps
-its stored effort, paints `unconfigured`, and disables both effort keys rather
-than guessing a common ladder.
+`-`/`+` in the picker step the head model's effort along that model's ladder;
+left/right still change the model. A model with a contract in
+`src/coding/model_contracts.py`, by exact id, declared alias or dated snapshot,
+gets the contract's ladder. `none` is on it only where the contract documents
+turning thinking off, so models whose thinking is always on never list it.
+On Hermes builds through v0.21.6, Haiku is sent neither thinking nor effort, so
+`none` there runs the API default `medium`. A provider's mapping is not a rung:
+DeepSeek maps `medium` and `xhigh` to `high`, so its ladder is
+`none, low, high, max`.
 
-A model's list can be replaced in the sibling document
-`~/.omh/routing/model-efforts.json` (`model_effort_options/v1`):
+A model with no contract and no user entry keeps the shared steps `low`,
+`medium`, `high`, `xhigh`, marked `?` as ladder not known. `model-efforts.json`
+is optional; it narrows or extends a ladder, and an empty list is the one way to
+turn the keys off.
+
+`~/.omh/routing/model-efforts.json` (`model_effort_options/v1`) sits beside
+`model-chains.json`:
 
 ```json
 {
@@ -2469,42 +2469,27 @@ A model's list can be replaced in the sibling document
 }
 ```
 
-`models.<id>.efforts` is the complete replacement list, in any order (the
-picker normalizes it to `none, minimal, low, medium, high, xhigh, max`). An
-empty list is a deliberate "no effort knob", distinct from an absent entry;
-the picker paints `no knob` and refuses both effort keys. Rungs outside that
-vocabulary, `off` (write `none`; installed Hermes does not recognize `off`),
-`auto`, duplicates, empty elements, unknown fields, and non-string values make
-the whole document invalid. An invalid document is ignored whole, the picker
-says so, built-in ladders keep applying, and a custom model it meant to
-configure stays unconfigured. The file is user metadata, not proof that a
-provider accepts a rung.
+`efforts` is the complete list for that model, in any order. The key is the
+chain alias or the wire id its `model-providers.json` route names, wire id
+first; it is not the contract id, so an entry for `deepseek-v4.1-flash` does not
+reach the `deepseek-flash` pointer. A rung outside `none, minimal, low, medium,
+high, xhigh, max`, as well as `off` (write `none`), `auto`, a duplicate or an
+unknown field, makes the whole document invalid. An invalid document is ignored
+whole: the picker says so and keeps `-`/`+` off until it is fixed. The file is
+user metadata, not proof that a provider accepts a rung, and it is per model id,
+so a shared chain also feeding an external CLI lane is not checked against that
+lane's own ladder.
 
-Resolution for one chain entry checks the exact wire model named by that
-alias's `model-providers.json` route first, then the alias itself. A user entry
-at either key replaces the built-in ladder; otherwise the contract ladder for
-that key applies. `omh model-chains set` keeps its historical semantics and
-does not validate an effort against this list. Opening, cancelling, or saving
-another row never rewrites an unedited value: an old `off`, a provider mapping
-alias, or a value a later override removed stays stored, is marked `!` with a
-warning, and only a `-`/`+` press moves it into the current list. Changing the
-head model keeps the old effort visible the same way; it is not silently
-escalated, disabled, or clamped. Saving re-reads this document, so an edit
-made while the picker was open cannot write a now-invalid choice: a model
-switch and a `-`/`+` press in the same picker session are re-checked
-together, because stepping the head model keeps its effort and only a press
-changes it. Untouched rows and model-only edits are not revalidated.
-If the file turns malformed while the picker is open, its ladders fall back
-to the built-in ones, so an effort edit is refused with the file named; a
-save with no effort edit still goes through and reports that the ignored
-file's fallback applied. Bare `omh model-chains`
-and `/omh-model` share this resolution; `show`, `set`, and `interview` are
-unchanged.
-
-The list is per model id, not per provider or executor. Identity chains also
-feed the external CLI lanes, whose own ladders can differ; a user override is
-the explicit way to bound a shared chain, and OMH does not claim a built-in
-ladder is accepted on every provider serving the id.
+Only a press is checked. Opening, cancelling or saving another row never
+rewrites a stored value: an old `off`, a mapping alias or a value your list
+removed stays stored and marked `!` until a press moves it. A head switch is not
+checked either, but a `none` it carries onto a model whose route refuses it gets
+`!` and a line saying so. Enter on a pressed value its head's list does not hold
+keeps the picker open on that row with every edit intact; `-`/`+` or `d` fix it
+and Enter saves. A save reads the file again, so a list edited while the picker
+was open refuses a press it no longer allows, and writes nothing. Bare
+`omh model-chains` and `/omh-model` share all of this; `show`, `set` and
+`interview` do not check efforts against these lists.
 
 Next to those two documents, `omh_delegate_route` maintains
 `~/.omh/routing/route-provenance.json` (`delegation_route_provenance/v1`): a
