@@ -24,9 +24,10 @@ EXPECTED_RULE_IDS = (
     "LNK-1", "LNK-2", "LNK-3", "BTN-1",
     "FORM-1", "FORM-2", "FORM-3",
     "ARIA-1", "ARIA-2", "ARIA-3",
-    "KEY-1", "KEY-2",
+    "KEY-1", "KEY-2", "KEY-3", "KEY-4",
+    "RFL-1", "TGT-1", "STAT-1",
     "SEM-1", "SEM-2", "SEM-3", "SEM-4", "SEM-5",
-    "COL-1", "COL-2",
+    "COL-1", "COL-2", "COL-3",
 )
 
 

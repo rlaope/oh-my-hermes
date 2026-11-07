@@ -23,7 +23,7 @@ omh context budget-plan status  --session-ref <session> [--json]
 `capacity.json` is `route_capacity_input/v1`: `context_window_tokens`,
 `max_output_tokens`, `compaction_reserve_tokens`, and `retained_history_tokens`,
 each `{"value", "class", "source", "observed_at"}`. A field left out stays
-`unknown`. `keep.json` is the must-keep pack as `{"digest", "estimated_tokens_total"}`;
+`unknown`. `keep.json` is the must-keep pack as `{"digest", "estimated_tokens_total", "item_classes"}`, where `item_classes` maps a class from the closed seven (`prohibitions`, `decisions`, `open_questions`, `requirements`, `paths`, `pr_state`, `verification_gaps`) to `{"count": N, "refs": [...]}` with at most 8 refs; omit `item_classes` only when you did not count, and the later class comparison is then unavailable;
 the pack's text never enters the plan file. `--model` is the exact wire spelling
 the host will send, not a family alias. `--provider` is declared local metadata;
 without it the route stays provider-unknown.

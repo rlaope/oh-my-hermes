@@ -92,7 +92,7 @@ Required inputs:
 Expert clarification questions:
 - `decision and audience`
   - English: Which decision must this inform, for which audience and decision owner?
-  - Korean: Which decision must this inform, for which audience and decision owner?
+  - Korean: 이 조사가 뒷받침할 의사결정은 무엇이고, 대상 청중과 결정권자는 누구인가요?
 
 Expected outputs:
 

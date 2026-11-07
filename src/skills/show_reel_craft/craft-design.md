@@ -21,7 +21,7 @@ For each segment in `concept.md`, decide the five things below. For a showreel, 
 | --- | --- |
 | Medium | DOM typography, SVG lines, canvas 2D (particles, procedural drawing), WebGL (shaders, 3D), photos and generated images, or a combination of these. Changing the medium per segment makes the range of expression visible at once |
 | Palette | Draw it from the subject: official brand colors, the colors of the photos, the industry and era of the fictional commission. Light backgrounds, primary-color contrast, monochrome, and black-and-white are candidates too. Choose a dark background when there is a reason |
-| Typeface | Beyond the typefaces `new_project.py` prepares (Pretendard variable 45-920, Noto Serif KR, Black Han Sans, Anton, JetBrains Mono, and Paperlogy and 에이투지체 (A2Z) if they are available locally), add Google Fonts typefaces (all OFL) with `new_project.py <project> --fonts "Hahmlet:wght@300;900" --fonts "Gowun Batang:wght@700"`. List weights separated by `;`, not as a range. Check in the font list of the render log that they were actually loaded |
+| Typeface | Use the explicit local font files given to `new_project.py --font` (nothing is bundled, prepared or downloaded; a family counts only when its file covers the glyphs). Check in the font list of the render log that they were actually loaded |
 | Character of motion | Weight (does it bounce lightly, or drop heavily), material (paper, liquid, metal, light, cloth), speed distribution (mostly fast with one slow moment, or the reverse). These answers decide the easing and timing |
 | Texture | Flat, halftone, dither, pixel, glass, ink bleed, film grain, and so on. Do not lay one texture over every segment |
 

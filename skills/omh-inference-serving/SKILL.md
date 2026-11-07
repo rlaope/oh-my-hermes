@@ -33,7 +33,7 @@ This is a Hermes-native `inference-serving` workflow skill.
 Good example:
 
 - Prompt: Serve Qwen on our two A100s for the team and tell me if prefix caching is worth turning on.
-- Expected behavior: Engine verdict (vLLM, TP as a power of two), quantization check, the k8s or docker runbook with its gates and verification, then the prefix-cache A/B protocol with hit-rate assumptions recorded - numbers only from observed runs.
+- Expected behavior: Engine verdict (vLLM, TP dividing the head counts), quantization check, the k8s or docker runbook with its gates and verification, then the prefix-cache A/B protocol with hit-rate assumptions recorded - numbers only from observed runs.
 - Why: Serving plus a measured tuning question is exactly the decide-deploy-measure process this workflow owns.
 
 Bad example:
@@ -77,7 +77,7 @@ Reasoning demand: `light`
 
 Quality bar:
 
-- Decide before deploying: engine from the situation table (vLLM for multi-user NVIDIA APIs, llama.cpp for CPU/Apple Silicon/edge, TensorRT-LLM only with ops budget), quantization to match (AWQ/GPTQ/FP8 vs the GGUF ladder with `Q4_K_M` default), tensor parallel a power of two.
+- Decide before deploying: engine from the situation table (vLLM for multi-user NVIDIA APIs, llama.cpp for CPU/Apple Silicon/edge, TensorRT-LLM only with ops budget), quantization to match (AWQ/GPTQ/FP8 vs the GGUF ladder with `Q4_K_M` default), tensor parallel head-divisible.
 - Deploy as the gated runbook: docker's three load-bearing flags (`--ipc=host`, HF cache mount, `HF_TOKEN`) or the Kubernetes five-step (secret gate, existing-deployment gate, apply, rollout+readiness verify, summary+smoke); the port invariant touches four places or it did not change the port.
 - Troubleshoot from the symptom table first - slow TTFT to prefix caching/chunked prefill, OOM to gpu-memory-utilization/max-model-len/quantization - before inventing flags.
 - Measure with the protocol: TTFT/TPOT/ITL/E2EL as mean/median/P99, goodput against an explicit SLO, one load shape per run, results saved with metadata; the full contract is `omh-inference-serving/references/serving-bench.md`.

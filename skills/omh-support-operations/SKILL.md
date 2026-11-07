@@ -45,9 +45,8 @@ Bad example:
 
 ## Completion Checklist
 
-- The source boundary, signal clusters, severity, and follow-up lane are named.
-- Bug, feature, research, strategy, and coding handoff outcomes stay separate.
-- The next workflow is recommended before any implementation claim.
+- The reply states only case facts and unknowns and promises no timing, refund or fix the user did not authorize.
+- Severity and priority are separate, with SLA time left when supplied; account takeover, exposed personal data, legal or regulator contact, payment disputes and safety go to their owner, not a product escalation.
 
 ## Recovery Notes
 
@@ -87,7 +86,7 @@ Required inputs:
 
 - support case
 - known facts
-- customer impact
+- customer impact, support tier or SLA, and arrival time
 - available ownership or escalation path
 
 Expert clarification questions:

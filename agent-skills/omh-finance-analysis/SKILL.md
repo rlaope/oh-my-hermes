@@ -27,6 +27,7 @@ This is an OMH `finance-analysis` workflow skill, projected for Agent Skills hos
 - The user wants pipeline coverage, deal health, or a seller forecast scenario rather than authoritative revenue or close reporting; use `omh-sales-pipeline-review`.
 - The user needs an enterprise or product direction decision after analysis; route that decision to `omh-decide`.
 - The ask is testing whether an internal control operated -- a SOX or ICFR sample, re-performance, or a deficiency's severity; use `omh-internal-audit`.
+- The ask is a valuation, DCF, multiples or a stock comparison from published statements; this procedure does not cover it. A host valuation skill does, when installed (Hermes ships optional finance skills); otherwise compute ratios with code from the supplied statements, state the formulas, give no recommendation, and stop at facts.
 
 ## Examples
 
@@ -44,9 +45,10 @@ Bad example:
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- finance_scope_source_record/v1 names entity, period, cutoff, currency and units, accounting basis and comparator version.
+- Totals tie to the source, or the unreconciled gap is listed; the brief is not called reconciled otherwise.
+- Every formula and policy is supplied or marked an unapproved assumption.
+- Recalculation ran with a tool and its result is quoted; the disposition is PASS or HOLD with an escalation owner.
 
 ## Recovery Notes
 

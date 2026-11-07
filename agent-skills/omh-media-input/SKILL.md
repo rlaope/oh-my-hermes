@@ -24,6 +24,7 @@ This is an OMH `media-input-operator` workflow skill, projected for Agent Skills
 - The request is already handled by a narrower explicit skill with stronger evidence.
 - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
 - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- The audio is an instruction to carry out; use `omh-voice-input`.
 
 ## Examples
 
@@ -41,6 +42,7 @@ Bad example:
 
 ## Completion Checklist
 
+- Receipt OCR checks items sum to the total, states assumed currency and date order, and masks card and ID numbers.
 - Media type, source location, permission boundary, transcript availability, language, requested output, timestamp requirement, and stop condition are explicit.
 - Downloads, uploads, ASR, transcript extraction, speaker labels, copyrighted media access, and provider setup are gated or marked missing.
 - Transcript text, OCR output, screenshot text, receipt fields, timestamps, quotes, action items, and media-summary claims are reported only from observed media or supplied transcript/extraction evidence.

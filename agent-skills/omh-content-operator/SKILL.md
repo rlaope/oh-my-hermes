@@ -29,13 +29,13 @@ This is an OMH `content-operator` workflow skill, projected for Agent Skills hos
 
 Good example:
 
-- Prompt: content-operator draft publish-ready release notes with audience, tone, source scope, review gates, and hallucination checks.
+- Prompt: content-operator write customer release notes for 4.2 from the attached changelog; legal reviews them first.
 - Expected behavior: Produce `prepare_content_operator_card` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: content-operator invent missing facts and claim the customer announcement was sent.
+- Prompt: content-operator send the 4.2 announcement to the customer list.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
@@ -43,15 +43,16 @@ Bad example:
 
 - Audience, channel, language, tone, style guide, length, source scope, fact-risk, review owner, and stop condition are explicit.
 - Missing facts, source gaps, claims needing citations, legal/compliance needs, approval, publish/send authority, and file-export needs are gated or marked missing.
+- Comparative or superlative claims, quoted numbers, named customers or testimonials, price or availability promises and paid or affiliate relationships each carry a source or a legal-review flag before the copy is called publish-ready.
 - Published, sent, exported, approved, and fact-verified claims are reported only from observed evidence.
 - Every product fact in the copy (install command, command and flag names, package name, URL, version, count) is copied byte-for-byte from its canonical source, such as the README install block, `--help` output, or the producer of the count, and cited by path; a fact written from memory or an earlier draft is a fact-risk, not a fact.
 - Every count the copy generates agrees with its noun in each plural category of the content locale (0, 1, and 2 for English: `0 agents`, `1 agent`, `2 agents`) before it ships.
 
 ## Recovery Notes
 
-- If the request asks for citations, current facts, or source-backed evidence gathering, route to research or source-finder before drafting.
-- If the request asks to send, post, invite, ticket, or mutate an external app, route to connector-operator before claiming delivery.
-- If the request asks for PDF, PPT, DOCX, HWP, spreadsheet, or attachment packaging, route to materials-package or deliverable-package.
+- If the request asks for citations, current facts, or source-backed evidence gathering, route to `ulw-research` or `omh-source-finder` before drafting.
+- If the request asks to send, post, invite, ticket, or mutate an external app, route to `omh-apps` before claiming delivery.
+- If the request asks for PDF, PPT, DOCX, HWP, spreadsheet, or attachment packaging, route to `omh-materials-package` or `omh-deliverable-package`.
 - If the request is a simple one-off sentence or paragraph transformation, answer directly instead of opening a workflow.
 
 

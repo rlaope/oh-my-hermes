@@ -45,6 +45,7 @@ Bad example:
 - Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
 - Open questions, residual risk, and missing verification are named.
 - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+- Per string: placeholders intact, target-locale plural categories, expansion and truncation, date/number/currency formats, register, literal brand and command tokens. Blocker: wrong meaning, broken placeholder, legal or safety text; major: glossary or register miss; minor: style.
 
 ## Recovery Notes
 

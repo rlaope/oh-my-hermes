@@ -40,7 +40,7 @@ This is a Hermes-native `data-share-review` workflow skill.
 Good example:
 
 - Prompt: the analytics vendor wants last month's ticket export, take the customer details out first
-- Expected behavior: Ask what the vendor needs, inventory the columns from the header and per-column shape counts, drop the ones it does not need, pseudonymize the customer id with the mapping kept in a local folder, count emails, phone numbers, names, and secrets in the output with a scan that prints counts only, and write the share record.
+- Expected behavior: Ask what the vendor needs, inventory the columns from the header and per-column shape counts, drop the ones it does not need, pseudonymize the customer id with the mapping kept in a local folder, count email shapes, phone shapes, secret shapes and every original identifier value in the output with a scan that prints counts only, and write the share record.
 - Why: A masking step that was never followed by a scan of the shipped file has not shown that anything came out.
 
 Bad example:
@@ -96,7 +96,7 @@ Keep the field inventory, minimization plan, residual scan result, and share rec
 
 Required inputs:
 
-- the file or export about to leave, and the destination it goes to
+- the file or export about to leave, the destination it goes to, and the countries whose id and phone formats apply
 - why the destination needs it, which decides the fields it may keep
 - the header or schema, and per-column shape counts when a field's content is unclear
 - where the pseudonym mapping may be kept locally, when a field must stay joinable
@@ -110,10 +110,10 @@ Expected outputs:
 
 Artifact expectations:
 
-- field_inventory/v1 lists every column, key, and free-text field with its class -- direct identifier, quasi-identifier, secret, free text, or not personal -- and the evidence for the class
-- minimization_plan/v1 gives each field one action -- drop, generalize, mask, or pseudonymize -- with the destination's need for the fields it keeps, and names the local path that holds any pseudonym mapping outside the shipped file
-- residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran
-- share_record/v1 is metadata only -- destination, date, fields shipped, row count, and the sha256 digest of the shipped file -- and holds no value from it
+- field_inventory/v1 lists every column, key, and free-text field with its class -- direct identifier, quasi-identifier, secret, free text, sensitive category, or not personal -- and the evidence for the class
+- minimization_plan/v1 gives each field one action -- drop, aggregate, generalize, mask, or pseudonymize -- with the destination's need for the fields it keeps, and names the local path that holds any pseudonym mapping outside the shipped file
+- residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, the free-text sample the reviewer read, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran, no free-text sample was read or its digest differs from the share record's
+- share_record/v1 is metadata only -- destination, date, fields shipped, row count, the sha256 digest of the shipped file, and its data_state (pseudonymized, still personal data, when identifiers were pseudonymized) -- and holds no value from it
 
 Safety rules:
 

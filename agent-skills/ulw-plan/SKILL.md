@@ -31,6 +31,7 @@ This is an OMH `ralplan` workflow skill, projected for Agent Skills hosts (Claud
 - The refactor's direction is already decided and what is missing is its execution shape - which files move in which phase, what verifies each phase, where each phase rolls back to; use `omh-refactor-plan`.
 - One plan-blocking choice still needs behavior evidence rather than argument; run `omh-decision-prototype` first and consume its decision receipt without transcript replay.
 - The user wants a pure source lookup, citation check, or paper explanation with no implementation plan.
+- An ordinary feature or fix that needs a plan but not a consensus review (no architectural, regression or user-visible risk the user named); use `omh-plan`.
 - The unresolved work is repository terminology alignment or a project-language decision frontier; use `ulw-context` before planning.
 
 ## Examples
@@ -53,7 +54,7 @@ Bad example:
 - Observed repo facts and source/web evidence gaps are named.
 - At least two options or one chosen option plus rejected alternatives are recorded.
 - Risks, acceptance criteria, and verification commands are testable or explicitly blocked.
-- Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped.
+- Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped: the plan states the count of target-state differences and the count of `Success criteria` rows, and the two are equal or each gap is named as a user-excluded non-goal.
 - When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
 - The plan exists as a recorded file-backed artifact, not only as chat narration.
 - The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.
@@ -61,7 +62,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If requirements are still fuzzy, route back to deep-interview before planning.
+- If requirements are still fuzzy, route back to the `ulw-interview` workflow before planning.
 - If current-source evidence is missing, route a `ulw-research` step before accepting the plan.
 - If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`ulw-work` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
 

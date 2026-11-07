@@ -18,6 +18,7 @@ Default maximum: 8 search queries, 20 posting-detail reads, 40 seconds per retri
 one attempt per source URL, no automatic retries. Record unenforceable tool timeout
 limits honestly. Respect access controls; no login/anti-bot bypass. Stop at bounds;
 a broader run needs approval. Search snippets are leads, not live-status evidence.
+Mark a posting `suspect` when it asks for payment, moves to a private messenger, shows no match on the company's own site, or offers pay far above the role norm; send no personal documents to a suspect source.
 Verify shortlisted postings at the employer/original source; retrieval time is not
 source update time or proof a vacancy remains open. Cached and user-provided text
 stay unverified unless separately checked. Missing dates remain null, never guessed.

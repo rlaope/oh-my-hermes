@@ -36,7 +36,9 @@ work lands.
 2. Capture the affected pages and states at 1440px, 768px, and 375px
    wide — desktop, tablet, and mobile. These are the web minimum, the
    counterpart of the TUI's 80x24 and 120x40; add the widths the
-   product actually targets.
+   product actually targets. Capture each in every theme the contract
+   defines, and once with `prefers-reduced-motion: reduce` for any surface
+   that animates.
 3. Compare each capture against the comparison target, side by side.
 4. List every difference — spacing, weight, color, alignment,
    truncation, state treatment — however small. A difference you did

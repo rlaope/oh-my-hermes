@@ -28,10 +28,13 @@ DEFINITION = SkillDefinition(
     delegation_boundary="retained-catalog-intent", progressive_disclosure=True,
     reasoning_demand="heavy",
     required_inputs=_INPUTS, expected_outputs=_OUTPUTS,
-    expert_questions=tuple(ExpertQuestion(key, question, question) for key, question in (
-        (_INPUTS[0], "Which host image tool produces the sheet, which grid (2x2, 2x3, ...) holds which pose, and is the background flat #FF00FF?"),
-        (_INPUTS[1], "What cell size and feet baseline (for example 512px cell, y=430) and which frames map to which game-data timings?"),
-        (_INPUTS[2], "Which new directory receives frames, is optional Pillow installed in a separate environment, and what host timeout bounds the run?"),
+    expert_questions=tuple(ExpertQuestion(key, question, korean) for key, question, korean in (
+        (_INPUTS[0], "Which host image tool produces the sheet, which grid (2x2, 2x3, ...) holds which pose, and is the background flat #FF00FF?",
+         "어떤 이미지 도구로 시트를 만들고, 어떤 격자(2x2, 2x3 등)의 어느 칸에 어떤 포즈가 들어가며, 배경은 단색 #FF00FF인가요?"),
+        (_INPUTS[1], "What cell size and feet baseline (for example 512px cell, y=430) and which frames map to which game-data timings?",
+         "게임이 기대하는 셀 크기와 발 기준선(예: 512px 셀, y=430)은 무엇이고, 어떤 프레임이 게임 데이터의 어떤 타이밍에 대응하나요?"),
+        (_INPUTS[2], "Which new directory receives frames, is optional Pillow installed in a separate environment, and what host timeout bounds the run?",
+         "프레임을 담을 새 디렉터리는 어디이고, Pillow가 별도 환경에 설치돼 있으며, 실행 시간 제한은 얼마인가요?"),
     )),
     opening_steps=(
         "Read `toolkit/README.md` and `references/execution-and-qa.md` before executing `toolkit/scripts/forge.py`; installation and skill discovery never run it.",
@@ -44,14 +47,14 @@ DEFINITION = SkillDefinition(
                        "Refuse 1xN strips, inexact cell division, oversized files and wide effects packed into a character cell; put slashes and muzzle flashes on a separate sheet."),
         ProcedureCheck("sprite_backend_check", ("pillow_version", "command", "exit_code", "script_sha256"),
                        "Name the real interpreter and Pillow version; missing Pillow, refusal exit 2 or timeout never yields guessed frames."),
-        ProcedureCheck("sprite_qc_check", ("body_scale_cv", "anchor_y_std", "verdict", "output_hashes"),
-                       "Require body_scale_cv <= 0.08 and anchor_y_std <= 0.05; a REGENERATE verdict (exit 3) means a new source sheet, never hand-patched frames."),
+        ProcedureCheck("sprite_qc_check", ("body_scale_cv", "anchor_y_max_dev", "free_frames", "verdict", "output_hashes"),
+                       "Require body_scale_cv <= 0.08 and anchor_y_max_dev <= 0.05 over the gated frames (--free-frames named before the run); a REGENERATE verdict (exit 3) means a new source sheet, never hand-patched frames."),
     ),
     procedure_steps=(
         ProcedureStep("sprite_direct", "analysis", (_INPUTS[0], _INPUTS[1]), (_OUTPUTS[2],), ("sprite_input_check",),
-                      "Write the character art-direction record: identity elements, rejected drafts with reasons, cell size, baseline and attack-frame timing linked to game data."),
+                      "Write the character art-direction record: identity elements, rejected drafts with reasons, cell size, baseline, the frames that leave the ground (index, pose, reason) and attack-frame timing linked to game data."),
         ProcedureStep("sprite_process", "production", _INPUTS, _OUTPUTS, ("sprite_input_check", "sprite_backend_check"),
-                      "Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment and nearest-neighbor resize.",
+                      "Run the helper with a finite host timeout: chroma key, cell split, component cleanup, one common scale, feet-baseline alignment (frames named in --free-frames keep their offset from the gated pivot) and nearest-neighbor resize.",
             on_fail=ProcedureBail(
                 still_stands=('character art-direction record',),
                 downgrade_to='not_observed',
@@ -68,8 +71,8 @@ DEFINITION = SkillDefinition(
         ),
     ),
     artifact_expectations=(
-        "Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y`, plus the re-composited aligned `sheet.png`.",
-        "Authored `sprite_forge_qc/v1` in `qc.json`: frame count, grid, cell/frame size, per-frame bbox, body_scale_cv, anchor_y_std, thresholds, verdict, hashes and argv.",
+        "Actual `frame_000.png`... equal-size RGBA frames with feet on one shared `baseline_y` (frames named in `free_frames` keep their offset from the gated pivot), plus the re-composited aligned `sheet.png`.",
+        "Authored `sprite_forge_qc/v1` in `qc.json`: frame count, grid, cell/frame size, per-frame bbox, body_scale_cv, anchor_y_max_dev, free_frames, thresholds, verdict, hashes and argv.",
         "A character art-direction record: identity elements, rejected drafts with reasons, cell size + baseline, and attack-frame timing tied to game data.",
     ),
     safety_rules=(
@@ -83,7 +86,7 @@ DEFINITION = SkillDefinition(
     quality_bar=(
         "Require a grid sheet on flat #FF00FF with exact cell division; strips and packed wide effects are regenerated, not cropped.",
         "Record the real interpreter, Pillow version, command, exit and output hashes; QC numbers come from qc.json, not from inspection by eye.",
-        "Gate on body_scale_cv <= 0.08 and anchor_y_std <= 0.05, and keep technical PASS distinct from art-direction approval.",
+        "Gate on body_scale_cv <= 0.08 and anchor_y_max_dev <= 0.05; keep technical PASS distinct from art-direction approval.",
     ),
     why_this_exists="Image models return character poses at drifting scales and offsets, so frames cut by hand jitter in play. This skill couples a grid-sheet contract to a fail-closed processor whose numeric QC decides whether to regenerate the source.",
     do_not_use_when=(
@@ -102,7 +105,7 @@ DEFINITION = SkillDefinition(
     final_checklist=(
         "The source sheet is a host-generated grid on #FF00FF with a source record; real-person sources carry consent.",
         "The actual helper command and exit were observed; frames, sheet and qc.json were read back and hashed, or the blocker is stated.",
-        "body_scale_cv and anchor_y_std are quoted from qc.json; a REGENERATE verdict led to a new sheet, not frame edits.",
+        "free_frames were named before the run, never after a REGENERATE; body_scale_cv and anchor_y_max_dev are quoted from qc.json; a REGENERATE verdict led to a new sheet, not frame edits.",
     ),
     recovery_notes=(
         "If the sheet is a 1xN strip or packs a wide effect, ask the host image tool for a grid and a separate effect sheet; do not slice it by hand.",
@@ -142,17 +145,38 @@ python scripts/forge.py process --input sheet.png --rows 2 --cols 3 \\
 ```
 
 The helper keeps the largest component per cell plus components >= 5% of it,
-applies one common scale (nearest-neighbor) and aligns every body's feet on a
-shared baseline. An empty cell or a body touching the cell edge (bleed) is
-refused with the cell index.
+applies one common scale (nearest-neighbor), pins every body's lowest row to
+one baseline and centres it. Frames that leave the ground on purpose (jump,
+fall, lunge) are named before the run from the art-direction record with
+`--free-frames 2,5`: those keep their offset from the gated frames' pivot and are
+excluded from the feet and scale-drift gates (their height must still stay within
+30% of the gated median), every other frame stays gated. At most one frame in
+three may be freed and at least two stay gated. A pass with freed frames is
+`PASS_FREE_FRAMES`, never a bare PASS. The helper cannot see the order of events,
+so the rule is structural: the freed frames are the record's list, and a
+REGENERATE is never answered by adding frames to it. An empty cell or a body
+touching the cell edge (bleed) is refused with the cell index.
 
 ## Read back and decide
 
-Exit codes: 0 PASS, 2 refusal (no outputs), 3 REGENERATE (outputs written as
+Exit codes: 0 PASS or PASS_FREE_FRAMES, 2 refusal (no outputs), 3 REGENERATE (outputs written as
 evidence). On exit 0 or 3, read `qc.json` (`sprite_forge_qc/v1`), every
 `frame_NNN.png` and `sheet.png`, and recompute their sha256 against the receipt.
 
-- `body_scale_cv` <= 0.08 and `anchor_y_std` <= 0.05 give PASS.
+- `body_scale_cv` <= 0.08 and `anchor_y_max_dev` <= 0.05 give PASS. `anchor_y_max_dev`
+  is the largest distance of any gated frame's feet row from the median feet
+  row in the SOURCE cells, as a share of the cell height (output alignment
+  would hide it, and a standard deviation dilutes one lifted frame). REGENERATE
+  on it means a pose stands off the baseline in the source image; the output
+  frames themselves are aligned.
+- `body_scale_cv` compares body heights over the gated frames, so a crouch or
+  hit-react pose raises it. Put such poses on their own sheet, or name them in
+  `--free-frames` before the run when the record says they leave the baseline on
+  purpose; there is no after-the-fact accepted-drift path.
+- `key_spill_share` in qc.json is reported, not gated, and is null on alpha
+  input. It has no fixed threshold: compare it with a clean sheet of the same
+  character and look at the edge on a dark ground. A fringe or a costume colour
+  near the key means regenerate on another flat key (`--key 00FF00`).
 - REGENERATE means the source drifted: ask the host image tool for a new sheet
   with tighter pose and scale instructions. Never hand-patch, redraw or shift
   produced frames to pass the gate.
@@ -170,6 +194,14 @@ List what must stay constant in every frame: silhouette, palette (hex values),
 proportions (head-to-body ratio), signature props and costume marks. A
 regeneration that loses an identity element is rejected even when QC passes.
 
+## Free frames
+
+List each frame that leaves the ground on purpose: frame index, pose, and the
+reason (jump apex, fall, lunge). This list is the only source of
+`--free-frames`; at most one frame in three, and the verify step compares it with
+`free_frames` in `qc.json`. A frame that is merely off the baseline in a bad
+generation is not a free frame: regenerate.
+
 ## Rejected drafts
 
 For each rejected sheet record the source file hash, the prompt or settings
@@ -181,8 +213,11 @@ waste; do not delete them before the record is written.
 
 Declare the cell size and the feet baseline the game expects, for example a
 512px cell with feet at y=430, and the target frame height passed to the helper.
-Every frame must share that baseline; the helper's `baseline_y` and
-`anchor_y_std` are the evidence.
+The helper has no cell-size or baseline argument: it sizes the frame to the
+scaled bodies (or to the scaled cell when `--free-frames` is used) and reports
+`frame_size` and `baseline_y` in qc.json. Record those, then place the frames on
+the game's canvas and baseline in the engine or an import step. The source-row
+`anchor_y_max_dev` is the alignment evidence.
 
 ## Attack-frame timing
 

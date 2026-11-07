@@ -31,7 +31,7 @@ This is a Hermes-native `command-operator` workflow skill.
 
 Good example:
 
-- Prompt: command-operator run npm test in the project terminal and summarize the output.
+- Prompt: command-operator run the staging deploy script from the repo root and confirm with me before it touches anything.
 - Expected behavior: Produce `prepare_command_operator_card` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
@@ -44,9 +44,9 @@ Bad example:
 ## Completion Checklist
 
 - Command text, working directory, environment assumptions, timeout, safety level, and stop condition are explicit.
-- Destructive, credential, network, filesystem mutation, install, deploy, and production commands are confirmed in chat before the run, or marked missing and not run; a native approval note is recorded beside that confirmation, never in place of it.
+- Irreversible or externally visible commands (data deletion or overwrite, force-push, database drop, credentialed or networked mutation, install, deploy, production change, external send) are confirmed in chat before the run, or marked missing and not run; a native approval note is recorded beside that confirmation, never in place of it.
 - With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing.
-- Exit codes, stdout/stderr, test results, package-manager effects, and filesystem mutations are reported only from observed command evidence.
+- Exit codes, stdout/stderr, test results, package-manager effects, and filesystem mutations are reported only from observed command evidence; token-like values in output are masked before quoting.
 
 ## Recovery Notes
 

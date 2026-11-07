@@ -143,7 +143,7 @@ python3 scripts/eleven.py music audio/music/music.mp3 --plan audio/music/plan.js
 ### 3) Synthesized music (fallback path)
 
 ```bash
-python3 scripts/synth_music.py music audio/music/spec.json audio/music/music.wav
+python3 scripts/synth_music.py audio/music/spec.json --out audio/music/music.wav
 ```
 
 It is made with numpy, without source audio. The same input gives the same sound, and it finishes in a few seconds. It is simpler than ElevenLabs Music, so state in the delivery report that it is synthesized music.
@@ -171,7 +171,7 @@ python3 scripts/music_tools.py analyze audio/music/music_edit.wav   # re-analyze
 
 ```bash
 python3 scripts/eleven.py sfx-kit audio/sfx --names impact,whoosh,riser,logo_hit,glitch,ui_blip   # ElevenLabs
-python3 scripts/synth_music.py sfx audio/sfx --names impact,whoosh,riser,logo_hit                 # synthesized (free, instant)
+# synthesized SFX (free, instant): add tick/boom/whoosh events to the synth_music.py spec and render it with --out; there is no `sfx` subcommand in this kit
 ```
 
 Preset names and prompts are in `assets/sfx_presets.json`: sub_boom, impact, braam, logo_hit, final_hit, riser, reverse_swell, whoosh, whoosh_deep, glitch, shimmer, ui_blip, ui_ticks, typing, stamp, shutter, counter, heartbeat, clock_tick, crowd, pop, ding, chime, drone. Make a new sound effect with `eleven.py sfx "prompt" out.mp3 --dur 2`. Length is 0.5 to 30 seconds.

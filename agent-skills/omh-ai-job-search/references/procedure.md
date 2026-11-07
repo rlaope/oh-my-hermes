@@ -3,13 +3,13 @@
 Expert clarification questions:
 - `requested career action`
   - English: Which career action is needed now: discovery, fit, tailoring, interview preparation or tracking?
-  - Korean: Which career action is needed now: discovery, fit, tailoring, interview preparation or tracking?
+  - Korean: 지금 필요한 구직 작업은 무엇인가요: 공고 탐색, 적합도 판단, 서류 맞춤 작성, 면접 준비, 지원 현황 관리 중 어느 것인가요?
 - `supported candidate facts and preferences`
   - English: Which user-selected facts and explicit preferences support this action, and which remain unknown?
-  - Korean: Which user-selected facts and explicit preferences support this action, and which remain unknown?
+  - Korean: 이 작업에 쓸 수 있도록 직접 고르신 사실과 분명한 선호는 무엇이고, 아직 모르는 것은 무엇인가요?
 - `approved private workspace and source scope`
   - English: Which private destination, source permissions and finite retrieval budget are approved?
-  - Korean: Which private destination, source permissions and finite retrieval budget are approved?
+  - Korean: 어떤 비공개 저장 위치, 출처 사용 권한, 정해진 조회 횟수 한도를 승인하셨나요?
 
 ## Procedure
 

@@ -16,8 +16,12 @@ conversation. General media editing belongs to the media workflows.
 
 Prefer Hermes' normal `MEDIA:/absolute/path` delivery. If the native response
 path cannot deliver the file and the user still wants direct Buzz delivery,
-use the documented Buzz CLI attachment command against the observed active
-channel.
+run the Buzz CLI as Hermes' adapter does: the configured CLI path,
+`messages send --channel <observed channel id> --file <absolute path>
+--content -`, with `BUZZ_RELAY_URL`, `BUZZ_PRIVATE_KEY` and, when set,
+`BUZZ_AUTH_TAG` in the subprocess environment only. `--content -` reads the
+caption from stdin; give it the caption or an empty stdin. Confirm the flags with
+`buzz messages send --help` first and stop if they differ.
 
 Treat the receipt as valid delivery evidence only when it parses as an object,
 contains `accepted=true`, and includes a non-empty event id. Empty stdout,

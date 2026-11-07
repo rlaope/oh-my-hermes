@@ -456,6 +456,11 @@ def _scan_plans(paths: OmhPaths) -> list[dict[str, Any]]:
             artifact = read_hermes_plan_artifact(path)
         except (OSError, UnicodeDecodeError, ValueError):
             continue
+        if artifact.get("schema_version") == "hermes_plan_input/v1":
+            # A planning-input bundle lives beside the plans but is not one: with
+            # the same task statement it would otherwise share a revision line and
+            # mark the accepted plan superseded. Every other file is listed as before.
+            continue
         status = str(artifact.get("status", ""))
         members.append(
             {

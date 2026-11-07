@@ -34,14 +34,14 @@ This is an OMH `decision-prototype` workflow skill, projected for Agent Skills h
 
 Good example:
 
-- Prompt: Run a small spike to check whether the streaming API can hold 500 concurrent connections on one worker before we plan the migration.
+- Prompt: Run a small spike to check whether the streaming API can hold 500 concurrent connections on one worker, or whether we must shard across two, before we plan the migration.
 - Expected behavior: Frame one decision question with a stable id, bound the budget and scratch worktree, prepare a timing probe with exact commands and expected observations, record only observed results, and close with a decision receipt for planning.
 - Why: One empirical uncertainty blocks planning and a cheap, reversible, isolated probe can answer it without building the migration.
 
 Bad example:
 
 - Prompt: decision-prototype build the whole notifications feature as a prototype and merge it if it works.
-- Expected behavior: Refuse the multi-feature scope, ask for the one decision the prototype should settle, and route accepted implementation to `ulw-plan` then `ultrawork`.
+- Expected behavior: Refuse the multi-feature scope, ask for the one decision the prototype should settle, and route accepted implementation to `ulw-plan`, and send the accepted plan to `ulw-work`.
 - Why: A general feature build is not a bounded experiment, and a successful prototype is never promoted without a separate accepted plan.
 
 ## Completion Checklist
@@ -84,7 +84,7 @@ Quality bar:
 - Select the smallest artifact that can answer the question and state why a larger one was not needed.
 - Separate prepared handoff, observed outputs, interpretation, confidence, and cleanup state as distinct evidence states.
 - Preserve the declared task, fixture, environment, and sample limits so the result is not generalized beyond them.
-- End with a decision receipt that `ralplan` can consume: supported option, rejected option, residual risk, evidence limits, and prototype-code reference permission.
+- End with a decision receipt, handed to `ulw-plan` for planning: supported option, rejected option, residual risk, evidence limits, and prototype-code reference permission.
 - When the question is about logic or state, or about an interaction or layout, or the receipt may let later work reference the prototype code, load `references/artifact-shapes.md`: a pure module a plan can lift with the full state shown after each action, structurally different variants mounted in the real host page, and kept code on a named throwaway ref.
 
 Required inputs:

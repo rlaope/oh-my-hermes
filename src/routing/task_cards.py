@@ -306,7 +306,10 @@ def classify_task(message: str) -> dict[str, object] | None:
 
     maintenance_command = _maintenance_command(normalized, compact, tokens)
     if maintenance_command:
-        return _maintenance_command_card(maintenance_command)
+        return _maintenance_command_card(
+            maintenance_command,
+            extra_flags=("--keep-command",) if "--keep-command" in message.lower() else (),
+        )
     if _is_router_design_feedback(normalized, compact, tokens, intent):
         return _router_design_feedback_card()
     if _is_runtime_portability(normalized, compact, tokens):
@@ -689,11 +692,19 @@ def _runtime_portability_card() -> dict[str, object]:
     }
 
 
-def _maintenance_command_card(command: str) -> dict[str, object]:
+def _maintenance_command_card(command: str, *, extra_flags: tuple[str, ...] = ()) -> dict[str, object]:
     selected_skill = "doctor" if command == "doctor" else "oh-my-hermes"
     command_argv = ["omh", command]
     if command == "list":
         first_safe_action = "Run `omh list` and summarize the installed workflow catalog without starting repo work."
+    elif command == "uninstall":
+        # A flagless uninstall is the full purge with no prompt, so the card previews it first.
+        command_argv = ["omh", "uninstall", "--dry-run", *extra_flags]
+        first_safe_action = (
+            "Run `omh uninstall --dry-run`, show what it would remove, and run the real command "
+            "only after the user confirms (keeping any typed flag such as `--keep-command`); if this message confirms a preview "
+            "already shown, run `omh uninstall`."
+        )
     else:
         first_safe_action = f"Run `omh {command}` and report only the observed maintenance output."
     return {
@@ -707,7 +718,9 @@ def _maintenance_command_card(command: str) -> dict[str, object]:
         "command": command,
         "command_argv": command_argv,
         "user_facing_summary": (
-            f"I will run the OMH maintenance {command} path; code changes require a separate request."
+            "I will preview the OMH maintenance uninstall path with --dry-run first; code changes require a separate request."
+            if command == "uninstall"
+            else f"I will run the OMH maintenance {command} path; code changes require a separate request."
         ),
         "not_a_workflow": [
             "coding_handoff",
