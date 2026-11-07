@@ -146,10 +146,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 533907 -> 536196 and the digest re-derived: the skill audit round's rows, +2,289
             # (itemized by lane at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the sum of the lanes'
             # readings is exact on the merged tree, and the pin before it was d6dfefff...fc71.
-            # Digest re-derived for the reach round: the rows of the skills whose triggers,
-            # description, or use-when moved; removing those edits reproduces a5d1c988...3e03.
-            (skill_capabilities, 536092, FULL_ROW_DELTA_CAP,
-             '85dec247d8f66a3560a9555a5032367b74360dc6c033e810f3a944c9ceddf6af',
+            # 536196 -> 537857 and the digest re-derived: the code-quality skills fix round, +1,661 on the merged
+            # tree (itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was a5d1c988...3e03.
+            # 537857 -> 537753 and the digest re-derived: the routing reach round, -104 (itemized at the same limit).
+            (skill_capabilities, 537753, FULL_ROW_DELTA_CAP,
+             'fdba9a0cb82490b41036f695ef133d42a799422411d690997cb02daa97d0163f',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -384,8 +385,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # section; the pin before it was 4f552dc5...a07a.
         # The skill audit round moves the bodies each lane edited and nothing else: the union of the
         # lanes' moved lists equals the merged tree's. Plan, ralplan and adversarial-consensus name
-        # `--plan-file` / `--input-bundle`; the pin before it was 7e537e8d...4b2c.
-        self.assertEqual(_digest(legacy_hashes), 'ca22f5523cf59df0351530c8c7bf49b6de5b1e81271d98c28b1684e89620e21c')
+        # `--plan-file` / `--input-bundle`; the pin before it was 7e537e8d...4b2c. The code-quality skills fix round then moves
+        # its lane's bodies (build-failure-triage, verification-gate, codebase-onboarding, codebase-uml, codegraph-refresh,
+        # frontend-refactor, github-event-ops, github-issue-intake and ultraqa among them); the pin before it was 49189871...a29a. Its second review then reworded
+        # the origin rerun rule, the lldb crash recipe's neighbours and a few sibling labels; the pin before that was 55b2226e...25eb. The third review's two command fixes (the codegraph reflog
+        # time and the job-log endpoint) move build-failure-triage and codegraph-refresh only; the pin before it was 460133f6...abb. The routing reach round moves the skills whose triggers or index text it narrows.
+        self.assertEqual(_digest(legacy_hashes), '3868bd8aa22a752f7671abe273b9fa96e2ca03f1da7c51b934ca341f123e2adc')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -403,7 +408,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 124814 -> 115494: the skill audit round's own Completion Checklist, Why and Recovery
         # lines replace the defaults those bodies repeated (itemized by lane at
         # FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS); the ceilings are re-derived there.
-        self.assertEqual(legacy['repeated']['bytes'], 115494)
+        # 115494 -> 114629: agent-debug states its own Why and Do Not Use When, and github-event-ops and
+        # github-issue-intake their own Completion Checklists, in place of the feature-surface defaults those
+        # bodies repeated (-865).
+        self.assertEqual(legacy['repeated']['bytes'], 114629)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

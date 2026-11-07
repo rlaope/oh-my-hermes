@@ -977,12 +977,14 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # +27 (application-threat-model -4, security-event-response +31); host readiness -17
 # (executor-runtime-readiness -16, provider-profile-posture -14, capability-toggle +13). The
 # operations lane moves no row, and design and media moves sprite-forge at the same length.
-# Measured from the producer; no headroom.
-# 539268 -> 539164: the reach round drops triggers from the rows it narrows (-110),
-# native-debugging's row stops promising a debug adapter (-4), morning-brief's and
-# live-info's index text is reworded (-21), verification-gate's `release gate`
-# becomes two longer phrases (+6), and the named reach phrases join their rows (+25).
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 539164
+# 539268 -> 540929: the code-quality skills fix round (+1,661) on top of the audit round, each read at
+# its own head: native-debugging, build-failure-triage, verification-gate, github-event-ops, agent-debug,
+# codebase-onboarding, github-issue-intake, frontend-refactor, repro-audit, codegraph-refresh, codebase-uml,
+# rust, and the todo-checklist path in three rows. Measured from the producer on the merged tree; no headroom.
+# 540929 -> 540825: the routing reach round drops triggers from the rows it narrows (-110), native-debugging's
+# row stops promising a debug adapter (-4), morning-brief's and live-info's index text is reworded (-21),
+# verification-gate's `release gate` becomes two longer phrases (+6), and the named phrases join their rows (+25).
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 540825
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -2181,7 +2183,9 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # record +843, research +11,359, operations +5,958, memory and Jev +6,241, business +5,740,
 # coding core +2,599, design and media +2,329, build, infra and security +2,798, host
 # readiness +2,254. 1,511,394 plus 10%, rounded up to the next 50,000, is 1,700,000.
-FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1511394
+# 1511394 -> 1521089 (the ceiling stays 1700000): the code-quality skills fix round adds 9,695 on the merged
+# tree; 1,521,089 plus 10%, rounded up to the next 50,000, is still 1,700,000.
+FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1521089
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
 FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1700000
@@ -2290,7 +2294,10 @@ FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # head; the merged tree is 253 above that sum, all under `Completion Checklist`, whose last
 # copy of a default stops counting as a duplicate only once. 117,436 plus 10%, rounded up to
 # the next 10,000, is 130,000.
-FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 117436
+# 117436 -> 116571 (the ceiling stays 130000): agent-debug states its own Why and Do Not Use When, and
+# github-event-ops and github-issue-intake their own Completion Checklists, in place of the feature-surface
+# defaults those bodies repeated (-865). 116,571 plus 10%, rounded up to the next 10,000, is still 130,000.
+FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 116571
 FULL_PROFILE_SKILL_BODY_REPEATED_CEILING_STEP_CHARS = 10000
 FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT = 130000
 

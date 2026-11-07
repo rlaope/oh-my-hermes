@@ -328,6 +328,26 @@ All notable changes will be documented here.
   never writes the setting. On a Docker or SSH terminal, where Hermes skips
   isolation, nothing changes; a config that cannot be read counts as off, as
   before.
+- **The code-quality skills now say what to do where they used to dead-end
+  or contradict.** Part of one round over all skills, split per lane for
+  independent review and rollback. `codebase-uml` and `codegraph-refresh`
+  stop on a repository the Python-only generator cannot read, and a stale
+  codegraph is defined by `generated_at` against the newest commit.
+  `native-debugging` picks the instrument by fault class (sanitizer build,
+  Valgrind, rr, core file) and scripts `lldb` or `gdb` in batch because
+  Hermes has no debug-adapter client. `build-failure-triage` no longer calls
+  a flake introduced on one green merge-base run, takes the origin of a
+  CI-only failure from CI history, and notes that a pull-request run builds
+  the merge ref. `verification-gate` defines its thorough lane and where the
+  required checks come from, and flaky-fix runs are sized from the observed
+  rate. `git-workflow` adds the bisect exit codes, a dirty-tree check before
+  `reset --hard`, and cherry-pick, detached HEAD, lost-commit and
+  committed-secret procedures. `refactor-plan`, `ai-slop-cleaner`,
+  `frontend-refactor`, `tech-debt-audit`, `rust`, `commit-pr-authoring`,
+  `github-event-ops`, `github-issue-intake`, `repro-audit`, `agent-debug`,
+  `app-debugging`, `code-review` and `codebase-onboarding` get their own
+  smaller fixes. No backward-compatibility layer: the producers and their
+  generated files ship together.
 - **The research and knowledge skills say what an expert needs and stop pointing
   at dead ends.** `omh-long-document-reading` runs the Hermes pdf skill's own
   environment instead of telling the model to `pip install`, keeps its range
@@ -776,6 +796,17 @@ All notable changes will be documented here.
   a session with a turn running (its own or another client's), a turn
   Hermes resubmits itself after a crash, a run that needs repair, a draft,
   a queued line or an open question.
+
+- **A push no longer ends the reply with "the session has stopped, send a
+  message".** After a `git push`, `gh pr create`, `gh pr merge` or
+  `gh workflow run` with no watcher armed, OMH appended that sentence to the
+  person's reply in the reply's language. It landed on very nearly every
+  successful push, a README edit pushed straight to main included, where
+  nothing was ever going to be waited on, and it was appended even right after
+  the model said it would stop writing it. The model still gets the in-loop
+  note on the push result (arm a background watcher, or say the session has
+  stopped); the reply the person reads is left as the model wrote it. The
+  end-of-turn sentence remains only on a turn a failed watcher's notice opened.
 
 ## 4.0.6 - 2026-11-04
 

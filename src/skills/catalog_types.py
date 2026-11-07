@@ -1478,6 +1478,7 @@ def _feature_surface_skill(
     extra_safety_rules: tuple[str, ...] = (),
     extra_quality_bar: tuple[str, ...] = (),
     extra_do_not_use_when: tuple[str, ...] = (),
+    required_inputs: tuple[str, ...] | None = None,
     why_this_exists: str = "",
     do_not_use_when: tuple[str, ...] = (),
     good_expected: str = "",
@@ -1504,7 +1505,8 @@ def _feature_surface_skill(
             "Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, "
             "or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded."
         ),
-        required_inputs=("user request", "target context", "delivery or status expectation", "known missing evidence"),
+        required_inputs=required_inputs
+        or ("user request", "target context", "delivery or status expectation", "known missing evidence"),
         expected_outputs=expected_outputs
         or (f"{name}/v1 card or guidance", "next action", "prepared-vs-observed boundary"),
         artifact_expectations=artifact_expectations

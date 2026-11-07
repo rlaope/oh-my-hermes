@@ -15,6 +15,14 @@ Notes, never half-applied.
 - Never refactor: export names, signatures or parameter order, file merges or
   splits, async execution models (a `.then` chain expressing parallelism stays),
   algorithmic logic that would merely get shorter, or test files.
+- The line between apply and Notes: a change inside one file that keeps every
+  component's props, exports, and file layout is applied. A change that alters
+  props, exports, or events, or adds, merges, or splits a file, is a breaking
+  change: it goes to Notes as a proposal and is applied only on the user's
+  explicit second decision. The macro tiers below are read through this line.
+- Never in a refactor: a new dependency, or a change in observable timing,
+  remounting, caching, or network behavior. Such items are marked
+  `[behavior-changing]` and go to Notes for `omh-frontend` or a feature request.
 
 ## Preview output, per change
 
@@ -35,10 +43,13 @@ Run categories in this order and finish one before starting the next:
 3. **SIMPLIFY** - guard clauses over nested precondition `if`s; early returns
    over inverted pyramids; `flag === true` to `flag`; an if/else assigning one
    variable to a conditional expression.
-4. **MODERN** - `var` to `const`/`let`; `.then` chains to async/await except
-   where the chain expresses parallelism or fire-and-forget; spread over
-   `Object.assign({}, ...)`; arrows for callbacks that use neither `this` nor
-   `arguments`.
+4. **MODERN** - `var` to `const`/`let` only when no use precedes the
+   declaration, nothing is redeclared, and no closure captures a loop variable
+   (hoisting, the temporal dead zone, and per-iteration binding change
+   behavior); `.then` chains to async/await except where the chain expresses
+   parallelism or fire-and-forget; spread over `Object.assign({}, ...)` only
+   when the target has no setters; arrows for callbacks that use none of
+   `this`, `arguments`, `new`, or `bind`.
 
 ## The macro pass — architecture, ordered by impact
 

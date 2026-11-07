@@ -7,7 +7,7 @@ Load this while drafting a commit message or a pull-request body. OMH writes the
 | Source | What to take from it | When it is missing |
 | --- | --- | --- |
 | PR template (`.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE/`, `docs/`) | the section headings, in order, and any checkbox list | say no template was found and use a plain summary, why, validation, and reversibility (section 4) |
-| Recent log (`git log -10 --format=%B`) | subject shape (imperative, `type(scope):`, ticket prefix), body width, trailer set | say the log is empty or unreadable, and do not import a convention |
+| Recent log (`git log -20 --no-merges --format='%an <%ae>%n%B%n---'`, skipping bot authors; in a squash-merge repository also the merged PR titles, `gh pr list --state merged -L 10 --json title`) | subject shape (imperative, `type(scope):`, ticket prefix), body width, trailer set | say the log is empty or unreadable, and do not import a convention |
 | Contributor docs (`CONTRIBUTING.md`, `AGENTS.md`) | sign-off rule, required trailers, forbidden lines | record the rule as not found |
 
 Record what was read and what was not in `repo_convention_read/v1`. A convention the repository does not use is not a default to fall back on.
@@ -40,7 +40,7 @@ A row is `observed` only when a run record exists. "It should pass", "CI will ru
 - Body: why the change exists and what is now true, not a restated diff. Measured before/after values belong here when the change is about a measurement.
 - In a PR body, when the change reshapes structure (files moved, a module split, a call path rerouted), show the smallest view of the new shape: a short file tree, a call tree, or a diff sketch of either, holding only the nodes the change touches and the ones needed to place them. A picture the reader can check in ten seconds replaces a paragraph that restates the diff.
 - Reversibility: in a PR body always, in the no-template fallback or under a section the template already has for risk or rollout (never as a heading the template lacks; when the template has neither a risk nor a rollout section, one sentence at the end of its summary or description section); in a commit message only when the recent log already carries a risk or rollback line or trailer (such as `Scope-risk:`). Say whether a revert undoes the whole change, or name what it leaves behind, such as persisted data, an applied migration, a published package or artifact, a sent message, or a changed external setting. Then name which surfaces a bad merge would reach. That one-way door is the fact that should slow a merge, so state the answer even when it is "a revert undoes all of it".
-- `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`.
+- `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`. GitHub needs the keyword per issue (`Closes #1, #2` closes only #1) and acts only when the change reaches the default branch. In a squash-merge repository, check `gh api repos/{owner}/{repo} --jq .squash_merge_commit_message`: with `PR_BODY` the PR body becomes the commit message and trailers belong in its last paragraph block; with `COMMIT_MESSAGES` (GitHub's default for a multi-commit PR) the commits' own messages are used.
 
 ## 5. Trailers and sign-off
 
@@ -48,7 +48,7 @@ A row is `observed` only when a run record exists. "It should pass", "CI will ru
 | --- | --- | --- |
 | DCO | `Signed-off-by: Name <email>` | add only when the repository requires it, with the configured author |
 | Decision trailers | `Constraint:`, `Rejected:`, `Confidence:`, `Scope-risk:`, `Directive:` | use when the log shows them; each `Rejected:` names the alternative and why |
-| Evidence trailers | `Tested:`, `Not-tested:` | projected from the ledger, never written freehand |
+| Evidence trailers | `Tested:`, `Not-tested:` | projected from the ledger, never written freehand; only when the recent log carries them. Otherwise add none: put the observed rows in the PR body's validation section (or one body line in the commit) and the unrun rows under "Not run", in the template's own headings |
 
 Never add attribution lines the repository forbids, and never put credentials, tokens, private URLs, or raw transcripts in either text.
 

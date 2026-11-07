@@ -361,10 +361,16 @@ NON_SKILL_BACKTICKS = frozenset(
 # `provider-profile-posture` defers connector adoption, the tool inventory and
 # a model-provider login to those two and `model-setup`; no sibling gains a
 # statement pointing back. Five cases, five pairs, two new owners.
-# 448 -> 450 and 473 -> 475: web-research and research-brief defer to market-research for sizing.
-EXPECTED_DEFERENCE_CASES = 450
-EXPECTED_DEFERENCE_PAIRS = 475
-EXPECTED_DEFERRING_OWNERS = 133
+# The code-quality skills fix round adds Do Not Use When lines that name a sibling: `code-review` defers the
+# evidence matrix to `verification-gate`, `agent-debug` defers application code to `app-debugging` and install
+# health to `doctor`, `repro-audit` defers bug reproduction to `app-debugging`, `codebase-onboarding` defers a
+# picture to `codebase-uml` and the index to `codegraph-refresh`, `github-issue-intake` names `feedback-triage` and
+# `github-event-ops` with their labels, and `github-event-ops` defers a patch or minor bump to `verification-gate`;
+# no sibling gains a pointing-back statement. Seven cases, nine pairs, four new owners.
+# Web-research and research-brief then defer to market-research for sizing: two cases, two pairs.
+EXPECTED_DEFERENCE_CASES = 457
+EXPECTED_DEFERENCE_PAIRS = 484
+EXPECTED_DEFERRING_OWNERS = 137
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

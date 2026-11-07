@@ -52,8 +52,9 @@ restate the requirement, or start working.
 
 From round two, the review is a ratchet: new findings on ground the previous
 round already settled need a stated reason they were not visible earlier, and a
-finding carried forward keeps the severity it was raised at. See `REVIEW.md` for
-the full rule set; this file only covers the reviewee's side.
+finding carried forward keeps the severity it was raised at. If the repository
+has no `REVIEW.md`, apply these two rules as written; this file only covers the
+reviewee's side.
 
 ## Boundary
 

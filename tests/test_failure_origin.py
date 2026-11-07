@@ -194,7 +194,7 @@ class BuildFailureTriageOriginTests(unittest.TestCase):
         """
         line = next(line for line in _definition(TRIAGE).quality_bar if line.startswith("Return FIX_READY only"))
         order = [
-            "NEEDS_MORE_LOGS while any cluster is `unknown`",
+            "NEEDS_MORE_LOGS while any cluster that can run locally is `unknown`",
             "otherwise FIX_READY when at least one is `introduced`",
             "otherwise, with every cluster `pre_existing`, ROUTE_TO_VERIFICATION_GATE",
         ]
