@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "83a8b3b786a001842af75e550c5a0d1e92d1b20b6b2efd816afecccfb8e57bdf",
+  "catalog_revision": "901ad1f72d7fe3e8613ef11b2d69729e5dbde8210c865c37ea4373085b3406c9",
   "files": {
     "omh-accessibility-audit/SKILL.md": "d76572f7d695dc8a936afd6e61db7108e2dcb17bed432c59382008b363f25b29",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -52,7 +52,7 @@
     "omh-biomedical-evidence/toolkit/README.md": "52e74efc55e258cf4f559e3791a2676a93ba42930bdf98e0bf90d340dac1522a",
     "omh-biomedical-evidence/toolkit/scripts/reconcile.py": "59bcd5b2d81b86f2016f3c1394119d6cc45761f4cd7d674c639733a53c4e086e",
     "omh-biomedical-evidence/toolkit/upstream-manifest.json": "39f37334dfeee05ca4665ca59a63057e2edf91e23745457d908176297f6fd70d",
-    "omh-build-failure-triage/SKILL.md": "b974b916b4c09ccbdf20d2cf0cd7505b3ad05117752d12f8222953f8a7d1ec4f",
+    "omh-build-failure-triage/SKILL.md": "86d9a376d0032dc6a4f286639df08a6e735614fe4a41c40f10bd80f03a2d680c",
     "omh-cancel/SKILL.md": "0df1aa79fd64b008899340cc727154039348884faefb455445d6634bd4b82f77",
     "omh-code-review/SKILL.md": "1f08a999d4fb3c852c1be5ae0ab322eb771592ef604bb67a491be083e17619b4",
     "omh-code-review/references/architecture-delta.md": "4a1c87aec27d08394151a8da5a4c484c2362ac48eb7967249d4a44d80708e750",
@@ -64,7 +64,7 @@
     "omh-code-review/references/smell-baseline.md": "73ad8dd8b4e4652cea012de347fcbbf225d11a351935f928eecd4475a2575254",
     "omh-codebase-onboarding/SKILL.md": "9631d034a14add879b9d4ce55864e40354a6171e525e4171dbec6a51207efc6c",
     "omh-codebase-uml/SKILL.md": "c3dd2eff7900236f4aea5f7b43af62a4ca963220897a99150f209cfe36314aff",
-    "omh-codegraph-refresh/SKILL.md": "e5da3a30c1c64c0f45bfd908afed9fe76b669082c713a52d9a8d0bf028f56cea",
+    "omh-codegraph-refresh/SKILL.md": "4bbb6327160838bc67f2a1ef67d86ec9bc520ecf847c1ee4a08a8d3d62c9cb0a",
     "omh-commit-pr-authoring/SKILL.md": "1a38ee33a96d209a072019f889430b1dba283faf1e9eb1614d198d6b3532d776",
     "omh-commit-pr-authoring/references/commit-and-pr-conventions.md": "b61ea0271331231e685e94a70c2787ca3bb4c74523e89540bd1dbaabcd35da99",
     "omh-content-operator/SKILL.md": "7b6b9a9f011c3a008a01d61dda954bfe9590e30e89bd5fe9b1d0f3e73f77bb1a",
@@ -178,7 +178,7 @@
     "omh-molecular-docking/toolkit/scripts/dock.py": "e27d15c921543849de47023bf21417efa73d94620d54cb158378fab998c65f41",
     "omh-molecular-docking/toolkit/upstream-manifest.json": "3fc34932681e4f696c33072b3fb2b826cdc8b5d996131eb492a68e9250b4adff",
     "omh-native-debugging/SKILL.md": "6608039f327fc8a6a1d385c9a8021b1c4f1ca225a94f7406c83cc8bf9c709960",
-    "omh-native-debugging/references/native-debug-loop.md": "74adb314eb4cc213247c5a6902c1391e94edc8b71340a02c9e2262dd591d1780",
+    "omh-native-debugging/references/native-debug-loop.md": "a147ff8a6171fa10c9e110b3768489ac35d6fdcc6b0830f726b072a5ca8c9c5d",
     "omh-operating-rhythm/SKILL.md": "1980ac41e7a5d5c9c7d77a13d0d41862db1c9990572f419334fc12ba9aaf20d3",
     "omh-ops-observability-card/SKILL.md": "df437b7a9e915efa5781543e6f0c17dd600d2da78e6a0fd1a739d8bb393e69ae",
     "omh-ops-review/SKILL.md": "4634dd0f9a8eec9c4cc3f794ad23ba8929eda4d0fe68dccd361c2877e8b7eb85",

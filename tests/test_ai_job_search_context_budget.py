@@ -386,8 +386,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # `--plan-file` / `--input-bundle`; the pin before it was 7e537e8d...4b2c. The code-quality skills fix round then moves
         # its lane's bodies (build-failure-triage, verification-gate, codebase-onboarding, codebase-uml, codegraph-refresh,
         # frontend-refactor, github-event-ops, github-issue-intake and ultraqa among them); the pin before it was 49189871...a29a. Its second review then reworded
-        # the origin rerun rule, the lldb crash recipe's neighbours and a few sibling labels; the pin before that was 55b2226e...25eb.
-        self.assertEqual(_digest(legacy_hashes), '460133f6fcde4908c32d5845a56c14b28fb2058027c397c0e15948849c969abb')
+        # the origin rerun rule, the lldb crash recipe's neighbours and a few sibling labels; the pin before that was 55b2226e...25eb. The third review's two command fixes (the codegraph reflog
+        # time and the job-log endpoint) move build-failure-triage and codegraph-refresh only; the pin before it was 460133f6...abb.
+        self.assertEqual(_digest(legacy_hashes), 'ffca16e261cfc58cbe7ac443ef273c95a0a47e02daf0c0065658872bde02d704')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
