@@ -10,7 +10,7 @@ metadata:
     phase: source-acquisition
     role: researcher
     quality_tier: source-acquisition-gated
-    related_skills: [ulw-research, omh-research-brief, omh-paper-learning, omh-research-department, omh-materials-package, omh-deliverable-package, omh-image-cards]
+    related_skills: [ulw-research, omh-research-brief, omh-web-research, omh-paper-learning, omh-research-department, omh-materials-package, omh-deliverable-package, omh-image-cards]
 ---
 
 # Source Finder
@@ -29,7 +29,7 @@ This is a Hermes-native `source-finder` workflow skill.
 
 - The requested output is factual findings, comparison, or a summary rather than a typed candidate inventory and acquisition status; use `ulw-research`.
 - The user needs a business decision brief with evidence-versus-inference treatment; use `omh-research-brief`.
-- The user asks for current citations, fact-finding, or source-backed synthesis; use `ulw-research`.
+- The user asks for a cited answer to a current-facts question; use `omh-web-research`, and for a reference-implementation study with a depth budget use `ulw-research`.
 - The user supplies a paper/PDF/arXiv/DOI/excerpt and wants explanation; use `omh-paper-learning`.
 - The user asks for recurring monitoring, source inbox, or Scout/Analyst/Briefer operations; use `omh-research-department`.
 - The user asks to export, convert, render, package, or attach a file; use `omh-materials-package` or `omh-deliverable-package`.
@@ -46,7 +46,7 @@ Good example:
 Bad example:
 
 - Prompt: source-finder find current citations and summarize what the sources say.
-- Expected behavior: Route to `research` because the user asks for current evidence and synthesis, not candidate acquisition status.
+- Expected behavior: Route to `ulw-research` because the user asks for current evidence and synthesis, not candidate acquisition status.
 - Why: Source-finder prepares acquisition lifecycle metadata; research owns current evidence synthesis.
 
 ## Completion Checklist
@@ -66,7 +66,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -90,7 +90,7 @@ Quality bar:
 - Separate candidate preparation, observed link, observed download, file hash, text extraction, license check, verification, and downstream selection.
 - Attach observation provenance before treating any acquisition state as evidence.
 - For `paper` candidates, when Hermes' bundled `arxiv` skill is available, search through it - by topic, author, category, or paper id - and record each entry it returns as `link_observed` with `hermes_tool` provenance. A search result is an observed link and nothing more: download, text extraction, and verification stay unclaimed until their own run is observed. Without the skill, a paper candidate stays `candidate_prepared` until a link is observed another way.
-- Vary search angles across official docs, academic work, implementations, datasets, and criticism until each requested source kind has candidates or another angle change adds nothing new.
+- Vary search angles across official docs, academic work, implementations, datasets, and criticism within the plan's budget (3 queries, 10 external attempts and one follow-up for an explore search), and name the source kinds still without candidates when the budget ends.
 - Recommend the next downstream workflow without pretending that downstream work already ran.
 
 Handoff policy:
@@ -121,7 +121,7 @@ Safety rules:
 
 - Do not claim web search, download, repository clone, file extraction, file hash verification, license verification, or source correctness from a prepared candidate.
 - Do not redefine research-department's source_inbox/v1; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.
-- Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `paper-learning`, recurring monitoring to `research-department`, file export to `materials-package`, and image cards to `img-summary`.
+- Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `omh-paper-learning`, recurring monitoring to `omh-research-department`, file export to `omh-materials-package`, and image cards to `omh-image-cards`.
 
 ## Runtime Evidence
 

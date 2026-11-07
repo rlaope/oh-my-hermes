@@ -37,7 +37,7 @@ Good example:
 Bad example:
 
 - Prompt: Should we even split billing out of orders?
-- Expected behavior: Route to `ralplan`: the direction is not decided, so consensus planning comes before phase planning.
+- Expected behavior: Route to `ulw-plan`: the direction is not decided, so consensus planning comes before phase planning.
 - Why: A phase plan for a contested direction launders a decision through logistics.
 
 ## Completion Checklist

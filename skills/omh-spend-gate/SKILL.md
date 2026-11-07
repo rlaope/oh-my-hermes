@@ -63,7 +63,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -112,7 +112,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- pre_spend_card/v1 names the payee with its exact origin or address, the item, the total with fees and taxes in its currency, the rail, the cap and what remains of it, the refund terms, whether the spend can be reversed, and the approver, who is the person whose money moves
+- pre_spend_card/v1 names the payee with its exact origin or address, the item, the total with fees and taxes in its currency, the rail, the cap and what remains of it (or that the cap cannot be checked), the refund terms, whether the spend can be reversed, and the approver, who is the person whose money moves
 - spend_confirmation/v1 records the person's typed yes in this session to that card's payee and total, with a host approval prompt's answer beside it as additional evidence when one appeared, and is void once the payee, the total, the currency, or the item changes
 - spend_receipt/v1 cites the observed order id, transaction id, or receipt header with the amount actually charged, and keeps quoted, confirmed, submitted, charged, declined, and unknown as separate states
 - spend_cap_ledger/v1 holds metadata only -- date, payee, amount, currency, rail, and receipt reference -- with the running total against the cap, and never a card number, security code, wallet key, password, or one-time code

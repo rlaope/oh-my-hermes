@@ -10,6 +10,7 @@ metadata:
     phase: plan
     role: planner
     quality_tier: acceptance-gated
+    related_skills: [ulw-plan, ulw-interview, omh-refactor-plan]
 ---
 
 # Plan
@@ -24,20 +25,23 @@ This is a Hermes-native `plan` workflow skill.
 
 - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
 - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+- The change is risky or architectural and the user wants alternatives compared, a risk review and a recorded decision; use `ulw-plan`, and keep this skill for the ordinary plan.
+- Requirements are too vague to list non-goals or acceptance criteria; use `ulw-interview`.
+- The direction is decided and what is missing is the phase-by-phase refactor shape; use `omh-refactor-plan`.
 
 ## Examples
 
 Good example:
 
-- Prompt: plan: handle a planning request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `plan` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: plan: add CSV export to the reports page; admins only, and it must stream 100k rows.
+- Expected behavior: Write goals, non-goals, risks, tasks with ids, dependencies and done checks, a closing gate, and the acceptance criteria; hand back for acceptance before any handoff.
+- Why: A feature with real acceptance questions needs a plan the user accepts before any code moves.
 
 Bad example:
 
-- Prompt: plan: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `plan`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: plan: fix the null check in parse_user (one line, the test already exists)
+- Expected behavior: Make the edit directly and run the test; a plan adds a round trip with nothing to decide.
+- Why: One bounded edit with a known check has no goals or tradeoffs to write down.
 
 ## Completion Checklist
 
@@ -46,7 +50,7 @@ Bad example:
 - Rejected options or unresolved tradeoffs are recorded before handoff.
 - When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning task ids, or one stating the check found none.
 - When the plan describes code changes, every task has an id, its dependencies, the files it may write, and a done check, and the last task is the closing gate.
-- When the plan describes code changes, each code task is a vertical slice whose done check exercises its behavior end to end, or a prefactor ordered before the slices, or a wide change handed to `refactor-plan`, or the one task that writes a file every slice only appends to; the closing gate and fix tasks aside.
+- When the plan describes code changes, each code task is a vertical slice whose done check exercises its behavior end to end, or a prefactor ordered before the slices, or a wide change handed to `omh-refactor-plan`, or the one task that writes a file every slice only appends to; the closing gate and fix tasks aside.
 - When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
 
 ## Recovery Notes
@@ -57,7 +61,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -83,7 +87,7 @@ Quality bar:
 - When the plan describes code changes, add a `Review Focus` section listing at most 5 inputs or failure modes the requirements imply that no planned test covers, likeliest first, each with its expected behavior and the id of the owning task that will add the test; an input the requirements do not mention must still leave the result intact, and when the check turns up nothing the section says it found none.
 - When the plan describes code changes, keep each step to a single action whose outcome can be checked - a named test and what it asserts, an exact signature and its file, or a command and the output that counts as passing; a step that leaves the choice open (`TBD`, `make it robust`) is a gap.
 - When the plan describes code changes, give each task a stable id (`T1`, `T2`, ...), the ids it depends on, the files it may write, and its done check (a checkable step as above; for a code task, a command with the result that counts as passing - the test's run command, a gate, or a grep for the signature - while a task that is not code may keep an observable check); when two tasks write the same file, one lists the other directly among its dependencies, since an order through a third task does not count. These carry a `dag-ulw` node's id, depends_on and write_scope, and the done check feeds its VERIFY and STOP WHEN; converting still adds each node's label, category and full prompt, and a baseline node before a full-suite check.
-- When the plan describes code changes, cut the code tasks as vertical slices: each delivers one behavior through every layer it needs, and its done check drives that behavior through the surface a user or caller reaches, so an integration failure shows in the task that caused it rather than first in the closing gate. Do not split by layer to keep write scopes apart: slices that write the same file are ordered, each later slice listing every earlier slice that writes it directly among its dependencies, since an order through a slice between them does not count; a file every slice only appends to (a changelog, a generated index) may instead be written by one task after the slices; when that file is generated and drift-gated (a generated index), each slice's done check excludes that file's gate and the later task runs it. A layer-only task is either a prefactor that makes the later slices easy and comes before them, or a wide mechanical change across many callers, handed to `refactor-plan` (the new form beside the old, callers moved in groups while both stay green, the old form deleted last) instead of a split by layer.
+- When the plan describes code changes, cut the code tasks as vertical slices: each delivers one behavior through every layer it needs, and its done check drives that behavior through the surface a user or caller reaches, so an integration failure shows in the task that caused it rather than first in the closing gate. Do not split by layer to keep write scopes apart: slices that write the same file are ordered, each later slice listing every earlier slice that writes it directly among its dependencies, since an order through a slice between them does not count; a file every slice only appends to (a changelog, a generated index) may instead be written by one task after the slices; when that file is generated and drift-gated (a generated index), each slice's done check excludes that file's gate and the later task runs it. A layer-only task is either a prefactor that makes the later slices easy and comes before them, or a wide mechanical change across many callers, handed to `omh-refactor-plan` (the new form beside the old, callers moved in groups while both stay green, the old form deleted last) instead of a split by layer.
 - When the plan describes code changes, its last task is the closing gate, named as the verification task (in `dag-ulw`, a node with `role: verify`): it depends on every other task, runs the real verification commands with the result that counts as passing, is run by someone other than the agent that built the work, and ends with a review. The plan states that a review that is not clean adds a fix task with its own id and done check and then reruns the gate instead of ending the plan - at most two fix rounds, or fewer when the engine running the plan stops sooner, after which the open findings are reported.
 - When the plan describes code changes, run a proportion check before acceptance: if the plan text outgrows the code it leads to, or is mostly function bodies, implementation has leaked into it; reduce bodies to test names, assertions, and signatures.
 - When the plan describes code changes, name the goal beyond the request before splitting tasks: one sentence on what should happen once the requested result exists, and whether the plan aims at that outcome or at the request as asked; when the two are the same, say so in one line. A plan aimed at the outcome adds, as its own tasks, the access the executor needs to work at that level unattended - failure logs, a reproduction environment, the raw data, the mapping from a released version to its commit.
@@ -112,7 +116,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- plan artifact when durable execution will follow
+- plan artifact when durable execution will follow, via `omh hermes plan --record --plan-file <file> "<task>"`
 
 Safety rules:
 

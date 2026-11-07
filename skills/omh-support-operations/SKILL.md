@@ -40,14 +40,13 @@ Good example:
 Bad example:
 
 - Prompt: Cluster last quarter's support feedback into roadmap opportunities.
-- Expected behavior: Route to `feedback-triage`, not `support-operations`.
+- Expected behavior: Route to `omh-feedback-triage`, not `support-operations`.
 - Why: A historical signal backlog needs product-pattern triage rather than case-level support guidance.
 
 ## Completion Checklist
 
-- The source boundary, signal clusters, severity, and follow-up lane are named.
-- Bug, feature, research, strategy, and coding handoff outcomes stay separate.
-- The next workflow is recommended before any implementation claim.
+- The reply states only case facts and unknowns and promises no timing, refund or fix the user did not authorize.
+- Severity and priority are separate, with SLA time left when supplied; account takeover, exposed personal data, legal or regulator contact, payment disputes and safety go to their owner, not a product escalation.
 
 ## Recovery Notes
 
@@ -57,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -87,7 +86,7 @@ Required inputs:
 
 - support case
 - known facts
-- customer impact
+- customer impact, support tier or SLA, and arrival time
 - available ownership or escalation path
 
 Expert clarification questions:

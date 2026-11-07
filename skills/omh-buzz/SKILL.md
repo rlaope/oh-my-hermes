@@ -22,7 +22,7 @@ Hermes already owns the Buzz transport, but users need one discoverable OMH entr
 
 ## Do Not Use When
 
-- The user wants a Buzz-managed ACP runtime rather than Hermes' native Buzz gateway.
+- The user wants a Buzz-managed ACP runtime rather than Hermes' native Buzz gateway; say it is outside this skill.
 - The request is general media editing with no Buzz delivery target.
 - The request is generic Docker or Nostr advice unrelated to a Buzz relay.
 - The user is only asking whether OMH supports Buzz, with no request to run the workflow.
@@ -59,7 +59,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## Choose One Internal Lane

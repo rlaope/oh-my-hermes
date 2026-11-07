@@ -42,9 +42,10 @@ Bad example:
 
 ## Completion Checklist
 
-- The local command, managed path, config surface, and state artifact inspected are named.
-- Blocking issues, warnings, and optional surfaces are separated.
-- The next repair action is explicit and does not claim a reload or runtime observation.
+- Each run is listed as prepared, observed, or not_observed, with the evidence behind observed.
+- Blockers and failed quality gates carry an owner or next action.
+- Throughput claims cite a measurement or say none exists.
+- An instrumentation audit gives every ladder row PASS, FAIL, or PARTIAL with its location.
 
 ## Recovery Notes
 
@@ -54,7 +55,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

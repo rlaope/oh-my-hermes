@@ -10,6 +10,7 @@ metadata:
     phase: provider-profile-posture
     role: operator
     quality_tier: workflow-surface-gated
+    related_skills: [omh-external-connector-readiness, omh-toolbelt-readiness, omh-model-setup]
 ---
 
 # Provider Profile Posture
@@ -18,13 +19,13 @@ This is a Hermes-native `provider-profile-posture` workflow skill.
 
 ## Why This Exists
 
-`provider-profile-posture` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
+`provider-profile-posture` exists so a profile's required secret names and capabilities are recorded as present, missing, or unknown without any secret value being read or any provider being called.
 
 ## Do Not Use When
 
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Choosing or adopting a connector; use `omh-external-connector-readiness`.
+- Listing every tool and credential a workflow needs; use `omh-toolbelt-readiness`.
+- Connecting a model provider or its login; use `omh-model-setup`.
 
 ## Examples
 
@@ -32,7 +33,7 @@ Good example:
 
 - Prompt: Prepare provider profile posture for this connector using metadata-only secret presence.
 - Expected behavior: Produce `prepare_provider_profile_posture` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Why: The card records which key names are present, missing, or unknown, and never reads a value.
 
 Bad example:
 
@@ -42,7 +43,7 @@ Bad example:
 
 ## Completion Checklist
 
-- Provider ID, profile ID, requested capabilities, and secret-presence metadata are explicit.
+- Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret presence are explicit, and `omh ops provider-profile-posture --input <file>` made the record from JSON with `schema_version` `provider_profile_posture_input/v1`, `provider_id`, `profile_id`, `requested_capabilities`, `secret_requirements` as `{name, present: true|false|"unknown"}`, optional `host_observations`.
 - No secret value, credential validation, provider call, model route, wallet, or payment action is claimed.
 - Any host observation reference remains supplied metadata, not a live connector check.
 
@@ -55,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

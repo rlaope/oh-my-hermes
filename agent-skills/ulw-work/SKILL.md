@@ -27,7 +27,7 @@ This is an OMH `ultrawork` workflow skill, projected for Agent Skills hosts (Cla
 ## Do Not Use When
 
 - Avoid conflicting parallel writers; use single-owner or ordered execution.
-- The plan is not accepted, lane boundaries are unclear, or verification commands are missing.
+- Plan not accepted, lanes unclear or verification missing; use `omh-plan` (`ulw-plan` for a stated risk) unless a delivery cycle was asked for or it is one concrete change with its own acceptance criteria and verification command.
 - The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.
 - For a decision spike, use `omh-decision-prototype`.
 - [capability:coordinated_scope] The lanes are exploratory research or QA coordination without an accepted implementation plan; frame them with the `coordinated_scope` capability before parallel delivery.
@@ -126,14 +126,14 @@ Quality bar:
 - [capability:single_owner_persistence] For single-owner coding edits, prepare and track the selected runtime path instead of implying unobserved work happened or hiding execution inside chat narration.
 - [capability:single_owner_persistence] Report single-owner completion only from observed execution and verification evidence, with remaining risks named.
 - [capability:durable_checkpoint] Keep goal state durable, inspectable, and separate from chat narration in the metadata-only .omh/goals goal_ledger/v1.
-- [capability:durable_checkpoint] Create a code-changing goal with `omh goal create --obligation slop-cleanup`; it completes only after a checkpoint cites one completed `ai-slop-cleaner` run for it, recorded and cited with the commands that skill closes on (`--cleanup-outcome passed|skipped|reverted` and an outputs or verification summary the integrity check accepts; placeholders are refused). Without the flag the goal is not gated.
+- [capability:durable_checkpoint] Create a code-changing goal with `omh goal create --obligation slop-cleanup`; it completes only after a checkpoint cites one completed `omh-ai-slop-cleaner` run for it, recorded and cited with the commands that skill closes on (`--cleanup-outcome passed|skipped|reverted` and an outputs or verification summary the integrity check accepts; placeholders are refused). Without the flag the goal is not gated.
 - [capability:durable_checkpoint] Checkpoint every success, blocker, and final quality gate with fresh evidence.
 - [capability:durable_checkpoint] Reject completion with a summary-only goal_completion_gate/v1 result until required criteria, blockers, and explicitly linked runtime runs are satisfied.
 - [capability:durable_checkpoint] Name the one element gating goal progress from the linked loop's loop_constraint_assessment/v1 before checkpointing the next step; load `ulw-loop/references/goal-constraint-discipline.md` for the method.
 
 Required inputs:
 
-- accepted plan
+- accepted plan, or one concrete change's acceptance criteria and verification command
 - work units with read/write scopes
 - dependency edges or shared invariants
 - verification commands

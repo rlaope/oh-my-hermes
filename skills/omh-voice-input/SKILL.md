@@ -10,6 +10,7 @@ metadata:
     phase: voice-routing
     role: guide
     quality_tier: workflow-surface-gated
+    related_skills: [omh-media-input]
 ---
 
 # Voice Operator
@@ -25,6 +26,7 @@ This is a Hermes-native `voice-operator` workflow skill.
 - The request is already handled by a narrower explicit skill with stronger evidence.
 - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
 - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- The speech is material to transcribe or summarize; use `omh-media-input`.
 
 ## Examples
 
@@ -43,6 +45,7 @@ Bad example:
 ## Completion Checklist
 
 - The short-input or voice-like request is clarified enough to avoid accidental action.
+- Before a delete, send, deploy or spend, state the transcript's names, numbers, paths and negations and wait for a yes.
 - The next action is readable, reversible when possible, and confirmation-gated when risky.
 - Delivery, notification, or platform behavior is not claimed without wrapper evidence.
 
@@ -54,7 +57,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

@@ -813,10 +813,33 @@ def _map_capture_payload(payload: dict, lens: "_SessionLens | None" = None) -> d
         **{**fields, "admission_state": "pending_review"},
         **hints,
         review_reason=str(payload.get("review_reason", "") or "unknown"),
-        next_action=(
-            "Saved as a candidate that waits for operator review (`omh memory review`). For "
-            "relative_time_phrase, capture the fact again with an absolute date instead."
-        ),
+        next_action=_held_next_action(str(payload.get("review_reason", "") or "")),
+    )
+
+
+def _held_next_action(reason: str, *, verb: str = "remembered") -> str:
+    """What a held capture or correction asks of the caller, by the reason it was held.
+
+    Only `policy_review_first` has a person behind it. A relative-time phrase is
+    restated by the caller; protected content is never releasable, so it must not
+    point at an approval that would refuse it.
+    """
+    if reason == "relative_time_phrase":
+        return (
+            f"Not {verb} yet: the summary holds a relative-time phrase that will read wrong later. Restate the "
+            "fact with an absolute date and send it again now; do not ask the user to review anything. If the "
+            "restated one is held again for the same reason (the word may be a name, such as a feature called "
+            "'today'), reword around the word once, and if it is still held tell the user it was not kept."
+        )
+    if reason == "unsafe_content":
+        return (
+            "Not kept: the safety check held it (a credential-like value, instruction-shaped text, or a word "
+            "such as 'temp' or 'hack' read as temporary progress). Restate it without those and send it again; "
+            "there is nothing to approve."
+        )
+    return (
+        f"Held back by memory policy and not {verb} yet; tell the user which review_reason held it. "
+        "`omh memory review` shows it and `omh memory approve` releases it."
     )
 
 
@@ -922,7 +945,7 @@ def _demote_entry(wanted: str, omh_home: Path, hermes_home: Path) -> dict[str, o
                 "pending_review",
                 **fields,
                 candidate_id=candidate_id,
-                next_action="A copy already waits for review; keep the Hermes entry until it is approved.",
+                next_action="A copy of this entry was already held and is not in memory; keep the Hermes entry.",
             )
         if status != "approved":
             return _demote_result(
@@ -1004,9 +1027,23 @@ def _demote_entry(wanted: str, omh_home: Path, hermes_home: Path) -> dict[str, o
             "pending_review",
             **fields,
             review_reason=str(payload.get("review_reason", "") or "unknown"),
-            next_action="Saved for review; keep the Hermes entry until it is approved.",
+            next_action=_demote_held_next_action(str(payload.get("review_reason", "") or "")),
         )
     return _demoted("demoted", reading, entry, siblings, fields, str(record.get("record_id", "") or ""))
+
+
+def _demote_held_next_action(reason: str) -> str:
+    if reason == "relative_time_phrase":
+        return (
+            "Not moved: the entry holds a relative-time phrase, and nothing records when it was written. Keep the "
+            "Hermes entry; restate it only if the person gives the date."
+        )
+    if reason == "unsafe_content":
+        return (
+            "Not moved: the safety check held the entry (a credential-like value, instruction-shaped text, or a "
+            "word such as 'temp' or 'hack' read as temporary progress). Keep the Hermes entry."
+        )
+    return "Held for review under memory policy; keep the Hermes entry until `omh memory approve` releases it."
 
 
 def _hermes_parsed_entries(path: Path) -> list[str]:
@@ -1652,10 +1689,8 @@ def _correct(home: Path, record: dict, summary: str, tags: object, lens: _Sessio
             record_id=record_id,
             candidate_id=str(candidate.get("candidate_id", "") or "") or None,
             review_reason=str(payload.get("review_reason", "") or "unknown"),
-            next_action=(
-                "Saved for operator review; the old record stays active and is replaced when the correction is "
-                "approved. For relative_time_phrase, correct it again with an absolute date."
-            ),
+            next_action=_held_next_action(str(payload.get("review_reason", "") or ""), verb="applied")
+            + " The old record stays active meanwhile.",
         )
     successor = payload.get("record") if isinstance(payload.get("record"), dict) else {}
     new_id = str(successor.get("record_id", "")) or None

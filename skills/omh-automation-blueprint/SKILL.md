@@ -10,7 +10,7 @@ metadata:
     phase: scheduled-ops-blueprint
     role: operator
     quality_tier: ops-blueprint-gated
-    related_skills: [omh-lifecycle-growth, omh-report-package, omh-materials-package, omh-reliability-review, omh-spend-gate]
+    related_skills: [omh-lifecycle-growth, omh-report-package, omh-materials-package, omh-reliability-review, omh-gateway-intent-card, omh-spend-gate]
 ---
 
 # Automation Blueprint
@@ -27,6 +27,7 @@ This is a Hermes-native `automation-blueprint` workflow skill.
 - The user needs a one-off report or deck; use `omh-report-package` or `omh-materials-package`.
 - The user asks to review incident metrics once; use `omh-reliability-review`.
 - The user needs actual code changes; prepare a selected executor/runtime handoff after the blueprint or plan is accepted.
+- The request is one message, thread reply, or attachment delivered now with no schedule; use `omh-gateway-intent-card`.
 - The person is inside Hermes' own /blueprint setup for one of its catalog automations; answer the questions that flow asks and let it create the job instead of preparing a second blueprint.
 - The recurring job would move money -- a purchase, a renewal, a top-up, or a transfer; use `omh-spend-gate`, because an agent run on a schedule never spends, and a no-agent script that pays is a spend set up now: its card, typed yes, and cap come before the job exists.
 
@@ -59,7 +60,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

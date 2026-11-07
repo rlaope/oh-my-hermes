@@ -35,7 +35,7 @@ Find the directory with `skills_list` or `search_files` before the first run ins
 
 | Script | Dependency (from its imports) | Output |
 | --- | --- | --- |
-| `pdf_read.py` | `pdfplumber` | JSON |
+| `pdf_read.py` | `pdfplumber`; `--meta` also `pypdf` | JSON |
 | `pdf_split.py` | `pypdf` | JSON |
 | `pdf_page_image.py` | `pypdfium2`, or poppler `pdftoppm` on PATH | JSON; exits 0 with `"rendered": false` and a `missing` list when neither is installed |
 | `extract_pymupdf.py` | `pymupdf` (`pymupdf4llm` for `--markdown`) | plain text with `--- Page N/M ---` separators; JSON only for `--metadata` |

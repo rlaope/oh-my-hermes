@@ -50,13 +50,13 @@ Bad example:
 ## Recovery Notes
 
 - If no code/trace/runtime evidence is supplied, prepare the audit plan and request the smallest source surface to inspect.
-- If the user wants live service SLO or incident review, route to reliability-review.
-- If the user wants rendered browser proof, route frontend visual evidence to visual-qa before PASS.
+- If the user wants live service SLO or incident review, route to the `omh-reliability-review` workflow.
+- If the user wants rendered browser proof, route frontend visual evidence to the `omh-visual-qa` workflow before any PASS is claimed.
 
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

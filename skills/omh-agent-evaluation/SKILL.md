@@ -50,6 +50,7 @@ Bad example:
 
 ## Recovery Notes
 
+- Receipts: `omh coding paired-run dispatch --decision <paired_run_decision/v1 file> --dry-run` prints the plan; the built-in receipt-capable adapter runs only `hermes` arms and refuses Codex, Claude Code, and generic arms before any child starts. For those arms the comparison can be designed and the runs supplied as observed artifacts, but the result stays ungrounded until a caller adapter returns the authenticated receipt: give a per-scenario recommendation labelled ungrounded, never a ranking.
 - If observed_at lacks receipt-authenticated provenance, retain the task set, rubric, and input digests, mark the comparison not_observed, and hand back paired_run_decision/v1 with the provenance gap rather than a pass or fail.
 - If candidate inputs or success criteria differ outside the variable under test, retain the observed runs, mark executor selection tentative, and hand back the mismatched digests or criteria and a matched rerun budget.
 - If a judge has no measured agreement against human labels, retain the prewritten rubric and observed executable checks, mark judgment unresolved and unqualified, and hand back the missing agreement measurements instead of a correctness claim.
@@ -57,7 +58,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

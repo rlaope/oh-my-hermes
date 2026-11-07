@@ -40,14 +40,13 @@ Good example:
 Bad example:
 
 - Prompt: Write a LinkedIn launch post for our new feature.
-- Expected behavior: Route to `content-operator`, not `sales-development`.
+- Expected behavior: Route to `omh-content-operator`, not `sales-development`.
 - Why: A one-off social post has no account qualification or discovery objective.
 
 ## Completion Checklist
 
-- The decision, options, tradeoffs, assumptions, and rejected alternatives are named.
-- Observed signals are separated from strategic inference.
-- Accepted decisions and implementation follow-ups are not conflated.
+- Each claim is tagged observed, asserted, hypothesis or unknown, with a source for observed ones; sequence rows are unsent drafts and exist only with supplied consent, suppression and channel eligibility.
+- The disposition is ADVANCE, HOLD or DISQUALIFY with its deciding evidence; a next step is confirmed only from an observed buyer response; CRM changes stay proposals.
 
 ## Recovery Notes
 
@@ -57,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

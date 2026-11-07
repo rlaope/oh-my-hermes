@@ -16,8 +16,9 @@ has a measured throughput.
 on the roadmap and always happens: support escalations, on-call, code review,
 interviewing, and the maintenance nobody plans. Take those from the last two
 quarters rather than from intention - the gap between planned and actual is
-frequently the whole finding, and a demand figure that omits them understates
-by a third or more in most teams.
+frequently the whole finding. In the worked example below the omitted work is
+29% of demand (21 of 73 person-weeks); take the real figure from your own
+actuals.
 
 **Capacity.** Headcount times weeks, minus holiday, leave, onboarding time for
 anyone who joined in the window, and the fraction of senior time the other
@@ -49,7 +50,7 @@ price and a different lag.
 | --- | --- | --- | --- | --- |
 | Hire | the gap permanently, once ramped | one to two quarters, counting ramp | salary plus the senior time recruiting and onboarding consume - which comes out of this quarter's capacity | the gap is worse before it is better |
 | Outsource | a bounded, specifiable slice | weeks | contract rate plus the internal time to specify and review | only works where the work can be handed over without the context that is not written down |
-| Cut scope | exactly what is cut | immediately | whatever the cut item was for | the only option that closes the gap this quarter, and the only one whose cost is a commitment to somebody |
+| Cut scope | exactly what is cut | immediately | whatever the cut item was for | closes the gap fully and immediately, and is the only one whose cost is a commitment to somebody; outsourcing closes part of it within the quarter, hiring none of it |
 
 The comparison is the deliverable. Hiring to close a 17-week gap that exists
 this quarter does not close it this quarter; saying so is the analysis.

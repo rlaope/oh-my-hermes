@@ -83,7 +83,7 @@ Treat OMH as the operating layer above individual Hermes-native skills. For a wo
 
 ## Priority Rules
 
-1. Exact or near-exact OMH maintenance commands (`omh update`, `omh setup`, `omh doctor`, `omh uninstall`, `omh install`, `omh list`, and Korean equivalents such as `omh 업데이트해줘`, `omh 닥터 돌려줘`, `omh 삭제해줘`, `omh 셋업해줘`) route as `operator_maintenance_command`. Run the requested command, report observed output, and avoid repo mutation unless the user separately asks for code changes.
+1. Exact or near-exact OMH maintenance commands (`omh update`, `omh setup`, `omh doctor`, `omh uninstall`, `omh install`, `omh list`, and Korean forms such as `omh 업데이트해줘`, `omh 닥터 돌려줘`, `omh 삭제해줘`, `omh 셋업해줘`) route as `operator_maintenance_command`. Run the requested command, report observed output, and avoid repo mutation unless asked. `omh uninstall`: `--dry-run`, then confirm.
 2. Explicit slash skill invocation wins when it is not one of those maintenance commands.
 3. Explicit workflow keywords route to the matching adapted skill when installed.
 4. Broad planning requests route to `ralplan` or `plan` before implementation.

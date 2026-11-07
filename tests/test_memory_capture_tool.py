@@ -97,10 +97,16 @@ class InProcessCaptureTests(unittest.TestCase):
         self.assertEqual(result["admission_state"], "pending_review")
         self.assertIsNone(result["record_id"])
         self.assertTrue((self.store / "memory" / "candidates" / f"{result['candidate_id']}.json").is_file())
+        # The model restates a relative date itself; no review step is named to it.
+        self.assertIn("absolute date", result["next_action"])
+        self.assertIn("tell the user it was not kept", result["next_action"])
+        self.assertNotIn("omh memory review", result["next_action"])
 
         write_setup_profile(self.paths, [], memory_mode="review-first")
         held = self.call(summary="Reviews happen on Thursdays.")
         self.assertEqual((held["status"], held["review_reason"]), ("pending_review", "policy_review_first"))
+        # Only this reason has a person behind it, and the verbs are the real ones.
+        self.assertIn("`omh memory review` shows it and `omh memory approve` releases it", held["next_action"])
         self.assertEqual(scan_project_memory_records(self.paths), ([], []))
 
     def test_unsafe_content_is_held_for_review_through_the_tool(self) -> None:
@@ -110,6 +116,15 @@ class InProcessCaptureTests(unittest.TestCase):
         result = self.call(summary=f"Deploy key is {AWS_ACCESS_KEY_ID} for the staging bucket.")
         self.assertEqual(result["status"], "pending_review", result)
         self.assertEqual(result["review_reason"], "unsafe_content")
+        # Protected content cannot be approved, so no approval is offered (it would exit 2).
+        self.assertIn("there is nothing to approve", result["next_action"])
+        self.assertIn("the safety check held it", result["next_action"])
+        self.assertNotIn("protected content", result["next_action"])
+        self.assertNotIn("omh memory", result["next_action"])
+        # needs_review words (not a secret) get the same cause, not "protected content".
+        temp = self.call(summary="Uploads stay in the temp directory until the nightly job runs.")
+        self.assertEqual(temp["review_reason"], "unsafe_content", temp)
+        self.assertIn("'temp' or 'hack'", temp["next_action"])
         self.assertEqual(result["receipt_state"], "candidate_persisted")
         self.assertIsNone(result["record_id"])
         self.assertEqual(scan_project_memory_records(self.paths), ([], []))

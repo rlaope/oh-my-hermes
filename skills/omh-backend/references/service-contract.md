@@ -31,13 +31,15 @@ Two rules the table exists to force:
 | Failure mode | Status / code | Body shape | Retryable? | Logged / redacted |
 | --- | --- | --- | --- | --- |
 | bad input | 4xx validation | error envelope with field paths | no | log shape, never values |
-| unauthenticated | 401 | error envelope, no detail | no | log attempt, never the token |
+| unauthenticated | 401 | error envelope, no detail, plus a WWW-Authenticate challenge naming the scheme | no | log attempt, never the token |
 | unauthorized | 403 | error envelope, no resource hint | no | log subject and object |
 | not found vs not permitted | pick one deliberately | must not leak existence | no | log the real reason |
 | conflict / version mismatch | 409 | current version, expected version | after refetch | log both versions |
 | duplicate create (unique constraint) | 409 | error envelope naming the conflicting field | no; a replay with the same idempotency key gets the stored response | log the constraint name, never the value |
 | upstream dependency failure | 5xx or 503 | error envelope, retry hint | yes, with backoff | log upstream identity |
-| timeout | 504 or 408 | error envelope | yes, bounded | log duration and budget |
+| timeout | 504 when a dependency or upstream timed out, 503 when the service sheds load; 408 only for a client that sent its request too slowly | error envelope | yes, bounded | log duration and budget |
+| rate limited / quota | 429 | error envelope naming the limit | yes, after the Retry-After interval | log caller and limit, never the key |
+| payload over the bound | 413 | error envelope naming the bound | no | log the size, never the body |
 
 The two rows that are always argued about and always matter: **not-found versus not-permitted** must be chosen on purpose, because returning 404 for a forbidden object hides existence and returning 403 confirms it; and **retryable** is a contract promise, because a client that retries a non-idempotent write you marked retryable will double-charge someone.
 
@@ -48,9 +50,10 @@ The two rows that are always argued about and always matter: **not-found versus 
 - Pagination is one style for the whole surface -- cursor or offset, not both -- and the contract names the ordering key. The key ends in a unique tie-breaker, such as `(created_at, id)` rather than `created_at` alone: a key with ties drops or repeats rows at page boundaries, and nobody sees it happen.
 - A cursor is opaque to the client and encodes the whole ordering tuple plus the filter and sort it was issued for. A cursor sent back with a different filter or sort is rejected as bad input, never reinterpreted.
 - The page size has a server-side maximum, and the contract says whether a larger request is clamped or rejected. A total count is optional and named as its own cost, not computed for every page by default.
-- An offset page reads and discards every row before it, so a surface that pages deep or grows without bound uses a cursor. The index that serves the cursor is a `relational-db` question; name it in the handoff.
+- An offset page reads and discards every row before it, so a surface that pages deep or grows without bound uses a cursor. The index that serves the cursor is a `omh-relational-db` question; name it in the handoff.
 - Time is one representation. Nullability is explicit. An optional field that is sometimes absent and sometimes `null` is two shapes.
 - Versioning: name how a breaking change reaches clients before the first breaking change, not during it.
+- A 429 or 503 carries `Retry-After`, and the contract states the backoff a client is expected to apply; a client that ignores it is the next incident.
 
 ## 5. Integrity under concurrency
 
@@ -60,7 +63,7 @@ Every write two requests can reach at the same time names its guard in the contr
 - **An idempotency key is stored, not just accepted.** Keep the key, scoped to the caller, under a unique constraint, together with a fingerprint of the request and the response it produced. The key record and its stored response commit in the same transaction as the effect; otherwise a crash between the two re-executes the effect when the request is replayed. The same key with the same request replays the stored response. The same key with a different request is rejected, with one status chosen for the surface. A second request that arrives while the first is still running gets a defined answer, not a second execution. The contract also says how long keys are kept.
 - **Every update that can race names its lost-update guard.** That is a version column checked in the `WHERE` clause (no row updated means 409), an update computed in SQL (`SET stock = stock - $1 WHERE stock >= $1`), or a row lock taken before the read. A read-modify-write in application code with none of these silently loses one of two concurrent writes.
 - **Side effects leave after the commit.** An email, an outbound event, or a webhook to another system is never sent before the transaction that records it commits; a rollback after the send tells the world about a state that does not exist. Either write the effect to an outbox table in the same transaction and deliver it from there, or send it after commit and accept that a crash in between drops it. The contract names which one. Outbox delivery repeats on retry, so its receiver deduplicates.
-- **Name the transaction and its isolation.** Each write path states its transaction boundary, the isolation level it relies on, and any row lock. The engine rules (default isolation per engine, `FOR UPDATE`, `SKIP LOCKED`, upsert, lock order, and which errors to retry) belong to the `relational-db` workflow and its engine lock tables.
+- **Name the transaction and its isolation.** Each write path states its transaction boundary, the isolation level it relies on, and any row lock. The engine rules (default isolation per engine, `FOR UPDATE`, `SKIP LOCKED`, upsert, lock order, and which errors to retry) belong to the `omh-relational-db` workflow and its engine lock tables.
 
 ## 6. Budgets, timeouts, and caches
 
@@ -77,7 +80,7 @@ The stack is a routing input. Name it in the contract and tell the executor whic
 | Python service | the framework's own routing, dependency-injection, and validation docs; the project's typed-settings and migration tooling |
 | Node / TypeScript service | the framework's routing and middleware docs; the project's schema-validation library and its query builder or ORM |
 | Go service | the router and middleware docs in use; the project's query-generation and migration tooling |
-| Rust service | the framework's extractor and error-handling docs, plus the `rust` workflow for the ownership and error contract |
+| Rust service | the framework's extractor and error-handling docs, plus the `omh-rust` workflow for the ownership and error contract |
 | Any stack | this repository's existing handlers -- the nearest sibling endpoint is a stronger convention source than any framework guide |
 
 If the stack is unknown, prepare the contract stack-neutral and name the stack as the one blocking input. A stack-neutral contract is useful; a contract written for the wrong stack is not.

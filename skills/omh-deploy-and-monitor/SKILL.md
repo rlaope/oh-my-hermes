@@ -19,7 +19,7 @@ This is a Hermes-native `deploy-and-monitor` workflow skill.
 
 ## Why This Exists
 
-`deploy-and-monitor` exists to keep `monitoring` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`deploy-and-monitor` exists because a deploy is judged healthy by whoever last looked at a dashboard: it fixes the baseline before the change and names the thresholds that mean roll back.
 
 ## Do Not Use When
 
@@ -37,15 +37,15 @@ Good example:
 
 Bad example:
 
-- Prompt: deploy-and-monitor: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `deploy-and-monitor`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: deploy-and-monitor: ship it and tell me when it is healthy.
+- Expected behavior: Refuse a health claim; name the missing baseline, signals, window, and rollback owner.
+- Why: Healthy with no baseline is whatever the dashboard shows after the fact.
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- Each health signal has a pre-deploy baseline, a threshold, a window, and an action.
+- The rollback owner and trigger are named, with a bake time and schema compatibility.
+- Post-deploy status cites observed values or reads not_observed.
 
 ## Recovery Notes
 
@@ -56,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -78,8 +78,10 @@ Quality bar:
 - Name release scope, target environment, health signals, rollback criteria, and evidence owner.
 - Show pre-deploy, deploy decision, monitor, rollback, and post-deploy as distinct stages.
 - Mark health and rollback status unknown until observed evidence arrives.
-- On Hermes, a watchlist that must keep running after this turn is prepared as a native blueprint through `automation-blueprint` (a cron job whose `monitor` source, a health URL or a script whose output carries no timestamps, is the user's source, never one OMH writes), activated by the user or Hermes and never by OMH.
+- On Hermes, a watchlist that must keep running after this turn is prepared as a native blueprint through `omh-automation-blueprint` (a cron job whose `monitor` source, a health URL or a script whose output carries no timestamps, is the user's source, never one OMH writes), activated by the user or Hermes and never by OMH.
 - On Hermes, the first monitor tick runs against a baseline with nothing to diff, so it is not a detected change; a silent tick says only that nothing was delivered (a no_change run, or an agent run that answered `[SILENT]`) and never that the release is healthy; a source that failed is an error, not a change; and what the job finds enters the post-deploy status only from its recorded runs (`hermes cron runs <job_id>`) and its open `hermes cron incidents`.
+- Name an error, a latency, and a saturation signal per service and record each pre-deploy value over the same window; healthy is a comparison to that baseline.
+- Set a bake time, and list migrations and flags in the decision gate with whether the old version still runs on the new schema.
 
 Handoff policy:
 

@@ -139,8 +139,15 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 533897 -> 533907 and the digest re-derived: the dag-ulw row's handoff policy
             # names choosing an owner by naming it in a dag-ulw request and the per-owner
             # `exports` list (+10); no other row moved, and the pin before it was e6484100...d8b.
-            (skill_capabilities, 533907, FULL_ROW_DELTA_CAP,
-             'ad1e9c0afd37432e32738b2eb0b6c5439f812df47f9c78f1e12e32c9c59c4aa5',
+            # Digest re-derived, length unchanged: meta-router's shortlist line names the
+            # catalog index as a `skill_view` call into omh-routing (the file is not its
+            # own), which moves that row past the preview cut; no other row moved, and the
+            # pin before it was ad1e9c0a...4aa5.
+            # 533907 -> 536196 and the digest re-derived: the skill audit round's rows, +2,289
+            # (itemized by lane at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the sum of the lanes'
+            # readings is exact on the merged tree, and the pin before it was d6dfefff...fc71.
+            (skill_capabilities, 536196, FULL_ROW_DELTA_CAP,
+             'a5d1c98868990aef117ac9373851d1a32090ffb70a011d712e459853085b3e03',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -198,7 +205,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         feature = [t for t in templates if t.name == FEATURE]
         self.assertEqual(len(feature), 1)
         sections = dict(_split_sections(feature[0].content))
-        self.assertEqual(len(sections['Workflow Lane']), 497)
+        # 497 -> 496: the hand-back line names the router by its loadable label,
+        # `omh-routing`, one character shorter than `oh-my-hermes`.
+        self.assertEqual(len(sections['Workflow Lane']), 496)
         self.assertEqual(len(sections['Runtime Evidence']), 1446)
         self.assertLessEqual(len(feature[0].content.encode()), 5735)
         legacy_templates = [t for t in templates if t.name != FEATURE]
@@ -367,7 +376,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # only ulw-research moves, and the pin before it was 5404bf98...ca32229.
         # dag-ulw's external-owner policy (per-owner choices named in a dag-ulw request, the node
         # `owner` field, `exports`); only dag-ulw moves, and the pin before it was 8ea92d7d...58d7.
-        self.assertEqual(_digest(legacy_hashes), '4f552dc5d28ff70b26b21c1dc4d93c8a66d5b28d34e72483ea00004d9315a07a')
+        # Then the render rail: every body names its siblings by the label `skill_view`
+        # loads, and the bodies that ended in a lost hand-back fragment gain the lane
+        # section; the pin before it was 4f552dc5...a07a.
+        # The skill audit round moves the bodies each lane edited and nothing else: the union of the
+        # lanes' moved lists equals the merged tree's. Plan, ralplan and adversarial-consensus name
+        # `--plan-file` / `--input-bundle`; the pin before it was 7e537e8d...4b2c.
+        self.assertEqual(_digest(legacy_hashes), '49189871872c2013aeaac9cd6c38a6775f9d7ea66272b44536a5e0ccac37a29a')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -380,7 +395,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # (-501); swapping only that body back to main's restores 128600.
         # Skill-specific bail notes remove duplicate Recovery Notes; the measured count falls, with all ceilings unchanged.
         # 120488 -> 122431: systematic-review's mandatory Workflow Lane (497) + Runtime Evidence (1446) = 1943.
-        self.assertEqual(legacy['repeated']['bytes'], 122431)
+        # 122431 -> 124814: the render rail writes each sibling under its loadable label
+        # (`omh-` or `ulw-` prefixed) in the sections bodies repeat; the ceilings keep their headroom.
+        # 124814 -> 115494: the skill audit round's own Completion Checklist, Why and Recovery
+        # lines replace the defaults those bodies repeated (itemized by lane at
+        # FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS); the ceilings are re-derived there.
+        self.assertEqual(legacy['repeated']['bytes'], 115494)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -391,8 +411,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         self.assertLess(current['repeated']['bytes'] - REPEATED_DELTA_CAP, 131_893)
         feature_refs = [t for t in refs if t.skill_name == FEATURE]
         self.assertEqual(len(feature_refs), 6)
-        self.assertLessEqual(sum(len(t.content.encode()) for t in feature_refs), 19397)
-        self.assertLessEqual(max(len(t.content.encode()) for t in feature_refs), 4039)
+        # 19397 -> 19800: the suspect-posting and interview-prep lines and real Korean questions
+        # (measured 19,731 at the time; the cap keeps the headroom the other lines in this test carry).
+        self.assertLessEqual(sum(len(t.content.encode()) for t in feature_refs), 19800)
+        # 4039 -> 4164: procedure.md's Korean clarification questions were English text; real Korean
+        # is three bytes a character (+125).
+        self.assertLessEqual(max(len(t.content.encode()) for t in feature_refs), 4164)
 
     def test_hard_per_item_schema_and_injection_limits_do_not_move(self) -> None:
         # Career growth moves only the three catalog-total ratchets. Later
@@ -402,16 +426,16 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         expected = {
             'skill_index_line_max_chars': 100,
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
-            'pre_llm_call_context_chars_max': 6041,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
-            'pre_llm_call_context_fallback_chars_max': 7593,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
+            'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
+            'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 3630,  # Human-voice reply sentence (+110).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1500000,
-            'full_profile_skill_body_repeated_chars': 140000,
+            'full_profile_skill_body_chars': 1700000,  # Re-derived from 1511394 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
+            'full_profile_skill_body_repeated_chars': 130000,  # Re-derived from 117436 measured, +10%, up to the next 10,000.
             'skill_density_filler_hits': 0,
         }
         metrics = {m.name: m for m in budget_metrics()}

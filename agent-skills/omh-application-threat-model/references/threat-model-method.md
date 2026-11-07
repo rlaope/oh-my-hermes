@@ -2,11 +2,11 @@
 
 The prompts, vocabularies, and test shapes the workflow body points at. Open this while modeling; the body carries the rules that must hold whether or not it is open.
 
-This models an application. The agent's own prompt, tool, file, credential, and dependency surface is `security-safety-review`, which emits `threat_surface_map/v1` — a different artifact, and the reason this reference never asks about prompts or tool permissions.
+This models an application. The agent's own prompt, tool, file, credential, and dependency surface is `omh-security-safety-review`, which emits `threat_surface_map/v1` — a different artifact, and the reason this reference never asks about prompts or tool permissions.
 
 ## 1. Assets
 
-An asset is something an attacker wants, not every table in the schema. Each row carries a data class and exactly one loss; an asset with no loss is not an asset.
+An asset is something an attacker wants, not every table in the schema. Each row carries a data class and its primary loss; any other loss that applies gets its own scenario row, and an asset with no loss is not an asset.
 
 | Data class | Examples | Loss that usually matters |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ Boundaries this repeatedly finds: internet to edge, edge to service, service to 
 
 ## 3. Scenarios: the STRIDE prompts
 
-Run all six against every boundary. One prompt, one scenario, or a recorded reason the category does not reach this boundary.
+Run all six against every boundary. One prompt, one scenario, or a recorded reason the category does not reach this boundary. Run them again against each data store, external entity, and process that holds an asset, since a store at rest or a process inside one zone has no boundary of its own, and add one more prompt for a compromised third-party dependency or build step.
 
 | Category | Prompt for this boundary |
 | --- | --- |
@@ -56,6 +56,8 @@ One decision per scenario, from a closed vocabulary, each with a named owner:
 - **Eliminate** — remove the feature, the data, or the path. Requires what is being removed.
 
 A scenario with two decisions has not been decided.
+
+Rank before deciding. Rate each scenario's likelihood and impact (low = 1, medium = 2, high = 3, each defined in one sentence for this system) and order the list by likelihood times impact, ties by impact. Accept is allowed only below the threshold the owner states; above it the decision is mitigate, transfer, or eliminate.
 
 ## 5. Control state
 

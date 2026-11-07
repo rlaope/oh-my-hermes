@@ -56,7 +56,7 @@ Quality tier: `execution-evidence-gated`
 
 - The source sheet is a host-generated grid on #FF00FF with a source record; real-person sources carry consent.
 - The actual helper command and exit were observed; frames, sheet and qc.json were read back and hashed, or the blocker is stated.
-- body_scale_cv and anchor_y_std are quoted from qc.json; a REGENERATE verdict led to a new sheet, not frame edits.
+- free_frames were named before the run, never after a REGENERATE; body_scale_cv and anchor_y_max_dev are quoted from qc.json; a REGENERATE verdict led to a new sheet, not frame edits.
 
 ## Recovery Notes
 
@@ -67,7 +67,7 @@ Quality tier: `execution-evidence-gated`
 ## Workflow Lane
 
 - Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## Runtime Evidence

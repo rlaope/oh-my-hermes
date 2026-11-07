@@ -28,6 +28,7 @@ This is a Hermes-native `feedback-triage` workflow skill.
 - The user wants current market research rather than triage of supplied signals.
 - The triage result asks for a retention or activation intervention rather than another cluster; use `omh-lifecycle-growth`.
 - The supplied material is opportunity records and the request is portfolio health or forecast review; use `omh-sales-pipeline-review`.
+- The request is one reproducible bug with a fix asked for, not a set of reports to cluster; use the coding handoff.
 
 ## Examples
 
@@ -48,6 +49,8 @@ Bad example:
 - The source boundary, signal clusters, severity, and follow-up lane are named.
 - Bug, feature, research, strategy, and coding handoff outcomes stay separate.
 - The next workflow is recommended before any implementation claim.
+- A cluster is ranked by distinct customers reporting it (one customer counted once), severity (lost data or money, then a blocked task, then annoyance), and whether a workaround exists, with the count and its source.
+- Quotes carry names, emails, order ids, and card digits masked, and keep the raw item reference.
 
 ## Recovery Notes
 
@@ -58,7 +61,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

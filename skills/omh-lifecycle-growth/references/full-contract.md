@@ -28,7 +28,7 @@ Good example:
 Bad example:
 
 - Prompt: Send the re-engagement push to every inactive user tonight.
-- Expected behavior: Route to `connector-operator` with explicit authorization, or return HOLD if consent, suppression, and frequency eligibility are unknown.
+- Expected behavior: Route to `omh-apps` with explicit authorization, or return HOLD if consent, suppression, and frequency eligibility are unknown.
 - Why: An immediate external send is a connector action, and lifecycle-growth never sends or claims delivery.
 
 ## Completion Checklist

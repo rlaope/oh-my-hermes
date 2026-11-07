@@ -10,6 +10,7 @@ metadata:
     phase: media-input-task
     role: guide
     quality_tier: workflow-surface-gated
+    related_skills: [omh-voice-input]
 ---
 
 # Media Input Operator
@@ -25,6 +26,7 @@ This is a Hermes-native `media-input-operator` workflow skill.
 - The request is already handled by a narrower explicit skill with stronger evidence.
 - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
 - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- The audio is an instruction to carry out; use `omh-voice-input`.
 
 ## Examples
 
@@ -42,6 +44,7 @@ Bad example:
 
 ## Completion Checklist
 
+- Receipt OCR checks items sum to the total, states assumed currency and date order, and masks card and ID numbers.
 - Media type, source location, permission boundary, transcript availability, language, requested output, timestamp requirement, and stop condition are explicit.
 - Downloads, uploads, ASR, transcript extraction, speaker labels, copyrighted media access, and provider setup are gated or marked missing.
 - Transcript text, OCR output, screenshot text, receipt fields, timestamps, quotes, action items, and media-summary claims are reported only from observed media or supplied transcript/extraction evidence.
@@ -56,7 +59,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

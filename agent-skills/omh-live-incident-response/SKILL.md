@@ -17,7 +17,7 @@ This is an OMH `live-incident-response` workflow skill, projected for Agent Skil
 
 ## Why This Exists
 
-`live-incident-response` exists because an incident that is still open had no owner. `support-operations` sent an active incident to `reliability-review`, and `reliability-review` reviews incident notes after the fact, so the one skill that saw the request handed it to a postmortem while the outage was still running.
+`live-incident-response` exists because an incident that is still open had no owner. `omh-support-operations` sent an active incident to `omh-reliability-review`, and `omh-reliability-review` reviews incident notes after the fact, so the one skill that saw the request handed it to a postmortem while the outage was still running.
 
 ## Do Not Use When
 
@@ -38,13 +38,13 @@ Good example:
 Bad example:
 
 - Prompt: live-incident-response write up the postmortem for last week's outage and what it cost the error budget
-- Expected behavior: Route to `reliability-review`: a closed incident is reviewed, never commanded.
+- Expected behavior: Route to `omh-reliability-review`: a closed incident is reviewed, never commanded.
 - Why: Severity, roles, and a running timeline have no subject once the incident is over.
 
 ## Completion Checklist
 
 - Severity is declared, carries the observation that set it, and every change appended rather than overwrote the previous level.
-- One commander is named; operations, communications, and scribe each name a person or read unfilled.
+- One commander is named; operations, communications, and scribe each name a person (the assistant, when one human holds the rest) or read unfilled.
 - Every timeline entry is timestamped, attributed, and typed, and no earlier entry was edited.
 - Each mitigation reads temporary or permanent, and a temporary one names what removes it.
 - Recovery cites the named signal, its healthy value, the observed value, and the observer, never the mitigation alone.
@@ -52,7 +52,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If nobody is named commander, ask for one before anything else; an incident without a commander produces opinions instead of decisions.
+- If nobody is named commander, ask for one before anything else; an incident without a commander produces opinions instead of decisions. With one human, that person is commander and operations.
 - If the recovery signal is not stated, ask which signal and which value counts as healthy before calling anything recovered.
 - If the incident turns out to be closed, hand the postmortem to `omh-reliability-review` and leave this record as the timeline it reads.
 - If a connector call fails or returns nothing, keep the send prepared and name the channel that is unconfirmed instead of assuming delivery.
@@ -115,7 +115,7 @@ Artifact expectations:
 Safety rules:
 
 - Never rewrite or delete a timeline entry. A correction is a new entry naming the entry it corrects, because the timeline is what the review reads afterwards.
-- Do not claim a page was sent, a status page was updated, or a customer was notified; those are `connector-operator` requests, observed only when the connector returns a result.
+- Do not claim a page was sent, a status page was updated, or a customer was notified; those are `omh-apps` requests, observed only when the connector returns a result.
 - Do not call the incident recovered because a mitigation was applied; recovery needs the named signal observed at its healthy value, with the observer recorded.
 - Never leave a temporary mitigation unmarked; record what it changed and what removes it, or it becomes permanent because nobody wrote it down.
 - Never print customer records, credentials, tokens, or connection strings pulled into the timeline as evidence.

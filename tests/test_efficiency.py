@@ -242,7 +242,11 @@ class EfficiencyContractTests(unittest.TestCase):
         # and offers `dag-ulw` after acceptance. Main measures 84,762 and this
         # tree 86,249 (+1,487); the ceiling leaves ~1.75k headroom, about the
         # ~1.6k the earlier entries recorded.
-        self.assertLess(core["skill_body"]["bytes"], 88_000)
+        # 88,000 -> 92,000: the skill audit round grows the core bodies it touches: operations
+        # +1,592 (cancel's stop commands and the checklists of the observability skills), host
+        # readiness +419, coding core +311, memory and Jev +68, plan record +60, business +30.
+        # Main measures 87,926 and the merged tree 90,406 (+2,480); the ceiling restores ~1.6k headroom.
+        self.assertLess(core["skill_body"]["bytes"], 92_000)
         # 815,000 -> 825,000: one new installable body (`web-research`) plus the
         # sentence that split `best-practice-research`'s boundary in two. Set to
         # restore the ~10k headroom this gate is meant to carry rather than to
@@ -411,7 +415,7 @@ class EfficiencyContractTests(unittest.TestCase):
 
                 # Evidence boundaries stay inline.
                 for rule in definition.safety_rules:
-                    self.assertIn(rule, content)
+                    self.assertIn(render_module.translate_sibling_mentions(rule, owner=definition.name), content)
                 self.assertIn("Prepared OMH routing", content)
                 self.assertIn("prepared", content.lower())
 

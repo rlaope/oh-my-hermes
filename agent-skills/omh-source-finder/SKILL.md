@@ -27,7 +27,7 @@ This is an OMH `source-finder` workflow skill, projected for Agent Skills hosts 
 
 - The requested output is factual findings, comparison, or a summary rather than a typed candidate inventory and acquisition status; use `ulw-research`.
 - The user needs a business decision brief with evidence-versus-inference treatment; use `omh-research-brief`.
-- The user asks for current citations, fact-finding, or source-backed synthesis; use `ulw-research`.
+- The user asks for a cited answer to a current-facts question; use `omh-web-research`, and for a reference-implementation study with a depth budget use `ulw-research`.
 - The user supplies a paper/PDF/arXiv/DOI/excerpt and wants explanation; use `omh-paper-learning`.
 - The user asks for recurring monitoring, source inbox, or Scout/Analyst/Briefer operations.
 - The user asks to export, convert, render, package, or attach a file; use `omh-materials-package` or `omh-deliverable-package`.
@@ -44,7 +44,7 @@ Good example:
 Bad example:
 
 - Prompt: source-finder find current citations and summarize what the sources say.
-- Expected behavior: Route to `research` because the user asks for current evidence and synthesis, not candidate acquisition status.
+- Expected behavior: Route to `ulw-research` because the user asks for current evidence and synthesis, not candidate acquisition status.
 - Why: Source-finder prepares acquisition lifecycle metadata; research owns current evidence synthesis.
 
 ## Completion Checklist
@@ -83,7 +83,7 @@ Quality bar:
 - Separate candidate preparation, observed link, observed download, file hash, text extraction, license check, verification, and downstream selection.
 - Attach observation provenance before treating any acquisition state as evidence.
 - For `paper` candidates, when Hermes' bundled `arxiv` skill is available, search through it - by topic, author, category, or paper id - and record each entry it returns as `link_observed` with `hermes_tool` provenance. A search result is an observed link and nothing more: download, text extraction, and verification stay unclaimed until their own run is observed. Without the skill, a paper candidate stays `candidate_prepared` until a link is observed another way.
-- Vary search angles across official docs, academic work, implementations, datasets, and criticism until each requested source kind has candidates or another angle change adds nothing new.
+- Vary search angles across official docs, academic work, implementations, datasets, and criticism within the plan's budget (3 queries, 10 external attempts and one follow-up for an explore search), and name the source kinds still without candidates when the budget ends.
 - Recommend the next downstream workflow without pretending that downstream work already ran.
 
 Required inputs:
@@ -110,7 +110,7 @@ Safety rules:
 
 - Do not claim web search, download, repository clone, file extraction, file hash verification, license verification, or source correctness from a prepared candidate.
 - Do not define a source inbox; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.
-- Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `paper-learning`, file export to `materials-package`, and image cards to `img-summary`.
+- Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `omh-paper-learning`, file export to `omh-materials-package`, and image cards to `omh-image-cards`.
 
 ## Runtime Evidence
 

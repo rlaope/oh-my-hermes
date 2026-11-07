@@ -19,7 +19,7 @@ This is a Hermes-native `data-pipelines` workflow skill.
 
 ## Why This Exists
 
-`data-pipelines` exists because pipeline work had no owner: `backend` owns a service's schema migration, `data-analysis` analyzes data it is handed, and `relational-db` owns a database's locks and indexes, while a backfill that duplicated events or a schema change with unknown readers reached memory and event lanes with no idempotency contract or replay bound at all.
+`data-pipelines` exists because pipeline work had no owner: `omh-backend` owns a service's schema migration, `omh-data-analysis` analyzes data it is handed, and `omh-relational-db` owns a database's locks and indexes, while a backfill that duplicated events or a schema change with unknown readers reached memory and event lanes with no idempotency contract or replay bound at all.
 
 ## First Steps
 
@@ -63,7 +63,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

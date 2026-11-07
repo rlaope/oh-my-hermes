@@ -616,7 +616,8 @@ def _build_coding_delegation_payload_native(
     # `target_paths` declaration -- reused here (and re-derived there) rather
     # than threaded through the dataclass, since it is a pure, cheap scan of
     # the message and the two call sites read it for unrelated purposes.
-    verification_target_paths = _safety_preflight_target_paths(message)
+    target_scan_text = _plan_scan_text(message, plan_artifact)
+    verification_target_paths = _safety_preflight_target_paths(target_scan_text)
     # The explicit post-completion merge/deploy intent, read from the user's own
     # message only. It preserves the intent through the gate; it grants nothing.
     post_completion_directive = _user_merge_directive(message)
@@ -700,7 +701,7 @@ def _build_coding_delegation_payload_native(
     # intents, target paths — and rebuilding it there would scan the message a
     # second time to produce a value this build already has.
     preflight_request = _safety_preflight_request(
-        message,
+        target_scan_text,
         owner=proposed_selection.selected_executor_profile or "hermes",
         workflow=delegation.recommended_workflow,
         message_context_mode=message_context_mode,
@@ -1554,6 +1555,24 @@ def _is_preflight_filesystem_target(token: str) -> bool:
         or "\\" in token
         or "." in token
     )
+
+
+def _plan_scan_text(message: str, plan_artifact: dict[str, object] | None) -> str:
+    """What the target scan reads for a supplied plan: the message minus an intact reviewed body.
+
+    With `--from-plan` the message carries the whole plan file. A reviewed body is
+    text a reviewer wrote after the person did, so a path inside it (a results
+    file, a forbidden `~/.ssh`, an endpoint) is not a target the user named.
+    Everything else -- title, task, generated sections, a scaffold -- is scanned
+    exactly as before, so nothing the person wrote can move the gate from deny to
+    allow. The body is cut only between markers whose random nonce was written
+    with the file and whose digest matches; any doubt leaves the whole message.
+    """
+    if not plan_artifact or not plan_artifact.get("path"):
+        return message
+    from ..workflows.hermes_planning import scan_text_without_reviewed_body
+
+    return scan_text_without_reviewed_body(message)
 
 
 def _safety_preflight_target_paths(message: str, *, excluded_path: str = "") -> list[str]:

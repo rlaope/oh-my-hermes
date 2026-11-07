@@ -40,7 +40,8 @@ the slowest of those turns step 4 into the outage step 1 was meant to avoid.
 
 A compromised credential inverts this: the exposure outranks the availability,
 so revoke first and accept the outage. Say which case applies before naming a
-window.
+window. A rotation is planned only when the credential was never exposed; when
+exposure cannot be ruled out by evidence, treat it as compromised.
 
 ## Revocation is proven by a failure, not by an exit code
 

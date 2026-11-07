@@ -3,13 +3,13 @@
 Expert clarification questions:
 - `input and overlay polygon layers`
   - English: Which two polygon layers, source permissions, and study extent define the overlap question?
-  - Korean: Which two polygon layers, source permissions, and study extent define the overlap question?
+  - Korean: 겹침을 구할 두 폴리곤 레이어는 무엇이고, 사용 권한과 분석 범위는 어떻게 되나요?
 - `explicit source and metric target CRS`
   - English: What are the authoritative source CRS declarations and an appropriate projected metre CRS for measurement?
-  - Korean: What are the authoritative source CRS declarations and an appropriate projected metre CRS for measurement?
+  - Korean: 각 레이어의 공식 좌표계(CRS) 선언은 무엇이고, 면적을 잴 미터 단위 투영 좌표계는 무엇으로 할까요?
 - `new output directory and execution budget`
   - English: Which new directory receives outputs, which optional backend is installed, and what host timeout bounds execution?
-  - Korean: Which new directory receives outputs, which optional backend is installed, and what host timeout bounds execution?
+  - Korean: 결과를 쓸 새 폴더는 어디이고, 어떤 선택 백엔드가 설치되어 있으며, 실행 제한 시간은 얼마인가요?
 
 ## Procedure
 

@@ -168,6 +168,7 @@ class SearchGuidanceTests(unittest.TestCase):
         from pathlib import Path
         from omh.skills.catalog import builtin_definitions
         from omh.skills.procedure_rendering import specialist_procedure_reference_markdown
+        from omh.skills.render import translate_sibling_mentions
         from omh.skills.skill_record import project, skill_record
 
         root = Path(__file__).resolve().parents[1]
@@ -182,7 +183,11 @@ class SearchGuidanceTests(unittest.TestCase):
         for definition in builtin_definitions():
             if definition.procedure_steps:
                 refs = {template.relative_path: template.content for template in skill_record(definition.name).references()}
-                self.assertEqual(refs['references/procedure.md'], specialist_procedure_reference_markdown(definition))
+                # The shipped reference names siblings by their loadable label; the generator writes catalog names.
+                self.assertEqual(
+                    refs['references/procedure.md'],
+                    translate_sibling_mentions(specialist_procedure_reference_markdown(definition), owner=definition.name),
+                )
 
 
 if __name__ == '__main__':

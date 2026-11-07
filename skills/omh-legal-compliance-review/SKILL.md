@@ -40,14 +40,14 @@ Good example:
 Bad example:
 
 - Prompt: Audit this OAuth integration for secret and permission risks.
-- Expected behavior: Route to `security-safety-review`, not `legal-compliance-review`.
+- Expected behavior: Route to `omh-security-safety-review`, not `legal-compliance-review`.
 - Why: The target is technical security risk rather than contract or compliance analysis.
 
 ## Completion Checklist
 
-- Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
-- Open questions, residual risk, and missing verification are named.
-- Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+- Every authority-dependent statement has an exact locator and effective status or is marked unverified.
+- Every mandatory hold trigger is evaluated and each open one has a counsel owner and a question; the disposition is PASS, REVISE or HOLD.
+- The documents and versions that were not supplied are listed; no sign-off, filing or advice is claimed.
 
 ## Recovery Notes
 
@@ -58,7 +58,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

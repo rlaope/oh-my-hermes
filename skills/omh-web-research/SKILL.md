@@ -1,6 +1,6 @@
 ---
 name: "omh-web-research"
-description: "[omh] Current technical or business fact to cite from web: web lookup lane - settle a current-facts question in one cited retrieval round with retrieval dates and source-quality notes; for pre-spec grounding across reference implementations use `research`. Use when the user says: web-research, web research, web search, search the web, internet search, look up, look up sources, latest sources."
+description: "[omh] Current technical or business fact to cite from web: web lookup lane - settle a current-facts question in one cited retrieval round with retrieval dates and source-quality notes; for pre-spec grounding across reference implementations use `ulw-research`. Use when the user says: web-research, web research, web search, search the web, internet search, look up, look up sources, latest sources."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:
@@ -47,7 +47,7 @@ Good example:
 Bad example:
 
 - Prompt: 스펙 잡기 전에 오픈소스 구현들 깊게 보고 근거 만들어줘.
-- Expected behavior: Route to `research`, which declares a depth budget and studies reference implementations with pinned refs.
+- Expected behavior: Route to `ulw-research`, which declares a depth budget and studies reference implementations with pinned refs.
 - Why: Pre-spec grounding needs the engine's dossier rather than a single lookup.
 
 ## Completion Checklist
@@ -63,12 +63,12 @@ Bad example:
 - If the web is unreachable, name the retrieval gap and stop rather than substituting recalled facts.
 - If no archive access exists or the capture provider's paid authority is exhausted, record a temporal retrieval gap with no network action and keep the as-of claim in the annex; never substitute the current page for it.
 - If sources conflict, present both with their retrieval dates and say which one is primary.
-- If leads keep expanding past one round, hand the question to `ulw-research` with the sources already gathered.
+- If the follow-up round the plan issues still leaves required conditions unsupported, or leads keep expanding, hand the question to `ulw-research` with the sources already gathered.
 
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -93,7 +93,7 @@ Quality bar:
 - Keep historical-capture evidence and live-page evidence as two typed surfaces for a point-in-time or then-versus-now question; capture time, publication time, and retrieval time are independent clocks and none substitutes for another.
 - When Hermes' bundled `grounded-citations` skill is available, load it and register each source in its ledger when it is retrieved (`scripts/sources.py add`), before any prose is written; cite a source only by the id the ledger gave it, written `[n]`. Keep the run's ledger in a file of its own, passed as `--ledger <path>` before the subcommand on every call: the default ledger is shared by the whole profile, and another run's reset rebinds its ids. Mark background that rests on model knowledge `[unverified]` instead of citing it: the marker is for background the answer does not rest on and never carries the answer, and a contested claim with a single source keeps its citation and is stated as uncorroborated. The ledger id sits beside the source class and the retrieval date and replaces neither. Without the skill, list each source when it is retrieved and cite it at the claim it supports.
 - When that ledger is in use, report the citation check from a run, or as `not_observed`: the exit status of `sources.py verify <draft>` is the observed check - `0` is a pass and any other status is not - and `verify --evidence` also fails a draft whose cited source carries no verbatim quote. An exit `0` whose `info: stats:` line reads `0 distinct source(s) cited` checked nothing and is reported as `not_observed`, and so is an answer given only in chat: `verify` reads a draft file and exits `2` without one, so write the answer to a file first when the check matters. The run compares cited ids and the Sources block with the ledger; it does not test whether a claim is true, so a passing citation check is never reported as fact verification. After that verify, run `omh research receipts verify --citations <ledger> --draft <draft>` and report its fetched coverage from the run, or as `not_observed`; a receipt proves only that the page was opened in this session tree, never that it supports the claim. Without the ledger the citation check is `not_observed`.
-- Stop at the answer: one retrieval round settles a lookup, and an expanding lead list means the request belongs to `research`.
+- Stop at the answer: one retrieval round settles a lookup, plus at most the one follow-up the plan issues; a follow-up that still leaves required conditions unsupported, or an expanding lead list, means the request belongs to `research`.
 - Report what retrieval did not yield rather than closing the gap from recall.
 
 Handoff policy:

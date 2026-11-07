@@ -32,6 +32,14 @@ still admit two incompatible builds. `Missing` means nothing addresses it.
 The scored map is working state, not output. Report it only when no question
 will be asked, where it is the evidence for asking nothing.
 
+The interview header scores three dimensions, not ten categories. Map the
+categories onto them: Scope and behavior, Interaction flow, and Domain and data
+feed the outcome; Constraints and tradeoffs, Security and privacy, Quality
+attributes, Integration surface, and Edge cases feed constraints and non-goals;
+Completion signals feed success criteria; Terminology feeds whichever it
+affects. A dimension counts as resolved when none of its categories holds a gap
+that earned a question (see below).
+
 ## Which gaps earn a question
 
 A `Partial` or `Missing` category is a candidate, not a question. Promote it only
@@ -40,8 +48,9 @@ whether it is accepted. Drop it when it is a matter of implementation technique,
 a choice the executing lane can make and reverse cheaply, or already answered
 somewhere in the material.
 
-Rank the survivors by impact times uncertainty and ask in that order. Five
-questions is the ceiling for the whole session. Spend them on the worst
+Rank the survivors by impact times uncertainty and ask in that order. The
+interview's round budget (one question per round) is the ceiling for the whole
+session. Spend it on the worst
 unresolved categories rather than clearing several cheap ones - two low-impact
 answers and an unresolved security posture is a worse session than one question.
 
@@ -56,7 +65,7 @@ One question per round, and the round advances only on an accepted answer.
 - An id may follow the question mark in parentheses. Never before it.
 - Follow with one plain sentence on what the answer changes. A question whose
   stake cannot be stated in one sentence has not earned a round.
-- Offer two to five mutually exclusive options, or constrain a short answer to a
+- Offer two to four mutually exclusive options, or constrain a short answer to a
   few words. Name which option is recommended and why, in one line, so the
   answerer can accept rather than adjudicate.
 - Never show the queue. A visible queue invites answering ahead, which collapses
@@ -88,8 +97,12 @@ transcript, not a clarified brief.
 
 ## Stopping
 
-Stop at the first of: every high-impact category resolved, the person says to
-stop, or five questions asked. Then report the outcome and, when the budget ran
+Stop at the first of: all three dimensions resolved, the person says to
+stop, or the round budget spent. Then report the outcome and, when the budget ran
 out first, list the categories still `Partial` or `Missing` and say what was
 assumed for each. A named unresolved assumption is a usable result. A silent one
 is the failure this whole pass exists to prevent.
+
+A caller that cannot answer (a subagent, a scheduled run) or a question that timed out ends the
+interview the same way: emit the clarified brief with each unresolved dimension recorded as an
+assumption marked `unconfirmed`, and stop.

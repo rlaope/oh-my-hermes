@@ -69,7 +69,7 @@ one adapter will ever fill is indirection, not a win.
 ## Recorded decisions
 
 Before listing, read the decision records for the area (`docs/adr/`, or
-`decision-recall` where it is installed). A candidate that contradicts a
+`omh-decision-recall` where it is installed). A candidate that contradicts a
 recorded decision is listed only when its friction is strong enough to reopen
 the decision, and the row names the record. Otherwise it goes on the
 looks-bad-but-is-actually-fine list with the record as its reason.
@@ -94,7 +94,7 @@ rarely effort `S`, and one that is appears among the quick wins as well.
 The before-picture of a candidate is derived, never drawn. For a Python
 candidate where the `omh` CLI is installed (its codegraph reads Python
 sources only), `omh codegraph uml --focus <candidate path>` renders the
-current structure with its omissions legend (`codebase-uml`); otherwise the
+current structure with its omissions legend (`omh-codebase-uml`); otherwise the
 cited files stand in for it. The after-shape stays the one-sentence
 deepening. A future structure has no tree to derive a picture from, and a
 hand-drawn one would present a guess as structure.
@@ -103,7 +103,7 @@ hand-drawn one would present a guess as structure.
 
 The audit ends at the ranked candidates and one named top pick with its
 reason. It proposes no interface. When the user picks a candidate, its
-interface is shaped in `refactor-plan`
+interface is shaped in `omh-refactor-plan`
 (`omh-refactor-plan/references/interface-shaping.md`), and that plan keeps
 its own approval gate.
 

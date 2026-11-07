@@ -28,6 +28,19 @@ All notable changes will be documented here.
   `mute_only` turns it down per profile. DMs, slash commands and other
   platforms are untouched.
 
+- **Host-readiness skills now say what their commands do and stop
+  promising what they cannot.** Turning off a capability family reports what
+  the disable actually does (memory stops; the other families are only
+  withheld, which `omh capability-policy status` shows), names the command,
+  and drops a flag that never existed. `omh uninstall`, from a chat phrase or
+  a wrapper card, is previewed with `--dry-run` and confirmed first. Wrappers
+  pass the chosen owner with `--from-plan`. A web-search setup is not called
+  verified while a keyed backend has no key. Doctor, toolbelt, executor,
+  provider-profile and prompt-import skills name the command or probe that
+  produces their evidence, a started run record says how to state its
+  outcome, and generated references no longer end in a literal `\n` or print
+  an ellipsis followed by a period.
+
 - **Several features or stages asked to be built are offered as a dag-ulw
   graph, in Korean as in English.** A request that names three or more
   features as one build verb's object, with a feature noun after the list
@@ -150,6 +163,20 @@ All notable changes will be documented here.
   `hermes gateway start` to start it again, and the restart wait reads
   `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, as Hermes does.
 
+- **A messenger reply made only of `[SILENT]` and `[SHUTUP]` lines now counts
+  as that marker.** Any `[SHUTUP]` among them mutes the thread with the 🫡
+  reaction, where "be quiet" was lost or a bare marker could get text added
+  to it. Tokens in a list, a quote, a table or a fence around several lines
+  stay an answer. A token leaves the end of an answer only after
+  sentence-ending punctuation, so `The marker - [SILENT]` stays as written.
+
+- **A queued line in the OMH TUI no longer starts ahead of a steer Hermes
+  passes on as its next prompt.** When a turn ends on its own with a steer
+  unread, the queue waits for the turn that runs it. If none starts, because
+  the turn's last model call read the steer, the queue goes on within a few
+  seconds, and a line sent during that wait stays behind the older ones. A
+  stopped or failed turn is unchanged.
+
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
   choice sent the question at once: with nothing ticked it answered with
@@ -263,6 +290,17 @@ All notable changes will be documented here.
   is. Briefings are not part of the session Hermes stores, so a resumed or
   rewound session is drawn without them. The rows erase on a scene look's ground
   and keep every mark and word under `NO_COLOR`. The messenger is unchanged.
+- **`omh hermes plan --record` can now record the reviewed plan, and
+  `plan-accept` says when it accepted only a scaffold.** Until now the
+  recorded file held the same generated goals, options and risks whatever the
+  plan was; the reviewed text stayed in chat, and accepting the file
+  accepted the scaffold. `--plan-file <path>` records that text in place of
+  the generated sections (`plan_body: reviewed`). Recording without it still
+  works and now says it recorded the scaffold only; accepting such a file
+  returns `reviewed_body: false` and a line to relay. `--input-bundle`
+  records a consensus bundle as `hermes_plan_input/v1`, planning input that
+  `plan-accept` refuses. `ulw-plan`, `omh-plan` and `omh-adversarial-consensus`
+  now use these.
 - **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
   on.** With that setting each delegated child works in a git worktree of its
   own, made from the parent's last commit, so a dependent node and the verify
@@ -278,6 +316,21 @@ All notable changes will be documented here.
   never writes the setting. On a Docker or SSH terminal, where Hermes skips
   isolation, nothing changes; a config that cannot be read counts as off, as
   before.
+- **The research and knowledge skills say what an expert needs and stop pointing
+  at dead ends.** `omh-long-document-reading` runs the Hermes pdf skill's own
+  environment instead of telling the model to `pip install`, keeps its range
+  ledger in `omh_document_plan` so it survives compaction, gives delegated
+  children the path and command they need, and names the encrypted-file,
+  printed-page and lookup cases. `analyze.py` in `omh-geospatial-analysis`
+  refuses Web Mercator as the measurement CRS for real layers, since it
+  inflates area by about 1.6x at 38 degrees; the synthetic fixture still runs.
+  `omh-data-analysis` computes with code and states n, effect size and an
+  interval; `omh-live-info` runs the lookup and checks provider time, units
+  and staleness; `omh-systematic-review` says its delegated reviewers share a
+  model and asks for deduplication first; `omh-molecular-docking` says what an
+  exhaustiveness-4 score cannot support and what to do with a SMILES;
+  `omh-wiki` hands to `llm-wiki` only when installed (it is optional on
+  current Hermes).
 - **The dag-ulw offer for several features reads what it can show, and a
   count with its list after the verb gets it.** "기능 네 개 개발해줘: 검색,
   필터, 정렬, 페이징", "다음 기능들 개발해줘: 로그인, 검색, 알림" and "build these
@@ -295,6 +348,98 @@ All notable changes will be documented here.
   change what exists and stated obligations or intent. The offer no longer
   pushes out a hint already there, and a message over 1000 characters is not
   read. Hint text and routes are unchanged.
+
+- **The operations and board skills now name the commands and Hermes
+  surfaces they depend on.** `cancel` lists what exists before clearing and
+  hands a running scheduled job to `hermes cron pause` and `runs`, and to
+  `hermes cron cancel` where Hermes has it;
+  `running-work-board` names `omh coding status-board`; `run-efficiency` names
+  `omh runtime efficiency-report` and its input; `agent-board` ships a
+  reference with the `prepare` fields, the supported operations and the
+  refusal reasons instead of pointing at repository docs; `gateway-intent-card`
+  states the `platform:chat_id:thread_id` target, the `MEDIA:` attachment line
+  and when `[SILENT]` is dropped in a live chat; `harness-session-inventory`
+  says where a previous coding session lives and what a snapshot file holds;
+  `achievements` says a snapshot exists only after the dashboard tab ran.
+  `context-budget-review`, `achievements`, `ops-review`, `feedback-triage` and
+  `gateway-intent-card` write their own completion checklist in place of a
+  category default that did not fit them, the must-keep file in
+  `context-budget-review` now carries `item_classes` so the class comparison
+  can run, `feedback-triage` ranks by distinct customers and masks personal
+  data in quotes, and `spend-gate` stops treating an unknown amount already
+  spent as zero and names the `pay`, `pay-cli` and `hermes-mpp` plugins instead of
+  presenting the removed `mpp-agent` skill as current.
+  `gateway-intent-card` and `automation-blueprint`, `harness-session-inventory`
+  and `workspace-audit`, `agent-board` and `running-work-board` each name the
+  other for the requests that belong to it.
+- **Memory, learning, agent and Jev skills now give steps that run.** A
+  fact with a relative date ("next Friday") is captured again with an absolute
+  date in the same turn instead of waiting for a review nobody does, and the
+  memory tool names the right next step for each reason it holds a capture
+  (protected content says there is nothing to approve). Recovering from
+  one wrong memory source archives live records with `omh memory attention
+  --tier archive` or the `omh_memory` retire action (the old `omh memory
+  retire` step refuses a live record), and says that hard delete
+  accepts only an expired volatile record. `decision-recall` names its command
+  and required flags and says an empty result is normal on a default install;
+  "what was decided" now goes to `omh_memory` recall, not to the rejected-only
+  store. `jev-action-check` treats a missing tool or a non-answer as a hold,
+  `jev-review-gate` sends the matching test diff with each file and says what
+  to do past eight files or an over-size diff, and `jev-done-check` and
+  `jev-route` cover the over-limit and no-route-question cases. The
+  instrumentation ladder grades one way, `workflow-learning` names
+  `omh learning route-signal`, `instinct-ledger` and `rules-distill` count
+  observations the same way, and `agent-instructions` gains a size rule for
+  Hermes' context-file cap. The full-profile skill-body ceiling is re-derived
+  by its written policy.
+
+- **Business and operations skills now check what a practitioner checks.**
+  The morning brief no longer claims a Gmail connection is draft-only from
+  its scopes (every Gmail scope that creates drafts also sends); it enforces
+  read-and-draft through the mail server's tool list and takes that list as
+  evidence. Pipeline review asks for the quota and keeps stage movement
+  unavailable from a single snapshot. Lifecycle experiments check sample
+  size before approval. Legal review inventories the clauses of a contract
+  and no longer writes redline language without a playbook. Control testing
+  starts with design, tests the reports it relies on, and says what one
+  deviation means. Data sharing scans national-id shapes, counts names only
+  against a known list, ties the scan to the file digest and no longer reads
+  as anonymous. The award score uses CSSDA's published thresholds and adds
+  Awwwards. Buzz setup names the real access keys and the attachment command.
+  Document-skill pointers work on Hermes before and after it folded them into
+  one Office skill. Completion checklists, examples and boundaries of the
+  sales, product, support, people, meeting, cto and content skills are specific
+  to each job.
+- **Design, media and operator skills now gate and describe what they
+  actually do.** The sprite-forge helper measures alignment on the source
+  sheet, so a misaligned sheet fails the gate instead of reading back the row
+  it had just set, using the largest deviation from the median so one lifted
+  frame cannot hide. `--free-frames` frees only the named airborne frames and
+  the rest stay gated. It also reports key-colour spill. Visual QA and the
+  accessibility audit return only their own verdicts and gain rule IDs for
+  focus, reflow, target size, status messages and non-text contrast. Show
+  reel no longer points at flags and downloads its toolkit does not have.
+  The browser, terminal, files and connector operators confirm the exact
+  payload and the paths a bulk change touches, and image cards read
+  generated text back.
+- **The build, infrastructure and security skills fix an audit's findings.**
+  A leaked secret that is compromised (pushed publicly, or used) is revoked
+  before its replacement is deployed, matching the rotation reference, and a
+  planned rotation keeps its overlap window. Model optimization means
+  onboarding a model into OMH's router only; making weights smaller or faster
+  is pointed to inference serving and fine-tuning. The backend error table
+  gains rate-limit and payload rows and a correct timeout status. The
+  database skill warns that `EXPLAIN ANALYZE` runs the statement and covers
+  index rebuilds. The LLM app skill drops a retired model id, plans for model
+  retirement, accounts for run-to-run variance and permission filtering in
+  retrieval. The serving runbook gains a startup probe, endpoint
+  authentication and a measured quantization delta. Data pipelines cover
+  late data, exactly-once and topic retention; infrastructure changes treat a
+  saved plan as secret; mobile release adds the Play closed-test and toolchain
+  gates and a rejection path. Deploy, idea-to-deploy, reliability and
+  production-audit lose their generic fallback text, and the incident,
+  security-event, threat-model and safety-review references close their
+  contradictions and gaps.
 
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
@@ -370,6 +515,18 @@ All notable changes will be documented here.
   or any other key cancels it, and on a terminal that reports Shift with the
   key (kitty, modifyOtherKeys) `fX` and `f(` find as they do elsewhere.
   Contributed by @DanRioDev in #2576.
+- **A skill now sends the model to siblings it can load, and ends with its
+  hand-back line.** A hyphenated sibling a rendered skill names in
+  backticks, anywhere in the body or a reference, is written as the label
+  `skill_view` loads; a one-word one (`research`, `plan`) only when its line
+  hands work to it (`use`, `route to`, `hand back to`, `from`, `workflow`),
+  so a config key, a command or a DOM event that shares a skill's name stays
+  as written. Trigger lists, metadata lines, fenced recipes, lines crediting an
+  upstream project and the router's registries keep the catalog names. The workflow-artifact and `omh-jev-*` bodies, which
+  ended on a stray fragment, carry the same lane section as every other skill,
+  and a full contract names `references/procedure.md` only for a skill that
+  ships it. `omh-meta-router` points at the catalog index through
+  `skill_view`, because the file belongs to `omh-routing`.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check
@@ -386,6 +543,22 @@ All notable changes will be documented here.
   when the failed node was a verify node) before editing. There is still no
   rollback: the worktree is shared. Every other node's task reads byte for
   byte as before.
+- **The coding-core skills no longer contradict each other or dead-end.**
+  A fix pass over the skills most coding runs load: `ulw-interview`'s
+  question budget, dimensions and option count now agree with its taxonomy;
+  `ulw-work` and `ulw-plan` no longer send an unplanned request back and
+  forth, and `ulw-work` names `dag-ulw` for an ordered plan; `omh-plan` and
+  `ulw-plan` say which one an ordinary or a risky change belongs to;
+  `ulw-loop` handles a north-star goal and a direct invocation that matches a
+  Do Not Use line; `ulw-perf` runs its edits in the Hermes harness unless an
+  external owner was chosen, and asks for repeated runs, spread and the metric
+  direction before a regression budget; `ulw-qa` caps fix rounds and requires
+  a cleanup receipt; `ulw-research` takes defaults when it cannot ask, names
+  the briefing renderer and the budget a declared depth gives; `ulw-context`
+  names the terminology capture command; `omh-ask` runs an advisor read-only
+  and out of the live repository. Smaller edits in `omh-decide`,
+  `omh-adversarial-consensus`, `dag-ulw`, `ulw-maestro` and the TDD
+  reference.
 - **A dag-ulw run that waits shows whole and moves, and says what it waits
   on.** A run of up to 12 lanes (the transcript's own small-run measure)
   shows every layer and node. A done layer of one node is one dim row

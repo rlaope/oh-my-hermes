@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .catalog_types import HERMES_USAGE_SURFACES_CLAUSE
+from .catalog_types import HERMES_USAGE_SURFACES_CLAUSE, PortableLine
 
 
 def native_capability_skill_definitions(feature_surface_skill: Callable[..., object]) -> tuple[object, ...]:
@@ -27,7 +27,7 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
             expected_outputs=("rejected_decision_recall/v1", "scoped rejected-decision matches", "claim boundary"),
             artifact_expectations=("rejected_decision_recall/v1 metadata-only recall result",),
             final_checklist=(
-                "The query, scope, tags, stale policy, and match limit are explicit.",
+                "The query and scope are explicit, and any tags, stale policy, or match limit that were set are stated.",
                 "Only reviewed rejected candidates are returned; expired candidates stay excluded.",
                 "Recall output is not presented as approved memory, source freshness, or execution evidence.",
             ),
@@ -39,8 +39,17 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
                 "options we decided against",
                 "why an approach was dismissed",
             ),
+            do_not_use_when=(
+                PortableLine(
+                    "The user asks what was decided or why an approved decision was made; recall it with the omh_memory tool's recall action, because only decisions a person rejected are stored here.",
+                    "The user asks what was decided or why an approved decision was made; recall it with omh memory recall \"<query>\", because only decisions a person rejected are stored here.",
+                ),
+            ),
             recovery_notes=(
-                "If the query, scope, tags, stale policy, or match limit is unspecified, no rejected-decision match stands yet; mark recall unresolved and hand back one question fixing the missing filter.",
+                "Run `omh memory rejected-recall --scope-kind project --scope-ref <id> [--tag <tag>] [--include-stale] [--limit <n>] <query words>`; `--scope-kind` and `--scope-ref` are required. Get the `prj:` id yourself from `omh memory project-identity show`, and ask the user only for a missing query, never for the scope.",
+                "An empty result on a default install is expected: memory is approved on capture, so rejected decisions exist only after a person rejected a staged candidate. Say \"no reviewed rejection is on record for this project\", not \"nothing was rejected\", and offer to recall alternatives that were only discussed or captured as ordinary memory.",
+                "If `omh memory project-identity show` reports `state: unresolved` (no project identity exists, for example a git repository with no remote that was never initialised), there is no project to look in from here: say so and do not run the recall with an empty scope ref.",
+                "If the query is missing, no rejected-decision match stands yet; mark recall unresolved and hand back one question for the query. The scope comes from the project identity, and tags, stale policy, and match limit default when unset.",
                 "If a candidate's reviewed-rejected status or expiry cannot be checked, retain only matches that passed those checks, mark remaining recall unresolved, and hand back rejected_decision_recall/v1 with the claim boundary and missing checks.",
             ),
         ),
@@ -71,7 +80,7 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
                 "not_observed provider and billing gaps",
             ),
             artifact_expectations=(
-                "run_efficiency_report/v1 metadata-only report",
+                "run_efficiency_report/v1 metadata-only report, built with `omh runtime efficiency-report --input <run_efficiency_input/v1 file> [--hermes-session <id>] [--write]`; the input is JSON with exactly `schema_version` (`run_efficiency_input/v1`), `run_id`, `context_budget` (`schema_version` `omh_run_context_budget/v1`, `run_id`, `budget_bytes`, `emitted_bytes`, `remaining_bytes` equal to the difference, and `surfaces` mapping a surface name to a count) and `observations` (at most 20 entries of `metric`, one of `wall_clock_duration_ms`, `tool_duration_ms`, `context_bytes`, an integer `value` and a `source_ref`); with no input file you ask for the timings and never write estimates into it",
                 "supplied `session_activity_receipt/v1` when available; unavailable metrics stay unavailable, never zero",
                 "`host_usage` from the Hermes-accounted part of the cost receipt `omh_run_summary` returns (the "
                 "session, its delegated children, and its kanban workers; `--hermes-session`, and a local Hermes "
@@ -124,12 +133,22 @@ def native_capability_skill_definitions(feature_surface_skill: Callable[..., obj
             phase="provider-profile-posture",
             next_action="prepare_provider_profile_posture",
             boundary="Provider/profile posture is OMH-local preparation metadata; it is not credential validation, provider connectivity, model routing, payment/wallet, or host execution evidence.",
+            good_why="The card records which key names are present, missing, or unknown, and never reads a value.",
             good_prompt="Prepare provider profile posture for this connector using metadata-only secret presence.",
+            why_this_exists=(
+                "`provider-profile-posture` exists so a profile's required secret names and capabilities are recorded as present, "
+                "missing, or unknown without any secret value being read or any provider being called."
+            ),
+            do_not_use_when=(
+                "Choosing or adopting a connector; use `external-connector-readiness`.",
+                "Listing every tool and credential a workflow needs; use `toolbelt-readiness`.",
+                "Connecting a model provider or its login; use `model-setup`.",
+            ),
             bad_prompt="Read the secret, validate the credential, call the provider, or create a payment route.",
             expected_outputs=("provider_profile_posture/v1", "metadata-only secret requirements", "allowed and prohibited actions"),
             artifact_expectations=("provider_profile_posture/v1 metadata-only preparation record",),
             final_checklist=(
-                "Provider ID, profile ID, requested capabilities, and secret-presence metadata are explicit.",
+                "Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret presence are explicit, and `omh ops provider-profile-posture --input <file>` made the record from JSON with `schema_version` `provider_profile_posture_input/v1`, `provider_id`, `profile_id`, `requested_capabilities`, `secret_requirements` as `{name, present: true|false|\"unknown\"}`, optional `host_observations`.",
                 "No secret value, credential validation, provider call, model route, wallet, or payment action is claimed.",
                 "Any host observation reference remains supplied metadata, not a live connector check.",
             ),

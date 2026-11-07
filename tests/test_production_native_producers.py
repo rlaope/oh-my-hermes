@@ -31,7 +31,7 @@ load_local_package()
 from omh.plugin_bundle.omh.native_tools import native_tool_presence_clause
 from omh.skills.catalog import builtin_definitions, omh_skill_display_name
 from omh.skills.packaging import builtin_skill_templates
-from omh.skills.render import agent_skill_templates
+from omh.skills.render import agent_skill_templates, translate_sibling_mentions
 from omh.workflows.materials import FORMAT_QA_LADDER
 
 PRODUCTION_SKILLS = (
@@ -56,13 +56,13 @@ DOCUMENT_QA_RULE = (
 # and at upstream main 63d0b94120, and a one-word drift (`--meta` to `--text`)
 # would point the model at a result that cannot show the rung.
 DOCUMENT_RUNGS_RULE = (
-    "On Hermes, the bundled skills give these rungs when available: `powerpoint` gives `slide_count` "
-    "(`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count "
+    "On Hermes, the bundled document skills give these rungs when available (`powerpoint`, `xlsx`, `docx`; "
+    "`microsoft-office` from v0.22.6; same scripts): PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count "
     "matching `slide_count`, since it lists every image already in that directory); `pdf` gives `page_count` "
-    "(`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); `xlsx` gives `sheet_schema` (`xlsx_read.py "
+    "(`pdf_read.py --meta`) and `render_preview` (`pdf_page_image.py`); Excel gives `sheet_schema` (`xlsx_read.py "
     "--sheets`) and `formula_recalculation` (`xlsx_recalc.py --out <copy>`, since without `--out` it replaces the "
     "input and rungs or approvals already recorded were for other bytes, then the cached results read back with "
-    "`xlsx_read.py --formulas`, where an error value or a formula with no cached value is a finding); `docx` gives "
+    "`xlsx_read.py --formulas`, where an error value or a formula with no cached value is a finding); Word gives "
     "`section_structure` and `required_clause_check` (`docx_read.py --structure` and `--text`) but no "
     "`page_count` or appearance until a converted PDF is rendered, and `docx_validate.py` checks package health, "
     "never rendering. Images that exist are not a render pass until each one has been inspected, and a "
@@ -88,12 +88,13 @@ NATIVE_CLAUSES = {
         "the file.",
     ),
     "report-package": (
-        "On Hermes, that tool can be the bundled `powerpoint` skill, and a deck it builds counts as generated from "
+        "On Hermes, that tool can be the bundled PowerPoint skill (`powerpoint`; `microsoft-office` from v0.22.6), "
+        "and a deck it builds counts as generated from "
         "its read-back (`pptx_read.py --outline`).",
         # The shared document rule and the `powerpoint` half of the rungs rule,
         # composed from the same strings `materials-package` states.
         DOCUMENT_QA_RULE,
-        "On Hermes, `powerpoint` gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` "
+        "On Hermes, PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` "
         "(`pptx_render.py` into a fresh directory, its image count matching `slide_count`, since it lists every "
         "image already in that directory). Images that exist are not a render pass until each one has been "
         "inspected.",
@@ -248,16 +249,16 @@ class ProducerClauseTests(unittest.TestCase):
         for name, clauses in NATIVE_CLAUSES.items():
             for clause in clauses:
                 with self.subTest(skill=name, projection="hermes", clause=clause[:60]):
-                    self.assertIn(clause, hermes[name])
+                    self.assertIn(translate_sibling_mentions(clause, owner=name), hermes[name])
                 if name in HERMES_ONLY_CLAUSES or clause in HERMES_ONLY_CLAUSE_TEXTS:
                     continue
                 with self.subTest(skill=name, projection="portable", clause=clause[:60]):
-                    self.assertIn(clause, portable[omh_skill_display_name(name)])
+                    self.assertIn(translate_sibling_mentions(clause, owner=name), portable[omh_skill_display_name(name)])
         for name, clauses in PORTABLE_ONLY_CLAUSES.items():
             for clause in clauses:
                 with self.subTest(skill=name, projection="portable", clause=clause[:60]):
-                    self.assertIn(clause, portable[omh_skill_display_name(name)])
-                    self.assertNotIn(clause, hermes[name])
+                    self.assertIn(translate_sibling_mentions(clause, owner=name), portable[omh_skill_display_name(name)])
+                    self.assertNotIn(translate_sibling_mentions(clause, owner=name), hermes[name])
 
     def test_the_portable_browser_skills_name_no_hermes_tool(self) -> None:
         portable = _portable()

@@ -24,7 +24,7 @@ This is a Hermes-native `dag-ulw` workflow skill.
 ## First Steps
 
 - Start at once; there is no plan approval. Write the goal criteria in one line.
-- When the conversation holds a plan the user accepted (from `plan`, `ralplan` or `refactor-plan`), build the graph from it instead of re-planning: each task becomes a node with its id, depends_on and write scope, its done check goes into VERIFY and STOP WHEN, and its closing verification task becomes the `role: verify` node; plan only what it leaves open.
+- When the conversation holds a plan the user accepted (from `omh-plan`, `ulw-plan` or `omh-refactor-plan`), build the graph from it instead of re-planning: each task becomes a node with its id, depends_on and write scope, its done check goes into VERIFY and STOP WHEN, and its closing verification task becomes the `role: verify` node; plan only what it leaves open.
 - Plan the graph and call `omh_dag action=define` with the complete run `goal` and each node's id, label, category, prompt, depends_on, write_scope and role (`build` by default; `baseline`, `verify`, `review`); fix every refusal and read the lint before going on. Never `delegate_task` before `define` returns its calls. The saved goal reaches every native task; local VERIFY does not replace goal acceptance.
 - Keep the plan todo as the run's layers in ONE tool: `todo_list` when `todo_list` is in your tool list or tool_search finds it (OMH mirrors it), else `omh_todo`. One item per layer, named for what it delivers, never a list of its nodes (the panel draws those); advance it as each layer settles.
 - For each call `omh_dag` returns, run its route (`omh_delegate_route`, set or fallback as given), then `delegate_task` with the tasks unchanged; never more calls than it returned. A call whose route names a `backend` (Hermes' model_map or profile_routes) runs no route tool: its tasks already carry what that backend takes. Then end the turn with one status line; never wait or poll.
@@ -36,6 +36,7 @@ This is a Hermes-native `dag-ulw` workflow skill.
 - One small change with one owner and one check: run it directly, or use `ulw-work` when the person named it.
 - The plan itself is still undecided and needs a reviewed decision record first; use `ulw-plan`.
 - Workers must talk to each other mid-run rather than hand off through files; use `ulw-work` coordinated lanes.
+- The graph tool (omh_dag) is not in your tool list: say so and offer `ulw-work` for the same plan; do not simulate the graph in chat.
 
 ## Examples
 
@@ -68,7 +69,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

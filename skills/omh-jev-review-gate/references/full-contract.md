@@ -26,19 +26,19 @@ Good example:
 Bad example:
 
 - Prompt: review the jev plugin PR before merge
-- Expected behavior: Route to `code-review`: the PR is about Jev, and nobody asked Jev anything.
+- Expected behavior: Route to `omh-code-review`: the PR is about Jev, and nobody asked Jev anything.
 - Why: Talking about Jev is not addressing it.
 
 ## Completion Checklist
 
 - Every file sent was named to the user first.
-- `code-review` still owns the verdict.
+- `omh-code-review` still owns the verdict.
 
 ## Recovery Notes
 
 - If `omh_jev_ask` is not in the tool list, say Jev is unavailable, point at the `plugin_jev_sidekick` line of `omh doctor`, and continue as main_model through the partner workflow.
 - If the tool returns `consent_not_observed`, nothing was sent; offer the ask in one line naming what would be sent and wait for the user to reply `ask jev`.
-- If the tool refuses `credential_like_content`, remove the secret-looking text from `state` rather than redacting it silently, and tell the user what was removed.
+- If the tool refuses a diff as `credential_like_content`, the diff adds credential-like text: report that as an OMH security flag on the file, and do not send a stripped diff as if it were the file.
 
 ## When to Use
 
@@ -56,7 +56,7 @@ Reasoning demand: `standard`
 
 Quality bar:
 
-- Each ask carries one file's diff; the union of flags is reported per file.
+- Each ask carries one file's diff with its matching test diff when one exists; the union of flags is reported per file.
 - A non-answer is `not_observed`, never `no_flags`.
 
 Handoff policy:
@@ -65,7 +65,7 @@ Run in Hermes: build the ask, call `omh_jev_ask`, and report the numbers. Nothin
 
 Required inputs:
 
-- the diff, one file per ask
+- the diff, one file per ask with its matching test diff
 - the review the flags feed
 
 Expected outputs:
@@ -84,5 +84,3 @@ Safety rules:
 - A non-answer status is never an answer: report it and continue without Jev.
 - Send at most 8 files per review and state the cost before the first ask; source code leaves the machine.
 - Flags are advisory evidence: `no_flags` never approves a merge and never satisfies a review item.
-
-Detailed procedure steps: `references/procedure.md`.

@@ -3,7 +3,9 @@
 ## Preparation tied to evidence
 Write `interview-prep.md` from the exact posting capture and selected application
 version, recording both references. Include role-specific questions, real STAR examples
-with profile evidence refs, missing evidence and honest bridge answers. Distinguish
+with profile evidence refs, missing evidence and honest bridge answers, three to five
+questions for the interviewer tied to the posting, and a compensation answer built from
+the user's stated range or `ask for the range first`, never a guessed number. Distinguish
 practice answers from achievements. Include sourced company facts with retrieval dates;
 no invented interviewer biography. Optional `skill-gaps.md` prioritizes learnable gaps,
 bounded exercises and a checkable next artifact; no hiring guarantee or unnecessary

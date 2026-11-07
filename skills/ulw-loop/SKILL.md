@@ -25,7 +25,7 @@ This is a Hermes-native `loop` workflow skill.
 
 - The user asks for one bounded delivery cycle; use `ulw-work`'s delivery-boundary capability instead.
 - Scope and milestones are already known and only durable checkpoint/resume tracking is needed; use `ulw-work`'s durable-checkpoint capability.
-- The user gives only a north-star outcome such as revenue, stars, or adoption and has not accepted a bounded first loop goal.
+- The user gives only a north-star outcome such as revenue, stars, or adoption and declines the bounded first loop goal you proposed; stop at the proposed arena, problem and verification and wait.
 - The goal is too vague to name an observable problem, next artifact, verification signal, or stop condition.
 - The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.
 - The permission profile does not allow repeated research, handoff, queue, or feedback cycles.
@@ -68,7 +68,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -87,7 +87,7 @@ Reasoning demand: `heavy`
 
 Quality bar:
 
-- Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path.
+- Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path, unless a Do Not Use condition holds; then name that condition and hand to the skill it names, or say none applies.
 - Classify the goal as task, project, ambition, external-wait, or unclear inside the loop, then keep progressing until a real permission, evidence, verification, context, budget, or external-wait gate appears.
 - A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it. A mid-run message is the latest steering for the active task, not automatically a replacement objective: it replaces the objective when the user says so and steers the current one otherwise.
 - A follow-up that needs new authority, materially expands the scope, or changes external state not already authorized is described first and started only on the user's approval: the turn ends by naming that next action and asking whether to take it, as one question carrying the choices the user has, never by declaring what will not be done; persistence never broadens the authorized scope. A refused escalation is answered the same way, with a safer alternative inside the boundary or the authorization the boundary asks for — never a workaround or an indirect execution.
@@ -110,7 +110,7 @@ Quality bar:
 - Treat ticks as preparation only. Advance one legal role phase through loop_phase_transition/v1 only after its named gate has observed evidence.
 - Treat a judge `done` verdict, a turn-ceiling pause, or a gate-retry pause as narration; completion still requires the linked goal ledger completion gate and observed evidence.
 - When the stop ladder names `replan_stuck_loop_once`, re-plan once from the goal ledger and recorded failures alone, not the transcript or recalled memory; record the new approach and continue; a second stop names the blocker step.
-- Treat any future change to the default as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.
+- Treat any future change to the default goal driver (native `/goal`) as a maintainer-reviewed product decision, not a runtime phase or automatic loop outcome.
 - Compare only observed outcomes under matched task, model/provider, permissions, turn budget, and verification surface; unresolved evidence keeps the current default.
 - Keep promotion governance separate from goal-ledger completion and ordinary measured-loop keep/discard decisions; do not invent subjective scorers, fixed numeric thresholds, minimum run counts, weighted percentages, or per-turn artifact quotas.
 - Name the one element gating this loop from the `loop_constraint_assessment/v1` block before choosing the next action; if none is binding, say so from the recorded reason rather than assuming.
@@ -121,7 +121,7 @@ Quality bar:
 - Log a long-running cycle to a file and pull only the declared metric and error lines into context; read the whole log only when the cycle crashed.
 - Choose the wait strategy before starting long-running work and bind it to a completion signal the host exposes, never to a status loop: a command that fits one tool call runs once in the foreground with a duration-sized timeout; a longer terminal command runs in the background with completion notification armed and no process-status polling; a delegated lane relies on its delivered result while the parent continues independent work or ends the turn; a CI, PR, deploy, file, port, log-line, or external-session condition uses the host's monitor when observed, else exactly ONE bounded watcher or adaptive backoff outside model turns. Record the handle and observation mode at dispatch; every armed wait needs a hard deadline, a cancellation path, and a fallback naming the missing capability. Each wait closes in one terminal state with bounded evidence; an unbounded idle or busy-wait is a defect and a lost notification times out. One decision-changing midpoint peek and any user-requested status check stay allowed; neither is the wait mechanism. Ladder and terminal states: shared rail.
 - On an equal metric keep the simpler change, always keep an improvement achieved by deletion, and do not let a small gain buy added complexity.
-- After the judge passes, run an `ai-slop-cleaner` pass scoped to the `changed_files` the cycle's `loop_subagent_result_contract/v1` results reported, never wider; the loop's own verification then reruns and must not regress - on a measured loop neither may the metric - or the cleaner's edits are reverted. When the linked goal carries AC-SLOP (a loop allowed `repo_edit` arms it), the goal refuses completion until an outcome record made with `omh runtime record --skill ai-slop-cleaner --harness coding-handling --status completed --cleanup-outcome passed|skipped|reverted --goal <linked goal id> --outputs-summary <what changed, or why skipped>` is cited by `omh goal checkpoint --goal <goal_id> --summary <outcome> --criterion AC-SLOP --evidence-ref run:<run_id>`; one accepted record satisfies AC-SLOP for the goal, so later cycles need no new one. A user's skip, or a cycle that reported no `changed_files`, is an explicit `skipped`, and a reverted pass is `reverted`, never `passed`; a missing record is never read as nothing to clean.
+- After the judge passes, run an `omh-ai-slop-cleaner` pass scoped to the `changed_files` the cycle's `loop_subagent_result_contract/v1` results reported, never wider; the loop's own verification then reruns and must not regress - on a measured loop neither may the metric - or the cleaner's edits are reverted. When the linked goal carries AC-SLOP (a loop allowed `repo_edit` arms it), the goal refuses completion until an outcome record made with `omh runtime record --skill ai-slop-cleaner --harness coding-handling --status completed --cleanup-outcome passed|skipped|reverted --goal <linked goal id> --outputs-summary <what changed, or why skipped>` is cited by `omh goal checkpoint --goal <goal_id> --summary <outcome> --criterion AC-SLOP --evidence-ref run:<run_id>`; one accepted record satisfies AC-SLOP for the goal, so later cycles need no new one. A user's skip, or a cycle that reported no `changed_files`, is an explicit `skipped`, and a reverted pass is `reverted`, never `passed`; a missing record is never read as nothing to clean.
 
 Handoff policy:
 

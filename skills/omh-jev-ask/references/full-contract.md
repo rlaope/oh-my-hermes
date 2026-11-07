@@ -88,5 +88,3 @@ Safety rules:
 - A non-answer status is never an answer: report it and continue without Jev.
 - Never ask Jev what code can compute: counts, dates, arithmetic, or string checks.
 - Report a probability between 0.4 and 0.6 as uncertain, never as yes or no.
-
-Detailed procedure steps: `references/procedure.md`.

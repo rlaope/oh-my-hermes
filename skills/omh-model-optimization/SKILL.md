@@ -10,7 +10,7 @@ metadata:
     phase: model-onboarding
     role: tracker
     quality_tier: evidence-gated
-    related_skills: [omh-model-setup, ulw-perf]
+    related_skills: [omh-model-setup, ulw-perf, omh-inference-serving, omh-model-finetuning]
 ---
 
 # Model Optimization
@@ -25,7 +25,8 @@ This is a Hermes-native `model-optimization` workflow skill.
 
 - The user wants their own machine's model routing configured or providers connected; use `omh-model-setup`.
 - The goal is measurable performance of an application or system, not model handling; use `ulw-perf`.
-- The user wants benchmark-superiority or provider-readiness claims without measurements.
+- The user wants benchmark-superiority or provider-readiness claims without measurements; decline the claim and offer the measurement plan from this skill's checklist.
+- Making a model's weights smaller or faster: quantizing is `omh-inference-serving` (serving format and quantization), distilling is `omh-model-finetuning`; OMH has no pruning workflow.
 
 ## Examples
 
@@ -58,7 +59,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

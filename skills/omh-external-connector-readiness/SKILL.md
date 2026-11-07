@@ -33,7 +33,7 @@ Good example:
 
 - Prompt: external-connector-readiness compare weather plugin and wxtrain candidates with cost, freshness, multimodal evidence, and fallback routes before adoption.
 - Expected behavior: Produce `prepare_external_connector_readiness` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Why: Two named weather connectors need a cost, freshness, and fallback comparison before either is enabled; no provider has been called.
 
 Bad example:
 
@@ -45,7 +45,7 @@ Bad example:
 
 - Candidate connector, target domain, read/write scope, modality needs, provider owner, fallback workflow, and stop condition are explicit.
 - Cost, quota, credential, permission, live-data freshness, multimodal capture, safety, and compliance boundaries are marked ready, missing, risky, or not_observed.
-- Route live read-only lookups to live-info-operator, external writes to connector-operator, datasets/SQL to data-analysis, and missing tools to toolbelt-readiness before claiming results.
+- Route live read-only lookups to `omh-live-info`, external writes to `omh-apps`, datasets/SQL to `omh-data-analysis`, and missing tools to `omh-toolbelt-readiness` before claiming results.
 - Provider responses, screenshots, audio/video/file captures, query outputs, message ids, and external mutations are reported only from observed trial evidence.
 - For a memory provider, disabling it, removing its local cache, deleting its remote memory, deleting the account, and switching away are reported as distinct operations with distinct postconditions.
 - Unknown deletion, isolation, or write semantics block automatic writes and irreversible adoption instead of resolving to an OMH or Hermes default.
@@ -54,16 +54,16 @@ Bad example:
 
 ## Recovery Notes
 
-- If the candidate list is unknown, route to skill-scout or source-finder before readiness scoring.
-- If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to toolbelt-readiness.
-- If a specific provider action is already selected, route read-only live data to live-info-operator or write/mutation tasks to connector-operator.
+- If the candidate list is unknown, route to `omh-skill-scout` or `omh-source-finder` before readiness scoring.
+- If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to `omh-toolbelt-readiness`.
+- If a specific provider action is already selected, route read-only live data to `omh-live-info` or write/mutation tasks to `omh-apps`.
 - If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to memory-sync as not_omh_reviewed context rather than importing it into OMH review.
 - If a realtime voice connector has no supplied realtime_voice_trial_receipt/v1, route the setup and the trial run to the host, connector, or operator that owns the microphone, call, or room, then consume only the returned receipt.
 
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

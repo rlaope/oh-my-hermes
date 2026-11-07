@@ -10,7 +10,7 @@ metadata:
     phase: preparation
     role: operator
     quality_tier: facilitation-gated
-    related_skills: [meeting-action-items]
+    related_skills: [omh-operating-rhythm, meeting-action-items]
 ---
 
 # Meeting Brief
@@ -26,6 +26,7 @@ This is a Hermes-native `meeting-brief` workflow skill.
 - The user needs observed meeting minutes, decisions, or action items but has not provided notes.
 - The request is strategy synthesis without a meeting audience, agenda, or decision ceremony.
 - The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.
+- The user wants minutes, scrum history or a decision log for a recurring meeting; use `omh-operating-rhythm`.
 - The meeting already happened, its notes or transcript are in hand, and the user wants decisions, owners, follow-ups, or tickets drawn from them; load Hermes' bundled `meeting-action-items` skill instead of this one.
 
 ## Examples
@@ -51,13 +52,12 @@ Bad example:
 ## Recovery Notes
 
 - If decision topics lack known context, retain the supplied meeting goal and audience, mark the agenda tentative, and hand back discussion prompts and the decisions-needed list with its open questions.
-- If action owners, due dates, or acceptance conditions are absent from a meeting record, retain the prepared agenda and prompts, mark action ownership not_observed, and hand back the action-item template with those columns marked unknown.
 - If follow-up coding lacks observed decisions or an accepted plan, retain the meeting brief, mark the coding handoff unresolved, and hand back the decisions needed rather than an implementation claim.
 
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -79,6 +79,7 @@ Quality bar:
 - Turn context into agenda topics, prompts, decisions needed, and a record template.
 - Keep prep distinct from actual meeting minutes or accepted decisions.
 - Identify missing context that would change the meeting structure.
+- Give each agenda item a time box that sums to the meeting length, an owner and an intended outcome (decide, discuss, inform); name pre-reads and who reads them; for a decision item name the decider and what each option costs; say so when a message would meet the goal.
 - Give the record template's action-item rows outcome, owner, due date, dependency, acceptance condition, and source columns, each marked unknown until the meeting record fills it.
 
 Handoff policy:
@@ -87,10 +88,10 @@ Run meeting preparation in Hermes; only create follow-up coding handoff from obs
 
 Required inputs:
 
-- meeting goal
+- meeting goal, date and length
 - audience
 - known context
-- decision topics
+- decision topics and who decides
 
 Expected outputs:
 

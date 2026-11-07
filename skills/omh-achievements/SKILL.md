@@ -42,12 +42,13 @@ Bad example:
 
 ## Completion Checklist
 
-- The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
-- Local telemetry, provider truth, billing truth, and completion evidence are separate states.
-- Warnings name the next measurement or operator review action.
+- The summary states the snapshot's `generated_at` and whether it is older than 120 seconds, the plugin's own rescan rule.
+- Unlocked, discovered, and secret badges are listed from the files read, and nothing is recomputed from session history.
+- Missing plugin files give not_observed with the way to produce a snapshot, not an empty list.
 
 ## Recovery Notes
 
+- If no snapshot exists, the plugin has not scanned yet: it writes one when its dashboard Achievements tab asks (`hermes dashboard`), so a gateway-only person has none until they open it; read with `omh achievements summary`.
 - If neither active-profile nor legacy hermes-achievements files are available, no badge result stands; mark the summary not_observed and hand back the missing local-file evidence needed for hermes_achievements_observation/v1.
 - If the snapshot is older than the plugin's rescan window, retain its badge list as of generated_at, mark current progress tentative, and hand back the timestamp and stale-snapshot warning.
 - If supplied session_activity_receipt/v1 lacks a metric, retain the available badge and activity metadata, mark that metric not_observed, and hand back the gap without replacing it with zero.
@@ -55,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

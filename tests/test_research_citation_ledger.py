@@ -284,7 +284,7 @@ class ResearchCitationLedgerTests(unittest.TestCase):
             body,
         )
         self.assertIn(
-            "when the `long-document-reading` skill is available, take the chunks from its page ranges",
+            "when the `omh-long-document-reading` skill is available, take the chunks from its page ranges",
             body,
         )
         self.assertIn("without it, plan numbered page ranges before reading", body)

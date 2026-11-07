@@ -17,7 +17,7 @@ This is an OMH `app-debugging` workflow skill, projected for Agent Skills hosts 
 
 ## Why This Exists
 
-`app-debugging` exists because a wrong result in application code had no owner: `native-debugging` covers native binaries, `build-failure-triage` covers red builds, and `agent-debug` covers agent misbehaviour, so the most common debugging request dispatched straight to an execution lane that skipped the diagnosis.
+`app-debugging` exists because a wrong result in application code had no owner: `omh-native-debugging` covers native binaries, `omh-build-failure-triage` covers red builds, and `omh-agent-debug` covers agent misbehaviour, so the most common debugging request dispatched straight to an execution lane that skipped the diagnosis.
 
 ## First Steps
 

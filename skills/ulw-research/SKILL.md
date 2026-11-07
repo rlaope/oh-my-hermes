@@ -47,7 +47,7 @@ Good example:
 Bad example:
 
 - Prompt: 이 레포 코드 구조만 파악해줘.
-- Expected behavior: Route to `codebase-onboarding` because the study target is this repository, not external sources or reference implementations.
+- Expected behavior: Route to `omh-codebase-onboarding` because the study target is this repository, not external sources or reference implementations.
 - Why: Local repo orientation needs no external evidence gathering or claim verification.
 
 ## Completion Checklist
@@ -70,7 +70,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -89,7 +89,7 @@ Reasoning demand: `standard`
 
 Quality bar:
 
-- Ask for the research question, source boundaries, freshness, jurisdiction, and version assumptions before retrieval.
+- Ask for the research question, source boundaries, freshness, jurisdiction, and version assumptions before retrieval. When another workflow or a lane that cannot ask called you, take audience = coding agent, skip the format and language questions, use the caller's stated question and depth, take the open web and the caller's repository as source boundaries, current freshness, and no stated jurisdiction or version, and record each defaulted input in the dossier `scope` as `defaulted: <why>`; ask only when a human is in the loop.
 - Ask who the output is for before retrieval and never infer it: a human reader gets a briefing document, a coding agent gets the dense handoff of findings, exact symbols, and file paths. The answer changes what the run records, not only how it is written up.
 - On the human branch ask the output format (markdown, a print-ready page, or both) and the output language before writing, then hold the document to `references/briefing-format.md` - noun-phrase titles carrying a role label from its closed vocabulary, cause before effect, terms defined at first use, figures drawn in code blocks, and the fixed chapter-and-appendix structure.
 - Keep the coding-agent branch dense: findings, exact symbols, file paths, and the plan-feed block, with no narrative framing and no briefing structure.

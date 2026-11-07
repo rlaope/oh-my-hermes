@@ -25,7 +25,7 @@ Good example:
 Bad example:
 
 - Prompt: verify before merge
-- Expected behavior: Route to `verification-gate`; nobody asked Jev.
+- Expected behavior: Route to `omh-verification-gate`; nobody asked Jev.
 - Why: Verification without Jev is the ordinary gate.
 
 ## Completion Checklist
@@ -84,5 +84,3 @@ Safety rules:
 - A non-answer status is never an answer: report it and continue without Jev.
 - One ask per claim, at most 6 claims; the evidence excerpt is observed output, never the agent's summary.
 - `no_objection` never satisfies a verification item and never stops a loop; stop criteria read record fields.
-
-Detailed procedure steps: `references/procedure.md`.

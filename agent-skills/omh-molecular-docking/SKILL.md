@@ -22,7 +22,7 @@ Input validation and tutorial numbers are not measured docking. Require a real e
 ## First Steps
 
 - Read `toolkit/README.md` and `references/execution-and-qa.md`. Use the explicitly invoked standalone Vina Python helper, not an invented ToolUniverse tool or hidden core execution service.
-- Recover prepared file paths, source/license and preparation receipts, angstrom binding box, seed, CPU, new output directory and host deadline. Never guess a site, silently prepare a molecule or install dependencies on skill load.
+- Recover prepared file paths, source/license and preparation receipts, angstrom binding box, seed, CPU, new output directory and host deadline. Never guess a site, silently prepare a molecule or install dependencies on skill load. If the person has a SMILES or a PDB id rather than PDBQT, stop and list the preparation steps they must approve (protonation state, charges, tautomer, receptor cleanup, box) with a named converter such as Meeko or ADFR; do not convert silently.
 - Use `--validate-only` for dependency-free prerequisites, or explicitly invoke actual docking in an approved environment with a host-enforced timeout and stdout/stderr capture. Missing dependencies must refuse, not produce guessed findings.
 
 ## Do Not Use When
@@ -51,7 +51,7 @@ Bad example:
 
 ## Recovery Notes
 
-- Preserve failed setup receipts. On this host, one authorized correction of the existing native build supplied CONDA_DEFAULT_ENV as well as CONDA_PREFIX/PATH, then Vina 1.2.7 built and the real 1IEP smoke passed; this is not a promise for other platforms.
+- Preserve failed setup receipts. PyPI ships Vina 1.2.7 wheels only for x86_64 Linux, so macOS arm64 needs a source build with Boost and SWIG, and its setup.py checks CONDA_DEFAULT_ENV, not only CONDA_PREFIX. If the build fails, return the failure log and do not retry blindly; the observed 1IEP smoke is one platform, not a promise for others.
 - If a native run fails or times out, retain its logs and partial files without a success claim; review the backend failure before retrying in a new output directory.
 
 
@@ -83,7 +83,7 @@ Required inputs:
 Expert clarification questions:
 - `prepared receptor and ligand PDBQT paths`
   - English: Which prepared, rights-cleared single-ligand and rigid-receptor PDBQT files are authorized?
-  - Korean: Which prepared, rights-cleared single-ligand and rigid-receptor PDBQT files are authorized?
+  - Korean: 사용이 허가된, 준비를 마친 단일 리간드와 강체 수용체 PDBQT 파일은 무엇인가요?
 
 Expected outputs:
 
@@ -99,6 +99,7 @@ Safety rules:
 - Never infer efficacy, safety, affinity certainty, target validation, dosing or treatment advice. PDBQT syntax validation is not chemical validity or a preparation review.
 - No hidden execution, network, credentials, global install or paid compute. Dependencies are optional and task-isolated; discovery, routing and skill installation never execute the helper.
 - ToolUniverse registrations were inspected, not invoked. This toolkit uses standalone AutoDock Vina Python only; do not invent a ToolUniverse adapter or tool name.
+- Exhaustiveness is capped at 4 here (Vina's default is 8): treat energies as one under-sampled run, never as a ranking or a comparison across ligands. Before reporting a site, redock the co-crystal ligand when one exists and report its pose RMSD to the crystal pose; with none, say the site is unvalidated.
 
 Procedure: load `references/procedure.md`.
 

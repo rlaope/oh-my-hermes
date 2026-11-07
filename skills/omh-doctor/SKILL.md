@@ -46,18 +46,19 @@ Bad example:
 - Blocking issues and warnings are separated, with one next repair action named for each blocking area.
 - Plugin install, plugin import/register smoke, and Hermes runtime load are not collapsed into one claim.
 - The final status says whether setup/update/doctor repaired anything or only observed health.
+- `omh doctor --json` was run (`--no-state-write` writes nothing, `--no-personal-files` skips SOUL.md and memory files) and `recommended_next_action` is quoted.
 
 ## Recovery Notes
 
 - If managed skills are stale, recommend omh update or omh setup depending on whether registration also needs repair.
 - If skills.external_dirs or Hermes config is missing, route to setup repair rather than editing hidden runtime state.
-- If plugin register smoke fails, reinstall the plugin bundle with setup --with-plugin --force before claiming plugin readiness.
+- If plugin register smoke fails, reinstall the plugin bundle with `omh setup --force` before claiming plugin readiness.
 - If omh is missing from PATH, use the installer-reported absolute command path and then re-run doctor.
 
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

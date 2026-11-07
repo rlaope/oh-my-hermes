@@ -9,6 +9,14 @@ List what must stay constant in every frame: silhouette, palette (hex values),
 proportions (head-to-body ratio), signature props and costume marks. A
 regeneration that loses an identity element is rejected even when QC passes.
 
+## Free frames
+
+List each frame that leaves the ground on purpose: frame index, pose, and the
+reason (jump apex, fall, lunge). This list is the only source of
+`--free-frames`; at most one frame in three, and the verify step compares it with
+`free_frames` in `qc.json`. A frame that is merely off the baseline in a bad
+generation is not a free frame: regenerate.
+
 ## Rejected drafts
 
 For each rejected sheet record the source file hash, the prompt or settings
@@ -20,8 +28,11 @@ waste; do not delete them before the record is written.
 
 Declare the cell size and the feet baseline the game expects, for example a
 512px cell with feet at y=430, and the target frame height passed to the helper.
-Every frame must share that baseline; the helper's `baseline_y` and
-`anchor_y_std` are the evidence.
+The helper has no cell-size or baseline argument: it sizes the frame to the
+scaled bodies (or to the scaled cell when `--free-frames` is used) and reports
+`frame_size` and `baseline_y` in qc.json. Record those, then place the frames on
+the game's canvas and baseline in the engine or an import step. The source-row
+`anchor_y_max_dev` is the alignment evidence.
 
 ## Attack-frame timing
 

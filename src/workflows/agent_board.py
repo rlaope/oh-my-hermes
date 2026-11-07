@@ -53,6 +53,8 @@ _OPERATIONS = {
     "list": ("", "assignee status tenant include_archived limit", "tasks count limit truncated next_limit promoted"),
     "attachments": ("", "task_id", "ok task_id attachments"),
 }
+# Operations whose task is not an existing one: a top-level `task_id` is refused on them and required on the rest.
+_NO_TASK_ID = ("create", "link", "list")
 _TYPES = {"parents": "array", "skills": "array", "created_cards": "array", "tasks": "array", "metadata": "object",
           "limit": "integer", "priority": "integer", "max_runtime_seconds": "integer",
           "include_archived": "boolean", "goal_mode": "boolean", "goal_max_turns": "integer"}
@@ -293,7 +295,7 @@ def _arguments(operation: str, payload: dict[str, object], request_id: str, boar
     if "board" in args and args["board"] != board:
         raise ValueError("foreign_board")
     args["board"] = board
-    if operation not in ("create", "link", "list"):
+    if operation not in _NO_TASK_ID:
         task_id = _reference(payload.get("task_id"))
         if "task_id" in args and args["task_id"] != task_id:
             raise ValueError("foreign_task")

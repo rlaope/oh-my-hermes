@@ -10,7 +10,7 @@ metadata:
     phase: workspace-audit
     role: operator
     quality_tier: workspace-audit-gated
-    related_skills: [omh-doctor, omh-source-finder, ulw-research]
+    related_skills: [omh-doctor, omh-source-finder, ulw-research, omh-harness-session-inventory]
 ---
 
 # Workspace Audit
@@ -26,6 +26,7 @@ This is a Hermes-native `workspace-audit` workflow skill.
 - The user already named a concrete implementation task with files and acceptance criteria; use the coding handoff or delivery workflow.
 - The request is local OMH installation health only; use `omh-doctor`.
 - The request is a source acquisition or current web lookup; use `omh-source-finder` or `ulw-research`.
+- The request compares several harnesses, sessions, MCP hosts, or worktrees for drift; use `omh-harness-session-inventory`.
 
 ## Examples
 
@@ -55,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

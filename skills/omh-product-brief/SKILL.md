@@ -24,7 +24,7 @@ This is a Hermes-native `product-brief` workflow skill.
 ## Do Not Use When
 
 - The input is unprocessed feedback, bug reports, or feature asks that first need clustering and evidence boundaries; use `omh-feedback-triage`.
-- The product evidence is unvalidated, synthetic, or a founder belief and the problem gate has not returned validated; use `omh-product-discovery-validation` before a PRD.
+- The product evidence is unvalidated, synthetic, or a founder belief rather than external-human or behavioral-data evidence from the target segment (usage data, support contacts and interviews count); use `omh-product-discovery-validation` before a PRD.
 - The input is a growth hypothesis that still needs an experiment and readout before it becomes a product requirement; use `omh-lifecycle-growth`.
 - The user needs a company or product strategy decision across high-level options rather than a requirements or roadmap artifact; use `omh-decide`.
 - The request is an accepted, code-ready change with repository constraints and verification needs; use `ulw-plan` or `ulw-work` rather than recreating a PRD.
@@ -41,7 +41,7 @@ Good example:
 Bad example:
 
 - Prompt: Implement the accepted onboarding PRD and open a PR.
-- Expected behavior: Route to `ultrawork` or `ralplan`, not `product-brief`.
+- Expected behavior: Route to `ulw-work` or `ulw-plan`, not `product-brief`.
 - Why: Accepted implementation work should move into planning or delivery rather than recreate a PRD.
 
 ## Completion Checklist
@@ -52,14 +52,14 @@ Bad example:
 
 ## Recovery Notes
 
-- If the problem gate has not returned validated, retain supplied product evidence as unvalidated, mark PRD readiness unresolved, and hand back the problem and user context to `omh-product-discovery-validation`.
+- If the evidence is not external-human or behavioral-data evidence from the target segment, retain it as unvalidated, mark PRD readiness unresolved, and hand back the problem and user context to `omh-product-discovery-validation`.
 - If the decision owner has not resolved prioritization tradeoffs, retain the drafted PRD and roadmap options, mark roadmap commitment unresolved, and hand back the tradeoffs and open questions for that owner.
 - If Jira or Linear updates lack an explicit target and approval, retain the prepared PRD, mark roadmap-system mutation not_observed, and hand back the target and approval questions for `omh-apps`.
 
 ## Workflow Lane
 
 - Current lane: **Intent -> plan** (`oh-my-hermes`, `meta-router`, `deep-interview`, `context`, `plan`, `ralplan`, `adversarial-consensus`, `codebase-onboarding`, `+9 more`) - clarify, plan, ship, or loop goals.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -89,8 +89,9 @@ Required inputs:
 
 - product evidence
 - problem and user
-- goal and non-goals
+- goal, non-goals, and success metric with baseline
 - decision owner
+- capacity or effort constraints
 
 Expert clarification questions:
 - `product evidence`
@@ -102,7 +103,7 @@ Expected outputs:
 - problem, user, evidence, metric, goal, and non-goal brief
 - PRD with requirements, open questions, risks, dependencies, and acceptance shape
 - prioritization/roadmap options with tradeoffs and decision owner
-- explicit downstream route to ralplan, strategy-brief, or ultrawork only when its prerequisite is satisfied
+- explicit downstream route to `ulw-plan`, `omh-decide`, or `ulw-work` only when its prerequisite is satisfied
 
 Artifact expectations:
 

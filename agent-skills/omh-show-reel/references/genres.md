@@ -81,7 +81,8 @@ attached, sent or published.
 - A math proof, equation or algorithm animation: Hermes' `manim-video` skill
   when the host has it.
 - Existing footage converted to ASCII art: Hermes' `ascii-video` skill.
-- Summarizing, transcribing, captioning or trimming a recording that exists:
-  `media-input-operator`.
+- Summarizing or transcribing a recording that exists: `omh-media-input`.
+  Trimming, converting or burning in captions: plain ffmpeg through
+  `omh-terminal`.
 - An animation inside an app's own UI (a button, modal, page transition or
   loading state): `frontend`.

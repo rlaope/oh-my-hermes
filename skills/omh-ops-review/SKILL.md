@@ -44,6 +44,7 @@ Bad example:
 
 - Confirm the workflow target, evidence boundary, and stop condition are named.
 - Report which outputs are prepared, observed, blocked, or missing.
+- Order priorities by impact on the next release or customer, then by time left; a blocker names who unblocks it and by when, or says the owner is unknown.
 - Name the smallest next verification or handoff instead of claiming completion from narration.
 
 ## Recovery Notes
@@ -54,7 +55,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

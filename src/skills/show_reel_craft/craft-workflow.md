@@ -1,5 +1,7 @@
 # Motion-graphics showreel production
 
+> OMH overrides, which win over anything below: fonts are explicit local files, `new_project.py PROJECT --font /path/Face.ttf` (repeatable); there is no `--fonts` flag, nothing is prepared and nothing is downloaded from Google Fonts. The music default is `synth_music.py` or supplied, licensed audio, never a paid provider unless the user asks for it with their own key. Missing tools are reported with the install command for the user to run; this skill never runs it. Libraries come from the approved dependency root, not a download. Questions follow `references/brief-and-locales.md`. Commands below that differ from this kit's flags (`synth_music.py`, `qa_check.py --audio-mode`, `mix.py`, `timeline.py`) follow the upstream command map in `toolkit/README.md`.
+
 A skill that makes Korean motion-graphics videos (resume showreels, promo videos, profile videos, teasers, brand films, event promos, product introductions, educational videos, making-of films) from concept to delivery. It does not pick a preset mood or template. For each request it drafts several concept candidates and picks the strongest, sets a fresh art direction for each segment, builds the screens in code (DOM, canvas, WebGL shaders, 3D), and then repeatedly looks at the rendered frames directly and rebuilds the weak segments. It carries the work through music, sound effects, ElevenLabs narration, codex-image images, the mix, and automated QA. It asks the user only for facts that only the user knows (the subject, information that must be included, where materials are), and makes creative decisions such as mood, length, structure, and whether to use narration on its own. For requests such as '쇼릴' (showreel), '모션그래픽' (motion graphics), '애니메이션 영상 만들어줘' (make me an animated video), '홍보 영상' (promo video), '소개 영상' (introduction video), '인물 소개 영상' (person introduction video), '1분 영상' (1-minute video), 'N초 영상' (N-second video), '이력서용 쇼릴' (showreel for a resume), '놀라운 모션 그래픽 디자이너' (amazing motion graphics designer), '전력을 다해요' (give it everything you have), '키네틱 타이포' (kinetic typography), '나레이션 넣은 영상' (video with narration), '티저 영상' (teaser video), and '하네스가 어떻게 동작하는지 영상으로' (a video showing how the harness works), use this skill even when the word "video" is not mentioned. Cut editing of live-action footage, work that only trims or converts files, calling generative video models such as Sora or Veo, and work that only produces slides or PDFs are out of scope.
 
 ## The bar this skill aims for
@@ -39,7 +41,7 @@ Items not in the request proceed with the values below.
 | --- | --- |
 | Length and format | 60 seconds, 16:9 1920x1080, 30fps. For Reels or Shorts, 9:16 1080x1920 |
 | Narration | Include it only when the request asks for it or when the content must be told in words. A showreel communicates through music and screens. When you include it, pick a voice that fits the concept from the voice table in `references/craft-audio.md` and from `eleven.py voices --lang ko`. `ibCGc01503OQd2R6i1n1` (the verified Korean narrator) is a voice whose Korean reading settings (`eleven_multilingual_v2`, stability 0.45, similarity 0.8, style 0.4) have been verified |
-| Music | ElevenLabs Music (paid plan). If it cannot be used, synthesized music from `synth_music.py` |
+| Music | Synthesized music from `synth_music.py`, or supplied licensed audio. ElevenLabs Music only when the user asks for it and has their own key |
 | Images | Generate with codex-image only when the concept needs them. Do not generate the faces of real people; use only real photos |
 | Deliverables | Master MP4, sharing MP4, poster JPG, subtitle SRT (when there is narration), production notes |
 | Loudness | -14 LUFS. `mix.py` masters to a true peak of -2.0 dBTP, and the QA criterion is -1.0 dBTP or below |
@@ -98,13 +100,13 @@ Read "Building the concept" in `references/craft-brief.md`. If the concept is we
 
 ## 3. Research and materials
 
-First create the project. The folder structure, the engine, the Hangul fonts, and the renderer dependencies are prepared in one go.
+First create the project. The folder structure and the engine are prepared; fonts are the explicit `--font` files you pass, and renderer dependencies come from the approved dependency root.
 
 ```bash
-python3 $S/new_project.py <project> --ratio 16:9 --duration 60 [--fonts "Hahmlet:wght@300;900"]
+python3 $S/new_project.py <project> --ratio 16:9 --duration 60 --font /path/to/Face.ttf
 ```
 
-Add Google Fonts Hangul typefaces outside the default typeface set with `--fonts` (it can be given more than once, and it persists when the command is run again).
+Add Hangul typefaces as explicit local font files with `--font` (it can be given more than once). No typeface is bundled or downloaded.
 
 `reel/scenes.js` is created as an empty scene file. API usage examples are in `reel/_example_scenes.js`. Do not take the example's screens as a starting point; write anew from the concept.
 
@@ -133,10 +135,10 @@ The screen timing is set by the music's beats and hits and by the narration's wo
 ```bash
 python3 $S/narrate.py <project>/script.json --stt            # when there is narration. Fix lines marked ✗ and run again
 python3 $S/music_tools.py plan <project>/audio/music/spec.json # music spec → ElevenLabs composition plan
-python3 $S/eleven.py music <project>/audio/music/music.mp3 --plan <project>/audio/music/plan.json
-#   if 402 (paid plan required): python3 $S/synth_music.py music <project>/audio/music/spec.json <project>/audio/music/music.wav
-python3 $S/music_tools.py analyze <project>/audio/music/music.mp3   # tempo and hits → align segment boundaries to the hits
-python3 $S/eleven.py sfx-kit <project>/audio/sfx --names impact,riser   # only where a generic preset is needed (synthesized: synth_music.py sfx). For sounds that match a segment's material, eleven.py sfx "prompt"
+python3 $S/synth_music.py <project>/audio/music/spec.json --out <project>/audio/music/music.wav   # default, local
+#   only when the user asked for ElevenLabs Music and has their own key: python3 $S/eleven.py music <project>/audio/music/music.mp3 --plan <project>/audio/music/plan.json
+python3 $S/music_tools.py analyze <project>/audio/music/music.wav   # tempo and hits → align segment boundaries to the hits
+python3 $S/eleven.py sfx-kit <project>/audio/sfx --names impact,riser   # only where a generic preset is needed (synthesized: `tick`/`boom`/`whoosh` events in the `synth_music.py` spec). For sounds that match a segment's material, eleven.py sfx "prompt"
 python3 $S/timeline.py <project>/script.json --music-analysis audio/music/analysis.json
 ```
 
@@ -208,10 +210,10 @@ Do not put reverb on the narration. A video that used a 2.4-second hall at `--ha
 ## 11. Automated QA and delivery report
 
 ```bash
-python3 $S/qa_check.py <project>/out/<name>.mp4 --timeline <project>/timeline.json --script <project>/script.json --stt
+python3 $S/qa_check.py <project>/out/<name>.mp4 --audio-mode <muted|music-only|narration|narration+bed/SFX> --policy <project>/qa-policy.json   # the mode of this film; no --timeline/--script/--stt
 ```
 
-It checks the format, loudness, overly dark stretches, flashes, frozen screens, and a transcription of the finished mix (including number misrecognition), and creates `qa/qa_report.md` and the final sheet. Handle every "to fix" item, look at the final sheet with Read, and then deliver. For a line that STT got wrong only once, run it once more, and fix it if it is wrong both times.
+In this kit it checks the format, loudness, overly dark stretches, flashes and frozen screens and prints a JSON report; it does not transcribe the finished mix and does not write `qa/qa_report.md` or a final sheet (use `contact_sheet.py` for the sheet). A finished-mix transcript check is not observed unless you ran separate approved speech-to-text tooling. Handle every "to fix" item, look at the final sheet with Read, and then deliver. For a line that STT got wrong only once, run it once more, and fix it if it is wrong both times.
 
 The formats of the delivery report and `제작노트.md` (production notes) are in "Delivery" in `references/craft-qa.md`. Always include the following.
 

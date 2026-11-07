@@ -17,7 +17,7 @@ This is an OMH `release-cut` workflow skill, projected for Agent Skills hosts (C
 
 ## Why This Exists
 
-`release-cut` exists because nothing owned deciding a release: `deploy-and-monitor` watches a rollout that is already happening, and a cut, a canary, or a rollback decision reached an image card or a watch lane with no rollback trigger at all.
+`release-cut` exists because nothing owned deciding a release: `omh-deploy-and-monitor` watches a rollout that is already happening, and a cut, a canary, or a rollback decision reached an image card or a watch lane with no rollback trigger at all.
 
 ## First Steps
 

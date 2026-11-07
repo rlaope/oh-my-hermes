@@ -1,12 +1,12 @@
 # Manual Test Guide
 
-Load this reference when part of a change cannot be proved by a check that runs on its own and a person has to try it by hand: a CLI flag, a migration, a config change, a daemon restart, an install on a real machine. If the surface RENDERS -- a page, an image, a TUI frame -- its guide is `visual-qa`'s viewport and state matrix instead, and that skill owns the capture rules this page does not repeat.
+Load this reference when part of a change cannot be proved by a check that runs on its own and a person has to try it by hand: a CLI flag, a migration, a config change, a daemon restart, an install on a real machine. If the surface RENDERS -- a page, an image, a TUI frame -- its guide is `omh-visual-qa`'s viewport and state matrix instead, and that skill owns the capture rules this page does not repeat.
 
 ## The Guide Is a Handover Artifact, Never Evidence
 
 Writing the steps does not run them. A finished guide is `prepared_not_observed`, and nothing the writer does moves it out of that state -- only a run can, and a run produces its own separate record.
 
-In `verification-gate` vocabulary: each written step is a `verification_matrix/v1` row with no result yet. A person who runs one can supply what that skill declares as "observed_check_results/v1 with command (verbatim, not a description of it), source (this checkout, a CI job, or an operator report), exit status, summary (what the output said), scope (what that run covered, since a narrower run proves less), freshness (when it ran, and whether the tree has moved since), and origin (for a failing check: introduced, pre_existing, or unknown)" -- quoted from its own artifact expectations rather than restated, so this page cannot drift from the gate it defers to. That row is the evidence, never the step it came from. Freshness is the field a manual run most needs and most often loses: a person's report is the likeliest stale output there is, and the gate refuses stale output as evidence outright. A report of "looks fine" supplies none of the fields at all, and is the self-referential shape (`TBD`, `works as expected`) that gate already refuses; a spoken report earns no exemption from the refusal.
+In `omh-verification-gate` vocabulary: each written step is a `verification_matrix/v1` row with no result yet. A person who runs one can supply what that skill declares as "observed_check_results/v1 with command (verbatim, not a description of it), source (this checkout, a CI job, or an operator report), exit status, summary (what the output said), scope (what that run covered, since a narrower run proves less), freshness (when it ran, and whether the tree has moved since), and origin (for a failing check: introduced, pre_existing, or unknown)" -- quoted from its own artifact expectations rather than restated, so this page cannot drift from the gate it defers to. That row is the evidence, never the step it came from. Freshness is the field a manual run most needs and most often loses: a person's report is the likeliest stale output there is, and the gate refuses stale output as evidence outright. A report of "looks fine" supplies none of the fields at all, and is the self-referential shape (`TBD`, `works as expected`) that gate already refuses; a spoken report earns no exemption from the refusal.
 
 The row is also where the evidence stops. OMH persists no verification output (#1782), so a row a person reports lives in this session's context and nowhere else -- the same thing `omh-wiki/references/handover-artifacts.md` marks with its "Held where" column. A later reader cannot re-read the result; they can only run the step again, which is one more reason every step names the build it ran against.
 
@@ -40,7 +40,7 @@ A step carrying none of the four is a test that was not written. Say so, and wri
 
 ## Enumerate, Do Not Sample
 
-The rule `visual-qa` holds for pages, states, and viewports holds here for everything else. List every flag and its default, every config value that changes the path taken, every version a migration can be reached from (fresh, previous, two behind), and every platform whose behavior differs. A guide that walks the happy path exercises the case that already worked.
+The rule `omh-visual-qa` holds for pages, states, and viewports holds here for everything else. List every flag and its default, every config value that changes the path taken, every version a migration can be reached from (fresh, previous, two behind), and every platform whose behavior differs. A guide that walks the happy path exercises the case that already worked.
 
 Each step also names what it depends on, so a reader whose step 3 fails knows whether steps 4 through 9 still mean anything. A partial run is the ordinary outcome, and it has to stay readable.
 
@@ -64,4 +64,4 @@ The reason is the deliverable in that case, so write one worth reading. Name the
 
 `done` on `VI. Manual test guide` says the guide exists. It does not say anyone followed it, and no record can say that: OMH observes declarations, never work.
 
-A completion claim citing this guide is therefore citing a plan. `verification-gate` returns HOLD or BLOCK on it with the manual checks listed as not-run, which is the correct verdict. The guide's job is to make that list short, specific, and cheap for somebody to close.
+A completion claim citing this guide is therefore citing a plan. `omh-verification-gate` returns HOLD or BLOCK on it with the manual checks listed as not-run, which is the correct verdict. The guide's job is to make that list short, specific, and cheap for somebody to close.

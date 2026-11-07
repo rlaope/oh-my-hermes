@@ -10,7 +10,7 @@ metadata:
     phase: motion-production
     role: operator
     quality_tier: evidence-gated
-    related_skills: [omh-image-cards, omh-frontend, omh-media-input, manim-video, ascii-video, omh-materials-package, omh-design-quality-gate, omh-visual-qa]
+    related_skills: [omh-image-cards, omh-frontend, omh-media-input, omh-terminal, manim-video, ascii-video, omh-materials-package, omh-design-quality-gate, omh-visual-qa]
 ---
 
 # Show Reel
@@ -34,11 +34,12 @@ metadata:
 An explainer, motion graphics, kinetic type, a logo or title intro, a 3D scene, a data-viz animation, a music visual or a short, with no product claim, real UI or brand asset on screen, takes this lane. It skips the source register, the rights register and the 3-concept comparison; it never skips a render.
 
 - Defaults, each labeled as an assumption and overridden by anything the user said: 16:9 1920x1080, 30 fps, 20-30 s when no duration is given (about 2.5 s per beat), muted unless music is asked for, on-screen text in the user's language. Ask only for a fact that cannot be recovered.
-- Pick one concept from its genre recipe in `references/genres.md` and record its assumptions. Then author one HTML composition with a deterministic time seek (a paused GSAP timeline or a `__seek(t)` function; no `Math.random()` or wall clock).
+- Pick one concept from its genre recipe in `references/genres.md` and record its assumptions. Then probe the renderer, because the file you write depends on it.
 - Probe the renderer read-only, in the order `references/genres.md` gives: the `hyperframes` CLI only when `command -v hyperframes` finds it (`npx` would download it), then `toolkit/scripts/render.mjs` with a local Chrome, `puppeteer-core` and FFmpeg, then a frame renderer already installed (such as Python with Pillow) piped to FFmpeg. If none runs, HOLD with the exact install command and ask for consent once; never install, download fonts or call a paid API on your own.
+- Author for the renderer found, with a deterministic seek and no `Math.random()` or wall clock: HyperFrames takes `data-*` timing and a paused GSAP timeline; `render.mjs` renders only a `new_project.py NEW --font FILE` scaffold, not a standalone HTML.
 - Render 3 style frames and view them, render a draft, view its contact sheet, and rebuild the weakest beat once. Export, then measure codec, dimensions, fps, duration, size and sha256 with `ffprobe`; deliver the path with those facts. A storyboard or an HTML file alone is HOLD, not delivery.
 - Fill the frame, use one hue family plus at most one accent, add no meta text (window titles, dimension labels, invented paths), draw no rounded "document" cards as a metaphor, and move the camera on one continuous path rather than stopping at every beat.
-- A promo or social clip of 15 s or less holds one hero scene with no meta text, one number smaller than the logo, and the official logo unboxed at 25% or more of the frame height; check a still sheet against `references/craft-design.md` (Short promo clips) before rendering.
+- A promo or social clip of 15 s or less holds one hero scene with no meta text and one number; check a still sheet against `references/craft-design.md` (Short promo clips) before rendering. One that shows an official logo or a product is a brand asset and takes the full method below, with those one-scene rules for the shot itself.
 - A product claim, a real UI or a brand asset on screen moves the video to the full method below.
 
 **Do Not Use When:** A math proof, equation or algorithm animation in the 3Blue1Brown style belongs to Hermes' bundled `manim-video` skill; converting existing footage to ASCII art belongs to `ascii-video`.
@@ -73,7 +74,7 @@ Category: `design`. Phase: `motion-production`. Hermes role: `operator`. Quality
 ## Workflow Lane
 
 - Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## Runtime Evidence

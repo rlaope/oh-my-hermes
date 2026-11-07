@@ -52,7 +52,7 @@ from omh.skills.catalog import (
     primary_harness_for_skill,
     retained_delegation_skill_names,
 )
-from omh.skills.catalog_types import ULW_ENGINE_SKILL_NAMES
+from omh.skills.catalog_types import ULW_ENGINE_SKILL_NAMES, _default_final_checklist
 from omh.skills.expert_question_rendering import (
     expert_question_reference_lines,
     expert_questions_markdown,
@@ -60,6 +60,7 @@ from omh.skills.expert_question_rendering import (
 from omh.skills.render import (
     frontmatter_description,
     loadable_skill_mentions,
+    translate_sibling_mentions,
     workflow_reference_markdown,
     workflow_reference_payload,
     workflow_skill,
@@ -321,7 +322,9 @@ class RouterContentTests(unittest.TestCase):
         # 33,000 -> 33,194: `systematic-review` adds one 194-byte index line
         # (32,978 -> 33,172 measured); the existing 22-byte allowance is kept,
         # not widened.
-        self.assertLess(len(rendered.encode("utf-8")), 33_194)
+        # 33,194 -> 33,236: the memory-new and memory-sync index lines name omh_memory recall for
+        # a past decision (33,172 -> 33,214 measured); the same 22-byte allowance is kept.
+        self.assertLess(len(rendered.encode("utf-8")), 33_236)
         for line in rendered.splitlines():
             self.assertLess(len(line.encode("utf-8")), 400, line)
 
@@ -519,7 +522,7 @@ class RouterContentTests(unittest.TestCase):
             if template.skill_name == "oh-my-hermes" and template.relative_path == "references/workflow-registry.md":
                 limit = 33_841
             elif template.skill_name == "oh-my-hermes" and template.relative_path == "references/catalog-index.md":
-                limit = 33_194
+                limit = 33_236
             else:
                 limit = 33_100
             self.assertLess(len(template.content.encode("utf-8")), limit, template.relative_path)
@@ -3328,7 +3331,7 @@ class RouterContentTests(unittest.TestCase):
                     )
                     if renderer is builtin_skill_templates:
                         for step in definition.opening_steps:
-                            self.assertIn(step, content)
+                            self.assertIn(translate_sibling_mentions(step, owner=definition.name), content)
 
     def test_catalog_marks_retained_and_codex_handoff_skills(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
@@ -3540,8 +3543,8 @@ class RouterContentTests(unittest.TestCase):
         # #954 stage 5: the retired reference contract no longer belongs to a
         # primer lane roster; its rendered reference falls back to the router
         # guidance line.
-        self.assertIn("Use `omh_recommend` or the `oh-my-hermes` router", skills["ultragoal"].content)
-        self.assertIn("hand back to `oh-my-hermes`", skills["ultragoal"].content)
+        self.assertIn("Use `omh_recommend` or the `omh-routing` router", skills["ultragoal"].content)
+        self.assertIn("hand back to `omh-routing`", skills["ultragoal"].content)
         self.assertIn("Prepared OMH routing", skills["ultragoal"].content)
         self.assertIn("OMH Context Rail", common_rail)
         self.assertIn("not a standalone executor", common_rail)
@@ -3749,9 +3752,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("source boundaries", " ".join(definitions["research"].final_checklist))
         self.assertIn("agenda", " ".join(definitions["meeting-brief"].final_checklist).lower())
         self.assertIn("selected coding or runtime owner", " ".join(definitions["ralph"].final_checklist))
-        # `skill` and `cancel` state their own checklists now; `agent-ops-review`
-        # still takes the operator lane's default.
-        self.assertIn("managed path", " ".join(definitions["agent-ops-review"].final_checklist))
+        # `skill`, `cancel` and `agent-ops-review` state their own checklists now, and no shipped
+        # skill takes the operator lane's default any more, so the default is read directly: a new
+        # operator skill without its own list still starts from it.
+        self.assertIn("managed path", " ".join(_default_final_checklist("new-operator", "operator", "", "")))
+        self.assertIn("ladder row", " ".join(definitions["agent-ops-review"].final_checklist))
 
     def test_coding_handoff_skills_include_executor_readiness_fallback(self) -> None:
         templates = {template.name: template.content for template in builtin_skill_templates()}

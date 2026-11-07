@@ -24,10 +24,10 @@ Contract: `references/full-contract.md`.
 
 ## Procedure
 
-1. Confirm the route carries `route_question` and the ladder lists `omh_jev_ask`; tell the user their message leaves the machine.
+1. Confirm the route carries `route_question` and the ladder lists `omh_jev_ask`; tell the user their message leaves the machine. With no `route_question` block, say there is no open route question and continue the normal route; offer `omh-jev-ask` with a typed Choice if they want Jev's pick among named options.
 2. Call `omh_jev_ask` with the block unchanged as `route_question` and the message as `state`.
 3. Offer Jev's top pick to the user as a question; the block's thresholds only shape the wording.
-4. Record it with `omh_route_answer`, `answered_by: omh_jev_ask`, and the returned `ask_id`.
+4. Record it with `omh_route_answer`: the block's `question_digest`, `answered_by: omh_jev_ask`, the returned `ask_id`, and Jev's `route_choice`, probabilities, and fits exactly as returned.
 
 ## Completion Checklist
 
@@ -35,6 +35,7 @@ Contract: `references/full-contract.md`.
 - Reply in the user's own words and the host's own voice: its SOUL.md persona owns reply language, tone, speech level, and sentence endings, progress updates included (where it sets no language, use the one the user wrote in), and OMH shapes structure and content only; OMH's record terms (surface, lane, wrapper, handoff, evidence boundary, not_observed) stay in records and tool calls, never in the sentence the user reads unless they ask about one; and when a real unresolved user decision or a useful briefing discussion remains, offer one specific, content-linked question. Completed work needs no question; omit unrelated non-action footers and generic offers to continue.
 - Report the tool's status, ask_id, served model, and cost source; a non-answer is reported as its status and is never an answer.
 - Record observed delegation results; use Hermes-native subagent/delegation features when available: native subagents -> Hermes delegation when available, otherwise sequential lanes.
+- Treat wrapper memory/context summaries as advisory local context, not proof of opaque Hermes memory reads or changes.
 
 ## Recovery Notes
 
@@ -42,4 +43,5 @@ Contract: `references/full-contract.md`.
 
 ## Workflow Lane
 
-advisory local context
+- Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.

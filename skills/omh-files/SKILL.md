@@ -45,6 +45,7 @@ Bad example:
 - The path root, allowed file operations, excluded paths, destructive-operation policy, and stop condition are explicit.
 - Delete, overwrite, move, rename, permission change, archive mutation, upload, and download are gated, or marked missing and not run.
 - With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing.
+- Before a bulk change, list the exact paths and the destination names that already exist; never overwrite a name the confirmation did not name, and compare the listing after the run with the plan.
 - Checkpoint availability is recorded before any destructive step, and the confirmation gate holds either way; without an observed checkpoint covering the target, a reversible copy or a move to trash comes first.
 - Directory listings, file contents, hashes, diffs, and operation results are reported only from observed file evidence.
 
@@ -59,7 +60,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

@@ -29,7 +29,7 @@ Good example:
 Bad example:
 
 - Prompt: Write discovery questions for the Northwind opportunity and draft the follow-up email.
-- Expected behavior: Route to `sales-development`, not `sales-pipeline-review`.
+- Expected behavior: Route to `omh-sales-development`, not `sales-pipeline-review`.
 - Why: A single account's discovery, qualification, and outreach draft has no portfolio, aging, or forecast-calibration objective.
 
 ## Completion Checklist
@@ -41,7 +41,7 @@ Bad example:
 ## Recovery Notes
 
 - If the snapshot fails scope validation, return `HOLD` naming the exact missing definition, conversion basis, owner, or duplicate set and ask for it; do not rank or total partial data.
-- If prior forecasts or outcomes are absent, keep calibration `unavailable`; if an annex has no supporting evidence, emit it as `unsupported` with the gap named rather than omitting it.
+- If only one snapshot with no history fields is supplied, keep stage movement and slipped close dates `unavailable`; if prior forecasts or outcomes are absent, keep calibration `unavailable`; if an annex has no supporting evidence, emit it as `unsupported` with the gap named rather than omitting it.
 - If a connector is unavailable, keep every CRM correction proposed and every alert or message unsent, and name the connector boundary as the next observable step.
 
 ## When to Use
@@ -73,7 +73,7 @@ Required inputs:
 - pipeline snapshot
 - as-of time and review horizon
 - currency, amount, stage, and forecast definitions
-- prior forecast and actuals
+- prior forecast, actuals, and quota or target
 - decision owner
 
 Expected outputs:

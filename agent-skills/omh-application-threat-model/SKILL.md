@@ -17,7 +17,7 @@ This is an OMH `application-threat-model` workflow skill, projected for Agent Sk
 
 ## Why This Exists
 
-`application-threat-model` exists because the nearest neighbour does not merely miss this request. `security-safety-review` maps the agent's own prompt, tool, credential, and dependency surface, so an application threat-model request came back as an agent tool inventory under a near-identical name — a confident wrong artifact rather than a miss, in the one domain where that costs most.
+`application-threat-model` exists because the nearest neighbour does not merely miss this request. `omh-security-safety-review` maps the agent's own prompt, tool, credential, and dependency surface, so an application threat-model request came back as an agent tool inventory under a near-identical name — a confident wrong artifact rather than a miss, in the one domain where that costs most.
 
 ## Do Not Use When
 
@@ -38,7 +38,7 @@ Good example:
 Bad example:
 
 - Prompt: application-threat-model check whether this agent can be prompt-injected through its file tool
-- Expected behavior: Route to `security-safety-review`: prompts, tools, and credentials are the agent's runtime surface, not an application this workflow models.
+- Expected behavior: Route to `omh-security-safety-review`: prompts, tools, and credentials are the agent's runtime surface, not an application this workflow models.
 - Why: The two surfaces share vocabulary and nothing else; modeling the agent's runtime here is how the artifacts get confused.
 
 ## Completion Checklist
@@ -74,10 +74,11 @@ Reasoning demand: `standard`
 Quality bar:
 
 - Name every component, data store, and external dependency of the real system before naming one threat; a model of a system nobody described is a checklist.
-- Give each asset a data class and exactly one loss: disclosure, corruption, unavailability, or fraud.
+- Give each asset a data class and its primary loss: disclosure, corruption, unavailability, or fraud.
 - For each trust boundary, state what crosses it, what authenticates the crossing, and what the receiver assumes without checking.
 - Run all six STRIDE prompts from `omh-application-threat-model/references/threat-model-method.md` per boundary; drop an unreachable scenario with its reason instead of carrying it.
 - Resolve every scenario to one decision (mitigate, transfer, accept, eliminate) with an owner, and give every mitigating control a test whose observable fails when the control is removed.
+- Rank scenarios by likelihood times impact; accept only below the owner's limit.
 
 Required inputs:
 
@@ -98,7 +99,7 @@ Expert clarification questions:
 Expected outputs:
 
 - application_threat_model/v1
-- asset register: data class plus the one loss that makes each asset worth defending
+- asset register: data class plus the loss that makes each asset worth defending
 - trust boundaries: what crosses, what authenticates the crossing, what the receiver assumes unchecked
 - attack scenarios: entry point, path, precondition, impact
 - one decision per scenario (mitigate, transfer, accept, eliminate) with an owner
@@ -113,7 +114,7 @@ Safety rules:
 
 - Never write working exploit code, a payload, or a runnable attack script; a scenario names the entry point, the path, and the precondition, not the weapon.
 - Do not record a control as deployed because the architecture describes it; an unobserved control is `unverified` until configuration or a passing test says otherwise.
-- Do not model the agent's own prompts, tools, credentials, or dependencies here; that surface belongs to `security-safety-review`.
+- Do not model the agent's own prompts, tools, credentials, or dependencies here; that surface belongs to `omh-security-safety-review`.
 - Never print secrets, tokens, keys, connection strings, or live customer records pulled in as examples.
 - A model is not a penetration test, a scan, or a compliance attestation; name which of the three the user still needs.
 

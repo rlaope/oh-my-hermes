@@ -34,13 +34,13 @@ This is a Hermes-native `jit-learn` workflow skill.
 Good example:
 
 - Prompt: What should I learn next to solve my current onboarding blocker? Recommend books, podcasts, creators, and courses I can apply this week.
-- Expected behavior: Ask one confirmation question, confirm the immediate target, then prepare a source-backed four-section learning brief ranked by fit and time-to-first-value.
+- Expected behavior: Ask one confirmation question, confirm the immediate target, then prepare a source-backed learning brief ranked by fit and time-to-first-value.
 - Why: The user needs target selection and immediate transfer, not a generic curriculum or popularity-ranked resource list.
 
 Bad example:
 
 - Prompt: Design a six-week Python syllabus with weekly assessments.
-- Expected behavior: Route to `curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.
+- Expected behavior: Route to `omh-curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.
 - Why: Just-in-time target selection should not displace an explicit curriculum-design request.
 
 ## Completion Checklist
@@ -62,7 +62,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -142,6 +142,8 @@ Start with the confirmed target statement and a short source-boundary note. Then
 - `## Podcasts`
 - `## Creators`
 - `## Courses`
+
+When the target names a tool, API, or library, add `## Docs and References` ahead of them (official documentation, API reference, changelog, source repository), since for a technical blocker that is usually the fastest source; it follows the same source gate and fields.
 
 Under every heading, list only candidates that passed the source gate. If none passed, say why - for example, insufficient authority, stale or unavailable evidence, poor immediate fit, or an unresolved retrieval gap - rather than padding the section.
 

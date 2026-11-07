@@ -43,9 +43,10 @@ Bad example:
 
 ## Completion Checklist
 
-- The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
-- Local telemetry, provider truth, billing truth, and completion evidence are separate states.
-- Warnings name the next measurement or operator review action.
+- `context_budget_plan/v1` names the route (the wire model) and its usable budget with a class of observed, assumed, or unknown.
+- The must-keep pack lists its items under the closed classes prohibitions, decisions, open_questions, requirements, paths, pr_state, and verification_gaps, with a count for each.
+- The checkpoint gives a cadence and the exact `/compress <focus>` text, and compaction is reported only after Hermes' own reply to it.
+- Estimated, observed, and billed figures are stated apart; capacity nobody published is `capacity_unknown_hold`, never a number.
 
 ## Recovery Notes
 
@@ -56,7 +57,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

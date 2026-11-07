@@ -17,7 +17,7 @@ This is an OMH `relational-db` workflow skill, projected for Agent Skills hosts 
 
 ## Why This Exists
 
-`relational-db` exists because the database work itself had no owner: `backend` owns `schema_migration_plan/v1` for a service change, and an index question, a lock taken during deploy, or an N+1 finding was answered by a data, deploy, or interview lane with no lock model at all.
+`relational-db` exists because the database work itself had no owner: `omh-backend` owns `schema_migration_plan/v1` for a service change, and an index question, a lock taken during deploy, or an N+1 finding was answered by a data, deploy, or interview lane with no lock model at all.
 
 ## First Steps
 
@@ -116,6 +116,7 @@ Safety rules:
 - Build indexes on live tables with the engine's non-blocking method (`CREATE INDEX CONCURRENTLY`, online DDL `LOCK=NONE`), and state what that method cannot do.
 - OMH never connects to a database, and does not claim a plan, a row count, a lock wait, or an applied migration it did not observe.
 - Never put connection strings, credentials, or customer rows into the plan or the handoff.
+- `EXPLAIN ANALYZE` runs the statement: never on a primary for a write.
 
 ## Runtime Evidence
 

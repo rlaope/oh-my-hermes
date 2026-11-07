@@ -214,7 +214,7 @@ class ClosingReferenceContentTest(unittest.TestCase):
             "bounded declarations written with `omh_todo action=record`",
             content,
         )
-        self.assertIn("belong to `verification-gate`, which runs\n  before this phase", content)
+        self.assertIn("belong to `omh-verification-gate`, which runs\n  before this phase", content)
 
     def test_the_page_refuses_to_read_a_declaration_as_work(self) -> None:
         content = _closing_reference_content()

@@ -144,6 +144,7 @@ DEFINITION = SkillDefinition(
         "The plan itself is still undecided and needs a reviewed decision record first; use `ralplan`.",
         "Workers must talk to each other mid-run rather than hand off through files; use `ultrawork` coordinated "
         "lanes.",
+        "The graph tool (omh_dag) is not in your tool list: say so and offer `ultrawork` for the same plan; do not simulate the graph in chat.",
     ),
     good_example=SkillExample(
         prompt="dag ulw: add the export API, its UI button and the docs page, then verify with the full test suite",
@@ -325,7 +326,8 @@ or Claude Code when asked, or named it in a request, through `omh chat` or `omh 
 both in a dag-ulw request in Hermes chat also records a choice per owner, without changing the main route.
 The record is read as the router reads it, with one extra rule: a choice counts for a day. An external
 coding CLI spends the person's money and quota, so a choice older than 24 hours (or dated in the future)
-starts nothing; the person names the owner again.
+starts nothing; the person names the owner again. This day rule belongs to a dag-ulw export: any other
+handoff to an external coding CLI (`ulw-maestro`) needs a choice made for that run.
 
 With such a choice:
 

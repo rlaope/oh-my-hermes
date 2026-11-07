@@ -40,12 +40,12 @@ Good example:
 Bad example:
 
 - Prompt: paper-learning 이 PDF를 PPT로 변환해서 공유용 파일 만들어줘.
-- Expected behavior: Route to `materials-package` because the user wants file conversion/export, not conceptual paper explanation.
+- Expected behavior: Route to `omh-materials-package` because the user wants file conversion/export, not conceptual paper explanation.
 - Why: PDF file output and render QA are material packaging work, not paper learning evidence.
 
 ## Completion Checklist
 
-- The selected explanation level is one of: very_easy, moderate, expert, choose.
+- The explanation level is very_easy, moderate or expert, asked or stated before the first chunk; `choose` is only the unanswered state.
 - The source_state is recorded and scoped to observed text or extraction evidence.
 - The coverage ledger lists observed, missing, or prepared sections before claiming completion.
 - The explanation is section-aware and does not compress away claims, equations, figures, limitations, or reproducibility notes.
@@ -62,7 +62,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -86,7 +86,7 @@ Quality bar:
 - Preserve the coverage policy `coverage_preserving_not_lossy_summary` through a section-by-section ledger.
 - Explain by chunks when the source is long; keep each chunk linked to coverage_ledger status.
 - Set source_state from how the paper was acquired, not from the request. An entry that Hermes' bundled `arxiv` skill returned (search or id lookup) is `metadata_only` until paper text is read. Text that the bundled `pdf` skill's `pdf_read.py <file> --text` run returned is `file_text_extraction_observed` for the pages that came back with text, and a page that came back empty is listed as missing. Without those skills, the state is whatever the supplied text supports.
-- For a paper past one read budget, when the `long-document-reading` skill is available, take the chunks from its page ranges - its page-count probe and page-anchored extraction - instead of a second chunking scheme, and map each covered range onto the coverage ledger's sections; without it, plan numbered page ranges before reading.
+- For a paper past one read budget, when the `omh-long-document-reading` skill is available, take the chunks from its page ranges - its page-count probe and page-anchored extraction - instead of a second chunking scheme, and map each covered range onto the coverage ledger's sections; without it, plan numbered page ranges before reading. Record the plan once with `omh_document_plan` (see Recovery Notes) so one ledger holds the ranges.
 - List missing sections and not-observed claims before presenting the explanation as complete.
 
 Handoff policy:
@@ -112,7 +112,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- record the card with `omh paper plan --title <title> --source <path or url> --level <level> --source-state <state>`, which writes paper_learning_card/v1 to `$OMH_HOME/paper-learning/<paper_id>/card.json` and hashes a local source file without parsing it
+- record the card with `omh paper plan --title <title> --source <path or url> --level <level> --source-state <state>` (add `--section` once per section, in reading order, when the paper is not shaped like the ten default sections - a proof-based, systems or survey paper), which writes paper_learning_card/v1 to `$OMH_HOME/paper-learning/<paper_id>/card.json` and hashes a local source file without parsing it
 - record each explained chunk with `omh paper progress <paper_id> --covered <section> --next <section> [--missing <section>] [--note <text>]`, which updates the coverage ledger and appends one line to `ledger.jsonl`; `omh paper validate` checks the store
 
 Safety rules:

@@ -17,10 +17,11 @@ This is an OMH `strategy-brief` workflow skill, projected for Agent Skills hosts
 
 ## Why This Exists
 
-`strategy-brief` exists to keep `strategy` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`strategy-brief` exists so a team decision ends as a recommendation whose options are priced in one unit with their lag (and, when hard to reverse, a proposed ADR), not a discussion where each option is argued in different terms.
 
 ## Do Not Use When
 
+- A technical choice one cheap experiment can settle; use `omh-decision-prototype`. A technical choice inside a plan being written; use `omh-plan`. A technical choice the user wants attacked; use `omh-adversarial-consensus`. Use this skill for the decision note and ADR once the options are known.
 - The strategic question is whether an early idea's customer problem and segment are real, and no validated discovery receipt exists yet; use `omh-product-discovery-validation`.
 - The question is how to run a hiring process — scorecards, interview loops, candidate comparison — rather than whether to hire at all; use `omh-people-ops`.
 - The user wants Jev's typed probabilities for a yes/no, pick-one, or scored question over supplied text rather than tradeoffs and a recommendation.
@@ -73,7 +74,7 @@ Quality bar:
 - When the decision is a resourcing one — hire, outsource, or cut scope — quantify demand and capacity against each other in one unit before comparing options, and price each option with the lag before it lands; a gap that exists this quarter is not closed by a hire that ramps next quarter. The worked example is `omh-decide/references/capacity-planning.md`.
 - Ask whether the decision deserves a durable record - hard to reverse, surprising without its context, and carrying a real trade-off; all three or no record, a decision note in chat is enough.
 - When a record is warranted, draft it per `omh-decide/references/decision-records.md` - the `docs/adr/` convention with Context, Drivers, Considered Options, Decision, Consequences with mitigations, and Related - and stop for the user's approval before any file is written.
-- Never edit an accepted record: status moves Proposed to Accepted to Deprecated or Superseded, supersession is a new record pointing back at the old one, and a Rejected record is kept - it is what `decision-recall` reads later.
+- Never edit an accepted record: status moves Proposed to Accepted to Deprecated or Superseded, supersession is a new record pointing back at the old one, and a Rejected record is kept - it is what `omh-decision-recall` reads later.
 
 Required inputs:
 

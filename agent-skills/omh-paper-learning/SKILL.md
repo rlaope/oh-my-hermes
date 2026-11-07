@@ -38,12 +38,12 @@ Good example:
 Bad example:
 
 - Prompt: paper-learning 이 PDF를 PPT로 변환해서 공유용 파일 만들어줘.
-- Expected behavior: Route to `materials-package` because the user wants file conversion/export, not conceptual paper explanation.
+- Expected behavior: Route to `omh-materials-package` because the user wants file conversion/export, not conceptual paper explanation.
 - Why: PDF file output and render QA are material packaging work, not paper learning evidence.
 
 ## Completion Checklist
 
-- The selected explanation level is one of: very_easy, moderate, expert, choose.
+- The explanation level is very_easy, moderate or expert, asked or stated before the first chunk; `choose` is only the unanswered state.
 - The source_state is recorded and scoped to observed text or extraction evidence.
 - The coverage ledger lists observed, missing, or prepared sections before claiming completion.
 - The explanation is section-aware and does not compress away claims, equations, figures, limitations, or reproducibility notes.
@@ -101,7 +101,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- record the card with `omh paper plan --title <title> --source <path or url> --level <level> --source-state <state>`, which writes paper_learning_card/v1 to `$OMH_HOME/paper-learning/<paper_id>/card.json` and hashes a local source file without parsing it
+- record the card with `omh paper plan --title <title> --source <path or url> --level <level> --source-state <state>` (add `--section` once per section, in reading order, when the paper is not shaped like the ten default sections - a proof-based, systems or survey paper), which writes paper_learning_card/v1 to `$OMH_HOME/paper-learning/<paper_id>/card.json` and hashes a local source file without parsing it
 - record each explained chunk with `omh paper progress <paper_id> --covered <section> --next <section> [--missing <section>] [--note <text>]`, which updates the coverage ledger and appends one line to `ledger.jsonl`; `omh paper validate` checks the store
 
 Safety rules:

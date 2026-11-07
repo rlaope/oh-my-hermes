@@ -17,7 +17,7 @@ This is an OMH `security-event-response` workflow skill, projected for Agent Ski
 
 ## Why This Exists
 
-`security-event-response` exists because an event had no owner: `security-safety-review` and `application-threat-model` review a design before it ships, and a CVE, a committed secret, or a license question was answered by onboarding, review, or an achievements lane with no containment order at all.
+`security-event-response` exists because an event had no owner: `omh-security-safety-review` and `omh-application-threat-model` review a design before it ships, and a CVE, a committed secret, or a license question was answered by onboarding, review, or an achievements lane with no containment order at all.
 
 ## First Steps
 
@@ -37,7 +37,7 @@ This is an OMH `security-event-response` workflow skill, projected for Agent Ski
 Good example:
 
 - Prompt: we committed a secret, what now
-- Expected behavior: Record the credential type, scope, and exposure window, then prepare containment_plan/v1: revoke and replace, observe the old credential rejected, audit its use in the window, and only then rewrite history; the closure verdict stays open until the rotation is observed.
+- Expected behavior: Record the credential type, scope, and exposure window, then prepare containment_plan/v1: revoke and replace, observe the old credential rejected, audit its use in the window, and only then rewrite history; the closure verdict stays open until the rotation is observed and the persistence list is empty.
 - Why: A rewritten history does not revoke a secret that was already cloned or scraped.
 
 Bad example:
@@ -51,7 +51,7 @@ Bad example:
 - The event kind, source, and exposure window are stated.
 - Every severity call cites the reachable path or its observed absence.
 - A leaked secret's rotation precedes any history rewrite in the plan.
-- The closure verdict is closed only when the rotation or fixed version is observed.
+- The closure verdict is closed only when the rotation (with an empty persistence list), the fixed version, the license decision, or the ended access is observed.
 - No secret value appears anywhere, and OMH scanned, contacted, or rotated nothing.
 
 ## Recovery Notes
@@ -81,13 +81,15 @@ Quality bar:
 - Adjust severity by reachability: a critical advisory on a function nothing calls is not the same event as one on the request path.
 - Keep prepared, observed, and closed as separate states for every containment step.
 - Hand a fix that needs a planned version jump to its own upgrade plan, and keep this event open until that fix is observed.
+- Leaked secret: revoke first unless every planned-rotation condition is shown by evidence. Unauthorized access: reference section 4.
 
 Required inputs:
 
-- the event kind: CVE or advisory, leaked secret, license question, or an advisory that forces a major version
+- the event kind: CVE or advisory, leaked secret, license question, an advisory that forces a major version, or suspected unauthorized access
 - for a CVE: the advisory id, the affected package and version range, and the installed version from the lockfile
 - for a leaked secret: the credential type and scope, where it was pushed, whether the repository is public, and when
 - for a license: the package, its declared license, and how the product is distributed
+- for unauthorized access: the identity or host, the first anomaly, and what it could reach
 - observed evidence for any containment or closure claim
 
 Expected outputs:
@@ -100,15 +102,15 @@ Expected outputs:
 
 Artifact expectations:
 
-- security_event_record/v1 names the event kind, the source, the affected package or credential class, and the exposure window, separately from the suspected impact
+- security_event_record/v1 names the event kind, the source, the affected package, credential class, or identity and host, and the exposure window, separately from the suspected impact
 - reachability_analysis/v1 names the vulnerable function or path, the repository call sites that reach it or the observed absence of any, and a severity call from the advisory score adjusted by that reachability
 - containment_plan/v1 orders every step; for a leaked secret the rotation and the observed rejection of the old credential come before any history rewrite, because a rewrite does not un-publish a secret already cloned
 - license_fit_verdict/v1 gives the SPDX id, the obligation it triggers for this distribution model, and fits, conflicts, or needs counsel
-- event_closure_verdict/v1 reads closed only when the rotation or the fixed version is recorded observed; a prepared step keeps the event open and is named
+- event_closure_verdict/v1 reads closed only when the rotation with an empty persistence list, the fixed version, the recorded license decision, or the ended access with an empty persistence list is recorded observed; a prepared step keeps the event open and is named
 
 Safety rules:
 
-- A leaked-secret event cannot close while its rotation is prepared rather than observed; `event_closure_verdict/v1` names the missing observation instead.
+- A leaked-secret event cannot close while its rotation is prepared rather than observed or attacker persistence remains; `event_closure_verdict/v1` names the missing observation instead.
 - Order rotation before history rewriting: revoke and replace the credential, observe the old one rejected, then rewrite history if at all.
 - Never print the secret value, and never paste it into the plan, the handoff, or a search.
 - OMH never runs a scanner, contacts a registry, or rotates a credential; reachability and license facts come from observed output or are marked unverified.

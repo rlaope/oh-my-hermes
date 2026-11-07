@@ -17,7 +17,7 @@ This is an OMH `agent-instructions` workflow skill, projected for Agent Skills h
 
 ## Why This Exists
 
-`agent-instructions` exists because the file every handoff target reads first had no owner: `rules-distill` extracts rule candidates, `codebase-onboarding` builds a human reading path, and `context` aligns terminology, and each reads that file without writing it.
+`agent-instructions` exists because the file every handoff target reads first had no owner: `omh-rules-distill` extracts rule candidates, `omh-codebase-onboarding` builds a human reading path, and `context` aligns terminology, and each reads that file without writing it.
 
 ## First Steps
 

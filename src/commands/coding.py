@@ -572,6 +572,7 @@ def _coding_plan_artifact(artifact: dict[str, object]) -> dict[str, object]:
         "sha256": str(artifact.get("sha256", "")),
         "task_statement_sha256": str(artifact.get("task_statement_sha256", "")),
         "task_statement_length": int(artifact.get("task_statement_length", 0) or 0),
+        "plan_body": str(artifact.get("plan_body", "unknown")),
     }
 
 

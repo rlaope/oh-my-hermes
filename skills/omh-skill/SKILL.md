@@ -26,7 +26,7 @@ This is a Hermes-native `skill` workflow skill.
 - The user wants an OMH capability family turned on or off; use `omh-capability-toggle`.
 - The user wants a public skill found and vetted before installing it; use `omh-skill-scout`.
 - The user wants skill health checked: stale surfaces, failure patterns, or pending amendments; use `omh-skill-health`.
-- The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' bundled `hermes-agent-skill-authoring` skill instead of this one.
+- The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' `hermes-agent-skill-authoring` skill instead of this one (if skill_view cannot find it: hermes skills install official/software-development/hermes-agent-skill-authoring).
 
 ## Examples
 
@@ -56,7 +56,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use

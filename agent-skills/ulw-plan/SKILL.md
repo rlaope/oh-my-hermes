@@ -31,6 +31,7 @@ This is an OMH `ralplan` workflow skill, projected for Agent Skills hosts (Claud
 - The refactor's direction is already decided and what is missing is its execution shape - which files move in which phase, what verifies each phase, where each phase rolls back to; use `omh-refactor-plan`.
 - One plan-blocking choice still needs behavior evidence rather than argument; run `omh-decision-prototype` first and consume its decision receipt without transcript replay.
 - The user wants a pure source lookup, citation check, or paper explanation with no implementation plan.
+- An ordinary feature or fix that needs a plan but not a consensus review (no architectural, regression or user-visible risk the user named); use `omh-plan`.
 - The unresolved work is repository terminology alignment or a project-language decision frontier; use `ulw-context` before planning.
 
 ## Examples
@@ -44,7 +45,7 @@ Good example:
 Bad example:
 
 - Prompt: $ralplan implement the refactor now and open the PR.
-- Expected behavior: Stop at the reviewed plan or route the full delivery cycle to `ultrawork` after plan acceptance.
+- Expected behavior: Stop at the reviewed plan or route the full delivery cycle to `ulw-work` after plan acceptance.
 - Why: Ralplan is a planning gate, not implementation, review, CI, or PR evidence.
 
 ## Completion Checklist
@@ -53,7 +54,7 @@ Bad example:
 - Observed repo facts and source/web evidence gaps are named.
 - At least two options or one chosen option plus rejected alternatives are recorded.
 - Risks, acceptance criteria, and verification commands are testable or explicitly blocked.
-- Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped.
+- Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped: the plan states the count of target-state differences and the count of `Success criteria` rows, and the two are equal or each gap is named as a user-excluded non-goal.
 - When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
 - The plan exists as a recorded file-backed artifact, not only as chat narration.
 - The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.
@@ -61,7 +62,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If requirements are still fuzzy, route back to deep-interview before planning.
+- If requirements are still fuzzy, route back to the `ulw-interview` workflow before planning.
 - If current-source evidence is missing, route a `ulw-research` step before accepting the plan.
 - If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`ulw-work` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
 
@@ -95,7 +96,7 @@ Quality bar:
 - When the plan describes code changes, name the raw material the work starts from instead of a digest of it - the failing log, trace, or data rather than the issue summary - and the methods and tools a leading practitioner of the field would use on it. Every verification step names an outside judge - a test, CI, a measurement, a human reviewer, or an external tool - never the planning model's or the executor's own reading of the result; a step with no outside judge is recorded as an evidence gap.
 - When the plan describes code changes, restate the deliverable once as the verbs it must accomplish rather than the noun it produces; when that brings in another field, write what a practitioner of that field does as a task (fuzz the parser, audit each completion claim against its evidence), never an instruction to write or speak like one.
 - Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.
-- When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.
+- When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `ulw-research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.
 - Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.
 - Take plan acceptance only from the answer the user gave — the response status and value the question tool returns, or the user's own reply — never from the wording of the question you asked: when the acceptance question times out, is dismissed, or returns with no answer, the plan stays unaccepted, so record no acceptance, prepare no handoff, and start nothing; a missing answer is not a refusal either, so ask again later or report the plan as awaiting acceptance.
 - End with a selected executor/runtime handoff shape only after the plan is accepted.

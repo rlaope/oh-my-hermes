@@ -35,7 +35,7 @@ class MarketResearchSkillTests(unittest.TestCase):
         for templates, name in ((builtin_skill_templates(), "research-brief"), (agent_skill_templates(), "omh-research-brief")):
             body = next(item.content for item in templates if item.name == name)
             for clause in (
-                "Use `market-research` for scoped TAM/SAM/SOM",
+                "Use `omh-market-research` for scoped TAM/SAM/SOM",
                 "decision implication, contrary evidence, confidence limit, and next verification owner",
                 "observed, vendor-asserted, or inferred",
                 "source cutoff, period/currency/base year, units and denominator",
@@ -50,7 +50,7 @@ class MarketResearchSkillTests(unittest.TestCase):
             "stable period, currency, units, source cutoff, and materiality threshold",
             "retain the failed source's previous cutoff",
             "observed, vendor-asserted, or inferred",
-            "hand the bounded analysis to `market-research`",
+            "hand the bounded analysis to `omh-market-research`",
             "Outreach, paid sources, and schedule creation require separate explicit approval",
         ):
             self.assertIn(clause, body)

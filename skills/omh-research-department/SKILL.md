@@ -10,7 +10,7 @@ metadata:
     phase: research-department
     role: researcher
     quality_tier: research-ops-gated
-    related_skills: [ulw-research, omh-research-brief, omh-automation-blueprint, competitor-news-monitor, arxiv]
+    related_skills: [omh-web-research, ulw-research, omh-research-brief, omh-automation-blueprint, competitor-news-monitor, arxiv]
 ---
 
 # Research Department
@@ -23,7 +23,7 @@ This is a Hermes-native `research-department` workflow skill.
 
 ## Do Not Use When
 
-- The user only needs a one-off current-source lookup; use `ulw-research`.
+- The user only needs a one-off current-source lookup; use `omh-web-research` for one cited round, or `ulw-research` for a reference-implementation study with a depth budget.
 - The user only needs a one-off business synthesis; use `omh-research-brief`.
 - The request is pure scheduling with no source collection or synthesis; use `omh-automation-blueprint`.
 - The user asks for coding implementation; prepare a selected executor/runtime handoff after the research plan is accepted.
@@ -46,9 +46,10 @@ Bad example:
 
 ## Completion Checklist
 
-- The research question, source boundaries, recency assumptions, and confidence level are named.
-- Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
-- Follow-up planning or handoff uses the research summary without calling it execution evidence.
+- research_department_plan/v1 names topic, cadence, delivery target, knowledge store and synthesis-tool readiness, each as supplied or missing.
+- Scout, Analyst and Briefer each map to a loadable skill; source_inbox/v1 has separate raw, processed, brief, conflict and verification buckets.
+- The watchlist, the materiality threshold and one cutoff per source are written down before the first run.
+- Any schedule is `not_observed` unless a `cronjob_manage` result or a cron listing was read.
 
 ## Recovery Notes
 
@@ -59,7 +60,7 @@ Bad example:
 ## Workflow Lane
 
 - Current lane: **Research and company ops** (`product-docs`, `source-finder`, `web-research`, `research`, `model-optimization`, `inference-serving`, `model-finetuning`, `research-brief`, `+28 more`) - research, signals, ops, and briefings.
-- If intent belongs to another lane, hand back to `oh-my-hermes` or name the adjacent workflow.
+- If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
@@ -90,7 +91,7 @@ Quality bar:
 - Count by the underlying event, not by article or URL: reprints, rewrites, and link variants of one announcement are one finding, and an independent second source stays attached to it as corroboration.
 - For market watches, keep a dated competitor/pricing snapshot per covered entity with source IDs, observation/effective dates, original packaging and normalized comparison units. Reuse a stable period, currency, units, source cutoff, and materiality threshold; record scope changes and distinguish a real change from changed source coverage.
 - Classify market findings as observed, vendor-asserted, or inferred and preserve contrary evidence. When coverage fails, retain the failed source's previous cutoff and name the uncovered window; do not turn a failed read into unchanged pricing or no new activity.
-- When a material event needs sizing, customer/JTBD, or comparable pricing work, hand the bounded analysis to `market-research` with snapshot IDs, source dates, cutoff, gaps and budget; return findings to `research-brief` before Briefer delivery. A prepared handoff does not prove any analysis ran.
+- When a material event needs sizing, customer/JTBD, or comparable pricing work, hand the bounded analysis to `omh-market-research` with snapshot IDs, source dates, cutoff, gaps and budget; return findings to `omh-research-brief` before Briefer delivery. A prepared handoff does not prove any analysis ran.
 - Outreach, paid sources, and schedule creation require separate explicit approval; research-operation setup is not permission to contact customers, buy data, schedule a watch, or approve a product investment.
 
 Handoff policy:
