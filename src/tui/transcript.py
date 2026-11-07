@@ -123,6 +123,7 @@ from .escapes import strip_escapes
 from .gateway import Event
 from . import gateway_contract as contract
 from .gateway_contract import TOOL_CALL_BRIDGE
+from .inline_image import Preview
 from .markdown import (
     GrowingLine,
     MarkdownState,
@@ -260,6 +261,9 @@ class UserBlock:
     known: frozenset[str] = frozenset()
     recorded: bool = False
     images: tuple[str, ...] = ()  # the labels of the images it went with, `[Image #1]`, one `⎿` row each under it
+    # What to draw under each label, by the same index: a checked preview (`inline_image.preview_from`), or None
+    # (or nothing, for an image past the end) where there is none.
+    previews: tuple[Preview | None, ...] = ()
 
 
 @dataclass
@@ -982,9 +986,10 @@ def _marked_spans(text: str, style: Style, theme: Theme, above: str = "") -> lis
 def _user_rows(block: UserBlock, width: int, theme: Theme, pending: bool = False) -> list[Line]:
     """Your prompt on a dim rail, behind a dim `❯`, in the muted colour (dim while it is a steer the turn has not
     taken in, `pending`); a `/name` that resolved to a command or skill bold in its colour (`slash_spans`);
-    `⧗ from queue` when the queue sent it; under it `  ⎿  [Image #1]` for each image it went with. Every row, a
-    wrapped or blank one too, runs on `theme.prompt_band` to the right edge, its words measured against the band
-    (`on_band`)."""
+    `⧗ from queue` when the queue sent it; under it `  ⎿  [Image #1]` for each image it went with, and under that
+    label the image's preview rows when it has one. Every row, a wrapped or blank one too, runs on
+    `theme.prompt_band` to the right edge, its words measured against the band (`on_band`); a preview cell keeps
+    its own background (a half-block's lower colour) and takes the band only where it has none."""
     band = theme.prompt_band
     theme = on_band(theme, band) if band.bg is not None else theme
     inner = max(width - len(RAIL), 1)
@@ -1000,9 +1005,18 @@ def _user_rows(block: UserBlock, width: int, theme: Theme, pending: bool = False
         tag: Line = (Span(COLUMN_GAP + FROM_QUEUE_TAG, theme.muted),)
         if line_width(rows[0]) + line_width(tag) <= inner:
             rows[0] = (*rows[0], *tag)
-    rows.extend((*_output_leads(theme)[0], Span(label, theme.muted)) for label in block.images)
+    previewed: set[int] = set()
+    for index, label in enumerate(block.images):
+        rows.append((*_output_leads(theme)[0], Span(label, theme.muted)))
+        preview = block.previews[index] if index < len(block.previews) else None
+        if preview is not None:
+            indent = _output_leads(theme)[1]
+            previewed.update(range(len(rows), len(rows) + len(preview.lines)))
+            rows.extend((*indent, *line) for line in preview.lines)
     rows = [_within((*_rail(theme.dim, faint=True), *row), width) for row in rows]
-    return _banded(rows, band) if band.bg is not None else rows
+    if band.bg is None:
+        return rows
+    return [_preview_banded(row, band) if index in previewed else _banded([row], band)[0] for index, row in enumerate(rows)]
 
 
 def _awaits_answer(block: Block) -> bool:
@@ -1040,6 +1054,14 @@ def _notice_style(level: str, theme: Theme) -> tuple[str, Style]:
 def _banded(rows: list[Line], band: Style) -> list[Line]:
     """`rows` on `band`: every span on its background and an erase to the right edge, so a copy has no trailing spaces."""
     return [(*(Span(span.text, replace(span.style, bg=band.bg, depth=band.depth)) for span in row), fill(band)) for row in rows]
+
+
+def _preview_banded(row: Line, band: Style) -> Line:
+    """A preview row on `band`: a cell that has a background of its own keeps it, the rest take the band's."""
+    return (
+        *(span if span.style.bg is not None else Span(span.text, replace(span.style, bg=band.bg, depth=band.depth)) for span in row),
+        fill(band),
+    )
 
 
 def _outcome_band(level: str, theme: Theme) -> Style | None:
@@ -1640,11 +1662,11 @@ class Transcript:
 
     def add_user(
         self, text: str, from_queue: bool = False, known: frozenset[str] = frozenset(), recorded: bool = False,
-        images: tuple[str, ...] = (),
+        images: tuple[str, ...] = (), previews: tuple[Preview | None, ...] = (),
     ) -> None:
         """Your prompt; `known` names the commands and skills a `/name` in it is drawn for (`slash.known_names`);
-        `recorded` for one from the session's history; `images` the labels of the images it went with."""
-        self._append(UserBlock(text, from_queue=from_queue, known=known, recorded=recorded, images=images))
+        `recorded` for one from the session's history; `images` the labels of the images it went with, `previews` what is drawn under each."""
+        self._append(UserBlock(text, from_queue=from_queue, known=known, recorded=recorded, images=images, previews=previews))
 
     def resolve_recorded_prompts(self, known: frozenset[str], width: int, theme: Theme, max_rows: int) -> bool:
         """The history's prompts take `known`, the session's catalog, which answers after they are drawn (`App.startup`
