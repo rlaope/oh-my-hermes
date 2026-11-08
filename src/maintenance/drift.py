@@ -1010,7 +1010,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # sentences and fresh ones with an ordinary anchor-like word beside a shared phrase (+24).
             # Its second review round: billions of money, data or volume, game, pixel-art and 3D bit widths,
             # grid transformers and firmware quantization stay off it (+18).
-            expected=1508,
+            # Its third review round: two billions of money or data, each followed by a noun, stay off it (+4).
+            expected=1512,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

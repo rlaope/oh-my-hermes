@@ -103,7 +103,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # statistics, 3D, game, signal or know-how word beside a shared phrase.
         # Its second review round adds eighteen: billions that are money, data or
         # volume, game and 3D bit widths, grid transformers, firmware quantization.
-        self.assertEqual(payload["summary"]["case_count"], 1508)
+        # Its third review round adds four: two billions of money or data.
+        self.assertEqual(payload["summary"]["case_count"], 1512)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
