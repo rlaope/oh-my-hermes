@@ -115,7 +115,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Use when: Use when the user opens a message with the /omh or ./omh command followed by an imperative task; reason over the task, consult the live OMH catalog, and select or chain the right workflow(s).
 - Do not use when:
   - The /omh token is not the leading command token.
-  - The message is a bare picker alias or an OMH catalog/entrypoint question — those belong to oh-my-hermes.
+  - The message is a bare picker alias or an OMH catalog/entrypoint question — those belong to `oh-my-hermes`.
 - Strong routing signals: `/omh`, `./omh`
 - Good example:
   - Prompt: /omh migrate this service off the deprecated API and add tests
@@ -255,7 +255,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - Prefer the native `omh_loop` tool when the plugin is loaded: assess, start, status, feedback, permit, run_once, goal_driver_observe, and queue_observe reach the same loop_cycle/v2 state, and a mutation submits the record_revision that status reported. Where it is absent, the same lifecycle is `omh loop assess|start|status|feedback|permit|run-once|goal-driver-observe|queue observe`, and every other Loop surface stays on that CLI.
   - If a queued tick is pending, show it as prepared queue state and use loop status/run-once before claiming progress.
-  - If feedback is unclear, ask one gate question or route back to research/plan rather than advancing the loop.
+  - If feedback is unclear, ask one gate question or route back to `research` or `plan` rather than advancing the loop.
   - If the goal turns into external waiting, record the waiting state and next observable signal instead of continuing locally.
   - Checkpoint on context/budget exhaustion. Migrate loop_cycle/v1 with migrate-driver --apply before external binding.
   - Resume paused native goals with re-registered gates; external goals follow driver recovery. Transfers require observed stopped/absent reconciliation; handoffs never dispatch.
@@ -488,7 +488,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Bad example:
   - Prompt: Design a six-week Python syllabus with weekly assessments.
   - Expected behavior: Route to `curriculum-design` because the target is already chosen and the requested output is a sequenced curriculum.
-  - Why: Just-in-time target selection should not displace an explicit curriculum-design request.
+  - Why: Just-in-time target selection should not displace an explicit `curriculum-design` request.
 - Quality bar:
   - Resolve urgency/trigger, current level, and application window with one question per turn, while stopping early once all three are clear after the mandatory first answer.
   - Confirm one target in the form `Learn X now so I can do/decide Y in context Z by T.` before source research.
@@ -527,7 +527,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - prepared Markdown learning brief with observed source links and explicit retrieval gaps when a wrapper captures it
 - Safety rules:
   - Always ask at least one confirmation question before research, exactly one question per turn, even when the initial request appears complete.
-  - Use the shared deep-interview ceiling of 6 rounds and its early-stop discipline; do not create a second interview budget.
+  - Use the shared `deep-interview` ceiling of 6 rounds and its early-stop discipline; do not create a second interview budget.
   - Use only the current conversation and reviewed or explicitly approved OMH context; never claim hidden Hermes memory or create a persistent learner profile.
   - Admit recommendations only from primary, institutional, or credible practitioner evidence whose authority, currency, availability, and link can be checked; report retrieval gaps instead of inventing support.
   - Never use bestseller status, ratings, follower counts, charts, generic popularity, or unsupported reputation as admission or ranking evidence.
@@ -591,7 +591,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When adapting an existing capability, load `skill_view(name='omh-verification-gate', file_path='references/adaptation-quality.md')` before accepting a plan, dispatching work, or claiming completion; carry its criteria and comparisons into tasks and evidence.
   - Attach acceptance criteria, verification commands, and review expectations to each lane.
   - Keep dispatch, execution, review, CI, and merge status evidence separate.
-  - After final brief composition and before unattended coding handoff, explicitly run `omh handoff-risk-scan --brief-file <final-brief> --repo <workspace> --strict --json`. Route high_risk (exit 1) to existing confirmation or security-safety-review; scan_error (exit 2) requires repaired input and a new scan. Clear never grants permission or bypasses metadata preflight, approval, or host policy.
+  - After final brief composition and before unattended coding handoff, explicitly run `omh handoff-risk-scan --brief-file <final-brief> --repo <workspace> --strict --json`. Route high_risk (exit 1) to existing confirmation or `security-safety-review`; scan_error (exit 2) requires repaired input and a new scan. Clear never grants permission or bypasses metadata preflight, approval, or host policy.
   - Write each lane prompt to the node prompt contract and close every code-changing run with the verification fan-in; `references/dependency-topology.md` holds both.
   - For each behavioral increment follow PIN -> RED -> GREEN -> SURFACE -> CLEAN: pin behavior a refactor could hide, capture the intended failing proof before implementation, make the smallest change, exercise the real user surface, and tear down every QA resource with a cleanup receipt; tests alone never prove completion.
   - Keep one inspectable, append-only evidence ledger for the run using the available goal/runtime records: record the tier decision, dependency topology, todo transitions, command outputs, real-surface artifacts, and cleanup receipts when each occurs.
@@ -599,7 +599,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - [capability:coordinated_scope] Keep Hermes as coordinator and status narrator for lane framing and status while coding lanes become runtime handoffs with explicit ownership.
   - [capability:delivery_boundary] Complete exactly one plan-to-PR delivery cycle, then stop with status, evidence gaps, or a next recommended workflow.
   - [capability:delivery_boundary] Start a delivery cycle with codebase/source research and a ralplan-style decision record before implementation handoff.
-  - [capability:delivery_boundary] Run code-review as a gate after implementation evidence exists; review preparation alone is not review evidence.
+  - [capability:delivery_boundary] Run `code-review` as a gate after implementation evidence exists; review preparation alone is not review evidence.
   - [capability:delivery_boundary] End a delivery cycle with a PR-ready or PR-observed report that separates prepared, executed, reviewed, verified, CI, and PR evidence.
   - [capability:delivery_boundary] For implementation, default to Hermes-native delegation with a per-lane `omh_delegate_route` mixture route and acceptance criteria and verification commands attached; hand off to the `durable_checkpoint` capability for work that must survive sessions, and prepare a selected external executor/runtime path only on the user's explicit owner acceptance.
   - When a lane's coding owner is an external CLI rather than the Hermes harness, that lane's handoff runs under `ulw-maestro`'s contract — load it and follow it whole; a lane with an external owner is never a Hermes-native `delegate_task` lane. Lane framing, disjointness, integration verification, and the closing brief stay here.
@@ -663,7 +663,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - [capability:coordinated_scope] Use coordination lanes only when work is independent; if two lanes are not independent, collapse them under one owner or re-plan before dispatch.
   - [capability:coordinated_scope] Keep shared-file edits under one owner; if integration reveals a shared-file conflict, stop lane fan-out and reassign ownership before continuing.
   - [capability:coordinated_scope] Record unobserved delegation as not_observed; a delegation record exists only when separate participants are observed.
-  - [capability:delivery_boundary] Do not continue into a repeated feedback loop; recommend `loop` when the user wants ongoing cycles.
+  - [capability:delivery_boundary] Do not continue into a repeated feedback loop; recommend `ulw-loop` when the user wants ongoing cycles.
   - [capability:delivery_boundary] Do not skip planning when the delivery request is broad, risky, or user-visible; a ralplan-style or reviewed plan names acceptance criteria, risks, and verification commands.
   - [capability:delivery_boundary] Run docs sync only when behavior, setup, commands, examples, or public claims changed.
   - [capability:delivery_boundary] Keep web research source-backed and permission-aware; do not run hidden network or LLM calls from OMH core.
@@ -693,7 +693,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user is asking whether an owner CAN run right now -- use `executor-runtime-readiness` instead.
   - The request is lane-splitting or a full delivery cycle rather than one lane's handoff -- use `ultrawork`, which enters this engine for lanes with an external owner.
   - The user wants a coding task handed straight to the Claude Code, Codex, or opencode CLI in the terminal, with no prompt composed from that CLI's own installed skills -- load Hermes' bundled `claude-code`, `codex`, or `opencode` skill instead of this one.
-- Strong routing signals: `$maestro`, `ulw-maestro`, `coding handoff`, `prepare the handoff`, `prepare a coding handoff`, `hand off the coding work`, `external executor handoff`, `handoff prompt`, `delegation prompt`, `コーディング委任`, `委任プロンプト`, `ハンドオフを準備`, `外部の実行エージェントに渡す`, `코딩 위임`, `위임 프롬프트`, `핸드오프 준비`, `외부 실행기 위임`, `코딩 에이전트에 넘기`, `передай кодексу`, `отдай задачу агенту`, `подготовь хэндофф`, `подготовь делегирование`, `编码委托`, `移交提示词`, `准备交接`, `交给编码代理`, `siapkan handoff coding`, `buat prompt delegasi untuk agen coding`, `susun instruksi implementasi untuk eksekutor coding`, `siapkan serah terima ke agen coding pilihan saya`, `bantu bikin brief untuk eksekutor coding`, `kemas tugas coding untuk agen yang sudah dipilih`, `chuẩn bị bàn giao coding`, `tạo prompt ủy quyền cho agent coding`, `lập hướng dẫn thực hiện cho trình thực thi coding`, `chuẩn bị bàn giao cho agent coding đã chọn`, `giúp viết brief cho trình thực thi coding`, `đóng gói công việc coding cho agent đã chọn`
+- Strong routing signals: `$maestro`, `ulw-maestro`, `coding handoff`, `prepare the handoff`, `prepare a coding handoff`, `hand off the coding work`, `external executor handoff`, `handoff prompt`, `delegation prompt`, `コーディング委任`, `委任プロンプト`, `ハンドオフを準備`, `外部の実行エージェントに渡す`, `코딩 위임`, `위임 프롬프트`, `핸드오프 준비`, `외부 실행기 위임`, `코딩 에이전트에 넘기`, `코딩 에이전트에 넘길`, `передай кодексу`, `отдай задачу агенту`, `подготовь хэндофф`, `подготовь делегирование`, `编码委托`, `移交提示词`, `准备交接`, `交给编码代理`, `siapkan handoff coding`, `buat prompt delegasi untuk agen coding`, `susun instruksi implementasi untuk eksekutor coding`, `siapkan serah terima ke agen coding pilihan saya`, `bantu bikin brief untuk eksekutor coding`, `kemas tugas coding untuk agen yang sudah dipilih`, `chuẩn bị bàn giao coding`, `tạo prompt ủy quyền cho agent coding`, `lập hướng dẫn thực hiện cho trình thực thi coding`, `chuẩn bị bàn giao cho agent coding đã chọn`, `giúp viết brief cho trình thực thi coding`, `đóng gói công việc coding cho agent đã chọn`
 - Good example:
   - Prompt: $maestro codex already agreed to take this -- compose the handoff prompt for the retry-queue fix.
   - Expected behavior: Confirm codex as the accepted owner, discover its installed skills, compose a role-arranged prompt with the required sections, and state the dispatchable handoff mode.
@@ -755,7 +755,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### research
 
-[omh] Deep dive before a decision: deep research engine - grounding for specs and decisions: study open-source reference implementations with pinned refs, gather live web evidence with citation discipline, verify contested claims, and distill a decision-grounding dossier that planning consumes; for a decision brief use research-brief, for upstream guidance use web-research.
+[omh] Deep dive before a decision: deep research engine - grounding for specs and decisions: study open-source reference implementations with pinned refs, gather live web evidence with citation discipline, verify contested claims, and distill a decision-grounding dossier that planning consumes; for a decision brief use `research-brief`, for upstream guidance use `web-research`.
 
 - Category: `research`
 - Phase: `decision-grounding`
@@ -826,7 +826,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If no archive access exists or the capture provider's paid authority is exhausted, record a temporal retrieval gap with no network action and keep the as-of claim in the annex; never substitute the current page for it.
   - If the evidence stays thin or contested, lower the stated confidence and keep the unresolved claims in the annex rather than flattening them.
   - If leads keep expanding past the declared budget, stop, record open leads in the dossier, and ask whether to extend the budget.
-  - If enough evidence already exists and the real request is planning, hand off to ralplan with the recorded dossier.
+  - If enough evidence already exists and the real request is planning, hand off to `ralplan` with the recorded dossier.
   - If the audience answer arrives after retrieval started, keep the evidence and re-render rather than re-running: the dossier feeds both branches.
 - Required inputs:
   - research question
@@ -886,7 +886,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run as a Hermes-side web retrieval lane: Hermes fetches and cites, and reports a retrieval gap when the web is unreachable instead of answering from recall.
-- Why this exists: `web-research` exists so a current-facts question returns a cited answer in one retrieval round, without the declared depth budget, reference-implementation study, and dossier that `research` requires.
+- Why this exists: `web-research` exists so a current-facts question returns a cited answer in one retrieval round, without the declared depth budget, reference-implementation study, and dossier that `ulw-research` requires.
 - First steps:
   - Discover the current search/read tools and authorized scope, then follow `references/search-method.md`: plan -> actual host search/read -> merge -> assess -> bounded retry. Use `omh_search` only when available; otherwise report the skill-only fallback. Keep direct file lookups direct.
 - Use when: Use when the answer depends on current external facts that one round of cited web retrieval can settle, with no reference-implementation study and no declared depth budget.
@@ -894,6 +894,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The decision needs reference-implementation study, a declared depth budget, or a decision-grounding dossier; use `research`.
   - The output is a typed candidate inventory and acquisition status rather than an answer; use `source-finder`.
   - The ask is a market, competitor, pricing, or customer decision brief; use `research-brief`.
+  - Market sizing, a customer-evidence matrix, or a competitor or pricing profile is the deliverable; use `market-research`.
   - The user wants recurring monitoring, a source inbox, or Scout/Analyst/Briefer operations; use `research-department`.
   - The user wants to configure or cheapen web search itself, such as a provider API key or a search or extract backend or tier; use `websearch-setup`.
   - The study target is this repository rather than the open web; use `codebase-onboarding`.
@@ -915,7 +916,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Keep historical-capture evidence and live-page evidence as two typed surfaces for a point-in-time or then-versus-now question; capture time, publication time, and retrieval time are independent clocks and none substitutes for another.
   - When Hermes' bundled `grounded-citations` skill is available, load it and register each source in its ledger when it is retrieved (`scripts/sources.py add`), before any prose is written; cite a source only by the id the ledger gave it, written `[n]`. Keep the run's ledger in a file of its own, passed as `--ledger <path>` before the subcommand on every call: the default ledger is shared by the whole profile, and another run's reset rebinds its ids. Mark background that rests on model knowledge `[unverified]` instead of citing it: the marker is for background the answer does not rest on and never carries the answer, and a contested claim with a single source keeps its citation and is stated as uncorroborated. The ledger id sits beside the source class and the retrieval date and replaces neither. Without the skill, list each source when it is retrieved and cite it at the claim it supports.
   - When that ledger is in use, report the citation check from a run, or as `not_observed`: the exit status of `sources.py verify <draft>` is the observed check - `0` is a pass and any other status is not - and `verify --evidence` also fails a draft whose cited source carries no verbatim quote. An exit `0` whose `info: stats:` line reads `0 distinct source(s) cited` checked nothing and is reported as `not_observed`, and so is an answer given only in chat: `verify` reads a draft file and exits `2` without one, so write the answer to a file first when the check matters. The run compares cited ids and the Sources block with the ledger; it does not test whether a claim is true, so a passing citation check is never reported as fact verification. After that verify, run `omh research receipts verify --citations <ledger> --draft <draft>` and report its fetched coverage from the run, or as `not_observed`; a receipt proves only that the page was opened in this session tree, never that it supports the claim. Without the ledger the citation check is `not_observed`.
-  - Stop at the answer: one retrieval round settles a lookup, plus at most the one follow-up the plan issues; a follow-up that still leaves required conditions unsupported, or an expanding lead list, means the request belongs to `research`.
+  - Stop at the answer: one retrieval round settles a lookup, plus at most the one follow-up the plan issues; a follow-up that still leaves required conditions unsupported, or an expanding lead list, means the request belongs to `ulw-research`.
   - Report what retrieval did not yield rather than closing the gap from recall.
 - Completion checklist:
   - The research question, source boundaries, recency assumptions, and confidence level are named.
@@ -1018,7 +1019,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### source-finder
 
-[omh] Gathering candidate papers, datasets, or repos: source candidate inventory - prepare typed source candidates and acquisition status before downstream work; use ulw-research to fetch and cite them, or research-brief to turn them into a decision-ready brief.
+[omh] Gathering candidate papers, datasets, or repos: source candidate inventory - prepare typed source candidates and acquisition status before downstream work; use ulw-research to fetch and cite them, or `research-brief` to turn them into a decision-ready brief.
 
 - Category: `research`
 - Phase: `source-acquisition`
@@ -1035,7 +1036,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Why this exists: `source-finder` exists so Hermes can turn vague source discovery requests into typed candidates, acquisition status, and downstream workflow choice without pretending OMH searched, downloaded, or verified the material.
 - First steps:
   - Discover the current search/read tools and authorized scope, then follow `references/search-method.md`: plan -> actual host search/read -> merge -> assess -> bounded retry. Use `omh_search` only when available; otherwise report the skill-only fallback. Keep direct file lookups direct.
-- Use when: Use when the requested output is a typed source candidate inventory and acquisition status across papers, web links, datasets, GitHub repositories, public presentations, docs/specs, or unknown source material before choosing paper-learning, research, research-brief, research-department, materials-package, or an ultrawork delivery cycle.
+- Use when: Use when the requested output is a typed source candidate inventory and acquisition status across papers, web links, datasets, GitHub repositories, public presentations, docs/specs, or unknown source material before choosing `paper-learning`, `research`, `research-brief`, `research-department`, `materials-package`, or `ultrawork` for a delivery cycle.
 - Do not use when:
   - The requested output is factual findings, comparison, or a summary rather than a typed candidate inventory and acquisition status; use `research`.
   - The user needs a business decision brief with evidence-versus-inference treatment; use `research-brief`.
@@ -1087,12 +1088,12 @@ These surfaces are generated command references, not installed Hermes workflow s
   - source_finder_plan/v1 under .omh/source-finder when a wrapper or CLI records it
 - Safety rules:
   - Do not claim web search, download, repository clone, file extraction, file hash verification, license verification, or source correctness from a prepared candidate.
-  - Do not redefine research-department's source_inbox/v1; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.
-  - Route current citations and source-backed synthesis to `research`, supplied-paper explanation to `paper-learning`, recurring monitoring to `research-department`, file export to `materials-package`, and image cards to `img-summary`.
+  - Do not redefine `research-department`'s source_inbox/v1; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.
+  - Route current citations and source-backed synthesis to `ulw-research`, supplied-paper explanation to `paper-learning`, recurring monitoring to `research-department`, file export to `materials-package`, and image cards to `img-summary`.
 
 ### research-brief
 
-[omh] Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief; for raw link gathering use ulw-research, and for ongoing multi-role research use research-department.
+[omh] Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief.
 
 - Category: `research`
 - Phase: `business-brief`
@@ -1112,6 +1113,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user needs to decide whether a customer problem deserves product investment with evidence typing and customer re-entry; use `product-discovery-validation`.
   - The request is only fresh links, citations, or current facts without a business question or decision audience; use `web-research` for one cited lookup, or `research` for a depth-budget study.
   - Sources have not yet been selected and the user wants source types, candidates, or acquisition state; use `source-finder`.
+  - A scoped TAM/SAM/SOM model, customer-evidence matrix, or comparable competitor or pricing profile is the deliverable; use `market-research`, then return here for the audience synthesis.
   - The research is recurring and run by several roles; use `research-department`.
 - Strong routing signals: `research-brief`, `business-research`, `business research`, `research brief`, `decision brief`, `pricing decision brief`, `decision-ready brief`, `source-backed business research`, `customer feedback trends`, `feedback trends`, `market evidence`, `data search`, `source scan`, `자료 조사`, `데이터 서치`, `근거 조사`, `피드백 추세`, `고객 피드백 추세`
 - Good example:
@@ -1158,7 +1160,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### research-department
 
-[omh] Recurring market or topic research: research operations department - coordinate Scout, Analyst, and Briefer work with source-inbox and status boundaries; for one decision brief use research-brief, and for typed candidates before research starts use source-finder.
+[omh] Recurring market or topic research: research operations department - coordinate Scout, Analyst, and Briefer work with source-inbox and status boundaries; for one decision brief use `research-brief`, and for typed candidates before research starts use `source-finder`.
 
 - Category: `research`
 - Phase: `research-department`
@@ -1347,7 +1349,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When the decision is a resourcing one — hire, outsource, or cut scope — quantify demand and capacity against each other in one unit before comparing options, and price each option with the lag before it lands; a gap that exists this quarter is not closed by a hire that ramps next quarter. The worked example is `omh-decide/references/capacity-planning.md`.
   - Ask whether the decision deserves a durable record - hard to reverse, surprising without its context, and carrying a real trade-off; all three or no record, a decision note in chat is enough.
   - When a record is warranted, draft it per `omh-decide/references/decision-records.md` - the `docs/adr/` convention with Context, Drivers, Considered Options, Decision, Consequences with mitigations, and Related - and stop for the user's approval before any file is written.
-  - Never edit an accepted record: status moves Proposed to Accepted to Deprecated or Superseded, supersession is a new record pointing back at the old one, and a Rejected record is kept - it is what `decision-recall` reads later.
+  - Never edit an accepted record: status moves Proposed to Accepted to Deprecated or Superseded, supersession is a new record pointing back at the old one, and a Rejected record stays in the decision log for later readers; `decision-recall` covers memory candidates a person rejected, not these records.
 - Completion checklist:
   - The decision, options, tradeoffs, assumptions, and rejected alternatives are named.
   - Observed signals are separated from strategic inference.
@@ -1790,7 +1792,7 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Output refs: `legal_scope_authority_record/v1`
     - Check IDs: `legal_authority_citation_check`, `legal_final_determination_guard`
     - If this step fails: unresolved; still stands: `legal_scope_authority_record/v1`; hand back: Return legal_scope_authority_record/v1 with scope facts intact and each missing, stale or unverified authority, pinpoint and effective status listed for research or counsel.
-    - Instruction: Create a citation ledger using only supplied or observed sources, exact pinpoints and effective status; route absent authority to research or counsel instead of filling it in.
+    - Instruction: Create a citation ledger using only supplied or observed sources, exact pinpoints and effective status; route absent authority to `research` or counsel instead of filling it in.
   - `legal_map_issues_exceptions` (`analysis`)
     - Input refs: `jurisdiction`, `document or process version`, `supplied authority`, `review objective`
     - Output refs: `legal_issue_traceability_matrix/v1`
@@ -2259,7 +2261,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The review is over sales stages, forecast categories, deal aging, or seller forecast rather than generic operating status; use `sales-pipeline-review`.
   - The primary output is durable cadence history, minutes, a decision log, or action history; use `operating-rhythm`.
-- Strong routing signals: `ops-review`, `ops review`, `weekly ops review`, `status review`, `operating review`, `release risks`, `risks and blockers`, `priorities`, `weekly status`, `운영 리뷰`, `주간 운영`, `상태 리뷰`, `리스크`, `블로커`, `우선순위`, `릴리즈 리스크`
+- Strong routing signals: `ops-review`, `ops review`, `weekly ops review`, `status review`, `operating review`, `release risks`, `risks and blockers`, `weekly status`, `운영 리뷰`, `주간 운영`, `상태 리뷰`, `릴리즈 리스크`, `리스크랑 블로커`, `리스크와 블로커`, `우선순위랑 블로커`
 - Good example:
   - Prompt: ops-review: summarize this week’s support queue, release blockers, owner status, and next operating risks.
   - Expected behavior: Create an operations status review with owners, blockers, evidence gaps, and next actions.
@@ -2449,7 +2451,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The user only needs a weekly/monthly report outline; use `report-package`.
   - The user asks for recurring meeting minutes or scrum history; use `operating-rhythm`.
-  - The request is code documentation, README, or project wiki maintenance; use the docs/wiki workflow.
+  - The request is code documentation, README, or project wiki maintenance; use `wiki`.
   - The user wants an operation done on one existing file - fill a PDF form, merge or split PDFs, or edit the text of a Word document, the slides of a deck, or the cells of a workbook - rather than a material plan with an export and QA ladder; load Hermes' bundled `pdf`, `docx`, `powerpoint`, or `xlsx` skill (`microsoft-office` from v0.22.6) for that file instead of this one.
 - Strong routing signals: `materials-package`, `material package`, `materials package`, `document package`, `deck file`, `binary export`, `file export`, `render qa`, `layout qa`, `ppt and pdf`, `pdf and ppt`, `ppt/pdf`, `pdf/ppt`, `spreadsheet to pdf`, `excel to pdf`, `monthly report pdf`, `attached spreadsheet`, `word document`, `word doc`, `document action items`, `compare pdfs`, `pdf differences`, `extract tables from pdf`, `pdf to csv`, `spreadsheet analysis brief`, `clean analysis brief`, `pdf`, `pptx`, `keynote`, `keynote deck`, `docx`, `xlsx`, `csv report`, `spreadsheet`, `excel`, `hwp`, `korean hwp`, `proposal document`, `PDF`, `HWP`, `첨부한 엑셀`, `첨부한 워드`, `워드 문서`, `PDF 두 개 비교`, `PDF 표를 CSV`, `PDF 표 추출`, `분석 브리프`, `엑셀을 월간 보고서`, `자료 패키지`, `자료 처리`, `자료 생성`, `문서 패키지`, `문서 생성`, `제안서 문서`, `엑셀`, `스프레드시트`, `피디에프`, `한글 문서`, `키노트`, `파일 export`, `파일 생성`, `렌더 QA`, `PDF랑 PPT`, `PPT랑 PDF`, `PDF와 PPT`, `PPT와 PDF`, `PDF랑 PPT로`
 - Good example:
@@ -2628,7 +2630,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Start with mode, target, convention, and available evidence; choose directions before visuals when open.
   - Load `references/platform-foundations.md`, `references/materials-and-accessibility.md`, `references/product-visual-production.md`, `references/web-production-libraries.md`, and `references/review-playbook.md` for their named boundaries.
   - For product work, use reference -> actual production -> same-subject comparison -> revision. Motion needs frames, video, or browser evidence and a reduced-motion alternative; do not award an Apple score.
-  - Findings name evidence, impact, source/applicability, fix, owner, and missing check; route implementation to the selected owner and proof to accessibility-audit or visual-qa.
+  - Findings name evidence, impact, source/applicability, fix, owner, and missing check; route implementation to the selected owner and proof to `accessibility-audit` or `visual-qa`.
 - Completion checklist:
   - Target, convention, state, and evidence are explicit.
   - Each direction or finding names evidence, source applicability, owner, and missing verification; product visuals name original art direction.
@@ -2645,7 +2647,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - apple_visual_direction/v1
   - apple_design_finding/v1 with severity, location/evidence, impact, source/applicability, fix, owner, and missing checks
   - two to four design directions before visual work when direction is open
-  - composed remediation route to frontend, design-quality-gate, accessibility-audit, visual-qa, or award-bar-score
+  - composed remediation route to `frontend`, `design-quality-gate`, `accessibility-audit`, `visual-qa`, or `award-bar-score`
 - Artifact expectations:
   - prepared Apple design brief with observations and hypotheses distinguished
   - prepared product-visual handoff when no authorized execution path exists
@@ -2693,7 +2695,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: The request delegates broad design ownership while leaving implementation and observed QA to the appropriate owners.
 - Bad example:
   - Prompt: design-orchestration already rendered and visually passed the new page.
-  - Expected behavior: Keep rendering and visual PASS not_observed; route the required capture and verdict work to visual-qa.
+  - Expected behavior: Keep rendering and visual PASS not_observed; route the required capture and verdict work to `visual-qa`.
   - Why: A prepared orchestration contract cannot create implementation or rendered evidence.
 - Quality bar:
   - Make the design job, context boundary, direction, downstream lane ownership, and visual evidence requirements readable before handoff.
@@ -2716,7 +2718,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - design_direction_set/v1 when the direction is still open
   - design intent and opaque context-reference boundary
   - prepared direction vocabulary
-  - downstream composition: design-quality-gate, frontend, accessibility-audit, visual-qa
+  - downstream composition: `design-quality-gate`, `frontend`, `accessibility-audit`, `visual-qa`
   - executor-neutral handoff with executor_selection_required
   - visual evidence requirements with visual_verdict not_observed
 - Artifact expectations:
@@ -2726,7 +2728,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - no raw project source, prompt, asset, path, or URL retention
   - no executor target, dispatch, implementation, render, QA PASS, review, CI, deployment, or merge claim
 - Safety rules:
-  - Preserve the existing direct owners: design-quality-gate for premium multi-format quality, frontend for web implementation/design-system work, accessibility-audit for semantic access review, and visual-qa for fresh rendered verdicts.
+  - Preserve the existing direct owners: `design-quality-gate` for premium multi-format quality, `omh-frontend` for web implementation/design-system work, `accessibility-audit` for semantic access review, and `visual-qa` for fresh rendered verdicts.
   - Do not use a prepared direction to claim code, screenshots, browser QA, accessibility PASS, review, CI, deployment, or merge.
   - Keep free-form briefs in Hermes conversation context; persist only closed vocabulary and opaque reference metadata in the deterministic artifact.
   - Do not call Claude Design, Figma, Open Design, an image provider, browser, network service, daemon, or executor from OMH core.
@@ -2797,7 +2799,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - layout_validation_plan/v1
   - visual_qa_evidence/v1 when observed
   - publishing_readiness/v1
-  - downstream route: frontend, materials-package, img-summary, or deliverable-package
+  - downstream route: `omh-frontend`, `materials-package`, `img-summary`, or `deliverable-package`
 - Artifact expectations:
   - design_quality_gate/v1 when prepared
   - surface_quality_matrix/v1 with web: responsive viewport, deck/PPT: slide rhythm, PDF/poster: print-safe, and accessibility/CJK checks
@@ -2808,7 +2810,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Require references/rubric plus fresh render QA before PASS.
   - Never claim PPTX, PDF, deployment, poster export, image generation, or publication without observed evidence.
   - Separate content, taste, layout, accessibility, render fidelity, and delivery checks.
-  - Route web to frontend, binary files to materials/deliverable package, and image cards to img-summary.
+  - Route web to `frontend`, binary files to `materials-package` or `deliverable-package`, and image cards to `img-summary`.
   - For Korean/CJK text, awkward breaks, clipped glyphs, orphan particles, or tiny copy block visual QA.
   - Do not call a result high-quality unless it is compared against a named ordinary-output baseline or references.
 
@@ -2827,9 +2829,9 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Compatibility alias: `false`
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
-- Handoff policy: Keep axis scoring, the weighted total, the binding-constraint call, and the tradeoff ledger in Hermes. Route implementation to frontend, WCAG evidence to accessibility-audit, and rendered captures to visual-qa; never score an axis from a description of a page instead of the page.
+- Handoff policy: Keep axis scoring, the weighted total, the binding-constraint call, and the tradeoff ledger in Hermes. Route implementation to `frontend`, WCAG evidence to `accessibility-audit`, and rendered captures to `visual-qa`; never score an axis from a description of a page instead of the page.
 - Why this exists: `award-bar-score` gives "make it award-winning" a measurable meaning: published axes, published weights, a published threshold, and the one axis holding the surface below it — instead of a taste argument nobody can settle.
-- Use when: Use when a web surface must be judged against an external award bar: per-axis scores for UI, UX, and innovation, the weighted total against the published threshold, and the one axis holding the score down.
+- Use when: Use when a web surface must be judged against an external award bar: per-axis scores for the axes the chosen award body publishes, the weighted total against the published threshold, and the one axis holding the score down.
 - Do not use when:
   - The request is broad premium quality across decks, PDFs, or posters; use `design-quality-gate`.
   - The request is frontend implementation, layout, or design-system work; use `frontend`.
@@ -2857,7 +2859,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Any innovation move that costs accessibility or performance budget is recorded as a tradeoff the user chooses.
   - No award, jury, placement, or selection outcome is claimed.
 - Recovery notes:
-  - If no rendered evidence exists, keep every axis not_observed and route the capture to visual-qa before scoring.
+  - If no rendered evidence exists, keep every axis not_observed and route the capture to `visual-qa` before scoring.
   - If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.
   - If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.
 - Required inputs:
@@ -2871,7 +2873,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - the weighted total and its distance from the published threshold
   - the binding constraint: the axis whose gain moves the total most
   - tradeoff_ledger/v1 when an innovation move costs accessibility or performance budget
-  - downstream route: frontend, accessibility-audit, visual-qa, or design-quality-gate
+  - downstream route: `omh-frontend`, `accessibility-audit`, `visual-qa`, or `design-quality-gate`
 - Artifact expectations:
   - award_bar_score/v1 with prepared_not_observed status
   - every axis score cites the rendered evidence it was read from, or stays not_observed
@@ -2908,7 +2910,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user only needs a file, deck, PDF, spreadsheet, HWP, or attachment package; use `materials-package` or `deliverable-package`.
   - The user only needs an image card or infographic prompt; use `img-summary`.
   - The user asks to mark a UI as visually passed without fresh rendered evidence; use `visual-qa` and keep PASS blocked until observed.
-- Strong routing signals: `frontend`, `front-end`, `front end`, `frontend skill`, `in the frontend`, `on the frontend`, `to the frontend`, `web ui`, `ui ux`, `ui/ux`, `landing page`, `web app layout`, `responsive layout`, `responsive design`, `design system`, `component polish`, `layout polish`, `visual polish`, `styling`, `animation`, `motion design`, `smooth scroll`, `smooth scrolling`, `scroll animation`, `scroll animations`, `parallax scroll`, `parallax hero`, `parallax effect`, `chart styling`, `chart theming`, `chart colors`, `dashboard charts`, `style the charts`, `theme the charts`, `tooltip`, `footer design`, `better footer`, `site footer`, `website footer`, `neobrutalism`, `neobrutalism style`, `neobrutalist`, `neo brutalism`, `neo-brutalism`, `logo marquee`, `marquee animation`, `scrolling marquee`, `split text animation`, `split-text animation`, `shadcn`, `component registry`, `three.js scene`, `threejs scene`, `webgl scene`, `voxel scene`, `voxel art scene`, `accessibility`, `wcag`, `lighthouse`, `core web vitals`, `make it beautiful`, `make it premium`, `make it less ai`, `ai-looking ui`, `ai slop ui`, `slop ui`, `looks like ai slop`, `look like ai slop`, `feels like ai slop`, `screams ai slop`, `generic ui`, `broken layout`, `layout broken`, `frontend qa`, `frontend layout`, `tui design`, `terminal ui design`, `tui layout`, `フロントエンド`, `ランディングページ`, `レスポンシブ対応`, `デザインシステム`, `画面のUI実装`, `スムーススクロール`, `スクロールアニメーション`, `パララックス`, `チャートのスタイル`, `チャートスタイル`, `フッターデザイン`, `ネオブルータリズム`, `ロゴマーキー`, `프론트엔드`, `웹 ui`, `웹 화면`, `랜딩페이지`, `레이아웃`, `레이아웃 깨짐`, `깨짐`, `디자인 자연스럽게`, `자연스러운 디자인`, `화려하게`, `고급스럽게`, `부드러운 스크롤`, `스크롤 부드럽게`, `스크롤 애니메이션`, `패럴랙스`, `ai 티`, `ai틱`, `ai 틱`, `반응형`, `접근성`, `차트 스타일`, `차트 스타일링`, `차트 테마`, `푸터 디자인`, `네오브루탈리즘`, `로고 마키`, `마키 애니메이션`, `스플릿 텍스트`, `сделай лендинг`, `одностраничный лендинг`, `свёрстай страницу`, `сделай веб страницу`, `веб интерфейс`, `анимация на сайте`, `сделай сайт`, `анимацию при скролле`, `сделать веб страницу`, `лендинга`, `на лендинге`, `вёрстку сайта`, `сверстать страницу`, `сделай лэндинг`, `前端`, `落地页`, `响应式布局`, `设计系统`, `平滑滚动`, `滚动动画`, `视差滚动`, `图表样式`, `页脚设计`, `新粗野主义`, `跑马灯`, `bangun antarmuka UI frontend`, `bantu bikin landing page`, `rapikan tampilan frontend`, `buat halaman yang responsif`, `implementasikan desain UI`, `rancang antarmuka terminal`, `tambahkan animasi scroll`, `desain ulang tampilan dashboard`, `xây dựng giao diện frontend`, `giúp tạo landing page`, `cải thiện giao diện frontend`, `tạo trang có bố cục responsive`, `thực hiện thiết kế UI`, `thiết kế giao diện terminal`, `thêm hiệu ứng scroll`, `thiết kế lại giao diện dashboard`
+- Strong routing signals: `frontend`, `front-end`, `front end`, `frontend skill`, `in the frontend`, `on the frontend`, `to the frontend`, `web ui`, `ui ux`, `ui/ux`, `landing page`, `web app layout`, `responsive layout`, `responsive design`, `design system`, `component polish`, `layout polish`, `visual polish`, `styling`, `animation`, `motion design`, `smooth scroll`, `smooth scrolling`, `scroll animation`, `scroll animations`, `parallax scroll`, `parallax hero`, `parallax effect`, `chart styling`, `chart theming`, `chart colors`, `dashboard charts`, `style the charts`, `theme the charts`, `tooltip`, `footer design`, `better footer`, `site footer`, `website footer`, `neobrutalism`, `neobrutalism style`, `neobrutalist`, `neo brutalism`, `neo-brutalism`, `logo marquee`, `marquee animation`, `scrolling marquee`, `split text animation`, `split-text animation`, `shadcn`, `component registry`, `three.js scene`, `threejs scene`, `webgl scene`, `voxel scene`, `voxel art scene`, `accessibility`, `wcag`, `lighthouse`, `core web vitals`, `make it beautiful`, `make it premium`, `make it less ai`, `ai-looking ui`, `ai slop ui`, `slop ui`, `looks like ai slop`, `look like ai slop`, `feels like ai slop`, `screams ai slop`, `generic ui`, `broken layout`, `layout broken`, `frontend qa`, `frontend layout`, `tui design`, `terminal ui design`, `tui layout`, `フロントエンド`, `ランディングページ`, `レスポンシブ対応`, `デザインシステム`, `画面のUI実装`, `スムーススクロール`, `スクロールアニメーション`, `パララックス`, `チャートのスタイル`, `チャートスタイル`, `フッターデザイン`, `ネオブルータリズム`, `ロゴマーキー`, `프론트엔드`, `웹 ui`, `웹 화면`, `랜딩페이지`, `레이아웃`, `레이아웃 깨짐`, `깨짐`, `디자인 자연스럽게`, `자연스러운 디자인`, `화려하게`, `고급스럽게`, `부드러운 스크롤`, `스크롤 부드럽게`, `스크롤 애니메이션`, `패럴랙스`, `ai 티`, `ai틱`, `ai 틱`, `반응형`, `차트 스타일`, `차트 스타일링`, `차트 테마`, `푸터 디자인`, `네오브루탈리즘`, `로고 마키`, `마키 애니메이션`, `스플릿 텍스트`, `сделай лендинг`, `одностраничный лендинг`, `свёрстай страницу`, `сделай веб страницу`, `веб интерфейс`, `анимация на сайте`, `сделай сайт`, `анимацию при скролле`, `сделать веб страницу`, `лендинга`, `на лендинге`, `вёрстку сайта`, `сверстать страницу`, `сделай лэндинг`, `前端`, `落地页`, `响应式布局`, `设计系统`, `平滑滚动`, `滚动动画`, `视差滚动`, `图表样式`, `页脚设计`, `新粗野主义`, `跑马灯`, `bangun antarmuka UI frontend`, `bantu bikin landing page`, `rapikan tampilan frontend`, `buat halaman yang responsif`, `implementasikan desain UI`, `rancang antarmuka terminal`, `tambahkan animasi scroll`, `desain ulang tampilan dashboard`, `xây dựng giao diện frontend`, `giúp tạo landing page`, `cải thiện giao diện frontend`, `tạo trang có bố cục responsive`, `thực hiện thiết kế UI`, `thiết kế giao diện terminal`, `thêm hiệu ứng scroll`, `thiết kế lại giao diện dashboard`
 - Good example:
   - Prompt: frontend 이 대시보드가 AI 티 안 나게 레이아웃과 디자인 시스템을 잡아줘.
   - Expected behavior: Prepare frontend_design_brief/v1, design_system_contract/v1, route/state matrix, implementation handoff, and visual_qa_required/v1.
@@ -2930,7 +2932,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - A 3D or canvas scene (WebGL, a three.js-style engine, a voxel world) is judged on its first frame: load `references/rendered-scene-craft.md`, boot on the view the scene's own title and copy promise, light it with a warm-or-cool key, a sky fill, explicit tone mapping, shadows, and fog, and make every small animated object read as what it is. A clean console is not a finished scene.
   - For first-time UI creation, name the initial generation branch, reference direction, reusable primitives, state coverage, and required visual QA path.
   - Cover responsive layout, empty/loading/error states, hover/focus/active states, CJK text, accessibility, and performance expectations.
-  - When the surface reads or writes remote data, load the frontend-refactor skill's `omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6) before writing the component: server state lives in a query cache, each mutation names the query keys it invalidates, and an optimistic write ships with its rollback.
+  - When the surface reads or writes remote data, load the `frontend-refactor` skill's `omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6) before writing the component: server state lives in a query cache, each mutation names the query keys it invalidates, and an optimistic write ships with its rollback.
   - When the surface has a form, a text composer, or a dialog, load `references/forms-and-input.md` before writing it: labelled controls, errors shown after the user commits a value, server field errors mapped onto their fields, one submit in flight, an Enter-to-send that waits for IME composition, and focus returned when a dialog closes.
   - Check the browser-support target before using a newer platform feature: a feature newer than the target (by default, anything only Baseline Newly available) needs feature detection plus a fallback, or a deliberate target change; suggest recording the target in the repository's agent instruction file (`omh-agent-instructions` owns that file).
   - State performance as a budget, not an adjective: load `references/web-vitals-budgets.md`, name one metric with its published bar (LCP, INP, CLS), the device and network class it is judged on, the route and load shape, and the baseline captured under that same profile - before the change. A budget chosen after seeing the result describes what happened instead of gating it.
@@ -2948,7 +2950,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict rows for remote writes.
   - The frontend_component_state_inventory/v1 covers reusable primitives and their default/hover/focus/active/disabled/loading/empty/error states.
   - The handoff names the executor/runtime owner and keeps code, browser, Lighthouse, accessibility, deployment, and visual QA evidence observed-only.
-  - The next action is prepare_frontend_handoff, route to visual-qa, or report the missing evidence blocker.
+  - The next action is prepare_frontend_handoff, route to `visual-qa`, or report the missing evidence blocker.
 - Recovery notes:
   - If the target surface is unclear, prepare the brief with a route/component gap instead of inventing pages.
   - If no visual reference exists, set a domain-fit quality bar and request references only when the decision changes layout or brand direction.
@@ -3237,7 +3239,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### native-debugging
 
-[omh] Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a DAP debugger instead of printf.
+[omh] Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a debugger instead of printf.
 
 - Category: `verification`
 - Phase: `native-debugging`
@@ -3252,7 +3254,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep the fault statement, hypothesis set, distinguishing observations, and the debugger plan in Hermes. Record every breakpoint hit, register or memory read, backtrace, and reproduction only from executor or wrapper observed evidence.
 - Why this exists: `native-debugging` closes OMH's zero-coverage low-level domain by preparing a hypothesis-driven, instrument-first debugging plan for native binaries, while OMH itself continues to execute nothing.
-- Use when: Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a DAP-driven evidence plan for the executor.
+- Use when: Use when Hermes should prepare low-level debugging of a native binary, crash, or memory fault: competing hypotheses, the distinguishing observation for each, and a debugger-driven evidence plan for the executor.
 - Do not use when:
   - The failure is a build or CI failure rather than a runtime fault in a binary; use `build-failure-triage`.
   - The subject is an agent or workflow misbehaving rather than a native binary; use `agent-debug`.
@@ -3354,7 +3356,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Give every finding a stable rule ID from `omh-accessibility-audit/references/a11y-rules.md` - category prefix plus number - beside its WCAG criterion and severity, so two audits of the same surface produce comparable findings and a rerun can say which are resolved, carried, or new.
   - Partition each fix by whether the markup determines the answer: `auto` when the correct output follows from the structure itself, `manual` whenever it requires knowing what the content means. A meaning-dependent fix marked `auto` is a defect - it produces confident, wrong alternative text - and a fix that is only half structural is split, never rounded to either side.
   - Read the surface fully and collect every finding before reporting one; report rule ID, severity, location, WCAG criterion, fix class, and the fix, so the `auto` rows can be handed to an executor as a batch while the `manual` rows go back carrying the question each one needs answered.
-  - Route design-system or implementation changes back to frontend or the selected coding owner, then recheck with visual-qa/accessibility evidence.
+  - Route design-system or implementation changes back to `omh-frontend` or the selected coding owner, then recheck with visual-qa/accessibility evidence.
 - Completion checklist:
   - The platform, target surfaces, critical tasks, WCAG level, supplied evidence, and missing observations are explicit.
   - The wcag_success_criteria_matrix/v1 separates PASS/HOLD/BLOCK and maps each issue to user impact.
@@ -3364,7 +3366,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If no rendered or DOM/accessibility-tree evidence exists, prepare the audit plan and return verdict BLOCK with blocker `missing_accessibility_evidence`.
   - If automated scan output exists without keyboard or screen-reader evidence, keep the verdict HOLD and request the smallest focus/announcement trace.
-  - If the request is mostly visual layout or CJK clipping, route to visual-qa while preserving accessibility follow-up checks.
+  - If the request is mostly visual layout or CJK clipping, route to `visual-qa` while preserving accessibility follow-up checks.
 - Required inputs:
   - target app, page, route, component, or design system
   - platform: web, iOS, Android, desktop, TUI, or unknown
@@ -3572,7 +3574,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If the log is missing or stale, fetch it when `gh` is authenticated (`gh run view <id> --log-failed`); otherwise ask for the smallest fresh command output or CI job URL.
   - If the failure looks environmental or credentialed, mark BLOCKED_BY_ENVIRONMENT and avoid patch handoff.
-  - If a fix has already been applied, route to verification-gate for fresh evidence instead of re-triaging stale failures.
+  - If a fix has already been applied, route to `verification-gate` for fresh evidence instead of re-triaging stale failures.
 - Required inputs:
   - failing command, CI job, PR check, or tool name
   - fresh failure log, exit status, or observed check URL
@@ -3630,7 +3632,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is local OMH installation health only; use `doctor`.
   - The request is a source acquisition or current web lookup; use `source-finder` or `research`.
   - The request compares several harnesses, sessions, MCP hosts, or worktrees for drift; use `harness-session-inventory`.
-- Strong routing signals: `workspace-audit`, `workspace audit`, `repo surface audit`, `repository surface audit`, `workspace surface audit`, `repo inventory`, `surface inventory`, `skill inventory`, `prompt inventory`, `plugin inventory`, `mcp inventory`, `hook inventory`, `config audit`, `what are we missing`, `audit this repo`, `레포 감사`, `워크스페이스 감사`, `설정 감사`, `스킬 인벤토리`, `аудит репозитория`, `аудит воркспейса`, `инвентаризация репо`, `инвентарь скиллов`, `аудит харнессов`, `аудит харнесов`, `проверь конфиги`
+- Strong routing signals: `workspace-audit`, `workspace audit`, `repo surface audit`, `repository surface audit`, `workspace surface audit`, `repo inventory`, `surface inventory`, `skill inventory`, `prompt inventory`, `plugin inventory`, `hook inventory`, `config audit`, `what are we missing`, `audit this repo`, `레포 감사`, `워크스페이스 감사`, `설정 감사`, `스킬 인벤토리`, `аудит репозитория`, `аудит воркспейса`, `инвентаризация репо`, `инвентарь скиллов`, `аудит харнессов`, `аудит харнесов`, `проверь конфиги`
 - Good example:
   - Prompt: workspace-audit OMH에 스킬/프롬프트/플러그인 표면이 어디 비어있는지 먼저 점검해줘.
   - Expected behavior: Prepare workspace_audit_plan/v1, observed surface_inventory/v1, gap matrix, redacted config findings, and downstream workflow recommendation.
@@ -3764,7 +3766,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user asks for visual render QA; use `visual-qa`.
   - The user asks for production release readiness beyond verification commands; use `production-audit`.
   - The user wants a bug-first code review of a diff; use `code-review`.
-- Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `generated file`, `generated artifact`, `generated output`, `source of truth`, `regenerate instead of editing`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `перед мерджем проверь`, `проверь перед пушем`, `гейт проверки`, `проверь перед мерджем`, `докажи что тесты проходят`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`, `verifikasi sebelum merge`, `buktikan perubahan ini sudah selesai`, `cek bukti build lint dan tes`, `pastikan semua pemeriksaan lulus sebelum merge`, `tolong validasi hasil implementasi ini`, `xác minh trước khi gộp`, `xác minh trước khi merge`, `chứng minh thay đổi này đã hoàn thành`, `kiểm tra bằng chứng build lint và kiểm thử`, `đảm bảo mọi kiểm tra đều đạt trước khi gộp`, `đảm bảo tất cả kiểm tra đạt trước khi merge`, `hãy xác thực kết quả thực hiện này`
+- Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `run the release gate`, `release gate check`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `generated file`, `generated artifact`, `generated output`, `source of truth`, `regenerate instead of editing`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `перед мерджем проверь`, `проверь перед пушем`, `гейт проверки`, `проверь перед мерджем`, `докажи что тесты проходят`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`, `verifikasi sebelum merge`, `buktikan perubahan ini sudah selesai`, `cek bukti build lint dan tes`, `pastikan semua pemeriksaan lulus sebelum merge`, `tolong validasi hasil implementasi ini`, `xác minh trước khi gộp`, `xác minh trước khi merge`, `chứng minh thay đổi này đã hoàn thành`, `kiểm tra bằng chứng build lint và kiểm thử`, `đảm bảo mọi kiểm tra đều đạt trước khi gộp`, `đảm bảo tất cả kiểm tra đạt trước khi merge`, `hãy xác thực kết quả thực hiện này`
 - Good example:
   - Prompt: verification-gate 이 PR 머지 전에 build/lint/test/docs/CI 증거를 정리해서 PASS 가능한지 봐줘.
   - Expected behavior: Prepare verification_matrix/v1, record observed_check_results/v1, and issue PASS/HOLD/BLOCK with missing evidence.
@@ -3788,7 +3790,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - The scenario, expected behavior, observed result, and pass/fail basis are named.
   - Proposed fixes are separated from observed QA evidence.
-  - Missing or failed verification routes back to plan, fix, or a narrower test.
+  - Missing or failed verification routes back to `plan`, fix, or a narrower test.
 - Recovery notes:
   - If a required check fails with an unknown origin, keep the other fresh results, mark the claim unresolved on HOLD, and hand back the same check rerun at the merge base as the missing evidence.
   - If a fix test has only a fresh green result, retain that result within its scope, mark the claim unresolved on HOLD with regression_witness_missing, and hand back the required pre-fix red witness and its source.
@@ -3910,7 +3912,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Use when: Use when Hermes should turn repeated workflow lessons, skill behavior, review comments, or failure traces into candidate rules that humans can review before docs or catalog changes.
 - Do not use when:
   - The user wants a single workflow route regression; use `workflow-learning`.
-  - The user wants durable factual project memory; use `wiki` or memory curation.
+  - The user wants durable factual project memory; use `memory-new`, or `memory-sync` to curate what Hermes already holds.
   - The user already approved a concrete code/doc change; use the implementation workflow.
   - The ask is writing or keeping current the file an agent reads at startup -- AGENTS.md, CLAUDE.md, a Cursor rule; use `agent-instructions`, which updates only its marked region.
 - Strong routing signals: `rules-distill`, `rules distill`, `distill rules`, `rule distillation`, `principle distill`, `skill principles`, `extract agent rules`, `turn traces into rules`, `policy distill`, `guidance distill`, `규칙 증류`, `원칙 추출`, `스킬 원칙`, `프롬프트 규칙`
@@ -3995,7 +3997,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Name the audience, depth, repo root, read-only boundary, and stop condition.
   - Separate observed files and commands from inferred architecture and unknowns.
   - Produce a practical reading path and first-task runway rather than a flat file tour.
-  - Route follow-up implementation to plan, ultrawork, verification-gate, or workspace-audit as needed.
+  - Route follow-up implementation to `plan`, `ultrawork`, `verification-gate`, or `workspace-audit` as needed.
   - Take build, test, and lint commands in this order: CI config (`.github/workflows`, `.gitlab-ci.yml`), the task runner (`Makefile`, `justfile`, `package.json` scripts), the manifest, then contributor docs; read `CODEOWNERS` and the top-churn files for ownership; the README comes last, and where it disagrees with CI trust CI and record the disagreement.
 - Completion checklist:
   - repo_map/v1 cites an observed path for every directory, entrypoint, generated surface, and test location it names; what was inferred is marked inferred, and what was never opened is listed as unread.
@@ -4069,14 +4071,14 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Name repo root, refresh depth, task focus, artifact write policy, and stop condition.
   - Choose build, summary, handoff, `--write`, and `--json` deliberately instead of treating all codegraph commands as equivalent.
   - Separate prepared command plans from observed command outputs, generated artifacts, and executor-ready handoffs.
-  - Route broader first-read orientation to codebase-onboarding and implementation to ultrawork or the selected coding owner.
+  - Route broader first-read orientation to `codebase-onboarding` and implementation to `ulw-work` or the selected coding owner.
 - Completion checklist:
   - Repo root, refresh depth, task focus, command choices, and write policy are explicit.
   - Prepared command plans, observed outputs, generated artifacts, and executor handoff readiness are separated.
   - `omh_codegraph_summary/v1`, `omh_codegraph_context/v1`, or `.omh/codegraph/codegraph.json` is claimed only with observed command or file evidence.
   - Follow-up implementation, review, CI, and merge state are routed to their owning workflows instead of inferred from codegraph context.
 - Recovery notes:
-  - If the codegraph command is unavailable, route to doctor or toolbelt-readiness before claiming freshness.
+  - If the codegraph command is unavailable, route to `doctor` or `toolbelt-readiness` before claiming freshness.
   - If no task focus is supplied, prepare build/summary guidance and ask for focus only when a handoff pack would otherwise be misleading.
   - If the index is stale or missing, report the stale/missing state and next safe command rather than treating prior summaries as current.
   - The codegraph indexes Python files only; when `omh codegraph summary` shows no Python files, say so, navigate with `rg` or `ast-grep`, and present no handoff pack.
@@ -4274,7 +4276,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is a vulnerability review of application code (injection, authorization, SSRF); use `code-review`.
   - The subject is an application or service rather than the agent's own runtime -- its assets, trust boundaries, attack scenarios, and the controls that defend them; use `application-threat-model`.
   - Something already happened to shipped code -- a CVE published against a dependency, a credential pushed to a repository, a license question about a package; use `security-event-response`, which orders containment and closes only on an observed rotation or fix.
-- Strong routing signals: `security-safety-review`, `security safety review`, `ai coding safety`, `agent safety review`, `prompt injection review`, `tool permission review`, `secret exposure review`, `destructive action review`, `supply chain safety`, `sandbox safety`, `plugin risk audit`, `Hermes plugin audit`, `local plugin guard`, `key rotation`, `secret rotation`, `credential rotation`, `certificate rotation`, `rotate the api key`, `rotate this api key`, `rotate the credentials`, `revoke the old key`, `보안 안전 검토`, `에이전트 안전`, `프롬프트 인젝션`, `시크릿 노출`, `파괴적 명령`, `ревью безопасности`, `аудит безопасности`, `проверь на уязвимости`, `секьюрити ревью`, `утечка секретов в коде`
+- Strong routing signals: `security-safety-review`, `security safety review`, `ai coding safety`, `agent safety review`, `prompt injection review`, `tool permission review`, `secret exposure review`, `destructive action review`, `supply chain safety`, `sandbox safety`, `plugin risk audit`, `Hermes plugin audit`, `local plugin guard`, `key rotation`, `secret rotation`, `credential rotation`, `certificate rotation`, `rotate the api key`, `rotate this api key`, `rotate the credentials`, `revoke the old key`, `보안 안전 검토`, `에이전트 안전`, `프롬프트 인젝션`, `시크릿 노출`, `파괴적 명령`, `ревью безопасности`, `аудит безопасности`, `секьюрити ревью`, `утечка секретов в коде`
 - Good example:
   - Prompt: security-safety-review 이 자동화가 프롬프트 인젝션, 시크릿, 파괴적 명령 위험이 있는지 봐줘.
   - Expected behavior: Prepare threat_surface_map/v1, permission/secret risk matrix, prompt injection review, safe action policy, and remediation handoff if needed.
@@ -4361,7 +4363,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is one message, thread reply, or attachment delivered now with no schedule; use `gateway-intent-card`.
   - The person is inside Hermes' own /blueprint setup for one of its catalog automations; answer the questions that flow asks and let it create the job instead of preparing a second blueprint.
   - The recurring job would move money -- a purchase, a renewal, a top-up, or a transfer; use `spend-gate`, because an agent run on a schedule never spends, and a no-agent script that pays is a spend set up now: its card, typed yes, and cap come before the job exists.
-- Strong routing signals: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`, `recurring ops`, `recurring workflow`, `keep watching`, `keep monitoring`, `watch continuously`, `monitor continuously`, `every morning`, `every day`, `daily digest`, `weekly digest`, `automate this`, `automate workflow`, `send to slack`, `send to discord`, `post to telegram`, `only if changed`, `silent if nothing changed`, `schedule this`, `ずっと監視`, `監視し続け`, `継続的に監視`, `매일`, `매주`, `정기`, `예약`, `반복`, `자동화`, `자동화해줘`, `스케줄`, `슬랙`, `디스코드`, `텔레그램`, `보내`, `공유`, `변화 없으면`, `조용히`, `계속 감시`, `계속 모니터링`, `계속 지켜봐`, `автоматизируй`, `сделай автоматизацию`, `крон задача`, `cron задача`, `напоминай мне каждый`, `реши это скриптами`, `持续监控`, `持續監控`, `一直监控`, `rancang otomatisasi terjadwal`, `bikin alur kerja otomatis setiap hari`, `rancang pengiriman ringkasan otomatis`, `thiết kế tự động hóa theo lịch trình`, `tạo luồng công việc tự động hàng ngày`, `thiết kế gửi tóm tắt tự động`
+- Strong routing signals: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`, `recurring ops`, `recurring workflow`, `keep watching`, `keep monitoring`, `watch continuously`, `monitor continuously`, `every morning`, `every day`, `daily digest`, `weekly digest`, `automate this`, `automate workflow`, `send to slack`, `send to discord`, `post to telegram`, `only if changed`, `silent if nothing changed`, `schedule this`, `ずっと監視`, `監視し続け`, `継続的に監視`, `매일`, `매주`, `정기`, `예약`, `자동화`, `자동화해줘`, `스케줄`, `슬랙`, `디스코드`, `텔레그램`, `보내`, `공유`, `변화 없으면`, `조용히`, `계속 감시`, `계속 모니터링`, `계속 지켜봐`, `반복해줘`, `반복 실행`, `반복 일정`, `автоматизируй`, `сделай автоматизацию`, `крон задача`, `cron задача`, `напоминай мне каждый`, `реши это скриптами`, `持续监控`, `持續監控`, `一直监控`, `rancang otomatisasi terjadwal`, `bikin alur kerja otomatis setiap hari`, `rancang pengiriman ringkasan otomatis`, `thiết kế tự động hóa theo lịch trình`, `tạo luồng công việc tự động hàng ngày`, `thiết kế gửi tóm tắt tự động`
 - Good example:
   - Prompt: automation-blueprint every weekday run an uptime check and send a Slack digest only if status changes.
   - Expected behavior: Draft prepared_native_blueprint/v1 with schedule intent, Slack delivery, a `[SILENT]` reply for unchanged runs, research/report skills, missing evidence, and the next confirmation.
@@ -4513,7 +4515,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Prepare coding handoffs only after plan acceptance and selected executor/runtime choice.
   - Mark deploy, monitoring, and rollback as unobserved until the wrapper or operator records evidence.
   - For a fresh, empty, or newly `git init`-ed target that is expected to outlive the session, run the greenfield bootstrap pass before or alongside delivery planning - load `references/project-bootstrap.md` for the six-step order (git and .gitignore, LICENSE, README, agent context file, CI skeleton, docs/ seed) and its per-file verify line; explicitly skip it for throwaway or scratch work instead of silently running it.
-  - Name the skill per stage: `backend`, `relational-db`, `frontend`, `application-threat-model`, `iac-change`, `production-audit`, `release-cut`, `deploy-and-monitor`. Settle where it runs, how secrets are provided, and the first environment before deploy.
+  - Name the skill per stage: `omh-backend`, `relational-db`, `frontend`, `application-threat-model`, `iac-change`, `production-audit`, `release-cut`, `deploy-and-monitor`. Settle where it runs, how secrets are provided, and the first environment before deploy.
 - Completion checklist:
   - The idea, user, success metric, and non-goals are written down; each stage has an owner and the skill that runs it.
   - Plan acceptance and executor choice precede any handoff; where it runs and how secrets are provided are decided before deploy.
@@ -4648,7 +4650,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Do not use when:
   - The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly or use `strategy-brief` for a decision brief instead of starting a leadership operating loop.
   - A launch-readiness audit of one named service or release with deploy, security, observability and rollback evidence; use `production-audit`. Prioritisation and risk ranking across workstreams stays here.
-  - An accepted plan is ready for build; use `ralplan` or `idea-to-deploy`.
+  - An accepted plan is ready for build; use `ultrawork` or `idea-to-deploy`.
 - Strong routing signals: `cto-loop`, `cto loop`, `cto`, `cto pm`, `pm dev qa security ops`, `roadmap technical tradeoffs`, `technical tradeoff`, `delivery risk`, `release readiness`, `technical leadership loop`, `leadership operating loop`, `engineering leadership`, `CTO 구조`, `PM 구조`, `로드맵`, `아키텍처 트레이드오프`, `기술 리더십`, `출시 준비`
 - Good example:
   - Prompt: cto-loop: run the PM, dev, QA, security, and ops loop for this risky billing launch.
@@ -4805,7 +4807,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - The scenario, expected behavior, observed result, and pass/fail basis are named.
   - Proposed fixes are separated from observed QA evidence.
-  - Missing or failed verification routes back to plan, fix, or a narrower test; a failed scenario gets at most two fix-and-rerun rounds, then it is reported as an open finding with its evidence and is not redefined to pass.
+  - Missing or failed verification routes back to `plan`, fix, or a narrower test; a failed scenario gets at most two fix-and-rerun rounds, then it is reported as an open finding with its evidence and is not redefined to pass.
   - Everything the hostile scenarios created or changed (accounts, rows, files, processes, ports) was listed before the first one ran and removed or restored afterwards, with the command and its observed result as the cleanup receipt, or what remains is named.
 - Recovery notes:
   - If a scenario needs a real install or external service the harness cannot reach, retain other observed pass/fail evidence, mark that scenario not_observed, and hand back its manual test guide with setup, do, expect, and broken signals.
@@ -4874,7 +4876,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When the plan describes code changes, name the raw material the work starts from instead of a digest of it - the failing log, trace, or data rather than the issue summary - and the methods and tools a leading practitioner of the field would use on it. Every verification step names an outside judge - a test, CI, a measurement, a human reviewer, or an external tool - never the planning model's or the executor's own reading of the result; a step with no outside judge is recorded as an evidence gap.
   - When the plan describes code changes, restate the deliverable once as the verbs it must accomplish rather than the noun it produces; when that brings in another field, write what a practitioner of that field does as a task (fuzz the parser, audit each completion claim against its evidence), never an instruction to write or speak like one.
   - Take plan acceptance only from the answer the user gave — the response status and value the question tool returns, or the user's own reply — never from the wording of the question you asked: when the acceptance question times out, is dismissed, or returns with no answer, the plan stays unaccepted, so record no acceptance, prepare no handoff, and start nothing; a missing answer is not a refusal either, so ask again later or report the plan as awaiting acceptance.
-  - Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on path that fits the work's shape — `dag-ulw` for an accepted plan whose tasks form a graph (several tasks with disjoint write scopes or an order between them, handing work on through files, plus a separate verification task), `ultrawork` durable checkpoints for progress that must survive sessions as a checkpointed ledger, `ultrawork` coordinated lanes for an accepted plan split into disjoint parallel lanes, `ultrawork` single-owner persistence for one already-scoped task with a single owner, `ultrawork` for one bounded delivery cycle, or a direct selected executor/runtime handoff for a single prepared coding change — state the fit reason in one line, and start it only after the user's explicit go-ahead.
+  - Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on path that fits the work's shape — `dag-ulw` for an accepted plan whose tasks form a graph (several tasks with disjoint write scopes or an order between them, handing work on through files, plus a separate verification task), `ulw-work` durable checkpoints for progress that must survive sessions as a checkpointed ledger, `ulw-work` coordinated lanes for an accepted plan split into disjoint parallel lanes, `ulw-work` single-owner persistence for one already-scoped task with a single owner, `ulw-work` for one bounded delivery cycle, or a direct selected executor/runtime handoff for a single prepared coding change — state the fit reason in one line, and start it only after the user's explicit go-ahead.
   - Hermes' built-in `/plan` writes one plan file under `.hermes/plans/` in a turn of its own that opens `[/plan — plan mode]` and executes nothing; in that turn, follow its instructions. When the user later asks to review, accept, or hand off that file, it is this skill's draft, not a reason to write a second plan: load `references/hermes-plan-mode.md`.
 - Completion checklist:
   - The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
@@ -4944,7 +4946,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Start from observed repo facts and source/web evidence when freshness or external behavior matters.
   - Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.
   - Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.
-  - List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `dag-ulw` nodes or `ultrawork` board rows come from the plan without re-planning; planning itself stays a bounded in-session lane.
+  - List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `dag-ulw` nodes or `ulw-work` board rows come from the plan without re-planning; planning itself stays a bounded in-session lane.
   - When adapting an existing capability, load `skill_view(name='omh-verification-gate', file_path='references/adaptation-quality.md')` before accepting a plan, dispatching work, or claiming completion; carry its criteria and comparisons into tasks and evidence.
   - Before comparing options, write the target state: name each consumer of the result (a person, a maintainer, or a program reading its output), their current workflow on this surface, the state in which that workflow keeps working with no new friction or loss, and every difference between current and target, each with why it matters.
   - Record a `Success criteria` table with columns `Criterion | Task | Verification scenario`, one row per target-state difference naming its owning task and the scenario that shows the difference closed; these rows are the acceptance criteria above, extended to the target state.
@@ -4955,11 +4957,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When the plan describes code changes, name the raw material the work starts from instead of a digest of it - the failing log, trace, or data rather than the issue summary - and the methods and tools a leading practitioner of the field would use on it. Every verification step names an outside judge - a test, CI, a measurement, a human reviewer, or an external tool - never the planning model's or the executor's own reading of the result; a step with no outside judge is recorded as an evidence gap.
   - When the plan describes code changes, restate the deliverable once as the verbs it must accomplish rather than the noun it produces; when that brings in another field, write what a practitioner of that field does as a task (fuzz the parser, audit each completion claim against its evidence), never an instruction to write or speak like one.
   - Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.
-  - When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.
-  - Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.
+  - When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `ulw-research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `ulw-research` artifact contract requires, and consume it instead of planning on assumptions.
+  - Consume a recorded `ulw-research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.
   - Take plan acceptance only from the answer the user gave — the response status and value the question tool returns, or the user's own reply — never from the wording of the question you asked: when the acceptance question times out, is dismissed, or returns with no answer, the plan stays unaccepted, so record no acceptance, prepare no handoff, and start nothing; a missing answer is not a refusal either, so ask again later or report the plan as awaiting acceptance.
   - End with a selected executor/runtime handoff shape only after the plan is accepted.
-  - Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on path that fits the work's shape — `dag-ulw` for an accepted plan whose tasks form a graph (several tasks with disjoint write scopes or an order between them, handing work on through files, plus a separate verification task), `ultrawork` durable checkpoints for progress that must survive sessions as a checkpointed ledger, `ultrawork` coordinated lanes for an accepted plan split into disjoint parallel lanes, `ultrawork` single-owner persistence for one already-scoped task with a single owner, `ultrawork` for one bounded delivery cycle, or a direct selected executor/runtime handoff for a single prepared coding change — state the fit reason in one line, and start it only after the user's explicit go-ahead.
+  - Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on path that fits the work's shape — `dag-ulw` for an accepted plan whose tasks form a graph (several tasks with disjoint write scopes or an order between them, handing work on through files, plus a separate verification task), `ulw-work` durable checkpoints for progress that must survive sessions as a checkpointed ledger, `ulw-work` coordinated lanes for an accepted plan split into disjoint parallel lanes, `ulw-work` single-owner persistence for one already-scoped task with a single owner, `ulw-work` for one bounded delivery cycle, or a direct selected executor/runtime handoff for a single prepared coding change — state the fit reason in one line, and start it only after the user's explicit go-ahead.
   - Do not implement directly from consensus planning.
 - Completion checklist:
   - The plan todo was declared before the first planning step and every stage reached a terminal state; a plan produced without one, or with stages still pending, is not finished.
@@ -4974,7 +4976,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If requirements are still fuzzy, route back to the `deep-interview` workflow before planning.
   - If current-source evidence is missing, route a `research` step before accepting the plan.
-  - If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ultrawork` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
+  - If the user asks for implementation after acceptance, recommend the follow-on path that fits the work's shape (`dag-ulw` when the accepted lanes form a graph with a verification lane, `ulw-work` with the matching capability — durable checkpoint, coordinated lanes, single-owner persistence, or one delivery cycle — or a direct selected executor handoff) with a one-line fit reason, and start it only on the user's explicit go-ahead — never auto-start an engine from acceptance alone.
 - Required inputs:
   - requirements
   - codebase facts
@@ -5099,7 +5101,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user wants build, lint, test, and CI results collected into a PASS/HOLD/BLOCK evidence matrix before merge; use `verification-gate`. This skill supplies findings that matrix may cite.
   - A kanban review worker needs its card's transition decided: Hermes' bundled `sdlc-review` owns approve, request-changes, and escalate there, and this skill only supplies the findings that decision cites.
   - The user wants their own uncommitted changes checked before a commit or push, with a security scan, quality gates, and fixes applied in place; load Hermes' bundled `requesting-code-review` skill for that pre-commit pass instead of this one.
-- Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `コードレビュー`, `バグを見つけて`, `実際に何をしたか`, `리뷰`, `코드 리뷰`, `리뷰까지`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`, `сделай ревью кода`, `ревью моего кода`, `ревью изменений`, `проверь код на баги`, `проревьюй`, `ревью пул реквеста`, `проверь мой код`, `проверить мой код`, `сделай код ревью`, `найди баги`, `ревьюни`, `ревью этого кода`, `代码评审`, `代码审查`, `找出缺陷`, `tinjau kode`, `review kode ini`, `bantu tinjau kode PR ini`, `tolong periksa diff ini untuk mencari bug`, `cek perubahan kode sebelum merge`, `ulas pull request ini`, `cari bug di perubahan ini`, `review PR ini dong`, `rà soát mã nguồn`, `review mã nguồn này`, `giúp rà soát PR này`, `hãy kiểm tra diff này tìm bug`, `kiểm tra đoạn code trước khi ráp vô`, `phân tích pull request này`, `tìm bug trong thay đổi này`, `review PR này giúp mình`
+- Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `コードレビュー`, `バグを見つけて`, `実際に何をしたか`, `리뷰`, `코드 리뷰`, `리뷰까지`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`, `сделай ревью кода`, `проверь на уязвимости`, `ревью моего кода`, `ревью изменений`, `проверь код на баги`, `проревьюй`, `ревью пул реквеста`, `проверь мой код`, `проверить мой код`, `сделай код ревью`, `найди баги`, `ревьюни`, `ревью этого кода`, `代码评审`, `代码审查`, `找出缺陷`, `tinjau kode`, `review kode ini`, `bantu tinjau kode PR ini`, `tolong periksa diff ini untuk mencari bug`, `cek perubahan kode sebelum merge`, `ulas pull request ini`, `cari bug di perubahan ini`, `review PR ini dong`, `rà soát mã nguồn`, `review mã nguồn này`, `giúp rà soát PR này`, `hãy kiểm tra diff này tìm bug`, `kiểm tra đoạn code trước khi ráp vô`, `phân tích pull request này`, `tìm bug trong thay đổi này`, `review PR này giúp mình`
 - Good example:
   - Prompt: $code-review review this PR for install/update UX regressions and missing tests.
   - Expected behavior: Lead with ranked findings, cite concrete evidence, then list open questions and test gaps.
@@ -5181,7 +5183,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The cleanup would change architecture or module boundaries and needs its execution shaped into phases first; use `refactor-plan`, or `ralplan` when the direction itself is still contested.
   - The user wants code judged for bugs or merge readiness with no drafted slop removal to inspect; use `code-review` for a bug-first review and `failure-signal-audit` for swallowed failures.
   - The user asks to simplify their own recent changes, a commit, or the staged diff with a reuse, quality, and efficiency pass rather than a behavior-locked removal of existing code; load Hermes' bundled `simplify-code` skill for that instead of this one.
-- Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`, `risky`, `behavior-preserving refactor`, `risk analysis`, `refactor workflow`, `legacy refactor`, `anti-slop pass`, `anti-slop review`, `anti-slop sweep`, `ai slop`, `deslop review`, `리팩터링`, `리팩토링`, `위험 분석`, `변경 범위 제한`, `회귀 테스트`, `деслоп`, `убери мусор из кода`, `почисти код`, `убери лишнее в коде`, `зачисти код`, `мёртвый код`, `анслоп`, `деблоат`, `почистить код`
+- Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`, `risky`, `behavior-preserving refactor`, `refactor workflow`, `legacy refactor`, `anti-slop pass`, `anti-slop review`, `anti-slop sweep`, `ai slop`, `deslop review`, `위험 분석`, `변경 범위 제한`, `회귀 테스트`, `리팩터링`, `리팩토링`, `деслоп`, `убери мусор из кода`, `почисти код`, `убери лишнее в коде`, `зачисти код`, `мёртвый код`, `анслоп`, `деблоат`, `почистить код`
 - Good example:
   - Prompt: $ai-slop-cleaner remove duplicated router branches and lock behavior with regression tests before refactoring.
   - Expected behavior: Plan cleanup, preserve behavior, delete or simplify code, and prove it with targeted tests.
@@ -5479,7 +5481,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The goal is measurable performance of an application or system, not model handling; use `ultraperf`.
   - The user wants benchmark-superiority or provider-readiness claims without measurements; decline the claim and offer the measurement plan from this skill's checklist.
   - Making a model's weights smaller or faster: quantizing is `inference-serving` (serving format and quantization), distilling is `model-finetuning`; OMH has no pruning workflow.
-- Strong routing signals: `model-optimization`, `model optimization`, `optimize for model`, `onboard new model`, `calibrate new model`, `new model calibration`, `model calibration`
+- Strong routing signals: `model-optimization`, `onboard new model`, `calibrate new model`, `new model calibration`, `model calibration`
 - Good example:
   - Prompt: GLM 5.3 and 5.3 Flash just shipped; check what we should optimize for them.
   - Expected behavior: Probe recognition for both ids, verify family coverage, research the official thinking/tool contract plus community harness handling with labeled sources, draft version-aware trait-to-counter calibration, propose chain placement distinguishing the Flash sibling from the highspeed tier, and name the benchmark pair as the measurement close.
@@ -5536,7 +5538,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Compatibility alias: `false`
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
-- Handoff policy: Hermes owns the audit, baseline, hypothesis, budget, and status; each optimization code edit runs in the Hermes harness (a `delegate_task` lane routed with `omh_delegate_route`) unless the user chose an external coding owner, in which case it goes through `maestro`; either way it returns as observed re-measurement.
+- Handoff policy: Hermes owns the audit, baseline, hypothesis, budget, and status; each optimization code edit runs in the Hermes harness (a `delegate_task` lane routed with `omh_delegate_route`) unless the user chose an external coding owner, in which case it goes through `ulw-maestro`; either way it returns as observed re-measurement.
 - Why this exists: `ultraperf` exists because most performance work starts unlocalized: something is slow, leaking, or expensive and nobody knows where. It forces measurement before edits, one hypothesis at a time, executor-owned changes, and a regression budget, so an optimization loop cannot end in unverified claims.
 - Use when: Use when performance problems are suspected but not yet localized, or when several cost hotspots across domains need a measured inspect-and-fix loop.
 - Do not use when:
@@ -5555,7 +5557,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Quality bar:
   - Record a baseline and name the evaluator command before proposing any optimization edit.
   - Attack only a hot path shown by a measurement or profile; never micro-optimize unmeasured code.
-  - Keep every fix the smallest reversible change and run its code edit in the Hermes harness, or through `maestro` when the user chose an external coding owner.
+  - Keep every fix the smallest reversible change and run its code edit in the Hermes harness, or through `ulw-maestro` when the user chose an external coding owner.
   - Re-measure after each change and report deltas only from observed evidence; record the baseline as repeated runs (count and warm-up stated) with median and spread, and treat a delta smaller than the spread as no result.
   - Never present a restart, cache flush, or resource bump as a leak fix; prove causation by revert-verify.
   - Set the regression budget as baseline x (1 + tolerance) for a lower-is-better metric (latency, memory, cost) or baseline x (1 - tolerance) for a higher-is-better one (throughput), with a tolerance at least the observed spread, and name the CI gate that enforces it.
@@ -5613,7 +5615,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
   - The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' `llm-wiki` skill instead of this one when it is installed (bundled through Hermes v0.22.5 and the floor v2026.9.7, optional from v0.22.6; hermes skills browse --source official finds it); when it is not installed, say so and offer to install it rather than imitating it.
-- Strong routing signals: `wiki`, `project wiki`, `build a wiki`, `start a wiki`, `organize my notes`, `external knowledge store`, `knowledge base`, `Obsidian`, `markdown vault`, `Notion knowledge base`, `Google Drive wiki`, `옵시디언`, `마크다운 볼트`, `노션 지식베이스`, `위키`, `위키 만들`, `지식베이스`, `지식 정리 체계`
+- Strong routing signals: `wiki`, `project wiki`, `write a handover guide`, `build a wiki`, `start a wiki`, `organize my notes`, `external knowledge store`, `knowledge base`, `Obsidian`, `markdown vault`, `Notion knowledge base`, `Google Drive wiki`, `옵시디언`, `마크다운 볼트`, `노션 지식베이스`, `위키`, `위키 만들`, `지식베이스`, `지식 정리 체계`, `인수인계 문서 써줘`
 - Good example:
   - Prompt: wiki: six of us keep re-answering the same questions in chat; help me stand up a wiki in Notion.
   - Expected behavior: Ask who reads and maintains it and what knowledge repeats, then propose one model with its breaking conditions, a skeleton, and seed pages, without claiming the store was created.
@@ -5923,7 +5925,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: The request is about which OMH surfaces are offered locally, not about capturing a memory.
 - Bad example:
   - Prompt: add a dark mode toggle to my settings page
-  - Expected behavior: Route to frontend or coding delegation instead of capability policy.
+  - Expected behavior: Route to `frontend` or coding delegation instead of capability policy.
   - Why: That is a feature in the user's own product, not an OMH capability family.
 - Quality bar:
   - Name the workflow target, constraints, validation evidence, and stop condition.
@@ -6117,7 +6119,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - For X/Twitter scraping or trend analysis, keep x_platform_data as a domain affinity rather than a role alias: prefer confirmed-active Grok, then Kimi K3.1 Pro, then Gemini, without removing the rest of the route or overriding an explicit model.
   - When a recommendation head is missing, choose the first confirmed-active owner-compatible candidate in that chain. Only after every selected category, role-slot, and domain chain is exhausted, consult the shared final order Claude Opus 5.5 then GPT-6.1 Sol. If no candidate is confirmed active anywhere, keep the selector on its owner's native default model and let the rest of OMH setup finish without a model-config write.
   - Give provider-specific native next actions without claiming provider readiness: use installed Hermes flows for OpenAI OAuth/OpenAI Codex, Anthropic or an existing Claude provider, Qwen OAuth or Alibaba, Gemini/Google/Vertex, Grok/xAI, Kimi, GLM/Z.AI, DeepSeek, or an already-working custom provider; preserve working alternatives.
-  - Closing step: once model routing/chains are confirmed, ask once whether the user also wants to set up coding delegation (the maestro lane) for an external coding CLI -- do not ask before model setup is done and never auto-enable it. Point at `omh coding executor-skills --profile <profile>` for skill-set discovery, `~/.omh/routing/dispatch-models.json` for an optional per-owner model preference, and the `ulw-maestro` skill for the handoff itself; name Codex and Claude Code neutrally rather than favoring either.
+  - Closing step: once model routing/chains are confirmed, ask once whether the user also wants to set up coding delegation (the `maestro` lane) for an external coding CLI -- do not ask before model setup is done and never auto-enable it. Point at `omh coding executor-skills --profile <profile>` for skill-set discovery, `~/.omh/routing/dispatch-models.json` for an optional per-owner model preference, and the `ulw-maestro` skill for the handoff itself; name Codex and Claude Code neutrally rather than favoring either.
 - Completion checklist:
   - If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
   - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
@@ -6176,7 +6178,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user wants a general Hermes update unrelated to parallel-tool capability.
   - No version or capability question has been asked yet.
   - The request needs a repository code change rather than a local version check.
-- Strong routing signals: `parallel-tools`, `parallel tools`, `hermes parallel tools setup`, `update hermes for parallel tools`, `check parallel tool support`, `enable parallel tool calls`, `verify parallel tools capability`, `check hermes version for parallel tools`, `헤르메스 업데이트 확인해줘`, `병렬 도구 설정`, `병렬 툴 확인`, `헤르메스 병렬 도구`
+- Strong routing signals: `parallel-tools`, `parallel tools`, `hermes parallel tools setup`, `update hermes for parallel tools`, `check parallel tool support`, `enable parallel tool calls`, `verify parallel tools capability`, `check hermes version for parallel tools`, `병렬 도구 설정`, `병렬 툴 확인`, `헤르메스 병렬 도구`, `병렬 도구 쓰려고 헤르메스 업데이트`
 - Good example:
   - Prompt: update hermes for parallel tools — can you check if I'm on a current enough version?
   - Expected behavior: Report the installed version and each MCP server's `supports_parallel_tool_calls` value, say that built-in read-only tools already run concurrently, and offer the per-server flag as one diff only for a server whose calls cannot interfere with one another.
@@ -6286,7 +6288,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### morning-brief
 
-[omh] Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with read-and-draft-only scope and diff approval; produces the configuration, not the daily brief itself.
+[omh] Mail and calendar brief configuration: morning brief SETUP (one-time) - connects mail and calendar MCP with the narrowest scope and diff approval; produces the configuration, not the daily brief itself.
 
 - Category: `hermes-setup`
 - Phase: `setup`
@@ -7144,7 +7146,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - A dependency moves to a new version as routine maintenance with no advisory or leak attached, such as a dependabot bump; use `refactor-plan`.
   - The question is a contract, a privacy obligation, or legal advice beyond a dependency's declared terms; use `legal-compliance-review`.
   - Production is down or degraded right now and the ask is command of the incident; use `live-incident-response`.
-- Strong routing signals: `security-event-response`, `security event response`, `cve`, `triage this cve`, `cve in our dependency`, `cve in a dependency`, `security advisory`, `dependabot alert`, `dependabot security`, `vulnerable dependency`, `vulnerability in our dependency`, `reachability analysis`, `npm audit`, `committed a secret`, `committed an api key`, `leaked secret`, `leaked a secret`, `leaked credential`, `leaked api key`, `leaked an api key`, `leaked aws key`, `leaked an aws key`, `secret in git history`, `secret in the history`, `dependency license`, `dependency's license`, `license ok`, `license compatibility`, `license compatible`, `gpl dependency`, `agpl dependency`
+- Strong routing signals: `security-event-response`, `security event response`, `exfiltrating customer data`, `suspected unauthorized access`, `account takeover`, `cve`, `triage this cve`, `cve in our dependency`, `cve in a dependency`, `security advisory`, `dependabot alert`, `dependabot security`, `vulnerable dependency`, `vulnerability in our dependency`, `reachability analysis`, `npm audit`, `committed a secret`, `committed an api key`, `leaked secret`, `leaked a secret`, `leaked credential`, `leaked api key`, `leaked an api key`, `leaked aws key`, `leaked an aws key`, `secret in git history`, `secret in the history`, `dependency license`, `dependency's license`, `license ok`, `license compatibility`, `license compatible`, `gpl dependency`, `agpl dependency`
 - Good example:
   - Prompt: we committed a secret, what now
   - Expected behavior: Record the credential type, scope, and exposure window, then prepare containment_plan/v1: revoke and replace, observe the old credential rejected, audit its use in the window, and only then rewrite history; the closure verdict stays open until the rotation is observed and the persistence list is empty.
@@ -7211,7 +7213,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep the section plan, the command verification record, and the region update in Hermes. Every command's outcome is recorded only from executor, operator, or wrapper observed output; the file is written by the executor, and only inside its marked region.
-- Why this exists: `agent-instructions` exists because the file every handoff target reads first had no owner: `rules-distill` extracts rule candidates, `codebase-onboarding` builds a human reading path, and `context` aligns terminology, and each reads that file without writing it.
+- Why this exists: `agent-instructions` exists because the file every handoff target reads first had no owner: `rules-distill` extracts rule candidates, `codebase-onboarding` builds a human reading path, and `ulw-context` aligns terminology, and each reads that file without writing it.
 - First steps:
   - List every instruction file and which agent reads it before proposing a section.
   - Run or ask for the observed run of each command before marking it verified.
@@ -7898,7 +7900,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Start at once; there is no plan approval. Write the goal criteria in one line.
   - When the conversation holds a plan the user accepted (from `plan`, `ralplan` or `refactor-plan`), build the graph from it instead of re-planning: each task becomes a node with its id, depends_on and write scope, its done check goes into VERIFY and STOP WHEN, and its closing verification task becomes the `role: verify` node; plan only what it leaves open.
   - Plan the graph and call `omh_dag action=define` with the complete run `goal` and each node's id, label, category, prompt, depends_on, write_scope and role (`build` by default; `baseline`, `verify`, `review`); fix every refusal and read the lint before going on. Never `delegate_task` before `define` returns its calls. The saved goal reaches every native task; local VERIFY does not replace goal acceptance.
-  - Keep the plan todo as the run's layers in ONE tool: `todo_list` when `todo_list` is in your tool list or tool_search finds it (OMH mirrors it), else `omh_todo`. One item per layer, named for what it delivers, never a list of its nodes (the panel draws those); advance it as each layer settles.
+  - Keep the plan todo as the run's layers in ONE tool: `todo_list` when `todo_list` is in your tool list or tool_search finds it (OMH mirrors it), else `omh_todo`; an accepted plan stays in `omh_todo`. One item per layer, named for what it delivers, never a list of its nodes (the panel draws those); advance it as each layer settles.
   - For each call `omh_dag` returns, run its route (`omh_delegate_route`, set or fallback as given), then `delegate_task` with the tasks unchanged; never more calls than it returned. A call whose route names a `backend` (Hermes' model_map or profile_routes) runs no route tool: its tasks already carry what that backend takes. Then end the turn with one status line; never wait or poll.
   - On each completion read the node's handoff file and call `omh_dag action=settle` (accepted, failed, or blocked; a provider error is failed with provider_error). Dispatch what it returns in the same turn.
   - When the run reports done, check each node against its SCOPE and the goal criteria: extend the run when work is missing, otherwise report.
@@ -8283,7 +8285,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - A supplied spreadsheet needs cleaning, descriptive statistics, or anomaly analysis; use `data-analysis`.
   - A supplied academic PDF needs section-by-section explanation; use `paper-learning`.
   - A general business question needs an audience-ready synthesis rather than a domain model; use `research-brief`.
-- Strong routing signals: `market-research`, `market sizing`, `tam sam som`, `bottom up market sizing`, `market size sensitivity`, `customer evidence analysis`, `jtbd evidence matrix`, `competitor pricing profiles`, `competitive pricing analysis`
+- Strong routing signals: `market-research`, `market sizing`, `tam sam som`, `bottom up market sizing`, `market size sensitivity`, `customer evidence analysis`, `jtbd evidence matrix`, `competitor pricing profiles`, `competitive pricing analysis`, `시장 규모`, `경쟁사 분석`, `시장규모`, `경쟁사분석`
 - Good example:
   - Prompt: Estimate TAM SAM SOM for US independent dental clinics with sourced counts and sensitivity, not a guessed capture percentage.
   - Expected behavior: Fix scope and units, build a source/assumption ledger, calculate addressable scenarios with tools, and expose confidence limits and missing inputs.
@@ -9955,7 +9957,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-  - A multi-lane implementation of an accepted plan is ultrawork, which prepares its durable lanes through this board.
+  - A multi-lane implementation of an accepted plan; use `ultrawork`, which prepares its durable lanes through this board.
   - The user only wants to see what is running right now, without creating or changing a task; use `running-work-board`.
   - The turn is a Kanban worker that the review dispatcher started on a review-lane task to verify a review-requested handoff; that worker loads Hermes' bundled `sdlc-review` skill, not this one.
 - Strong routing signals: `agent-board`, `agent board`, `kanban`, `multi-agent`, `multi agent`, `multi agent board`, `multiple hermes agents`, `multiple hermes profiles`, `hermes profiles`, `subagent`, `subagents`, `sub agent`, `sub agents`, `agent coordination`, `agent task board`, `task board`, `roles and board`, `role board`, `heartbeat`, `blocker`, `agent blocker`, `agent heartbeat`, `agent handoff`, `handoff board`, `interviewer reviewer builder`, `reviewer builder`, `칸반`, `멀티 에이전트`, `서브에이전트`, `서브 에이전트`, `여러 에이전트`, `Hermes agent 여러 명`, `여러 명이 같이 일`, `에이전트 보드`, `작업 배분`, `역할 배분`, `작업 보드`, `역할과 보드`, `역할 보드`
@@ -9999,7 +10001,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### memory-new
 
-[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, and for a past decision use omh_memory recall or decision-recall.
+[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for existing Hermes memory use omh-memory-sync, and for a past decision use omh_memory recall or `decision-recall`.
 
 - Category: `memory`
 - Phase: `candidate-capture`
@@ -10061,7 +10063,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### memory-sync
 
-[omh] Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use memory-new, and for a past decision use omh_memory recall or decision-recall.
+[omh] Outdated or wrong Hermes memory entries: English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff without invoking, applying, or observing a native write; for a new fact use `memory-new`, and for a past decision use omh_memory recall or `decision-recall`.
 
 - Category: `memory`
 - Phase: `curation-review`
@@ -10096,7 +10098,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
   - State that Hermes-native and external provider/vector context is not_omh_reviewed, can nominate a candidate only, and may receive rendered OMH prefetch content through a configured Hermes runtime model request.
-  - Send memory-provider lifecycle questions -- enabling, switching, pausing, retention, deletion, export, or failed synchronization -- to external-connector-readiness, which owns the provider posture this review cannot establish.
+  - Send memory-provider lifecycle questions -- enabling, switching, pausing, retention, deletion, export, or failed synchronization -- to `external-connector-readiness`, which owns the provider posture this review cannot establish.
 - Completion checklist:
   - Confirm the workflow target, evidence boundary, and stop condition are named.
   - Report which outputs are prepared, observed, blocked, or missing.
@@ -10187,7 +10189,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### executor-runtime-readiness
 
-[omh] Unsure whether Codex or Claude Code is ready: executor runtime readiness - compare Codex, Claude Code, Hermes coding, and oh-my runtimes by tools and handoff mode; use external-connector-readiness for a named plugin or API, and toolbelt-readiness for the whole capability inventory.
+[omh] Unsure whether Codex or Claude Code is ready: executor runtime readiness - compare Codex, Claude Code, Hermes coding, and oh-my runtimes by tools and handoff mode; use `external-connector-readiness` for a named plugin or API, and `toolbelt-readiness` for the whole capability inventory.
 
 - Category: `executor-readiness`
 - Phase: `runtime-selection`
@@ -10331,7 +10333,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
   - The speech is material to transcribe or summarize; use `media-input-operator`.
-- Strong routing signals: `voice-operator`, `voice operator`, `voice-first`, `voice command`, `mobile command`, `short command`, `dictated command`, `dictated request`, `spoken request`, `speech command`, `accessibility`, `hands free`, `hands-free`, `phone command`, `phone request`, `push command`, `음성`, `음성으로`, `음성 명령`, `모바일 명령`, `모바일 음성`, `핸드폰`, `폰으로`, `말로`, `말로 한 요청`, `접근성`, `짧은 명령`, `짧게 말한 요청`
+- Strong routing signals: `voice-operator`, `voice operator`, `voice-first`, `voice command`, `mobile command`, `short command`, `dictated command`, `dictated request`, `spoken request`, `speech command`, `hands free`, `hands-free`, `phone command`, `phone request`, `push command`, `음성`, `음성으로`, `음성 명령`, `모바일 명령`, `모바일 음성`, `핸드폰`, `폰으로`, `말로`, `말로 한 요청`, `짧은 명령`, `짧게 말한 요청`
 - Good example:
   - Prompt: voice-operator 'release before lunch, check risky parts' from mobile.
   - Expected behavior: Produce `prepare_voice_operator_card` with required context, wrapper actions, and not-evidence boundaries.
@@ -10366,7 +10368,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Safety rules:
   - A voice operator card is not speech recognition, mobile notification delivery, platform action, or accepted execution evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
-  - This card is not realtime voice connector readiness. It may read the tool-safety verdict of a supplied realtime_voice_trial_receipt/v1 when one exists, and it never creates, infers, or upgrades one; route realtime voice adoption to external-connector-readiness.
+  - This card is not realtime voice connector readiness. It may read the tool-safety verdict of a supplied realtime_voice_trial_receipt/v1 when one exists, and it never creates, infers, or upgrades one; route realtime voice adoption to `external-connector-readiness`.
 
 ### browser-operator
 
@@ -10413,7 +10415,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - omh_browser blocks native browser_*; inert by default. Opted-in effects need exact approval: docs/BROWSER-EFFECTS.md.
   - Sign-ins, one-time codes, and saved cards go through `browser_vault` when `browser_vault` is in your tool list or tool_search finds it (`list` first; `fill` for a saved login, card, or address; `enter_code` for a one-time code after the password; `save_login` when nothing is saved for the site, so the user types it into Hermes' masked prompt; Hermes asks the user before it fills a card and refuses that in a headless run, and that answer sits beside `omh-spend-gate`'s typed yes, never in place of it): no password, card number, card security code, or one-time code is asked for, typed, or echoed in chat; record only its `success` and `filled_fields`, and never retry a `payment_declined`. Without it, the sign-in is the user's own step and a named gap.
 - Recovery notes:
-  - Missing target/confirmation: ask; visual correctness: visual-qa.
+  - Missing target/confirmation: ask; visual correctness: `visual-qa`.
   - Refresh stale state once; never replay unknown work. Reuse acquisitions; only owner adapter/version reaps. Release needs observed cleanup, not mutation approval.
   - Host receipt BLOCK: production click/submit, retry after auth/4xx/assertion/mutation failure, or over two transient read-only retries.
   - POSIX native agent-browser collector: cold-desktop anonymous read-only Chromium only; other engine/profile/fixture/locale/timezone: named blocker (unsupported_browser_engine_webkit), never substitution.
@@ -10490,7 +10492,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Recovery notes:
   - If the target path or folder is missing, ask for the smallest path scope needed before preparing the operation.
   - If delete, overwrite, move, rename, chmod, or irreversible cleanup is requested, require an explicit confirmation gate.
-  - If the request is file conversion, deck/PDF export, or attachment delivery, route to materials-package or deliverable-package instead.
+  - If the request is file conversion, deck/PDF export, or attachment delivery, route to `materials-package` or `deliverable-package` instead.
   - On Hermes, when a checkpoint covers the change, the user's `/rollback` restores it and `/diff session` shows what the session changed since the checkpoint baseline; cite either only after the user runs it.
   - On Hermes, a write that its own file guards refuse or hold for approval (a sensitive system path, a protected instruction file) is that gate's outcome to record, `blocked` or the user's answer, never a write to retry through another tool.
 - Required inputs:
@@ -10537,7 +10539,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - An ordinary read-only or test command with a known working directory and nothing to gate; run it with the native terminal tool.
   - The user pasted a failed command's output and asks for the cause; use `build-failure-triage`, or `agent-debug` when the agent itself is stuck.
   - The user wants a command blocked for the agent from now on; use `security-safety-review`, which prepares a proposed deny-glob list for the user to apply.
-- Strong routing signals: `command-operator`, `command operator`, `terminal command`, `terminal task`, `shell command`, `shell task`, `cli command`, `command execution`, `run command`, `run this command`, `execute command`, `execute this command`, `run npm test`, `run tests`, `npm test`, `pnpm test`, `bun test`, `uv run`, `python -m unittest`, `pytest`, `make test`, `cargo test`, `go test`, `summarize command output`, `터미널 명령`, `터미널에서`, `셸 명령`, `쉘 명령`, `명령 실행`, `명령어 실행`, `실행 준비`, `npm test 실행`, `테스트 실행`, `결과 요약`
+- Strong routing signals: `command-operator`, `command operator`, `terminal command`, `terminal task`, `shell command`, `shell task`, `cli command`, `command execution`, `run command`, `run this command`, `execute command`, `execute this command`, `npm test`, `pnpm test`, `bun test`, `uv run`, `python -m unittest`, `make test`, `summarize command output`, `터미널 명령`, `터미널에서`, `셸 명령`, `쉘 명령`, `명령 실행`, `명령어 실행`, `실행 준비`, `npm test 실행`, `테스트 실행`, `결과 요약`
 - Good example:
   - Prompt: command-operator run the staging deploy script from the repo root and confirm with me before it touches anything.
   - Expected behavior: Produce `prepare_command_operator_card` with required context, wrapper actions, and not-evidence boundaries.
@@ -10561,7 +10563,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If the command is irreversible or externally visible, require an explicit confirmation gate in chat before the run, whether or not the host flags it: deleting or overwriting user data, discarding history or force-pushing, deleting a remote branch, dropping, deleting from, truncating, or flushing a database, a credentialed or networked mutation, device actuation, an install, a deploy, a production change, or an external send.
   - On Hermes, record the terminal result's `approval` note beside that confirmation as additional evidence, never in place of it: a note that the command "was approved by the user" is the person's answer to Hermes' own prompt for that command, while "auto-approved by smart approval" or no note at all is not a person's consent, and a `pending_approval` status means the command has not run and will not run on its own (Hermes stores it without running it, and `/approve` resumes only a run that is still waiting on an approval), so it is never re-run or reworded and goes to a person's turn.
   - On Hermes, a cron job, a one-shot `-q` run, or a webhook run denies a flagged command by default (`approvals.cron_mode`, `approvals.single_query_mode`, `approvals.unattended_mode`): record the block as the gate's outcome and hand the command to a person's turn, never rephrase it to get past the gate. Nobody can answer the chat confirmation in those runs either, so an irreversible or externally visible command that Hermes does not flag is not run: it is handed to a person's turn and its confirmation is recorded as missing.
-  - If the user supplied failed command output and asks for root cause, route to build-failure-triage or agent-debug instead of preparing a fresh command.
+  - If the user supplied failed command output and asks for root cause, route to `build-failure-triage` or `agent-debug` instead of preparing a fresh command.
 - Required inputs:
   - user request
   - target context
@@ -10624,8 +10626,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing.
   - Message ids, ticket ids, provider responses, delivery receipts, and API effects are reported only from observed connector evidence.
 - Recovery notes:
-  - If the connector, credentials, or permission is missing: on Hermes, when `manage_connections` is in your tool list or tool_search finds it, use it for the app the user named (`status`, then `connect`) and take each app's answer as given: `connected` proceeds, `skipped` means continue without that app or ask in chat, never calling it again on your own or reaching the app another way, and `not_connected` stays a named gap. Otherwise route to toolbelt-readiness before preparing action success claims.
-  - If the request is only chat thread delivery policy for Discord, Slack, or Telegram, route to gateway-intent-card instead.
+  - If the connector, credentials, or permission is missing: on Hermes, when `manage_connections` is in your tool list or tool_search finds it, use it for the app the user named (`status`, then `connect`) and take each app's answer as given: `connected` proceeds, `skipped` means continue without that app or ask in chat, never calling it again on your own or reaching the app another way, and `not_connected` stays a named gap. Otherwise route to `toolbelt-readiness` before preparing action success claims.
+  - If the request is only chat thread delivery policy for Discord, Slack, or Telegram, route to `gateway-intent-card` instead.
   - If the external app action would create, send, invite, mutate, or delete provider state, require an explicit confirmation gate in chat before the call. Hermes asks the person before such a call only in some configurations (a write-capable tool on an MCP server set to `trust: untrusted`, or a plugin hook that escalates the call), so a host prompt that does appear is recorded as additional evidence and never replaces the chat confirmation.
 - Required inputs:
   - user request
@@ -10667,7 +10669,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Preferred usage: Use as an installed Hermes workflow skill when users ask to prepare or supervise read-only weather, finance, sports, map, place, exchange-rate, or time-zone lookups without claiming live data retrieval.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `live-info-operator` exists because a live number answered from recall, or from a quote with no timestamp, is wrong in a way the reader cannot see: it runs the lookup with an available tool and then checks what came back for provider, time, units and staleness before it is stated.
-- Use when: Use when Hermes should prepare or supervise read-only live information lookups without claiming provider availability, API access, freshness, retrieval, or result correctness.
+- Use when: Use when Hermes should answer read-only live information lookups with the provider, freshness, and units stated, without claiming a retrieval it never made or a correctness it never checked.
 - Do not use when:
   - The question is a broad current-facts or citation question rather than one live value; use `web-research`.
   - A supplied ledger, budget or close needs analysis rather than a live rate; use `finance-analysis`.
@@ -10721,7 +10723,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### external-connector-readiness
 
-[omh] Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use executor-runtime-readiness for coding-owner choice and toolbelt-readiness for missing capability inventory.
+[omh] Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `executor-runtime-readiness` for coding-owner choice and `toolbelt-readiness` for missing capability inventory.
 
 - Category: `connector`
 - Phase: `connector-readiness`
@@ -10741,7 +10743,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Choosing which coding owner runs a task; use `executor-runtime-readiness`.
   - Finding which tool, credential, or install is missing for work already chosen; use `toolbelt-readiness`.
   - A read-only live lookup or an external write through a connector already adopted; use `live-info-operator` or `connector-operator`.
-- Strong routing signals: `external-connector-readiness`, `external connector readiness`, `connector readiness matrix`, `plugin readiness matrix`, `provider readiness`, `api readiness`, `connector adoption`, `external plugin adoption`, `weather plugin readiness`, `weather connector readiness`, `wxtrain readiness`, `onequery read-only sql`, `read-only sql connector`, `sql connector readiness`, `nextcloud connector`, `microsoft workspace connector`, `microsoft graph connector`, `chainlink connector`, `solana connector`, `xmr gateway`, `private crypto transaction`, `private cryptocurrency connector`, `crypto transaction plugin`, `blockchain gateway`, `composio connector`, `composio universal cli`, `universal cli connector`, `universal cli skill adoption`, `skill connector adoption`, `connector auth risk`, `connector cost auth risk`, `agentchat connector`, `peer-to-peer agent messaging connector`, `websocket identity connector`, `websocket connector trial`, `clawsocial connector`, `social discovery connector`, `windy pairing`, `windymail mailbox connector`, `matrix chat identity`, `antigravity cli connector`, `agy cli bridge`, `agy bridge connector`, `macos keychain oauth connector`, `oracle oci connector`, `oracle genai connector`, `miniverse bridge`, `crustocean platform connector`, `cost-aware connector`, `multimodal connector`, `multimodal routing`, `screenshot connector`, `audio connector`, `video connector`, `video generation`, `generate a video`, `product demo video`, `text to video`, `home assistant connector`, `home assistant integration`, `home assistant device control`, `home assistant smart home`, `smart home connector`, `device control connector`, `plugin auto-routing`, `connector auto-routing`, `external tool trial`, `memory provider readiness`, `memory provider posture`, `memory provider lifecycle`, `memory provider adoption`, `memory provider retention`, `memory provider portability`, `memory provider sync failure`, `compare memory providers`, `memory provider comparison`, `memory provider`, `memory provider trial`, `memory provider benchmark`, `memory provider migration`, `memory provider rollback`, `switch memory provider`, `switching memory providers`, `disable memory provider`, `delete provider memory`, `export memory provider data`, `realtime voice connector`, `real-time voice connector`, `realtime voice readiness`, `realtime voice trial`, `realtime voice stack`, `voice connector readiness`, `voice connector trial`, `voice gateway readiness`, `voice gateway trial`, `voice agent connector readiness`, `voice trial receipt`, `voice turn integrity`, `voice turn receipt`, `barge-in behavior`, `barge-in handling`, `voice tool safety`, `spoken tool safety`, `커넥터 준비도`, `외부 커넥터 준비`, `외부 플러그인 채택`, `플러그인 준비도`, `커넥터 도입`, `플러그인 도입`, `비용 인증 리스크`, `인증 리스크`, `도입 비용`, `비용 기준 커넥터`, `자동 라우팅`, `멀티모달 커넥터`, `멀티모달 라우팅`, `영상 생성`, `제품 데모 영상`, `홈 어시스턴트 커넥터`, `홈 어시스턴트 연동`, `홈 어시스턴트 기기 제어`, `홈 어시스턴트 스마트홈`, `홈어시스턴트 커넥터`, `홈어시스턴트 연동`, `홈어시스턴트 기기 제어`, `홈어시스턴트 스마트홈`, `스마트홈 커넥터`
+- Strong routing signals: `external-connector-readiness`, `external connector readiness`, `connector readiness matrix`, `plugin readiness matrix`, `provider readiness`, `api readiness`, `connector adoption`, `external plugin adoption`, `weather plugin readiness`, `weather connector readiness`, `wxtrain readiness`, `onequery read-only sql`, `read-only sql connector`, `sql connector readiness`, `nextcloud connector`, `microsoft workspace connector`, `microsoft graph connector`, `chainlink connector`, `solana connector`, `xmr gateway`, `private crypto transaction`, `private cryptocurrency connector`, `crypto transaction plugin`, `blockchain gateway`, `composio connector`, `composio universal cli`, `universal cli connector`, `universal cli skill adoption`, `skill connector adoption`, `connector auth risk`, `connector cost auth risk`, `agentchat connector`, `peer-to-peer agent messaging connector`, `websocket identity connector`, `websocket connector trial`, `clawsocial connector`, `social discovery connector`, `windy pairing`, `windymail mailbox connector`, `matrix chat identity`, `antigravity cli connector`, `agy cli bridge`, `agy bridge connector`, `macos keychain oauth connector`, `oracle oci connector`, `oracle genai connector`, `miniverse bridge`, `crustocean platform connector`, `cost-aware connector`, `multimodal connector`, `multimodal routing`, `screenshot connector`, `audio connector`, `video generation connector`, `video connector readiness`, `text to video provider`, `home assistant connector`, `home assistant integration`, `home assistant device control`, `home assistant smart home`, `smart home connector`, `device control connector`, `plugin auto-routing`, `connector auto-routing`, `external tool trial`, `memory provider readiness`, `memory provider posture`, `memory provider lifecycle`, `memory provider adoption`, `memory provider retention`, `memory provider portability`, `memory provider sync failure`, `compare memory providers`, `memory provider comparison`, `memory provider`, `memory provider trial`, `memory provider benchmark`, `memory provider migration`, `memory provider rollback`, `switch memory provider`, `switching memory providers`, `disable memory provider`, `delete provider memory`, `export memory provider data`, `realtime voice connector`, `real-time voice connector`, `realtime voice readiness`, `realtime voice trial`, `realtime voice stack`, `voice connector readiness`, `voice connector trial`, `voice gateway readiness`, `voice gateway trial`, `voice agent connector readiness`, `voice trial receipt`, `voice turn integrity`, `voice turn receipt`, `barge-in behavior`, `barge-in handling`, `voice tool safety`, `spoken tool safety`, `커넥터 준비도`, `외부 커넥터 준비`, `외부 플러그인 채택`, `플러그인 준비도`, `커넥터 도입`, `플러그인 도입`, `비용 인증 리스크`, `인증 리스크`, `도입 비용`, `비용 기준 커넥터`, `자동 라우팅`, `멀티모달 커넥터`, `멀티모달 라우팅`, `홈 어시스턴트 커넥터`, `홈 어시스턴트 연동`, `홈 어시스턴트 기기 제어`, `홈 어시스턴트 스마트홈`, `홈어시스턴트 커넥터`, `홈어시스턴트 연동`, `홈어시스턴트 기기 제어`, `홈어시스턴트 스마트홈`, `스마트홈 커넥터`, `영상 생성 커넥터`
 - Good example:
   - Prompt: external-connector-readiness compare weather plugin and wxtrain candidates with cost, freshness, multimodal evidence, and fallback routes before adoption.
   - Expected behavior: Produce `prepare_external_connector_readiness` with required context, wrapper actions, and not-evidence boundaries.
@@ -10768,7 +10770,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If the candidate list is unknown, route to `skill-scout` or `source-finder` before readiness scoring.
   - If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to `toolbelt-readiness`.
   - If a specific provider action is already selected, route read-only live data to `live-info-operator` or write/mutation tasks to `connector-operator`.
-  - If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to memory-sync as not_omh_reviewed context rather than importing it into OMH review.
+  - If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to `memory-sync` as not_omh_reviewed context rather than importing it into OMH review.
   - If a realtime voice connector has no supplied realtime_voice_trial_receipt/v1, route the setup and the trial run to the host, connector, or operator that owns the microphone, call, or room, then consume only the returned receipt.
 - Required inputs:
   - user request
@@ -10815,7 +10817,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### prompt-import-readiness
 
-[omh] Importing prompt files for Hermes: prompt import readiness - review and normalize external CLI-agent prompt files before offering slash-command candidates; use external-connector-readiness for plugin or API adoption and toolbelt-readiness for missing runtime capabilities.
+[omh] Importing prompt files for Hermes: prompt import readiness - review and normalize external CLI-agent prompt files before offering slash-command candidates; use `external-connector-readiness` for plugin or API adoption and `toolbelt-readiness` for missing runtime capabilities.
 
 - Category: `prompt`
 - Phase: `prompt-import-readiness`
@@ -10891,7 +10893,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### physical-device-readiness
 
-[omh] Agent control of a robot, 3D printer, or IoT relay: gate robots, 3D printers, IoT relays, sensors, and lab hardware before trials; use external-connector-readiness for provider or connector adoption and toolbelt-readiness for missing control tools.
+[omh] Agent control of a robot, 3D printer, or IoT relay: gate robots, 3D printers, IoT relays, sensors, and lab hardware before trials; use `external-connector-readiness` for provider or connector adoption and `toolbelt-readiness` for missing control tools.
 
 - Category: `operations`
 - Phase: `device-readiness`
@@ -11056,7 +11058,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
   - The audio is an instruction to carry out; use `voice-operator`.
-- Strong routing signals: `media-input-operator`, `media input operator`, `media input`, `audio transcription`, `audio transcript`, `transcribe audio`, `transcribe this audio`, `meeting recording`, `recording transcript`, `video transcript`, `youtube summary`, `youtube video`, `summarize youtube`, `summarize this youtube`, `video summary`, `summarize this video`, `ocr image`, `image ocr`, `photo ocr`, `picture ocr`, `graphic ocr`, `screenshot ocr`, `ocr this image`, `ocr receipt image`, `ocr this receipt image`, `receipt ocr`, `receipt image ocr`, `receipt text`, `receipt text from image`, `receipt fields`, `receipt fields from image`, `receipt image extraction`, `receipt image text`, `receipt image fields`, `parse receipt image`, `receipt image parse`, `receipt image into fields`, `image text extraction`, `extract text from image`, `extract text from this image`, `screenshot text extraction`, `extract text from screenshot`, `extract text from this screenshot`, `screenshot to text`, `timestamps`, `with timestamps`, `clip summary`, `podcast summary`, `webinar summary`, `오디오 전사`, `음성 전사`, `회의 녹음`, `녹음 요약`, `영상 요약`, `유튜브 요약`, `youtube 요약`, `이미지 ocr`, `이미지 OCR`, `이미지 텍스트 추출`, `이미지에서 텍스트 추출`, `영수증 ocr`, `영수증 OCR`, `영수증 이미지 ocr`, `영수증 이미지 OCR`, `스크린샷 텍스트 추출`, `스크린샷에서 텍스트 추출`, `타임스탬프`, `타임라인 요약`, `транскрибируй`, `расшифруй аудио`, `суммаризируй видео`, `вытащи текст со скриншота`, `распознай текст на картинке`
+- Strong routing signals: `media-input-operator`, `media input operator`, `media input`, `audio transcription`, `audio transcript`, `transcribe audio`, `transcribe this audio`, `meeting recording`, `demo recording`, `recording transcript`, `video transcript`, `youtube summary`, `youtube video`, `summarize youtube`, `summarize this youtube`, `video summary`, `summarize this video`, `ocr image`, `image ocr`, `photo ocr`, `picture ocr`, `graphic ocr`, `screenshot ocr`, `ocr this image`, `ocr receipt image`, `ocr this receipt image`, `receipt ocr`, `receipt image ocr`, `receipt text`, `receipt text from image`, `receipt fields`, `receipt fields from image`, `receipt image extraction`, `receipt image text`, `receipt image fields`, `parse receipt image`, `receipt image parse`, `receipt image into fields`, `image text extraction`, `extract text from image`, `extract text from this image`, `screenshot text extraction`, `extract text from screenshot`, `extract text from this screenshot`, `screenshot to text`, `timestamps`, `with timestamps`, `clip summary`, `podcast summary`, `webinar summary`, `오디오 전사`, `음성 전사`, `회의 녹음`, `녹음 요약`, `영상 요약`, `유튜브 요약`, `youtube 요약`, `이미지 ocr`, `이미지 OCR`, `이미지 텍스트 추출`, `이미지에서 텍스트 추출`, `영수증 ocr`, `영수증 OCR`, `영수증 이미지 ocr`, `영수증 이미지 OCR`, `스크린샷 텍스트 추출`, `스크린샷에서 텍스트 추출`, `타임스탬프`, `타임라인 요약`, `транскрибируй`, `расшифруй аудио`, `суммаризируй видео`, `вытащи текст со скриншота`, `распознай текст на картинке`
 - Good example:
   - Prompt: media-input-operator transcribe this audio meeting and summarize action items with evidence and timestamp boundaries.
   - Expected behavior: Produce `prepare_media_input_card` with required context, wrapper actions, and not-evidence boundaries.
@@ -11076,9 +11078,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Transcript text, OCR output, screenshot text, receipt fields, timestamps, quotes, action items, and media-summary claims are reported only from observed media or supplied transcript/extraction evidence.
 - Recovery notes:
   - If the media or transcript is missing, ask for the smallest source, file, transcript, or provider result needed.
-  - If the request is broad current-source research about a video topic, route to research or source-finder before summary.
-  - If the user wants a PPT/PDF/report generated from the media summary, route to materials-package after media input evidence is clear.
-  - If the request is about whether a live duplex voice connector keeps whole spoken turns, route to external-connector-readiness for a realtime_voice_trial_receipt/v1 rather than treating a supplied recording as that evidence.
+  - If the request is broad current-source research about a video topic, route to `research` or `source-finder` before summary.
+  - If the user wants a PPT/PDF/report generated from the media summary, route to `materials-package` after media input evidence is clear.
+  - If the request is about whether a live duplex voice connector keeps whole spoken turns, route to `external-connector-readiness` for a realtime_voice_trial_receipt/v1 rather than treating a supplied recording as that evidence.
 - Required inputs:
   - user request
   - target context
@@ -11176,7 +11178,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### toolbelt-readiness
 
-[omh] Which tools and credentials a workflow needs: inventory which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs; use external-connector-readiness to assess one named integration and executor-runtime-readiness to choose the coding owner.
+[omh] Which tools and credentials a workflow needs: inventory which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs; use `external-connector-readiness` to assess one named integration and `executor-runtime-readiness` to choose the coding owner.
 
 - Category: `tools`
 - Phase: `readiness-check`
@@ -11456,7 +11458,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`, `coding progress`, `where is codex`, `what's going on`, `status update please`, `what are you doing`, `what are you working on`, `where are we`, `今何してる`, `现在在做什么`, `qué está pasando`, `qu'est-ce qui se passe`, `was ist los`, `ai agent manager`, `관리자 입장`, `Codex 작업`, `Codex 작업이 어디까지`, `코덱스 작업`, `작업이 어디까지`, `진행됐는지`, `진행되었는지`, `처리량`, `작업 품질`, `진행상황`, `무슨일이노`, `뭔일임`, `무슨 일이야`, `뭐해`, `지금 뭐 하고 있어`, `작업상황 브리핑`, `어디까지 됐어`, `리서치 코딩 리뷰`, `что сделали агенты`, `прогресс агентов`, `как там делегированное`, `статус работы агентов`
+- Strong routing signals: `agent-ops-review`, `agent ops review`, `tracing audit`, `telemetry audit`, `instrumentation audit`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`, `coding progress`, `where is codex`, `what's going on`, `status update please`, `what are you doing`, `what are you working on`, `where are we`, `今何してる`, `现在在做什么`, `qué está pasando`, `qu'est-ce qui se passe`, `was ist los`, `ai agent manager`, `관리자 입장`, `Codex 작업`, `Codex 작업이 어디까지`, `코덱스 작업`, `작업이 어디까지`, `진행됐는지`, `진행되었는지`, `처리량`, `작업 품질`, `진행상황`, `무슨일이노`, `뭔일임`, `무슨 일이야`, `뭐해`, `지금 뭐 하고 있어`, `작업상황 브리핑`, `어디까지 됐어`, `리서치 코딩 리뷰`, `что сделали агенты`, `прогресс агентов`, `как там делегированное`, `статус работы агентов`
 - Good example:
   - Prompt: agent-ops-review show quality, blockers, and throughput for AI-agent work.
   - Expected behavior: Produce `prepare_agent_ops_review` with required context, wrapper actions, and not-evidence boundaries.
@@ -11544,9 +11546,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Diagnosis distinguishes repeated command/tool loops, context drift, environment mismatch, service errors, and wrong-hypothesis tests.
   - Recovery action is contained, reversible, and does not claim implementation, verification, CI, merge, or future-loop fixes.
 - Recovery notes:
-  - If the request is install/setup health, route to doctor.
-  - If the request is a manager status or throughput review, route to agent-ops-review.
-  - If the request is a durable self-improvement record after diagnosis, route to workflow-learning.
+  - If the request is install/setup health, route to `doctor`.
+  - If the request is a manager status or throughput review, route to `agent-ops-review`.
+  - If the request is a durable self-improvement record after diagnosis, route to `workflow-learning`.
 - Required inputs:
   - session id or record path, and the turn range if known
   - what the user expected the run to do, and what they saw instead
@@ -11679,12 +11681,12 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Confidence is the count of independent observations (different runs, sessions, or projects; one session counts once): 1 is an anecdote, 2 is tentative, 3 or more with no contradicting observation is a promotion candidate. Show the count and evidence refs beside every instinct. Instincts live only in this conversation's `instinct_candidate/v1` list until a store route accepts one; say so.
   - Project-specific conventions, global practices, project/global promotion candidates, imports, and exports are separated.
   - No hooks, memory writes, skill edits, global promotion, import/export, or behavior-change claims are made without observed approval and implementation evidence.
-  - A promoted instinct leaves as a store route, `memory_candidate` for `memory-new`, `skill_update_candidate` for `workflow-learning`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.
+  - A promoted instinct leaves as a store route, `memory_new_candidate/v1` for `memory-new`, `skill_update_candidate` for `workflow-learning`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.
   - On Hermes, the skill audit ledger (`skills/.curator_ledger.jsonl` under the active profile's Hermes home) is observed evidence of what the agent or its background review already wrote; an instinct that matches a ledger entry no store route accounts for is reported as `unreviewed_native_write` (OMH holds no record of that write, which is not to say nobody reviewed it), never counted as repeated evidence for the instinct.
 - Recovery notes:
-  - If the request is a single missed route or run trace, route to workflow-learning first.
-  - If the request is to mutate durable rules, prompts, skills, or AGENTS guidance, route to rules-distill or implementation after review approval.
-  - If evidence comes from a stuck run, use agent-debug before converting lessons into instincts.
+  - If the request is a single missed route or run trace, route to `workflow-learning` first.
+  - If the request is to mutate durable rules, prompts, skills, or AGENTS guidance, route to `rules-distill` or implementation after review approval.
+  - If evidence comes from a stuck run, use `agent-debug` before converting lessons into instincts.
 - Required inputs:
   - user request
   - target context
@@ -11746,9 +11748,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - No install, copy, write, credential, or trust claim is made without observed review or implementation.
   - On Hermes, fill the external candidates from `hermes skills search <query>` and `hermes skills inspect <identifier>`, whose hub requests are Hermes' own, not OMH's. Keep the trust each shows (`official` for an official-source row, otherwise `builtin`, `trusted`, or `community`, highest first) beside the candidate as its source's standing, never as a review of its content, and record a scan verdict (`safe`, `caution`, or `dangerous`) only from install or `hermes skills audit` output that was seen, so a candidate nobody installed has none.
 - Recovery notes:
-  - If the request is about setup or installed skill repair, route to doctor.
-  - If the request is a portfolio health dashboard, route to skill-health.
-  - If the request is an approved skill mutation or creation task, route to skill or implementation after the scout decision.
+  - If the request is about setup or installed skill repair, route to `doctor`.
+  - If the request is a portfolio health dashboard, route to `skill-health`.
+  - If the request is an approved skill mutation or creation task, route to `skill` or implementation after the scout decision.
 - Required inputs:
   - user request
   - target context
@@ -11807,14 +11809,14 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
   - Dashboard scope, source surfaces, stale/duplicate criteria, and stop condition are explicit.
-  - Install/setup health is routed to doctor; catalog operations are routed to skill; failure retrospectives are routed to workflow-learning.
+  - Install/setup health is routed to `doctor`; catalog operations are routed to `skill`; failure retrospectives are routed to `workflow-learning`.
   - No skill, prompt, doc, memory, or model behavior is claimed changed until a reviewed implementation records evidence.
   - Never present use, view, or load counts, `.usage.json` included, as a health, prune, archive, or retire signal: a rarely used skill is not an unhealthy one, and no health card recommends removing, archiving, or pruning a skill for being used little.
   - On Hermes, read the skill audit ledger read-only (that skill's entries in `skills/.curator_ledger.jsonl` under the active profile's Hermes home, or `hermes curator ledger --skill <name> --limit <n>`, which lists only the 20 newest entries by default): an entry against an OMH-managed skill means Hermes changed that managed copy outside OMH, so it may no longer match its generated body; report it as drift with the entry's `action` and `actor` (`agent`, `user`, or `curator`, which covers Hermes' curator and its background review). An OMH-managed skill is one OMH installed, under a label OMH's catalog renders such as `omh-plan` or `ulw-work`; a companion skill the person or an agent created is theirs, whatever its name. An empty ledger is unknown, not clean, because `skills.ledger: false` turns it off.
   - On Hermes, record an authoring finding only from the `lint_warnings` a `skill_manage` write returned, which are advisory and never proof a skill works; only some writes return them (an `edit` never does), so a write without them is not a clean lint. Record an available update for a hub-installed skill only from `hermes skills check` output that was seen; that hub request is Hermes' own, not OMH's.
 - Recovery notes:
-  - If the request is about OMH setup, install, stale package paths, or command availability, route to doctor.
-  - If the request is a missed-route or self-improvement trace, route to workflow-learning before adding health actions.
+  - If the request is about OMH setup, install, stale package paths, or command availability, route to `doctor`.
+  - If the request is a missed-route or self-improvement trace, route to `workflow-learning` before adding health actions.
 - Required inputs:
   - user request
   - target context
@@ -11866,7 +11868,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
-  - Classify a lesson before any write: `omh learning route-signal "<one-line lesson>"` names the destination (memory, skill, wiki, failure-retrospective, or automation review); add `--record` only after the user agrees to keep the route. Show the destination and why, list pending routes with `omh learning store-routes`, and leave `omh learning review-route` to the person. A fact goes to `memory-new` and a skill change stays a `skill_update_candidate`; this skill writes none of those stores.
+  - Classify a lesson before any write: `omh learning route-signal "<one-line lesson>"` names the destination (memory, skill, wiki, failure-retrospective, automation review, `manual_review_candidate` for an ambiguous signal, or `discard_transient` for private or transient content); add `--record` only after the user agrees to keep the route. Show the destination and why, list pending routes with `omh learning store-routes`, and leave `omh learning review-route` to the person. A fact goes to `memory-new` and a skill change stays a `skill_update_candidate`; this skill writes none of those stores.
   - Read Hermes' skill audit ledger read-only (`skills/.curator_ledger.jsonl` under the active profile's Hermes home, or `hermes curator ledger --limit <n>`, which lists only the 20 newest entries by default) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. An empty ledger is unknown, not clean, because `skills.ledger: false` turns it off. A trimmed ledger is incomplete too: from Hermes v2026.9.24 the oldest entries are dropped past `skills.ledger_max_bytes`, so report the window you read (entry count, oldest timestamp) and treat an older write as not_observed, not clean.
   - Mark an approved `skill_update_candidate` landed only from a `skill_manage` result for that skill that succeeded without `staged: true`, or from a ledger entry that is dated after the approval, has `actor` `agent` or `user` and `action` `create`, `edit`, `patch`, or `write_file`, and lists the approved target file in its `after` manifest. An entry by `curator`, or one that deletes, archives, rolls back, or purges, never marks it landed, and a staged result waits in `/skills pending` for the person and has not landed.
   - The ledger records skill writes only: a memory write by Hermes' background review is visible only when Hermes staged it under `pending/memory/` with `origin: background_review`, and is `not_observed` otherwise.
@@ -15035,7 +15037,7 @@ Capture one bounded durable project or product memory candidate through explicit
 
 ### memory-sync
 
-English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff; no OMH surface invokes, applies, or observes a native write — a user-approved diff is applied by Hermes's own native memory tool. For a new fact use memory-new.
+English-canonical Hermes memory-review guidance: inspect USER.md and MEMORY.md claims and prepare a native write diff; no OMH surface invokes, applies, or observes a native write — a user-approved diff is applied by Hermes's own native memory tool. For a new fact use `memory-new`.
 
 - Use when: Use when existing Hermes USER.md, MEMORY.md, or accumulated skill memories need an English-canonical, claim-by-claim review; it prepares native write guidance only, and no OMH surface invokes, applies, or observes a native write.
 - Quality tier: `curation-gated`

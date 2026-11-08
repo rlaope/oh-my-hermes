@@ -1,6 +1,6 @@
 ---
 name: "omh-code-review"
-description: "[omh] Pull request or changes to vet: bug-first review with evidence. Use when the user says: code-review, review, audit, find bugs, release gate, claim audit, evidence audit, README claim."
+description: "[omh] Pull request or changes to vet: bug-first review with evidence. Use when the user says: code-review, review, audit, find bugs, claim audit, evidence audit, README claim, what actually happened."
 license: MIT
 metadata:
   hermes:
@@ -67,7 +67,7 @@ Bad example:
 
 Use for review-shaped requests; findings come first and must cite concrete evidence.
 
-    Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `コードレビュー`, `バグを見つけて`, `実際に何をしたか`, `리뷰`, `코드 리뷰`, `리뷰까지`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`, `сделай ревью кода`, `ревью моего кода`, `ревью изменений`, `проверь код на баги`, `проревьюй`, `ревью пул реквеста`, `проверь мой код`, `проверить мой код`, `сделай код ревью`, `найди баги`, `ревьюни`, `ревью этого кода`, `代码评审`, `代码审查`, `找出缺陷`, `tinjau kode`, `review kode ini`, `bantu tinjau kode PR ini`, `tolong periksa diff ini untuk mencari bug`, `cek perubahan kode sebelum merge`, `ulas pull request ini`, `cari bug di perubahan ini`, `review PR ini dong`, `rà soát mã nguồn`, `review mã nguồn này`, `giúp rà soát PR này`, `hãy kiểm tra diff này tìm bug`, `kiểm tra đoạn code trước khi ráp vô`, `phân tích pull request này`, `tìm bug trong thay đổi này`, `review PR này giúp mình`
+    Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `コードレビュー`, `バグを見つけて`, `実際に何をしたか`, `리뷰`, `코드 리뷰`, `리뷰까지`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`, `сделай ревью кода`, `проверь на уязвимости`, `ревью моего кода`, `ревью изменений`, `проверь код на баги`, `проревьюй`, `ревью пул реквеста`, `проверь мой код`, `проверить мой код`, `сделай код ревью`, `найди баги`, `ревьюни`, `ревью этого кода`, `代码评审`, `代码审查`, `找出缺陷`, `tinjau kode`, `review kode ini`, `bantu tinjau kode PR ini`, `tolong periksa diff ini untuk mencari bug`, `cek perubahan kode sebelum merge`, `ulas pull request ini`, `cari bug di perubahan ini`, `review PR ini dong`, `rà soát mã nguồn`, `review mã nguồn này`, `giúp rà soát PR này`, `hãy kiểm tra diff này tìm bug`, `kiểm tra đoạn code trước khi ráp vô`, `phân tích pull request này`, `tìm bug trong thay đổi này`, `review PR này giúp mình`
 
 ## Catalog Metadata
 
@@ -90,7 +90,7 @@ Quality bar:
 - Require structured `spec_axis`, `could_not_assess` (empty allowed), and unranked `verification_gaps` (empty allowed) under the dispatch schema; gaps carry `path`, `line_range`, and `evidence`, never finding priority or confidence. Check actual reads, revision, bounds, ordered ranges, and claim truth separately from shape.
 - Select depth by changed risk, not diff size; record selected and omitted checks, reasons, actual coverage, and budget. Deduplicate candidates by root cause and validate before final findings; retain unresolved protected risks separately. Say `independent validation unavailable` when no different reader participated.
 - When the reviewed work ran in a Hermes session, cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) to scope which workspace files its read_file, write_file, and patch calls touched, with the outcome Hermes recorded; it is file lineage, never file-content, diff, test, review, CI, or merge evidence.
-- For native `omh_todo` checkpoints, `record` then `recall` this review declaration. Stored declarations are not proof.
+- On Hermes, for native `omh_todo` checkpoints, `record` then `recall` this review declaration. Stored declarations are not proof.
 
 Required inputs:
 

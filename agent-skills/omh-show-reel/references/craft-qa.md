@@ -2,6 +2,8 @@
 
 # Review and delivery
 
+Script paths on this page use `S=<skill_dir>/toolkit/scripts`, where `<skill_dir>` is this skill's folder.
+
 ## Contents
 
 - Review stages

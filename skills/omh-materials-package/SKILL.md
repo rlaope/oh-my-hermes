@@ -10,7 +10,7 @@ metadata:
     phase: material-plan
     role: operator
     quality_tier: material-gated
-    related_skills: [omh-report-package, omh-operating-rhythm, pdf, docx, powerpoint, xlsx, microsoft-office]
+    related_skills: [omh-report-package, omh-operating-rhythm, omh-wiki, pdf, docx, powerpoint, xlsx, microsoft-office]
 ---
 
 # Materials Package
@@ -25,7 +25,7 @@ This is a Hermes-native `materials-package` workflow skill.
 
 - The user only needs a weekly/monthly report outline; use `omh-report-package`.
 - The user asks for recurring meeting minutes or scrum history; use `omh-operating-rhythm`.
-- The request is code documentation, README, or project wiki maintenance; use the docs/wiki workflow.
+- The request is code documentation, README, or project wiki maintenance; use `omh-wiki`.
 - The user wants an operation done on one existing file - fill a PDF form, merge or split PDFs, or edit the text of a Word document, the slides of a deck, or the cells of a workbook - rather than a material plan with an export and QA ladder; load Hermes' bundled `pdf`, `docx`, `powerpoint`, or `xlsx` skill (`microsoft-office` from v0.22.6) for that file instead of this one.
 
 ## Examples
@@ -56,7 +56,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
+- Current lane: **Materials and visual summaries** - web, accessibility, visual QA, files, and packages.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 

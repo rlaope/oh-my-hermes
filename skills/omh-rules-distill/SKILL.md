@@ -10,7 +10,7 @@ metadata:
     phase: rules-distillation
     role: memory-keeper
     quality_tier: rules-distillation-gated
-    related_skills: [omh-workflow-learning, omh-wiki, omh-agent-instructions]
+    related_skills: [omh-workflow-learning, omh-memory-new, omh-memory-sync, omh-agent-instructions]
 ---
 
 # Rules Distill
@@ -24,7 +24,7 @@ This is a Hermes-native `rules-distill` workflow skill.
 ## Do Not Use When
 
 - The user wants a single workflow route regression; use `omh-workflow-learning`.
-- The user wants durable factual project memory; use `omh-wiki` or memory curation.
+- The user wants durable factual project memory; use `omh-memory-new`, or `omh-memory-sync` to curate what Hermes already holds.
 - The user already approved a concrete code/doc change; use the implementation workflow.
 - The ask is writing or keeping current the file an agent reads at startup -- AGENTS.md, CLAUDE.md, a Cursor rule; use `omh-agent-instructions`, which updates only its marked region.
 
@@ -57,7 +57,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
+- Current lane: **Automation and status** - schedules, status, health, and ops review.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 

@@ -299,7 +299,7 @@ What it measures, and what each one asks of you:
 | --- | --- | --- |
 | `filler_hits` | 0 | No phrase from the reviewed `FILLER_PHRASES` list. Each is a connective whose deletion leaves the claim intact. |
 | `repeated_share_percent` | < 5.0 | A body does not repeat its own sentences. The margin exists so the one most important rule may be restated at the end of a long body. |
-| `payload_markers_per_1k` | > 9.0 | Prose that instructs: modals, negations and exceptions, conditionals, numeric bounds with units, and exact strings in backticks. |
+| `payload_markers_per_1k` | > 7.9 | Prose that instructs: modals, negations and exceptions, conditionals, numeric bounds with units, and exact strings in backticks. |
 
 Two rules the gate cannot check for you:
 

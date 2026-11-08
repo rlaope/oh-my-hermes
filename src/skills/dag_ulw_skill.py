@@ -126,7 +126,7 @@ DEFINITION = SkillDefinition(
         "fix every refusal and read the lint before going on. Never `delegate_task` "
         "before `define` returns its calls. The saved goal reaches every native task; local VERIFY does not replace goal acceptance.",
         f"Keep the plan todo as the run's layers in ONE tool: `{NATIVE_TODO_TOOL}` when "
-        f"{native_tool_presence_clause(NATIVE_TODO_TOOL, code=True)} (OMH mirrors it), else `omh_todo`. One item per "
+        f"{native_tool_presence_clause(NATIVE_TODO_TOOL, code=True)} (OMH mirrors it), else `omh_todo`; an accepted plan stays in `omh_todo`. One item per "
         "layer, named for what it delivers, never a list of its nodes (the panel draws those); advance it as each "
         "layer settles.",
         "For each call `omh_dag` returns, run its route (`omh_delegate_route`, set or fallback as given), then "

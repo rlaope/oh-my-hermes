@@ -57,7 +57,7 @@ Bad example:
 
 Use when Hermes should inspect the local repo/workspace/operator surface and produce a safe inventory, risk map, and gap list before planning, routing, or feature strengthening.
 
-    Strong routing signals: `workspace-audit`, `workspace audit`, `repo surface audit`, `repository surface audit`, `workspace surface audit`, `repo inventory`, `surface inventory`, `skill inventory`, `prompt inventory`, `plugin inventory`, `mcp inventory`, `hook inventory`, `config audit`, `what are we missing`, `audit this repo`, `레포 감사`, `워크스페이스 감사`, `설정 감사`, `스킬 인벤토리`, `аудит репозитория`, `аудит воркспейса`, `инвентаризация репо`, `инвентарь скиллов`, `аудит харнессов`, `аудит харнесов`, `проверь конфиги`
+    Strong routing signals: `workspace-audit`, `workspace audit`, `repo surface audit`, `repository surface audit`, `workspace surface audit`, `repo inventory`, `surface inventory`, `skill inventory`, `prompt inventory`, `plugin inventory`, `hook inventory`, `config audit`, `what are we missing`, `audit this repo`, `레포 감사`, `워크스페이스 감사`, `설정 감사`, `스킬 인벤토리`, `аудит репозитория`, `аудит воркспейса`, `инвентаризация репо`, `инвентарь скиллов`, `аудит харнессов`, `аудит харнесов`, `проверь конфиги`
 
 ## Catalog Metadata
 

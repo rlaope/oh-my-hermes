@@ -59,7 +59,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `live-incident-response`, `automation-blueprint`, `github-event-ops`, `github-issue-intake`, `buzz`, `+40 more`) - schedules, status, health, and ops review.
+- Current lane: **Automation and status** - schedules, status, health, and ops review.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
@@ -67,7 +67,7 @@ Bad example:
 
 Use when Hermes should turn a natural recurring/cron-like request into a scheduled ops blueprint without claiming host automation, platform delivery, source retrieval, or no-agent execution.
 
-    Strong routing signals: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`, `recurring ops`, `recurring workflow`, `keep watching`, `keep monitoring`, `watch continuously`, `monitor continuously`, `every morning`, `every day`, `daily digest`, `weekly digest`, `automate this`, `automate workflow`, `send to slack`, `send to discord`, `post to telegram`, `only if changed`, `silent if nothing changed`, `schedule this`, `ずっと監視`, `監視し続け`, `継続的に監視`, `매일`, `매주`, `정기`, `예약`, `반복`, `자동화`, `자동화해줘`, `스케줄`, `슬랙`, `디스코드`, `텔레그램`, `보내`, `공유`, `변화 없으면`, `조용히`, `계속 감시`, `계속 모니터링`, `계속 지켜봐`, `автоматизируй`, `сделай автоматизацию`, `крон задача`, `cron задача`, `напоминай мне каждый`, `реши это скриптами`, `持续监控`, `持續監控`, `一直监控`, `rancang otomatisasi terjadwal`, `bikin alur kerja otomatis setiap hari`, `rancang pengiriman ringkasan otomatis`, `thiết kế tự động hóa theo lịch trình`, `tạo luồng công việc tự động hàng ngày`, `thiết kế gửi tóm tắt tự động`
+    Strong routing signals: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`, `recurring ops`, `recurring workflow`, `keep watching`, `keep monitoring`, `watch continuously`, `monitor continuously`, `every morning`, `every day`, `daily digest`, `weekly digest`, `automate this`, `automate workflow`, `send to slack`, `send to discord`, `post to telegram`, `only if changed`, `silent if nothing changed`, `schedule this`, `ずっと監視`, `監視し続け`, `継続的に監視`, `매일`, `매주`, `정기`, `예약`, `자동화`, `자동화해줘`, `스케줄`, `슬랙`, `디스코드`, `텔레그램`, `보내`, `공유`, `변화 없으면`, `조용히`, `계속 감시`, `계속 모니터링`, `계속 지켜봐`, `반복해줘`, `반복 실행`, `반복 일정`, `автоматизируй`, `сделай автоматизацию`, `крон задача`, `cron задача`, `напоминай мне каждый`, `реши это скриптами`, `持续监控`, `持續監控`, `一直监控`, `rancang otomatisasi terjadwal`, `bikin alur kerja otomatis setiap hari`, `rancang pengiriman ringkasan otomatis`, `thiết kế tự động hóa theo lịch trình`, `tạo luồng công việc tự động hàng ngày`, `thiết kế gửi tóm tắt tự động`
 
 ## Catalog Metadata
 

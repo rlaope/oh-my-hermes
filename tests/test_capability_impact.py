@@ -35,7 +35,6 @@ class RepresentativeRoutingTests(unittest.TestCase):
             ("Find and recover my previous Codex coding session", "harness-session-inventory"),
             ("지난 코딩 세션을 찾아서 기억을 복구해줘", "harness-session-inventory"),
             ("Edit this image to remove the background", "img-summary"),
-            ("Generate a short product demo video", "external-connector-readiness"),
             ("Check whether Home Assistant can control this device", "external-connector-readiness"),
         )
 

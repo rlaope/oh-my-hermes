@@ -1,6 +1,6 @@
 ---
 name: "omh-code-review"
-description: "[omh] Pull request or changes to vet: bug-first review with evidence. Use when the user says: code-review, review, audit, find bugs, release gate, claim audit, evidence audit, README claim."
+description: "[omh] Pull request or changes to vet: bug-first review with evidence. Use when the user says: code-review, review, audit, find bugs, claim audit, evidence audit, README claim, what actually happened."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:
@@ -67,7 +67,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
+- Current lane: **Coding handoff** - coding owners, handoffs, review, CI, and merge evidence.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
@@ -75,7 +75,7 @@ Bad example:
 
 Use for review-shaped requests; findings come first and must cite concrete evidence.
 
-    Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `コードレビュー`, `バグを見つけて`, `実際に何をしたか`, `리뷰`, `코드 리뷰`, `리뷰까지`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`, `сделай ревью кода`, `ревью моего кода`, `ревью изменений`, `проверь код на баги`, `проревьюй`, `ревью пул реквеста`, `проверь мой код`, `проверить мой код`, `сделай код ревью`, `найди баги`, `ревьюни`, `ревью этого кода`, `代码评审`, `代码审查`, `找出缺陷`, `tinjau kode`, `review kode ini`, `bantu tinjau kode PR ini`, `tolong periksa diff ini untuk mencari bug`, `cek perubahan kode sebelum merge`, `ulas pull request ini`, `cari bug di perubahan ini`, `review PR ini dong`, `rà soát mã nguồn`, `review mã nguồn này`, `giúp rà soát PR này`, `hãy kiểm tra diff này tìm bug`, `kiểm tra đoạn code trước khi ráp vô`, `phân tích pull request này`, `tìm bug trong thay đổi này`, `review PR này giúp mình`
+    Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `コードレビュー`, `バグを見つけて`, `実際に何をしたか`, `리뷰`, `코드 리뷰`, `리뷰까지`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`, `сделай ревью кода`, `проверь на уязвимости`, `ревью моего кода`, `ревью изменений`, `проверь код на баги`, `проревьюй`, `ревью пул реквеста`, `проверь мой код`, `проверить мой код`, `сделай код ревью`, `найди баги`, `ревьюни`, `ревью этого кода`, `代码评审`, `代码审查`, `找出缺陷`, `tinjau kode`, `review kode ini`, `bantu tinjau kode PR ini`, `tolong periksa diff ini untuk mencari bug`, `cek perubahan kode sebelum merge`, `ulas pull request ini`, `cari bug di perubahan ini`, `review PR ini dong`, `rà soát mã nguồn`, `review mã nguồn này`, `giúp rà soát PR này`, `hãy kiểm tra diff này tìm bug`, `kiểm tra đoạn code trước khi ráp vô`, `phân tích pull request này`, `tìm bug trong thay đổi này`, `review PR này giúp mình`
 
 ## Catalog Metadata
 

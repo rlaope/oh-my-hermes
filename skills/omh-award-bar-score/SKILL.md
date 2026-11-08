@@ -53,19 +53,19 @@ Bad example:
 
 ## Recovery Notes
 
-- If no rendered evidence exists, keep every axis not_observed and route the capture to visual-qa before scoring.
+- If no rendered evidence exists, keep every axis not_observed and route the capture to `omh-visual-qa` before scoring.
 - If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.
 - If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.
 
 ## Workflow Lane
 
-- Current lane: **Materials and visual summaries** (`show-reel`, `sprite-forge`, `design-orchestration`, `apple-design`, `design-quality-gate`, `award-bar-score`, `frontend`, `accessibility-audit`, `+8 more`) - web, accessibility, visual QA, files, and packages.
+- Current lane: **Materials and visual summaries** - web, accessibility, visual QA, files, and packages.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
 ## When to Use
 
-Use when a web surface must be judged against an external award bar: per-axis scores for UI, UX, and innovation, the weighted total against the published threshold, and the one axis holding the score down.
+Use when a web surface must be judged against an external award bar: per-axis scores for the axes the chosen award body publishes, the weighted total against the published threshold, and the one axis holding the score down.
 
     Strong routing signals: `award-bar-score`, `award bar score`, `award winning`, `award-winning`, `award winning website`, `award-winning website`, `award winning design`, `award ready`, `make it award winning`, `design award`, `design awards`, `css design awards`, `cssda`, `awwwards`, `site of the day`, `website of the day`, `wotd`, `score my site`, `어워드`, `디자인 어워드`, `어워드 수준`, `수상작 수준`, `수상 가능한 디자인`, `어워드 받을만한`, `올해의 사이트`
 
@@ -86,7 +86,7 @@ Quality bar:
 
 Handoff policy:
 
-Keep axis scoring, the weighted total, the binding-constraint call, and the tradeoff ledger in Hermes. Route implementation to frontend, WCAG evidence to accessibility-audit, and rendered captures to visual-qa; never score an axis from a description of a page instead of the page.
+Keep axis scoring, the weighted total, the binding-constraint call, and the tradeoff ledger in Hermes. Route implementation to `omh-frontend`, WCAG evidence to `omh-accessibility-audit`, and rendered captures to `omh-visual-qa`; never score an axis from a description of a page instead of the page.
 
 Required inputs:
 
@@ -102,7 +102,7 @@ Expected outputs:
 - the weighted total and its distance from the published threshold
 - the binding constraint: the axis whose gain moves the total most
 - tradeoff_ledger/v1 when an innovation move costs accessibility or performance budget
-- downstream route: frontend, accessibility-audit, visual-qa, or design-quality-gate
+- downstream route: `omh-frontend`, `omh-accessibility-audit`, `omh-visual-qa`, or `omh-design-quality-gate`
 
 Artifact expectations:
 

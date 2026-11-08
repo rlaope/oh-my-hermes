@@ -1,6 +1,6 @@
 ---
 name: "omh-verification-gate"
-description: "[omh] Proof a change is done before merge: define and record build, lint, typecheck, test, security, docs, generated-output, and CI evidence before completion or merge. Use when the user says: verification-gate, verification gate, quality gate, release gate, test gate, build lint test, lint typecheck tests, verify before merge."
+description: "[omh] Proof a change is done before merge: define and record build, lint, typecheck, test, security, docs, generated-output, and CI evidence before completion or merge. Use when the user says: verification-gate, verification gate, quality gate, run the release gate, release gate check, test gate, build lint test, lint typecheck tests."
 license: MIT
 author: "oh-my-hermes maintainers"
 metadata:
@@ -45,7 +45,7 @@ Bad example:
 
 - The scenario, expected behavior, observed result, and pass/fail basis are named.
 - Proposed fixes are separated from observed QA evidence.
-- Missing or failed verification routes back to plan, fix, or a narrower test.
+- Missing or failed verification routes back to `omh-plan`, fix, or a narrower test.
 
 ## Recovery Notes
 
@@ -55,7 +55,7 @@ Bad example:
 
 ## Workflow Lane
 
-- Current lane: **Coding handoff** (`idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `code-review`, `build-failure-triage`, `verification-gate`, `security-safety-review`, `+28 more`) - coding owners, handoffs, review, CI, and merge evidence.
+- Current lane: **Coding handoff** - coding owners, handoffs, review, CI, and merge evidence.
 - If intent belongs to another lane, hand back to `omh-routing` or name the adjacent workflow.
 - Shared product, routing, compatibility, and evidence rules: `skill_view(name='omh-routing', file_path='references/skill-common-rail.md')`.
 
@@ -63,7 +63,7 @@ Bad example:
 
 Use when Hermes must turn a change, PR, release, or claim into a concrete evidence checklist and PASS/HOLD/BLOCK verdict.
 
-    Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `generated file`, `generated artifact`, `generated output`, `source of truth`, `regenerate instead of editing`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `перед мерджем проверь`, `проверь перед пушем`, `гейт проверки`, `проверь перед мерджем`, `докажи что тесты проходят`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`, `verifikasi sebelum merge`, `buktikan perubahan ini sudah selesai`, `cek bukti build lint dan tes`, `pastikan semua pemeriksaan lulus sebelum merge`, `tolong validasi hasil implementasi ini`, `xác minh trước khi gộp`, `xác minh trước khi merge`, `chứng minh thay đổi này đã hoàn thành`, `kiểm tra bằng chứng build lint và kiểm thử`, `đảm bảo mọi kiểm tra đều đạt trước khi gộp`, `đảm bảo tất cả kiểm tra đạt trước khi merge`, `hãy xác thực kết quả thực hiện này`
+    Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `run the release gate`, `release gate check`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `generated file`, `generated artifact`, `generated output`, `source of truth`, `regenerate instead of editing`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `перед мерджем проверь`, `проверь перед пушем`, `гейт проверки`, `проверь перед мерджем`, `докажи что тесты проходят`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`, `verifikasi sebelum merge`, `buktikan perubahan ini sudah selesai`, `cek bukti build lint dan tes`, `pastikan semua pemeriksaan lulus sebelum merge`, `tolong validasi hasil implementasi ini`, `xác minh trước khi gộp`, `xác minh trước khi merge`, `chứng minh thay đổi này đã hoàn thành`, `kiểm tra bằng chứng build lint và kiểm thử`, `đảm bảo mọi kiểm tra đều đạt trước khi gộp`, `đảm bảo tất cả kiểm tra đạt trước khi merge`, `hãy xác thực kết quả thực hiện này`
 
 ## Catalog Metadata
 

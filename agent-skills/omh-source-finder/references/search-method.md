@@ -1,6 +1,6 @@
 # Search method
 
-Shared by the existing web-research, source-finder and research skills; not a
+Shared by the existing `omh-web-research`, `source-finder` and `ulw-research` skills; not a
 new user command, search mode, provider, or permission grant. Resolve references
 from this installed skill's base directory, not a repository or working directory.
 Load `references/search-fields.md` only to construct a helper payload and

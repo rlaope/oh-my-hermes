@@ -57,8 +57,12 @@ from .awareness import awareness_primer_context, awareness_primer_markdown
 # opened with praise and closed with offers while the persona held. The compact
 # rail measured 1550 and the markdown 3619 (re-derived from the producers,
 # standing headroom kept as above).
+# 3630 -> 3685: the markdown's generic-tool checkpoint names each skill by its
+# full catalog name (`accessibility-audit`, not `a11y`), because the shorthand
+# was nothing a model could load. It measured 3677 (standing headroom kept as
+# above); the compact rail does not carry the line.
 AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT = 1560
-AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 3630
+AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 3685
 AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT = 1500
 ROLE_CONTEXT_CHAR_LIMIT = 2600
 # Per-request budgets, zero-slack: each is the value its producer measured,

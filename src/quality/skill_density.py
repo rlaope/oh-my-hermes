@@ -98,7 +98,10 @@ REPEATED_SENTENCE_MIN_CHARS = 40
 # they were set from and for what each one buys.
 DENSITY_FILLER_HIT_CEILING = 0
 DENSITY_REPEATED_SHARE_CEILING_PERCENT = 5.0
-DENSITY_PAYLOAD_MARKERS_PER_1K_FLOOR = 9.0
+# 9.0 -> 7.9, the same about 10% below the measured worst case: each body's lane line dropped a sample of up to
+# eight backticked sibling names that did not load, which the marker count had read as payload. That leaves
+# `meeting-brief` the worst at 8.79; its prose did not change.
+DENSITY_PAYLOAD_MARKERS_PER_1K_FLOOR = 7.9
 
 # Named exemptions with a reason each, never a silent skip. Empty today: the
 # thresholds above were set from the measured corpus so that no skill needs

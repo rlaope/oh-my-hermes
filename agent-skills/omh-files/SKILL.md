@@ -51,7 +51,7 @@ Bad example:
 
 - If the target path or folder is missing, ask for the smallest path scope needed before preparing the operation.
 - If delete, overwrite, move, rename, chmod, or irreversible cleanup is requested, require an explicit confirmation gate.
-- If the request is file conversion, deck/PDF export, or attachment delivery, route to materials-package or deliverable-package instead.
+- If the request is file conversion, deck/PDF export, or attachment delivery, route to `omh-materials-package` or `omh-deliverable-package` instead.
 - On Hermes, when a checkpoint covers the change, the user's `/rollback` restores it and `/diff session` shows what the session changed since the checkpoint baseline; cite either only after the user runs it.
 - On Hermes, a write that its own file guards refuse or hold for approval (a sensitive system path, a protected instruction file) is that gate's outcome to record, `blocked` or the user's answer, never a write to retry through another tool.
 
