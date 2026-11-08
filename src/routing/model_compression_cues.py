@@ -60,13 +60,38 @@ MODEL_COMPRESSION_ANCHORS = frozenset(
 # (`8b로`), but not a longer word (`8bit`). On its own it is any billion: 5b
 # gallons, a 10b dataset, a 2b budget. It never anchors a shared phrase.
 _PARAMETER_COUNT = re.compile(r"\d+(?:\.\d+)?b(?![a-z0-9])")
-_MODEL_WORDS = ("model", normalized_phrase("모델"))
+_PUNCTUATION = ".,;:!?()[]\"'"
+# A size names a model only when what follows it says so: the model word or a
+# student names the model, and `into`, `for`, punctuation, the end of the
+# message or a Korean particle end the size where a model's size ends. Any
+# other word after it ("2b rows", "5b compute", "2b and", "cut 2b to 1b")
+# makes it an amount.
+_MODEL_WORDS = ("model", "student", normalized_phrase("모델"))
+_SIZE_CLOSERS = frozenset({"into", "for"})
+
+
+def _is_korean_particle(text: str) -> bool:
+    # `normalized_phrase` decomposes Hangul into conjoining jamo.
+    return bool(text) and all("ᄀ" <= character <= "ᇿ" for character in text)
 
 
 def names_a_model_by_parameter_count(normalized_query: str) -> bool:
-    """Two sizes (`70b ... 8b`), or one size followed by `model` or `모델` (`our 7b model`, `70B 모델을`)."""
-    words = [word.strip(".,;:!?()[]\"'") for word in normalized_query.split()]
-    sizes = [index for index, word in enumerate(words) if _PARAMETER_COUNT.match(word)]
-    if len(sizes) >= 2:
-        return True
-    return any(index + 1 < len(words) and words[index + 1].startswith(_MODEL_WORDS) for index in sizes)
+    """One size followed by `model`, `student` or `모델` (`our 7b model`, `an 8b student`, `70B 모델을`), or two sizes that each end where a model's size ends (`70b into an 8b`)."""
+    raw_words = normalized_query.split()
+    words = [word.strip(_PUNCTUATION) for word in raw_words]
+    closed_sizes = 0
+    for index, word in enumerate(words):
+        match = _PARAMETER_COUNT.match(word)
+        if not match:
+            continue
+        rest = word[match.end():]
+        following = words[index + 1] if index + 1 < len(words) else ""
+        if rest:
+            closed_sizes += _is_korean_particle(rest)
+        elif raw_words[index].rstrip(_PUNCTUATION) != raw_words[index] or not following:
+            closed_sizes += 1
+        elif following.startswith(_MODEL_WORDS):
+            return True
+        elif following in _SIZE_CLOSERS:
+            closed_sizes += 1
+    return closed_sizes >= 2

@@ -145,6 +145,9 @@ class ModelCompressionRoutingTests(unittest.TestCase):
             "3D 모델 압축해서 양자화된 정점으로 저장해줘",
             "the transformer model in my electrical grid sim is too detailed, prune the model",
             "post-training quantization of the ADC signal in the firmware",
+            "we raised 2b and spent 1b, distill the lessons into a memo",
+            "distill 40b rows down to 2b rows for the dashboard",
+            "distill the 5b compute budget into a plan for 2b next year",
         ):
             with self.subTest(message=message):
                 route = _route(message)
@@ -199,6 +202,11 @@ class ModelCompressionParameterCountTests(unittest.TestCase):
             ("distill the 10b dataset into a sample", False),
             ("our 2b budget model needs pruning", False),
             ("quantize it to 8bit", False),
+            ("this 70B is too expensive, distill it into an 8B student", True),
+            ("we raised 2b and spent 1b, distill the lessons into a memo", False),
+            ("distill 40b rows down to 2b rows for the dashboard", False),
+            ("distill the 5b compute budget into a plan for 2b next year", False),
+            ("cut 2b to 1b for marketing, distill the plan into a memo", False),
         ):
             with self.subTest(message=message):
                 self.assertIs(names_a_model_by_parameter_count(normalized_phrase(message)), named)
