@@ -540,8 +540,9 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
 EXACT_MODEL_CONTRACT_ALIASES: frozenset[str] = frozenset(
     {
         "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-cyber", "gpt-6-luna",
-        "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "deepseek-v4.1-flash", "kimi-k3.1-pro",
-        "kimi-k3.1-pro-highspeed", "gemini-4-argon", "jev-1.13.0",
+        "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "deepseek-v4.1-flash",
+        "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed", "gemini-4-argon", "glm-5.3-flash", "grok-4.7",
+        "jev-1.13.0",
     }
 )
 

@@ -512,16 +512,16 @@ class PickerNavigationTests(unittest.TestCase):
             self.assertIn("…", visible[0])
 
     def test_the_frame_shows_labels_effort_bar_chain_and_default_for_the_cursor_row(self) -> None:
-        _write_overrides(self.root, {"ultrabrain": (("claude-fable-5-1", "medium"), ("gpt-6-astra", "xhigh"))})
+        _write_overrides(self.root, {"ultrabrain": (("glm-5.3", "medium"), ("gpt-6-astra", "xhigh"))})
         payload = _payload(self.root)
         chains = _chains(payload)
         lines = render_frame(payload, chains, 0, use_color=False, width=200)
         row = next(line for line in lines if " ultrabrain " in line)
         self.assertTrue(row.startswith(f" {CURSOR_MARK} "))
-        self.assertIn(f"◂ {MODEL_DISPLAY_LABELS['claude-fable-5-1']} ▸", row)
+        self.assertIn(f"◂ {MODEL_DISPLAY_LABELS['glm-5.3']} ▸", row)
         self.assertIn(f"− {effort_bar('medium')} +   medium?", row)
         self.assertTrue(row.rstrip().endswith("◆ override"))
-        self.assertIn("   chain             claude-fable-5-1:medium, gpt-6-astra:xhigh", lines)
+        self.assertIn("   chain             glm-5.3:medium, gpt-6-astra:xhigh", lines)
         self.assertIn(
             f"   shipped default   {', '.join(m + ':' + e for m, e in HERMES_MIXTURE_CATEGORY_CHAINS['ultrabrain'])}",
             lines,
@@ -697,9 +697,9 @@ class EffortPickerTests(unittest.TestCase):
         # The owner's rule: nobody on a custom model is stuck writing JSON.
         cases = (
             ("my-custom", "low", KEY_PLUS, "medium"),
-            ("glm-5.3-flash", "low", KEY_PLUS, "medium"),
-            ("grok-4.7", "high", KEY_PLUS, "xhigh"),
-            ("claude-fable-5-1", "high", KEY_MINUS, "medium"),
+            ("glm-5.3", "low", KEY_PLUS, "medium"),
+            ("grok-build-0.1", "high", KEY_PLUS, "xhigh"),
+            ("grok-build-0.1", "high", KEY_MINUS, "medium"),
         )
         for model, stored, key, landed in cases:
             with self.subTest(model=model):
@@ -714,10 +714,39 @@ class EffortPickerTests(unittest.TestCase):
 
     def test_shipped_heads_with_no_contract_step_from_a_clean_install(self) -> None:
         payload = _payload(self.root)
+        result, _ = _drive(payload, _down_to(payload, "unspecified-low") + [KEY_PLUS, KEY_ENTER])
+        self.assertEqual(result["unspecified-low"][0], ("glm-5.3", "medium"))
+
+    def test_contracted_glm_flash_grok_and_fable_heads_step_their_own_ladders_unmarked(self) -> None:
+        # GLM-5.3-Flash has no `medium`, so `+` from `low` lands on `high`;
+        # Grok 4.7's ladder is the shared four, now checked; Fable 5.1 reaches
+        # `max`, which the shared steps never offered.
+        payload = _payload(self.root)
+        for alias, efforts in (
+            ("glm-5.3-flash", ["low", "high", "max"]),
+            ("grok-4.7", ["low", "medium", "high", "xhigh"]),
+            ("claude-fable-5-1", ["low", "medium", "high", "xhigh", "max"]),
+        ):
+            with self.subTest(alias=alias):
+                row = next(row for row in payload["models"] if row["alias"] == alias)
+                self.assertEqual(row["efforts"], efforts)
+                self.assertEqual(row["efforts_source"], "contract")
+                self.assertTrue(row["efforts_configured"])
+        for category, head, effort in (("quick", "glm-5.3-flash", "low"), ("x-search", "grok-4.7", "high")):
+            with self.subTest(category=category):
+                row = _row_of(_frame(payload, category), category)
+                self.assertIn(f" {effort} ", row)
+                self.assertNotIn(f"{effort}?", row)
         result, _ = _drive(payload, _down_to(payload, "quick") + [KEY_PLUS, KEY_ENTER])
-        self.assertEqual(result["quick"][0], ("glm-5.3-flash", "medium"))
+        self.assertEqual(result["quick"][0], ("glm-5.3-flash", "high"))
         result, _ = _drive(payload, _down_to(payload, "x-search") + [KEY_PLUS, KEY_ENTER])
         self.assertEqual(result["x-search"][0], ("grok-4.7", "xhigh"))
+        _write_overrides(self.root, {"swarm": (("claude-fable-5-1", "xhigh"),)})
+        payload = _payload(self.root)
+        row = _row_of(_frame(payload, "swarm"), "swarm")
+        self.assertNotIn("xhigh?", row)
+        result, _ = _drive(payload, _down_to(payload, "swarm") + [KEY_PLUS, KEY_ENTER])
+        self.assertEqual(result, {"swarm": (("claude-fable-5-1", "max"),)})
 
     def test_an_unconfigured_value_is_marked_not_known_and_never_called_wrong(self) -> None:
         for stored in ("low", "xhigh", "max", "auto"):

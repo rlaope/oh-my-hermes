@@ -1095,6 +1095,102 @@ _CLAUDE_HAIKU_5_5: Final[dict[str, object]] = {
     "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
 }
 
+# Claude Fable 5.1, on the Opus 5.5 terms: adaptive thinking is always on and
+# a thinking-disabled request or a manual budget returns HTTP 400, so a
+# no-thinking rung is raised to `low` on record. All five effort levels are
+# documented and `high` is the API default. Claude Mythos 5.1 shares the
+# specifications but is served only to verified organizations; it gets no
+# row here.
+_CLAUDE_FABLE_5_1: Final[dict[str, object]] = {
+    "schema_version": MODEL_CONTRACT_SCHEMA_VERSION,
+    "model_id": "claude-fable-5-1",
+    "reasoning_mode": "thinking",
+    "service_tier": "standard",
+    "family": "claude",
+    "generation": "claude-fable-5.1",
+    "released": "2026-09-01",
+    "rollout": (
+        "available on the Claude API, Amazon Bedrock, Google Cloud, Microsoft Foundry, and Claude "
+        "Platform on AWS; a released id is not account-level readiness evidence"
+    ),
+    # A fixed id with no date suffix: the dateless id is the pinned snapshot.
+    "served_ids": {
+        "first_party": "claude-fable-5-1",
+        "bedrock": "anthropic.claude-fable-5-1",
+    },
+    "retirement": "not sooner than 2027-09-01",
+    "knowledge_cutoff": "2026-06",
+    "context_window_tokens": 1_000_000,
+    "max_input_tokens": 1_000_000,
+    "max_output_tokens": 128_000,
+    "limits_note": (
+        "1M context and 128K max output per request are documented; the 300K Message Batches "
+        "output beta does not list this model; no separate max-input figure is published"
+    ),
+    "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
+    "effort_floor": "low",
+    "effort_default": "high",
+    "unsupported_efforts": {
+        "off": (
+            "adaptive thinking is always on; `thinking.type=disabled` or `enabled` with "
+            "`budget_tokens` returns HTTP 400"
+        ),
+        "minimal": "not in the documented ladder",
+    },
+    "tool_calling": {
+        "api": "messages",
+        "note": (
+            "forced `tool_choice` of type `any` or `tool` returns HTTP 400, on count_tokens as "
+            "well; use `auto` and say in the prompt when a tool applies"
+        ),
+    },
+    "unsupported_parameters": ("thinking.budget_tokens", "temperature", "top_p", "top_k"),
+    "unsupported_parameters_note": (
+        "setting `temperature`, `top_p`, or `top_k` returns HTTP 400, and so does an assistant "
+        "prefill"
+    ),
+    "runtime_mechanisms": {
+        "preserved_thinking_blocks": "documented_not_observed",
+        "per_message_effort": "documented_not_observed",
+    },
+    "surface_notes": {
+        "hermes": (
+            "Hermes Agent at 2bd378ed1b sends `output_config.effort` from `low` through `max` "
+            "verbatim on the Anthropic route and lists the model as always thinking; over "
+            "OpenRouter the effort travels as top-level `verbosity`; observed in the Hermes source, "
+            "not a vendor statement"
+        ),
+    },
+    "documented_traits": (
+        "adaptive thinking is always on; a request that disables it returns HTTP 400",
+        "supports all five effort levels and `high` is the API default",
+        "at `low` it calls a search or retrieval tool less often and answers from memory more",
+        "writes less user-facing text between tool calls, especially at higher effort",
+        "is more likely to rewrite a whole file than make a targeted edit",
+        "only Claude Fable 5.1 and Claude Mythos 5.1 can read its thinking blocks, and editing "
+        "an earlier turn invalidates them",
+    ),
+    # Anthropic list price (the Fable 5.1 model overview, read 2026-11-07).
+    # Cache reads are 0.025x input, a quarter of the Fable 5 rate.
+    "pricing_usd_per_mtok": {
+        "input": 10.0,
+        "cached_input": 0.25,
+        "cache_write_5m": 12.5,
+        "cache_write_1h": 20.0,
+        "output": 50.0,
+        "batch": "50% off input and output on Message Batches",
+    },
+    "data_handling": _DATA_HANDLING_NOT_READ,
+    "sources": (
+        "https://platform.claude.com/docs/en/models/fable-5-1/overview",
+        "https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1",
+        "https://platform.claude.com/docs/en/models/fable-5-1/migration-guide",
+        "https://platform.claude.com/docs/en/build-with-claude/effort",
+    ),
+    "sources_read": "2026-11-07",
+    "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
+}
+
 # DeepSeek V4.1 Flash. OMH's alias is the versioned gateway spelling; the
 # first-party API names the current Flash generation `deepseek-flash` and
 # that pointer is a declared projection below, not a second contract.
@@ -1470,6 +1566,181 @@ _GEMINI_4_ARGON: Final[dict[str, object]] = {
     "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
 }
 
+# GLM-5.3-Flash (Z.ai), a separately trained smaller model rather than a speed
+# tier of GLM-5.3. Its page says the text parameters are consistent with
+# GLM-5.3 and that `thinking.type` accepts only `enabled`; the GLM-5.3 page
+# documents those parameters: reasoning always on, `reasoning_effort` of
+# `low`, `high`, and `max`. So `off` and `minimal` are raised to the floor
+# `low` on record, and `xhigh` to `max`, the lowest documented rung above it.
+# `medium` is deliberately NOT listed as unsupported: the docs do not say the
+# API rejects it, and the installed Hermes sends it verbatim on the zai route
+# (its GLM-5.3 table holds `medium` from a live probe), so raising it here
+# would record a rung the wire does not carry. The picker offers the three
+# documented rungs only.
+#
+# GLM-5.3 itself has no exact contract yet: the plugin's exact-contract
+# mirror stops an undeclared speed tier of a contracted base from projecting
+# onto it, which would unlabel `glm-5.3-highspeed` and `glm-5.3-ultrafast`
+# and split two tiers of one model into a disagreement.
+_GLM_5_3_FLASH: Final[dict[str, object]] = {
+    "schema_version": MODEL_CONTRACT_SCHEMA_VERSION,
+    "model_id": "glm-5.3-flash",
+    "reasoning_mode": "thinking",
+    "service_tier": "standard",
+    "family": "glm",
+    "generation": "glm-5.3-flash",
+    "released": "",
+    "rollout": (
+        "fully available on the Z.ai API and the GLM Coding Plan; the docs give no API release "
+        "date; a released id is not account-level readiness evidence"
+    ),
+    "served_ids": {"first_party": "glm-5.3-flash"},
+    "knowledge_cutoff": "",
+    "context_window_tokens": 1_000_000,
+    "max_input_tokens": 1_000_000,
+    "max_output_tokens": 128_000,
+    "limits_note": (
+        "a 1M-token context window and 128K maximum output are documented; no separate max-input "
+        "figure is published"
+    ),
+    "reasoning_efforts": ("low", "high", "max"),
+    "effort_floor": "low",
+    # The Flash page names no default; GLM-5.3's is `max`, and the Flash page
+    # recommends `max`.
+    "effort_default": "",
+    "unsupported_efforts": {
+        "off": (
+            "reasoning is always on; `thinking.type` accepts only `enabled` and a request that "
+            "disables it fails"
+        ),
+        "minimal": "not an accepted `reasoning_effort` value",
+        "xhigh": "not an accepted `reasoning_effort` value",
+    },
+    "tool_calling": {
+        "api": "chat_completions",
+        "note": (
+            "function calling is supported; streamed tool-call construction is off by default and "
+            "needs `stream` and `tool_stream` both enabled"
+        ),
+    },
+    "unsupported_parameters": ("thinking.type=disabled",),
+    "runtime_mechanisms": {
+        "preserved_thinking": "documented_not_observed",
+        "context_caching": "documented_not_observed",
+    },
+    "surface_notes": {
+        "hermes": (
+            "Hermes Agent at 2bd378ed1b matches the id as GLM-5.3 on the zai route and sends "
+            "`thinking.type=enabled` with `clear_thinking` false and a top-level "
+            "`reasoning_effort` from `low`, `medium`, `high`, `max`, `xhigh` sent as `max` and a "
+            "thinking-off request as `low`; observed in the Hermes source, not a vendor statement"
+        ),
+    },
+    "documented_traits": (
+        "text parameters are consistent with GLM-5.3: reasoning is always on and "
+        "`reasoning_effort` accepts `low`, `high`, and `max`; the recommended setting is `max`",
+        "a native multimodal model with 320B total and 18B activated parameters",
+    ),
+    # Z.ai list price (docs.z.ai/guides/overview/pricing, read 2026-11-07);
+    # cached input storage is listed as limited-time free.
+    "pricing_usd_per_mtok": {
+        "input": 0.15,
+        "cached_input": 0.03,
+        "output": 0.50,
+    },
+    "data_handling": _DATA_HANDLING_NOT_READ,
+    "sources": (
+        "https://docs.z.ai/guides/vlm/glm-5.3-flash",
+        "https://docs.z.ai/guides/llm/glm-5.3",
+        "https://docs.z.ai/guides/overview/migrate-to-glm-new",
+        "https://docs.z.ai/guides/overview/pricing",
+    ),
+    "sources_read": "2026-11-07",
+    "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
+}
+
+# Grok 4.7 (xAI). Reasoning cannot be disabled and `reasoning_effort` takes
+# `low`, `medium`, `high`, and `xhigh`, with `high` the default, so `off` and
+# `minimal` are raised to `low` on record. `max` is not listed as unsupported,
+# on the Gemini 4 Argon terms: no documented rung sits above it, so listing it
+# would lower `max` to the floor.
+_GROK_4_7: Final[dict[str, object]] = {
+    "schema_version": MODEL_CONTRACT_SCHEMA_VERSION,
+    "model_id": "grok-4.7",
+    "reasoning_mode": "thinking",
+    "service_tier": "standard",
+    "family": "grok",
+    "generation": "grok-4.7",
+    "released": "",
+    "rollout": "listed on the xAI API with no release date; a released id is not account-level readiness evidence",
+    "served_ids": {"first_party": "grok-4.7"},
+    "knowledge_cutoff": "",
+    "context_window_tokens": 500_000,
+    "max_input_tokens": 500_000,
+    "max_output_tokens": 500_000,
+    "limits_note": (
+        "a 500,000-token context window is documented; xAI publishes no separate input or output "
+        "cap, so both fields carry the window"
+    ),
+    "reasoning_efforts": ("low", "medium", "high", "xhigh"),
+    "effort_floor": "low",
+    "effort_default": "high",
+    "unsupported_efforts": {
+        "off": "reasoning cannot be disabled",
+        "minimal": "not a documented `reasoning_effort` value",
+    },
+    "tool_calling": {
+        "api": "responses",
+        "note": (
+            "function calling and structured outputs are supported; on the Responses API every "
+            "response carries `reasoning.encrypted_content`, and reasoning items go back unchanged "
+            "in the next request's input"
+        ),
+    },
+    "unsupported_parameters": ("presence_penalty", "frequency_penalty", "stop"),
+    "unsupported_parameters_note": (
+        "reasoning models return an error for `presencePenalty`, `frequencyPenalty`, and `stop`; "
+        "`logprobs` and `top_logprobs` are silently ignored"
+    ),
+    "runtime_mechanisms": {
+        "encrypted_reasoning_passback": "documented_not_observed",
+        "reasoning_summaries": "documented_not_observed",
+    },
+    "surface_notes": {
+        "hermes": (
+            "Hermes Agent at 2bd378ed1b sends no `reasoning` field to `grok-4.7` on the xai route, "
+            "because its effort allow list stops at `grok-4.6`, so the model runs at its default "
+            "`high` whatever effort is asked; over OpenRouter the effort is clamped to the "
+            "catalog's `supported_efforts`; observed in the Hermes source, not a vendor statement"
+        ),
+    },
+    "documented_traits": (
+        "always reasons; `reasoning_effort` accepts `low`, `medium`, `high`, and `xhigh`, and "
+        "`high` is the default",
+        "exposes summaries of its internal reasoning",
+    ),
+    # xAI list price (docs.x.ai/developers/models/grok-4.7, read 2026-11-07).
+    # Cached input is a quarter of input.
+    "pricing_usd_per_mtok": {
+        "input": 2.0,
+        "cached_input": 0.50,
+        "output": 6.0,
+        "long_context_200k_prompt": (
+            "input 4.00, cached input 1.00, output 12.00 for every token of a request whose prompt "
+            "reaches 200,000 tokens"
+        ),
+        "batch": "20% off the standard rates",
+    },
+    "data_handling": _DATA_HANDLING_NOT_READ,
+    "sources": (
+        "https://docs.x.ai/developers/models/grok-4.7",
+        "https://docs.x.ai/developers/model-capabilities/text/reasoning",
+        "https://docs.x.ai/developers/models",
+    ),
+    "sources_read": "2026-11-07",
+    "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
+}
+
 # TypeSafe Jev 1.13, the first `non_generative` contract: a model whose
 # documented output is a typed answer over options the caller supplies, not
 # text. Four keys exist only on this class and carry their reason here rather
@@ -1614,10 +1885,13 @@ MODEL_CONTRACTS: Final[dict[str, Mapping[str, object]]] = {
     "claude-opus-5-5": _CLAUDE_OPUS_5_5,
     "claude-sonnet-5-5": _CLAUDE_SONNET_5_5,
     "claude-haiku-5-5": _CLAUDE_HAIKU_5_5,
+    "claude-fable-5-1": _CLAUDE_FABLE_5_1,
     "deepseek-v4.1-flash": _DEEPSEEK_V41_FLASH,
     "kimi-k3.1-pro": _KIMI_K3_1_PRO,
     "kimi-k3.1-pro-highspeed": _KIMI_K3_1_PRO_HIGHSPEED,
     "gemini-4-argon": _GEMINI_4_ARGON,
+    "glm-5.3-flash": _GLM_5_3_FLASH,
+    "grok-4.7": _GROK_4_7,
     "jev-1.13.0": _JEV_1_13,
 }
 

@@ -67,6 +67,18 @@ class ContractEffortOptionTests(unittest.TestCase):
     def test_kimi_low_high_max_only(self) -> None:
         self.assertEqual(contract_effort_option("kimi-k3.1-pro")["efforts"], ("low", "high", "max"))
 
+    def test_fable_glm_flash_and_grok_heads_carry_their_documented_ladders(self) -> None:
+        # Read from the vendor pages each contract cites: Fable 5.1 takes all
+        # five Claude levels, GLM-5.3-Flash GLM-5.3's three, and Grok 4.7
+        # xAI's four. None of them can turn reasoning off, so `none` is absent.
+        for model_id, efforts in (
+            ("claude-fable-5-1", ("low", "medium", "high", "xhigh", "max")),
+            ("glm-5.3-flash", ("low", "high", "max")),
+            ("grok-4.7", ("low", "medium", "high", "xhigh")),
+        ):
+            with self.subTest(model_id=model_id):
+                self.assertEqual(contract_effort_option(model_id), {"efforts": efforts, "source": "contract"})
+
     def test_deepseek_mapping_aliases_are_not_independent_rungs(self) -> None:
         self.assertEqual(contract_effort_option("deepseek-flash")["efforts"], ("none", "low", "high", "max"))
 
@@ -113,7 +125,9 @@ class ContractEffortOptionTests(unittest.TestCase):
             self.assertIsNone(contract_effort_option("gpt-6-luna"))
 
     def test_models_without_a_contract_are_unknown_not_wide_open(self) -> None:
-        for model_id in ("glm-5.3", "glm-5.3-flash", "claude-fable-5-1", "gpt-5.6-terra", "custom:mine", ""):
+        # GLM-5.3 stays here until its speed tiers have declared rows (see the
+        # GLM-5.3-Flash contract); Grok Build 0.1 documents no effort parameter.
+        for model_id in ("glm-5.3", "grok-build-0.1", "gpt-5.6-terra", "custom:mine", ""):
             with self.subTest(model_id=model_id):
                 self.assertIsNone(contract_effort_option(model_id))
 

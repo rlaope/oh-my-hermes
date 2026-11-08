@@ -786,6 +786,13 @@ All notable changes will be documented here.
   Hermes resubmits itself after a crash, a run that needs repair, a draft,
   a queued line or an open question.
 
+- **Claude Fable 5.1, GLM 5.3 Flash and Grok 4.7 step their own efforts in
+  the model-chain picker.** Each has a contract read from its vendor's docs,
+  so `-`/`+` follow Fable's `low` to `max`, GLM 5.3 Flash's `low, high, max`
+  and Grok 4.7's `low` to `xhigh`, and the `?` mark is gone from the `quick`
+  and `x-search` heads. A route asking any of them for no thinking is raised
+  to `low` on record, as their APIs refuse it. GLM 5.3 and Grok Build 0.1
+  keep the shared steps for now.
 - **A push no longer ends the reply with "the session has stopped, send a
   message".** After a `git push`, `gh pr create`, `gh pr merge` or
   `gh workflow run` with no watcher armed, OMH appended that sentence to the
