@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh` launched while Hermes' gateway restarts waits for it instead of
+  opening Hermes' own TUI.** A whole-gateway restart while a bot's turn runs
+  drains first, up to Hermes' `restart_after_turn_timeout`, and refuses every
+  new or resumed session as `runtime_draining` meanwhile; the OMH TUI took
+  that refusal as its own failure and fell back to `hermes --tui`, which met
+  the same refusal and showed only `error: runtime_draining`. The launch now
+  waits through the drain and the restart on one shell line naming the work
+  the gateway lets finish and the cap it allows, and opens once it is back.
+  A gateway that is there but not answering past the wait (restarting,
+  silent on the session call) is reported with what to check and exits 1;
+  Hermes' own TUI is opened only for a failure that is the OMH TUI's own.
 - **Codex and Claude Code units dispatched by OMH now come back accepted,
   and one dag-ulw run can send different coding nodes to both owners.**
   Untracked executor plugin state under `.omx/` and `.omc/` no longer fails
