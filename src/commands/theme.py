@@ -33,17 +33,22 @@ from typing import NamedTuple
 from ..installer import OmhError
 from ..install.config_adapter import display_skin_selection, read_config
 from ..skin_pack import (
+    RUNTIME_CHOICES,
+    RUNTIME_OWN,
+    RUNTIME_SHARED,
     SHORT_NAME_WIDTH,
     SKIN_THEMES,
     SkinTheme,
     default_theme,
     effective_theme,
+    read_runtime_choice,
     read_theme_choice,
     read_update_check_choice,
     read_wallpaper_choice,
     theme_for_name,
     theme_names,
     theme_store_path,
+    write_runtime_choice,
     write_theme_choice,
     write_update_check_choice,
     write_wallpaper_choice,
@@ -62,6 +67,7 @@ THEME_STATUS_SCHEMA_VERSION = "omh_theme_status/v2"
 THEME_REPAIR_SCHEMA_VERSION = "omh_theme_repair/v2"
 THEME_WALLPAPER_SCHEMA_VERSION = "omh_theme_wallpaper/v1"
 THEME_UPDATE_CHECK_SCHEMA_VERSION = "omh_theme_update_check/v1"
+THEME_RUNTIME_SCHEMA_VERSION = "omh_theme_runtime/v1"
 
 
 def _language(args: argparse.Namespace) -> str:
@@ -204,6 +210,66 @@ def cmd_theme_wallpaper(args: argparse.Namespace) -> int:
 def cmd_theme_update_check(args: argparse.Namespace) -> int:
     """`omh theme update-check on|off` saves whether the OMH TUI asks npm for a newer release; alone, reports it."""
     return _theme_switch(args, UPDATE_CHECK_SWITCH)
+
+
+def cmd_theme_runtime(args: argparse.Namespace) -> int:
+    """`omh theme runtime own|shared` saves where bare `omh` opens its sessions; alone, reports it.
+
+    `shared` (the default) is the Hermes gateway that also serves the bots.
+    `own` is a TUI-only Hermes home under the OMH home with a gateway of its
+    own (`tui/own_runtime.py`): the bots' restarts and drains never reach it,
+    and a restart of it loads new OMH code without a bot reconnecting. Model,
+    providers, memory (OMH's), skills and the OMH plugin are the root home's;
+    sessions and Hermes' own state are the TUI home's.
+    """
+    from ..tui.own_runtime import tui_home_path
+
+    requested = str(getattr(args, "value", "") or "").strip().lower()
+    if requested not in ("", *RUNTIME_CHOICES):
+        print(f"omh: the TUI runtime is {' or '.join(RUNTIME_CHOICES)}, not {requested!r}: "
+              f"`omh theme runtime {RUNTIME_OWN}` or `omh theme runtime {RUNTIME_SHARED}`.")
+        return 2
+    paths = _paths(args)
+    saved = read_runtime_choice(paths.omh_home)
+    current = saved or RUNTIME_SHARED
+    payload: dict[str, object] = {
+        "schema_version": THEME_RUNTIME_SCHEMA_VERSION,
+        "runtime": current,
+        "source": "default" if saved is None else "saved",
+        "changed": False,
+        "store_path": str(theme_store_path(paths.omh_home)),
+        "tui_home": str(tui_home_path(paths.omh_home)),
+    }
+    if requested:
+        payload.update({"previous": current, "runtime": requested, "source": "saved"})
+        if saved != requested:
+            try:
+                write_runtime_choice(paths.omh_home, requested)
+            except OSError as exc:
+                raise OmhError(
+                    f"could not save the TUI runtime to {theme_store_path(paths.omh_home)}: {exc}") from exc
+            payload["changed"] = True
+    if _wants_json(args):
+        _print_json(payload)
+        return 0
+    use_color = _use_color()
+    print(_color(f"OMH TUI runtime: {payload['runtime']}", "1;36", use_color))
+    if not requested:
+        print(f"  {'Saved' if saved is not None else 'Nothing saved; shared by default'} in {payload['store_path']}.")
+    elif payload["changed"]:
+        print(f"  Saved {requested} in {payload['store_path']}.")
+    else:
+        print(f"  No change: {requested} is already saved.")
+    print(_color("Next", "1;32", use_color))
+    if payload["runtime"] == RUNTIME_OWN:
+        print(f"  Bare `omh` opens the TUI on {payload['tui_home']}, a Hermes home of the TUI's own, built from the "
+              "root home at each launch: the bots' gateway restarts and drains never pause it. `omh --resume <id>` "
+              "of a session on the shared gateway still opens there. `omh theme runtime shared` goes back.")
+    else:
+        print("  Bare `omh` opens the TUI on the Hermes gateway that also serves the bots; a whole-gateway restart "
+              "with a bot turn running pauses it until Hermes is back. `omh theme runtime own` gives the TUI a "
+              "runtime of its own.")
+    return 0
 
 
 class _Switch(NamedTuple):
@@ -420,6 +486,15 @@ def _add_theme_commands(sub) -> None:
     theme_update_check.add_argument("state", nargs="?", help="on or off; omit to show the saved choice.")
     _add_shared_theme_arguments(theme_update_check, "Print the machine-readable update-check payload.")
     theme_update_check.set_defaults(func=cmd_theme_update_check)
+
+    theme_runtime = theme_sub.add_parser(
+        "runtime",
+        help="Where bare `omh` opens its sessions: `shared` (the Hermes gateway the bots use; the default) or "
+             "`own` (a TUI-only Hermes home with a gateway of its own); alone, show it.",
+    )
+    theme_runtime.add_argument("value", nargs="?", help="own or shared; omit to show the saved choice.")
+    _add_shared_theme_arguments(theme_runtime, "Print the machine-readable runtime payload.")
+    theme_runtime.set_defaults(func=cmd_theme_runtime)
 
     theme_repair = theme_sub.add_parser("repair", help="Retired: OMH installs no skin files into Hermes. Does nothing.")
     theme_repair.add_argument("name", nargs="?", help="Accepted for compatibility and ignored.")

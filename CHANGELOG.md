@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh theme runtime own` gives the OMH TUI a Hermes runtime of its own,
+  so the bots' gateway restarts and drains never pause it.** Hermes serves
+  every profile from one gateway per host and refuses its standalone entry
+  beside it, but a home outside `profiles/` gets an auto-started,
+  idle-exiting gateway of its own. With the choice saved, bare `omh` builds
+  `<omh_home>/tui-home` from the root Hermes home at each launch (config and
+  auth copied, `.env` without messaging credentials, `SOUL.md` linked, one
+  link per skill over the root's and every served profile's with the root
+  winning a clash, `plugins/omh` linked) and opens the TUI there; `/gateway
+  restart` restarts that runtime alone and loads new OMH code without a bot
+  reconnecting. The bot board keeps reading the bots' home, `--hermes-home`
+  and `-p` stay on the home they name, and `--resume` of a session on the
+  shared gateway opens there with one line saying so. The default stays
+  `shared`.
 - **Codex and Claude Code units dispatched by OMH now come back accepted,
   and one dag-ulw run can send different coding nodes to both owners.**
   Untracked executor plugin state under `.omx/` and `.omc/` no longer fails

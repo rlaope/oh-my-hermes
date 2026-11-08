@@ -1702,6 +1702,33 @@ to 1 MiB each (a larger one is reported by size), the OMH store's records are
 counted from its directory listing, the only signal it sends is the signal-0
 liveness probe, and it calls nothing in Hermes' gateway.
 
+#### The TUI on a Hermes runtime of its own
+
+By default bare `omh` opens its session on the Hermes gateway that also serves
+your bots: Hermes runs one gateway per host for every profile under
+`profiles/`, and refuses its standalone entry beside it. So a whole-gateway
+restart with a bot turn running drains first, up to Hermes'
+`agent.restart_after_turn_timeout` (30 minutes by default), and `omh` waits
+with it. `omh theme runtime own` moves the TUI's sessions to a Hermes home of
+the TUI's own, `<omh_home>/tui-home`, which Hermes gives a gateway of its own
+(auto-started, exits once idle). Nothing that happens to the bots' gateway
+reaches it, and `/gateway restart` there restarts only that runtime, which
+loads new OMH code without a bot reconnecting.
+
+`omh` builds the home from the root Hermes home at every launch and refreshes
+only what changed: `config.yaml` and `auth.json` copied (model, providers and
+their keys, OMH's memory provider, OMH's skills through `skills.external_dirs`,
+the plugins), `.env` copied without any messaging credential (no adapter of
+the TUI runtime ever polls a bot's token), `SOUL.md` linked, `skills/` a link
+per skill over the root's and every served profile's (the root wins a name
+clash; a directory you put there yourself is left alone), and `plugins/omh`
+linked to the same OMH bundle the bots run. Sessions, Hermes' own memory,
+cron and kanban are the TUI home's. The bot board keeps reading the bots'
+home. `omh --hermes-home` and `omh -p <profile>` stay on the home they name;
+`omh --resume <id>` of a session that lives on the shared gateway opens there
+and says so; `omh theme runtime shared` goes back. `omh-tui-home.json` in
+the home records what was built from what.
+
 When the OMH TUI cannot start, `omh` says why in one line on stderr and opens
 Hermes instead, so you lose the OMH screen, never the session. For a reason
 that is the OMH TUI's own — Windows or another terminal without `termios`,
@@ -3454,6 +3481,7 @@ omh theme use crimson --dry-run
 omh theme status             # the active theme, which source decided it, and where it is saved
 omh theme wallpaper off      # the living wallpaper off in every later OMH TUI session (on, or alone to show it)
 omh theme update-check off   # no once-a-day ask of npm for a newer release (on, or alone to show it)
+omh theme runtime own        # open sessions on a Hermes runtime of the TUI's own (shared, or alone to show it)
 ```
 
 Bare `omh theme` opens a picker: up/down arrows (or `j`/`k`) move the cursor,
