@@ -1020,6 +1020,16 @@ All notable changes will be documented here.
   session row and its auxiliary calls across compaction segments, and `—`
   for any figure nothing reported. Contributed by @yqm-307 (#2665).
 
+- **A drag copy in the OMH TUI inside a herdr pane now reaches the clipboard
+  of the machine you are looking at, including over SSH.** herdr strips
+  TMUX from its panes and keeps the SSH variables its server started with,
+  so on a Mac the TUI used to put the copy on that Mac's own clipboard with
+  `pbcopy` and still say "copied", even for a person attached over SSH from
+  another machine. In a herdr pane the copy now goes out as OSC 52, which
+  herdr hands to its client's clipboard. A copy past the 192 KiB herdr takes
+  says it was only sent, and so does `/copy`. A tmux started inside the pane
+  keeps the tmux rule. Reported by @foxion37 in #2672.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and

@@ -14,6 +14,15 @@ last client that attached) says the variable is not set; an answer that does
 not come, or does not say so, counts as remote. Both are fixed argvs, run only
 for a copy the person made with the mouse in the pager, `pbcopy` with the text
 on stdin.
+
+A herdr pane (herdr, a terminal workspace manager) is the exception to both.
+herdr strips TMUX from its panes and keeps no SSH variables per client (a pane
+inherits the long-lived server's), so the pane's environment says nothing
+about where the screen is. herdr itself puts the pane's OSC 52 on the
+clipboard of the machine its client runs on (as OSC 52 again when that client
+runs under SSH), so there the copy always goes out as OSC 52 and counts as
+copied, up to the most herdr takes (HERDR_CLIPBOARD_BYTES); a larger one is
+reported as sent. A tmux started inside the pane sets TMUX again and is tmux.
 """
 
 from __future__ import annotations
@@ -26,6 +35,9 @@ from .terminal import terminal_name
 COPY_OSC52 = "osc52"
 COPY_PBCOPY = "pbcopy"
 COPY_UNCONFIRMED = "osc52-unconfirmed"
+COPY_TOO_LARGE = "osc52-too-large"  # a herdr pane's copy past HERDR_CLIPBOARD_BYTES: herdr drops it
+# herdr hands a pane's OSC 52 on only up to this many bytes of decoded text (ghostty-vt's MAX_CLIPBOARD_BYTES).
+HERDR_CLIPBOARD_BYTES = 192 * 1024
 OSC52_TERMINALS = frozenset({"kitty", "ghostty", "WezTerm", "alacritty"})  # by `terminal_name`
 SSH_VARIABLES = ("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY")  # set: the screen is on another machine than pbcopy's
 PBCOPY_SECONDS = 2.0
@@ -50,12 +62,26 @@ def tmux_client_over_ssh(environ: Mapping[str, str]) -> bool:
     return not (said == f"-{TMUX_SSH_VARIABLE}" or never_had)
 
 
+def in_herdr(environ: Mapping[str, str]) -> bool:
+    """Whether the TUI runs in a herdr pane: herdr's `HERDR_ENV=1` (the gate `herdr.py` reads) or its
+    `TERM_PROGRAM`."""
+    return environ.get("HERDR_ENV") == "1" or terminal_name(environ) == "herdr"
+
+
+def herdr_drops(environ: Mapping[str, str], size: int) -> bool:
+    """Whether herdr drops an OSC 52 written in this pane that carries `size` bytes of text."""
+    return in_herdr(environ) and size > HERDR_CLIPBOARD_BYTES
+
+
 def copy_route(
     environ: Mapping[str, str], platform: str, tmux_over_ssh: Callable[[Mapping[str, str]], bool] = tmux_client_over_ssh,
+    size: int = 0,
 ) -> str:
-    """How a copy from the pager reaches the clipboard: COPY_OSC52 for a terminal outside tmux that honours OSC 52 as
-    it ships, COPY_PBCOPY on a Mac the screen is on (no SSH between them, tmux's last client included), else
-    COPY_UNCONFIRMED."""
+    """How a copy of `size` bytes from the pager reaches the clipboard: COPY_OSC52 in a herdr pane outside tmux
+    (COPY_TOO_LARGE past what herdr takes) or for a terminal outside tmux that honours OSC 52 as it ships, COPY_PBCOPY
+    on a Mac the screen is on (no SSH between them, tmux's last client included), else COPY_UNCONFIRMED."""
+    if in_herdr(environ) and not environ.get("TMUX"):
+        return COPY_TOO_LARGE if herdr_drops(environ, size) else COPY_OSC52
     if terminal_name(environ) in OSC52_TERMINALS and not environ.get("TMUX"):
         return COPY_OSC52
     if platform != "darwin" or any(environ.get(name) for name in SSH_VARIABLES):

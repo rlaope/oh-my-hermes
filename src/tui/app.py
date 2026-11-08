@@ -248,7 +248,7 @@ from .panels import (
 )
 from .dag_pager import DagPager
 from .background import BackgroundProcess, askable, finished_forms, report_prompt, running_forms, tool_call
-from .clipboard import COPY_OSC52, COPY_PBCOPY, SSH_VARIABLES, copy_route, pbcopy, tmux_client_over_ssh
+from .clipboard import COPY_OSC52, COPY_PBCOPY, COPY_TOO_LARGE, SSH_VARIABLES, copy_route, herdr_drops, pbcopy, tmux_client_over_ssh
 from .prompts import CLOSED_CHOICES, FRAMED_FOOTER_MIN_ROWS, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
 from .faults import FaultLog
 from .screen import (
@@ -1104,6 +1104,7 @@ COPY_SENT_NOTE = "copy sent ({why})"
 SELECTION_DROPPED_NOTE = "selection dropped: text moved"
 OSC52_UNCONFIRMED = "terminal may not support OSC 52"
 OSC52_IN_TMUX = "tmux passes it on only with set-clipboard on"
+OSC52_TOO_LARGE = "herdr drops a copy over 192 KiB"  # `clipboard.HERDR_CLIPBOARD_BYTES`
 # The completion menu's name column: at least this wide, wider for the longest name it lists (OMH skills are
 # `omh-*` and `ulw-*` slugs) up to half the terminal; a name longer than that pushes only its own summary.
 MENU_NAME_CELLS = 16
@@ -7804,8 +7805,11 @@ class App(ModesMixin, AgentViewMixin):
             return
         # "replace", as `Terminal.write` encodes: a lone surrogate (JSON can carry one) is copied as the "?" the
         # screen shows, not as bytes that are no UTF-8 for the terminal to put on the clipboard.
-        encoded = base64.b64encode(last.text.strip().encode("utf-8", "replace")).decode("ascii")
-        self.terminal.write(OSC52_COPY.format(encoded))
+        data = last.text.strip().encode("utf-8", "replace")
+        self.terminal.write(OSC52_COPY.format(base64.b64encode(data).decode("ascii")))
+        if herdr_drops(self.environ, len(data)):
+            self.transcript.add_notice(f"Copy sent ({OSC52_TOO_LARGE}).", NOTICE_WARN)
+            return
         self.transcript.add_notice("Copied the last reply to the clipboard (OSC 52; the terminal must allow it).")
 
     def _pager_mouse(self, event: Mouse) -> None:
@@ -8006,16 +8010,18 @@ class App(ModesMixin, AgentViewMixin):
         """Put `text` on the clipboard by `copy_route`, and the notice that says so: copied when OSC 52 went to a
         terminal that honours it or `pbcopy` succeeded, sent otherwise (OSC 52 is never answered, so nothing confirms
         it)."""
-        route = copy_route(self.environ, self.platform, self.tmux_over_ssh)
+        # "replace", as `_copy` encodes: a lone surrogate is copied as the "?" the screen shows.
+        data = text.encode("utf-8", "replace")
+        route = copy_route(self.environ, self.platform, self.tmux_over_ssh, len(data))
         if route == COPY_PBCOPY and self.pbcopy(text):
             confirmed = True
         else:
-            # "replace", as `_copy` encodes: a lone surrogate is copied as the "?" the screen shows.
-            self.terminal.write(OSC52_COPY.format(base64.b64encode(text.encode("utf-8", "replace")).decode("ascii")))
+            self.terminal.write(OSC52_COPY.format(base64.b64encode(data).decode("ascii")))
             confirmed = route == COPY_OSC52
         if confirmed:
             return Notification(COPIED_NOTE.format(count=len(text)), "success", "")
         why = OSC52_IN_TMUX if self.environ.get("TMUX") else OSC52_UNCONFIRMED
+        why = OSC52_TOO_LARGE if route == COPY_TOO_LARGE else why
         return Notification(COPY_SENT_NOTE.format(why=why), "warn", "")
 
     def _theme(self, arg: str) -> None:
