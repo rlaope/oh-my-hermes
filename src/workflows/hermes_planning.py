@@ -441,6 +441,12 @@ def mark_payload_as_scaffold_record(payload: dict[str, object]) -> None:
     decision_gate = contract.get("decision_gate")
     if isinstance(decision_gate, dict):
         decision_gate["acceptance_requires"] = dict(SCAFFOLD_ACCEPTANCE_REQUIREMENT)
+    # `available` keeps meaning "available after acceptance": wrapper sessions
+    # read it to offer the coding step, and `coding delegate --from-plan`
+    # already refuses a draft. The requirement rides beside it instead.
+    coding_delegate = contract.get("coding_delegate")
+    if isinstance(coding_delegate, dict) and coding_delegate.get("available"):
+        coding_delegate["acceptance_requires"] = dict(SCAFFOLD_ACCEPTANCE_REQUIREMENT)
 
 
 def validate_reviewed_body(body: str) -> str:

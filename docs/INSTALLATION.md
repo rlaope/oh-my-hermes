@@ -5114,7 +5114,10 @@ The stdout JSON also includes `wrapper_contract`. Wrappers should use that JSON,
 not the Markdown body, to decide the next local action. If
 `wrapper_contract.coding_delegate.available` is `true`, the listed
 `argv_template` is an adapter contract for preparing a lower-level delegation
-after plan acceptance. Use the accepted plan artifact or generated context pack
+after plan acceptance; `available` does not mean the plan can be accepted yet.
+On a scaffold record, `coding_delegate.acceptance_requires` (the same value as
+`decision_gate.acceptance_requires`) says acceptance first needs the reviewed
+plan recorded with `--plan-file`. Use the accepted plan artifact or generated context pack
 as the executor context; Discord/channel text is only a summary. If
 `coding_delegate.available` is `false`, follow `next_action` and do not dispatch
 coding work.

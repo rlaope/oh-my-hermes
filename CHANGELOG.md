@@ -531,7 +531,8 @@ All notable changes will be documented here.
   quality gate and next action match stdout):
   `quality_gate.readiness: needs_reviewed_body`, `coding_handoff_ready:
   false`, `next_action: record_reviewed_plan`, and
-  `decision_gate.acceptance_requires`. `ulw-plan`, the `omh-routing`
+  `decision_gate.acceptance_requires`, repeated on `coding_delegate`, whose
+  `available` still means available after acceptance. `ulw-plan`, the `omh-routing`
   wrapper reference and `docs/INSTALLATION.md` describe the refusal.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
