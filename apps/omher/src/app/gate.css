@@ -1,0 +1,47 @@
+.gate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg, #0b090d);
+  color: var(--body, #dcd6de);
+  font-size: 13px;
+}
+.gate-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 420px;
+  padding: 24px;
+  text-align: center;
+}
+.gate-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #f3eff4);
+}
+.gate-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted, #9a929d);
+  overflow-wrap: anywhere;
+}
+.gate-retry {
+  height: 26px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-sm, 4px);
+  background: var(--seg-on, #3d3843);
+  color: var(--ink, #f3eff4);
+  font: inherit;
+  cursor: pointer;
+}
+.gate-retry:hover:not(:disabled) {
+  background: var(--raise2, #232026);
+}
+.gate-retry:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
