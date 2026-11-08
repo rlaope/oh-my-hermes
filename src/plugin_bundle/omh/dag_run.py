@@ -242,6 +242,10 @@ def _record_shape_ok(raw: object) -> bool:
     ids = [node.get("id") for node in nodes if isinstance(node, dict)]
     if len(ids) != len(nodes) or len(set(ids)) != len(ids) or not all(isinstance(i, str) and _ID.fullmatch(i) for i in ids):
         return False
+    # The coding owners the defining request named (`dag_tool._define`); only `define` writes them.
+    owners = raw.get("owners", [])
+    if not isinstance(owners, list) or not all(isinstance(owner, str) and owner in EXTERNAL_OWNERS for owner in owners):
+        return False
     known = set(ids)
     for node in nodes:
         if not isinstance(node.get("depends_on"), list) or not set(node["depends_on"]) <= known:

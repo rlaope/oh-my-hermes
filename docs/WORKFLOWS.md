@@ -704,7 +704,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: No coding owner has been explicitly chosen yet, so composing a handoff would select the owner silently.
 - Quality bar:
   - Planning is not execution permission. Handoff requests authorize preparation only; explicit execution requests authorize only their scope, subject to readiness and permission probes. Clarify missing authority.
-  - Require an explicit owner choice for this run: named now, confirmed when asked, or recorded as `accepted_explicit_choice`. Recommendations, plan mentions and previous owners do not count. For a missing, ambiguous or unready owner, ask `choose_executor` once and stop; never choose for the user.
+  - Require an explicit owner choice made in this request: named in it, or confirmed when asked. A choice counts only for the request it was made in; an earlier request's owner, a recorded or learned owner, recommendations and plan mentions do not count, so ask again. For a missing, ambiguous or unready owner, ask `choose_executor` once and stop; never choose for the user.
   - Owner selection alone is not dispatch permission: `prepare a Codex handoff only` or `use Codex, do not dispatch` stays preparation-only. `Use Codex to implement this now` supplies both the owner choice and dispatch permission within scope, with no redundant confirmation. After readiness and permission probes, invoke the fanout-dispatch bridge (`omh coding run` for one unit); clarify missing owner or action authority first.
   - State the handoff mode before composing: the claude-code handoff record is prompt-only (`coding_prompt_handoff/v1` -- that record is never dispatchable and never described as a run; a user-commanded Claude Code run goes through the bridge below, and only the fanout-dispatch bridge -- `omh coding fanout dispatch` or its `omh coding run` single-run entry -- ever spawns a CLI), codex is a dispatchable `coding_executor_handoff/v1`, and omx-runtime/pi-family-runtime/omc-runtime are `coding_runtime_handoff/v1`.
   - Compose the prompt from the selected profile's DISCOVERED skills via `omh coding executor-skills --profile <profile>`: arrange the returned skills by the unit's role recipe, one named skill per step, using each skill's own invocation string verbatim (`/name`, `/pack:name` from its manifest, `$name` for a codex pack) -- never a guessed prefix. Empty discovery gets one explicit line -- "no installed skills discovered for <profile>; prompt composed generically" -- then compose generically. Load `references/executor-prompt-composition.md` for the full procedure.
@@ -733,11 +733,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Dispatch never merges: collect each unit's fanout_unit_result/v1 evidence, verify the integrated combination of units (not just each one alone -- disjoint file scopes can still conflict at integration), and report merged/unmerged per unit in the closing brief. Merging the unit branches remains an explicit operator or reviewing-agent action; a dispatch receipt is never merge evidence.
   - The closing brief includes the observed `omh_run_summary` summary_text verbatim, or an explicit run-summary not_available line, before any specific next-action question -- never a model-estimated number.
 - Recovery notes:
-  - If this run lacks an explicit coding-owner choice, no handoff stands yet; mark prompt composition unresolved and hand back the choose_executor question without selecting a CLI.
+  - If this request lacks an explicit coding-owner choice, no handoff stands yet; mark prompt composition unresolved and hand back the choose_executor question without selecting a CLI.
   - If the scratch-edit permission probe fails, retain the composed prompt and discovered skill names, mark execution not_observed, and hand back the denied permission and required grant change before retrying.
   - If dispatch returns no session or thread id, retain the dispatch receipt, mark steering unresolved, and hand back the explicit unsteerable note and any observed unit result without claiming a resumable session.
 - Required inputs:
-  - explicit coding-owner choice for this run
+  - explicit coding-owner choice made in this request
   - task or unit description
   - the chosen profile's discovered executor skill set
 - Expected outputs:
@@ -747,7 +747,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Artifact expectations:
   - prepared external handoff record when a wrapper can record it
 - Safety rules:
-  - Never prepare a handoff without an explicit owner choice for this run -- a routing recommendation, a plan mention, or a previous run's owner is not a choice for this run.
+  - Never prepare a handoff without an explicit owner choice made in this request -- a routing recommendation, a plan mention, or an earlier request's owner is not a choice for this one.
   - Prepared, composed, or shown is never dispatch, execution, review, CI, or merge evidence.
   - Never route a Hermes-owned lane through this engine; the Hermes harness stays the default coding path.
   - Never carry a discovered skill's description text into a composed prompt -- only its name and invocation string ever leave discovery; the description stays inside the classifier.
@@ -7895,7 +7895,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Compatibility alias: `false`
 - Lifecycle stage: `canonical`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
-- Handoff policy: Hermes owns the plan, the dispatch, the settling and the verdict; every node runs as Hermes' own `delegate_task` child, routed per category with `omh_delegate_route`. OMH's `omh_dag` tool keeps the graph, and only its calls start nodes: a `delegate_task` without the `[dag:<run>/<node>]` marker it returned is no node of the run. Coding nodes go to an external coding CLI only when the person chose that owner within the last day (`omh chat`, `omh coding`, or naming it in a dag-ulw request); then `omh_dag` lists each owner's nodes under `exports`. Otherwise no external CLI runs.
+- Handoff policy: Hermes owns the plan, the dispatch, the settling and the verdict; every node runs as Hermes' own `delegate_task` child, routed per category with `omh_delegate_route`. OMH's `omh_dag` tool keeps the graph, and only its calls start nodes: a `delegate_task` without the `[dag:<run>/<node>]` marker it returned is no node of the run. Coding nodes go to an external coding CLI only when the person named that owner in the dag-ulw request that defines the run; a choice counts only for the request it was made in, so an earlier request's choice, `omh chat` or `omh coding` does not count. Then `omh_dag` lists each owner's nodes under `exports`. Otherwise no external CLI runs.
 - Why this exists: `dag-ulw` exists so a big job runs end to end without the person driving it: the parent plans a graph OMH can validate and draw, runs the ready nodes in parallel on Hermes' own children, verifies the goal with a separate node, and repairs before it reports.
 - First steps:
   - Start at once; there is no plan approval. Write the goal criteria in one line.
@@ -7960,7 +7960,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Two nodes that can run at the same time never share a write scope; a shared file needs an edge or one owner.
   - A node's own report is a claim: settle it accepted only after reading its handoff file, and settle a child that says it is blocked as blocked.
   - Ask the person only for scope, spend, or an irreversible step, as one required `Authorize` question; an unanswered question means that part does not start.
-  - No external coding CLI runs unless the person already chose it as the coding owner.
+  - No external coding CLI runs unless the person named it as the coding owner in this request.
 
 ### decision-prototype
 

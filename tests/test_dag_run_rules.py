@@ -21,6 +21,7 @@ load_local_package()
 
 from _delegation_state import PARENT, homes  # noqa: E402
 from omh.plugin_bundle.omh import dag_run  # noqa: E402
+from omh.plugin_bundle.omh.named_owner_choice import note_turn_owners  # noqa: E402
 from omh.plugin_bundle.omh.tools import dag_tool  # noqa: E402
 from test_dag_tool import PROMPT, call, child_started, handoff, node, slots_table  # noqa: E402
 
@@ -126,10 +127,12 @@ class BaselineNodeTests(unittest.TestCase):
         ], time.time())
         derived = dag_run.derive(record, [], time.time())
         self.assertEqual([unit["unit_id"] for unit in dag_tool.export_units(record, derived, "codex")], ["api"])
-        with homes() as home, patch.object(dag_tool, "owner_choice", return_value="codex"):
+        with homes() as home:
             slots_table(home)
+            note_turn_owners(PARENT, "/dag-ulw build it with codex")
             result = call(action="define", run="feat", nodes=[
-                node("baseline", role="baseline", scope=("baseline.txt",)), node("api", scope=("api.py",)),
+                node("baseline", role="baseline", scope=("baseline.txt",)),
+                {**node("api", scope=("api.py",)), "owner": "codex"},
             ])
             self.assertIn("baseline", calls_by_node(result))
             self.assertEqual(result["export"]["nodes"], ["api"])

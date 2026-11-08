@@ -281,8 +281,8 @@ class SpendGateContractTests(unittest.TestCase):
     def test_an_unknown_amount_already_spent_is_never_zero(self) -> None:
         self.assertInBoth(
             "If they cannot say, what is already spent is unknown: never assume zero and never show the full cap as "
-            "remaining. The card says the cap cannot be checked, and the spend goes ahead only against a cap the "
-            "person sets for this spend alone, with the total checked against it; for a recurring charge that cap also "
+            "remaining. The card says the cap cannot be checked, and the spend goes ahead only against a spend-only cap, "
+            "one the person sets for this spend alone, with the total checked against it; for a recurring charge that cap also "
             "covers its renewals, and an `unknown` charge from a timed-out payment is still reconciled first, so a cap "
             "never stands in for that.",
             _references(),
@@ -395,6 +395,47 @@ class SpendGateContractTests(unittest.TestCase):
                     [(path, section.splitlines()[0]) for path, section in sections if "omh-spend-gate" not in section],
                     [],
                 )
+
+    def test_an_unknown_cost_call_is_checked_against_a_cap_in_its_own_units(self) -> None:
+        # The credits rule, show-reel and craft-brief send an unknown-cost call to
+        # "the spend-only cap"; the rails page names that cap and gives it a check
+        # that needs no price: the planned count in the call's own units.
+        for projection, reference in _references().items():
+            with self.subTest(projection=projection):
+                ledger = reference.split("## 4. Cap ledger", 1)[1]
+                self.assertIn("the spend goes ahead only against a spend-only cap, one the person sets for this spend alone", ledger)
+                unknown_cost = (
+                    "For a call whose own cost is unknown, because no price gives its credits or cost, the person sets a "
+                    "spend-only cap for this call alone in its own units (images, characters, or seconds), and the planned "
+                    "count is checked against it: the call runs only when the count fits"
+                )
+                self.assertIn(unknown_cost, ledger)
+                # Its row keeps the count in its own units, and the period total it
+                # leaves unknown sends the next spend to the already-spent rule.
+                self.assertIn(
+                    "Its ledger row records that count in those units and leaves the period total unknown, so the next "
+                    "spend's already-spent amount is unknown under the rule below.",
+                    ledger,
+                )
+                # It is a rule of its own, not part of the no-ledger branch that follows.
+                self.assertLess(ledger.index(unknown_cost), ledger.index("When no ledger is supplied"))
+        for projection, body in _bodies().items():
+            with self.subTest(projection=projection):
+                self.assertIn("or says the cost is unknown so the spend-only cap applies", body)
+        craft_brief = {
+            skill: next(
+                template.content
+                for template in templates
+                if template.skill_name == skill and template.relative_path == "references/craft-brief.md"
+            )
+            for skill, templates in (
+                ("show-reel", builtin_skill_reference_templates()),
+                ("omh-show-reel", agent_skill_reference_templates()),
+            )
+        }
+        for skill, text in craft_brief.items():
+            with self.subTest(skill=skill):
+                self.assertIn("`omh-spend-gate`'s spend-only cap applies", text)
 
     def test_each_sibling_is_named_once(self) -> None:
         mine = _definition(SKILL).do_not_use_when

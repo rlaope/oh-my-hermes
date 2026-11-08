@@ -1234,20 +1234,16 @@ class RouterContentTests(unittest.TestCase):
             "native subagents -> Hermes delegation when available, otherwise sequential lanes",
             "Record observed delegation results",
             "not_observed",
-            # Completion is not itself a user decision or a reason to append a
-            # generic question or an unrelated list of actions nobody requested.
-            "real unresolved user decision or a useful briefing discussion",
-            "one specific, content-linked question",
-            "Completed work needs no question",
-            "omit unrelated non-action footers and generic offers to continue",
             # The reply is written in the user's words and the host's voice;
             # the persona owns the reply language, speech level, and endings,
-            # progress updates too, the user's language is the fallback, and
-            # OMH's record vocabulary stays in records and tool calls.
+            # progress updates too, the user's language is the fallback. That
+            # core stays in every body as one line; the record-term and
+            # turn-ending clauses live once in the shared rail (pinned below).
             "Reply in the user's own words and the host's own voice",
             "owns reply language, tone, speech level, and sentence endings, progress updates included",
             "where it sets no language, use the one the user wrote in",
             "OMH shapes structure and content only",
+            "the shared rail's Reply Language And Host Voice and Turn Ending sections hold the full rule",
         )
         templates = {template.name: template.content for template in builtin_skill_templates()}
         rendered_files = {
@@ -1274,20 +1270,53 @@ class RouterContentTests(unittest.TestCase):
         for name, content in sorted(templates.items()):
             if name != "oh-my-hermes":
                 self.assertIn("Preserve workflow intent and stop conditions", content, name)
+            # The clauses that left the body are not repeated in it.
+            self.assertNotIn("OMH's record terms (surface, lane", content, name)
+        from omh.skills.render import SHARED_RAIL_REFERENCE_PATH
+
+        rail = next(
+            template.content for template in builtin_skill_reference_templates()
+            if f"{omh_skill_display_name(template.skill_name)}/{template.relative_path}"
+            == SHARED_RAIL_REFERENCE_PATH
+        )
+        for fragment in (
+            # What the body's paragraph said beyond its one line, held by the rail.
+            "OMH's record vocabulary is for records and tool calls, not for the sentence the user reads",
+            "`surface`, `lane`, `wrapper`, `handoff`",
+            "`evidence boundary`",
+            "`not_observed`",
+            "A user who names a term gets it explained",
+            "OMH shapes what Hermes checks, records, and how a reply is structured, never how it sounds",
+            "real unresolved user decision or a useful briefing discussion",
+            "one specific, content-linked question",
+            "Completed work needs no question",
+            "omit unrelated non-action footers and generic offers to continue",
+        ):
+            with self.subTest(rail_fragment=fragment):
+                self.assertIn(fragment, rail)
 
     def test_brief_endings_are_relevant_in_native_and_portable_guidance(self) -> None:
-        """Pin delivered guidance, not a context-free ban on negative sentences."""
+        """Pin delivered guidance, not a context-free ban on negative sentences.
+
+        A portable body has no shared rail, so it carries the turn-ending rule
+        itself; a native body names the rail's Turn Ending section, and the
+        rail carries the rule (checked below).
+        """
         from omh.skills.render import agent_skill_templates, SHARED_RAIL_REFERENCE_PATH
 
-        for renderer in (builtin_skill_templates, agent_skill_templates):
-            for template in renderer():
-                with self.subTest(renderer=renderer.__name__, skill=template.name):
-                    text = " ".join(template.content.split())
-                    self.assertIn("real unresolved user decision or a useful briefing discussion", text)
-                    self.assertIn("one specific, content-linked question", text)
-                    self.assertIn("Completed work needs no question", text)
-                    self.assertIn("omit unrelated non-action footers and generic offers to continue", text)
-                    self.assertNotIn("when a stop condition or a decision the user owns ends the turn", text)
+        for template in agent_skill_templates():
+            with self.subTest(renderer="agent_skill_templates", skill=template.name):
+                text = " ".join(template.content.split())
+                self.assertIn("real unresolved user decision or a useful briefing discussion", text)
+                self.assertIn("one specific, content-linked question", text)
+                self.assertIn("Completed work needs no question", text)
+                self.assertIn("omit unrelated non-action footers and generic offers to continue", text)
+                self.assertNotIn("when a stop condition or a decision the user owns ends the turn", text)
+        for template in builtin_skill_templates():
+            with self.subTest(renderer="builtin_skill_templates", skill=template.name):
+                text = " ".join(template.content.split())
+                self.assertIn("Reply Language And Host Voice and Turn Ending sections hold the full rule", text)
+                self.assertNotIn("when a stop condition or a decision the user owns ends the turn", text)
 
         rail = next(
             template.content for template in builtin_skill_reference_templates()

@@ -1,57 +1,49 @@
-"""One dag-ulw run can prepare separate, explicitly chosen external owner batches."""
+"""One dag-ulw run can prepare separate external owner batches, each named in the request that defined it."""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import shlex
-import time
 import unittest
 
-from test_dag_tool import FEATURE, PARENT, call, choose, handoff, homes, node, put_record, slots_table
+from test_dag_tool import (
+    FEATURE, PARENT, call, choose, handoff, homes, new_request, node, put_record, router_record, slots_table,
+)
 from omh.plugin_bundle.omh import dag_run
+from omh.plugin_bundle.omh.named_owner_choice import note_turn_owners, turn_owners
 from omh.plugin_bundle.omh.tools import dag_tool
 from omh.routing import owner_preference
 
 
-def choose_lane(home, owner: str, *, state: dict | None = None, age: float = 0.0,
-                selected_owner: str = "") -> dict:
-    """Use the router's writer, not the chat hook, to record one per-owner choice."""
-    state = owner_preference.record_in_message_explicit_naming(
-        state, route_family=f"ulw-coding-delivery.{owner}", selected_owner=selected_owner or owner,
-        naming_cue=f"named_executor:{selected_owner or owner}",
-        occurred_at=(datetime.now(timezone.utc) - timedelta(seconds=age)).isoformat())
-    put_record(home, state)
-    return state
-
-
 class OwnerChoicesTests(unittest.TestCase):
-    def test_main_and_per_owner_choices_are_sorted_unique_without_changing_main_choice(self) -> None:
+    def test_define_keeps_the_owners_this_request_named_sorted_and_unique(self) -> None:
         with homes() as home:
-            state = choose(home, "codex")
-            state = choose_lane(home, "codex", state=state)
-            choose_lane(home, "claude-code", state=state)
-            self.assertEqual(dag_tool.owner_choices(home.omh, now=time.time()), ("claude-code", "codex"))
-            self.assertEqual(dag_tool.owner_choice(home.omh, now=time.time()), "codex")
+            choose(home, "codex", "claude-code", "codex")
+            call(action="define", run="feat", nodes=[node("api", scope=("api.py",))])
+            stored = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+            self.assertEqual(stored["owners"], ["claude-code", "codex"])
+            self.assertEqual(dag_tool.owner_choices(stored), ("claude-code", "codex"))
 
-    def test_per_owner_choice_obeys_age_future_and_matching_owner_boundaries(self) -> None:
-        for age, selected_owner, expected in (
-            (23 * 3600, "codex", ("codex",)), (25 * 3600, "codex", ()),
-            (-60, "codex", ()), (0, "claude-code", ()),
-        ):
-            with self.subTest(age=age, selected_owner=selected_owner), homes() as home:
-                choose_lane(home, "codex", age=age, selected_owner=selected_owner)
-                self.assertEqual(dag_tool.owner_choices(home.omh, now=time.time()), expected)
-                self.assertEqual(dag_tool.owner_choice(home.omh, now=time.time()), "")
+    def test_a_request_that_names_no_owner_keeps_none_in_the_run(self) -> None:
+        for text in ("build the API with codex", "/dag-ulw build it without codex", "/dag-ulw build it"):
+            with self.subTest(text=text), homes() as home:
+                note_turn_owners(PARENT, text)
+                self.assertEqual(turn_owners(PARENT), ())
+                call(action="define", run="feat", nodes=[node("api", scope=("api.py",))])
+                stored = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+                self.assertNotIn("owners", stored)
+                self.assertEqual(dag_tool.owner_choices(stored), ())
 
-    def test_missing_or_invalid_record_grants_no_owner(self) -> None:
+    def test_a_per_owner_record_from_an_earlier_request_grants_no_owner(self) -> None:
         with homes() as home:
-            self.assertEqual(dag_tool.owner_choices(home.omh, now=time.time()), ())
-            state = choose_lane(home, "codex")
-            state["privacy"]["mode"] = "full"
+            state = owner_preference.record_in_message_explicit_naming(
+                router_record("codex"), route_family="ulw-coding-delivery.codex", selected_owner="codex",
+                naming_cue="named_executor:codex", occurred_at="2026-11-07T00:00:00+00:00")
             put_record(home, state)
-            self.assertEqual(dag_tool.owner_choices(home.omh, now=time.time()), ())
+            new_request()
+            call(action="define", run="feat", nodes=[owned("api", "codex", scope=("api.py",))])
+            self.assertEqual(call(action="export", run="feat", owner="codex")["reason"], "owner_not_chosen")
 
 
 def owned(node_id: str, owner: object, **kwargs) -> dict:
@@ -122,17 +114,19 @@ class OwnerLaneRoutingTests(unittest.TestCase):
                  node("verify", role="verify", scope=("verify.log",)), node("baseline", role="baseline")]
         with homes() as home:
             slots_table(home)
-            choose_lane(home, "claude-code", state=choose(home, "codex"))
+            choose(home, "codex", "claude-code")
             defined = call(action="define", run="feat", nodes=nodes)
             expected = [
                 {"owner": "claude-code", "nodes": ["ui"],
                  "next": {"tool": "omh_dag", "action": "export", "owner": "claude-code"}},
-                {"owner": "codex", "nodes": ["api", "docs"],
+                {"owner": "codex", "nodes": ["api"],
                  "next": {"tool": "omh_dag", "action": "export", "owner": "codex"}},
             ]
             self.assertEqual(defined.get("exports"), expected, defined)
             self.assertNotIn("export", defined)
-            self.assertEqual({i for row in defined["calls"] for i in row["nodes"]}, {"baseline", "review", "verify"})
+            # A coding node that names no owner stays on delegate_task, even with an owner chosen for the run.
+            self.assertEqual({i for row in defined["calls"] for i in row["nodes"]},
+                             {"baseline", "docs", "review", "verify"})
             status = call(action="status", run="feat")
             self.assertEqual(status["exports"], expected)
             self.assertNotIn("export", status)
@@ -145,7 +139,7 @@ class OwnerLaneRoutingTests(unittest.TestCase):
             second = call(action="export", run="feat", owner="claude-code")
             self.assertEqual(second["status"], "ok", second)
             self.assertNotEqual(first["fanout"]["fanout_id"], second["fanout"]["fanout_id"])
-            for result, expected_ids in ((first, ["api", "docs"]), (second, ["ui"])):
+            for result, expected_ids in ((first, ["api"]), (second, ["ui"])):
                 units = json.loads(Path(result["fanout"]["units_file"]).read_text(encoding="utf-8"))["units"]
                 self.assertEqual([unit["unit_id"] for unit in units], expected_ids)
                 self.assertEqual({unit["owner"] for unit in units}, {result["fanout"]["owner"]})
@@ -161,7 +155,7 @@ class OwnerLaneRoutingTests(unittest.TestCase):
                  owned("ui", "claude-code", scope=("ui.py",)), owned("css", "claude-code", scope=("css.py",))]
         with homes() as home:
             slots_table(home)
-            choose_lane(home, "claude-code", state=choose_lane(home, "codex"))
+            choose(home, "codex", "claude-code")
             call(action="define", run="feat", nodes=nodes)
             single = call(action="export", run="feat", owner="codex")
             pair = call(action="export", run="feat", owner="claude-code")
@@ -181,7 +175,7 @@ class OwnerLaneRoutingTests(unittest.TestCase):
                  owned("css", "claude-code", scope=("css.py",), depends_on=("ui",))]
         with homes() as home:
             slots_table(home)
-            choose_lane(home, "claude-code", state=choose_lane(home, "codex"))
+            choose(home, "codex", "claude-code")
             result = call(action="define", run="feat", nodes=nodes)
             self.assertEqual(result.get("exports", [])[0]["nodes"], ["api"], result)
             self.assertEqual(call(action="export", run="feat", owner="claude-code")["reason"], "nothing_to_export")
@@ -196,30 +190,34 @@ class OwnerLaneRoutingTests(unittest.TestCase):
             units = json.loads(Path(second["fanout"]["units_file"]).read_text(encoding="utf-8"))["units"]
             self.assertEqual([(unit["unit_id"], unit["depends_on"]) for unit in units], [("ui", []), ("css", ["ui"])])
 
-    def test_unchosen_or_expired_named_owner_stays_native_even_with_another_main_owner(self) -> None:
-        for expired in (False, True):
-            with self.subTest(expired=expired), homes() as home:
+    def test_unchosen_or_earlier_named_owner_stays_native_even_with_another_owner_chosen(self) -> None:
+        for earlier in (False, True):
+            with self.subTest(earlier=earlier), homes() as home:
                 slots_table(home)
-                state = choose(home, "claude-code")
-                if expired:
-                    choose_lane(home, "codex", state=state, age=25 * 3600)
+                if earlier:
+                    choose(home, "codex")
+                    new_request("/dag-ulw build it with claude code")
+                else:
+                    choose(home, "claude-code")
                 result = call(action="define", run="feat", nodes=[owned("api", "codex", scope=("api.py",))])
                 self.assertEqual([row["nodes"] for row in result["calls"]], [["api"]], result)
                 self.assertEqual(result.get("exports"), [])
                 self.assertNotIn("export", result)
-                warning = "Node api names codex, which the person has not chosen in the last day; it runs on delegate_task."
+                warning = ("Node api names codex, which the request that defined this run did not name; "
+                           "it runs on delegate_task.")
                 self.assertEqual(result["say"].count(warning), 1)
                 self.assertEqual(call(action="export", run="feat", owner="codex")["reason"], "owner_not_chosen")
                 self.assertEqual(call(action="export", run="feat", owner="claude-code")["reason"], "nothing_to_export")
 
-    def test_per_owner_choice_does_not_choose_an_unnamed_nodes_owner(self) -> None:
-        with homes() as home:
-            slots_table(home)
-            choose_lane(home, "codex")
-            result = call(action="define", run="feat", nodes=[node("api", scope=("api.py",))])
-            self.assertEqual([row["nodes"] for row in result["calls"]], [["api"]])
-            self.assertEqual(result.get("exports"), [])
-            self.assertEqual(call(action="export", run="feat", owner="codex")["reason"], "nothing_to_export")
+    def test_a_chosen_owner_does_not_choose_an_unnamed_nodes_owner(self) -> None:
+        for chosen in (("codex",), ("codex", "claude-code")):
+            with self.subTest(chosen=chosen), homes() as home:
+                slots_table(home)
+                choose(home, *chosen)
+                result = call(action="define", run="feat", nodes=[node("api", scope=("api.py",))])
+                self.assertEqual([row["nodes"] for row in result["calls"]], [["api"]])
+                self.assertEqual(result.get("exports"), [])
+                self.assertEqual(call(action="export", run="feat", owner="codex")["reason"], "nothing_to_export")
 
     def test_every_result_has_exports_and_empty_batches_have_no_legacy_export(self) -> None:
         with homes() as home:
@@ -232,21 +230,20 @@ class OwnerLaneRoutingTests(unittest.TestCase):
                     self.assertEqual(result.get("exports"), [])
                     self.assertNotIn("export", result)
 
-    def test_legacy_single_main_choice_retains_byte_identical_export_payload(self) -> None:
+    def test_a_single_owner_batch_keeps_the_single_export_object(self) -> None:
         expected = {"owner": "codex", "nodes": ["api", "ui"],
                     "next": {"tool": "omh_dag", "action": "export", "owner": "codex"}}
         with homes() as home:
             slots_table(home)
             choose(home, "codex")
-            result = call(action="define", run="feat", nodes=[node("api", scope=("api.py",)),
-                                                               node("ui", scope=("ui.py",))])
+            result = call(action="define", run="feat", nodes=[owned("api", "codex", scope=("api.py",)),
+                                                               owned("ui", "codex", scope=("ui.py",))])
             self.assertEqual(json.dumps(result["export"], sort_keys=True).encode(),
                              json.dumps(expected, sort_keys=True).encode())
             self.assertEqual(result.get("exports"), [expected])
             status = call(action="status", run="feat")
             self.assertEqual(status["exports"], [expected])
             self.assertEqual(status["export"], result["export"])
-
 
 if __name__ == "__main__":
     unittest.main()

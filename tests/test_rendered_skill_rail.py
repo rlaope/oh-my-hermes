@@ -268,6 +268,17 @@ class RenderedSkillRailTests(unittest.TestCase):
                 self.assertIn("omh-frontend", targets)
                 self.assertEqual([t for t in targets if t not in labels], [])
 
+    def test_every_lane_key_the_primer_names_is_a_loadable_label(self) -> None:
+        """A lane's `Key:` names reach the model through the per-turn primer with no render pass."""
+        labels = {omh_skill_display_name(name) for name in self.installed}
+        keys = [line for line in awareness_primer_markdown().split("\n") if ". Key: `" in line]
+        self.assertTrue(keys)
+        for line in keys:
+            with self.subTest(line=line[:40]):
+                names = re.findall(r"`([^`]+)`", line.split(". Key: ", 1)[1])
+                self.assertTrue(names)
+                self.assertEqual([name for name in names if name not in labels], [])
+
     def test_the_lane_line_keeps_its_title_and_names_no_siblings(self) -> None:
         for name, content in self.hermes.items():
             for line in content.split("\n"):
