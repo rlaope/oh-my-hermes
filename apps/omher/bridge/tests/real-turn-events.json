@@ -1,0 +1,290 @@
+[
+ {
+  "type": "session.info",
+  "payload": {
+   "stored_session_id": "local-6c2573db857d60032c913a4300d89bee9b4e7058399db3a3426d74aa80169673",
+   "pending": [
+    {
+     "admission_id": "42801ff190ca473d9e09851adf9fa2f3",
+     "ref": {
+      "profile_id": "/Users/khope@sionic.ai/.hermes/profiles/kami",
+      "session_id": "local-6c2573db857d60032c913a4300d89bee9b4e7058399db3a3426d74aa80169673"
+     },
+     "sequence": 1261,
+     "status": "queued",
+     "outcome": null,
+     "authority_epoch": 26,
+     "execution_generation": null,
+     "input_id": "487d036e-db0c-4d67-bd9e-a9b6d5c8976e",
+     "text": "Run the shell command `echo omher-probe` with the terminal tool, then reply with one short sentence.",
+     "controls": [
+      "steer",
+      "replace"
+     ],
+     "steering": false
+    }
+   ],
+   "authority_epoch": 26,
+   "desktop_protocol": "hermes-gateway-v1",
+   "running": false,
+   "execution_generation": 0,
+   "revision": 0
+  }
+ },
+ {
+  "type": "message.start",
+  "payload": {}
+ },
+ {
+  "type": "session.info",
+  "payload": {
+   "stored_session_id": "local-6c2573db857d60032c913a4300d89bee9b4e7058399db3a3426d74aa80169673",
+   "pending": [
+    {
+     "admission_id": "42801ff190ca473d9e09851adf9fa2f3",
+     "ref": {
+      "profile_id": "/Users/khope@sionic.ai/.hermes/profiles/kami",
+      "session_id": "local-6c2573db857d60032c913a4300d89bee9b4e7058399db3a3426d74aa80169673"
+     },
+     "sequence": 1261,
+     "status": "started",
+     "outcome": null,
+     "authority_epoch": 26,
+     "execution_generation": 1,
+     "input_id": "487d036e-db0c-4d67-bd9e-a9b6d5c8976e",
+     "text": "Run the shell command `echo omher-probe` with the terminal tool, then reply with one short sentence.",
+     "controls": [],
+     "steering": false
+    }
+   ],
+   "authority_epoch": 26,
+   "desktop_protocol": "hermes-gateway-v1",
+   "running": true,
+   "execution_generation": 1,
+   "revision": 0
+  }
+ },
+ {
+  "type": "status.update",
+  "payload": {
+   "kind": "lifecycle",
+   "text": "🧠 OMH — recalled 6 memories"
+  }
+ },
+ {
+  "type": "session.info",
+  "payload": {
+   "source": "cli",
+   "model": "claude-opus-5-5",
+   "lazy": false,
+   "profile_id": "/Users/khope@sionic.ai/.hermes/profiles/kami",
+   "desktop_protocol": "hermes-gateway-v1",
+   "profile_name": "kami",
+   "cwd": "/Users/khope@sionic.ai/.hermes/profiles/kami/workspace",
+   "reasoning_effort": "high",
+   "reasoning_effort_wire": "high",
+   "service_tier": "",
+   "fast": false,
+   "launch_request": {
+    "source": "cli"
+   },
+   "title": "Run the shell command `echo omher-probe` with…",
+   "started_at": 1794149975.783481,
+   "last_active_at": 1794149976.1931462,
+   "yolo": false,
+   "api_mode": "chat_completions",
+   "tool_count": 22,
+   "credential_hint": "<age...a10>"
+  }
+ },
+ {
+  "type": "agent.step",
+  "payload": {
+   "iteration": 1
+  }
+ },
+ {
+  "type": "thinking.delta",
+  "payload": {
+   "text": "(｡•́︿•̀｡) synthesizing..."
+  }
+ },
+ {
+  "type": "thinking.delta",
+  "payload": {
+   "text": ""
+  }
+ },
+ {
+  "type": "tool.generating",
+  "payload": {
+   "name": "terminal"
+  }
+ },
+ {
+  "type": "thinking.delta",
+  "payload": {
+   "text": ""
+  }
+ },
+ {
+  "type": "message.delta",
+  "payload": {
+   "text": null
+  }
+ },
+ {
+  "type": "tool.start",
+  "payload": {
+   "tool_id": "toolu_015CxWBfJRCfcovenJzxsdNd",
+   "name": "terminal",
+   "context": "echo omher-probe",
+   "tool_call_id": "toolu_015CxWBfJRCfcovenJzxsdNd",
+   "tool_name": "terminal",
+   "args": {
+    "command": "echo omher-probe"
+   }
+  }
+ },
+ {
+  "type": "tool.complete",
+  "payload": {
+   "tool_id": "toolu_015CxWBfJRCfcovenJzxsdNd",
+   "name": "terminal",
+   "context": "echo omher-probe",
+   "tool_call_id": "toolu_015CxWBfJRCfcovenJzxsdNd",
+   "tool_name": "terminal",
+   "args": {
+    "command": "echo omher-probe"
+   },
+   "is_error": false,
+   "result": "{\"output\": \"omher-probe\", \"exit_code\": 0, \"error\": null}",
+   "duration_s": 0.15158075001090765,
+   "inline_diff": null,
+   "image_path": null
+  }
+ },
+ {
+  "type": "agent.step",
+  "payload": {
+   "iteration": 2
+  }
+ },
+ {
+  "type": "thinking.delta",
+  "payload": {
+   "text": "( ͡° ͜ʖ ͡°) ruminating..."
+  }
+ },
+ {
+  "type": "thinking.delta",
+  "payload": {
+   "text": ""
+  }
+ },
+ {
+  "type": "message.delta",
+  "payload": {
+   "text": "\n\n`echo omher",
+   "turn_id": "9480f6ee54274f0ab9603c5795d595be",
+   "segment": 0,
+   "offset": 0
+  }
+ },
+ {
+  "type": "message.delta",
+  "payload": {
+   "text": "-probe` 실행 ",
+   "turn_id": "9480f6ee54274f0ab9603c5795d595be",
+   "segment": 0,
+   "offset": 13
+  }
+ },
+ {
+  "type": "message.delta",
+  "payload": {
+   "text": "결과 `omher-prob",
+   "turn_id": "9480f6ee54274f0ab9603c5795d595be",
+   "segment": 0,
+   "offset": 24
+  }
+ },
+ {
+  "type": "message.delta",
+  "payload": {
+   "text": "e`가 출력",
+   "turn_id": "9480f6ee54274f0ab9603c5795d595be",
+   "segment": 0,
+   "offset": 38
+  }
+ },
+ {
+  "type": "message.delta",
+  "payload": {
+   "text": "됐고 exit code는",
+   "turn_id": "9480f6ee54274f0ab9603c5795d595be",
+   "segment": 0,
+   "offset": 44
+  }
+ },
+ {
+  "type": "message.delta",
+  "payload": {
+   "text": " 0입니다.",
+   "turn_id": "9480f6ee54274f0ab9603c5795d595be",
+   "segment": 0,
+   "offset": 57
+  }
+ },
+ {
+  "type": "thinking.delta",
+  "payload": {
+   "text": ""
+  }
+ },
+ {
+  "type": "message.complete",
+  "payload": {
+   "text": "`echo omher-probe` 실행 결과 `omher-probe`가 출력됐고 exit code는 0입니다.",
+   "content": "`echo omher-probe` 실행 결과 `omher-probe`가 출력됐고 exit code는 0입니다.",
+   "admission_id": "42801ff190ca473d9e09851adf9fa2f3",
+   "outcome": "completed",
+   "status": "complete",
+   "usage": {
+    "model": "claude-opus-5-5",
+    "input": 4,
+    "output": 409,
+    "reasoning": 0,
+    "prompt": 76066,
+    "completion": 409,
+    "total": 76475,
+    "calls": 2,
+    "context_used": 38081,
+    "context_max": 1000000,
+    "context_percent": 4,
+    "context_source": "provider_usage",
+    "context_estimated": false,
+    "compressions": 0,
+    "cache_hit_pct": 71,
+    "avg_latency_s": 2.9,
+    "avg_tps": 70.3,
+    "active_subagents": 0
+   },
+   "persisted_turn": {
+    "row_ids": [
+     48179,
+     48180,
+     48181,
+     48182
+    ],
+    "complete": true,
+    "user_row_id": 48179,
+    "user_row_ids": [
+     48179
+    ],
+    "final_assistant_row_id": 48182,
+    "submission_id": "487d036e-db0c-4d67-bd9e-a9b6d5c8976e"
+   }
+  }
+ }
+]
