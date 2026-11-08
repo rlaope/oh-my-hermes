@@ -6072,6 +6072,11 @@ def _resolve_delegate_executor_target(executor_target: str, paths: OmhPaths | No
     }
 
 
+def executor_target_named_in_message(message: str) -> str:
+    """The coding owner the message names, read as the chat wrapper reads it (`message_mention`), or ""."""
+    return _executor_target_from_message(message)
+
+
 @lru_cache(maxsize=4096)
 def _executor_target_from_message(message: str) -> str:
     lowered = f" {message.lower()} "

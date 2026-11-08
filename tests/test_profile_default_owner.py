@@ -1,9 +1,10 @@
 """A setup-profile default coding owner is a setting, never an owner named in the request.
 
-Every entry point keeps the owner that runs, but a profile default must reach
-the wrapper as `setup_profile`: the route decision is the recorded-owner one,
-no explicit-choice record is written, and it never bypasses the genre veto.
-An owner named with `--executor` or in the message is still explicit.
+A profile default must reach the wrapper as `setup_profile`: the route
+decision is the recorded-owner one, no explicit-choice record is written, and
+it never bypasses the genre veto. An owner named with `--executor` or in the
+message is still a choice made in this request, and it beats the profile
+default on every entry point.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from omh.routing.owner_preference import owner_preference_decision  # noqa: E402
 from omh.wrapper import contract  # noqa: E402
 
 CODING = "fix the login bug and open a pr"
+NAMED_CODEX = "fix the login bug with codex and open a pr"
 RESEARCH_BRIEF = "Research the best pricing model for our SaaS tier and summarize the findings for the team."
 
 
@@ -124,6 +126,76 @@ class ProfileDefaultEntryPointTests(unittest.TestCase):
         self.assertEqual(research["delegation"]["action"], "clarify")
         self.assertFalse(stored)
 
+
+    def test_an_owner_named_in_the_message_beats_the_profile_default_in_chat(self) -> None:
+        # This changes which owner runs: main resolved the profile default in the CLI and ran claude-code here.
+        with TemporaryDirectory() as tmp:
+            homes = _Homes(Path(tmp))
+            for entry, payload in (
+                ("chat interact", homes.cli("chat", "interact", "--json", "--source", "discord", NAMED_CODEX)),
+                ("chat session start", homes.cli("chat", "session", "start", "--source", "discord", NAMED_CODEX)),
+            ):
+                interaction = _interaction(payload)
+                with self.subTest(entry=entry):
+                    self.assertEqual(interaction["executor_resolution"]["source"], "message_mention")
+                    self.assertEqual(interaction["executor_resolution"]["resolved_executor_target"], "codex")
+                    self.assertEqual(interaction["delegation"]["selected_executor_profile"], "codex")
+
+    def test_coding_delegate_takes_an_owner_named_in_the_message_over_the_profile_default(self) -> None:
+        # Mutation: drop the message mention in `coding delegate`; the profile default (claude-code) runs instead.
+        with TemporaryDirectory() as tmp:
+            homes = _Homes(Path(tmp))
+            named = homes.cli("coding", "delegate", NAMED_CODEX)
+            flagged = homes.cli("coding", "delegate", "--executor", "claude-code", NAMED_CODEX)
+        self.assertEqual(named["selected_executor_profile"], "codex")
+        self.assertEqual(flagged["selected_executor_profile"], "claude-code")
+
+
+class ProfileOwnerRouteHintTests(unittest.TestCase):
+    MESSAGE = "implement the dark mode toggle and open a pr"
+
+    def _decisions(self, payload: dict) -> list[dict]:
+        return [hint["coding_route_decision"] for hint in payload["hints"] if "coding_route_decision" in hint]
+
+    def test_the_hint_reports_a_profile_owner_as_the_profile(self) -> None:
+        from omh.plugin_bundle.omh.awareness import awareness_route_hint
+
+        asked = self._decisions(awareness_route_hint(self.MESSAGE))
+        held = self._decisions(awareness_route_hint(self.MESSAGE, profile_owner="claude-code"))
+        self.assertTrue(asked and held)
+        self.assertEqual({d["owner_preference_reason_code"] for d in asked}, {"explicit_choice_required"})
+        self.assertEqual({d["source"] for d in held}, {"recorded_setup_preference"})
+        self.assertEqual({d["owner_preference_reason_code"] for d in held}, {"owner_set_in_setup_profile"})
+
+    def test_the_turn_hook_reads_the_profile_owner_for_the_hint(self) -> None:
+        # Mutation: call the hint without the profile owner; the hook then hands it "" and the hint asks.
+        from omh.plugin_bundle.omh.hooks import llm_hooks
+
+        seen: list[str] = []
+        real = llm_hooks.awareness_route_hint
+
+        def spy(*args, **kwargs):
+            seen.append(kwargs.get("profile_owner", ""))
+            return real(*args, **kwargs)
+
+        with TemporaryDirectory() as tmp, patch.object(llm_hooks, "awareness_route_hint", side_effect=spy):
+            homes = _Homes(Path(tmp))
+            llm_hooks.pre_llm_call(omh_home=str(homes.omh), hermes_home=str(homes.hermes), session_id="profile-owner",
+                                   user_message=self.MESSAGE, is_first_turn=True)
+        self.assertEqual(seen[:1], ["claude-code"])
+
+    def test_the_profile_reader_names_only_a_set_owner(self) -> None:
+        from omh.plugin_bundle.omh.owner_preference_record import setup_profile_owner
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertEqual(setup_profile_owner(root), "")
+            (root / "setup-profile.json").write_text(json.dumps({"default_executor": "Codex"}), encoding="utf-8")
+            self.assertEqual(setup_profile_owner(root), "codex")
+            for raw in ('{"default_executor": "choose"}', '{"default_executor": "bad owner!"}', "[]", "{broken"):
+                with self.subTest(raw=raw):
+                    (root / "setup-profile.json").write_text(raw, encoding="utf-8")
+                    self.assertEqual(setup_profile_owner(root), "")
 
 class ProfileOwnerDecisionTests(unittest.TestCase):
     def test_a_profile_owner_bypasses_the_question_and_says_why(self) -> None:

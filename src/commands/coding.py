@@ -71,6 +71,7 @@ from ..workflows.goal_ledger import (
     record_goal_checkpoint,
 )
 from ..workflows.role_context_packs import validate_accepted_role_context, write_role_context_pack
+from ..wrapper.contract import executor_target_named_in_message
 from ..wrapper.lifecycle import (
     CodingLifecycleError,
     record_codex_dispatch,
@@ -263,6 +264,12 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             message = sys.stdin.read().strip()
         else:
             message = " ".join(args.message).strip()
+        if not args.from_plan and not getattr(args, "executor", None):
+            # An owner the person named in the message beats the setup-profile default, as it does in chat
+            # (`message_mention`). It is still not `--explicit-owner-choice`: that flag stays the caller's own.
+            named = executor_target_named_in_message(message)
+            if named:
+                executor_target = named
         source_metadata.update(_explicit_source_metadata(args))
         input_representation = merged_input_representation(
             list(getattr(args, "input_representation", None) or []),

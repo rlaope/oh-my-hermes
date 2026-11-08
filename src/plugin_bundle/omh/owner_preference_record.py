@@ -16,6 +16,8 @@ patterns equal.
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
+from pathlib import Path
 import re
 from typing import Any, Final
 from .iso_datetime import strict_fromisoformat
@@ -194,3 +196,25 @@ def route_errors(key: object, route: object) -> list[str]:
     elif provenance == "in_message_naming":
         errors.append(f"route {family} in_message_naming provenance requires a naming_cue")
     return errors
+
+
+SETUP_PROFILE_FILE: Final = "setup-profile.json"
+_PROFILE_UNSET: Final = frozenset({"", "choose"})
+
+
+def setup_profile_owner(omh_home: str | Path | None) -> str:
+    """The default coding owner `<omh_home>/setup-profile.json` names, or "".
+
+    Read per call, so a profile edit counts on the next turn. A missing,
+    unreadable or malformed profile, an unset value ("choose") or one that is
+    not an opaque reference names no owner: the hint then asks, as before.
+    """
+    if omh_home is None or not str(omh_home):
+        return ""
+    try:
+        profile = json.loads((Path(omh_home) / SETUP_PROFILE_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError, RecursionError):
+        return ""
+    owner = profile.get("default_executor") if isinstance(profile, dict) else None
+    owner = owner.strip().casefold() if isinstance(owner, str) else ""
+    return owner if owner not in _PROFILE_UNSET and opaque_ref_ok(owner) else ""

@@ -487,9 +487,15 @@ All notable changes will be documented here.
   non-coding request back from an external coding CLI, and it was recorded as
   an explicit choice the person never made. The wrapper now reads the profile
   itself and labels it `setup_profile`, the route decision is the
-  recorded-owner one, and nothing is recorded. The owner that runs is the
-  same, and `--executor` or an owner named in the message still counts as a
-  choice made in this request.
+  recorded-owner one, and nothing is recorded. An owner named in the message
+  now beats the profile default on every entry point: with the profile on
+  `claude-code`, "fix the login bug with codex" runs Codex through `chat
+  interact`, `chat session start` and `coding delegate`, as it already did
+  through the plugin `omh_interact` tool (those three ran Claude Code before).
+  `--executor` still wins over both. The plugin tool and the turn's route
+  hint now say `owner_set_in_setup_profile` when the profile holds the owner,
+  where they said the owner had to be asked for.
+
 - **The operations and board skills now name the commands and Hermes
   surfaces they depend on.** `cancel` lists what exists before clearing and
   hands a running scheduled job to `hermes cron pause` and `runs`, and to

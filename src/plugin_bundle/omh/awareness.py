@@ -5728,7 +5728,9 @@ def _data_share_awareness_marked(text: str) -> bool:
     return bool(data_share_phrases_said(text)) and data_share_request_admitted(text)
 
 
-def awareness_route_hint(message: str, *, max_hints: int = 2, context_removed: bool = False) -> dict[str, object]:
+def awareness_route_hint(
+    message: str, *, max_hints: int = 2, context_removed: bool = False, profile_owner: str = ""
+) -> dict[str, object]:
     """Return bounded message-specific workflow hints without exposing raw text.
 
     The hint reads the person's own words (`person_request_text`), never the
@@ -5742,6 +5744,10 @@ def awareness_route_hint(message: str, *, max_hints: int = 2, context_removed: b
     `context_removed`: a caller that already cut the person's words from the
     turn says whether a reply pointer or an attachment note went with it
     (`host_context_removed`); this reader also finds one in `message` itself.
+
+    `profile_owner`: the setup profile's default coding owner, from a caller
+    that read it (`setup_profile_owner`). A coding hint then reports it as the
+    profile's owner, as the wrapper does, instead of an owner to ask for.
     """
     request = "" if host_command_turn(message) else person_request_text(message)
     context_removed = context_removed or host_context_removed(message)
@@ -5749,7 +5755,7 @@ def awareness_route_hint(message: str, *, max_hints: int = 2, context_removed: b
     # newline and the executable projection masks the URL or fence that mark work.
     plain = bool(request) and plain_question(message)
     return _copy_awareness_route_hint_payload(
-        _awareness_route_hint_cached(request, max(max_hints, 0), context_removed, plain)
+        _awareness_route_hint_cached(request, max(max_hints, 0), context_removed, plain, profile_owner)
     )
 
 
@@ -5838,7 +5844,8 @@ def _route_hint_with_action_labels(hint: dict[str, object]) -> dict[str, object]
 
 @lru_cache(maxsize=512)
 def _awareness_route_hint_cached(
-    message: str, max_hints: int, context_removed: bool = False, plain_knowledge_question: bool = False
+    message: str, max_hints: int, context_removed: bool = False, plain_knowledge_question: bool = False,
+    profile_owner: str = "",
 ) -> dict[str, object]:
     degraded: list[tuple[str, str]] = []
     matching_message = executable_routing_text(message)
@@ -6109,7 +6116,7 @@ def _awareness_route_hint_cached(
         # how does it work", "code-review 결과가 이상해"), or a stop, a status request or a question about the skill
         # after the sigil that invokes it ("/ulw-work stop"): the router answers it, so no hint offers a run either.
         hints = []
-    hints = [_route_hint_with_coding_route_decision(hint, routing_normalized) for hint in hints]
+    hints = [_route_hint_with_coding_route_decision(hint, routing_normalized, profile_owner) for hint in hints]
     hints = [_route_hint_with_action_labels(hint) for hint in hints]
     # Emission boundary (#1249): every consumer above keys off the catalog name
     # (rule tables, retired-engine folding, context-card lookup, the coding
@@ -6166,7 +6173,9 @@ def _awareness_route_hint_cached(
     return payload
 
 
-def _route_hint_with_coding_route_decision(hint: dict[str, object], routing_normalized: str) -> dict[str, object]:
+def _route_hint_with_coding_route_decision(
+    hint: dict[str, object], routing_normalized: str, profile_owner: str = ""
+) -> dict[str, object]:
     """Attach the shared coding-owner decision to every coding-delivery route hint.
 
     Direct `ultraprocess`, broad `coding_delivery`, and `test_until_pass_delivery` all
@@ -6180,7 +6189,7 @@ def _route_hint_with_coding_route_decision(hint: dict[str, object], routing_norm
         copied["coding_route_decision"] = _standalone_user_choice_decision_payload()
         return copied
     copied["coding_route_decision"] = _coding_route_decision_payload(
-        _resolve_coding_route_decision(routing_normalized)
+        _resolve_coding_route_decision(routing_normalized, recorded_owner=profile_owner)
     )
     return copied
 

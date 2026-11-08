@@ -44,6 +44,7 @@ from ..hermes_session_commands import host_command_turn, host_context_removed, p
 from ..host_context import record_active_main_agent_model
 from ..host_observation import observe_plugin_hook_call
 from ..capability_off import read_disabled_family_ids, skill_families_for
+from ..owner_preference_record import setup_profile_owner
 from ..installed_skills import hermes_loadable_skill_names, routable_skill_names
 from ..kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
 from ..native_todo import held_native_write_note
@@ -799,7 +800,10 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
     rendered_route_hint: dict[str, object] = {}
     if include_awareness:
         if is_first_turn:
-            route_hint_payload = awareness_route_hint(request_message, context_removed=host_context_removed(user_message))
+            route_hint_payload = awareness_route_hint(
+                request_message, context_removed=host_context_removed(user_message),
+                profile_owner=setup_profile_owner(omh_home),
+            )
             rendered_route_hint = _rendered_route_hint(
                 route_hint_payload, installed_skills, delegated=delegated, disabled=disabled_skills
             )
@@ -820,7 +824,10 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
             if match_error:
                 degraded.append((COMPONENT_LOCALIZED_ROUTING_TEXT, match_error))
         if message_matches_awareness and route_hint_payload is None:
-            route_hint_payload = awareness_route_hint(request_message, context_removed=host_context_removed(user_message))
+            route_hint_payload = awareness_route_hint(
+                request_message, context_removed=host_context_removed(user_message),
+                profile_owner=setup_profile_owner(omh_home),
+            )
             rendered_route_hint = _rendered_route_hint(
                 route_hint_payload, installed_skills, delegated=delegated, disabled=disabled_skills
             )
