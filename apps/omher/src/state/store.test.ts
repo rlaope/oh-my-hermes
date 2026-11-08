@@ -246,6 +246,8 @@ function fakeBridge() {
   let statusH: ((s: BridgeStatus) => void) | null = null;
   const calls: { op: string; params: Record<string, unknown> }[] = [];
   let history = [{ id: "h1", role: "user" as const, text: "hi", ts: T0 / 1000 - 10 }];
+  const offline = new Set<string>();
+  let running = false;
   const bridge: BridgeLike = {
     connect: async () => {
       statusH?.("open");
@@ -264,7 +266,8 @@ function fakeBridge() {
             })),
           };
         case "chat.open":
-          return { session_id: `s-${params.bot}`, messages: history, running: false, model: "Opus 5.5", provider: "claude-proxy", reasoning: "high" };
+          if (offline.has(String(params.bot))) throw { code: "bot_offline", message: "gateway could not start" };
+          return { session_id: `s-${params.bot}`, messages: history, running, model: "Opus 5.5", provider: "claude-proxy", reasoning: "high" };
         case "elsewhere.list":
           return { sessions: [away("e1", T0 / 1000 - 5)] };
         case "routines.list":
@@ -284,6 +287,8 @@ function fakeBridge() {
     emit: (ev: BridgeEvent) => anyH!(ev),
     status: (s: BridgeStatus) => statusH!(s),
     setHistory: (h: typeof history) => (history = h),
+    setOffline: (bot: string) => offline.add(bot),
+    setRunning: (r: boolean) => (running = r),
   };
 }
 
@@ -346,6 +351,36 @@ describe("store", () => {
     await store.actions.respondApproval("ap1", "deny");
     expect(f.calls.find((c) => c.op === "approval.respond")!.params).toEqual({ bot: "kami", request_id: "ap1", choice: "deny" });
     expect(store.getState().chats.kami.items.find((i) => i.kind === "approval")).toMatchObject({ resolved: "deny" });
+  });
+
+  it("losing the bridge mid-turn ends the turn as interrupted, not done after reconnect", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    f.emit({ event: "turn.start", bot: "kami" });
+    f.emit({ event: "tool.start", bot: "kami", tool_id: "t1", name: "terminal", detail: "sleep 30" });
+    expect(store.getState().chats.kami.turn).not.toBeNull();
+    f.status("closed");
+    let s = store.getState();
+    expect(s.chats.kami.turn).toBeNull(); // no live activity line / Stop during the outage
+    expect(s.chats.kami.lastTurn?.outcome).toBe("interrupted");
+    f.setRunning(false);
+    f.status("open");
+    await new Promise((r) => setTimeout(r, 0));
+    s = store.getState();
+    expect(s.chats.kami.lastTurn?.outcome).toBe("interrupted"); // reconnect does not rewrite it to "done"
+    expect(f.calls.filter((c) => c.op === "chat.send")).toHaveLength(0); // nothing resent
+  });
+
+  it("an offline bot's chat stops loading and carries the error", async () => {
+    const f = fakeBridge();
+    f.setOffline("friren");
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    await store.actions.selectBot("friren");
+    const c = store.getState().chats.friren;
+    expect(c.loaded).toBe(true);
+    expect(c.openError).toMatch(/gateway could not start/);
   });
 
   it("ui actions", async () => {

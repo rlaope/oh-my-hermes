@@ -94,6 +94,8 @@ export interface Chat {
   loaded: boolean;
   sessionId: string | null;
   turnSeq: number;
+  /** Set when chat.open failed (bot offline, gateway refused); the timeline shows it instead of loading forever. */
+  openError?: string | null;
 }
 
 export interface Peek {
@@ -276,7 +278,8 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string):
 // ---- reducer --------------------------------------------------------------------------------
 
 export type Action =
-  | { type: "conn"; status: BridgeStatus }
+  | { type: "conn"; status: BridgeStatus; now?: number }
+  | { type: "chat.failed"; bot: string; message: string }
   | { type: "hello"; hello: HelloResult }
   | { type: "error"; message: string | null }
   | { type: "bots"; bots: Bot[] }
@@ -417,8 +420,18 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
 
 export function reduce(state: AppState, a: Action): AppState {
   switch (a.type) {
-    case "conn":
-      return { ...state, conn: a.status };
+    case "conn": {
+      if (a.status === "open" || a.status === state.conn) return { ...state, conn: a.status };
+      // The bridge went away: whatever was running is no longer observed. End live turns as interrupted
+      // now, so the activity line and Stop do not stay up for the whole outage (a later chat.open with
+      // running:false must not turn them into "done").
+      const t = a.now ?? Date.now();
+      const chats: AppState["chats"] = {};
+      for (const [b, c] of Object.entries(state.chats)) chats[b] = c.turn ? endTurn(c, t, "interrupted", "Connection to Hermes lost") : c;
+      return { ...state, conn: a.status, chats };
+    }
+    case "chat.failed":
+      return touchChat(state, a.bot, (c) => ({ ...c, loaded: true, openError: a.message }));
     case "hello":
       return { ...state, hello: a.hello };
     case "error":
@@ -428,7 +441,7 @@ export function reduce(state: AppState, a: Action): AppState {
     case "select":
       return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: "chat" } };
     case "chat.opened":
-      return touchChat(state, a.bot, (c) => applyOpened(c, a.res, a.now, a.bot));
+      return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot), openError: null }));
     case "local.user":
       return touchChat(state, a.bot, (c) =>
         withItems(c, [...c.items, { kind: "user", id: a.id, ts: a.now / 1000, text: a.text }]),
@@ -600,7 +613,14 @@ export function createStore(bridge: BridgeLike, opts: { now?: () => number } = {
   const botArg = (bot?: string) => bot ?? state.selectedBot;
 
   const loadChat = async (bot: string) => {
-    const res = await bridge.request("chat.open", { bot });
+    let res: ChatOpenResult;
+    try {
+      res = await bridge.request("chat.open", { bot });
+    } catch (e) {
+      // Without this the chat stays unloaded and the timeline shows "Loading…" forever (bot offline).
+      dispatch({ type: "chat.failed", bot, message: errText(e) });
+      throw e;
+    }
     dispatch({ type: "chat.opened", bot, res, now: now() });
   };
   const loadElsewhere = async (bot?: string) => {
@@ -660,7 +680,7 @@ export function createStore(bridge: BridgeLike, opts: { now?: () => number } = {
       started = true;
       let opened = false;
       bridge.onStatus((status) => {
-        dispatch({ type: "conn", status });
+        dispatch({ type: "conn", status, now: now() });
         if (status === "open") {
           if (opened) void resync();
           opened = true;

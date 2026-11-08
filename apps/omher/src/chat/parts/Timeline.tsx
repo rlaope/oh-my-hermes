@@ -68,7 +68,12 @@ export function Timeline({ bot }: { bot: Bot }) {
       }}
     >
       {!chat?.loaded && items.length === 0 && <div className="day">Loading…</div>}
-      {chat?.loaded && items.length === 0 && <div className="day">Say hi to {bot.display_name}</div>}
+      {chat?.openError && (
+        <div className="day" data-testid="chat-error">
+          {bot.display_name} is not reachable ({chat.openError}). Start Hermes for this profile, then pick it again.
+        </div>
+      )}
+      {chat?.loaded && !chat.openError && items.length === 0 && <div className="day">Say hi to {bot.display_name}</div>}
       {items.map((it, i) => {
         const label = divider(items[i - 1], it);
         return (
