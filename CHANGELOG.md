@@ -268,12 +268,14 @@ All notable changes will be documented here.
 - **show-reel asks through the spend gate before it spends the user's
   ElevenLabs or codex credits.** Narration, voice, transcription, sound,
   music and image runs on the user's own key or login now go through
-  `omh-spend-gate` first: a card names the exact lines, voice and model or
-  the job and its length, with the expected credits, and the person's typed
-  yes to it is that run's exact-target approval. `omh-spend-gate` now says a
-  call billed to subscription credits or plan usage is a spend, with its own
-  row in the rails table. The scripts are unchanged: they run only when
-  invoked and exit 2 without a key.
+  `omh-spend-gate` first, at every step that runs them: a card names the
+  exact lines, voice and model or the job and its length, with the expected
+  credits from the provider's own price for that model (or says the cost is
+  unknown), and the person's typed yes to it is that run's exact-target
+  approval. `omh-spend-gate` now says a call billed to subscription credits
+  or plan usage is a spend, with its own row in the rails table, a receipt
+  of the output and the credits used, and a ledger row kept in credits. The
+  scripts are unchanged: they run only when invoked and exit 2 without a key.
 
 - **The round-end checks also run after edits made through the shell.**
   Hermes calls OMH's round-end hook only after a `patch` or `write_file`, so

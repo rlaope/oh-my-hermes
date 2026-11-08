@@ -880,12 +880,15 @@ The opt-in `eleven.py`/`narrate.py` (narration, SFX, music, STT) and
 `codex_ref_image.sh` run only when the user asks for them with their own
 `ELEVENLABS_API_KEY` or signed-in codex; they refuse without it, and the film
 falls back to local music and on-screen text.
-Each run that reaches ElevenLabs or codex spends the user's own subscription
-credits or plan usage, so it goes through `omh-spend-gate` before it runs: show
-the target (which lines, voice and model, or which SFX, music, STT or image job
-and its length) and the expected credits from the estimates in
-`references/craft-brief.md`, then run it only after the person's typed yes to
-that card. That yes is the exact-target approval for that run and nothing
+Each run that reaches ElevenLabs or codex (`eleven.py`, `narrate.py`,
+`codex_imagegen_batch.sh`, `codex_ref_image.sh`) spends the user's own
+subscription credits or plan usage, so it goes through `omh-spend-gate` before
+it runs: show the target (which lines, voice and model, or which SFX, music, STT
+or image job and its length) and the expected credits read from the provider's
+own price for that model. The estimates in `references/craft-brief.md` are only
+a rough guide; where no price gives a figure, the card says the cost is unknown
+and the gate's spend-only cap applies. Run it only after the person's typed yes
+to that card. That yes is the exact-target approval for that run and nothing
 wider; a regenerated line, a new take or a changed voice is a new card.
 `eleven.py check` and `eleven.py voices` only read the account and spend nothing.
 Audio comes before scenes: music beats and narration words set the picture's

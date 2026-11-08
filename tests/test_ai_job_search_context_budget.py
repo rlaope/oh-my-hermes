@@ -395,7 +395,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # before it was 0ae5f905...ebc5f.
         # show-reel then sends its paid calls through spend-gate, and spend-gate counts subscription
         # credits as a spend; only those two move, and the pin before it was d4eb4e54...7ed7.
-        self.assertEqual(_digest(legacy_hashes), '3c83661f33e9e71bf94e09533df3d4036156cfec31b46ecd837a92a5c5939ccf')
+        # Its review round (credits read from the provider's own price, the credits receipt, the gate
+        # named at every paid run step) moves the same two; the pin before it was 3c83661f...9ccf.
+        self.assertEqual(_digest(legacy_hashes), 'f30c9ae027d276a917c22a6adecbb8b53c499cc4abc4ec1977d10dbe16ebca61')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

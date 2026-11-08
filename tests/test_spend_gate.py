@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 
 from _local_package import load_local_package
@@ -230,7 +231,8 @@ class SpendGateContractTests(unittest.TestCase):
     def test_only_an_observed_receipt_completes_a_spend(self) -> None:
         self.assertInBoth(
             "A quote is not a purchase and a confirmation is not a charge; call a spend done only on an observed "
-            "receipt -- an order id, a transaction id, or a receipt header -- with the amount charged.",
+            "receipt -- an order id, a transaction id, or a receipt header -- with the amount charged; a credits call's "
+            "receipt is its output with the credits used, as the credits rule below says.",
             _bodies(),
         )
         self.assertInBoth("keeps quoted, confirmed, submitted, charged, declined, and unknown as separate states", _bodies())
@@ -338,7 +340,12 @@ class SpendGateContractTests(unittest.TestCase):
         for projection, body in _bodies().items():
             with self.subTest(projection=projection):
                 self.assertIn("A paid call billed to the person's own subscription credits or plan usage", body)
-                self.assertIn("with the expected credits or cost; the call runs only after the typed yes", body)
+                self.assertIn("read from the provider's own price for that model, or says the cost is unknown", body)
+                self.assertIn("when neither can be read it is charged with the amount unconfirmed", body)
+                # The general receipt rule and the checklist point at the credits receipt
+                # instead of demanding an order id a credits call never has.
+                self.assertIn("a credits call's receipt is its output with the credits used", body)
+                self.assertIn("or, for a credits call, its output with the credits used or marked unconfirmed", body)
 
     def test_show_reel_sends_its_paid_calls_through_the_gate(self) -> None:
         # show-reel's ElevenLabs and codex scripts spend the user's own
@@ -362,9 +369,32 @@ class SpendGateContractTests(unittest.TestCase):
         for projection, refs in (("hermes", hermes_refs), ("portable", portable_refs)):
             with self.subTest(projection=projection):
                 audio = refs["references/audio-production.md"]
-                self.assertIn("so it goes through `omh-spend-gate` before it runs", audio)
+                self.assertIn("so it goes through `omh-spend-gate` before\nit runs", audio)
                 self.assertIn("That yes is the exact-target approval for that run", audio)
                 self.assertIn("goes through `omh-spend-gate`'s card and typed yes first", refs["references/render-qa-delivery.md"])
+
+    def test_every_show_reel_section_that_runs_a_paid_script_names_the_gate(self) -> None:
+        # A run step is the command form (`$S/eleven.py tts`, `.../scripts/codex_imagegen_batch.sh`);
+        # `eleven.py check` and `voices` only read the account. Headings inside a code fence
+        # are shell comments, so a section starts only at a heading that begins with a capital or digit.
+        paid = re.compile(r"\$S/(?:eleven\.py (?!check|voices)|narrate\.py|codex_ref_image\.sh)|scripts/codex_imagegen_batch\.sh")
+        for skill, templates in (
+            ("show-reel", builtin_skill_reference_templates()),
+            ("omh-show-reel", agent_skill_reference_templates()),
+        ):
+            sections = [
+                (template.relative_path, section)
+                for template in templates
+                if template.skill_name == skill
+                for section in re.split(r"(?m)^(?=#{1,4} [A-Z0-9])", template.content)
+                if paid.search(section)
+            ]
+            with self.subTest(skill=skill):
+                self.assertTrue(sections)
+                self.assertEqual(
+                    [(path, section.splitlines()[0]) for path, section in sections if "omh-spend-gate" not in section],
+                    [],
+                )
 
     def test_each_sibling_is_named_once(self) -> None:
         mine = _definition(SKILL).do_not_use_when
