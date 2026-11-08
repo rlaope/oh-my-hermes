@@ -509,7 +509,7 @@ class RelaunchTests(unittest.TestCase):
                 patch.object(sys.stdout, "isatty", return_value=True), \
                 patch("shutil.which", return_value="/bin/hermes"), \
                 patch.object(bare_launch, "_run_terminal",
-                             side_effect=lambda hermes, a, paths, closed, relaunch: (
+                             side_effect=lambda hermes, a, paths, closed, relaunch, hermes_home=None: (
                                  closed.append(("s-1", "/h", ())), relaunch.append((Path("/root/generations/old"), launch.UPDATED_PLAN)),
                                  launch.RELAUNCH_EXIT)[-1]), \
                 patch.object(bare_launch, "_nothing_said", return_value=False), \

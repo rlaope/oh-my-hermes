@@ -207,8 +207,8 @@ from .keys import (
 )
 from .generation_watch import GenerationWatch, watch_for
 from .launch import (
-    CLOSED_EXIT, PICK_SESSION_ENV, RELAUNCH_EXIT, RELAUNCH_FILE_ENV, SESSION_FILE_ENV, UPDATED_ENV, UPDATED_PLAIN,
-    UPDATED_PLAN, request_fallback, request_relaunch,
+    BOTS_HOME_ENV, CLOSED_EXIT, PICK_SESSION_ENV, RELAUNCH_EXIT, RELAUNCH_FILE_ENV, RUNTIME_ENV, RUNTIME_OWN_VALUE,
+    SESSION_FILE_ENV, UPDATED_ENV, UPDATED_PLAIN, UPDATED_PLAN, request_fallback, request_relaunch,
 )
 from .agent_view import AGENT_STEER_LEFT_UNANSWERED_NOTICE, STEER_SAY, TAIL_ANSWER_SECONDS, AgentViewMixin
 from .aura import aura_ranges
@@ -841,6 +841,10 @@ GATEWAY_RESTART_SECONDS = 180.0
 GATEWAY_REATTACH_SECONDS = 60.0
 GATEWAY_RESTART_QUESTION = "Restart Hermes' gateway?"
 GATEWAY_RESTART_CHOICE = "Restart"
+# The TUI's own runtime (`omh theme runtime own`, `tui/own_runtime.py`): a gateway with no bot on it, which the
+# restart stops; Hermes starts a fresh one, on the OMH generation installed now, when the TUI reattaches.
+GATEWAY_OWN_RUNTIME_LEAD = "This TUI runs on its own Hermes runtime; the bots' gateway is not touched."
+GATEWAY_OWN_RUNTIME_CHOICE = "Restart this TUI's runtime — loads new OMH code; no bot reconnects"
 # A named profile the shared gateway serves: Hermes' restart of that profile alone, or of the whole gateway.
 # Hermes re-serves the profile without waiting (`unserve_profile` does not drain), so its running turns stop at once.
 GATEWAY_PROFILE_CHOICE = (
@@ -849,6 +853,19 @@ GATEWAY_PROFILE_CHOICE = (
 GATEWAY_WHOLE_CHOICE = "Restart the whole gateway — every profile and bot reconnects; loads new OMH code"
 GATEWAY_CANCEL_CHOICE = "Cancel"
 GATEWAY_RESTART_CANCELLED = "Hermes' gateway was not restarted."
+
+
+def gateway_restart_choices(profile: str, *, own: bool = False, offered: bool = False) -> tuple[str, ...]:
+    """The answers `/gateway restart` offers: on the TUI's own runtime, its restart alone; for a named profile the
+    shared gateway serves, that profile alone or the whole gateway; else the one restart. Cancel last, or first
+    when the TUI offers the restart itself after an update (`offered`), so the answer defaults to no restart."""
+    if own:
+        choices: tuple[str, ...] = (GATEWAY_OWN_RUNTIME_CHOICE, GATEWAY_CANCEL_CHOICE)
+    elif profile:
+        choices = (GATEWAY_PROFILE_CHOICE.format(profile=profile), GATEWAY_WHOLE_CHOICE, GATEWAY_CANCEL_CHOICE)
+    else:
+        choices = (GATEWAY_RESTART_CHOICE, GATEWAY_CANCEL_CHOICE)
+    return (GATEWAY_CANCEL_CHOICE, *choices[:-1]) if offered else choices
 GATEWAY_RESTART_STDIO = (
     "/gateway restart restarts Hermes' shared gateway, and this session runs on Hermes' stdio entry in a process of "
     "its own; run `{command}` in a terminal for the messaging gateway."
@@ -3786,22 +3803,22 @@ class App(ModesMixin, AgentViewMixin):
             return
         impact = self.read_restart_impact(self.environ, self.launch_profile)
         profile = impact.profile
+        own = self.environ.get(RUNTIME_ENV) == RUNTIME_OWN_VALUE  # the TUI's own runtime: no profile, no bots
         alone = GATEWAY_PROFILE_CHOICE.format(profile=profile) if profile else ""
-        choices = (alone, GATEWAY_WHOLE_CHOICE, GATEWAY_CANCEL_CHOICE) if profile else (
-            GATEWAY_RESTART_CHOICE, GATEWAY_CANCEL_CHOICE)
-        if offered:
-            choices = (GATEWAY_CANCEL_CHOICE, *choices[:-1])
+        choices = gateway_restart_choices(profile, own=own, offered=offered)
 
         def decided(choice: str) -> None:
             if profile and choice == alone:
                 self._start_gateway_restart(impact, profile, command, profile)
-            elif choice in (GATEWAY_WHOLE_CHOICE, GATEWAY_RESTART_CHOICE):
+            elif choice in (GATEWAY_WHOLE_CHOICE, GATEWAY_RESTART_CHOICE, GATEWAY_OWN_RUNTIME_CHOICE):
                 whole = DEFAULT_PROFILE if profile else self.launch_profile
                 self._start_gateway_restart(impact, whole, manual_command(whole, explicit=bool(profile)), "")
             else:
                 self.transcript.add_notice(GATEWAY_RESTART_CANCELLED)
 
         lead = [GATEWAY_UPDATE_LEAD] if offered else []
+        if own:
+            lead.append(GATEWAY_OWN_RUNTIME_LEAD)
         question = "\n".join([*lead, *impact_lines(impact, self._busy()), GATEWAY_RESTART_QUESTION])
         self._ask_locally(question, choices, decided)
 
@@ -9827,7 +9844,10 @@ def _run(
                     open_terminal(),
                     client,
                     environ,
-                    poller=make_poller(environ.get("OMH_HOME") or None, environ.get("HERMES_HOME") or None),
+                    # The bot board reads the bots' home: the launcher's `HERMES_HOME`, or on the TUI's own runtime
+                    # the home `omh` named beside it (`BOTS_HOME_ENV`).
+                    poller=make_poller(environ.get("OMH_HOME") or None,
+                                       environ.get(BOTS_HOME_ENV) or environ.get("HERMES_HOME") or None),
                     theme=initial_theme(ready.payload, environ.get("OMH_HOME") or None),
                     make_client=make_client,
                     # The session's directory as the launcher names it; with none named, no branch (never the TUI's

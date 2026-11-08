@@ -260,3 +260,11 @@ def exit_card_lines(db_path: str | Path | None, session_id: str, profile: str | 
         "  " + resume_command_line(session_id, profile),
         "",
     ]
+
+
+def session_known(db_path: str | Path, session_id: str) -> bool:
+    """Whether Hermes' state database at `db_path` has a row for `session_id`; False when it has none or cannot
+    be read (a missing database is a home no session was ever opened in)."""
+    if not session_id or not Path(db_path).is_file():
+        return False
+    return bool(_session_card_row(db_path, session_id))

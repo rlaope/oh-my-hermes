@@ -96,6 +96,12 @@ RELAUNCH_FILE_ENV = "OMH_TUI_RELAUNCH_FILE"
 # Set to "1" in the relaunched `omh`'s environment: the TUI it opens started for an update, so when the shared
 # gateway it attaches to still runs the old OMH plugin code it offers `/gateway restart` once.
 UPDATED_ENV = "OMH_TUI_UPDATED"
+# Set by `omh` when it opens the TUI on its own Hermes runtime (`tui/own_runtime.py`): `RUNTIME_ENV` is `own`, and
+# `BOTS_HOME_ENV` names the bots' Hermes home, which the bot board and `/sessions` of the bots keep reading while
+# `HERMES_HOME` is the TUI home. Both are `OMH_TUI_` names: the gateway child never sees them.
+RUNTIME_ENV = "OMH_TUI_RUNTIME"
+RUNTIME_OWN_VALUE = "own"
+BOTS_HOME_ENV = "OMH_TUI_BOTS_HOME"
 # Its value and the marker's content when the TUI left in plan mode, which only the TUI knows (a prompt goes as `/plan`).
 UPDATED_PLAN = "plan"
 UPDATED_PLAIN = "1"
@@ -179,6 +185,7 @@ def omh_import_root() -> str:
 def omh_tui_environment(
     environ: Mapping[str, str], *, python: str, site: str, omh_home: Path, fallback_sentinel: Path,
     session_file: Path, pick_session: bool = False, relaunch_file: Path | None = None,
+    bots_home: Path | None = None,
 ) -> dict[str, str]:
     """The environment `hermes --tui` runs with when it should start the OMH TUI.
 
@@ -188,9 +195,16 @@ def omh_tui_environment(
     `omh`'s own arguments. `SITE_ENV` is set over any inherited value.
     `PICK_SESSION_ENV` is set only for `pick_session` (a bare `omh --resume`),
     and an inherited one is dropped otherwise. `RELAUNCH_FILE_ENV` likewise:
-    only a launch that can relaunch the TUI names one.
+    only a launch that can relaunch the TUI names one. `bots_home` is given
+    only when the TUI opens on its own Hermes runtime: `RUNTIME_ENV` says so
+    and `BOTS_HOME_ENV` names the bots' home; both are dropped otherwise.
     """
     env = dict(environ)
+    env.pop(RUNTIME_ENV, None)
+    env.pop(BOTS_HOME_ENV, None)
+    if bots_home is not None:
+        env[RUNTIME_ENV] = RUNTIME_OWN_VALUE
+        env[BOTS_HOME_ENV] = str(bots_home)
     env["HERMES_TUI_DIR"] = str(FRONTEND_DIR)
     env["OMH_TUI_PYTHON"] = python
     env[SITE_ENV] = site

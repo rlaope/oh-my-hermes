@@ -191,8 +191,28 @@ def write_update_check_choice(omh_home: Path, on: bool) -> Path:
     return _write_theme_store(omh_home, "update_check", "on" if on else "off")
 
 
+# Where the OMH TUI opens its sessions (`runtime`, beside the theme): `shared`, the Hermes gateway that also serves
+# the bots (the default), or `own`, a TUI-only Hermes home under the OMH home with a gateway of its own
+# (`tui/own_runtime.py`).
+RUNTIME_SHARED, RUNTIME_OWN = "shared", "own"
+RUNTIME_CHOICES = (RUNTIME_SHARED, RUNTIME_OWN)
+
+
+def read_runtime_choice(omh_home: Path) -> str | None:
+    """`own` or `shared` as saved for this OMH home; None when nothing this module wrote says (shared, then)."""
+    value = _theme_store_record(omh_home).get("runtime")
+    return value if value in RUNTIME_CHOICES else None
+
+
+def write_runtime_choice(omh_home: Path, runtime: str) -> Path:
+    """Save where the OMH TUI opens its sessions; the path it was written to. The other choices stay."""
+    if runtime not in RUNTIME_CHOICES:
+        raise ValueError(f"runtime is one of {', '.join(RUNTIME_CHOICES)}, not {runtime!r}")
+    return _write_theme_store(omh_home, "runtime", runtime)
+
+
 # The keys the one writer (`_write_theme_store`) keeps: every write carries the others over.
-THEME_STORE_KEYS = ("theme", "launch", "wallpaper", "update_check")
+THEME_STORE_KEYS = ("theme", "launch", "wallpaper", "update_check", "runtime")
 
 
 def _write_theme_store(omh_home: Path, key: str, value: str) -> Path:
