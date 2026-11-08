@@ -38,6 +38,9 @@ from .route_question import build_route_question_for_candidate_handoff
 
 ROUTER_SKILL = "oh-my-hermes"
 CAPABILITY_OFF_KEY = "capability_family_off"
+# Set on a clarify whose own candidate is turned off: the route asks an open
+# question and notes the family, without refusing and without a stand-in.
+CAPABILITY_NOTE_KEY = "capability_family_note"
 # A clarify whose every candidate was turned off asks an open question; the
 # code keeps the router's instruction from naming an empty candidate.
 REASON_CODE_NO_ENABLED_CANDIDATE = "no_enabled_candidate"
@@ -65,6 +68,9 @@ def route_without_disabled_skills(
     pick = _turned_off_pick(route, disabled)
     if pick:
         return _capability_off_route(route, pick, disabled[pick])
+    candidate = str(route.get("candidate_skill") or "")
+    if route.get("action") in {"clarify", "fallback"} and candidate in disabled:
+        return _open_question_route(route, candidate, disabled[candidate])
     return _without_offered(route, disabled, message=message)
 
 
@@ -133,6 +139,39 @@ def _capability_off_route(
     return route
 
 
+def _open_question_route(route: dict[str, object], skill: str, family_id: str) -> dict[str, object]:
+    """A clarify whose own candidate is off: an open question that notes the family.
+
+    The next row is not promoted: it was ranked below a skill the person's
+    words matched better, so asking about it handed a clear request to an
+    unrelated skill (`find recent papers ...` asked about `ultraperf`) without
+    saying the best match was off. Nor is the request refused: the router was
+    asking, so the note only tells the person, if that was the work they
+    meant, that its family is off and how to turn it on.
+    """
+    record = capability_off_record(skill, family_id)
+    for key in _CANDIDATE_KEYS:
+        route.pop(key, None)
+    route.update(
+        {
+            "candidate_skill": "",
+            "candidate_harness": "",
+            "reason_code": REASON_CODE_NO_ENABLED_CANDIDATE,
+            "clarification": (
+                "Ask what outcome the user wants without naming a workflow. If they meant the work "
+                f"`{skill}` does, say its {family_label(family_id)} capability family is turned off in this OMH "
+                f"home and that `{record['enable_command']}` turns it back on."
+            ),
+            "recommendations": [],
+            "workflow_route_plan": None,
+            CAPABILITY_NOTE_KEY: record,
+        }
+    )
+    route["routing_prompt"] = _routing_prompt(route)
+    route["route_decision"] = build_route_decision_contract(route)
+    return route
+
+
 def _without_offered(
     route: dict[str, object], disabled: Mapping[str, str], *, message: str
 ) -> dict[str, object]:
@@ -167,15 +206,10 @@ def _without_offered(
         changed = True
     candidate = str(route.get("candidate_skill") or "")
     if candidate in disabled:
-        offered = handoff_candidates if handoff_candidates is not None else route.get("recommendations", [])
-        replacement = next(
-            (str(row.get("skill") or "") for row in offered or [] if isinstance(row, dict) and row.get("skill")),
-            "",
-        )
-        route["candidate_skill"] = replacement
-        route["candidate_harness"] = primary_harness_for_skill(replacement) if replacement else ""
-        if not replacement and route.get("action") == "clarify":
-            route["reason_code"] = REASON_CODE_NO_ENABLED_CANDIDATE
+        # Only a route that is neither a clarify nor a fallback reaches here
+        # (those become `_open_question_route`); no stand-in is promoted.
+        route["candidate_skill"] = ""
+        route["candidate_harness"] = ""
         changed = True
     if _names_any(str(route.get("clarification") or ""), disabled):
         route["clarification"] = _clarification(route, handoff_candidates)
@@ -224,4 +258,4 @@ def _routing_prompt(route: Mapping[str, object]) -> str:
     )
 
 
-__all__ = ["CAPABILITY_OFF_KEY", "REASON_CODE_NO_ENABLED_CANDIDATE", "ROUTER_SKILL", "route_without_disabled_skills"]
+__all__ = ["CAPABILITY_NOTE_KEY", "CAPABILITY_OFF_KEY", "REASON_CODE_NO_ENABLED_CANDIDATE", "ROUTER_SKILL", "route_without_disabled_skills"]

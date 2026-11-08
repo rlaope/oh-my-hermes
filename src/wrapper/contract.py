@@ -53,7 +53,7 @@ from ..routing.route_plan import public_workflow_identifier, with_public_skill_n
 from ..routing.route_question import apply_route_question_mode
 from ..plugin_bundle.omh.route_question_mode import read_route_question_mode
 from ..plugin_bundle.omh.capability_off import disabled_skill_families
-from ..routing.capability_off import CAPABILITY_OFF_KEY
+from ..routing.capability_off import CAPABILITY_NOTE_KEY, CAPABILITY_OFF_KEY
 from ..routing.policy import POINT_IN_TIME_WEB_GUARD
 from ..workflows.realtime_voice_trial_receipts import build_prepared_realtime_voice_chat_state
 from ..workflows.temporal_source_receipts import (
@@ -9463,6 +9463,13 @@ def _finish_interaction(payload: dict[str, object], target_notice: dict[str, obj
     response = payload.get("chat_response")
     if isinstance(response, dict):
         response = _chat_response_with_route_explanation(response, _nested(payload, "route"))
+        # A clarify whose best match is in a turned-off family carries that
+        # note on the reply in every language, not only in the English
+        # clarification text a localized body replaces.
+        capability_note = _nested(payload, "route").get(CAPABILITY_NOTE_KEY)
+        state = response.get("state")
+        if isinstance(capability_note, dict) and isinstance(state, dict):
+            state[CAPABILITY_NOTE_KEY] = dict(capability_note)
         # A retired-engine alias route (#954 stage 5) shows exactly one line on
         # the status card -- the capability reason -- while the full
         # machine-readable selection stays on `route.alias_resolution` (Q5).

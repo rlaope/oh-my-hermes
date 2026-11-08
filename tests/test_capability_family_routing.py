@@ -52,8 +52,15 @@ EXPLICIT = "/omh-web-research compare redis and valkey"
 # A plain request the router dispatches to `ai-job-search` (FAMILY).
 NATURAL = "Help with my job search for library coordinator roles in Boston."
 # A high-confidence clarify whose candidate, and whole shortlist, is in FAMILY:
-# the router is asking, so the family is dropped without an "off" answer.
+# the router is asking, so it asks an open question that notes the family.
 PARAPHRASED = "research the latest vector database benchmarks and cite sources"
+# Clarifies whose best match is in FAMILY; the re-review measured each handed
+# to an unrelated skill (`ultraperf`, `ops-review`, `content-operator`,
+# `ai-slop-cleaner`) when the next row was promoted.
+REVIEWED_CLARIFIES = (
+    "find recent papers on diffusion model distillation and summarize them",
+    "우리 앱 경쟁사 분석 정리해줘",
+)
 # Negative controls the review measured the old hint block refusing.
 NEGATIVE_CONTROLS = (
     ("operate_and_observe", "Explain what a cron job does."),
@@ -61,8 +68,9 @@ NEGATIVE_CONTROLS = (
     (FAMILY, 'Explain the phrase "our recruiting team runs a job search campaign".'),
     (FAMILY, "Draft a tweet about the HellaSwag results our paper reported"),
 )
-# Its route question is rebuilt with FAMILY off (review: digest mismatch).
-QUESTION_MESSAGE = "Help our recruiting team run a job search campaign."
+# A shortlist that loses `web-research` (FAMILY) but keeps its own candidate,
+# so its route question is rebuilt with FAMILY off (review: digest mismatch).
+QUESTION_MESSAGE = "set up web search"
 # Ranks `omh-lifecycle-growth` (FAMILY) first on the skill-candidate line.
 CANDIDATE_MESSAGE = (
     "Activation fell after we changed the signup flow and new users churn in their first week. "
@@ -182,16 +190,30 @@ class RouterTests(unittest.TestCase):
                 self.assertIn("Learn and gather", route["clarification"])
                 self.assertNotIn("``", route["routing_instruction"])
 
-    def test_a_clarify_the_router_only_asks_drops_the_family_without_an_off_answer(self) -> None:
+    def test_a_clarify_on_a_turned_off_skill_asks_openly_and_notes_the_family(self) -> None:
         plain = public_chat_route_payload(PARAPHRASED)
         self.assertEqual((plain["action"], plain["confidence"], plain["explicit"]), ("clarify", "high", False))
         with TemporaryDirectory() as tmp:
             disabled = capability_off.disabled_skill_families(_home(Path(tmp), FAMILY).omh_home)
-        route = public_chat_route_payload(PARAPHRASED, disabled_skills=disabled)
-        self.assertNotIn("capability_family_off", route)
-        self.assertEqual(route["action"], "clarify")
-        self.assertEqual(_offered_skills(route) & _spellings(disabled), set())
-        self.assertNotIn("``", route["routing_instruction"])
+        for message in (PARAPHRASED, *REVIEWED_CLARIFIES):
+            self.assertIn(public_chat_route_payload(message)["candidate_skill"], disabled, message)
+            route = public_chat_route_payload(message, disabled_skills=disabled)
+            # Not refused, and no stand-in from another family.
+            self.assertNotIn("capability_family_off", route, message)
+            self.assertEqual(route["action"], "clarify", message)
+            self.assertEqual(route["reason_code"], "no_enabled_candidate", message)
+            self.assertEqual(_offered_skills(route), {"oh-my-hermes"}, message)
+            self.assertEqual(route["capability_family_note"]["family"], FAMILY, message)
+            self.assertIn(f"omh capability-policy enable {FAMILY}", route["clarification"], message)
+            self.assertNotIn("``", route["routing_instruction"])
+
+    def test_the_note_reaches_the_reply_in_every_language(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _home(Path(tmp), FAMILY)
+            for message in REVIEWED_CLARIFIES:
+                response = build_chat_interaction_payload(message, source="discord", paths=paths)["chat_response"]
+                note = response["state"]["capability_family_note"]
+                self.assertEqual(note["enable_command"], f"omh capability-policy enable {FAMILY}", message)
 
     def test_the_chat_reply_names_the_family_and_the_command_that_turns_it_on(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -274,6 +296,31 @@ class CorpusTests(unittest.TestCase):
             != ("capability_family_off" in public_chat_route_payload(message, disabled_skills=disabled))
         ]
         self.assertEqual(disagree, [])
+
+    def test_a_request_whose_best_match_is_off_is_never_offered_another_family(self) -> None:
+        # Every intervention request the plain router dispatches to, or asks
+        # about, a skill of the family turned off: answered "off", or asked
+        # openly with the enable command named, never handed to a stand-in.
+        checked = 0
+        for family_id in toggleable_family_ids():
+            disabled = capability_off.skill_families_for((family_id,))
+            command = f"omh capability-policy enable {family_id}"
+            for case in ROUTING_INTERVENTION_CASES:
+                plain = self.plain[case.message]
+                if plain["action"] not in {"clarify", "dispatch"}:
+                    continue
+                pick = plain["selected_skill"] if plain["action"] == "dispatch" else plain["candidate_skill"]
+                if pick not in disabled:
+                    continue
+                checked += 1
+                route = public_chat_route_payload(case.message, source="discord", disabled_skills=disabled)
+                self.assertEqual(_offered_skills(route), {"oh-my-hermes"}, (family_id, case.id))
+                record = route.get("capability_family_off") or route.get("capability_family_note")
+                self.assertIsInstance(record, dict, (family_id, case.id))
+                self.assertEqual(record["enable_command"], command, (family_id, case.id))
+                if "capability_family_note" in route:
+                    self.assertIn(command, route["clarification"], (family_id, case.id))
+        self.assertGreater(checked, 0)
 
     def test_no_negative_control_is_answered_off_whichever_family_is_off(self) -> None:
         for family_id in toggleable_family_ids():
@@ -375,6 +422,8 @@ class OtherSurfaceTests(unittest.TestCase):
             paths = _home(Path(tmp), FAMILY)
             disabled = capability_off.disabled_skill_families(paths.omh_home)
             question = route_chat_message(QUESTION_MESSAGE, disabled_skills=disabled)["route_question"]
+            plain = route_chat_message(QUESTION_MESSAGE)["route_question"]
+            self.assertNotEqual(question["question_digest"], plain["question_digest"])
             verified = _verify_digest(
                 {
                     "message": QUESTION_MESSAGE,
