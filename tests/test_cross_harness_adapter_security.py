@@ -270,22 +270,28 @@ class AdapterSandboxSecurityTests(_RunnerMixin, unittest.TestCase):
 
     @requires_secure_dir_io
     def test_symlink_escape_is_denied_and_symlinked_sensitive_root_rejected(self) -> None:
+        # Immutable siblings keep the canary outside every granted read root,
+        # even when the process scratch directory has a sensitive ancestor.
+        fixture = ROOT / "tests" / "fixtures" / "cross_harness_symlink_escape"
+        allowed = fixture / "allowed"
+        linked = allowed / "linked"
+        self.assertTrue(linked.is_symlink())
+        self.assertEqual(linked.resolve().read_text(encoding="utf-8"), "sentinel-secret\n")
+        outcome = self._run("credential-read-denied", sandbox=True, environment=(("OMH_READ_PROBE", str(linked)),), read_roots=(allowed,))
+        self.assertEqual(outcome.status, "observed_success")
+
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
-            allowed = root / "allowed"
-            allowed.mkdir()
-            secret = root / "secret"
-            secret.write_text("sentinel-secret", encoding="utf-8")
-            linked = allowed / "linked"
-            linked.symlink_to(secret)
-            outcome = self._run("credential-read-denied", sandbox=True, environment=(("OMH_READ_PROBE", str(linked)),), read_roots=(allowed,))
-            self.assertEqual(outcome.status, "observed_success")
-
             request, spec = _spec(root, "passing")
             sensitive_link = root / "sensitive"
             sensitive_link.symlink_to(Path.home() / ".ssh")
             rejected = self._run_fake_adapter(request, ExecutionSpec(spec.argv, (sensitive_link,), root, spec.backend), _output(root))
             self.assertEqual(rejected.reason_code, "unsafe_read_root")
+
+            sensitive_hermes = root / ".hermes" / "allowed"
+            sensitive_hermes.mkdir(parents=True)
+            rejected_hermes = self._run_fake_adapter(request, ExecutionSpec(spec.argv, (sensitive_hermes,), root, spec.backend), _output(root))
+            self.assertEqual(rejected_hermes.reason_code, "unsafe_read_root")
 
     @requires_posix
     def test_linux_command_is_strict_and_missing_backend_fails_closed(self) -> None:

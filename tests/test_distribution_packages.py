@@ -322,6 +322,10 @@ class NpmBunDistributionTests(unittest.TestCase):
         self.stack = TemporaryDirectory()
         self.addCleanup(self.stack.cleanup)
         self.root = Path(self.stack.name)
+        (self.root / "package.json").write_text(
+            json.dumps({"name": "omh-test-isolation-barrier", "type": "commonjs"}),
+            encoding="utf-8",
+        )
         self.wheel = build_wheel(self.root / "wheel")
         self.package = stage_npm_package(self.wheel, self.root / "package")
 
@@ -381,6 +385,8 @@ class NpmBunDistributionTests(unittest.TestCase):
             # verifies the staged artifact's own CLI and provenance.
             "OMH_SKIP_COMMAND_PACKAGE_UPDATE": "1",
         }
+        if package_manager == "bun":
+            env["BUN_INSTALL"] = str(self.root / "bun-global")
         for arguments in (("--version",), ("--help",), ("setup", "--help")):
             result = run(command_for(binary, *arguments), env=env)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -454,6 +460,24 @@ class NpmBunDistributionTests(unittest.TestCase):
             pinned.stderr,
         )
 
+    def _installer_env(self) -> dict[str, str]:
+        home = self.root / "installer-home"
+        home.mkdir(exist_ok=True)
+        return {
+            **os.environ,
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(home / "config"),
+            "XDG_CACHE_HOME": str(home / "cache"),
+            "npm_config_cache": str(home / "npm-cache"),
+            "npm_config_userconfig": str(home / "npmrc"),
+            "npm_config_globalconfig": str(home / "global-npmrc"),
+            "npm_config_audit": "false",
+            "npm_config_fund": "false",
+            "BUN_INSTALL_CACHE_DIR": str(home / "bun-cache"),
+            "BUN_INSTALL_GLOBAL_DIR": str(self.root / "bun-global" / "install" / "global"),
+            "BUN_INSTALL_BIN": str(self.root / "bun-global" / "bin"),
+        }
+
     def test_global_tarball_launchers(self) -> None:
         tarball = self._tarball()
         npm = Path(require_tool("npm"))
@@ -469,7 +493,9 @@ class NpmBunDistributionTests(unittest.TestCase):
                 "--prefix",
                 str(npm_prefix),
                 str(tarball),
-            )
+            ),
+            cwd=self.root,
+            env=self._installer_env(),
         )
         self._assert_cli(
             locate_global_omh(npm_prefix),
@@ -478,9 +504,13 @@ class NpmBunDistributionTests(unittest.TestCase):
         )
 
         bun_root = self.root / "bun-global"
-        bun_env = {**os.environ, "BUN_INSTALL": str(bun_root)}
+        bun_workspace = bun_root / "install" / "global"
+        bun_workspace.mkdir(parents=True)
+        (bun_workspace / "package.json").write_text('{"private":true}\n', encoding="utf-8")
+        bun_env = {**self._installer_env(), "BUN_INSTALL": str(bun_root)}
         run(
             command_for(bun, "install", "--global", str(tarball)),
+            cwd=bun_workspace,
             env=bun_env,
         )
         self._assert_cli(
