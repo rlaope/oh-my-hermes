@@ -248,7 +248,7 @@ from .panels import (
 )
 from .dag_pager import DagPager
 from .background import BackgroundProcess, askable, finished_forms, report_prompt, running_forms, tool_call
-from .clipboard import COPY_OSC52, COPY_PBCOPY, COPY_TOO_LARGE, SSH_VARIABLES, copy_route, herdr_drops, pbcopy, tmux_client_over_ssh
+from .clipboard import COPY_OSC52, COPY_PBCOPY, COPY_TOO_LARGE, HERDR_TOO_LARGE, SSH_VARIABLES, copy_route, herdr_drops, pbcopy, tmux_client_over_ssh
 from .prompts import CLOSED_CHOICES, FRAMED_FOOTER_MIN_ROWS, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
 from .faults import FaultLog
 from .screen import (
@@ -1104,7 +1104,7 @@ COPY_SENT_NOTE = "copy sent ({why})"
 SELECTION_DROPPED_NOTE = "selection dropped: text moved"
 OSC52_UNCONFIRMED = "terminal may not support OSC 52"
 OSC52_IN_TMUX = "tmux passes it on only with set-clipboard on"
-OSC52_TOO_LARGE = "herdr drops a copy over 192 KiB"  # `clipboard.HERDR_CLIPBOARD_BYTES`
+COPY_DROPPED_NOTE = "not copied ({why})"  # a copy herdr drops (`clipboard.HERDR_TOO_LARGE`), written all the same
 # The completion menu's name column: at least this wide, wider for the longest name it lists (OMH skills are
 # `omh-*` and `ulw-*` slugs) up to half the terminal; a name longer than that pushes only its own summary.
 MENU_NAME_CELLS = 16
@@ -7808,7 +7808,7 @@ class App(ModesMixin, AgentViewMixin):
         data = last.text.strip().encode("utf-8", "replace")
         self.terminal.write(OSC52_COPY.format(base64.b64encode(data).decode("ascii")))
         if herdr_drops(self.environ, len(data)):
-            self.transcript.add_notice(f"Copy sent ({OSC52_TOO_LARGE}).", NOTICE_WARN)
+            self.transcript.add_notice(f"Not copied ({HERDR_TOO_LARGE}).", NOTICE_WARN)
             return
         self.transcript.add_notice("Copied the last reply to the clipboard (OSC 52; the terminal must allow it).")
 
@@ -8020,8 +8020,9 @@ class App(ModesMixin, AgentViewMixin):
             confirmed = route == COPY_OSC52
         if confirmed:
             return Notification(COPIED_NOTE.format(count=len(text)), "success", "")
+        if route == COPY_TOO_LARGE:
+            return Notification(COPY_DROPPED_NOTE.format(why=HERDR_TOO_LARGE), "warn", "")
         why = OSC52_IN_TMUX if self.environ.get("TMUX") else OSC52_UNCONFIRMED
-        why = OSC52_TOO_LARGE if route == COPY_TOO_LARGE else why
         return Notification(COPY_SENT_NOTE.format(why=why), "warn", "")
 
     def _theme(self, arg: str) -> None:

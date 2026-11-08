@@ -16,13 +16,18 @@ for a copy the person made with the mouse in the pager, `pbcopy` with the text
 on stdin.
 
 A herdr pane (herdr, a terminal workspace manager) is the exception to both.
-herdr strips TMUX from its panes and keeps no SSH variables per client (a pane
-inherits the long-lived server's), so the pane's environment says nothing
-about where the screen is. herdr itself puts the pane's OSC 52 on the
-clipboard of the machine its client runs on (as OSC 52 again when that client
-runs under SSH), so there the copy always goes out as OSC 52 and counts as
-copied, up to the most herdr takes (HERDR_CLIPBOARD_BYTES); a larger one is
-reported as sent. A tmux started inside the pane sets TMUX again and is tmux.
+herdr strips TMUX, STY and ZELLIJ from its panes and keeps no SSH variables
+per client (a pane inherits the long-lived server's), so the pane's
+environment says nothing about where the screen is. herdr itself puts the
+pane's OSC 52 on the clipboard of the machine its client runs on (as OSC 52
+again when that client runs under SSH), so there the copy always goes out as
+OSC 52 and counts as copied: it reached herdr, and over SSH the terminal the
+person looks at must still honour OSC 52. A copy past the most herdr takes
+(HERDR_CLIPBOARD_BYTES) is written too but reported as not copied, since
+herdr drops it. A pane is herdr's by `TERM_PROGRAM=herdr`, or `HERDR_ENV=1`
+with no `TERM_PROGRAM` at all (another terminal opened from the pane inherits
+`HERDR_ENV` and sets its own). A tmux, screen or zellij started inside the pane
+sets its variable again, and the rules above apply to it as before.
 """
 
 from __future__ import annotations
@@ -38,6 +43,8 @@ COPY_UNCONFIRMED = "osc52-unconfirmed"
 COPY_TOO_LARGE = "osc52-too-large"  # a herdr pane's copy past HERDR_CLIPBOARD_BYTES: herdr drops it
 # herdr hands a pane's OSC 52 on only up to this many bytes of decoded text (ghostty-vt's MAX_CLIPBOARD_BYTES).
 HERDR_CLIPBOARD_BYTES = 192 * 1024
+HERDR_TOO_LARGE = f"herdr drops a copy over {HERDR_CLIPBOARD_BYTES // 1024} KiB"  # why a COPY_TOO_LARGE is not copied
+HERDR_STRIPPED = ("TMUX", "STY", "ZELLIJ")  # herdr unsets them in its panes: set, a multiplexer runs inside the pane
 OSC52_TERMINALS = frozenset({"kitty", "ghostty", "WezTerm", "alacritty"})  # by `terminal_name`
 SSH_VARIABLES = ("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY")  # set: the screen is on another machine than pbcopy's
 PBCOPY_SECONDS = 2.0
@@ -62,25 +69,28 @@ def tmux_client_over_ssh(environ: Mapping[str, str]) -> bool:
     return not (said == f"-{TMUX_SSH_VARIABLE}" or never_had)
 
 
-def in_herdr(environ: Mapping[str, str]) -> bool:
-    """Whether the TUI runs in a herdr pane: herdr's `HERDR_ENV=1` (the gate `herdr.py` reads) or its
-    `TERM_PROGRAM`."""
-    return environ.get("HERDR_ENV") == "1" or terminal_name(environ) == "herdr"
+def herdr_takes_osc52(environ: Mapping[str, str]) -> bool:
+    """Whether an OSC 52 written here goes straight to herdr: a herdr pane (`TERM_PROGRAM=herdr`, or herdr's
+    `HERDR_ENV=1` with no `TERM_PROGRAM` another terminal set) with no tmux, screen or zellij started inside it."""
+    program = environ.get("TERM_PROGRAM", "")
+    in_herdr = program == "herdr" or (environ.get("HERDR_ENV") == "1" and not program)
+    return in_herdr and not any(environ.get(name) for name in HERDR_STRIPPED)
 
 
 def herdr_drops(environ: Mapping[str, str], size: int) -> bool:
-    """Whether herdr drops an OSC 52 written in this pane that carries `size` bytes of text."""
-    return in_herdr(environ) and size > HERDR_CLIPBOARD_BYTES
+    """Whether herdr drops an OSC 52 written here that carries `size` bytes of text."""
+    return herdr_takes_osc52(environ) and size > HERDR_CLIPBOARD_BYTES
 
 
 def copy_route(
     environ: Mapping[str, str], platform: str, tmux_over_ssh: Callable[[Mapping[str, str]], bool] = tmux_client_over_ssh,
     size: int = 0,
 ) -> str:
-    """How a copy of `size` bytes from the pager reaches the clipboard: COPY_OSC52 in a herdr pane outside tmux
-    (COPY_TOO_LARGE past what herdr takes) or for a terminal outside tmux that honours OSC 52 as it ships, COPY_PBCOPY
-    on a Mac the screen is on (no SSH between them, tmux's last client included), else COPY_UNCONFIRMED."""
-    if in_herdr(environ) and not environ.get("TMUX"):
+    """How a copy of `size` bytes from the pager reaches the clipboard: COPY_OSC52 where herdr takes it
+    (`herdr_takes_osc52`; COPY_TOO_LARGE past what herdr takes) or for a terminal outside tmux that honours OSC 52 as
+    it ships, COPY_PBCOPY on a Mac the screen is on (no SSH between them, tmux's last client included), else
+    COPY_UNCONFIRMED."""
+    if herdr_takes_osc52(environ):
         return COPY_TOO_LARGE if herdr_drops(environ, size) else COPY_OSC52
     if terminal_name(environ) in OSC52_TERMINALS and not environ.get("TMUX"):
         return COPY_OSC52

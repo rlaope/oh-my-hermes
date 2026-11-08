@@ -1027,8 +1027,9 @@ All notable changes will be documented here.
   `pbcopy` and still say "copied", even for a person attached over SSH from
   another machine. In a herdr pane the copy now goes out as OSC 52, which
   herdr hands to its client's clipboard. A copy past the 192 KiB herdr takes
-  says it was only sent, and so does `/copy`. A tmux started inside the pane
-  keeps the tmux rule. Reported by @foxion37 in #2672.
+  says it was not copied, and so does `/copy`. A tmux, screen or zellij
+  started inside the pane, or another terminal opened from it, keeps its own
+  rule. Reported by @foxion37 in #2672.
 
 ## 4.0.6 - 2026-11-04
 
