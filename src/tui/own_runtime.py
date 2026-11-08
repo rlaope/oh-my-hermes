@@ -234,3 +234,68 @@ def _differs(target: Path, text: str) -> bool:
         return target.read_text(encoding="utf-8") != text
     except (OSError, UnicodeDecodeError):
         return True
+
+
+@dataclass(frozen=True)
+class TuiHomeStatus:
+    """What `omh doctor` and the menu bar say of the TUI home, read without building it (`tui_home_status`)."""
+
+    runtime: str  # the saved choice: `own` or `shared`
+    home: Path
+    exists: bool
+    built_from: str  # the root the marker names; "" without a marker
+    served: tuple[str, ...]
+    skill_count: int
+    clash_count: int
+    broken_links: tuple[str, ...]  # skills whose link resolves to nothing: the skill went since the last build
+    messaging_names: tuple[str, ...]  # `.env` names that are messaging credentials: never expected after a build
+    gateway_live: bool
+    gateway_pid: int | None
+    platforms: tuple[str, ...]  # adapters the TUI runtime's gateway reports connected: never expected
+
+    @property
+    def built(self) -> bool:
+        return bool(self.built_from)
+
+
+def tui_home_status(omh_home: Path, runtime: str | None) -> TuiHomeStatus:
+    """The TUI home as it is now, for the report surfaces; `runtime` is the saved choice (`read_runtime_choice`)."""
+    import json
+
+    from .bot_board import read_gateway
+
+    home = tui_home_path(omh_home)
+    exists = home.is_dir()
+    marker: dict[str, object] = {}
+    if exists:
+        try:
+            loaded = json.loads((home / MARKER_FILE).read_text(encoding="utf-8"))
+            marker = loaded if isinstance(loaded, dict) and loaded.get("schema_version") == MARKER_SCHEMA else {}
+        except (OSError, ValueError):
+            marker = {}
+    broken: list[str] = []
+    skills_dir = home / "skills"
+    if skills_dir.is_dir():
+        for entry in sorted(skills_dir.iterdir(), key=lambda p: p.name):
+            if entry.is_symlink() and not entry.exists():
+                broken.append(entry.name)
+    messaging: tuple[str, ...] = ()
+    if (home / ".env").is_file():
+        try:
+            _, messaging = scrub_env_text((home / ".env").read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            messaging = ()
+    gateway = read_gateway(home) if exists else None
+    served = marker.get("served")
+    skills = marker.get("skills")
+    clashes = marker.get("clashes")
+    return TuiHomeStatus(
+        runtime=runtime or "shared", home=home, exists=exists, built_from=str(marker.get("root") or ""),
+        served=tuple(str(name) for name in served) if isinstance(served, list) else (),
+        skill_count=len(skills) if isinstance(skills, list) else 0,
+        clash_count=len(clashes) if isinstance(clashes, list) else 0,
+        broken_links=tuple(broken), messaging_names=messaging,
+        gateway_live=bool(gateway is not None and gateway.live),
+        gateway_pid=gateway.pid if gateway is not None and gateway.live else None,
+        platforms=tuple(p.name for p in gateway.platforms if p.current) if gateway is not None and gateway.live else (),
+    )

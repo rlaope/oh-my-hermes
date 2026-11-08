@@ -1727,7 +1727,12 @@ cron and kanban are the TUI home's. The bot board keeps reading the bots'
 home. `omh --hermes-home` and `omh -p <profile>` stay on the home they name;
 `omh --resume <id>` of a session that lives on the shared gateway opens there
 and says so; `omh theme runtime shared` goes back. `omh-tui-home.json` in
-the home records what was built from what.
+the home records what was built from what. `omh update` rebuilds the home
+too (the plugin bundle it links moved with the update), `omh doctor` has an
+`omh_tui_runtime` row (which runtime, what the home was built from, how many
+skills, a messaging credential or adapter that should not be there, whether
+its gateway runs), and the menu bar's settings name the runtime and the TUI
+gateway's pid while it is live.
 
 When the OMH TUI cannot start, `omh` says why in one line on stderr and opens
 Hermes instead, so you lose the OMH screen, never the session. For a reason

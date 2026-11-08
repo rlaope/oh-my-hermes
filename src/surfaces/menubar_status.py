@@ -75,6 +75,7 @@ def build_menubar_status_payload(
         now=now,
     )
     settings = _settings(hud, hermes_agents, current_executor)
+    settings["tui_runtime"] = tui_runtime_setting(paths)
     return {
         "schema_version": MENUBAR_STATUS_SCHEMA_VERSION,
         "package": "oh-my-hermes",
@@ -435,6 +436,28 @@ def _settings(
             raw=f"dispatch_policy:{dispatch_policy}",
         ),
     }
+
+
+def tui_runtime_setting(paths: OmhPaths) -> dict[str, str]:
+    """Where bare `omh` opens its sessions (`omh theme runtime`), and whether the TUI's own gateway runs now.
+
+    `shared`: the Hermes gateway the bots use. `own`: a TUI-only Hermes home
+    under the OMH home (`tui/own_runtime.py`), its gateway's pid when it is
+    live. Read-only, from the saved choice, the home's marker and its record.
+    """
+    from ..skin_pack import RUNTIME_OWN, read_runtime_choice
+    from ..tui.own_runtime import tui_home_status
+
+    status = tui_home_status(paths.omh_home, read_runtime_choice(paths.omh_home))
+    if status.runtime != RUNTIME_OWN:
+        return _setting(value="shared", label="TUI runtime: shared gateway", raw="tui_runtime:shared")
+    if status.gateway_live:
+        label = f"TUI runtime: own (gateway pid {status.gateway_pid})"
+    elif status.built:
+        label = "TUI runtime: own (gateway idle)"
+    else:
+        label = "TUI runtime: own (home not built yet)"
+    return _setting(value="own", label=label, raw=f"tui_runtime:own:{status.gateway_pid or 0}")
 
 
 def _coding_handoff_source(current_executor_row: dict[str, Any], current_executor: str) -> str:

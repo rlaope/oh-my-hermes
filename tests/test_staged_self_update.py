@@ -2128,6 +2128,7 @@ class ManagedWorkflowRegistrationTests(unittest.TestCase):
                 patch.object(setup_commands, "cmd_install", return_value=0),
                 patch("omh.commands.setup._bootstrap_tui_surface", return_value={}),
                 patch("omh.commands.setup._refresh_installed_menubar_app", return_value=None),
+                patch("omh.commands.setup._refresh_tui_home", return_value=None),
                 patch("omh.commands.setup._registered_workflow_dir", return_value=current_skills),
                 patch.object(setup_commands, "install_plugin_bundle"),
                 patch("omh.commands.setup._apply_result", side_effect=apply_result),
