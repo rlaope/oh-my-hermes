@@ -5325,7 +5325,8 @@ Before calling the bot integration ready, verify these points:
   Hermes home that the bot uses. Without `--plan-file` the file holds only the
   generated scaffold: stdout reports `quality_gate.readiness:
   needs_reviewed_body`, `coding_handoff_ready: false`, `next_action:
-  record_reviewed_plan` and `decision_gate.acceptance_requires`, and
+  record_reviewed_plan` and `decision_gate.acceptance_requires` (the recorded
+  file's quality gate and next action say the same), and
   `omh hermes plan-accept` refuses the file with exit code 2 unless
   `--allow-scaffold` is passed.
 - That planning command does not create a runtime `run.json` or

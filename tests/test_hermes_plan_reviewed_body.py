@@ -112,6 +112,29 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             self.assertEqual(blocked["plan"]["quality_gate"]["readiness"], "needs_clarification")
             self.assertEqual(blocked["wrapper_contract"]["next_action"], "ask_clarification")
 
+    def test_the_recorded_scaffold_file_says_what_stdout_says(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            task = "implement durable observation journal with tests"
+            _, scaffold, _ = self._run(root, "hermes", "plan", "--record", task)
+            self.assertEqual(scaffold["plan"]["deep_interview"]["after_answer_next_action"], "record_reviewed_plan")
+            self.assertEqual(
+                scaffold["wrapper_contract"]["deep_interview"]["after_answer_next_action"], "record_reviewed_plan"
+            )
+            text = Path(scaffold["artifact"]["path"]).read_text(encoding="utf-8")
+            self.assertIn("- Readiness: `needs_reviewed_body`", text)
+            self.assertIn("- Coding handoff ready: `false`", text)
+            self.assertIn("- Next action: `record_reviewed_plan`", text)
+            self.assertNotIn("ready_for_acceptance", text)
+            self.assertNotIn("accept_or_revise_plan", text)
+
+            body = root / "reviewed.md"
+            body.write_text(REVIEWED, encoding="utf-8")
+            _, reviewed, _ = self._run(root, "hermes", "plan", "--record", "--plan-file", str(body), task)
+            self.assertEqual(reviewed["plan"]["deep_interview"]["after_answer_next_action"], "accept_or_revise_plan")
+            reviewed_text = Path(reviewed["artifact"]["path"]).read_text(encoding="utf-8")
+            self.assertNotIn("needs_reviewed_body", reviewed_text)
+
     def test_re_accepting_an_accepted_scaffold_is_not_a_failure(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
