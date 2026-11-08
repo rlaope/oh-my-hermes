@@ -38,6 +38,8 @@ from tools.test_sharding.aggregate import QUARANTINE_KEY, load_plan
 
 _ExcInfo = tuple[type[BaseException], BaseException, types.TracebackType]
 
+_OUTCOME_RANKS: Final = {"passed": 0, "skipped": 1, "failure": 2, "error": 3}
+
 # Worker mode is internal: the parent spawns `run.py --worker` and talks to it
 # over the worker's original stdin/stdout. Every protocol line carries this
 # marker so anything else that reaches that pipe (a grandchild process that
@@ -77,37 +79,59 @@ class RecordingResult(unittest.TextTestResult):
         self.durations: dict[str, float] = {}
         self._started = 0.0
 
+    @staticmethod
+    def _parent_id(test: unittest.TestCase) -> str:
+        parent = getattr(test, "test_case", None)
+        return parent.id() if isinstance(parent, unittest.TestCase) else test.id()
+
+    def _record_outcome(self, test: unittest.TestCase, outcome: str) -> None:
+        test_id = self._parent_id(test)
+        current = self.outcomes.get(test_id)
+        if current is None or _OUTCOME_RANKS[outcome] > _OUTCOME_RANKS[current]:
+            self.outcomes[test_id] = outcome
+
     def startTest(self, test: unittest.TestCase) -> None:
         self._started = time.monotonic()
         super().startTest(test)
 
     def stopTest(self, test: unittest.TestCase) -> None:
-        self.durations[test.id()] = time.monotonic() - self._started
+        self.durations[self._parent_id(test)] = time.monotonic() - self._started
         super().stopTest(test)
 
     def addSuccess(self, test: unittest.TestCase) -> None:
-        self.outcomes[test.id()] = "passed"
+        self._record_outcome(test, "passed")
         super().addSuccess(test)
 
     def addFailure(self, test: unittest.TestCase, err: _ExcInfo) -> None:
-        self.outcomes[test.id()] = "failure"
+        self._record_outcome(test, "failure")
         super().addFailure(test, err)
 
     def addError(self, test: unittest.TestCase, err: _ExcInfo) -> None:
-        self.outcomes[test.id()] = "error"
+        self._record_outcome(test, "error")
         super().addError(test, err)
 
     def addSkip(self, test: unittest.TestCase, reason: str) -> None:
-        self.outcomes[test.id()] = "skipped"
+        self._record_outcome(test, "skipped")
         super().addSkip(test, reason)
 
     def addExpectedFailure(self, test: unittest.TestCase, err: _ExcInfo) -> None:
-        self.outcomes[test.id()] = "passed"
+        self._record_outcome(test, "passed")
         super().addExpectedFailure(test, err)
 
     def addUnexpectedSuccess(self, test: unittest.TestCase) -> None:
-        self.outcomes[test.id()] = "failure"
+        self._record_outcome(test, "failure")
         super().addUnexpectedSuccess(test)
+
+    def addSubTest(
+        self,
+        test: unittest.TestCase,
+        subtest: unittest.TestCase,
+        err: _ExcInfo | tuple[None, None, None] | None,
+    ) -> None:
+        super().addSubTest(test, subtest, err)
+        if err is not None and err[0] is not None:
+            is_failure = issubclass(err[0], test.failureException)
+            self._record_outcome(test, "failure" if is_failure else "error")
 
 
 def load_plan_ids(plan_path: Path, shard: int | None) -> tuple[str, list[str]]:
@@ -221,7 +245,7 @@ def run_unit(test_ids: list[str], channel: IO[bytes]) -> dict[str, JsonValue]:
     return {
         "outcomes": dict(result.outcomes),
         "durations": dict(result.durations),
-        "failures": len(result.failures),
+        "failures": len(result.failures) + len(result.unexpectedSuccesses),
         "errors": len(result.errors),
     }
 
@@ -421,7 +445,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.workers == 1 or kind == "quarantine":
         result = unittest.TextTestRunner(resultclass=RecordingResult, verbosity=1).run(suite)
         payload = result_payload(target, planned, result.outcomes, result.durations)
-        failures, errors = len(result.failures), len(result.errors)
+        failures, errors = len(result.failures) + len(result.unexpectedSuccesses), len(result.errors)
     else:
         started = time.monotonic()
         merged = run_parallel(plan_units(suite), args.workers, worker_command(args.start_dir))

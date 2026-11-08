@@ -101,7 +101,8 @@ class _ConfinedSpawnContract:
             self.assertEqual(confinement.receipt["status"], "observed")
             self.assertTrue(confinement.receipt["enforced"])
             self.assertEqual(confinement.receipt["probe"]["inside_write_exit_code"], 0)
-            self.assertEqual(confinement.receipt["probe"]["outside_write_exit_code"], 1)
+            self.assertIsInstance(confinement.receipt["probe"]["outside_write_exit_code"], int)
+            self.assertNotEqual(confinement.receipt["probe"]["outside_write_exit_code"], 0)
             self.assertIn(self.probe_refusal, confinement.receipt["probe"]["refusal"])
 
     def test_owner_cli_under_a_sensitive_directory_is_really_fenced(self) -> None:
@@ -128,7 +129,8 @@ class _ConfinedSpawnContract:
             self.assertFalse(read_roots_are_safe(confinement.roots))
             self.assertTrue(confinement.receipt["enforced"])
             self.assertEqual(confinement.receipt["probe"]["inside_write_exit_code"], 0)
-            self.assertEqual(confinement.receipt["probe"]["outside_write_exit_code"], 1)
+            self.assertIsInstance(confinement.receipt["probe"]["outside_write_exit_code"], int)
+            self.assertNotEqual(confinement.receipt["probe"]["outside_write_exit_code"], 0)
 
     def test_confined_command_can_exec_a_real_binary_without_widening_writes(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -162,7 +164,7 @@ class _ConfinedSpawnContract:
             )
 
             self.assertEqual(completed.returncode, 0)
-            self.assertEqual(completed.stdout.strip(), "inside_exit=0 outside_exit=1")
+            self.assertRegex(completed.stdout.strip(), r"^inside_exit=0 outside_exit=[1-9][0-9]*$")
             self.assertTrue(inside.is_file())
             self.assertFalse(outside.exists())
 

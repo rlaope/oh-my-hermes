@@ -928,8 +928,10 @@ def answering_cursor_requests(terminal) -> None:  # type: ignore[no-untyped-def]
 @unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
 class RealLoopTests(AppTestCase):
     def test_in_the_real_loop_sgr_reports_drag_copy_without_the_rail_and_the_wheel_opens_the_view(self) -> None:
-        run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=startup_answers()),
-                           env={"OMH_TUI_MOUSE": "1", "TERM": "xterm-kitty"})
+        run = self.prepare(
+            Scenario("session", spans("session", "startup", "create", "plain_turn"), answers=startup_answers()),
+            env={"OMH_TUI_MOUSE": "1", "TERM": "xterm-kitty"},
+        )
         terminal = run.terminal
         drag = Step(capture="dragged", label="a drag over the typed prompt")
         aimed: list[int] = []
@@ -957,6 +959,7 @@ class RealLoopTests(AppTestCase):
             Step(b"\x04", when=lambda: not terminal.screen.alternate, label="the end"),
         )
         self.run_main(run)
+        self.assert_clean_run(run)
         copies = [text for text in terminal.screen.osc if text.startswith("52;c;")]
         self.assertEqual([base64.b64decode(text[5:].rstrip("\x07")).decode() for text in copies], ["❯ copy me"])
         self.assertIn("copy me", "\n".join(terminal.captures["view"]))

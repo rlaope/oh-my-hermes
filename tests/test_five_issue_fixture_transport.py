@@ -7,6 +7,7 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -16,6 +17,7 @@ from unittest.mock import patch
 
 from _local_package import load_local_package
 load_local_package()
+from _verification_python import SHORT_INTERPRETER_CHARS
 from omh.coding.executor_readiness import negotiate_session_capability, observe_session_binary
 from omh.coding.fanout_capacity import AdmissionBinding, OwnerLaunchGate
 from omh.coding.fanout_dispatch import signal_safe_unit_runner
@@ -196,16 +198,39 @@ class FixtureTransportTests(unittest.TestCase):
                     captured.extend(str(command) for command in commands)
             return real_build(goal, units)
 
-        with patch.object(diagnostics, 'build_fanout_contract', capture):
+        # The fixtures' interpreter budget (`_verification_python`): a longer base interpreter would crowd the
+        # command's cap, so `sys.executable` stands in for it.
+        base_python = getattr(sys, "_base_executable", sys.executable)
+        if len(base_python) > SHORT_INTERPRETER_CHARS or not Path(base_python).exists():
+            base_python = sys.executable
+
+        with (
+            patch.object(diagnostics, 'build_fanout_contract', capture),
+            patch.object(diagnostics, 'verification_python_path', return_value=base_python),
+        ):
             result = diagnostics.run_case('D5', verification_newline='\r\n')
         self.assertTrue(result['pass'], result['observations'])
         self.assertEqual(len(captured), 1)
         command = captured[0]
         checkout = str(Path(__file__).resolve().parents[1])
-        self.assertNotIn(checkout, command)
+        argv = shlex.split(command)
+        self.assertEqual(argv[0], base_python)
+        self.assertNotIn(checkout, argv[1])
         # Headroom for a checkout far deeper than this one, measured rather
         # than assumed: the command may not consume the whole cap.
         self.assertLess(len(command), MAX_UNIT_VERIFICATION_COMMAND_CHARS - 40)
+
+    def test_diagnostics_fixture_survives_isolated_home_without_codex_state(self) -> None:
+        from five_issue_cases import diagnostics
+
+        with TemporaryDirectory(prefix='isolated-home-') as home_dir:
+            home = Path(home_dir)
+            with patch.dict(os.environ, {'HOME': str(home)}):
+                _ = os.environ.pop('CODEX_HOME', None)
+                result = diagnostics.run_case('D5')
+            self.assertTrue(result['pass'], result['observations'])
+            self.assertTrue(result['cleanup']['verified_absent'])
+            self.assertFalse((home / '.codex').exists())
 
 
 if __name__ == '__main__':

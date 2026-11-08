@@ -1020,6 +1020,17 @@ All notable changes will be documented here.
   session row and its auxiliary calls across compaction segments, and `—`
   for any figure nothing reported. Contributed by @yqm-307 (#2665).
 
+- **Vim NORMAL in the OMH TUI takes quoted text objects.** With
+  `display.vim_mode` on, `d`, `c` and `y` take `i` or `a` with a double
+  quote, single quote or backtick (`di"`, `ca'`, `yi` and a backtick), on
+  one line. Inner takes what is between the quotes, and with a count of 2 or
+  more the quotes too; around takes the quotes and the blanks after them, or
+  before them when none follow. A quote after a backslash does not close the
+  pair, and a missing pair changes nothing. The second Ctrl+C of an exit now
+  leaves over any half-typed command, and Esc over a pending find holds a
+  waiting `continue` as it does over any other command. Contributed by
+  @DanRioDev (#2668).
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and

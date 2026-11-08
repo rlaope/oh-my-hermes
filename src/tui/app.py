@@ -4562,6 +4562,12 @@ class App(ModesMixin, AgentViewMixin):
             self.composer._drop_pending()  # the picker owns input, including display keys that return below
         if self._display_key(event):
             return
+        if isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c" and (
+            self.composer.pending and self._exit_said()
+        ):
+            # The second Ctrl+C exits over a half-typed command too (a find target, an operator, a count). Any other
+            # Ctrl+C over one only drops it, as in Vim; over the leader it does what it does unarmed (below).
+            self.composer._drop_pending()
         if self.slot is None and self.composer.normal and self.composer._prefix in ("f", "F", "t", "T") and (
             self._front_picker() is None
         ):
@@ -4569,6 +4575,9 @@ class App(ModesMixin, AgentViewMixin):
             if self.picker is not None and self._picker_arms(event):
                 self.composer._drop_pending()
                 self._picker_key(event)
+                return
+            if isinstance(event, Key) and event.name == ESCAPE:
+                self._escape(event)  # drops the target as any pending command's Esc does, holding a waiting continue
                 return
             if isinstance(event, Paste):
                 self.composer._drop_pending()

@@ -409,6 +409,43 @@ def _first_blank_free(units: Sequence[str], start: int, end: int) -> int:
     return index if index < end else max(end - 1, start)
 
 
+_QUOTE_CHARS = ('"', "'", "`")
+
+
+def _backslashes_before(units: Sequence[str], line_start: int, index: int) -> int:
+    """How many backslashes run back from just before `index`, not past `line_start`."""
+    count = 0
+    at = index - 1
+    while at >= line_start and units[at] == "\\":
+        count += 1
+        at -= 1
+    return count
+
+
+def _raw_quote(units: Sequence[str], start: int, line_end: int, quote: str) -> int | None:
+    """The first `quote` from `start` before `line_end`, escaped or not."""
+    at = start
+    while at < line_end:
+        if units[at] == quote:
+            return at
+        at += 1
+    return None
+
+
+def _closing_quote(units: Sequence[str], start: int, line_end: int, quote: str) -> int | None:
+    """The first `quote` from `start` before `line_end` that no backslash escapes."""
+    at = start
+    while at < line_end:
+        unit = units[at]
+        if unit == "\\":
+            at += 2
+            continue
+        if unit == quote:
+            return at
+        at += 1
+    return None
+
+
 @dataclass(frozen=True)
 class _Register:
     """What a NORMAL deletion, change or yank took, for `p` and `P`: the text, its chips and images, and whether it
@@ -787,6 +824,12 @@ class Composer:
                 return self._normal_char(event.char)
             self._drop_pending()
             return NOTHING
+        if self._operator and self._prefix in ("i", "a"):
+            if event.name == CHAR and not (event.ctrl or event.alt):
+                return self._normal_char(event.char)
+            self._drop_pending()
+            # A legacy Alt chord is Esc and the key in one read: the Esc drops the object, then the key is a fresh one.
+            return self._normal_char(event.char) if legacy_alt else NOTHING
         if is_leader_key(event) and not (self._operator or self._prefix):
             self._drop_pending()  # a count does not carry into a leader sequence
             self._leader = True
@@ -862,6 +905,8 @@ class Composer:
             self._drop_pending()
             if char == "w" and operator:
                 self._operate_span(operator, self._text_object_span(prefix, count))
+            elif char in _QUOTE_CHARS and operator:
+                self._operate_span(operator, self._quote_object_span(prefix, count, char))
             return NOTHING
         if prefix == "r":
             self._replace_chars(char, self._take_count() or 1)
@@ -1097,6 +1142,70 @@ class Composer:
                 while start > line_start and units[start - 1] in WORD_BREAKS:
                     start -= 1
         return start, end
+
+    def _quote_object_span(self, descriptor: str, times: int, q: str) -> tuple[int, int] | None:
+        """Line-local quoted text object (`i` or `a` with `"`, `'`, or `` ` ``) using atom indexes."""
+        if descriptor not in ("i", "a") or q not in _QUOTE_CHARS:
+            return None
+        units, _bounds, index = self._atoms()
+        line_start, line_end = _line_of(units, index)
+
+        if index < line_end and units[index] == q:
+            # On a quote: the pair, enumerated from the line's start, that holds the caret.
+            found_pair: tuple[int, int] | None = None
+            scan_pos = line_start
+            while scan_pos < line_end:
+                open_pos = _raw_quote(units, scan_pos, line_end, q)
+                if open_pos is None:
+                    break
+                close_pos = _closing_quote(units, open_pos + 1, line_end, q)
+                if close_pos is None:
+                    break
+                if open_pos <= index <= close_pos:
+                    found_pair = (open_pos, close_pos)
+                    break
+                scan_pos = close_pos + 1
+            if found_pair is None:
+                return None
+            open_idx, close_idx = found_pair
+        else:
+            # Off a quote: the nearest unescaped one strictly before the caret opens, else the line's first.
+            cand = index - 1
+            open_idx: int | None = None
+            while cand >= line_start:
+                if units[cand] == q and (_backslashes_before(units, line_start, cand) % 2 == 0):
+                    open_idx = cand
+                    break
+                cand -= 1
+            if open_idx is None:
+                open_idx = _raw_quote(units, line_start, line_end, q)
+            if open_idx is None:
+                return None
+            close_idx = _closing_quote(units, open_idx + 1, line_end, q)
+            if close_idx is None:
+                return None
+
+        if descriptor == "i":
+            if times >= 2:
+                return open_idx, close_idx + 1
+            return open_idx + 1, close_idx
+
+        # descriptor == "a"
+        # Includes delimiters plus contiguous trailing ASCII space/tab run;
+        # only if no trailing run, include contiguous preceding ASCII space/tab run.
+        start = open_idx
+        end = close_idx + 1
+        trailing_end = end
+        while trailing_end < line_end and units[trailing_end] in _BLANKS:
+            trailing_end += 1
+
+        if trailing_end > end:
+            return start, trailing_end
+
+        leading_start = start
+        while leading_start > line_start and units[leading_start - 1] in _BLANKS:
+            leading_start -= 1
+        return leading_start, end
 
     def _operate(self, operator: str, motion: str, times: int) -> None:
         """`d`, `c` or `y` over `motion` (`times` of it), or over `times` whole lines when `motion` is the operator."""
