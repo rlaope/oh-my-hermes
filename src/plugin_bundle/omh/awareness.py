@@ -7373,32 +7373,40 @@ def awareness_workflow_context_markdown(skill_name: str) -> str:
     )
 
 
+# The cue, card and checkpoint lines name each skill by the label `skill_view`
+# loads, written out because this bundle cannot import `omh` to derive it; the
+# per-turn primer carries these lines as they are, with no render pass.
 def _compact_workflow_cue_line() -> str:
     return (
-        "notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, "
-        "feedback-triage, report-package, or img-summary; papers -> paper-learning; sources/news -> research/research-department; "
-        "premium visuals -> design-quality-gate; frontend -> frontend; accessibility/WCAG -> accessibility-audit; screenshots/render -> visual-qa; files/docs -> materials/report-package; image cards -> img-summary; "
-        "failed checks -> build-failure-triage; code/CI/merge -> ultrawork/code-review/verification-gate; "
-        "agent failure/drift -> agent-debug; hidden failures -> failure-signal-audit; lessons -> instinct-ledger; regression -> workflow-learning"
+        "notes/retros -> omh-operating-rhythm/omh-meeting-brief; PR/issue/bug/feedback/release -> omh-github-event-ops, "
+        "omh-feedback-triage, omh-report-package, or omh-image-cards; papers -> omh-paper-learning; "
+        "sources/news -> ulw-research/omh-research-department; premium visuals -> omh-design-quality-gate; "
+        "frontend -> omh-frontend; accessibility/WCAG -> omh-accessibility-audit; screenshots/render -> omh-visual-qa; "
+        "files/docs -> omh-materials-package/omh-report-package; image cards -> omh-image-cards; "
+        "failed checks -> omh-build-failure-triage; code/CI/merge -> ulw-work/omh-code-review/omh-verification-gate; "
+        "agent failure/drift -> omh-agent-debug; hidden failures -> omh-failure-signal-audit; lessons -> omh-instinct-ledger; "
+        "regression -> omh-workflow-learning"
     )
 
 
 def _compact_workflow_context_cards_line() -> str:
     return (
-        "intent -> deep-interview/ralplan/codebase-onboarding/codegraph-refresh/loop; "
-        "signals -> research/research-department/feedback-triage; "
-        "materials -> design-quality-gate/frontend/accessibility-audit/visual-qa/materials-package; "
-        "ops -> automation/workspace/production/context-budget/agent-debug/failure-signal-audit/instinct-ledger/skill-health/learning/doctor; "
-        "eval/rules -> agent-evaluation/rules-distill; "
-        "code -> ultrawork/code-review/build-failure-triage/verification-gate/ultraqa"
+        "intent -> ulw-interview/ulw-plan/omh-codebase-onboarding/omh-codegraph-refresh/ulw-loop; "
+        "signals -> ulw-research/omh-research-department/omh-feedback-triage; "
+        "materials -> omh-design-quality-gate/omh-frontend/omh-accessibility-audit/omh-visual-qa/omh-materials-package; "
+        "ops -> omh-automation-blueprint/omh-workspace-audit/omh-production-audit/omh-context-budget-review/omh-agent-debug/"
+        "omh-failure-signal-audit/omh-instinct-ledger/omh-skill-health/omh-workflow-learning/omh-doctor; "
+        "eval/rules -> omh-agent-evaluation/omh-rules-distill; "
+        "code -> ulw-work/omh-code-review/omh-build-failure-triage/omh-verification-gate/ulw-qa"
     )
 
 
 def _compact_generic_tool_checkpoint_line() -> str:
     return (
-        "image->img-summary; frontend->frontend/accessibility-audit/visual-qa; paper->paper-learning; content->content-operator; media->media-input-operator; file->materials-package; "
-        "search->research; live->live-info-operator; audit->workspace-audit/production-audit/security-safety-review; "
-        "failures->build-failure-triage; verify->verification-gate; code->codegraph-refresh/codebase-onboarding/ultrawork"
+        "image->omh-image-cards; frontend->omh-frontend/omh-accessibility-audit/omh-visual-qa; paper->omh-paper-learning; "
+        "content->omh-content-operator; media->omh-media-input; file->omh-materials-package; "
+        "search->ulw-research; live->omh-live-info; audit->omh-workspace-audit/omh-production-audit/omh-security-safety-review; "
+        "failures->omh-build-failure-triage; verify->omh-verification-gate; code->omh-codegraph-refresh/omh-codebase-onboarding/ulw-work"
     )
 
 

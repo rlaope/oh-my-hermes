@@ -397,7 +397,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # moves, and the pin before it was d4eb4e54...7ed7.
         # ralplan's acceptance line says plan-accept refuses a scaffold-only file unless
         # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91.
-        self.assertEqual(_digest(legacy_hashes), '51d4a5cf229d2cf9cef491bf969e17a0524619b053ba13a5c216cd1082aa9f51')
+        # show-reel then sends its paid calls through spend-gate, and spend-gate counts subscription
+        # credits as a spend; only those two move. Its review round (credits read from the provider's
+        # own price, the credits receipt, the gate named at every paid run step) moves the same two.
+        # Merged with main after #2652: both sides' bodies; main's pin before that merge was
+        # b36ad311...1e91, and this branch's was f30c9ae0...ca61. Merged again after #2650: main's
+        # pin was 51d4a5cf...9f51, and this branch's was a5bce194...90de.
+        self.assertEqual(_digest(legacy_hashes), '62bebac1a0b2d516c936f3966ec321cdee21c66815b6b477b618473eda7abd0b')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -447,7 +453,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
-            'awareness_primer_markdown_chars': 3685,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55).
+            'awareness_primer_markdown_chars': 3973,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49) and on the card and cue lines (+239).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,
             'role_context_chars_max': 2600,
