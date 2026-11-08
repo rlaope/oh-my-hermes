@@ -13,6 +13,7 @@ from ..hermes_planning import (
     update_hermes_plan_status,
     apply_reviewed_body_to_payload,
     mark_payload_as_planning_input,
+    mark_payload_as_scaffold_record,
     outside_repository_targets,
     outside_targets_note,
     read_plan_file,
@@ -95,6 +96,7 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
                 if outside:
                     payload["say"] = " ".join(filter(None, (str(payload.get("say", "")), outside_targets_note(outside))))
             elif reviewed_body is None:
+                mark_payload_as_scaffold_record(payload)
                 payload["say"] = (
                     "Recorded the generated scaffold only; the reviewed plan is not in the file. "
                     "Re-run with --plan-file <reviewed-plan.md> to record it; plan-accept refuses this file "

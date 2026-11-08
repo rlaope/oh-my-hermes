@@ -82,6 +82,48 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             self.assertIn("generated scaffold on purpose", accepted["say"])
             self.assertIn("scaffold", accepted["journal_event"]["summary"])
 
+    def test_a_scaffold_record_is_not_ready_for_acceptance_in_the_machine_fields(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            task = "implement durable observation journal with tests"
+            _, scaffold, _ = self._run(root, "hermes", "plan", "--record", task)
+            contract = scaffold["wrapper_contract"]
+            self.assertEqual(scaffold["plan"]["status"], "draft")
+            self.assertEqual(scaffold["plan"]["quality_gate"]["readiness"], "needs_reviewed_body")
+            self.assertFalse(scaffold["plan"]["quality_gate"]["coding_handoff_ready"])
+            self.assertEqual(contract["quality_gate"]["readiness"], "needs_reviewed_body")
+            self.assertEqual(contract["next_action"], "record_reviewed_plan")
+            self.assertEqual(
+                contract["decision_gate"]["acceptance_requires"],
+                {"plan_body": "reviewed", "record_with": "--plan-file", "accept_scaffold_with": "--allow-scaffold"},
+            )
+
+            body = root / "reviewed.md"
+            body.write_text(REVIEWED, encoding="utf-8")
+            _, reviewed, _ = self._run(root, "hermes", "plan", "--record", "--plan-file", str(body), task)
+            self.assertEqual(reviewed["plan"]["quality_gate"]["readiness"], "ready_for_acceptance")
+            self.assertEqual(reviewed["wrapper_contract"]["next_action"], "prepare_coding_delegation_after_plan_acceptance")
+            self.assertNotIn("acceptance_requires", reviewed["wrapper_contract"]["decision_gate"])
+
+            _, unrecorded, _ = self._run(root, "hermes", "plan", task)
+            self.assertEqual(unrecorded["plan"]["quality_gate"]["readiness"], "ready_for_acceptance")
+
+            _, blocked, _ = self._run(root, "hermes", "plan", "--record", "help")
+            self.assertEqual(blocked["plan"]["quality_gate"]["readiness"], "needs_clarification")
+            self.assertEqual(blocked["wrapper_contract"]["next_action"], "ask_clarification")
+
+    def test_re_accepting_an_accepted_scaffold_is_not_a_failure(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, payload, _ = self._run(root, "hermes", "plan", "--record", "Move sessions")
+            path = payload["artifact"]["path"]
+            self.assertEqual(self._run(root, "hermes", "plan-accept", "--allow-scaffold", path)[0], 0)
+            status, again, stderr = self._run(root, "hermes", "plan-accept", path)
+            self.assertEqual((status, stderr), (0, ""))
+            self.assertEqual(again["artifact"]["status"], "accepted")
+            self.assertFalse(again["reviewed_body"])
+            self.assertIn("accepted earlier", again["say"])
+
     def test_allow_scaffold_changes_nothing_for_a_reviewed_plan(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
