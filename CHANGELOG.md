@@ -190,6 +190,12 @@ All notable changes will be documented here.
   stay an answer. A token leaves the end of an answer only after
   sentence-ending punctuation, so `The marker - [SILENT]` stays as written.
 
+- **A spend whose cost is unknown is checked against a cap in its own units.**
+  The spend-gate rails page now names the spend-only cap the credits rule
+  points to. When no price gives a call's credits or cost, the person sets
+  that cap in the call's own units (images, characters or seconds), and the
+  call runs only when its planned count fits.
+
 - **A queued line in the OMH TUI no longer starts ahead of a steer Hermes
   passes on as its next prompt.** When a turn ends on its own with a steer
   unread, the queue waits for the turn that runs it. If none starts, because
