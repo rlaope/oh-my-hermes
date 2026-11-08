@@ -4776,10 +4776,10 @@ def _score_definition(
         matched.add("direct:llm_app_dev")
     # `리스크` and `블로커` are held back one by one, so either word alone names
     # nothing; said together, in any order or joiner, they are this review's pair.
-    # Each must open a word: a cue match on the spaceless copy would find `리스크`
-    # across `갤러리 스크린샷`.
+    # Each must sit inside one token (`리스크블로커`, `주요리스크와` included): a cue
+    # match on the spaceless copy would find `리스크` across `갤러리 스크린샷`.
     if definition.name == "ops-review" and all(
-        any(token.startswith(word) for token in query_tokens) for word in _OPS_REVIEW_KOREAN_PAIR
+        any(word in token for token in query_tokens) for word in _OPS_REVIEW_KOREAN_PAIR
     ):
         score += 12
         matched.add("direct:ops_review_risks_and_blockers")

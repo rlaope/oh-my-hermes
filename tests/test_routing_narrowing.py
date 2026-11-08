@@ -84,7 +84,7 @@ class OpsReviewPairTests(unittest.TestCase):
         return recommend_skills(message, limit=1)[0]
 
     def test_both_words_in_any_order_or_joiner_name_the_review(self) -> None:
-        for message in ("이번 주 리스크와 블로커 정리해줘", "블로커, 리스크 정리", "블로커랑 리스크 알려줘"):
+        for message in ("이번 주 리스크와 블로커 정리해줘", "블로커, 리스크 정리", "블로커랑 리스크 알려줘", "리스크블로커 정리", "주요리스크와 블로커"):
             with self.subTest(message=message):
                 top = self._top(message)
                 self.assertEqual(top["skill"], "ops-review")
@@ -96,7 +96,7 @@ class OpsReviewPairTests(unittest.TestCase):
                 self.assertNotIn(self._PAIR, self._top(message)["matched"])
 
     def test_a_word_only_spelled_across_other_words_is_not_the_pair(self) -> None:
-        # `갤러리 스크린샷` holds `리스크` once the spaces go; a word must open with it.
+        # `갤러리 스크린샷` holds `리스크` once the spaces go; each word must sit inside one token.
         for message in (
             "갤러리 스크린샷 블로커 정리해줘",
             "디렉토리 스크롤 블로커 알려줘",

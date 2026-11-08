@@ -258,7 +258,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # before an add-tests request keeps ultrawork, and two reports quoting
         # the user's own migrate / rewrite ask reach workflow-learning.
         # systematic-review adds four screening requests and two owner-keeping controls.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1279)
+        # The ops-review pair keeps `리스크블로커` and `주요리스크와 블로커`.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1281)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

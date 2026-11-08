@@ -1601,7 +1601,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # six requests that its named reach phrases carry. Its review adds what the narrowing must leave reaching.
             # Its re-review adds the stock and time lookups, a search through a web search connection, the risk and
             # blocker pair in either order, a repeat schedule, and a softened market request.
-            expected=1279,
+            # The ops-review pair's follow-up adds the pair written as one word and inside a longer word, which a
+            # word-opening rule lost.
+            expected=1281,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
