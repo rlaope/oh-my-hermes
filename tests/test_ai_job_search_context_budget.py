@@ -395,7 +395,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # before it was 0ae5f905...ebc5f.
         # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
         # moves, and the pin before it was d4eb4e54...7ed7.
-        self.assertEqual(_digest(legacy_hashes), 'b36ad311864b8b059524a780f9b4fdb0e9aad74acaa0f1c9384278cc1bf81e91')
+        # ralplan's acceptance line says plan-accept refuses a scaffold-only file unless
+        # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91.
+        self.assertEqual(_digest(legacy_hashes), '51d4a5cf229d2cf9cef491bf969e17a0524619b053ba13a5c216cd1082aa9f51')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

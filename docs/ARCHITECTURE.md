@@ -734,7 +734,7 @@ is the adapter contract for calling
 after plan acceptance. Its `--executor` value is the setup profile's default
 executor, else `generic`; `--from-plan` without `--executor` resolves the same
 default as a plain `omh coding delegate`, and selects Codex only when Codex is
-named. `omh coding delegate --from-plan` rejects draft plans by
+named or is the setup profile's default executor. `omh coding delegate --from-plan` rejects draft plans by
 default and uses the accepted artifact or generated context pack as executor
 context; a run-backed Codex handoff and a future `runtime.run.run_id` come
 from `--executor codex`. Blocked or non-coding plans keep `coding_delegate.available`
@@ -1866,8 +1866,10 @@ critic review was observed; it says nothing about whether the body is a scaffold
 The front-matter key `plan_body` says that: `scaffold` (generated sections),
 `reviewed` (the caller's own plan, recorded with `--plan-file`, which replaces the
 generated sections and is a claim by the caller, not a verification), or absent
-(an older file, state unknown). `--plan-file ... --input-bundle` records planning
-input as `hermes_plan_input/v1`, which `plan-accept` refuses.
+(an older file, state unknown). `plan-accept` refuses a `scaffold` file unless
+`--allow-scaffold` is passed, so a scaffold is never accepted as the plan by
+accident. `--plan-file ... --input-bundle` records planning input as
+`hermes_plan_input/v1`, which `plan-accept` refuses.
 
 The plan body and stdout payload include `quality_gate` and `deep_interview`
 blocks. `quality_gate` names readiness, pass conditions, and evidence that must
