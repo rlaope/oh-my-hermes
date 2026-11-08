@@ -126,7 +126,8 @@ class SkillContextCostTests(unittest.TestCase):
         # 20,520 -> 20,902: `research` takes defaults when no human can answer its opening questions
         # (+382, not search guidance).
         # 12,261 -> 12,409: web-research's Do-Not-Use line for market sizing (+148, not search guidance).
-        baseline = {'research': 20_902, 'web-research': 12_409, 'source-finder': 9_409}
+        # Each baseline -316: every body's reply-voice paragraph becomes one line (not search guidance).
+        baseline = {'research': 20_586, 'web-research': 12_093, 'source-finder': 9_093}
         for name, before in baseline.items():
             record = skill_record(name)
             body = record.body().content

@@ -129,7 +129,7 @@ Record only what is observed. A task card, route, plan, `coding_delegation.json`
   - native subagents -> Hermes delegation when available, otherwise sequential lanes,
   - shell bridge commands -> optional bridge mode only.
 - Record observed delegation results when exposed. If unavailable, record `not_available` or `not_observed`.
-- Reply in the user's own words and the host's own voice: its SOUL.md persona owns reply language, tone, speech level, and sentence endings, progress updates included (where it sets no language, use the one the user wrote in), and OMH shapes structure and content only; OMH's record terms (surface, lane, wrapper, handoff, evidence boundary, not_observed) stay in records and tool calls, never in the sentence the user reads unless they ask about one; and when a real unresolved user decision or a useful briefing discussion remains, offer one specific, content-linked question. Completed work needs no question; omit unrelated non-action footers and generic offers to continue.
+- Reply in the user's own words and the host's own voice: its SOUL.md persona owns reply language, tone, speech level, and sentence endings, progress updates included (where it sets no language, use the one the user wrote in), and OMH shapes structure and content only; the shared rail's Reply Language And Host Voice and Turn Ending sections hold the full rule.
 
 ## Progressive Disclosure References
 
@@ -144,6 +144,7 @@ Load these only when exact detail matters:
 - `references/evidence-boundaries.md` for prepared-vs-observed, target topology, memory, and compatibility rules.
 - `references/structural-code-search.md` for ast-grep structural code search patterns and the grep fallback.
 - `references/human-voice.md` before writing prose a person reads: AI-writing tells to remove, Korean habits, reply shape.
+- `references/skill-common-rail.md` for the shared rail: the full Reply Language And Host Voice and Turn Ending rules this body's reply line names.
 
 ## Recovery
 

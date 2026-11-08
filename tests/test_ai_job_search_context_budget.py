@@ -34,7 +34,8 @@ INDEX_DELTA_CAP = 86  # One 85-character line and its joining newline.
 FULL_ROW_DELTA_CAP = 3072  # One 3070-character JSON row + comma/space.
 STANDALONE_ROW_DELTA_CAP = 935  # One 933-character row + comma/space.
 REGISTRY_DELTA_CAP = 244  # 227-character trigger row + 17-character role entry.
-REPEATED_DELTA_CAP = 1943  # Workflow Lane 497 + Runtime Evidence 1446.
+# 1943 -> 1627: the Runtime Evidence reply-voice paragraph became one line (1446 -> 1130).
+REPEATED_DELTA_CAP = 1627  # Workflow Lane 497 + Runtime Evidence 1130.
 
 
 def _digest(value: object) -> str:
@@ -156,8 +157,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 537829 -> 538004 and the digest re-derived: a coding-owner choice counts only for the request it was
             # made in, in the dag-ulw and maestro rows (+175, itemized at the same limit); the pin before it was
             # c5c17f84...2eb0.
-            (skill_capabilities, 538004, FULL_ROW_DELTA_CAP,
-             'cbc660582e53ada0b9beacda30b0e72ab2f72068152892f04701cbe2c11636bc',
+            # 538004 -> 538044 and the digest re-derived: no learned coding-owner default; the maestro and dag-ulw
+            # rows say which choice stands (+40, itemized at the same limit); the pin before it was cbc66058...36bc.
+            (skill_capabilities, 538044, FULL_ROW_DELTA_CAP,
+             '3cb600bd1434f53caa7464cf49cf4426ea6ec6133a105df42f31fa7de0c2e829',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -220,7 +223,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # `omh-routing`, one character shorter than `oh-my-hermes`.
         # 496 -> 341: the lane line drops its sample of member names, which did not load.
         self.assertEqual(len(sections['Workflow Lane']), 341)
-        self.assertEqual(len(sections['Runtime Evidence']), 1446)
+        self.assertEqual(len(sections['Runtime Evidence']), 1130)
         self.assertLessEqual(len(feature[0].content.encode()), 5735)
         legacy_templates = [t for t in templates if t.name != FEATURE]
         legacy_hashes = {}
@@ -408,7 +411,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # pin was 51d4a5cf...9f51, and this branch's was a5bce194...90de.
         # A coding-owner choice then counts only for the request it was made in: only dag-ulw and maestro
         # move, and the pin before it was 62bebac1...bd0b.
-        self.assertEqual(_digest(legacy_hashes), 'c0b3ab76dcb31bce5335b26c34a03ad339b5e1e2c7e713aacd33b64355c6df31')
+        # Every body's reply-voice paragraph then becomes one line pointing at the shared rail, so every body
+        # moves; the pin before it was c0b3ab76...df31.
+        # No learned coding-owner default then: only dag-ulw and maestro move, and the pin before it was
+        # 4da0a2a3...f96c. Its review then lists the shared rail among omh-routing's own references, which its
+        # one-line reply rule names; only that body moves, and the pin before it was 8484c56d...21dd.
+        self.assertEqual(_digest(legacy_hashes), '15b8c2cd20e6e7fc7da7253eeece9abd8e80bf14cb6165dd7579485b239e9716')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -430,7 +438,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # github-issue-intake their own Completion Checklists, in place of the feature-surface defaults those
         # bodies repeated (-865).
         # 114629 -> 92262: the lane line's sample of member names was the same text in every lane mate.
-        self.assertEqual(legacy['repeated']['bytes'], 92262)
+        # 92262 -> 83098: every body's reply-voice paragraph became one line pointing at the shared rail.
+        self.assertEqual(legacy['repeated']['bytes'], 83098)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -464,8 +473,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1650000,  # Re-derived from 1499208 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
-            'full_profile_skill_body_repeated_chars': 110000,  # Re-derived from 94049 measured, +10%, up to the next 10,000.
+            'full_profile_skill_body_chars': 1600000,  # Re-derived from 1450927 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
+            'full_profile_skill_body_repeated_chars': 100000,  # Re-derived from 84569 measured, +10%, up to the next 10,000.
             'skill_density_filler_hits': 0,
         }
         metrics = {m.name: m for m in budget_metrics()}

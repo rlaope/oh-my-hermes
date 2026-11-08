@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh` launched while Hermes' gateway restarts waits for it instead of
+  opening Hermes' own TUI.** A whole-gateway restart while a bot's turn runs
+  drains first, up to Hermes' `restart_after_turn_timeout`, and refuses every
+  new or resumed session as `runtime_draining` meanwhile; the OMH TUI took
+  that refusal as its own failure and fell back to `hermes --tui`, which met
+  the same refusal and showed only `error: runtime_draining`. The launch now
+  waits through the drain and the restart on one shell line naming the work
+  the gateway lets finish and the cap it allows, and opens once it is back.
+  A gateway that is there but not answering past the wait (restarting,
+  silent on the session call) is reported with what to check and exits 1;
+  Hermes' own TUI is opened only for a failure that is the OMH TUI's own.
 - **Codex and Claude Code units dispatched by OMH now come back accepted,
   and one dag-ulw run can send different coding nodes to both owners.**
   Untracked executor plugin state under `.omx/` and `.omc/` no longer fails
@@ -472,6 +483,23 @@ All notable changes will be documented here.
   their skill: `account takeover` and `suspected unauthorized access`, `telemetry
   audit`, `write a handover guide` and `인수인계 문서 써줘`, and in Korean `시장 규모` and
   `경쟁사 분석` right before a request to size or analyse.
+- **A capability family turned off with `omh capability-policy disable` is no
+  longer routed to.** Its skills used to lose their tools but kept being
+  dispatched, offered as candidates, hinted and listed on the skill-candidate
+  line. Now none of those name them. A request the router would have
+  dispatched to one, or that names one, is answered with the family being off
+  and `omh capability-policy enable <family>` instead of being routed
+  elsewhere. When the router was only asking about one, it asks an open
+  question instead, noting in the reply's own language that the family is off
+  and how to turn it on, rather than offering a different skill in its place;
+  the per-turn hint names no skill for it either. `omh_interact`,
+  `omh chat interact`, `omh chat route-hint`, `omh_recommend` (plugin and MCP),
+  route-answer checks and the per-turn hint read the policy from the OMH home
+  on every call, so a profile-scoped home answers with its own, and a policy
+  file that cannot be read is reported. A home with nothing turned off routes
+  exactly as before. The operations family's card
+  now also lists `operating-rhythm`, `ops-review` and `reliability-review`,
+  which belonged to it but were missing from the card.
 - **Every arrow line in the per-turn primer names skills a model can load.**
   The generic tool map, workflow context cards and common cues named
   catalog names (`research`, `img-summary`) and shorthand that was no skill
@@ -615,6 +643,18 @@ All notable changes will be documented here.
   returns to the chat.** The transcript view the wheel opens closes once the wheel brings it back to its
   end, so the composer is back without Esc or `q`. A view opened by Ctrl+O or
   `/history` still stays open at its end.
+- **The router no longer picks a coding owner from earlier choices.** Three
+  accepted answers to the coding-owner question used to make that owner a
+  visible default for later requests. Now every request asks for an explicit
+  choice unless it names an owner or the setup profile holds one, so the
+  "Override learned coding agent" and "Reset learned coding agent" card
+  actions are gone. The stored choice history stays readable in
+  `omh coding model-routing status` and clearable with its `reset`, but it
+  selects no owner. ulw-maestro now names the setup-profile default as a
+  choice that stands, and dag-ulw says a newly named owner needs a new run id.
+  `omh_dag define` now refuses to define a cancelled run id again instead of
+  handing back the cancelled run, and `omh coding model-routing status`
+  reports stored choices as `recorded` history that selects no owner.
 - **The round-end check continues a turn less often.** A changed function's
   name in another file no longer continues the turn when every mention there
   is proven to need no change: another object's method of the same name, or
@@ -648,6 +688,15 @@ All notable changes will be documented here.
   head can't take (`+` to `xhigh`, then a switch to Gemini 4 Argon) keeps the
   picker open on that row, with every other edit intact, until you fix it or
   cancel. Stored values nobody touched are left as they are and marked.
+- **Every Hermes skill body carries the reply-voice rule as one line.** The
+  paragraph each body repeated becomes one line that keeps the rule's core:
+  reply in the user's own words and the host's own voice, the SOUL.md persona
+  owns reply language, tone, speech level and sentence endings in progress
+  updates too, the user's language where the persona sets none, and OMH shapes
+  structure and content only. The record-term and turn-ending clauses live once
+  in the shared rail's Reply Language And Host Voice and Turn Ending sections,
+  which already held them. Portable agent-skills bodies keep the full
+  paragraph, since their hosts have no shared rail.
 - **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
   `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
   or Enter opens sessions or bots, folds the plan, searches history, cycles
@@ -960,6 +1009,16 @@ All notable changes will be documented here.
   Python's own Big5 and GB2312 codecs; Simplified replies are unchanged. A
   kanji-only Japanese reply, already read as Chinese, now usually gets the
   Traditional copy. (Reported and first fixed by @sykuang in #2654.)
+
+- **The OMH pane now draws an active delegation as cards and shows what the
+  focused chat has spent.** A delegation or fanout run of up to 16 lanes
+  renders as layered node cards with edges, the critical path, bottleneck
+  chips and per-model stats, and a click on a card shows that node's
+  details; a larger run keeps the drawn graph. A USAGE section at the top of
+  the pane shows the chat's own tokens, cache hit, cost, context share,
+  rolling tokens per second and first-token wait, read from its recorded
+  session row and its auxiliary calls across compaction segments, and `—`
+  for any figure nothing reported. Contributed by @yqm-307 (#2665).
 
 ## 4.0.6 - 2026-11-04
 

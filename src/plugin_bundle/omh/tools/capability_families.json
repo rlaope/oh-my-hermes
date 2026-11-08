@@ -303,7 +303,10 @@
    "ask",
    "jev-ask",
    "jev-route",
-   "cancel"
+   "cancel",
+   "operating-rhythm",
+   "ops-review",
+   "reliability-review"
   ],
   "route_summary": "Show status, repair, schedule, or learning shape without claiming runtime actions happened.",
   "source_examples": [

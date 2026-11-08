@@ -234,7 +234,7 @@ separate when several agents are active:
   owner.
 
 The agent/maintainer `omh coding model-routing status` report can compare local
-observations, Hermes aliases, Maestro chains, and owner-learning metadata. It is
+observations, Hermes aliases, Maestro chains, and stored owner-choice metadata (which selects no owner). It is
 an offline advisory snapshot, not a cross-process lock or provider/runtime
 observation. `omh coding model-routing reset --route-family <id>` changes only
 OMH owner-preference metadata and must not be used as a substitute for

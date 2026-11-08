@@ -283,7 +283,7 @@ def _names(names: tuple[str, ...]) -> str:
     return f"{shown} +{len(names) - NAMES_SHOWN}" if len(names) > NAMES_SHOWN else shown
 
 
-def _duration(seconds: float) -> str:
+def duration_text(seconds: float) -> str:
     return f"{seconds / 60:g} min" if seconds >= 60 else f"{seconds:g} s"
 
 
@@ -306,7 +306,7 @@ def impact_lines(impact: RestartImpact, busy: bool) -> list[str]:
     if work or busy:
         mine = ", this session's turn included" if busy else ""
         whole = "On a whole-gateway restart, running" if impact.profile else "Running"
-        drain = (f"finishes first, up to {_duration(impact.wait_seconds)} (Hermes' restart_after_turn_timeout); new "
+        drain = (f"finishes first, up to {duration_text(impact.wait_seconds)} (Hermes' restart_after_turn_timeout); new "
                  "turns wait meanwhile")
         if impact.wait_seconds <= 0:
             lines.append(f"{whole} work (turns, cron jobs{mine}) would be interrupted.")
