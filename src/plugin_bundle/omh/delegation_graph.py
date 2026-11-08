@@ -308,18 +308,31 @@ def _usage(values: Sequence[Any], output: Any) -> dict[str, Any] | None:
 def _sum_usage(items: Sequence[Mapping[str, Any] | None]) -> dict[str, Any] | None:
     """The usage of a conversation's segments (or of a row and its auxiliary calls) added up.
 
-    A cost is kept only when every counted part has one.
+    The cost is the priced parts' sum, ``cost_partial`` where some counted part (or part of one) has no cost, so the
+    figure is a floor; no cost where no part was priced.
     """
     held = [item for item in items if item]
     if not held:
         return None
     total: dict[str, Any] = {key: sum(item[key] for item in held)
                              for key in ("input", "cache_read", "cache_write", "output")}
-    if all("cost_usd" in item for item in held):
-        total["cost_usd"] = sum(item["cost_usd"] for item in held)
-        if any(item.get("cost_estimated") for item in held):
+    priced = [item for item in held if "cost_usd" in item]
+    if priced:
+        total["cost_usd"] = sum(item["cost_usd"] for item in priced)
+        if any(item.get("cost_estimated") for item in priced):
             total["cost_estimated"] = True
+        if len(priced) < len(held) or any(item.get("cost_partial") for item in priced):
+            total["cost_partial"] = True
     return total
+
+
+# `session_model_usage` tasks that are main-loop calls, already counted in the `sessions` row: every value Hermes
+# gives `agent._turn_route_task`, which `agent/turn_usage.py` passes to `update_token_counts(task=...)` (its docstring
+# in `hermes_state_usage.py`: a per-turn route's calls "count in the session totals and land in session_model_usage
+# under that task"). Today one, `agent/voice_turn_route.py`'s `TASK`. An auxiliary task, by contrast, is any name a
+# caller hands `auxiliary_client` (`agent/aux_accounting.record_aux_usage`) or `background_review`, an open set, so
+# the route tasks are the closed list here and a new one must join it.
+ROUTE_TASKS: Final = ("voice_chat",)
 
 
 def _auxiliary_usage(
@@ -329,9 +342,11 @@ def _auxiliary_usage(
 
     Hermes records an auxiliary call (compression, title generation, vision, ...) only there, under its task name,
     and never in the `sessions` row (`record_auxiliary_usage`), so these add to the row's counts. The main loop's
-    own rows there (task ``''``) repeat what the row already holds and are left out; a table without `task` cannot
-    tell the two apart and gives nothing. An auxiliary row records no actual cost, so a positive estimate prices
-    it, and one with tokens but no estimate leaves its session's auxiliary calls unpriced.
+    own rows there repeat what the row already holds and are left out: task ``''``, a per-turn route's task
+    (`ROUTE_TASKS`), and any row with a `cost_status`, which only the main loop writes (`record_auxiliary_usage`
+    takes none, and the runtime worker refuses one for an auxiliary call). A table without `task` cannot tell the
+    two apart and gives nothing. An auxiliary row records no actual cost, so a positive estimate prices it; one with
+    tokens but no estimate is unpriced (Hermes stores an unknown estimate as 0), which makes the sum a floor.
     """
     if "task" not in columns:
         return {}
@@ -343,22 +358,27 @@ def _auxiliary_usage(
                         ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"))
     actual, estimated = column("actual_cost_usd"), column("estimated_cost_usd")
     figure = f"CASE WHEN {actual} > 0 THEN {actual} WHEN {estimated} > 0 THEN {estimated} END"
+    routes = ", ".join("?" for _ in ROUTE_TASKS)
+    unstated = " AND cost_status IS NULL" if "cost_status" in columns else ""
     found: dict[str, dict[str, Any]] = {}
     for row in connection.execute(
         f"SELECT session_id, SUM({column('input_tokens')}), SUM({column('cache_read_tokens')}), "
         f"SUM({column('cache_write_tokens')}), SUM({column('output_tokens')}), SUM({figure}), "
         f"SUM(CASE WHEN {actual} > 0 THEN 0 WHEN {estimated} > 0 THEN 1 ELSE 0 END), "
         f"SUM(CASE WHEN ({tokens}) > 0 AND {figure} IS NULL THEN 1 ELSE 0 END) "
-        f"FROM session_model_usage WHERE session_id IN ({marks}) AND COALESCE(task, '') <> '' GROUP BY session_id",
-        ids,
+        f"FROM session_model_usage WHERE session_id IN ({marks}) AND COALESCE(task, '') <> '' "
+        f"AND task NOT IN ({routes}){unstated} GROUP BY session_id",
+        (*ids, *ROUTE_TASKS),
     ):
         usage = {"input": _count(row[1]), "cache_read": _count(row[2]), "cache_write": _count(row[3]),
                  "output": _count(row[4])}
         cost = _price(row[5])
-        if cost and not row[7]:
+        if cost:
             usage["cost_usd"] = cost
             if row[6]:
                 usage["cost_estimated"] = True
+            if row[7]:
+                usage["cost_partial"] = True
         elif not any(usage.values()):
             continue
         found[str(row[0])] = usage
@@ -370,9 +390,9 @@ def session_usage(hermes_home: Path, session_id: str) -> dict[str, Any] | None:
 
     ``session_id`` is the chat asked about, so the pane can tell this chat's figures from the last one's.
     ``model`` is the one the chat's own row names, ``output`` its output tokens and, besides
-    them, the `_usage` keys; each segment's auxiliary calls count with it (`_auxiliary_usage`). A cost is kept only
-    where Hermes priced every counted part, and no token is turned into one. ``None`` where the chat has no row or
-    its row counted nothing.
+    them, the `_usage` keys; each segment's auxiliary calls count with it (`_auxiliary_usage`). The cost is what
+    Hermes priced, marked ``cost_partial`` where some counted part is unpriced, and no token is turned into one.
+    ``None`` where the chat has no row or its row counted nothing.
     """
     try:
         connection = _connect(hermes_home)

@@ -1431,13 +1431,14 @@ export function laneUsage(record) {
     write: usage ? positive(usage.cache_write) : 0,
     output,
     cost,
-    estimated: !!(usage && usage.cost_estimated)
+    estimated: !!(usage && usage.cost_estimated),
+    partial: !!(usage && usage.cost_partial)
   }
 }
 
 // Lanes' usage added up. `lanes` counts those that counted anything, `priced` those Hermes priced.
 export function sumUsage(list) {
-  const total = { lanes: 0, priced: 0, input: 0, read: 0, write: 0, output: 0, cost: null, estimated: false }
+  const total = { lanes: 0, priced: 0, input: 0, read: 0, write: 0, output: 0, cost: null, estimated: false, partial: false }
   list.forEach(function (usage) {
     if (!usage.seen) return
     total.lanes += 1
@@ -1449,6 +1450,7 @@ export function sumUsage(list) {
       total.cost = (total.cost || 0) + usage.cost
       total.priced += 1
       total.estimated = total.estimated || usage.estimated
+      total.partial = total.partial || usage.partial
     }
   })
   return total
@@ -1477,17 +1479,18 @@ export function percentText(ratio) {
   return ratio === null ? '—' : `${(ratio * 100).toFixed(1)}%`
 }
 
-// A recorded cost, a recorded zero as one; a dash where none was recorded.
-export function costText(cost, estimated) {
+// A recorded cost, a recorded zero as one; a dash where none was recorded. `partial` is a floor (some counted part
+// has no cost), shown `≥$x` alone: a floor is not exact either way, so it carries no `~` beside it.
+export function costText(cost, estimated, partial) {
   if (cost === null || !Number.isFinite(cost)) return '—'
+  if (partial) return `≥$${Math.max(0, cost).toFixed(4)}`
   return exceeds(cost, 0) ? costSegmentText({ cost_usd: cost, cost_approximate: estimated }) : `$${(0).toFixed(4)}`
 }
 
-// Lanes' cost added up, marked `≥` while a lane that counted tokens has no cost: the priced lanes' floor, not the
-// run's total. A dash where no lane was priced.
+// Lanes' cost added up, a floor while a lane that counted tokens has no cost or its own cost is one: the priced
+// part, not the run's total. A dash where no lane was priced.
 export function sumCostText(total) {
-  const text = costText(total.cost, total.estimated)
-  return total.cost !== null && exceeds(total.lanes, total.priced) ? `≥${text}` : text
+  return costText(total.cost, total.estimated, total.partial || exceeds(total.lanes, total.priced))
 }
 
 // ---------------------------------------------------------------------------
@@ -1620,7 +1623,7 @@ export function usageBoard(input) {
       },
       {
         label: t('dgCost'),
-        value: costText(cost, streamedCost || saved.cost_estimated === true),
+        value: costText(cost, streamedCost || saved.cost_estimated === true, recordedCost && saved.cost_partial === true),
         sub: cost === null ? (exceeds(counted, 0) ? t('dgUnpriced') : t('dgCostNone')) : '',
         tip: t('ubCostTip')
       },
@@ -2900,7 +2903,7 @@ function LaneDetail({ dag, lane, onPick, seat }) {
     [t('dgElapsed'), lane.elapsed === null ? '—' : elapsedText(lane.elapsed)],
     [t('dgTokens'), tokensText(allTokens(usage))],
     [t('dgCacheHit'), percentText(cacheHit(usage))],
-    [t('dgCost'), usage.cost !== null ? costText(usage.cost, usage.estimated) : usage.seen ? t('dgUnpriced') : '—'],
+    [t('dgCost'), usage.cost !== null ? costText(usage.cost, usage.estimated, usage.partial) : usage.seen ? t('dgUnpriced') : '—'],
     [t('dgOutput'), exceeds(usage.output, 0) ? `↓${tokensText(usage.output)}` : '—']
   ]
   return node('div', { className: 'omh-pane-dv-detail', ref: seat, 'data-detail': lane.id }, [

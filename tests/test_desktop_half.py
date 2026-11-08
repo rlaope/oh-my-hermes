@@ -876,6 +876,9 @@ FORMATTER_CASES = {
         [{**DAG_GRAPH, "dag_topology": None}],
         [{**DAG_GRAPH, "status": "inactive"}],
         [BEYOND_DAG_GRAPH],
+        # A lane whose own cost is a floor (an unpriced auxiliary call) makes the run's a floor.
+        [{**DAG_GRAPH, "nodes": [{**item, "usage": {**item["usage"], "cost_partial": True}} if item["id"] == "d:r:a" else item
+                                 for item in DAG_GRAPH["nodes"]]}],
     ],
     "t": [["graphTitle", {"ready": 1, "edges": 1}], ["graphTitle", {"ready": 1, "edges": 2}], ["stateIdle", {}, "ko"]],
     "foldLabels": [[[{"state": "done"}] * 4, {"start": 3, "earlier": 3, "later": 1}]],
@@ -919,12 +922,15 @@ FORMATTER_CASES = {
         [{"usage": {"input": 0, "cache_read": 0, "cache_write": 0, "output": 0, "cost_usd": 0}}],
     ],
     "sumCostText": [
-        [{"lanes": 2, "priced": 2, "cost": 0.0184, "estimated": True}],
-        [{"lanes": 2, "priced": 1, "cost": 0.0123, "estimated": False}],
-        [{"lanes": 2, "priced": 0, "cost": None, "estimated": False}],
-        [{"lanes": 1, "priced": 1, "cost": 0, "estimated": False}],
+        [{"lanes": 2, "priced": 2, "cost": 0.0184, "estimated": True, "partial": False}],
+        [{"lanes": 2, "priced": 1, "cost": 0.0123, "estimated": False, "partial": False}],
+        [{"lanes": 2, "priced": 0, "cost": None, "estimated": False, "partial": False}],
+        [{"lanes": 1, "priced": 1, "cost": 0, "estimated": False, "partial": False}],
+        # Every lane priced, one of them a floor itself; and an estimated floor, which reads as a floor alone.
+        [{"lanes": 2, "priced": 2, "cost": 0.03, "estimated": False, "partial": True}],
+        [{"lanes": 2, "priced": 1, "cost": 0.01, "estimated": True, "partial": False}],
     ],
-    "costText": [[0.0123, False], [0, False], [None, False], [0.0061, True]],
+    "costText": [[0.0123, False], [0, False], [None, False], [0.0061, True], [0.0061, True, True]],
     "usageBoard": [
         # The stream alone, with a cost it does not vouch for.
         [{"live": {"prompt": 4000, "input": 500, "output": 300, "cache_hit_pct": 50, "cost_usd": 0.01}}],
@@ -946,6 +952,9 @@ FORMATTER_CASES = {
         [{"live": {"prompt": 4000, "output": 300}, "stored": "c1", "saved": {"session_id": "c1", "error": "OperationalError: locked"}}],
         # A provider-reported zero is a zero cost.
         [{"stored": "c1", "saved": {"session_id": "c1", "input": 100, "output": 10, "cost_usd": 0}}],
+        # Some counted part unpriced: the priced sum, as a floor.
+        [{"stored": "c1", "saved": {"session_id": "c1", "input": 100, "output": 10, "cost_usd": 0.521, "cost_estimated": True,
+                                    "cost_partial": True}}],
     ],
     "elapsedText": [[12], [242], [7260], [None]],
     "costSegmentText": [
@@ -1101,8 +1110,14 @@ class DesktopBackendTests(unittest.TestCase):
                 failed = plugin_api.hud_payload(home.hermes, PARENT)
         self.assertEqual(failed["session_usage"], {"session_id": PARENT, "error": "RuntimeError: state.db is locked"})
         self.assertNotIn("error", failed, "the reader's payload is not an error record")
-        self.assertEqual({key: value for key, value in failed.items() if key != "session_usage"},
-                         {key: value for key, value in read.items() if key != "session_usage"})
+        def reader_part(payload: dict) -> dict:
+            # The open activity's age is the payload's one clock-dependent figure (null here, nothing is open).
+            rest = {key: value for key, value in payload.items() if key != "session_usage"}
+            rest["activity"] = {key: value for key, value in (rest.get("activity") or {}).items()
+                                if key != "oldest_open_elapsed_seconds"}
+            return rest
+
+        self.assertEqual(reader_part(failed), reader_part(read))
 
     def test_a_big_run_or_a_narrow_pane_is_drawn_as_the_tree(self) -> None:
         self.assertEqual(plugin_api.SMALL_GRAPH_LANES, dag_block.SMALL_GRAPH_LANES)
@@ -1276,8 +1291,6 @@ class DesktopBackendTests(unittest.TestCase):
         self.assertEqual(manifest, {"name": "omh", "api": "plugin_api.py", "tab": {"hidden": True}})
         self.assertEqual(manifest["name"], _plugin_yaml_name())
         self.assertTrue((MANIFEST.parent / manifest["api"]).is_file())
-
-
 
 
 class DesktopPluginFileTests(unittest.TestCase):
@@ -1967,9 +1980,10 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertIn("1/2 nodes priced", self._classed(render, "omh-pane-dv-kpi-sub"))
         rows = [[cell["text"] for cell in node["cells"]] for node in render["structure"] if "omh-pane-dv-mrow" in node["className"].split()]
         self.assertEqual(rows[1:], [["claude-haiku-5-5", "2", "12.6k", "77.5%", "≥$0.0123"]])
-        self.assertEqual(self._drive()["formatters"]["sumCostText"], ["~$0.0184", "≥$0.0123", "—", "$0.0000"])
-        self.assertEqual(self._drive()["formatters"]["costText"], ["$0.0123", "$0.0000", "—", "~$0.0061"],
-                         "a provider-reported zero is a zero, not a dash")
+        self.assertEqual(self._drive()["formatters"]["sumCostText"],
+                         ["~$0.0184", "≥$0.0123", "—", "$0.0000", "≥$0.0300", "≥$0.0100"])
+        self.assertEqual(self._drive()["formatters"]["costText"], ["$0.0123", "$0.0000", "—", "~$0.0061", "≥$0.0061"],
+                         "a provider-reported zero is a zero, not a dash; a floor has one form, never `≥~`")
 
     def test_the_lane_detail_legend_shows_a_reported_zero_as_zero(self) -> None:
         """Mutation: show a reported 0 as a dash beside its 0.0% share, or a count the lane never reported as 0."""
@@ -2082,7 +2096,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         """Mutation: take the stream over the recorded row, drop the `~` from a cost the stream does not vouch for, or
         show a recorded zero read as a dash."""
         (streamed, recorded, zero_read, empty, calls_only, guessed, window, ragged,
-         other_chat, unnamed, failed, free) = self._drive()["formatters"]["usageBoard"]
+         other_chat, unnamed, failed, free, floor) = self._drive()["formatters"]["usageBoard"]
 
         def cells(model: dict) -> dict:
             return {cell["label"]: (cell["value"], cell["sub"]) for cell in model["cells"]}
@@ -2116,6 +2130,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         for model in (other_chat, unnamed, failed):
             self.assertEqual((cells(model)["Tokens"], cells(model)["Cost"]), (("4.3k", "↓300 out · 4.0k in"), ("—", "unpriced")))
         self.assertEqual(cells(free)["Cost"], ("$0.0000", ""), "a provider-reported zero is a zero cost")
+        self.assertEqual(cells(floor)["Cost"], ("≥$0.5210", ""), "an unpriced part makes the priced sum a floor, as in the DAG")
 
     def test_a_korean_host_reads_the_usage_board_in_korean(self) -> None:
         hud = " ".join(self._drive()["korean"]["usage_board"]["byId"]["hud"])
@@ -2126,12 +2141,13 @@ class DesktopPluginNodeTests(unittest.TestCase):
             self.assertNotIn(english, hud)
 
     def test_dag_model_lays_out_layers_and_skips_edges_it_cannot_draw(self) -> None:
-        plain, fanout, with_noise, cyclic, no_topology, inactive, beyond = self._drive()["formatters"]["dagModel"]
+        plain, fanout, with_noise, cyclic, no_topology, inactive, beyond, floor = self._drive()["formatters"]["dagModel"]
         self.assertEqual(plain["layers"], [["d:r:a", "d:r:b"], ["d:r:sum"], ["d:r:chk"]])
         self.assertEqual(plain["path"], ["d:r:a", "d:r:sum", "d:r:chk"])
         self.assertEqual(plain["bottlenecks"], [{"id": "d:r:sum", "blocks": 1}])
         self.assertEqual({lane["id"]: lane["blocks"] for lane in plain["lanes"]}, {"d:r:a": 2, "d:r:b": 2, "d:r:sum": 1, "d:r:chk": 0})
-        self.assertEqual(plain["total"], {"lanes": 2, "priced": 2, "input": 1600, "read": 9300, "write": 1100, "output": 630, "cost": 0.0184, "estimated": True})
+        self.assertEqual(plain["total"], {"lanes": 2, "priced": 2, "input": 1600, "read": 9300, "write": 1100, "output": 630, "cost": 0.0184, "estimated": True,
+                                          "partial": False})
         self.assertEqual((plain["seconds"], plain["timed"], plain["cards"]), (78, 2, True))
         self.assertEqual([(entry["model"], entry["count"]) for entry in plain["models"]], [("claude-haiku-5-5", 2)])
         self.assertEqual((fanout["cards"], fanout["path"], fanout["bottlenecks"]), (True, [], []))
@@ -2144,6 +2160,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertIsNone(inactive)
         self.assertEqual((beyond["cards"], len(beyond["layers"]), beyond["hidden"]), (False, 17, 3))
         self.assertEqual(beyond["total"]["lanes"], 0)
+        self.assertEqual((floor["total"]["priced"], floor["total"]["partial"]), (2, True))
 
     def test_the_dag_view_leaves_the_hosts_sideways_swipe_alone(self) -> None:
         """Mutation: clip every drawing (native and team graphs too), clip in a narrow mouse window, or let the cards
