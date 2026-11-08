@@ -1,0 +1,244 @@
+/* Sidebar: one icon column and one text column starting at --side-x. */
+.side {
+  background: var(--side);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px 8px;
+  min-height: 0;
+  min-width: 0;
+}
+.side-top {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 3px;
+  flex: none;
+  /* room for the macOS traffic lights on the left */
+  -webkit-app-region: drag;
+}
+.side-top button {
+  -webkit-app-region: no-drag;
+}
+.side-add {
+  position: relative;
+}
+.side-add .ui-ib:disabled {
+  opacity: 0.5;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 var(--side-x) 12px;
+  flex: none;
+}
+.brand img {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+.brand b {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.search {
+  height: 28px;
+  border-radius: var(--r);
+  background: var(--search-bg);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 var(--side-x);
+  color: var(--quiet);
+  margin: 0 0 10px;
+  flex: none;
+  cursor: text;
+}
+.search svg {
+  width: 18px;
+  flex: none;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: 0;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.search input::placeholder {
+  color: var(--quiet);
+}
+.search input::-webkit-search-cancel-button {
+  display: none;
+}
+.search:focus-within {
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.bot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.bot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 7px var(--side-x);
+  border-radius: var(--r);
+  text-align: left;
+  width: 100%;
+  position: relative;
+  flex: none;
+}
+.bot:hover {
+  background: var(--hover);
+}
+.bot.active {
+  background: var(--active-row);
+}
+.bot .live-dot {
+  position: absolute;
+  left: 32px;
+  top: 30px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--w1);
+  border: 2px solid var(--side);
+  animation: pulse 1.4s infinite;
+}
+.bot.active .live-dot {
+  border-color: var(--active-row);
+}
+.bot-m {
+  flex: 1;
+  min-width: 0;
+  display: block;
+}
+.bot-r1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+.bot-n {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bot-t {
+  color: var(--quiet);
+  font-size: 11px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.bot-r2 {
+  display: flex;
+  align-items: center;
+}
+.bot-p {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bot.unread .bot-p {
+  color: var(--body);
+}
+.bot-p.live {
+  color: var(--muted);
+}
+.badge {
+  margin-left: 6px;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 8px;
+  background: var(--g-logo);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  flex: none;
+}
+.bot-empty {
+  padding: 8px var(--side-x);
+  font-size: 12px;
+  color: var(--quiet);
+}
+
+.side-foot {
+  margin-top: auto;
+  display: grid;
+  gap: 1px;
+  padding-top: 8px;
+  flex: none;
+}
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px var(--side-x);
+  border-radius: var(--r);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: left;
+  width: 100%;
+}
+.nav svg {
+  width: 18px;
+  height: 14px;
+  color: var(--quiet);
+  flex: none;
+}
+.nav:not(:disabled):hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.nav:disabled {
+  cursor: default;
+}
+.nav.on {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px var(--side-x) 2px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.me-i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--raise2);
+  display: grid;
+  place-items: center;
+  font-size: 9.5px;
+  color: var(--muted);
+  flex: none;
+}
