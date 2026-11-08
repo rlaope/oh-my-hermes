@@ -470,6 +470,11 @@ All notable changes will be documented here.
   (`automation`); only the rendered rail page rewrote one of those lines.
   The three lines now write `ulw-research`, `omh-image-cards` and the other
   labels `skill_view` loads. The lane key lines still list catalog names.
+- **The per-turn primer's lane keys name skills a model can load.** Each
+  lane's `Key:` list named catalog names (`research`, `deep-interview`), so
+  one primer showed both `research` and `ulw-research`. The keys now read
+  `ulw-research`, `ulw-interview`, `omh-routing` and the other labels
+  `skill_view` loads.
 - **`omh coding delegate --from-plan` no longer picks Codex when no owner
   was named.** Leaving out `--executor` used to select Codex with
   `--from-plan` and `generic` without it. Both now resolve the same default:

@@ -69,8 +69,12 @@ from .awareness import awareness_primer_context, awareness_primer_markdown
 # tools write their targets as labels too, so the primer names one skill one
 # way; the cards also drop shorthand that was no skill (`automation`,
 # `workspace`, `learning`). It measured 3965 (standing headroom kept as above).
+# 3973 -> 4051: each lane's `Key:` names are written as loadable labels
+# (`ulw-research`, `omh-routing`) instead of catalog names, so the primer no
+# longer shows `research` and `ulw-research` for one skill. It measured 4043
+# (standing headroom kept as above).
 AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT = 1560
-AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 3973
+AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 4051
 AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT = 1500
 ROLE_CONTEXT_CHAR_LIMIT = 2600
 # Per-request budgets, zero-slack: each is the value its producer measured,
