@@ -19,7 +19,12 @@ from .catalog_questions import (
 )
 from .compound_intent import distinct_complete_domain_signals
 from .action_copy import next_action_label as _route_next_action_label
-from .capability_off import CAPABILITY_OFF_KEY, REASON_CODE_NO_ENABLED_CANDIDATE, route_without_disabled_skills
+from .capability_off import (
+    CAPABILITY_NOTE_KEY,
+    CAPABILITY_OFF_KEY,
+    REASON_CODE_NO_ENABLED_CANDIDATE,
+    route_without_disabled_skills,
+)
 from ..plugin_bundle.omh.capability_off import CAPABILITY_OFF_REASON_CODE
 from .candidate_handoff import SHORTLIST_LEXICAL, WEAK_DISPATCH_EVIDENCE, build_candidate_handoff, shortlist_clarification
 from .dispatch_evidence import EVIDENCE_WEAK, GUARD_TRUSTED, dispatch_evidence
@@ -1677,16 +1682,30 @@ def route_chat_message(
     )
 
 
-def capability_off_verdict(message: str, disabled_skills: Mapping[str, str]) -> dict[str, object]:
-    """The `capability_family_off` record the chat route gives `message`, or `{}`.
+def capability_family_verdict(
+    message: str, disabled_skills: Mapping[str, str], *, source: str = "generic"
+) -> dict[str, object]:
+    """What the chat route does about a turned-off family for `message`, or `{}`.
 
-    The per-turn hint asks this rather than judging on its own, so the turn
-    says a family is off exactly where `omh_interact` would answer that it is.
+    `{"verdict": "off", ...record}` when the route answers that the family is
+    off, `{"verdict": "note", ...record}` when it asks an open question noting
+    it, `{}` when no turned-off skill was the route's pick. The per-turn hint
+    asks this rather than judging on its own, so the turn and `omh_interact`
+    reach one verdict, from one router pass.
+
+    `source` is the chat source to route as. The hook passes the person's own
+    words (`request_message`, gateway material already stripped), on which
+    every source routes alike; a caller passing a raw gateway turn should
+    name its real source, since a messaging source strips that material first.
     """
     if not disabled_skills or not message.strip():
         return {}
-    record = route_chat_message(message, disabled_skills=disabled_skills).get(CAPABILITY_OFF_KEY)
-    return dict(record) if isinstance(record, dict) else {}
+    route = route_chat_message(message, source=source, disabled_skills=disabled_skills)
+    for verdict, key in (("off", CAPABILITY_OFF_KEY), ("note", CAPABILITY_NOTE_KEY)):
+        record = route.get(key)
+        if isinstance(record, dict):
+            return {"verdict": verdict, **record}
+    return {}
 
 
 def user_trigger_pack_route_hint(message: str) -> dict[str, str]:

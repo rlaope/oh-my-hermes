@@ -459,8 +459,9 @@ All notable changes will be documented here.
   dispatched to one, or that names one, is answered with the family being off
   and `omh capability-policy enable <family>` instead of being routed
   elsewhere. When the router was only asking about one, it asks an open
-  question instead, noting that the family is off and how to turn it on,
-  rather than offering a different skill in its place. `omh_interact`,
+  question instead, noting in the reply's own language that the family is off
+  and how to turn it on, rather than offering a different skill in its place;
+  the per-turn hint names no skill for it either. `omh_interact`,
   `omh chat interact`, `omh chat route-hint`, `omh_recommend` (plugin and MCP),
   route-answer checks and the per-turn hint read the policy from the OMH home
   on every call, so a profile-scoped home answers with its own, and a policy

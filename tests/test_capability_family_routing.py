@@ -34,7 +34,7 @@ from omh.capabilities.toggles import (
 )
 from omh.paths import OmhPaths
 from omh.plugin_bundle.omh import capability_off, skill_shortlist
-from omh.plugin_bundle.omh.awareness import capability_off_hint_context
+from omh.plugin_bundle.omh.awareness import capability_family_verdict, capability_off_hint_context
 from omh.plugin_bundle.omh.hooks import llm_hooks
 from omh.plugin_bundle.omh.installed_skills import reset_installed_skill_cache
 from omh.plugin_bundle.omh.tools import recommend_tool
@@ -44,6 +44,7 @@ from omh.routing.chat import public_chat_route_payload, recommend_route_summary,
 from omh.routing.route_plan import public_workflow_identifier
 from omh.skills.catalog import CORE_SKILLS, installable_skill_names, omh_skill_display_name
 from omh.wrapper.contract import build_chat_interaction_payload
+from omh.wrapper.localized_copy import CAPABILITY_NOTE_SENTENCES, ChatCopy, card_copy_voice_violations
 from omh.wrapper.route_hints import build_chat_route_hint_payload
 
 FAMILY = "learn_and_gather"
@@ -208,12 +209,20 @@ class RouterTests(unittest.TestCase):
             self.assertNotIn("``", route["routing_instruction"])
 
     def test_the_note_reaches_the_reply_in_every_language(self) -> None:
+        command = f"omh capability-policy enable {FAMILY}"
         with TemporaryDirectory() as tmp:
             paths = _home(Path(tmp), FAMILY)
             for message in REVIEWED_CLARIFIES:
                 response = build_chat_interaction_payload(message, source="discord", paths=paths)["chat_response"]
-                note = response["state"]["capability_family_note"]
-                self.assertEqual(note["enable_command"], f"omh capability-policy enable {FAMILY}", message)
+                self.assertEqual(response["state"]["capability_family_note"]["enable_command"], command, message)
+                # The visible body names the command once, in the body's language.
+                self.assertEqual(response["body"].count(command), 1, message)
+            korean = build_chat_interaction_payload(REVIEWED_CLARIFIES[1], source="discord", paths=paths)
+        self.assertIn("기능 묶음이 꺼져 있습니다", korean["chat_response"]["body"])
+
+    def test_the_family_sentences_pass_the_card_voice_gate(self) -> None:
+        table = {"capability_note": {locale: ChatCopy(headline="", body=text) for locale, text in CAPABILITY_NOTE_SENTENCES.items()}}
+        self.assertEqual(card_copy_voice_violations(table), ())
 
     def test_the_chat_reply_names_the_family_and_the_command_that_turns_it_on(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -286,16 +295,26 @@ class CorpusTests(unittest.TestCase):
                 self.assertEqual(route, plain, message)
         self.assertGreater(touched, 0)
 
-    def test_the_turn_block_and_the_router_verdict_agree_on_every_message(self) -> None:
+    def test_the_turn_verdict_and_the_route_agree_on_every_message(self) -> None:
+        # "off" (the turn's block) and "note" (the turn withholds its hint and
+        # candidate line) are read from the same router pass `omh_interact` uses.
         with TemporaryDirectory() as tmp:
             disabled = capability_off.disabled_skill_families(_home(Path(tmp), FAMILY).omh_home)
-        disagree = [
-            message
-            for message in self.plain
-            if bool(capability_off_hint_context(message, disabled))
-            != ("capability_family_off" in public_chat_route_payload(message, disabled_skills=disabled))
-        ]
+        disagree = []
+        verdicts = {"off": 0, "note": 0}
+        for message in self.plain:
+            route = public_chat_route_payload(message, disabled_skills=disabled)
+            routed = (
+                "off" if "capability_family_off" in route else "note" if "capability_family_note" in route else ""
+            )
+            turn = str(capability_family_verdict(message, disabled).get("verdict") or "")
+            if turn != routed or bool(capability_off_hint_context(message, disabled)) != (routed == "off"):
+                disagree.append(message)
+            if routed:
+                verdicts[routed] += 1
         self.assertEqual(disagree, [])
+        self.assertGreater(verdicts["off"], 0)
+        self.assertGreater(verdicts["note"], 0)
 
     def test_a_request_whose_best_match_is_off_is_never_offered_another_family(self) -> None:
         # Every intervention request the plain router dispatches to, or asks
@@ -374,6 +393,33 @@ class PreLlmCallTests(unittest.TestCase):
         self.assertEqual(set(_SELECTED.findall(route)) & off_names, set())
         self.assertNotIn("omh-lifecycle-growth", candidates)
         self.assertIn("Skills that may fit this request", candidates)
+
+    def test_an_open_question_withholds_the_hint_and_the_candidate_line(self) -> None:
+        # Every intervention request the router asks openly about because its
+        # best match is off, for each family: the turn names no other skill
+        # (the third review measured 53 of 140 that did) and adds no block.
+        checked = 0
+        with TemporaryDirectory() as tmp:
+            for family_id in toggleable_family_ids():
+                paths = _home(Path(tmp) / family_id, family_id)
+                disabled = capability_off.disabled_skill_families(paths.omh_home)
+                for case in ROUTING_INTERVENTION_CASES:
+                    if "capability_family_note" not in public_chat_route_payload(case.message, disabled_skills=disabled):
+                        continue
+                    checked += 1
+                    skill_shortlist.reset_candidate_line_state()
+                    result = llm_hooks.pre_llm_call(
+                        user_message=case.message,
+                        session_id=f"note-{family_id}-{case.id}",
+                        omh_home=str(paths.omh_home),
+                        hermes_home=str(paths.hermes_home),
+                        is_first_turn=True,
+                    )
+                    context = str((result or {}).get("context", ""))
+                    self.assertEqual(_SELECTED.findall(context), [], (family_id, case.id))
+                    self.assertNotIn("Skills that may fit this request", context, (family_id, case.id))
+                    self.assertNotIn("[OMH Capability Off]", context, (family_id, case.id))
+        self.assertGreater(checked, 0)
 
     def test_negative_controls_get_no_off_block_on_any_turn(self) -> None:
         with TemporaryDirectory() as tmp:

@@ -121,6 +121,7 @@ from .domain_context_attachment import (
 from ..skills.expert_question_rendering import domain_expert_question_body
 from .localized_copy import (
     SUPPORTED_COPY_LOCALES,
+    capability_note_sentence,
     chat_copy,
     consolidation_notice_line,
     detect_copy_locale,
@@ -9454,6 +9455,26 @@ def _capability_off_response(record: Mapping[str, object], *, reason: str, threa
     )
 
 
+def _chat_response_with_capability_note(response: dict[str, object], note: Mapping[str, object]) -> dict[str, object]:
+    """The reply with the turned-off-family sentence in its body's own language, once.
+
+    The English clarification already says it and names the command; a
+    localized body (Korean, Japanese, ...) replaces that text, so it gets the
+    sentence in the language the body is written in, read from the body itself.
+    """
+    command = str(note.get("enable_command") or "")
+    body = str(response.get("body") or "")
+    if not command or command in body:
+        return response
+    sentence = capability_note_sentence(
+        detect_copy_locale(f"{response.get('plain_headline') or ''} {body}"),
+        skill=str(note.get("workflow") or ""),
+        family=str(note.get("family_label") or ""),
+        command=command,
+    )
+    return {**response, "body": f"{body}\n\n{sentence}" if body else sentence}
+
+
 def _finish_interaction(payload: dict[str, object], target_notice: dict[str, object] | None) -> dict[str, object]:
     if target_notice:
         payload["target_notice"] = target_notice
@@ -9470,6 +9491,7 @@ def _finish_interaction(payload: dict[str, object], target_notice: dict[str, obj
         state = response.get("state")
         if isinstance(capability_note, dict) and isinstance(state, dict):
             state[CAPABILITY_NOTE_KEY] = dict(capability_note)
+            response = _chat_response_with_capability_note(response, capability_note)
         # A retired-engine alias route (#954 stage 5) shows exactly one line on
         # the status card -- the capability reason -- while the full
         # machine-readable selection stays on `route.alias_resolution` (Q5).

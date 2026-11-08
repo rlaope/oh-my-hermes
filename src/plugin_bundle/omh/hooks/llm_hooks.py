@@ -16,7 +16,8 @@ from ..awareness import (
     awareness_context_matches_message,
     awareness_route_hint,
     awareness_route_hint_context_from_payload,
-    capability_off_hint_context,
+    capability_family_verdict,
+    capability_off_block,
     route_hint_for_installed_skills,
     route_hint_without_disabled_skills,
     route_hint_without_engine_workflows,
@@ -789,12 +790,15 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
             # Routing goes ahead as though every family were on; say so.
             degraded.append((COMPONENT_CAPABILITY_POLICY_READ, safe_error_type(policy_error)))
     installed_skills = routable_skill_names(installed_skills, disabled_skills)
-    # A person's request the router answers "this family is off" gets that
-    # answer and nothing else: no route hint, no candidate line. A child's
-    # brief is its orchestrator's words, not a request for the family.
-    capability_off_context = (
-        capability_off_hint_context(request_message, disabled_skills) if disabled_skills and not delegated else ""
+    # One router pass decides. A request it answers "this family is off"
+    # gets that block and nothing else; one it asks openly about because its
+    # best match is off gets no block, and in both the route hint and the
+    # candidate line are withheld, since either would name a stand-in skill.
+    # A child's brief is its orchestrator's words, not a request for the family.
+    capability_verdict = (
+        capability_family_verdict(request_message, disabled_skills) if disabled_skills and not delegated else {}
     )
+    capability_off_context = capability_off_block(capability_verdict)
     rendered_route_hint: dict[str, object] = {}
     if include_awareness:
         if is_first_turn:
@@ -824,9 +828,9 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
                 route_hint_payload, installed_skills, delegated=delegated, disabled=disabled_skills
             )
             route_hint_context = awareness_route_hint_context_from_payload(rendered_route_hint)
-        if capability_off_context:
-            # The off block is this request's answer; a next hint beside it
-            # would hand the work to another workflow after all.
+        if capability_verdict:
+            # The best match is off; a next hint would hand the work to
+            # another workflow after all.
             rendered_route_hint = {}
             route_hint_context = ""
         if route_hint_context:
@@ -930,7 +934,7 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
         # The person asked for work whose family this home turned off: the
         # turn says so, and lists no other skill in its place.
         context_parts.append(capability_off_context)
-    elif include_awareness:
+    elif include_awareness and not capability_verdict:
         candidates = skill_candidates_for_turn(
             request_message, route_hint_payload=route_hint_payload, installed=installed_skills
         )

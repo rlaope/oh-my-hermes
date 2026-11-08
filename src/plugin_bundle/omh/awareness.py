@@ -6761,20 +6761,37 @@ def route_hint_withheld(payload: dict[str, object]) -> dict[str, object]:
 CAPABILITY_OFF_HINT_HEAD = "[OMH Capability Off]"
 
 
-def capability_off_hint_context(message: str, disabled: Mapping[str, str]) -> str:
-    """The block for a request the router answers "this family is off", or "".
+def capability_family_verdict(message: str, disabled: Mapping[str, str]) -> dict[str, object]:
+    """The router's verdict on a turned-off family for `message` (`routing.chat.capability_family_verdict`).
 
-    The router decides, not the hint rail: the rail names skills on medium
-    evidence too, and a block on those told the model to refuse ordinary
-    questions ("Explain what a cron job does." with operations off). Asking the
-    router keeps this turn and `omh_interact` on one verdict. A standalone
-    host has no router to ask, so it emits nothing and the hint stays cut.
+    `{"verdict": "off" | "note", ...record}` or `{}`. A standalone host has no
+    router to ask and gets `{}`: the turned-off skills are still cut from the
+    hint, and the turn adds nothing.
     """
     if not disabled or not message.strip():
+        return {}
+    try:
+        from ...routing.chat import capability_family_verdict as router_verdict
+    except ImportError:
+        try:
+            from omh.routing.chat import capability_family_verdict as router_verdict
+        except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
+            return {}
+    return router_verdict(message, disabled)
+
+
+def capability_off_block(verdict: Mapping[str, object]) -> str:
+    """The turn's block for an "off" verdict, or "".
+
+    Only "off": the router decides, not the hint rail, which names skills on
+    medium evidence too. A "note" verdict (an open question) adds no block,
+    because 23 to 261 negative controls per family get one; the turn
+    withholds its route hint and candidate line instead.
+    """
+    if verdict.get("verdict") != "off":
         return ""
-    record = _capability_off_router_verdict(message, disabled)
-    workflow = str(record.get("workflow") or "")
-    family_id = str(record.get("family") or "")
+    workflow = str(verdict.get("workflow") or "")
+    family_id = str(verdict.get("family") or "")
     if not workflow or not family_id:
         return ""
     return (
@@ -6784,16 +6801,9 @@ def capability_off_hint_context(message: str, disabled: Mapping[str, str]) -> st
     )
 
 
-def _capability_off_router_verdict(message: str, disabled: Mapping[str, str]) -> dict[str, object]:
-    """The router's off record for `message`, through the deferred import `_user_trigger_pack_route_decision` uses."""
-    try:
-        from ...routing.chat import capability_off_verdict
-    except ImportError:
-        try:
-            from omh.routing.chat import capability_off_verdict
-        except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
-            return {}
-    return capability_off_verdict(message, disabled)
+def capability_off_hint_context(message: str, disabled: Mapping[str, str]) -> str:
+    """`capability_off_block` for `message`: the turn's "off" block, or ""."""
+    return capability_off_block(capability_family_verdict(message, disabled))
 
 
 def route_hint_without_engine_workflows(payload: dict[str, object]) -> dict[str, object]:
