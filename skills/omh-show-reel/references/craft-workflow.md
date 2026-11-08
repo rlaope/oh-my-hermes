@@ -144,6 +144,8 @@ python3 $S/eleven.py sfx-kit <project>/audio/sfx --names impact,riser   # only w
 python3 $S/timeline.py <project>/script.json --music-analysis audio/music/analysis.json
 ```
 
+> OMH note: `narrate.py` and `eleven.py` spend the user's ElevenLabs credits; run each only after `omh-spend-gate`'s card and their typed yes.
+
 - Set music sections in 4-bar units (8 seconds at 120 BPM). ElevenLabs Music builds tracks in that unit, so if the drop comes later than the time you want, use `music_tools.py splice` to splice the drop section in a few beats after the end of the build-up and pull it earlier.
 - Design the sound effects to match each movement on screen. Do not just pick preset names; use `eleven.py sfx "prompt"` to make sounds that match the segment's material (paper, glass, liquid, electronic).
 
@@ -152,6 +154,8 @@ python3 $S/timeline.py <project>/script.json --music-analysis audio/music/analys
 ## 6. Images
 
 Do this only when the concept needs photos or generated images. Read `references/craft-images.md`.
+
+> OMH note: codex image runs spend the user's ChatGPT plan; run each only after `omh-spend-gate`'s card and their typed yes.
 
 - Generation: `<codex-image skill>/scripts/codex_imagegen_batch.sh <project>/assets/gen "prompt::name.png" …` (5 at a time in parallel, about 1 minute per image)
 - Photo-style images with people in them: build the prompt with the `photoreal` skill.
