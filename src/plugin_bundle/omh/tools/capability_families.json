@@ -66,6 +66,7 @@
    "model-optimization",
    "inference-serving",
    "model-finetuning",
+   "model-compression",
    "research-brief",
    "market-research",
    "repro-audit",

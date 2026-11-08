@@ -173,6 +173,14 @@ FROZEN_HANGUL_TRIGGERS_BY_SKILL: dict[str, int] = {
     # English equivalents in the same commit ("switch provider account",
     # "provider quota exceeded") — new capability reach, not padding over a
     # routing miss.
+    # 0 -> 6 (2026-11-07, new skill): model-compression ships with its own
+    # Korean phrases for quantization, distillation and pruning of a model
+    # (모델 양자화, 모델 증류, 지식 증류, 모델 프루닝, 모델 가지치기, 양자화 인식
+    # 학습), with the English base corpus in the same commit. Frozen at what it
+    # carries so a later Korean miss is not papered over by padding it; 모델
+    # 압축 and 모델 경량화 are not pack phrases because a 3D asset is compressed
+    # and slimmed too, and they count only beside a word of model weights.
+    "model-compression": 6,
     "model-setup": 10,  # +3 (모델 세팅/모델 체인/카테고리별 모델): chain-interview vocabulary, owner request 2026-08-21
     "morning-brief": 4,
     "oh-my-hermes": 2,

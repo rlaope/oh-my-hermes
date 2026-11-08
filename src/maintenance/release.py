@@ -198,7 +198,9 @@ CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "co
 # Merged with main: 13327 (main) + 85 = 13412, re-derived from the producer.
 # 13412 -> 13502: one `systematic-review` index line plus newline (+90),
 # measured from the producer; no headroom.
-SKILL_INDEX_CHAR_LIMIT = 13502
+# 13502 -> 13592: one `model-compression` index line plus newline (+90),
+# measured from the producer; no headroom.
+SKILL_INDEX_CHAR_LIMIT = 13592
 # The longest single skill line in that index. Every description is already cut
 # to 60 characters, so what moves this is a longer skill name.
 SKILL_INDEX_LINE_CHAR_LIMIT = 100
@@ -990,7 +992,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # keeps its exclusions in do_not_use_when only (-104), model-optimization drops two triggers (-44),
 # morning-brief's and native-debugging's index text (-6, -4), and the named phrases joining agent-ops-review,
 # code-review, security-event-response, verification-gate and wiki (+3, +2, +14, +6, +8); -125 in all.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 540901
+# 540901 -> 544876: one `model-compression` capability row (3973) plus its
+# separator (+3975); no other row moved. Measured per row from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 544876
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1100,7 +1104,9 @@ FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # Merged with main: 143564 (main) + 960 = 144524, re-derived from the producer.
 # 144524 -> 145471: one 945-character standalone `systematic-review` row plus
 # separator (+947); the procedure stays in the skill body.
-STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 145471
+# 145471 -> 146418: one 945-character standalone `model-compression` row plus
+# separator (+947); the method stays in its on-demand reference.
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 146418
 STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # ULW fold context ceiling (issue #954, PR D). The limit is the pre-D measured
 # value of the full profile's `skill_body` chars on `main` @ acb9a060, in the

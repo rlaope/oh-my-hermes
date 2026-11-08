@@ -3408,6 +3408,7 @@ _PRIMARY_HARNESSES = {
     "iac-change": "app-delivery-loop",
     "data-pipelines": "coding-handling",
     "model-finetuning": "research",
+    "model-compression": "research",
     "mobile-release": "app-delivery-loop",
     "internal-audit": "critic",
     "data-share-review": "critic",

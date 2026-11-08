@@ -64,6 +64,8 @@ from .policy import (
     jit_learn_guard_applies,
     llm_wiki_request,
     media_input_operator_guard_applies,
+    MODEL_COMPRESSION_ANCHORS,
+    MODEL_COMPRESSION_SHARED_PHRASES,
     ops_observability_external_blocked,
     ops_observability_generic_metrics_blocked,
 )
@@ -485,6 +487,70 @@ _MODEL_FINETUNING_EXPLICIT_PHRASES = tuple(
         "dpo vs sft",
         "dpo or sft",
     )
+)
+
+# `model-compression` holds back every everyday token its phrases are built
+# from. Listed are the phrases that name making a model smaller by changing its
+# weights: a method phrase, a method verb on a model family, a quantization
+# tool. A bare "compress", "quantize", "prune" or "distill" is not: people
+# compress a video, quantize a drum track, prune a hedge and distill whisky. A
+# method verb on "the model" is listed too; it reaches scoring only beside a
+# word of model weights or on its own (`EVERYDAY_SENSE_PHRASES`), because a 3D
+# asset or a business model is compressed and distilled as well.
+_MODEL_COMPRESSION_EXPLICIT_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (
+        "model-compression",
+        *MODEL_COMPRESSION_SHARED_PHRASES,
+        *(
+            f"{verb} {family}"
+            for verb in ("quantize", "quantise", "quantizing", "prune", "pruning", "distill", "distil", "distilling")
+            for family in ("llama", "qwen", "deepseek", "gpt-oss")
+        ),
+        *(f"convert {target} to gguf" for target in ("it", "this model", "the model", "our model", "my model")),
+        "post-training quantization",
+        "quantization-aware training",
+        "quantization aware training",
+        "model quantization",
+        "weight quantization",
+        "llm quantization",
+        "llm compression",
+        "int4 quantization",
+        "int8 quantization",
+        "fp8 quantization",
+        "bitsandbytes quantization",
+        "model pruning",
+        "2:4 sparsity",
+        "model distillation",
+        "knowledge distillation",
+        "smaller student model",
+        "gptq",
+        "awq",
+        "sparsegpt",
+        "llm-compressor",
+        "llmcompressor",
+        "llama-quantize",
+        "모델 양자화",
+        "모델을 양자화",
+        "모델 증류",
+        "모델을 증류",
+        "지식 증류",
+        "모델 프루닝",
+        "모델을 프루닝",
+        "모델 가지치기",
+        "양자화 인식 학습",
+    )
+)
+# "3D 모델 경량화" and "모델 압축" name a game asset as often as a network, so
+# these count as this skill's request only beside a word of model weights.
+# They are not pack phrases, so without one they add nothing: the Korean pack
+# has no everyday-sense row to withdraw them, and a request ending such as
+# "압축해줘" is a word of its own there.
+_MODEL_COMPRESSION_ANCHORED_PHRASES = tuple(
+    normalized_phrase(phrase) for phrase in ("모델 압축", "모델을 압축", "모델 경량화", "모델을 경량화")
+)
+_MODEL_COMPRESSION_ANCHOR_TOKENS = MODEL_COMPRESSION_ANCHORS | frozenset(
+    routing_tokens("양자화 증류 프루닝 가중치 파라미터 추론 정확도 4비트 8비트 온디바이스 엣지", stopwords=_STOPWORDS)
 )
 
 # `internal-audit` holds back every everyday token its phrases are built from.
@@ -1259,6 +1325,19 @@ _SKILL_POLICIES = {
             "Prepare finetune_decision/v1 first, returning do_not_finetune when prompting or retrieval closes the gap; "
             "training_method_choice/v1 from the data's shape; training_data_plan/v1 with a held-out split; "
             "baseline_comparison/v1 on the same eval; and checkpoint_promotion_gate/v1 with its margin and tolerance."
+        ),
+    ),
+    "model-compression": RecommendationPolicy(
+        next_action="prepare_compression_plan",
+        evidence_boundary=(
+            "A compression plan is not a quantized, pruned or distilled model, a measured size, or an eval score until "
+            "observed; OMH compresses nothing and runs no eval, and no smaller model is kept without the uncompressed "
+            "baseline measured on the same task eval."
+        ),
+        wrapper_guidance=(
+            "Prepare compression_target/v1 from the hardware, memory budget and runtime; compression_method_choice/v1 "
+            "with the cheapest method first; calibration_data_plan/v1 kept apart from the held-out eval; and "
+            "compression_quality_gate/v1 comparing baseline and compressed on the person's own task."
         ),
     ),
     "internal-audit": RecommendationPolicy(
@@ -3188,6 +3267,50 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
             "write",
         }
     ),
+    # `model-compression` is built from "compress", "quantize", "prune",
+    # "distill" and their nouns, from "model", "weight", "student", "smaller"
+    # and "structured", and from number formats a database or a GPU spec also
+    # names (int8, fp8, 4-bit) -- a compressed video, a quantized drum track, a
+    # pruned hedge, distilled whisky, a teacher-student ratio, an earthquake's
+    # magnitude and an int8 column all say them. Only the complete phrases score; the four tool
+    # names that mean nothing else stay creditable: `gptq`, `awq`, `sparsegpt`,
+    # `bitsandbytes`.
+    "model-compression": frozenset(
+        {
+            "4-bit",
+            "8-bit",
+            "aware",
+            "bit",
+            "compress",
+            "compression",
+            "distill",
+            "distillation",
+            "fp8",
+            "int8",
+            "into",
+            "knowledge",
+            "magnitude",
+            "make",
+            "model",
+            "our",
+            "post",
+            "post-training",
+            "prune",
+            "pruning",
+            "quantization",
+            "quantization-aware",
+            "quantize",
+            "quantized",
+            "smaller",
+            "structured",
+            "student",
+            "the",
+            "this",
+            "training",
+            "unstructured",
+            "weight",
+        }
+    ),
     # `model-finetuning` is built from "fine", "tune", "tuning", "model",
     # "data", "checkpoint", "baseline", "eval", "adapter", "preference",
     # "promote" and "supervised" -- a fine-tuned email, a workout that needs
@@ -4794,6 +4917,9 @@ def _score_definition(
     if definition.name == "model-finetuning" and _model_finetuning_explicit_match(normalized_query):
         score += 30
         matched.add("direct:model_finetuning")
+    if definition.name == "model-compression" and _model_compression_explicit_match(normalized_query, query_tokens):
+        score += 30
+        matched.add("direct:model_compression")
     if definition.name == "data-pipelines" and _data_pipelines_explicit_match(normalized_query):
         score += 30
         matched.add("direct:data_pipelines")
@@ -5690,6 +5816,19 @@ def _mobile_release_explicit_match(normalized_query: str) -> bool:
 
 def _model_finetuning_explicit_match(normalized_query: str) -> bool:
     return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _MODEL_FINETUNING_EXPLICIT_PHRASES)
+
+
+def _model_compression_explicit_match(normalized_query: str, query_tokens: set[str]) -> bool:
+    """A phrase that names compressing a model, or an anchored phrase beside a word of model weights.
+
+    The English shared phrases are in the explicit list: the everyday-sense
+    check withdrew the skill before this runs when one arrived unanchored.
+    """
+    if any(phrase_is_spoken(normalized_query, phrase) for phrase in _MODEL_COMPRESSION_EXPLICIT_PHRASES):
+        return True
+    return bool(query_tokens & _MODEL_COMPRESSION_ANCHOR_TOKENS) and any(
+        phrase_is_spoken(normalized_query, phrase) for phrase in _MODEL_COMPRESSION_ANCHORED_PHRASES
+    )
 
 
 def _data_pipelines_explicit_match(normalized_query: str) -> bool:

@@ -30,6 +30,7 @@ from .reference_regions import executable_routing_text
 from .jev_addressing import jev_addressed_skill
 from .localization import normalized_phrase, phrase_is_spoken, routing_terms, routing_tokens
 from .materials_cues import OFFICE_FILE_MATERIAL_PHRASES
+from .model_compression_cues import MODEL_COMPRESSION_ANCHORS, MODEL_COMPRESSION_SHARED_PHRASES
 from ..plugin_bundle.omh.dag_ulw_cues import DAG_ULW, asks_about_dag_ulw, dag_ulw_control, declines_dag_ulw, invokes_dag_ulw
 from ..plugin_bundle.omh.invocation_cues import invoked_instruction
 from ..coding.pi_family_interop import PI_DISTRIBUTION_HOST, RUNTIME_SHORT_NAME
@@ -2069,6 +2070,10 @@ _TOOLBELT_READINESS_TOKENS = _normalized_token_set(
 # scoring, the operator-surface fast path, the harness-session guard, a bare
 # leading name ("cancel my netflix subscription"), and the clarify shortlist.
 # The routing-precision controls fail when any one of those checks is removed.
+# Rows whose phrases carry anchor words of their own ("4-bit quantization",
+# "make the model smaller"): the anchor has to stand outside the spoken phrase,
+# or every such phrase would anchor itself.
+_ANCHOR_OUTSIDE_PHRASE_SKILLS = frozenset({"model-compression"})
 EVERYDAY_SENSE_PHRASES: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
     "failure-signal-audit": (
         ("silent failure", "silent failures", "hidden failure", "hidden failures"),
@@ -2240,6 +2245,11 @@ EVERYDAY_SENSE_PHRASES: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
             }
         ),
     ),
+    # "distill our model of customer churn into a one-pager", "prune the model of
+    # unused variables", "compress the model for the web" (a 3D asset) and "make
+    # the model smaller in Blender" name a conceptual, statistical or 3D model;
+    # each phrase keeps this route only beside a word of model weights.
+    "model-compression": (MODEL_COMPRESSION_SHARED_PHRASES, MODEL_COMPRESSION_ANCHORS),
     # "we need to backfill the open position on the team", "my family lineage
     # goes back to scotland", "duplicate events in my calendar" and "the batch
     # job at the bakery" are not pipelines; each phrase keeps this route only
@@ -2386,9 +2396,11 @@ def everyday_sense_phrase_unanchored(skill: str, normalized_query: str) -> bool:
     if not spoken:
         return False
     query_tokens = routing_tokens(normalized_query)
-    if query_tokens & anchors:
+    phrase_tokens = routing_tokens(" ".join(spoken))
+    context = query_tokens - phrase_tokens if skill in _ANCHOR_OUTSIDE_PHRASE_SKILLS else query_tokens
+    if context & anchors:
         return False
-    return bool(query_tokens - routing_tokens(" ".join(spoken)) - _EVERYDAY_SENSE_FILLER_TOKENS)
+    return bool(query_tokens - phrase_tokens - _EVERYDAY_SENSE_FILLER_TOKENS)
 
 
 _HARNESS_SESSION_INVENTORY_PHRASES = (

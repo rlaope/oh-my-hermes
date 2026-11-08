@@ -1000,7 +1000,11 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # using their words in another sense, and three more for the phrases that failed that test. Its review
             # adds a case per hold-back and what the narrowing must keep out: `주가`, `time in`, the market gate.
             # Its re-review keeps `주가` and `time in` as they were and pins the lookups instead of the compounds.
-            expected=1452,
+            # model-compression: a video, image colors, a hedge, whisky, a show flat, a churn model, a
+            # regression's variables, fruit trees, audio bit depth, a Blender asset and a 3D asset in Korean
+            # stay off it (+11); "distill this model", a reach case kept off rules-distill, now dispatches to
+            # model-compression and moves to the intervention corpus (-1).
+            expected=1462,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1599,7 +1603,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # six requests that its named reach phrases carry. Its review adds what the narrowing must leave reaching.
             # Its re-review adds the stock and time lookups, a search through a web search connection, the risk and
             # blocker pair in either order, a repeat schedule, and a softened market request.
-            expected=1279,
+            # model-compression: eight compression requests (two through the ko pack, one the "distill this
+            # model" reach case moved from the negative corpus) and three that keep inference-serving,
+            # rules-distill and model-finetuning (+11).
+            expected=1290,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

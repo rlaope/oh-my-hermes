@@ -73,6 +73,7 @@
     "omh-meeting-brief",
     "omh-memory-new",
     "omh-mobile-release",
+    "omh-model-compression",
     "omh-model-finetuning",
     "omh-molecular-docking",
     "omh-native-debugging",

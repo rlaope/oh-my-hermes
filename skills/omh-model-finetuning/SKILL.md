@@ -10,7 +10,7 @@ metadata:
     phase: model-finetuning
     role: planner
     quality_tier: baseline-comparison-gated
-    related_skills: [omh-model-optimization, omh-inference-serving, omh-llm-app-dev, omh-workflow-learning]
+    related_skills: [omh-model-optimization, omh-inference-serving, omh-llm-app-dev, omh-workflow-learning, omh-model-compression]
 ---
 
 # Model Finetuning
@@ -32,6 +32,7 @@ This is a Hermes-native `model-finetuning` workflow skill.
 - The ask is serving an existing model behind an endpoint or benchmarking that endpoint; use `omh-inference-serving`.
 - The ask is building an application on top of a hosted model -- RAG, structured output, prompt versions; use `omh-llm-app-dev`.
 - The ask is learning from an OMH run, a missed route, or a skill improvement candidate; use `omh-workflow-learning`.
+- The ask is a smaller or cheaper copy of an existing network -- quantization, pruning, or distillation into a student whose goal is size; use `omh-model-compression`.
 
 ## Examples
 

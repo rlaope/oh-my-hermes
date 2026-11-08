@@ -101,6 +101,8 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "show_replay_plan": "showing the bounded replay plan",
     "prepare_finetune_decision": "preparing a fine-tuning decision",
     "show_promotion_gate": "showing the checkpoint promotion gate",
+    "prepare_compression_plan": "preparing a model compression plan",
+    "show_compression_quality_gate": "showing the compression quality gate",
     "prepare_mobile_release_plan": "preparing a store release plan",
     "show_rollout_halt": "showing the rollout halt thresholds",
     "prepare_control_test_plan": "preparing a control test plan",

@@ -10,7 +10,7 @@ metadata:
     phase: rules-distillation
     role: memory-keeper
     quality_tier: rules-distillation-gated
-    related_skills: [omh-workflow-learning, omh-memory-new, omh-memory-sync, omh-agent-instructions]
+    related_skills: [omh-workflow-learning, omh-memory-new, omh-memory-sync, omh-agent-instructions, omh-model-compression]
 ---
 
 # Rules Distill
@@ -27,6 +27,7 @@ This is a Hermes-native `rules-distill` workflow skill.
 - The user wants durable factual project memory; use `omh-memory-new`, or `omh-memory-sync` to curate what Hermes already holds.
 - The user already approved a concrete code/doc change; use the implementation workflow.
 - The ask is writing or keeping current the file an agent reads at startup -- AGENTS.md, CLAUDE.md, a Cursor rule; use `omh-agent-instructions`, which updates only its marked region.
+- The ask is shrinking a neural network's weights into a smaller student model; use `omh-model-compression`.
 
 ## Examples
 

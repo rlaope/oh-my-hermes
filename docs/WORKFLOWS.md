@@ -3915,6 +3915,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user wants durable factual project memory; use `memory-new`, or `memory-sync` to curate what Hermes already holds.
   - The user already approved a concrete code/doc change; use the implementation workflow.
   - The ask is writing or keeping current the file an agent reads at startup -- AGENTS.md, CLAUDE.md, a Cursor rule; use `agent-instructions`, which updates only its marked region.
+  - The ask is shrinking a neural network's weights into a smaller student model; use `model-compression`.
 - Strong routing signals: `rules-distill`, `rules distill`, `distill rules`, `rule distillation`, `principle distill`, `skill principles`, `extract agent rules`, `turn traces into rules`, `policy distill`, `guidance distill`, `규칙 증류`, `원칙 추출`, `스킬 원칙`, `프롬프트 규칙`
 - Good example:
   - Prompt: rules-distill 최근 실패 trace와 스킬들을 보고 OMH AGENTS에 넣을 만한 반복 원칙 후보만 뽑아줘.
@@ -5414,6 +5415,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user wants their own machine's model routing or providers configured; use `model-setup`.
   - The question is whether a coding runtime/executor can run at all; use `executor-runtime-readiness`.
   - The goal is application or system performance rather than the serving endpoint itself; use `ultraperf`.
+  - The ask is producing the smaller weights -- GPTQ or AWQ calibration, pruning, or a distilled student -- and proving they still do the task; use `model-compression`.
 - Strong routing signals: `inference-serving`, `inference serving`, `serve this model`, `serve the model`, `model serving`, `serving endpoint`, `vllm`, `llama.cpp`, `llama cpp`, `serve with vllm`, `deploy vllm`, `vllm deployment`, `serving benchmark`, `benchmark the endpoint`, `prefix caching benchmark`, `gguf quantization`, `which quantization`, `모델 서빙`, `모델 서빙해줘`, `모델 배포해서 서빙`, `서빙 벤치마크`, `vllm 배포`, `vllm 서빙`, `추론 서버 띄워줘`, `모델 띄워줘`
 - Good example:
   - Prompt: Serve Qwen on our two A100s for the team and tell me if prefix caching is worth turning on.
@@ -5480,7 +5482,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user wants their own machine's model routing configured or providers connected; use `model-setup`.
   - The goal is measurable performance of an application or system, not model handling; use `ultraperf`.
   - The user wants benchmark-superiority or provider-readiness claims without measurements; decline the claim and offer the measurement plan from this skill's checklist.
-  - Making a model's weights smaller or faster: quantizing is `inference-serving` (serving format and quantization), distilling is `model-finetuning`; OMH has no pruning workflow.
+  - Making a model's weights smaller or cheaper by quantization, pruning or distillation into a student; use `model-compression`.
 - Strong routing signals: `model-optimization`, `onboard new model`, `calibrate new model`, `new model calibration`, `model calibration`
 - Good example:
   - Prompt: GLM 5.3 and 5.3 Flash just shipped; check what we should optimize for them.
@@ -7448,6 +7450,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The ask is serving an existing model behind an endpoint or benchmarking that endpoint; use `inference-serving`.
   - The ask is building an application on top of a hosted model -- RAG, structured output, prompt versions; use `llm-app-dev`.
   - The ask is learning from an OMH run, a missed route, or a skill improvement candidate; use `workflow-learning`.
+  - The ask is a smaller or cheaper copy of an existing network -- quantization, pruning, or distillation into a student whose goal is size; use `model-compression`.
 - Strong routing signals: `model-finetuning`, `model finetuning`, `model fine-tuning`, `fine-tune a model`, `fine-tune the model`, `fine tune a model`, `fine tune the model`, `fine-tune`, `fine tune`, `fine-tuning`, `fine tuning`, `fine-tuned model`, `fine-tuned checkpoint`, `finetune`, `finetuning`, `sft`, `supervised fine-tuning`, `dpo`, `direct preference optimization`, `rlvr`, `verifiable rewards`, `lora`, `qlora`, `lora adapter`, `preference data`, `untuned baseline`, `held-out eval`
 - Good example:
   - Prompt: should we fine-tune a model for our support replies or is a better prompt enough
@@ -9000,6 +9003,80 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Same-model reviewers are not independent: report `reviewer_independence` as the merge prints it, and keep the `broken_independence` warning in the report.
   - Agreement (kappa, PABAK) is agreement between two reviewers, not accuracy; never call it correctness against a human gold set.
   - AI screening decisions are decision support; the review team verifies them before any PRISMA count is published.
+
+### model-compression
+
+[omh] Making a model smaller or cheaper by changing its weights: quantization (GPTQ, AWQ, GGUF, bitsandbytes, FP8, quantization-aware training), pruning, or distillation into a smaller student, sized to the target hardware, calibrated on the task's own data, and kept only when it holds quality on the person's own eval.
+
+- Category: `planning`
+- Phase: `model-compression`
+- Hermes role: `planner`
+- Quality tier: `baseline-comparison-gated`
+- Reasoning demand: `standard`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Lifecycle stage: `canonical`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Keep the target, the method choice, the calibration plan and the quality gate in Hermes. Quantization, pruning, distillation and every eval run in the operator's environment; sizes, speeds and scores are recorded only from observed output, and OMH never loads a model, compresses weights, or runs an eval.
+- Why this exists: `model-compression` exists because making a model smaller had no owner: `inference-serving` chooses an engine and the quantized format to serve, and `model-finetuning` trains for new behavior, while producing the smaller weights and proving they still do the person's task fell between them, and perplexity was the only number anyone checked.
+- First steps:
+  - Ask what hardware and memory budget the model must fit and which runtime will load it before naming a method.
+  - Ask for the held-out task examples and the uncompressed model's score on them.
+- Use when: Use when a model's weights must get smaller or cheaper to fit a memory budget or cheaper hardware: post-training or quantization-aware quantization, structured or unstructured pruning, or distillation into a smaller student, gated by a comparison with the uncompressed baseline on the person's own task eval; OMH compresses nothing and runs no eval.
+- Do not use when:
+  - The ask is choosing a serving engine, which published checkpoint format to serve, or deploying and benchmarking an endpoint; use `inference-serving`.
+  - The ask is training a model for new behavior on your own data with SFT, DPO, RLVR or a LoRA adapter; use `model-finetuning`.
+  - The ask is turning lessons from OMH sessions into rules or guidance; use `rules-distill`.
+  - The ask is onboarding a new model generation into OMH's routing, calibration, or pricing; use `model-optimization`.
+- Strong routing signals: `model-compression`, `model compression`, `compress this model`, `compress the model`, `compress a model`, `compress our model`, `compress my model`, `quantize this model`, `quantize the model`, `quantize a model`, `quantize our model`, `quantize my model`, `prune this model`, `prune the model`, `prune a model`, `prune our model`, `prune my model`, `distill this model`, `distill the model`, `distill a model`, `distill our model`, `distill my model`, `make this model smaller`, `make the model smaller`, `structured pruning`, `unstructured pruning`, `weight pruning`, `magnitude pruning`, `4-bit quantization`, `8-bit quantization`, `into a smaller model`, `post-training quantization`, `quantization-aware training`, `model quantization`, `quantized model`, `int8 quantization`, `fp8 quantization`, `gptq`, `awq`, `bitsandbytes`, `model pruning`, `sparsegpt`, `model distillation`, `knowledge distillation`, `smaller student model`, `모델 양자화`, `모델 증류`, `지식 증류`, `모델 프루닝`, `모델 가지치기`, `양자화 인식 학습`
+- Good example:
+  - Prompt: Quantize our Llama 3.1 8B support classifier so it fits on one 16 GB GPU under vLLM, and tell me how much accuracy we lose.
+  - Expected behavior: Size the target, measure the 16-bit baseline on the held-out tickets, run a 4-bit GPTQ or AWQ pass with calibration tickets kept apart from the eval, and keep it only if accuracy stays within the stated tolerance.
+  - Why: The runtime and memory budget pick the format, and the person's own tickets decide whether the smaller model is kept.
+- Bad example:
+  - Prompt: The Q4_K_M GGUF has perplexity 6.1 against 5.9 for the original, ship it.
+  - Expected behavior: Refuse to keep it on perplexity alone: run the same task eval on the original and the Q4_K_M and compare before shipping.
+  - Why: A small perplexity gap can hide a large loss on the task, long context, or output format.
+- Quality bar:
+  - Start from the target: the memory budget and the runtime decide the format, and the format decides the method.
+  - Load `references/compression-method.md` for the sizing arithmetic, the method table, the commands with their source pages, and the quality gate instead of recalling flags.
+  - Try weight-only post-training quantization first; reach for pruning, quantization-aware training or distillation only when it measured short, because each needs training compute.
+  - Judge every candidate on the person's own task metric beside the baseline, and report perplexity or KL divergence only as a secondary signal.
+  - Keep prepared, compressed, evaluated, and kept as separate states for every candidate.
+- Completion checklist:
+  - The target names the hardware, the memory budget, the runtime and the format it needs.
+  - The method is the cheapest that reaches the target, with the rejected methods named.
+  - Calibration data came from the task's distribution and none of it is in the held-out eval.
+  - The kept model cites the same eval observed on the baseline and on it, within the stated tolerance.
+  - OMH ran nothing, and every size and score cites observed output or is marked unverified.
+- Recovery notes:
+  - If no held-out task eval exists, building one is the first step; say so before any compression run.
+  - If 4-bit loses too much, try a higher-precision format, a larger calibration set or an importance matrix before pruning or distillation.
+- Required inputs:
+  - the model: id or path, parameter count, architecture, and a license that permits a modified copy
+  - the target: GPU and VRAM, CPU or Apple Silicon, or the edge device, and the memory budget the model must fit
+  - the runtime that will load the result: vLLM, llama.cpp, TensorRT-LLM, or Transformers
+  - the person's own held-out task examples, the metric, and the quality loss they accept
+  - calibration text from the same distribution as the task, kept apart from the held-out examples
+  - for distillation: the teacher, the student candidates, and terms that permit training on the teacher's outputs
+- Expected outputs:
+  - compression_target/v1
+  - compression_method_choice/v1
+  - calibration_data_plan/v1
+  - compression_quality_gate/v1
+- Artifact expectations:
+  - compression_target/v1 turns the memory budget into the bits per weight or parameter count that fits, with the KV cache and runtime overhead counted, and names the runtime format that target needs
+  - compression_method_choice/v1 picks the cheapest method that reaches the target -- weight-only post-training quantization before pruning, quantization-aware training or distillation -- for that runtime, names the tool and the command's source page, and lists the methods rejected
+  - calibration_data_plan/v1 names the calibration source, sample count and sequence length, drawn from the task's distribution and checked for overlap with the held-out eval
+  - compression_quality_gate/v1 runs the same held-out eval, prompts and decoding on the uncompressed baseline and each compressed candidate, adds perplexity or KL divergence as a secondary signal, and keeps the smallest candidate within the stated tolerance
+- Safety rules:
+  - Measure the uncompressed baseline on the person's own held-out task eval before compressing; perplexity alone never keeps a compressed model.
+  - Keep a compressed model only when it stays within the stated tolerance of the baseline on that same eval; otherwise keep the next-larger candidate or the baseline.
+  - Never calibrate on the held-out eval examples; a model calibrated on its test set proves nothing.
+  - Do not distill from a teacher whose terms forbid training on its outputs, or publish a compressed copy the model's license does not permit.
+  - OMH compresses nothing, loads no model, and runs no eval; every size, speed, and score comes from observed output or is marked unverified.
 
 ### geospatial-analysis
 

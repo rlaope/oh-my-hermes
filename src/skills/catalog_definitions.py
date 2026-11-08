@@ -55,6 +55,7 @@ from ..source_finder import (
 
 from .repro_audit_skill import DEFINITION as REPRO_AUDIT_DEFINITION
 from .systematic_review_skill import DEFINITION as SYSTEMATIC_REVIEW_DEFINITION
+from .model_compression_skill import DEFINITION as MODEL_COMPRESSION_DEFINITION
 from .dag_ulw_skill import DEFINITION as DAG_ULW_DEFINITION
 from .decision_prototype_skill import DEFINITION as DECISION_PROTOTYPE_DEFINITION
 from .jev_skills import JEV_DEFINITIONS
@@ -6313,6 +6314,7 @@ _DEFINITIONS = [
             ),
             "The user already approved a concrete code/doc change; use the implementation workflow.",
             "The ask is writing or keeping current the file an agent reads at startup -- AGENTS.md, CLAUDE.md, a Cursor rule; use `agent-instructions`, which updates only its marked region.",
+            "The ask is shrinking a neural network's weights into a smaller student model; use `model-compression`.",
         ),
         good_example=SkillExample(
             prompt="rules-distill 최근 실패 trace와 스킬들을 보고 OMH AGENTS에 넣을 만한 반복 원칙 후보만 뽑아줘.",
@@ -8483,6 +8485,7 @@ _DEFINITIONS = [
             "The user wants their own machine's model routing or providers configured; use `model-setup`.",
             "The question is whether a coding runtime/executor can run at all; use `executor-runtime-readiness`.",
             "The goal is application or system performance rather than the serving endpoint itself; use `ultraperf`.",
+            "The ask is producing the smaller weights -- GPTQ or AWQ calibration, pruning, or a distilled student -- and proving they still do the task; use `model-compression`.",
         ),
         good_example=SkillExample(
             prompt="Serve Qwen on our two A100s for the team and tell me if prefix caching is worth turning on.",
@@ -8587,7 +8590,7 @@ _DEFINITIONS = [
             "The user wants their own machine's model routing configured or providers connected; use `model-setup`.",
             "The goal is measurable performance of an application or system, not model handling; use `ultraperf`.",
             "The user wants benchmark-superiority or provider-readiness claims without measurements; decline the claim and offer the measurement plan from this skill's checklist.",
-            "Making a model's weights smaller or faster: quantizing is `inference-serving` (serving format and quantization), distilling is `model-finetuning`; OMH has no pruning workflow.",
+            "Making a model's weights smaller or cheaper by quantization, pruning or distillation into a student; use `model-compression`.",
         ),
         good_example=SkillExample(
             prompt="GLM 5.3 and 5.3 Flash just shipped; check what we should optimize for them.",
@@ -11701,6 +11704,7 @@ _DEFINITIONS.append(
             "The ask is serving an existing model behind an endpoint or benchmarking that endpoint; use `inference-serving`.",
             "The ask is building an application on top of a hosted model -- RAG, structured output, prompt versions; use `llm-app-dev`.",
             "The ask is learning from an OMH run, a missed route, or a skill improvement candidate; use `workflow-learning`.",
+            "The ask is a smaller or cheaper copy of an existing network -- quantization, pruning, or distillation into a student whose goal is size; use `model-compression`.",
         ),
         good_example=SkillExample(
             prompt="should we fine-tune a model for our support replies or is a better prompt enough",
@@ -12440,6 +12444,7 @@ _DEFINITIONS.extend(
         SHOW_REEL_DEFINITION,
         REPRO_AUDIT_DEFINITION,
         SYSTEMATIC_REVIEW_DEFINITION,
+        MODEL_COMPRESSION_DEFINITION,
         GEOSPATIAL_ANALYSIS_DEFINITION,
         SPRITE_FORGE_DEFINITION,
         BIOMEDICAL_EVIDENCE_DEFINITION,

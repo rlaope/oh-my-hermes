@@ -368,9 +368,15 @@ NON_SKILL_BACKTICKS = frozenset(
 # `github-event-ops` with their labels, and `github-event-ops` defers a patch or minor bump to `verification-gate`;
 # no sibling gains a pointing-back statement. Seven cases, nine pairs, four new owners.
 # Web-research and research-brief then defer to market-research for sizing: two cases, two pairs.
-EXPECTED_DEFERENCE_CASES = 460
-EXPECTED_DEFERENCE_PAIRS = 488
-EXPECTED_DEFERRING_OWNERS = 138
+# `model-compression` defers serving to `inference-serving`, training for new
+# behavior to `model-finetuning`, session rules to `rules-distill` and model
+# onboarding to `model-optimization`, and each of the four gains one line
+# pointing back. `model-optimization`'s old quantize/distill line named
+# `inference-serving` and `model-finetuning`; it now names only the new skill.
+# Eight new cases less that one, eight new pairs less its two, one new owner.
+EXPECTED_DEFERENCE_CASES = 467
+EXPECTED_DEFERENCE_PAIRS = 494
+EXPECTED_DEFERRING_OWNERS = 139
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.
