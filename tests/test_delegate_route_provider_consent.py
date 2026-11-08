@@ -19,7 +19,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 from omh.plugin_bundle.omh.delegation_routing import read_delegation_route
-from omh.plugin_bundle.omh.hermes_delegation import PROVIDER_ENTITLEMENTS_SCHEMA_VERSION, provider_entitlements_path
+from omh.plugin_bundle.omh.hermes_delegation import (
+    HERMES_MIXTURE_CATEGORY_CHAINS,
+    MODEL_PROVIDER_ROUTES_SCHEMA_VERSION,
+    PROVIDER_ENTITLEMENTS_SCHEMA_VERSION,
+    alias_is_served,
+    effective_mixture_category_chains,
+    model_provider_routes_path,
+    provider_entitlements_path,
+)
 from omh.plugin_bundle.omh.tools.delegate_route_tool import omh_delegate_route_handler
 
 SESSION_CONFIG = (
@@ -183,7 +191,12 @@ class ProviderConsentTest(unittest.TestCase):
 class RouteOnlyProviderConsentTest(unittest.TestCase):
     """A relay key lets a route name its provider and enrols nothing else (#2635)."""
 
-    ROUTE = {"action": "set", "model": "deepseek/deepseek-v4-pro", "provider": "commandcode"}
+    PROVIDER = "commandcode"
+    KEY_NAME = "COMMANDCODE_API_KEY"
+
+    @property
+    def ROUTE(self) -> dict:
+        return {"action": "set", "model": "deepseek/deepseek-v4-pro", "provider": self.PROVIDER}
 
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
@@ -207,8 +220,8 @@ class RouteOnlyProviderConsentTest(unittest.TestCase):
     def auth(self, **store: object) -> None:
         (self.hermes_home / "auth.json").write_text(json.dumps({"version": 1, **store}), encoding="utf-8")
 
-    def pool(self, source: str, provider: str = "commandcode") -> None:
-        self.auth(credential_pool={provider: [{"source": source}]})
+    def pool(self, source: str, provider: str = "") -> None:
+        self.auth(credential_pool={provider or self.PROVIDER: [{"source": source}]})
 
     def call(self, **route: object) -> dict:
         return json.loads(
@@ -223,7 +236,7 @@ class RouteOnlyProviderConsentTest(unittest.TestCase):
         payload = self.call()
         self.assertEqual(payload["status"], "routed", payload)
         route = read_delegation_route(self.hermes_home)
-        self.assertEqual(route["provider"], "commandcode")
+        self.assertEqual(route["provider"], self.PROVIDER)
         self.assertEqual(route["model"], "deepseek/deepseek-v4-pro")
 
     def assert_refused(self) -> None:
@@ -233,15 +246,15 @@ class RouteOnlyProviderConsentTest(unittest.TestCase):
         self.assertEqual(self.config.read_bytes(), before)
 
     def test_the_key_in_env_lets_a_route_name_the_provider(self) -> None:
-        self.env("COMMANDCODE_API_KEY=placeholder-key\n")
+        self.env(f"{self.KEY_NAME}=placeholder-key\n")
         self.assert_routed()
 
     def test_a_login_or_counted_pool_row_lets_a_route_name_the_provider(self) -> None:
         for name, store in (
-            ("manual", {"credential_pool": {"commandcode": [{"source": "manual"}]}}),
-            ("manual label", {"credential_pool": {"commandcode": [{"source": "manual:work"}]}}),
-            ("active provider", {"active_provider": "commandcode"}),
-            ("provider state", {"providers": {"commandcode": {"token_type": "key"}}}),
+            ("manual", {"credential_pool": {self.PROVIDER: [{"source": "manual"}]}}),
+            ("manual label", {"credential_pool": {self.PROVIDER: [{"source": "manual:work"}]}}),
+            ("active provider", {"active_provider": self.PROVIDER}),
+            ("provider state", {"providers": {self.PROVIDER: {"token_type": "key"}}}),
         ):
             with self.subTest(name):
                 self.auth(**store)
@@ -250,19 +263,19 @@ class RouteOnlyProviderConsentTest(unittest.TestCase):
     def test_a_pool_row_hermes_would_not_count_is_refused(self) -> None:
         # A row seeded from a variable that is gone, and one borrowed from
         # another CLI, are not credentials the person gave Hermes.
-        for source in ("env:COMMANDCODE_API_KEY", "gh_cli"):
+        for source in (f"env:{self.KEY_NAME}", "gh_cli"):
             with self.subTest(source):
                 self.pool(source)
                 self.assert_refused()
 
     def test_an_env_seeded_row_lapses_with_an_empty_key(self) -> None:
-        self.pool("env:COMMANDCODE_API_KEY")
-        self.env("COMMANDCODE_API_KEY=\n")
+        self.pool(f"env:{self.KEY_NAME}")
+        self.env(f"{self.KEY_NAME}=\n")
         self.assert_refused()
 
     def test_an_excluded_provider_is_refused_with_a_pool_row(self) -> None:
         self.pool("manual")
-        self.record(providers={"anthropic": "anthropic"}, excluded_providers=["commandcode"])
+        self.record(providers={"anthropic": "anthropic"}, excluded_providers=[self.PROVIDER])
         self.assert_refused()
 
     def test_a_pool_row_for_a_provider_outside_the_table_is_refused(self) -> None:
@@ -277,36 +290,111 @@ class RouteOnlyProviderConsentTest(unittest.TestCase):
 
     def test_a_key_only_exported_in_the_shell_is_refused(self) -> None:
         # Provider detection reads what Hermes recorded, never this process.
-        with patch.dict("os.environ", {"COMMANDCODE_API_KEY": "placeholder-key"}):
+        with patch.dict("os.environ", {self.KEY_NAME: "placeholder-key"}):
             self.assert_refused()
 
     def test_a_commented_key_is_refused(self) -> None:
-        self.env("# COMMANDCODE_API_KEY=placeholder-key\n")
+        self.env(f"# {self.KEY_NAME}=placeholder-key\n")
         self.assert_refused()
 
     def test_an_empty_key_is_refused(self) -> None:
         # Hermes raises "No usable credentials" on it, after OMH said routed.
-        for line in ("COMMANDCODE_API_KEY=\n", 'COMMANDCODE_API_KEY=""\n', "COMMANDCODE_API_KEY=''\n"):
+        for line in (f"{self.KEY_NAME}=\n", f'{self.KEY_NAME}=""\n', f"{self.KEY_NAME}=''\n"):
             with self.subTest(line=line):
                 self.env(line)
                 self.assert_refused()
 
-    def test_the_models_dev_name_alone_is_refused(self) -> None:
-        # Hermes' registry reads only COMMANDCODE_API_KEY for this provider.
-        self.env("CMD_API_KEY=placeholder-key\n")
-        self.assert_refused()
+    def test_a_name_hermes_does_not_read_for_the_provider_is_refused(self) -> None:
+        # Hermes' registry reads one key per relay: models.dev's CMD_API_KEY
+        # is not commandcode's, and one relay's key never opens another.
+        for name in sorted({"CMD_API_KEY", "COMMANDCODE_API_KEY", "KILOCODE_API_KEY", "AI_GATEWAY_API_KEY"} - {self.KEY_NAME}):
+            with self.subTest(name):
+                self.env(f"{name}=placeholder-key\n")
+                self.assert_refused()
 
     def test_an_excluded_provider_is_refused_with_the_key_present(self) -> None:
-        self.env("COMMANDCODE_API_KEY=placeholder-key\n")
-        self.record(providers={"anthropic": "anthropic"}, excluded_providers=["commandcode"])
+        self.env(f"{self.KEY_NAME}=placeholder-key\n")
+        self.record(providers={"anthropic": "anthropic"}, excluded_providers=[self.PROVIDER])
         self.assert_refused()
 
     def test_a_recorded_gateway_does_not_cover_the_key(self) -> None:
         # An env row of kind `gateway` was dropped as already held when the
         # document recorded a gateway of its own, which refused this route.
-        self.env("COMMANDCODE_API_KEY=placeholder-key\n")
+        self.env(f"{self.KEY_NAME}=placeholder-key\n")
         self.record(providers={"og": "gateway"})
         self.assert_routed()
+
+    def routed_categories(self) -> int:
+        """Categories an `anthropic` session holding its own key routes, with no routes document."""
+        original = self.config.read_bytes()
+        routed = 0
+        for category in sorted(effective_mixture_category_chains(self.omh_home, self.hermes_home)):
+            self.config.write_bytes(original)
+            routed += self.call(action="set", category=category)["status"] == "routed"
+        self.config.write_bytes(original)
+        return routed
+
+    def test_the_key_or_a_login_leaves_category_routes_as_they_were(self) -> None:
+        # As a `gateway` account the relay served every alias, so the chains
+        # fell back to the shipped order and categories whose new head the
+        # session provider cannot serve were refused.
+        self.env("ANTHROPIC_API_KEY=placeholder-key\n")
+        baseline = self.routed_categories()
+        self.assertGreater(baseline, 0)
+        for label, key_line, store in (
+            ("key", f"{self.KEY_NAME}=placeholder-key\n", None),
+            ("manual row", "", {"credential_pool": {self.PROVIDER: [{"source": "manual"}]}}),
+            ("active provider", "", {"active_provider": self.PROVIDER}),
+            ("provider state", "", {"providers": {self.PROVIDER: {"token_type": "key"}}}),
+        ):
+            with self.subTest(label):
+                self.env("ANTHROPIC_API_KEY=placeholder-key\n" + key_line)
+                (self.hermes_home / "auth.json").unlink(missing_ok=True)
+                if store is not None:
+                    self.auth(**store)
+                self.assertEqual(self.routed_categories(), baseline)
+
+    def test_a_routes_document_sends_category_heads_to_the_held_relay(self) -> None:
+        # The routes document recommended for a relay: every chain alias the
+        # session's own provider cannot serve goes to it. Held, those heads
+        # lead their chains again and route to the relay; not held, none does.
+        anthropic_only = {"providers": {"anthropic": "anthropic"}, "subscription_clis": []}
+        chains = HERMES_MIXTURE_CATEGORY_CHAINS
+        aliases = sorted({alias for chain in chains.values() for alias, _effort in chain if not alias_is_served(alias, anthropic_only)})
+        path = model_provider_routes_path(self.omh_home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": MODEL_PROVIDER_ROUTES_SCHEMA_VERSION,
+                    "models": {alias: {"provider": self.PROVIDER, "model": f"vendor/{alias}"} for alias in aliases},
+                }
+            ),
+            encoding="utf-8",
+        )
+        original = self.config.read_bytes()
+        for label, key_line in (("key", f"{self.KEY_NAME}=placeholder-key\n"), ("no key", "")):
+            with self.subTest(label):
+                self.env("ANTHROPIC_API_KEY=placeholder-key\n" + key_line)
+                via_relay = 0
+                for category in sorted(effective_mixture_category_chains(self.omh_home, self.hermes_home)):
+                    self.config.write_bytes(original)
+                    if self.call(action="set", category=category)["status"] == "routed":
+                        via_relay += read_delegation_route(self.hermes_home).get("provider") == self.PROVIDER
+                self.config.write_bytes(original)
+                shipped_heads_on_relay = sum(chain[0][0] in aliases for chain in chains.values())
+                self.assertGreater(shipped_heads_on_relay, 0)
+                self.assertEqual(via_relay, shipped_heads_on_relay if key_line else 0)
+
+
+class KilocodeRouteOnlyConsentTest(RouteOnlyProviderConsentTest):
+    PROVIDER = "kilocode"
+    KEY_NAME = "KILOCODE_API_KEY"
+
+
+class AiGatewayRouteOnlyConsentTest(RouteOnlyProviderConsentTest):
+    PROVIDER = "ai-gateway"
+    KEY_NAME = "AI_GATEWAY_API_KEY"
 
 
 if __name__ == "__main__":

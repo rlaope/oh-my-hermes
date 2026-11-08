@@ -5331,10 +5331,12 @@ Before calling the bot integration ready, verify these points:
   (stdout `plan.goals` and `plan.options` stay generated).
 - For implementation-shaped draft plans, the stdout
   `wrapper_contract.coding_delegate.argv_template` is the handoff bridge to
-  `omh coding delegate --executor codex --record --from-plan <accepted-plan.md>`;
+  `omh coding delegate --executor <selected-executor> --record --from-plan <accepted-plan.md>`;
   run it only after plan acceptance and pass the accepted artifact or context
-  pack, not the original Discord/channel summary, when the wrapper wants a
-  run-backed Codex handoff.
+  pack, not the original Discord/channel summary. The template's executor is
+  the setup profile's default executor, else `generic`; a run-backed Codex
+  handoff needs `--executor codex`, because `--from-plan` without `--executor`
+  resolves the same default as a plain `omh coding delegate`.
 - A chat message that strongly names a workflow reaches Hermes with installed
   skill descriptions available after the wrapper dispatches to Hermes.
 - `omh runtime record` can create a run and `omh runtime show <run-id>` can read

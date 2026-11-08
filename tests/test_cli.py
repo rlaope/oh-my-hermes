@@ -12065,8 +12065,10 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         self.assertIn("--from-plan", coding_delegate["argv_template"])
         self.assertIn("{plan_artifact}", coding_delegate["argv_template"])
         self.assertNotIn("{message}", coding_delegate["argv_template"])
+        # No owner was named, so the template carries the neutral default, never Codex.
         self.assertIn("--executor", coding_delegate["argv_template"])
-        self.assertIn("codex", coding_delegate["argv_template"])
+        self.assertIn("generic", coding_delegate["argv_template"])
+        self.assertNotIn("codex", coding_delegate["argv_template"])
         self.assertEqual(coding_delegate["plan_artifact_arg"], "--from-plan")
         self.assertEqual(coding_delegate["recorded_run_field"], "runtime.run.run_id")
         self.assertNotIn("command_template", coding_delegate)
@@ -12084,7 +12086,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         self.assertNotIn("command_template", coding_delegate)
         self.assertEqual(coding_delegate["argv_template"][-1], "{plan_artifact}")
         self.assertIn("--executor", coding_delegate["argv_template"])
-        self.assertIn("codex", coding_delegate["argv_template"])
+        self.assertIn("generic", coding_delegate["argv_template"])
         self.assertNotIn(hostile, json.dumps(coding_delegate))
 
     def test_hermes_plan_wrapper_contract_rejects_substring_coding_matches(self) -> None:
@@ -12184,6 +12186,8 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
                 + [
                     "coding",
                     "delegate",
+                    "--executor",
+                    "codex",
                     "--from-plan",
                     str(plan_path),
                     "--record",
@@ -12247,7 +12251,17 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertTrue(context_pack_path.exists())
 
             status, stdout, stderr = run_cli(
-                base + ["coding", "delegate", "--from-plan", str(plan_path), "--record", "--include-message-full"]
+                base
+                + [
+                    "coding",
+                    "delegate",
+                    "--executor",
+                    "codex",
+                    "--from-plan",
+                    str(plan_path),
+                    "--record",
+                    "--include-message-full",
+                ]
             )
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
@@ -12300,6 +12314,46 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertEqual(shown["lifecycle"]["plan_status"], "accepted")
             self.assertTrue(shown["lifecycle"]["prepared_handoff"])
             self.assertEqual(shown["lifecycle"]["observation_status"], "prepared_not_observed")
+
+    def test_from_plan_without_executor_resolves_the_plain_default(self) -> None:
+        # Coding ownership stays executor-neutral: `--from-plan` once selected
+        # Codex when `--executor` was left out, while the same command without
+        # `--from-plan` resolved `generic`. Codex is selected only when named.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            task = ["implement", "durable", "observation", "journal", "with", "tests"]
+            reviewed = root / "reviewed-plan.md"
+            reviewed.write_text("## Plan\n- T1 append journal events\n", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(base + ["hermes", "plan", "--record", "--plan-file", str(reviewed), *task])
+            self.assertEqual((status, stderr), (0, ""))
+            planned = json.loads(stdout)
+            plan_path = Path(planned["artifact"]["path"])
+            self.assertNotIn("codex", planned["wrapper_contract"]["coding_delegate"]["argv_template"])
+
+            status, stdout, stderr = run_cli(base + ["hermes", "plan-accept", str(plan_path), "--write-context-pack"])
+            self.assertEqual((status, stderr), (0, ""))
+            self.assertEqual(json.loads(stdout)["context_pack"]["context_pack"]["executor_target"], "generic")
+
+            status, stdout, stderr = run_cli(base + ["coding", "delegate", *task])
+            self.assertEqual((status, stderr), (0, ""))
+            plain = json.loads(stdout)
+
+            status, stdout, stderr = run_cli(base + ["coding", "delegate", "--record", "--from-plan", str(plan_path)])
+            self.assertEqual((status, stderr), (0, ""))
+            from_plan = json.loads(stdout)
+            self.assertEqual(from_plan["selected_executor_profile"], plain["selected_executor_profile"])
+            self.assertEqual(from_plan["selected_executor_profile"], "generic")
+            self.assertEqual(from_plan["work_owner_mode"], plain["work_owner_mode"])
+            self.assertNotIn("executor_handoff", from_plan)
+            self.assertFalse(from_plan["runtime"]["recorded"])
+
+            status, stdout, stderr = run_cli(
+                base + ["coding", "delegate", "--executor", "codex", "--from-plan", str(plan_path)]
+            )
+            self.assertEqual((status, stderr), (0, ""))
+            self.assertEqual(json.loads(stdout)["selected_executor_profile"], "codex")
 
     def test_hermes_plan_records_context_for_weak_request(self) -> None:
         with TemporaryDirectory() as tmp:
