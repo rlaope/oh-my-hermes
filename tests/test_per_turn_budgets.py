@@ -708,9 +708,12 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         self.assertEqual(without_role(legacy), 85)
         encoded = json.dumps(legacy, sort_keys=True, ensure_ascii=False)
         self.assertEqual(len(encoded), 2479)
+        # Digest re-derived, length unchanged: the export `owner` description reads "a coding owner named in the
+        # run's request" in place of "the coding owner the person already chose" (same 42 characters), since a
+        # choice counts only for the request it was made in; the pin before it was 39be91ff...d3c5.
         self.assertEqual(
             hashlib.sha256(encoded.encode()).hexdigest(),
-            "39be91ffc4db311ad1222cd4f57ded619ceb643063fdaa7bb2f0605fe654d3c5",
+            "5f8cb791ca4052cd474026e154f759ba0ea9c01f402d4fd6ebe4054253143b6f",
         )
         # The parked cap is measured against the live schema without the six
         # category values, so category growth cannot spend the parked cap.

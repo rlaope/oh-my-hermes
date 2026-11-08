@@ -993,7 +993,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # 540901 -> 541076: a coding-owner choice counts only for the request it was made in. dag-ulw's handoff policy and
 # fourth safety rule drop the one-day window (+90); ulw-maestro's required input, first safety rule and owner-choice
 # quality bar say the same (+85). Measured per row from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 541076
+# 541076 -> 541116: no learned coding-owner default. ulw-maestro's owner-choice quality bar names the setup-profile
+# default as a choice that stands and drops "recorded or learned" (+30); dag-ulw's handoff policy says the owner is
+# named in a request that invokes dag-ulw (+10). Measured per row from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 541116
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

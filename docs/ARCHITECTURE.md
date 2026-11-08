@@ -950,7 +950,7 @@ integration and is considered only when the user declares the corresponding
 local route active. OMH transfers no credentials.
 
 `model_routing_status/v1` joins discovery, Hermes aliases, Maestro category
-resolution, and owner-learning metadata for agents and maintainers. These
+resolution, and stored owner-choice metadata (which selects no owner) for agents and maintainers. These
 remain four separately labeled inputs. The status and doctor advisory do not
 upgrade any of them into provider entitlement, dispatch, execution, review,
 CI, or merge evidence.

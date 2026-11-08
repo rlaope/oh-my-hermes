@@ -632,6 +632,18 @@ All notable changes will be documented here.
   returns to the chat.** The transcript view the wheel opens closes once the wheel brings it back to its
   end, so the composer is back without Esc or `q`. A view opened by Ctrl+O or
   `/history` still stays open at its end.
+- **The router no longer picks a coding owner from earlier choices.** Three
+  accepted answers to the coding-owner question used to make that owner a
+  visible default for later requests. Now every request asks for an explicit
+  choice unless it names an owner or the setup profile holds one, so the
+  "Override learned coding agent" and "Reset learned coding agent" card
+  actions are gone. The stored choice history stays readable in
+  `omh coding model-routing status` and clearable with its `reset`, but it
+  selects no owner. ulw-maestro now names the setup-profile default as a
+  choice that stands, and dag-ulw says a newly named owner needs a new run id.
+  `omh_dag define` now refuses to define a cancelled run id again instead of
+  handing back the cancelled run, and `omh coding model-routing status`
+  reports stored choices as `recorded` history that selects no owner.
 - **The round-end check continues a turn less often.** A changed function's
   name in another file no longer continues the turn when every mention there
   is proven to need no change: another object's method of the same name, or

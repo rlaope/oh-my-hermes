@@ -21,6 +21,7 @@ from omh.routing.executor_cues import (
     SUBSTRING_NAMED_CODING_AGENT_PHRASES,
 )
 from omh.routing.coding_route_actions import (
+    CODING_ROUTE_DECISION_SOURCES,
     CODING_ROUTE_LANE_NEXT_ACTION,
     CODING_ROUTE_NEXT_ACTIONS,
     COMPATIBLE_ROUTE_NEXT_ACTION,
@@ -323,7 +324,8 @@ class CodingRouteActionGuardTests(unittest.TestCase):
                 self.assertEqual(decision.next_action, NAMED_EXECUTOR_NEXT_ACTION)
                 self.assertEqual(decision.selected_owner, owner)
 
-    def test_owner_learning_asks_then_exposes_reversible_fourth_default(self) -> None:
+    def test_three_accepted_choices_then_a_fourth_request_still_asks(self) -> None:
+        # Mutation: restore `use_learned_default`; the fourth request then picks codex without asking.
         state = empty_owner_preference_state()
 
         for index in range(3):
@@ -346,13 +348,16 @@ class CodingRouteActionGuardTests(unittest.TestCase):
             owner_preference_state=state,
         )
 
-        self.assertEqual(fourth.next_action, RECORDED_OWNER_NEXT_ACTION)
-        self.assertEqual(fourth.source, "learned_owner_preference")
-        self.assertEqual(fourth.selected_owner, "codex")
-        self.assertEqual(fourth.owner_preference_route_family, "ulw-coding-delivery")
+        self.assertEqual(fourth.next_action, USER_CHOICE_NEXT_ACTION)
+        self.assertEqual(fourth.source, "user_choice_required")
+        self.assertTrue(fourth.choice_required)
+        self.assertEqual(fourth.selected_owner, "")
+        self.assertEqual(fourth.owner_preference_action, "ask_explicit_owner")
+        self.assertEqual(fourth.owner_preference_reason_code, "explicit_choice_required")
         self.assertEqual(fourth.owner_preference_evidence_count, 3)
-        self.assertTrue(fourth.owner_preference_override_available)
-        self.assertTrue(fourth.owner_preference_reset_available)
+        self.assertFalse(fourth.owner_preference_override_available)
+        self.assertFalse(fourth.owner_preference_reset_available)
+        self.assertNotIn("learned_owner_preference", CODING_ROUTE_DECISION_SOURCES)
 
     def test_explicit_owner_and_safety_gates_outrank_learned_default(self) -> None:
         state = _learned_owner_state()

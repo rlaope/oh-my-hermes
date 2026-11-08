@@ -157,8 +157,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 537829 -> 538004 and the digest re-derived: a coding-owner choice counts only for the request it was
             # made in, in the dag-ulw and maestro rows (+175, itemized at the same limit); the pin before it was
             # c5c17f84...2eb0.
-            (skill_capabilities, 538004, FULL_ROW_DELTA_CAP,
-             'cbc660582e53ada0b9beacda30b0e72ab2f72068152892f04701cbe2c11636bc',
+            # 538004 -> 538044 and the digest re-derived: no learned coding-owner default; the maestro and dag-ulw
+            # rows say which choice stands (+40, itemized at the same limit); the pin before it was cbc66058...36bc.
+            (skill_capabilities, 538044, FULL_ROW_DELTA_CAP,
+             '3cb600bd1434f53caa7464cf49cf4426ea6ec6133a105df42f31fa7de0c2e829',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -411,7 +413,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # move, and the pin before it was 62bebac1...bd0b.
         # Every body's reply-voice paragraph then becomes one line pointing at the shared rail, so every body
         # moves; the pin before it was c0b3ab76...df31.
-        self.assertEqual(_digest(legacy_hashes), '4da0a2a3752ee2f732417d7c0e3e653fe6e491037720f37116e3fc79bf5af96c')
+        # No learned coding-owner default then: only dag-ulw and maestro move, and the pin before it was
+        # 4da0a2a3...f96c. Its review then lists the shared rail among omh-routing's own references, which its
+        # one-line reply rule names; only that body moves, and the pin before it was 8484c56d...21dd.
+        self.assertEqual(_digest(legacy_hashes), '15b8c2cd20e6e7fc7da7253eeece9abd8e80bf14cb6165dd7579485b239e9716')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

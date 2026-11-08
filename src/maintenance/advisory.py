@@ -399,17 +399,18 @@ def _owner_learning_status(paths: OmhPaths) -> dict[str, object]:
         if not isinstance(route, dict):
             continue
         count = int(route.get("consecutive_accepted_explicit_choices", 0) or 0)
-        route_status = "learned" if count >= 3 else "learning"
-        if count == 0 and route.get("reset_at"):
-            route_status = "reset"
+        # A stored choice is history: a coding-owner choice counts only for the request it was made in, so no
+        # count of them selects an owner.
+        route_status = "recorded" if count else "reset" if route.get("reset_at") else "none"
         routes[str(family)] = {
             "status": route_status,
-            "selected_owner": str(route.get("selected_owner", "")),
+            "recorded_owner": str(route.get("selected_owner", "")),
+            "selects_owner": False,
             "evidence_count": count,
             "reset_at": str(route.get("reset_at", "")),
             "reset_reason": str(route.get("reset_reason", "")),
         }
-    overall = "learned" if any(value.get("status") == "learned" for value in routes.values() if isinstance(value, dict)) else "unlearned"
+    overall = "recorded" if any(value.get("status") == "recorded" for value in routes.values() if isinstance(value, dict)) else "none"
     return {"status": overall, "path": str(path), "routes": routes}
 
 
