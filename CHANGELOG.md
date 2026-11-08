@@ -175,6 +175,14 @@ All notable changes will be documented here.
   `hermes gateway start` to start it again, and the restart wait reads
   `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, as Hermes does.
 
+- **A recaptured memory now keeps a copy observed of another agent, and its
+  retired copy can no longer be rejected.** The retirement of an earlier held
+  copy also requires the same perspective, so the same summary observed of
+  codex and of claude-code stays two memories. Rejection refuses a copy
+  retired by a recapture as approval already did, a demotion of the same
+  Hermes entry reads that copy as held, and the retirement runs only after
+  an auto-safe approval succeeds.
+
 - **A messenger reply made only of `[SILENT]` and `[SHUTUP]` lines now counts
   as that marker.** Any `[SHUTUP]` among them mutes the thread with the 🫡
   reaction, where "be quiet" was lost or a bare marker could get text added
