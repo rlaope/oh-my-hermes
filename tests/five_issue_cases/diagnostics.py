@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -105,9 +106,14 @@ def exercise_dispatch(*, stdout: bytes = b'', stderr: bytes = b'', exit_code: in
                 argv += ['--fenced-result'] if sidecar == 'fenced' else ['--result-path', match[1]]
             commands.append(argv)
             return argv
+        codex_state = root / 'codex-state'
+        codex_state.mkdir()
         def ready(_paths: OmhPaths, _owner: str) -> dict[str, object]:
             return {'status': 'ready'}
-        with patch('omh.coding.fanout_dispatch.build_dispatch_argv', argv_for_fixture):
+        with (
+            patch('omh.coding.fanout_dispatch.build_dispatch_argv', argv_for_fixture),
+            patch.dict(os.environ, {'CODEX_HOME': str(codex_state)}),
+        ):
             summary = dispatch_fanout(paths, contract, goal_text=goal, repo_root=repo,
                                       base_sha=base, concurrency=1, readiness=ready,
                                       max_retries=0, run_verification=verification,

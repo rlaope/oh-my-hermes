@@ -217,6 +217,21 @@ class FixtureTransportTests(unittest.TestCase):
         # than assumed: the command may not consume the whole cap.
         self.assertLess(len(command), MAX_UNIT_VERIFICATION_COMMAND_CHARS - 40)
 
+    def test_diagnostics_fixture_survives_isolated_home_without_codex_state(self) -> None:
+        from five_issue_cases import diagnostics
+
+        with TemporaryDirectory(prefix='isolated-home-') as home_dir:
+            home = Path(home_dir)
+            with (
+                patch.dict(os.environ, {'HOME': str(home)}),
+                patch.dict(os.environ, {}, clear=False),
+            ):
+                _ = os.environ.pop('CODEX_HOME', None)
+                result = diagnostics.run_case('D5')
+            self.assertTrue(result['pass'], result['observations'])
+            self.assertTrue(result['cleanup']['verified_absent'])
+            self.assertFalse((home / '.codex').exists())
+
 
 if __name__ == '__main__':
     _ = unittest.main()

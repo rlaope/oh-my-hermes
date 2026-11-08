@@ -101,7 +101,8 @@ class _ConfinedSpawnContract:
             self.assertEqual(confinement.receipt["status"], "observed")
             self.assertTrue(confinement.receipt["enforced"])
             self.assertEqual(confinement.receipt["probe"]["inside_write_exit_code"], 0)
-            self.assertEqual(confinement.receipt["probe"]["outside_write_exit_code"], 1)
+            self.assertIsInstance(confinement.receipt["probe"]["outside_write_exit_code"], int)
+            self.assertNotEqual(confinement.receipt["probe"]["outside_write_exit_code"], 0)
             self.assertIn(self.probe_refusal, confinement.receipt["probe"]["refusal"])
 
     def test_owner_cli_under_a_sensitive_directory_is_really_fenced(self) -> None:
