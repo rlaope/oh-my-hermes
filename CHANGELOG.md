@@ -232,6 +232,15 @@ All notable changes will be documented here.
   cells that want it. Its border line meets both rows' columns. `/history`
   lays the whole table out again. Alignment colons (`:---:`) are still not
   drawn.
+
+- **A memory captured again while an earlier copy waits for review leaves one
+  copy, not two.** The earlier held candidate with the same normalized
+  summary, the key the duplicate check already reads, in the same scope, is
+  retired with `retirement_reason: recaptured` and `recaptured_as` naming the
+  new one. Approval refuses the retired copy, the review queue drops it, and
+  the capture result lists it. Approved and rejected candidates are left as
+  they are, and no person is asked.
+
 - **`/gateway restart` says what each choice stops.** In a named profile the
   shared gateway serves, "Restart this profile" now says that profile's
   running turns stop now, since Hermes re-serves it without waiting. The
@@ -449,6 +458,14 @@ All notable changes will be documented here.
   exactly as before. The operations family's card
   now also lists `operating-rhythm`, `ops-review` and `reliability-review`,
   which belonged to it but were missing from the card.
+- **`omh coding delegate --from-plan` no longer picks Codex when no owner
+  was named.** Leaving out `--executor` used to select Codex with
+  `--from-plan` and `generic` without it. Both now resolve the same default:
+  the setup profile's default executor, else `generic`. Codex is selected
+  only when it is named. The `hermes plan` wrapper template and
+  `plan-accept --write-context-pack` follow the same default instead of
+  writing `codex`, and the `omh-routing` text that said the flag selects
+  Codex now says what it resolves.
 - **Business and operations skills now check what a practitioner checks.**
   The morning brief no longer claims a Gmail connection is draft-only from
   its scopes (every Gmail scope that creates drafts also sends); it enforces
@@ -850,6 +867,29 @@ All notable changes will be documented here.
   note on the push result (arm a background watcher, or say the session has
   stopped); the reply the person reads is left as the model wrote it. The
   end-of-turn sentence remains only on a turn a failed watcher's notice opened.
+
+- **A Kilo Code or Vercel AI Gateway key no longer turns chain shaping off.**
+  `KILOCODE_API_KEY` or `AI_GATEWAY_API_KEY` in Hermes' `.env`, or a Hermes
+  login or credential pool row for `kilocode` or `ai-gateway`, counted as a
+  relay serving every model, so chains fell back to the shipped order and
+  category routes the session's own provider served were refused (an
+  Anthropic session routed 7 of 18 categories instead of 15, a Kimi session
+  none instead of 11). They now work the way a `commandcode` key does: a
+  route may name the relay, and a `routing/model-providers.json` route to a
+  relay this machine holds counts its alias as served, so a chain head sent
+  to the relay still leads and routes there. Nothing else about routing
+  moves. A key with a recorded gateway in `routing/providers.json` no longer
+  hides the relay, so a route naming it applies too. The same routes
+  document now works for a held `commandcode` relay, whose routed aliases
+  were demoted and reported as routed to an unknown provider. A
+  `providers.kilocode` or `providers.ai-gateway` block, or
+  `model.provider: kilocode` / `ai-gateway`, in `config.yaml` still counts
+  as a gateway the person declared. A key or login no longer lists either
+  relay in the `omh setup` provider step; the "a provider not listed here"
+  row still adds one. A `routing/providers.json` that already recorded the
+  relay (`"kilocode": "gateway"`, from an earlier `omh setup` pre-tick) keeps
+  turning shaping off until that row is cleared in `omh setup` or with
+  `omh model-chains provider clear`.
 
 ## 4.0.6 - 2026-11-04
 
