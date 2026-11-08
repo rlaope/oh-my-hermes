@@ -88,11 +88,13 @@ class BuildTests(unittest.TestCase):
             built = build_tui_home(omh_home, root, served=("kami",))
             home = tui_home_path(omh_home)
             self.assertEqual(built.path, home)
-            self.assertEqual(stat.S_IMODE(home.stat().st_mode), 0o700)
+            if os.name == "posix":  # Windows reports its own modes for a chmod (CLAUDE.md, platform facts)
+                self.assertEqual(stat.S_IMODE(home.stat().st_mode), 0o700)
             self.assertEqual((home / "config.yaml").read_text(encoding="utf-8"), (root / "config.yaml").read_text(encoding="utf-8"))
             self.assertEqual((home / "auth.json").read_text(encoding="utf-8"), (root / "auth.json").read_text(encoding="utf-8"))
             for name in ("config.yaml", "auth.json", ".env"):
-                self.assertEqual(stat.S_IMODE((home / name).stat().st_mode), 0o600, name)
+                if os.name == "posix":
+                    self.assertEqual(stat.S_IMODE((home / name).stat().st_mode), 0o600, name)
             env = (home / ".env").read_text(encoding="utf-8")
             self.assertIn("OPENAI_API_KEY=sk-root", env)
             self.assertNotIn("discord-secret", env)
