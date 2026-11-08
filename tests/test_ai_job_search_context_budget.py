@@ -403,11 +403,23 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # (same length); only that body moves, and the pin before it was 0ac3cd4c...17f7.
         # The routing reach round then moves the skills whose triggers or index text it narrows; the pin
         # before it was 0ae5f905...ebc5f.
+        # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
+        # moves, and the pin before it was d4eb4e54...7ed7.
+        # ralplan's acceptance line says plan-accept refuses a scaffold-only file unless
+        # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91.
+        # show-reel then sends its paid calls through spend-gate, and spend-gate counts subscription
+        # credits as a spend; only those two move. Its review round (credits read from the provider's
+        # own price, the credits receipt, the gate named at every paid run step) moves the same two.
+        # Merged with main after #2652: both sides' bodies; main's pin before that merge was
+        # b36ad311...1e91, and this branch's was f30c9ae0...ca61. Merged again after #2650: main's
+        # pin was 51d4a5cf...9f51, and this branch's was a5bce194...90de.
         # Re-derived for model-compression: its body joins the legacy set, and
         # inference-serving, model-finetuning, model-optimization and
         # rules-distill each gain one Do Not Use line naming it. Without the new
         # body the repeated bytes reproduce 92262; its Workflow Lane rail adds 341.
-        self.assertEqual(_digest(legacy_hashes), 'a25a40f012299483858f9899e8f6780513bfc7c96eb5ff8b72125caeb8019bb2')
+        # Merged with main: both sides' bodies; main's pin before that merge was
+        # 62bebac1...7abd0b, and this branch's was a25a40f0...19bb2.
+        self.assertEqual(_digest(legacy_hashes), 'bdc90eb328e0a93d0a3074993ef33e35ad0b7e41b461b7df954747be1591b8a4')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -457,7 +469,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
-            'awareness_primer_markdown_chars': 3685,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55).
+            'awareness_primer_markdown_chars': 3973,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49) and on the card and cue lines (+239).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,
             'role_context_chars_max': 2600,

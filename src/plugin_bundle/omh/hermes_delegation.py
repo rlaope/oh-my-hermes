@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from . import runtime_paths
 from .live_session import conversation_segments
-from .provider_detection import detect_linked_providers, env_row_is_covered
+from .provider_detection import detect_linked_providers, env_row_is_covered, route_only_provider_ids
 from .sqlite_readonly import connect_readonly
 
 import json
@@ -540,8 +540,9 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
 EXACT_MODEL_CONTRACT_ALIASES: frozenset[str] = frozenset(
     {
         "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-cyber", "gpt-6-luna",
-        "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "deepseek-v4.1-flash", "kimi-k3.1-pro",
-        "kimi-k3.1-pro-highspeed", "gemini-4-argon", "jev-1.13.0",
+        "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "deepseek-v4.1-flash",
+        "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed", "gemini-4-argon", "grok-4.7",
+        "jev-1.13.0",
     }
 )
 
@@ -581,6 +582,9 @@ DECLARED_MODEL_ALIAS_PROJECTIONS: dict[str, tuple[str, str, str]] = {
     "claude-sonnet-5.5": ("claude-sonnet-5-5", "thinking", "standard"),
     "anthropic.claude-haiku-5-5": ("claude-haiku-5-5", "thinking", "standard"),
     "claude-haiku-5.5": ("claude-haiku-5-5", "thinking", "standard"),
+    # Claude Fable 5.1's dotted spelling (Hermes' static model catalog,
+    # 2026-11-08), on the same terms.
+    "claude-fable-5.1": ("claude-fable-5-1", "thinking", "standard"),
     # TypeSafe publishes two aliases for Jev (docs.typesafe.ai/models,
     # 2026-09-21); both point at `jev-1.13.0` today and both move on the next
     # release, so each is a declared projection with a read date.
@@ -769,6 +773,11 @@ def effective_provider_entitlements(
     disk says a CLI subscription is held. Beyond that neither side removes
     the other's providers: the serving rule only ever moves a served entry
     forward, so more evidence can promote, never demote.
+
+    A route-only relay this home holds (`route_only_provider_ids`, minus the
+    exclusions) is listed under ``route_only_providers`` when there is one,
+    never under ``providers``: it serves exactly the aliases a routes
+    document sends to it, and no kind is inferred for the rest.
     """
     recorded, status = load_provider_entitlements(omh_home)
     excluded = set(recorded.get("excluded_providers", [])) if recorded is not None else set()
@@ -791,7 +800,10 @@ def effective_provider_entitlements(
     if recorded is None and not rows:
         return None, status, ()
     ordered = tuple(sorted(rows.values(), key=lambda row: (_PROVIDER_SOURCE_RANK.get(row["source"], 9), row["id"])))
-    entitlements = {"providers": {row["id"]: row["kind"] for row in ordered}, "subscription_clis": clis}
+    entitlements: dict[str, Any] = {"providers": {row["id"]: row["kind"] for row in ordered}, "subscription_clis": clis}
+    route_only = sorted(route_only_provider_ids(hermes_home) - excluded)
+    if route_only:
+        entitlements["route_only_providers"] = route_only
     return entitlements, status, ordered
 
 
@@ -803,8 +815,9 @@ def alias_is_served(
     """Whether a confirmed provider can serve ``alias``. Fails open.
 
     An explicit route in model-providers.json decides first: the alias is
-    served when its provider is one the operator confirmed, and unserved when
-    the route names a provider they did not. Without a route, a multi-vendor
+    served when its provider is one the operator confirmed or a route-only
+    relay they hold (``route_only_providers``), and unserved when the route
+    names a provider they did not. Without a route, a multi-vendor
     provider serves every alias, a vendor provider serves the aliases whose
     catalog families name it, and an alias the catalog never described (or a
     machine with no providers recorded at all) is served — nothing is
@@ -815,7 +828,7 @@ def alias_is_served(
         return True
     route_key = _route_key_for(alias, routes)
     if routes and route_key is not None:
-        return routes[route_key][0] in providers
+        return routes[route_key][0] in providers or routes[route_key][0] in entitlements.get("route_only_providers", ())
     kinds = set(str(kind) for kind in providers.values())
     if kinds & MULTI_VENDOR_PROVIDER_KINDS:
         return True
@@ -883,6 +896,7 @@ def routes_to_unknown_providers(
     providers = (entitlements or {}).get("providers", {})
     if not isinstance(providers, Mapping) or not providers:
         return ()
+    route_only = (entitlements or {}).get("route_only_providers", ())
     effective_chains = chains if chains is not None else HERMES_MIXTURE_CATEGORY_CHAINS
     chain_aliases = sorted({model for chain in effective_chains.values() for model, _effort in chain})
     reached: dict[str, list[str]] = {}
@@ -892,7 +906,7 @@ def routes_to_unknown_providers(
             reached.setdefault(key, []).append(alias)
     rows: list[dict[str, str]] = []
     for key, (provider, _model) in routes.items():
-        if provider in providers:
+        if provider in providers or provider in route_only:
             continue
         for alias in reached.get(key, []):
             rows.append({"alias": alias, "route": key, "provider": provider, "effect": UNKNOWN_ROUTE_EFFECT_CHAIN})

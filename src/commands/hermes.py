@@ -13,6 +13,7 @@ from ..hermes_planning import (
     update_hermes_plan_status,
     apply_reviewed_body_to_payload,
     mark_payload_as_planning_input,
+    mark_payload_as_scaffold_record,
     outside_repository_targets,
     outside_targets_note,
     read_plan_file,
@@ -43,7 +44,7 @@ from ..workflows.workflow_composition import (
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..installer import OmhError
 from ..system.local_store import utc_now
-from .common import _explicit_source_metadata, _paths, _print_json, _wants_json
+from .common import _explicit_source_metadata, _paths, _print_json, _resolved_executor, _wants_json
 
 
 def cmd_hermes_plan(args: argparse.Namespace) -> int:
@@ -72,6 +73,7 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
             source=args.source,
             limit=args.limit,
             source_metadata=source_metadata,
+            executor_target=_resolved_executor(args, default="generic"),
         )
         plan_file = getattr(args, "plan_file", None)
         input_bundle = bool(getattr(args, "input_bundle", False))
@@ -95,9 +97,11 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
                 if outside:
                     payload["say"] = " ".join(filter(None, (str(payload.get("say", "")), outside_targets_note(outside))))
             elif reviewed_body is None:
+                mark_payload_as_scaffold_record(payload)
                 payload["say"] = (
                     "Recorded the generated scaffold only; the reviewed plan is not in the file. "
-                    "Re-run with --plan-file <reviewed-plan.md> to record it."
+                    "Re-run with --plan-file <reviewed-plan.md> to record it; plan-accept refuses this file "
+                    "without --allow-scaffold."
                 )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
@@ -131,13 +135,19 @@ def _maybe_handle_plan_lifecycle_alias(args: argparse.Namespace) -> dict[str, ob
 def cmd_hermes_plan_accept(args: argparse.Namespace) -> int:
     try:
         paths = _paths(args)
-        result = update_hermes_plan_status(paths, args.path, status="accepted", summary=args.summary or "")
+        result = update_hermes_plan_status(
+            paths,
+            args.path,
+            status="accepted",
+            summary=args.summary or "",
+            allow_scaffold=bool(args.allow_scaffold),
+        )
         if args.write_context_pack:
             artifact = read_hermes_plan_artifact(args.path)
             result["context_pack"] = write_plan_handoff_context_pack(
                 paths,
                 artifact,
-                executor_target=args.executor,
+                executor_target=_resolved_executor(args, default="generic"),
             )
     except (OSError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
@@ -375,8 +385,13 @@ def _add_hermes_commands(sub) -> None:
     plan_accept = hermes_sub.add_parser("plan-accept", help="Mark a file-backed Hermes plan as accepted.")
     plan_accept.add_argument("path", help="Path to a hermes_plan/v1 Markdown artifact.")
     plan_accept.add_argument("--summary", default="", help="Optional metadata-only acceptance summary.")
+    plan_accept.add_argument(
+        "--allow-scaffold",
+        action="store_true",
+        help="Accept a plan recorded without --plan-file (plan_body: scaffold). Refused by default: it is not a reviewed plan.",
+    )
     plan_accept.add_argument("--write-context-pack", action="store_true", help="Write a handoff_context_pack/v1 pointer for the accepted plan.")
-    plan_accept.add_argument("--executor", type=canonical_executor_profile, default="codex", choices=("codex", "generic", "claude-code", "hermes", "omx-runtime", "pi-family-runtime", "omc-runtime"))
+    plan_accept.add_argument("--executor", type=canonical_executor_profile, default=None, choices=("choose", "codex", "generic", "claude-code", "hermes", "omx-runtime", "pi-family-runtime", "omc-runtime"))
     plan_accept.set_defaults(func=cmd_hermes_plan_accept)
 
     plan_revise = hermes_sub.add_parser("plan-revise", help="Mark a file-backed Hermes plan as revised.")

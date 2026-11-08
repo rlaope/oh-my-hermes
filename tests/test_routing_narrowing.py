@@ -6,6 +6,7 @@ import unittest
 
 from omh.routing.chat import route_chat_message
 from omh.routing.localization import normalized_phrase, phrase_is_spoken
+from omh.routing.recommend import recommend_skills
 
 
 def _route(message: str) -> dict[str, object]:
@@ -73,6 +74,38 @@ class MarketResearchKoreanTests(unittest.TestCase):
         for message in ("시장 규모 슬라이드 보내줘", "시장 규모가 작아서 걱정이야", "경쟁사 분석 회의 잡아줘", "경쟁사 분석 보고서 번역해줘", "광장시장 규모 계산해줘", "시장 규모 뜻 정리해줘", "경쟁사 분석 코드 정리해줘"):
             with self.subTest(message=message):
                 self.assertNotEqual(_route(message)["candidate_skill"], "market-research")
+
+
+
+class OpsReviewPairTests(unittest.TestCase):
+    _PAIR = "direct:ops_review_risks_and_blockers"
+
+    def _top(self, message: str) -> dict[str, object]:
+        return recommend_skills(message, limit=1)[0]
+
+    def test_both_words_in_any_order_or_joiner_name_the_review(self) -> None:
+        for message in ("이번 주 리스크와 블로커 정리해줘", "블로커, 리스크 정리", "블로커랑 리스크 알려줘", "리스크블로커 정리", "주요리스크와 블로커"):
+            with self.subTest(message=message):
+                top = self._top(message)
+                self.assertEqual(top["skill"], "ops-review")
+                self.assertIn(self._PAIR, top["matched"])
+
+    def test_one_word_alone_is_not_the_pair(self) -> None:
+        for message in ("이 PR 리스크 알려줘", "블로커만 정리해줘"):
+            with self.subTest(message=message):
+                self.assertNotIn(self._PAIR, self._top(message)["matched"])
+
+    def test_a_word_only_spelled_across_other_words_is_not_the_pair(self) -> None:
+        # `갤러리 스크린샷` holds `리스크` once the spaces go; each word must sit inside one token.
+        for message in (
+            "갤러리 스크린샷 블로커 정리해줘",
+            "디렉토리 스크롤 블로커 알려줘",
+            "쿼리 스크립트랑 블로커 정리해줘",
+            "블로 커 리스크 정리",
+        ):
+            with self.subTest(message=message):
+                self.assertNotIn(self._PAIR, self._top(message)["matched"])
+                self.assertNotEqual(_route(message)["selected_skill"], "ops-review")
 
 
 if __name__ == "__main__":

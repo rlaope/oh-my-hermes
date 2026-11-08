@@ -125,8 +125,9 @@ font/TTS/render support from fixtures.
 
 Separate generated, attached, received and published states with exact file
 hashes and target receipts. A local path is generated, not delivered. Attachment
-failure remains failed with a safe retry/alternative; external upload, spend or
-publication needs separate exact-target user approval and readback. Never infer
+failure remains failed with a safe retry/alternative; external upload or
+publication needs separate exact-target user approval and readback, and a spend
+goes through `omh-spend-gate`'s card and typed yes first. Never infer
 recipient receipt from an upload attempt. Include selected master/share/poster,
 subtitles and source package as requested, rights/gaps and a regeneration recipe.
 If a video was requested, a storyboard alone is not completion. Report the useful

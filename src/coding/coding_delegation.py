@@ -2178,7 +2178,8 @@ def _action_for(
             # `named_coding_agent` above is the one thing strong enough to
             # override that case, and only when the owner is named in the
             # message itself. Callers thread this only from genuine per-run
-            # provenance (see `_resolved_executor_for_delegate` and the
+            # provenance (`--explicit-owner-choice` on `coding delegate`, whose
+            # `--executor` default comes from `_resolved_executor`, and the
             # wrapper's `explicit`/`message_mention` executor-resolution
             # sources); a caller-default or learned-preference resolution
             # never sets it.
