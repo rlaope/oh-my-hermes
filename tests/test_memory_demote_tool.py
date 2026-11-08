@@ -133,6 +133,20 @@ class _Home(unittest.TestCase):
 
 
 class DemoteToolTests(_Home):
+    def test_a_copy_retired_by_a_recapture_still_reads_as_held(self) -> None:
+        write_setup_profile(self.paths, [], memory_mode="review-first")
+        write_memory(self.hermes, "MEMORY.md", FACT)
+        held = self.demote(sha(FACT)[:12])
+        self.assertEqual(held["status"], "pending_review", held)
+        recaptured = capture_project_memory_candidate(self.store, FACT, scope_kind="user-global")
+        self.assertEqual(recaptured.get("retired_held_candidates"), [held["candidate_id"]], recaptured)
+
+        again = self.demote(sha(FACT)[:12])
+
+        self.assertEqual((again["status"], again["candidate_id"]), ("pending_review", held["candidate_id"]), again)
+        self.assertEqual(again["recaptured_as"], recaptured["candidate"]["candidate_id"])
+        self.assertNotIn("remove_from_hermes", again)
+
     def test_demote_stores_the_exact_entry_and_hands_back_the_native_remove(self) -> None:
         path = write_memory(self.hermes, "MEMORY.md", FACT, entry(0))
         before = path.read_bytes()

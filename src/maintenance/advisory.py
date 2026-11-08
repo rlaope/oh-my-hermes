@@ -734,7 +734,8 @@ def check_legacy_plan_artifacts(hermes_home: str | Path | None = None) -> Advice
     remediation = (
         "OMH used to write plan artifacts into Hermes' own home. It now writes them to "
         "`<repo>/.omh/plans`, so these older files are no longer read by anything. They are "
-        "plain markdown: `omh hermes plan-accept <path>` still works on one, and they are "
+        "plain markdown: `omh hermes plan-accept <path>` still works on one (a scaffold-only "
+        "file needs `--allow-scaffold`), and they are "
         "safe to delete or archive by hand. OMH will not touch them."
     )
     counts: list[str] = []

@@ -249,6 +249,31 @@ def terminal_name(environ: Mapping[str, str]) -> str:
     return term
 
 
+INLINE_KITTY = "kitty"
+INLINE_UNICODE = "unicode"
+
+
+def inline_graphics(environ: Mapping[str, str]) -> str:
+    """Which form an inline image takes on this terminal, as Hermes' own TUI decides it from the environment (ui-tui `lib/terminalGraphics.ts`): kitty Unicode placeholders where they paint, else half-blocks."""
+    term = environ.get("TERM", "").lower()
+    program = environ.get("TERM_PROGRAM", "").lower()
+    if program == "vscode" or environ.get("HERMES_PTY_HOST", "") == "dashboard":
+        return INLINE_UNICODE
+    if environ.get("TMUX") or environ.get("STY"):
+        return INLINE_UNICODE
+    if program == "wezterm" or environ.get("WEZTERM_PANE"):
+        return INLINE_UNICODE
+    if (
+        environ.get("KITTY_WINDOW_ID")
+        or environ.get("GHOSTTY_RESOURCES_DIR")
+        or "kitty" in term
+        or "ghostty" in term
+        or program == "ghostty"
+    ):
+        return INLINE_KITTY
+    return INLINE_UNICODE
+
+
 def keyboard_protocol_request(environ: Mapping[str, str]) -> str:
     """What `Terminal` writes on entry to ask for the richer key reports; "" when it does not ask."""
     if environ.get("OMH_TUI_KEYBOARD", "") == KEYBOARD_OPT_OUT:
