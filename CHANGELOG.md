@@ -232,6 +232,15 @@ All notable changes will be documented here.
   cells that want it. Its border line meets both rows' columns. `/history`
   lays the whole table out again. Alignment colons (`:---:`) are still not
   drawn.
+
+- **A memory captured again while an earlier copy waits for review leaves one
+  copy, not two.** The earlier held candidate with the same normalized
+  summary, the key the duplicate check already reads, in the same scope, is
+  retired with `retirement_reason: recaptured` and `recaptured_as` naming the
+  new one. Approval refuses the retired copy, the review queue drops it, and
+  the capture result lists it. Approved and rejected candidates are left as
+  they are, and no person is asked.
+
 - **`/gateway restart` says what each choice stops.** In a named profile the
   shared gateway serves, "Restart this profile" now says that profile's
   running turns stop now, since Hermes re-serves it without waiting. The
@@ -441,6 +450,14 @@ All notable changes will be documented here.
   only the rendered rail page rewrote one of those lines. The primer now
   writes `ulw-research`, `omh-image-cards` and the other labels `skill_view`
   loads on all three.
+- **`omh coding delegate --from-plan` no longer picks Codex when no owner
+  was named.** Leaving out `--executor` used to select Codex with
+  `--from-plan` and `generic` without it. Both now resolve the same default:
+  the setup profile's default executor, else `generic`. Codex is selected
+  only when it is named. The `hermes plan` wrapper template and
+  `plan-accept --write-context-pack` follow the same default instead of
+  writing `codex`, and the `omh-routing` text that said the flag selects
+  Codex now says what it resolves.
 - **Business and operations skills now check what a practitioner checks.**
   The morning brief no longer claims a Gmail connection is draft-only from
   its scopes (every Gmail scope that creates drafts also sends); it enforces
