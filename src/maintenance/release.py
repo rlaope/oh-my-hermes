@@ -2194,10 +2194,13 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # 1521089 -> 1499208 (the ceiling 1700000 -> 1650000): each body's `Current lane` line drops its sample of up to
 # eight member names and a `+N more` count, none of which `skill_view` loads, and the cross-lane rail fix adds its
 # hand-off labels. 1,499,208 plus 10%, rounded up to the next 50,000, is 1,650,000.
-FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1499208
+# 1499208 -> 1450927 (the ceiling 1650000 -> 1600000): every body's reply-voice paragraph becomes one line; the
+# record-term and turn-ending clauses it repeated live in the shared rail's Reply Language And Host Voice and Turn
+# Ending sections, which already held them. 1,450,927 plus 10%, rounded up to the next 50,000, is 1,600,000.
+FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1450927
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1650000
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1600000
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # Repeated bytes: characters of full-profile SKILL.md `##` sections that are
 # byte-identical to the same section in another skill -- the second and later
@@ -2308,9 +2311,11 @@ FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # defaults those bodies repeated (-865). 116,571 plus 10%, rounded up to the next 10,000, is still 130,000.
 # 116571 -> 94049 (the ceiling 130000 -> 110000): the same lane line, whose sample of names was the same text in
 # every lane mate. 94,049 plus 10%, rounded up to the next 10,000, is 110,000.
-FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 94049
+# 94049 -> 84569 (the ceiling 110000 -> 100000): the same one-line reply-voice rule, shorter in every section that
+# repeats it. 84,569 plus 10%, rounded up to the next 10,000, is 100,000.
+FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 84569
 FULL_PROFILE_SKILL_BODY_REPEATED_CEILING_STEP_CHARS = 10000
-FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT = 110000
+FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT = 100000
 
 
 @dataclass(frozen=True)

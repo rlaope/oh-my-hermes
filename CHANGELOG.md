@@ -566,6 +566,15 @@ All notable changes will be documented here.
   head can't take (`+` to `xhigh`, then a switch to Gemini 4 Argon) keeps the
   picker open on that row, with every other edit intact, until you fix it or
   cancel. Stored values nobody touched are left as they are and marked.
+- **Every Hermes skill body carries the reply-voice rule as one line.** The
+  paragraph each body repeated becomes one line that keeps the rule's core:
+  reply in the user's own words and the host's own voice, the SOUL.md persona
+  owns reply language, tone, speech level and sentence endings in progress
+  updates too, the user's language where the persona sets none, and OMH shapes
+  structure and content only. The record-term and turn-ending clauses live once
+  in the shared rail's Reply Language And Host Voice and Turn Ending sections,
+  which already held them. Portable agent-skills bodies keep the full
+  paragraph, since their hosts have no shared rail.
 - **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
   `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
   or Enter opens sessions or bots, folds the plan, searches history, cycles
