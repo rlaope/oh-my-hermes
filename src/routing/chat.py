@@ -19,6 +19,13 @@ from .catalog_questions import (
 )
 from .compound_intent import distinct_complete_domain_signals
 from .action_copy import next_action_label as _route_next_action_label
+from .capability_off import (
+    CAPABILITY_NOTE_KEY,
+    CAPABILITY_OFF_KEY,
+    REASON_CODE_NO_ENABLED_CANDIDATE,
+    route_without_disabled_skills,
+)
+from ..plugin_bundle.omh.capability_off import CAPABILITY_OFF_REASON_CODE
 from .candidate_handoff import SHORTLIST_LEXICAL, WEAK_DISPATCH_EVIDENCE, build_candidate_handoff, shortlist_clarification
 from .dispatch_evidence import EVIDENCE_WEAK, GUARD_TRUSTED, dispatch_evidence
 from .decision_contract import build_route_decision_contract
@@ -1652,6 +1659,7 @@ def route_chat_message(
     min_confidence: str = "high",
     skill_policy: dict[str, object] | None = None,
     active_design_direction_iteration: Mapping[str, object] | None = None,
+    disabled_skills: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
@@ -1670,7 +1678,34 @@ def route_chat_message(
         min_confidence,
         skill_policy=skill_policy,
         active_design_direction_iteration=active_design_direction_iteration,
+        disabled_skills=disabled_skills,
     )
+
+
+def capability_family_verdict(
+    message: str, disabled_skills: Mapping[str, str], *, source: str = "generic"
+) -> dict[str, object]:
+    """What the chat route does about a turned-off family for `message`, or `{}`.
+
+    `{"verdict": "off", ...record}` when the route answers that the family is
+    off, `{"verdict": "note", ...record}` when it asks an open question noting
+    it, `{}` when no turned-off skill was the route's pick. The per-turn hint
+    asks this rather than judging on its own, so the turn and `omh_interact`
+    reach one verdict, from one router pass.
+
+    `source` is the chat source to route as. The hook passes the person's own
+    words (`request_message`, gateway material already stripped), on which
+    every source routes alike; a caller passing a raw gateway turn should
+    name its real source, since a messaging source strips that material first.
+    """
+    if not disabled_skills or not message.strip():
+        return {}
+    route = route_chat_message(message, source=source, disabled_skills=disabled_skills)
+    for verdict, key in (("off", CAPABILITY_OFF_KEY), ("note", CAPABILITY_NOTE_KEY)):
+        record = route.get(key)
+        if isinstance(record, dict):
+            return {"verdict": verdict, **record}
+    return {}
 
 
 def user_trigger_pack_route_hint(message: str) -> dict[str, str]:
@@ -1770,6 +1805,7 @@ def _enriched_route(
     *,
     skill_policy: dict[str, object] | None,
     active_design_direction_iteration: Mapping[str, object] | None = None,
+    disabled_skills: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     """The cached decision plus everything every consumer must see.
 
@@ -1912,6 +1948,10 @@ def _enriched_route(
                 f"Routing reason: {route.get('reason', '')}"
             )
     route["route_decision"] = build_route_decision_contract(route)
+    if disabled_skills:
+        # Last, so a turned-off skill is taken out of every list built above
+        # (`capability_off`); a home with nothing off never reaches it.
+        route = route_without_disabled_skills(route, disabled_skills, message=message)
     return _apply_skill_governance(route, skill_policy)
 
 
@@ -2027,6 +2067,7 @@ def public_chat_route_payload(
     include_message: bool = False,
     skill_policy: dict[str, object] | None = None,
     active_design_direction_iteration: Mapping[str, object] | None = None,
+    disabled_skills: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
@@ -2037,7 +2078,7 @@ def public_chat_route_payload(
         raise ValueError("chat route --limit must be at least 1")
     if min_confidence not in CONFIDENCE_LEVELS:
         raise ValueError(f"unsupported chat route confidence threshold: {min_confidence}")
-    if skill_policy is not None or active_design_direction_iteration is not None:
+    if skill_policy is not None or active_design_direction_iteration is not None or disabled_skills:
         return public_route_payload(
             route_chat_message(
                 message,
@@ -2046,6 +2087,7 @@ def public_chat_route_payload(
                 min_confidence=min_confidence,
                 skill_policy=skill_policy,
                 active_design_direction_iteration=active_design_direction_iteration,
+                disabled_skills=disabled_skills,
             ),
             include_message=include_message,
         )
@@ -2060,15 +2102,20 @@ def public_chat_route_payload(
     )
 
 
-def recommend_route_summary(message: str) -> dict[str, object]:
+def recommend_route_summary(message: str, *, disabled_skills: Mapping[str, str] | None = None) -> dict[str, object]:
     """The chat route's verdict for `message`, as the recommend surfaces show it.
 
     `omh recommend`, the `omh_recommend` plugin tool, and the MCP bridge rank
     with `recommend_skills`; this is the decision chat dispatch makes on top of
-    that ranking, so a reader of either surface sees the same answer.
+    that ranking, so a reader of either surface sees the same answer. A home's
+    turned-off families (`disabled_skills`) are taken out the way chat takes
+    them out, and a request for one carries the `capability_family_off` record.
     """
-    route = public_chat_route_payload(message)
-    return {key: route[key] for key in ("action", "selected_skill", "candidate_skill", "confidence")}
+    route = public_chat_route_payload(message, disabled_skills=disabled_skills)
+    summary = {key: route[key] for key in ("action", "selected_skill", "candidate_skill", "confidence")}
+    if CAPABILITY_OFF_KEY in route:
+        summary[CAPABILITY_OFF_KEY] = route[CAPABILITY_OFF_KEY]
+    return summary
 
 
 def _names_skill_display_label(message: str, skill: str) -> bool:
@@ -8116,6 +8163,13 @@ def _routing_prompt_template(
 
 
 def _routing_instruction(action: str, selected_skill: str, candidate_skill: str, reason_code: str = "") -> str:
+    if reason_code == CAPABILITY_OFF_REASON_CODE:
+        return (
+            "Do not dispatch: the requested workflow's capability family is turned off in this OMH home. "
+            "Say so and name the command that turns it back on."
+        )
+    if action == "clarify" and not candidate_skill and reason_code == REASON_CODE_NO_ENABLED_CANDIDATE:
+        return "Use the `oh-my-hermes` router and ask one open clarification question without naming a skill."
     if action == "dispatch":
         return f"Use the `{selected_skill}` workflow for this chat message."
     elif action == "clarify":

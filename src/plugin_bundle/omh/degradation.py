@@ -27,6 +27,9 @@ COMPONENT_LOOP_ROUTE_HINT_ASSESSMENT = "loop_route_hint_assessment"
 COMPONENT_CATALOG_QUESTION_CLASSIFIER = "catalog_question_classifier"
 COMPONENT_RUNTIME_STATUS_READ = "runtime_status_read"
 COMPONENT_DELEGATION_ROUTE_RESTORE = "delegation_route_restore"
+# `<omh_home>/setup-profile.json` exists but could not be read, so a family
+# the person turned off is routed as though it were on (`capability_off`).
+COMPONENT_CAPABILITY_POLICY_READ = "capability_policy_read"
 
 DEGRADATION_COMPONENTS = frozenset(
     {
@@ -35,12 +38,13 @@ DEGRADATION_COMPONENTS = frozenset(
         COMPONENT_CATALOG_QUESTION_CLASSIFIER,
         COMPONENT_RUNTIME_STATUS_READ,
         COMPONENT_DELEGATION_ROUTE_RESTORE,
+        COMPONENT_CAPABILITY_POLICY_READ,
     }
 )
 UNKNOWN_COMPONENT = "unknown_component"
-# The closed component set (5) times two distinct error types. Exceeding it
+# The closed component set (6) times two distinct error types. Exceeding it
 # indicates a duplication bug, which `components_truncated` makes visible.
-MAX_DEGRADATION_COMPONENTS = 10
+MAX_DEGRADATION_COMPONENTS = 12
 
 DEGRADATION_CLAIM_BOUNDARY = (
     "An OMH-local delegated call failed and a reduced local fallback answered. "

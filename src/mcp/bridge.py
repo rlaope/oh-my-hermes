@@ -9,6 +9,7 @@ from ..version import __version__
 from ..hud import build_hud_payload
 from ..local_store import ensure_dir, ensure_file, read_jsonl_objects, utc_now
 from ..paths import OmhPaths
+from ..plugin_bundle.omh.capability_off import disabled_skill_families
 from ..probe import probe_capabilities
 from ..routing.chat import recommend_route_summary
 from ..routing.recommend import recommend_skills
@@ -484,14 +485,20 @@ def _call_tool(paths: OmhPaths, name: str, arguments: dict[str, Any]) -> dict[st
         if not message:
             raise ValueError("omh_recommend.message is required")
         limit = _bounded_int(arguments.get("limit"), default=5, minimum=1, maximum=10)
-        recommendations = recommend_skills(message, limit=limit)
+        # A skill of a capability family this home turned off is not offered.
+        disabled = disabled_skill_families(getattr(paths, "omh_home", None))
+        recommendations = [
+            row
+            for row in recommend_skills(message, limit=limit + len(disabled))
+            if str(row.get("skill") or "") not in disabled
+        ][:limit]
         return _tool_result(
             "omh_recommend_result/v1",
             "omh_recommend",
             {
                 "message_summary": f"{len(message)} characters; raw prompt not stored by the bridge",
                 "recommendations": recommendations,
-                "route": recommend_route_summary(message),
+                "route": recommend_route_summary(message, disabled_skills=disabled or None),
             },
         )
     if name == "omh_probe":

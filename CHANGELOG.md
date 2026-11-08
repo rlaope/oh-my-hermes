@@ -472,6 +472,23 @@ All notable changes will be documented here.
   their skill: `account takeover` and `suspected unauthorized access`, `telemetry
   audit`, `write a handover guide` and `인수인계 문서 써줘`, and in Korean `시장 규모` and
   `경쟁사 분석` right before a request to size or analyse.
+- **A capability family turned off with `omh capability-policy disable` is no
+  longer routed to.** Its skills used to lose their tools but kept being
+  dispatched, offered as candidates, hinted and listed on the skill-candidate
+  line. Now none of those name them. A request the router would have
+  dispatched to one, or that names one, is answered with the family being off
+  and `omh capability-policy enable <family>` instead of being routed
+  elsewhere. When the router was only asking about one, it asks an open
+  question instead, noting in the reply's own language that the family is off
+  and how to turn it on, rather than offering a different skill in its place;
+  the per-turn hint names no skill for it either. `omh_interact`,
+  `omh chat interact`, `omh chat route-hint`, `omh_recommend` (plugin and MCP),
+  route-answer checks and the per-turn hint read the policy from the OMH home
+  on every call, so a profile-scoped home answers with its own, and a policy
+  file that cannot be read is reported. A home with nothing turned off routes
+  exactly as before. The operations family's card
+  now also lists `operating-rhythm`, `ops-review` and `reliability-review`,
+  which belonged to it but were missing from the card.
 - **Every arrow line in the per-turn primer names skills a model can load.**
   The generic tool map, workflow context cards and common cues named
   catalog names (`research`, `img-summary`) and shorthand that was no skill
