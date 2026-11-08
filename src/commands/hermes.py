@@ -84,6 +84,9 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
         reviewed_body = read_plan_file(plan_file) if plan_file is not None else None
         if reviewed_body is not None and not input_bundle:
             apply_reviewed_body_to_payload(payload)
+        if args.record and reviewed_body is None:
+            # Before the write, so the recorded file says what stdout says.
+            mark_payload_as_scaffold_record(payload)
         if args.record:
             artifact = write_hermes_plan(
                 _paths(args), payload, reviewed_body=reviewed_body, input_bundle=input_bundle
@@ -97,7 +100,6 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
                 if outside:
                     payload["say"] = " ".join(filter(None, (str(payload.get("say", "")), outside_targets_note(outside))))
             elif reviewed_body is None:
-                mark_payload_as_scaffold_record(payload)
                 payload["say"] = (
                     "Recorded the generated scaffold only; the reviewed plan is not in the file. "
                     "Re-run with --plan-file <reviewed-plan.md> to record it; plan-accept refuses this file "

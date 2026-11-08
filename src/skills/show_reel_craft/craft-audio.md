@@ -83,6 +83,8 @@ Ways to use it:
 python3 $S/narrate.py <project>/script.json --stt
 ```
 
+> OMH note: each command here that reaches ElevenLabs (`narrate.py`, `eleven.py`) spends the user's own credits. Run it only after `omh-spend-gate`'s card, which names the lines, voice and model, or the job and its length, with the expected credits from ElevenLabs' own price for that model, and the person's typed yes to that card. `synth_music.py`, `music_tools.py` and `timeline.py` run locally and spend nothing.
+
 - Each line is generated with `/with-timestamps`, and the character-level alignment (`<id>.align.json`) is saved. For Korean, use `alignment`. `normalized_alignment` returns Hangul romanized.
 - `--stt`: transcribes with Scribe and compares against whichever of the on-screen spelling and the pronunciation spelling is closer. A similarity below 0.85 or a differing number is ✗.
 - Only changed lines are regenerated. To regenerate specific lines, use `--only n03,n07 --force`.
@@ -131,6 +133,8 @@ python3 $S/music_tools.py plan audio/music/spec.json            # → audio/musi
 python3 $S/eleven.py music audio/music/music.mp3 --plan audio/music/plan.json
 ```
 
+> OMH note: each command here that reaches ElevenLabs (`narrate.py`, `eleven.py`) spends the user's own credits. Run it only after `omh-spend-gate`'s card, which names the lines, voice and model, or the job and its length, with the expected credits from ElevenLabs' own price for that model, and the person's typed yes to that card. `synth_music.py`, `music_tools.py` and `timeline.py` run locally and spend nothing.
+
 - Sections must be 3 seconds or longer. `plan` merges short sections into the previous section.
 - **Do not include artist, composer, or track names.** "Hans Zimmer style" was rejected twice with 400. When rejected, `eleven.py` shows the alternative prompt from the response.
 - Generation takes 1 to 2 minutes for a 60-second track. With the same plan you can change `--seed` to make two tracks and choose. Giving `--prompt` and `--seed` together returns 422, so `eleven.py` sends without the seed.
@@ -173,6 +177,8 @@ python3 $S/music_tools.py analyze audio/music/music_edit.wav   # re-analyze and 
 python3 $S/eleven.py sfx-kit audio/sfx --names impact,whoosh,riser,logo_hit,glitch,ui_blip   # ElevenLabs
 # synthesized SFX (free, instant): add tick/boom/whoosh events to the synth_music.py spec and render it with --out; there is no `sfx` subcommand in this kit
 ```
+
+> OMH note: each command here that reaches ElevenLabs (`narrate.py`, `eleven.py`) spends the user's own credits. Run it only after `omh-spend-gate`'s card, which names the lines, voice and model, or the job and its length, with the expected credits from ElevenLabs' own price for that model, and the person's typed yes to that card. `synth_music.py`, `music_tools.py` and `timeline.py` run locally and spend nothing.
 
 Preset names and prompts are in `assets/sfx_presets.json`: sub_boom, impact, braam, logo_hit, final_hit, riser, reverse_swell, whoosh, whoosh_deep, glitch, shimmer, ui_blip, ui_ticks, typing, stamp, shutter, counter, heartbeat, clock_tick, crowd, pop, ding, chime, drone. Make a new sound effect with `eleven.py sfx "prompt" out.mp3 --dur 2`. Length is 0.5 to 30 seconds.
 

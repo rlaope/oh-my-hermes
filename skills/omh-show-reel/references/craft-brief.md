@@ -128,6 +128,8 @@ WebGL and 3D scenes and scenes with many particles take longer to render. Re-est
 
 ElevenLabs credits (approximate):
 
+> OMH note: these figures are a rough planning guide, not a quote. A spend card reads the expected credits from the provider's own price for the chosen model; where that gives no figure, the card says the cost is unknown and `omh-spend-gate`'s spend-only cap applies.
+
 - TTS: character count × 1 (about 1.5 to 2 times including regeneration and takes)
 - STT: a small amount per minute
 - Sound effects: 40 credits per second when a duration is specified (10 sound effects × 2 seconds ≈ 800)

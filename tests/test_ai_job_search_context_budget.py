@@ -154,8 +154,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was 41011a72...3bc7.
             # 537954 -> 537829 and the digest re-derived: the routing reach round, -125 (itemized at the same
             # limit); the pin before it was b1ad64a5...590b.
-            (skill_capabilities, 537829, FULL_ROW_DELTA_CAP,
-             'c5c17f8447a21a90f56652c76ca61560d12e987acf34f9d459d418765e562eb0',
+            # 537829 -> 538004 and the digest re-derived: a coding-owner choice counts only for the request it was
+            # made in, in the dag-ulw and maestro rows (+175, itemized at the same limit); the pin before it was
+            # c5c17f84...2eb0.
+            (skill_capabilities, 538004, FULL_ROW_DELTA_CAP,
+             'cbc660582e53ada0b9beacda30b0e72ab2f72068152892f04701cbe2c11636bc',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -397,10 +400,18 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
         # moves, and the pin before it was d4eb4e54...7ed7.
         # ralplan's acceptance line says plan-accept refuses a scaffold-only file unless
-        # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91. Every body's
-        # reply-voice paragraph then becomes one line pointing at the shared rail, so every body moves; the pin
-        # before it was 51d4a5cf...9f51.
-        self.assertEqual(_digest(legacy_hashes), '0db47bdc669ac8c5e5773a80d78f2b14dc670e9401916db7b2ee8476f3af2ac6')
+        # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91.
+        # show-reel then sends its paid calls through spend-gate, and spend-gate counts subscription
+        # credits as a spend; only those two move. Its review round (credits read from the provider's
+        # own price, the credits receipt, the gate named at every paid run step) moves the same two.
+        # Merged with main after #2652: both sides' bodies; main's pin before that merge was
+        # b36ad311...1e91, and this branch's was f30c9ae0...ca61. Merged again after #2650: main's
+        # pin was 51d4a5cf...9f51, and this branch's was a5bce194...90de.
+        # A coding-owner choice then counts only for the request it was made in: only dag-ulw and maestro
+        # move, and the pin before it was 62bebac1...bd0b.
+        # Every body's reply-voice paragraph then becomes one line pointing at the shared rail, so every body
+        # moves; the pin before it was c0b3ab76...df31.
+        self.assertEqual(_digest(legacy_hashes), '4da0a2a3752ee2f732417d7c0e3e653fe6e491037720f37116e3fc79bf5af96c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -451,7 +462,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
-            'awareness_primer_markdown_chars': 3685,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55).
+            'awareness_primer_markdown_chars': 4051,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,
             'role_context_chars_max': 2600,

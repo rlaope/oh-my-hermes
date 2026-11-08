@@ -106,7 +106,7 @@ Quality bar:
 
 Handoff policy:
 
-Hermes owns the plan, the dispatch, the settling and the verdict; every node runs as Hermes' own `delegate_task` child, routed per category with `omh_delegate_route`. OMH's `omh_dag` tool keeps the graph, and only its calls start nodes: a `delegate_task` without the `[dag:<run>/<node>]` marker it returned is no node of the run. Coding nodes go to an external coding CLI only when the person chose that owner within the last day (`omh chat`, `omh coding`, or naming it in a dag-ulw request); then `omh_dag` lists each owner's nodes under `exports`. Otherwise no external CLI runs.
+Hermes owns the plan, the dispatch, the settling and the verdict; every node runs as Hermes' own `delegate_task` child, routed per category with `omh_delegate_route`. OMH's `omh_dag` tool keeps the graph, and only its calls start nodes: a `delegate_task` without the `[dag:<run>/<node>]` marker it returned is no node of the run. Coding nodes go to an external coding CLI only when the person named that owner in the dag-ulw request that defines the run; a choice counts only for the request it was made in, so an earlier request's choice, `omh chat` or `omh coding` does not count. Then `omh_dag` lists each owner's nodes under `exports`. Otherwise no external CLI runs.
 
 Required inputs:
 
@@ -129,7 +129,7 @@ Safety rules:
 - Two nodes that can run at the same time never share a write scope; a shared file needs an edge or one owner.
 - A node's own report is a claim: settle it accepted only after reading its handoff file, and settle a child that says it is blocked as blocked.
 - Ask the person only for scope, spend, or an irreversible step, as one required `Authorize` question; an unanswered question means that part does not start.
-- No external coding CLI runs unless the person already chose it as the coding owner.
+- No external coding CLI runs unless the person named it as the coding owner in this request.
 
 ## Runtime Evidence
 

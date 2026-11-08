@@ -61,8 +61,20 @@ from .awareness import awareness_primer_context, awareness_primer_markdown
 # full catalog name (`accessibility-audit`, not `a11y`), because the shorthand
 # was nothing a model could load. It measured 3677 (standing headroom kept as
 # above); the compact rail does not carry the line.
+# 3685 -> 3734: the same line writes each target as the label `skill_view`
+# loads (`omh-accessibility-audit`, `ulw-research`), because a catalog name
+# reaches the model through this primer with no render pass and is not a name
+# it can load either. It measured 3726 (standing headroom kept as above).
+# 3734 -> 3973: the workflow context cards and the common cues before generic
+# tools write their targets as labels too, so the primer names one skill one
+# way; the cards also drop shorthand that was no skill (`automation`,
+# `workspace`, `learning`). It measured 3965 (standing headroom kept as above).
+# 3973 -> 4051: each lane's `Key:` names are written as loadable labels
+# (`ulw-research`, `omh-routing`) instead of catalog names, so the primer no
+# longer shows `research` and `ulw-research` for one skill. It measured 4043
+# (standing headroom kept as above).
 AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT = 1560
-AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 3685
+AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 4051
 AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT = 1500
 ROLE_CONTEXT_CHAR_LIMIT = 2600
 # Per-request budgets, zero-slack: each is the value its producer measured,

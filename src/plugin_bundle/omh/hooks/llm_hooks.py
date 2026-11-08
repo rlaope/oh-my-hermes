@@ -42,7 +42,7 @@ from ..host_observation import observe_plugin_hook_call
 from ..installed_skills import hermes_loadable_skill_names
 from ..kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
 from ..native_todo import held_native_write_note
-from ..named_owner_choice import record_named_owner_choices
+from ..named_owner_choice import clear_turn_owners, note_turn_owners
 from ..omh_roles import extract_role_marker, role_context_payload
 from ..plan_follow_on import DAG_ULW, acceptance_line, plan_turn_line
 from ..omh_identities import extract_identity_marker, identity_context_payload
@@ -646,6 +646,8 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
     # asked for Jev until its own request is read below. A marker left from
     # the previous turn must never survive a degraded turn.
     clear_jev_turn(kwargs.get("session_id"))
+    # The same for the coding owners a dag-ulw request named: a choice counts only for the request it was made in.
+    clear_turn_owners(kwargs.get("session_id"))
     # The same for the round-end answer stash: one left by the previous turn
     # (a sentinel never came) must not be swappable in this one. Detached
     # forks never reach this line, so a background review cannot clear the
@@ -751,15 +753,10 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
     )
     message_matches_awareness = False
     degraded: list[tuple[str, str]] = []
-    # Only a person's main-session request can record explicit external owners.
+    # Only a person's main-session request names external owners, and only for this turn's dag-ulw run.
     # Host-written turns have no request here; a child cannot choose for its parent.
     if request_message and not delegated:
-        try:
-            record_named_owner_choices(
-                omh_home, request_message, now_iso=datetime.now(timezone.utc).isoformat()
-            )
-        except (OSError, ValueError) as exc:
-            degraded.append((COMPONENT_RUNTIME_STATUS_READ, safe_error_type(type(exc).__name__)))
+        note_turn_owners(session_id, request_message)
     # The skills this home installed and this Hermes can load by name. The
     # route hint and the candidate line rank the whole catalog, and a
     # `--core` home holds ten of its skills, so both are cut to this set

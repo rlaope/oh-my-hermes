@@ -7231,7 +7231,8 @@ def awareness_primer_markdown() -> str:
     for lane in payload["lanes"]:
         if not isinstance(lane, dict):
             continue
-        skills = [str(skill) for skill in lane["skills"][:4]]
+        # The per-turn primer has no render pass, so each key is written as its loadable label.
+        skills = [_loadable_skill_label(str(skill)) for skill in lane["skills"][:4]]
         lane_lines.append(
             f"- **{lane['label']}**: {lane['use_for']}. Key: `{'`, `'.join(skills)}`."
         )
@@ -7303,32 +7304,40 @@ def awareness_workflow_context_markdown(skill_name: str) -> str:
     )
 
 
+# The cue, card and checkpoint lines name each skill by the label `skill_view`
+# loads, written out because this bundle cannot import `omh` to derive it; the
+# per-turn primer carries these lines as they are, with no render pass.
 def _compact_workflow_cue_line() -> str:
     return (
-        "notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, "
-        "feedback-triage, report-package, or img-summary; papers -> paper-learning; sources/news -> research/research-department; "
-        "premium visuals -> design-quality-gate; frontend -> frontend; accessibility/WCAG -> accessibility-audit; screenshots/render -> visual-qa; files/docs -> materials/report-package; image cards -> img-summary; "
-        "failed checks -> build-failure-triage; code/CI/merge -> ultrawork/code-review/verification-gate; "
-        "agent failure/drift -> agent-debug; hidden failures -> failure-signal-audit; lessons -> instinct-ledger; regression -> workflow-learning"
+        "notes/retros -> omh-operating-rhythm/omh-meeting-brief; PR/issue/bug/feedback/release -> omh-github-event-ops, "
+        "omh-feedback-triage, omh-report-package, or omh-image-cards; papers -> omh-paper-learning; "
+        "sources/news -> ulw-research/omh-research-department; premium visuals -> omh-design-quality-gate; "
+        "frontend -> omh-frontend; accessibility/WCAG -> omh-accessibility-audit; screenshots/render -> omh-visual-qa; "
+        "files/docs -> omh-materials-package/omh-report-package; image cards -> omh-image-cards; "
+        "failed checks -> omh-build-failure-triage; code/CI/merge -> ulw-work/omh-code-review/omh-verification-gate; "
+        "agent failure/drift -> omh-agent-debug; hidden failures -> omh-failure-signal-audit; lessons -> omh-instinct-ledger; "
+        "regression -> omh-workflow-learning"
     )
 
 
 def _compact_workflow_context_cards_line() -> str:
     return (
-        "intent -> deep-interview/ralplan/codebase-onboarding/codegraph-refresh/loop; "
-        "signals -> research/research-department/feedback-triage; "
-        "materials -> design-quality-gate/frontend/accessibility-audit/visual-qa/materials-package; "
-        "ops -> automation/workspace/production/context-budget/agent-debug/failure-signal-audit/instinct-ledger/skill-health/learning/doctor; "
-        "eval/rules -> agent-evaluation/rules-distill; "
-        "code -> ultrawork/code-review/build-failure-triage/verification-gate/ultraqa"
+        "intent -> ulw-interview/ulw-plan/omh-codebase-onboarding/omh-codegraph-refresh/ulw-loop; "
+        "signals -> ulw-research/omh-research-department/omh-feedback-triage; "
+        "materials -> omh-design-quality-gate/omh-frontend/omh-accessibility-audit/omh-visual-qa/omh-materials-package; "
+        "ops -> omh-automation-blueprint/omh-workspace-audit/omh-production-audit/omh-context-budget-review/omh-agent-debug/"
+        "omh-failure-signal-audit/omh-instinct-ledger/omh-skill-health/omh-workflow-learning/omh-doctor; "
+        "eval/rules -> omh-agent-evaluation/omh-rules-distill; "
+        "code -> ulw-work/omh-code-review/omh-build-failure-triage/omh-verification-gate/ulw-qa"
     )
 
 
 def _compact_generic_tool_checkpoint_line() -> str:
     return (
-        "image->img-summary; frontend->frontend/accessibility-audit/visual-qa; paper->paper-learning; content->content-operator; media->media-input-operator; file->materials-package; "
-        "search->research; live->live-info-operator; audit->workspace-audit/production-audit/security-safety-review; "
-        "failures->build-failure-triage; verify->verification-gate; code->codegraph-refresh/codebase-onboarding/ultrawork"
+        "image->omh-image-cards; frontend->omh-frontend/omh-accessibility-audit/omh-visual-qa; paper->omh-paper-learning; "
+        "content->omh-content-operator; media->omh-media-input; file->omh-materials-package; "
+        "search->ulw-research; live->omh-live-info; audit->omh-workspace-audit/omh-production-audit/omh-security-safety-review; "
+        "failures->omh-build-failure-triage; verify->omh-verification-gate; code->omh-codegraph-refresh/omh-codebase-onboarding/ulw-work"
     )
 
 
@@ -7629,6 +7638,43 @@ def _ulw_retired_hint_target(
     return _ULW_RETIRED_TARGET_HOME, remapped_actions.get(next_action, next_action)
 
 
+# Hand-picked labels the mechanical prefix rule cannot derive. Mirrors
+# `skills/catalog_types.OMH_SKILL_DISPLAY_NAME_OVERRIDES`; the copy exists
+# because a copied plugin bundle has no catalog import, and
+# `tests/test_display_names.py` locks the two together.
+_DISPLAY_LABEL_OVERRIDES: tuple[tuple[str, str], ...] = (
+    ("omh-docs", "product-docs"),
+    ("omh-decide", "strategy-brief"),
+    ("ulw-context", "context"),
+    ("ulw-interview", "deep-interview"),
+    ("ulw-plan", "ralplan"),
+    ("ulw-goal", "ultragoal"),
+    ("ulw-process", "ultraprocess"),
+    ("ulw-qa", "ultraqa"),
+    ("ulw-work", "ultrawork"),
+    ("ulw-perf", "ultraperf"),
+    ("omh-browser", "browser-operator"),
+    ("omh-files", "workspace-file-operator"),
+    ("omh-terminal", "command-operator"),
+    ("omh-apps", "connector-operator"),
+    ("omh-live-info", "live-info-operator"),
+    ("omh-media-input", "media-input-operator"),
+    ("omh-voice-input", "voice-operator"),
+    ("omh-image-cards", "img-summary"),
+    ("dag-ulw", "dag-ulw"),
+)
+
+
+def _loadable_skill_label(workflow: str) -> str:
+    """The label `skill_view` loads for a catalog workflow name, by the same rules as the map below."""
+    if workflow == "oh-my-hermes":
+        return "omh-routing"
+    for display, name in _DISPLAY_LABEL_OVERRIDES:
+        if name == workflow:
+            return display
+    return f"{'ulw-' if workflow in _ULW_ENGINE_WORKFLOWS else 'omh-'}{workflow}"
+
+
 @lru_cache(maxsize=1)
 def _canonical_workflow_by_display_name() -> dict[str, str]:
     """Map every `omh-`/`ulw-` display label this module knows back to its workflow name.
@@ -7643,31 +7689,7 @@ def _canonical_workflow_by_display_name() -> dict[str, str]:
         f"{'ulw-' if workflow in _ULW_ENGINE_WORKFLOWS else 'omh-'}{workflow}": workflow for workflow in workflows
     }
     mapping["omh-routing"] = "oh-my-hermes"
-    # Hand-picked labels the mechanical prefix rule cannot derive. Mirrors
-    # `skills/catalog_types.OMH_SKILL_DISPLAY_NAME_OVERRIDES`; the copy exists
-    # because a copied plugin bundle has no catalog import, and
-    # `tests/test_display_names.py` locks the two together.
-    for display, workflow in (
-        ("omh-docs", "product-docs"),
-        ("omh-decide", "strategy-brief"),
-        ("ulw-context", "context"),
-        ("ulw-interview", "deep-interview"),
-        ("ulw-plan", "ralplan"),
-        ("ulw-goal", "ultragoal"),
-        ("ulw-process", "ultraprocess"),
-        ("ulw-qa", "ultraqa"),
-        ("ulw-work", "ultrawork"),
-        ("ulw-perf", "ultraperf"),
-        ("omh-browser", "browser-operator"),
-        ("omh-files", "workspace-file-operator"),
-        ("omh-terminal", "command-operator"),
-        ("omh-apps", "connector-operator"),
-        ("omh-live-info", "live-info-operator"),
-        ("omh-media-input", "media-input-operator"),
-        ("omh-voice-input", "voice-operator"),
-        ("omh-image-cards", "img-summary"),
-        ("dag-ulw", "dag-ulw"),
-    ):
+    for display, workflow in _DISPLAY_LABEL_OVERRIDES:
         if workflow in workflows:
             mapping[display] = workflow
         else:

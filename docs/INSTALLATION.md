@@ -5120,7 +5120,10 @@ The stdout JSON also includes `wrapper_contract`. Wrappers should use that JSON,
 not the Markdown body, to decide the next local action. If
 `wrapper_contract.coding_delegate.available` is `true`, the listed
 `argv_template` is an adapter contract for preparing a lower-level delegation
-after plan acceptance. Use the accepted plan artifact or generated context pack
+after plan acceptance; `available` does not mean the plan can be accepted yet.
+On a scaffold record, `coding_delegate.acceptance_requires` (the same value as
+`decision_gate.acceptance_requires`) says acceptance first needs the reviewed
+plan recorded with `--plan-file`. Use the accepted plan artifact or generated context pack
 as the executor context; Discord/channel text is only a summary. If
 `coding_delegate.available` is `false`, follow `next_action` and do not dispatch
 coding work.
@@ -5331,7 +5334,8 @@ Before calling the bot integration ready, verify these points:
   Hermes home that the bot uses. Without `--plan-file` the file holds only the
   generated scaffold: stdout reports `quality_gate.readiness:
   needs_reviewed_body`, `coding_handoff_ready: false`, `next_action:
-  record_reviewed_plan` and `decision_gate.acceptance_requires`, and
+  record_reviewed_plan` and `decision_gate.acceptance_requires` (the recorded
+  file's quality gate and next action say the same), and
   `omh hermes plan-accept` refuses the file with exit code 2 unless
   `--allow-scaffold` is passed.
 - That planning command does not create a runtime `run.json` or
