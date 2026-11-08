@@ -20,8 +20,12 @@ from unittest.mock import patch
 
 from omh.plugin_bundle.omh.delegation_routing import read_delegation_route
 from omh.plugin_bundle.omh.hermes_delegation import (
+    HERMES_MIXTURE_CATEGORY_CHAINS,
+    MODEL_PROVIDER_ROUTES_SCHEMA_VERSION,
     PROVIDER_ENTITLEMENTS_SCHEMA_VERSION,
+    alias_is_served,
     effective_mixture_category_chains,
+    model_provider_routes_path,
     provider_entitlements_path,
 )
 from omh.plugin_bundle.omh.tools.delegate_route_tool import omh_delegate_route_handler
@@ -349,6 +353,38 @@ class RouteOnlyProviderConsentTest(unittest.TestCase):
                 if store is not None:
                     self.auth(**store)
                 self.assertEqual(self.routed_categories(), baseline)
+
+    def test_a_routes_document_sends_category_heads_to_the_held_relay(self) -> None:
+        # The routes document recommended for a relay: every chain alias the
+        # session's own provider cannot serve goes to it. Held, those heads
+        # lead their chains again and route to the relay; not held, none does.
+        anthropic_only = {"providers": {"anthropic": "anthropic"}, "subscription_clis": []}
+        chains = HERMES_MIXTURE_CATEGORY_CHAINS
+        aliases = sorted({alias for chain in chains.values() for alias, _effort in chain if not alias_is_served(alias, anthropic_only)})
+        path = model_provider_routes_path(self.omh_home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": MODEL_PROVIDER_ROUTES_SCHEMA_VERSION,
+                    "models": {alias: {"provider": self.PROVIDER, "model": f"vendor/{alias}"} for alias in aliases},
+                }
+            ),
+            encoding="utf-8",
+        )
+        original = self.config.read_bytes()
+        for label, key_line in (("key", f"{self.KEY_NAME}=placeholder-key\n"), ("no key", "")):
+            with self.subTest(label):
+                self.env("ANTHROPIC_API_KEY=placeholder-key\n" + key_line)
+                via_relay = 0
+                for category in sorted(effective_mixture_category_chains(self.omh_home, self.hermes_home)):
+                    self.config.write_bytes(original)
+                    if self.call(action="set", category=category)["status"] == "routed":
+                        via_relay += read_delegation_route(self.hermes_home).get("provider") == self.PROVIDER
+                self.config.write_bytes(original)
+                shipped_heads_on_relay = sum(chain[0][0] in aliases for chain in chains.values())
+                self.assertGreater(shipped_heads_on_relay, 0)
+                self.assertEqual(via_relay, shipped_heads_on_relay if key_line else 0)
 
 
 class KilocodeRouteOnlyConsentTest(RouteOnlyProviderConsentTest):

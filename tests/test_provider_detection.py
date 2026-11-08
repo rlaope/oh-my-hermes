@@ -31,9 +31,11 @@ from omh.plugin_bundle.omh.hermes_delegation import (  # noqa: E402
     PROVIDER_KIND_UNKNOWN,
     PROVIDER_KIND_VOCABULARY,
     _CHAIN_TOKEN_RE,
+    alias_is_served,
     effective_mixture_category_chains,
     effective_provider_entitlements,
     provider_entitlements_path,
+    routes_to_unknown_providers,
 )
 from omh.plugin_bundle.omh.model_chain_picker import picker_rows  # noqa: E402
 
@@ -135,13 +137,55 @@ class TableTests(unittest.TestCase):
         # Only the key and the login stop counting; a `providers.<id>` block is
         # the person declaring the relay, and keeps the `gateway` default.
         for _name, provider_id in self.ROUTE_ONLY_RELAYS:
-            with self.subTest(provider_id), TemporaryDirectory() as tmp:
-                home = Path(tmp) / "hermes"
-                _write(home / "config.yaml", f"providers:\n  {provider_id}:\n    base_url: https://relay.example/v1\n")
-                self.assertEqual(
-                    detection.detect_linked_providers(home),
-                    [{"id": provider_id, "kind": "gateway", "source": "config", "evidence": "config.yaml"}],
-                )
+            for config in (
+                f"providers:\n  {provider_id}:\n    base_url: https://relay.example/v1\n",
+                f"model:\n  provider: {provider_id}\n",
+            ):
+                with self.subTest(provider_id, config=config), TemporaryDirectory() as tmp:
+                    home = Path(tmp) / "hermes"
+                    _write(home / "config.yaml", config)
+                    self.assertEqual(
+                        detection.detect_linked_providers(home),
+                        [{"id": provider_id, "kind": "gateway", "source": "config", "evidence": "config.yaml"}],
+                    )
+
+    def test_a_routes_document_naming_a_held_route_only_relay_serves_its_aliases(self) -> None:
+        # A gateway row made every route to the relay count as held. Without
+        # the row, a route to a relay this home holds must still count, and
+        # one to a relay it does not hold, or excluded, still must not.
+        anthropic_only = {"providers": {"anthropic": "anthropic"}, "subscription_clis": []}
+        aliases = sorted(
+            {alias for chain in HERMES_MIXTURE_CATEGORY_CHAINS.values() for alias, _effort in chain}
+            - {alias for chain in HERMES_MIXTURE_CATEGORY_CHAINS.values() for alias, _effort in chain if alias_is_served(alias, anthropic_only)}
+        )
+        self.assertTrue(aliases)
+        for name, provider_id in self.ROUTE_ONLY_RELAYS:
+            routes = {alias: (provider_id, f"vendor/{alias}") for alias in aliases}
+            for label, env, excluded, held in (
+                ("key", f"{name}={KEY_VALUE}\n", False, True),
+                ("no key", "", False, False),
+                ("excluded", f"{name}={KEY_VALUE}\n", True, False),
+            ):
+                with self.subTest(provider_id, case=label), TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    hermes, omh = root / "hermes", root / "omh"
+                    _write(hermes / ".env", f"ANTHROPIC_API_KEY={KEY_VALUE}\n{env}")
+                    if excluded:
+                        _write(
+                            provider_entitlements_path(omh),
+                            json.dumps(
+                                {
+                                    "schema_version": PROVIDER_ENTITLEMENTS_SCHEMA_VERSION,
+                                    "providers": {"anthropic": "anthropic"},
+                                    "excluded_providers": [provider_id],
+                                }
+                            ),
+                        )
+                    entitlements, _status, _rows = effective_provider_entitlements(omh, hermes)
+                    self.assertEqual(entitlements["providers"], {"anthropic": "anthropic"})
+                    self.assertEqual([alias for alias in aliases if alias_is_served(alias, entitlements, routes)], aliases if held else [])
+                    unknown = routes_to_unknown_providers(routes, entitlements)
+                    self.assertEqual(sorted({row["route"] for row in unknown}), [] if held else aliases)
 
     def test_generic_and_implicit_tokens_are_not_provider_evidence(self) -> None:
         # Hermes' registry lists CLAUDE_CODE_OAUTH_TOKEN under its implicit

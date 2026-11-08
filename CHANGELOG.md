@@ -804,10 +804,21 @@ All notable changes will be documented here.
   category routes the session's own provider served were refused (an
   Anthropic session routed 7 of 18 categories instead of 15, a Kimi session
   none instead of 11). They now work the way a `commandcode` key does: a
-  route may name the relay, and nothing else about routing moves. A key with
-  a recorded gateway in `routing/providers.json` no longer hides the relay, so
-  that route applies too. A `providers.kilocode` or `providers.ai-gateway`
-  block in `config.yaml` still counts as a gateway the person declared.
+  route may name the relay, and a `routing/model-providers.json` route to a
+  relay this machine holds counts its alias as served, so a chain head sent
+  to the relay still leads and routes there. Nothing else about routing
+  moves. A key with a recorded gateway in `routing/providers.json` no longer
+  hides the relay, so a route naming it applies too. The same routes
+  document now works for a held `commandcode` relay, whose routed aliases
+  were demoted and reported as routed to an unknown provider. A
+  `providers.kilocode` or `providers.ai-gateway` block, or
+  `model.provider: kilocode` / `ai-gateway`, in `config.yaml` still counts
+  as a gateway the person declared. A key or login no longer lists either
+  relay in the `omh setup` provider step; the "a provider not listed here"
+  row still adds one. A `routing/providers.json` that already recorded the
+  relay (`"kilocode": "gateway"`, from an earlier `omh setup` pre-tick) keeps
+  turning shaping off until that row is cleared in `omh setup` or with
+  `omh model-chains provider clear`.
 
 ## 4.0.6 - 2026-11-04
 
