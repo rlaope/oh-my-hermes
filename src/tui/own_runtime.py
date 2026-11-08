@@ -139,10 +139,19 @@ def _copy(source: Path, target: Path) -> None:
     os.chmod(target, FILE_MODE)
 
 
+def _points_at(link: Path, destination: Path) -> bool:
+    """Whether the symlink `link` names `destination`: by the real path of each, since Windows spells a link's
+    target with its own prefix (`\\?\`) and a text comparison would relink it at every build."""
+    try:
+        return os.path.realpath(link) == os.path.realpath(destination)
+    except OSError:
+        return False
+
+
 def _link(target: Path, destination: Path) -> bool:
     """Make `target` a symlink to `destination`; True when it was made or changed, False when it already was."""
     if target.is_symlink():
-        if os.readlink(target) == str(destination):
+        if _points_at(target, destination):
             return False
         target.unlink()
     elif target.exists():
@@ -203,7 +212,7 @@ def build_tui_home(omh_home: Path, root: Path, served: Sequence[str] | None = No
     skills_dir = home / "skills"
     for entry in sorted(skills_dir.iterdir(), key=lambda p: p.name):
         if entry.is_symlink():
-            if entry.name not in wanted or os.readlink(entry) != str(wanted[entry.name]):
+            if entry.name not in wanted or not _points_at(entry, wanted[entry.name]):
                 entry.unlink()
                 refreshed.append(f"skills/{entry.name} (removed)")
         else:
