@@ -118,7 +118,7 @@ def build_hermes_plan_payload(
     source: str = "generic",
     limit: int = 3,
     source_metadata: dict[str, str] | None = None,
-    executor_target: str = "codex",
+    executor_target: str = "generic",
     decision_artifact: DecisionArtifact | None = None,
 ) -> dict[str, object]:
     task = message.strip()
@@ -607,7 +607,7 @@ def build_plan_handoff_message(artifact: dict[str, object]) -> str:
     )
 
 
-def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_target: str = "codex") -> dict[str, object]:
+def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_target: str = "generic") -> dict[str, object]:
     plan_artifact_path = str(artifact.get("path", ""))
     # Copied into each consumer below so editing one scope cannot rewrite the others.
     scope = {"kind": "project", "ref": project_identity()}
@@ -663,7 +663,7 @@ def write_plan_handoff_context_pack(
     paths: OmhPaths,
     artifact: dict[str, object],
     *,
-    executor_target: str = "codex",
+    executor_target: str = "generic",
 ) -> dict[str, object]:
     pack = build_plan_handoff_context_pack(artifact, executor_target=executor_target)
     path = paths.runtime_plan_context_dir / f"{Path(str(artifact.get('path', 'plan'))).stem}-context-pack.json"

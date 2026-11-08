@@ -393,11 +393,14 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # (same length); only that body moves, and the pin before it was 0ac3cd4c...17f7.
         # The routing reach round then moves the skills whose triggers or index text it narrows; the pin
         # before it was 0ae5f905...ebc5f.
+        # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
+        # moves, and the pin before it was d4eb4e54...7ed7.
         # show-reel then sends its paid calls through spend-gate, and spend-gate counts subscription
-        # credits as a spend; only those two move, and the pin before it was d4eb4e54...7ed7.
-        # Its review round (credits read from the provider's own price, the credits receipt, the gate
-        # named at every paid run step) moves the same two; the pin before it was 3c83661f...9ccf.
-        self.assertEqual(_digest(legacy_hashes), 'f30c9ae027d276a917c22a6adecbb8b53c499cc4abc4ec1977d10dbe16ebca61')
+        # credits as a spend; only those two move. Its review round (credits read from the provider's
+        # own price, the credits receipt, the gate named at every paid run step) moves the same two.
+        # Merged with main after #2652: both sides' bodies; main's pin before the merge was
+        # b36ad311...1e91, and this branch's was f30c9ae0...ca61.
+        self.assertEqual(_digest(legacy_hashes), 'a5bce1941c3610987568cc3ee0b18547aee27d53659e06042e7bbacd498090de')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
