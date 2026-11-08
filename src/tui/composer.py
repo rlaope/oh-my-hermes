@@ -410,7 +410,40 @@ def _first_blank_free(units: Sequence[str], start: int, end: int) -> int:
 
 
 _QUOTE_CHARS = ('"', "'", "`")
-_QUOTE_BLANKS = (" ", "\t")
+
+
+def _backslashes_before(units: Sequence[str], line_start: int, index: int) -> int:
+    """How many backslashes run back from just before `index`, not past `line_start`."""
+    count = 0
+    at = index - 1
+    while at >= line_start and units[at] == "\\":
+        count += 1
+        at -= 1
+    return count
+
+
+def _raw_quote(units: Sequence[str], start: int, line_end: int, quote: str) -> int | None:
+    """The first `quote` from `start` before `line_end`, escaped or not."""
+    at = start
+    while at < line_end:
+        if units[at] == quote:
+            return at
+        at += 1
+    return None
+
+
+def _closing_quote(units: Sequence[str], start: int, line_end: int, quote: str) -> int | None:
+    """The first `quote` from `start` before `line_end` that no backslash escapes."""
+    at = start
+    while at < line_end:
+        unit = units[at]
+        if unit == "\\":
+            at += 2
+            continue
+        if unit == quote:
+            return at
+        at += 1
+    return None
 
 
 @dataclass(frozen=True)
@@ -792,13 +825,11 @@ class Composer:
             self._drop_pending()
             return NOTHING
         if self._operator and self._prefix in ("i", "a"):
-            if event.name == CHAR:
-                if not (event.ctrl or event.alt):
-                    return self._normal_char(event.char)
-                if legacy_alt and event.char == "w":
-                    return self._normal_char(event.char)
+            if event.name == CHAR and not (event.ctrl or event.alt):
+                return self._normal_char(event.char)
             self._drop_pending()
-            return NOTHING
+            # A legacy Alt chord is Esc and the key in one read: the Esc drops the object, then the key is a fresh one.
+            return self._normal_char(event.char) if legacy_alt else NOTHING
         if is_leader_key(event) and not (self._operator or self._prefix):
             self._drop_pending()  # a count does not carry into a leader sequence
             self._leader = True
@@ -1119,44 +1150,15 @@ class Composer:
         units, _bounds, index = self._atoms()
         line_start, line_end = _line_of(units, index)
 
-        def count_backslashes(pos: int) -> int:
-            b = 0
-            curr = pos - 1
-            while curr >= line_start and units[curr] == "\\":
-                b += 1
-                curr -= 1
-            return b
-
-        def find_escaped_closer(from_idx: int) -> int | None:
-            curr = from_idx
-            while curr < line_end:
-                u = units[curr]
-                if u == "\\":
-                    curr += 2
-                    continue
-                if u == q:
-                    return curr
-                curr += 1
-            return None
-
-        def find_raw_opener(from_idx: int) -> int | None:
-            curr = from_idx
-            while curr < line_end:
-                if units[curr] == q:
-                    return curr
-                curr += 1
-            return None
-
-        # Check if caret atom is exactly q
         if index < line_end and units[index] == q:
-            # Enumerate pairs from line_start
+            # On a quote: the pair, enumerated from the line's start, that holds the caret.
             found_pair: tuple[int, int] | None = None
             scan_pos = line_start
             while scan_pos < line_end:
-                open_pos = find_raw_opener(scan_pos)
+                open_pos = _raw_quote(units, scan_pos, line_end, q)
                 if open_pos is None:
                     break
-                close_pos = find_escaped_closer(open_pos + 1)
+                close_pos = _closing_quote(units, open_pos + 1, line_end, q)
                 if close_pos is None:
                     break
                 if open_pos <= index <= close_pos:
@@ -1167,26 +1169,24 @@ class Composer:
                 return None
             open_idx, close_idx = found_pair
         else:
-            # Backward scan strictly before index
+            # Off a quote: the nearest unescaped one strictly before the caret opens, else the line's first.
             cand = index - 1
             open_idx: int | None = None
             while cand >= line_start:
-                if units[cand] == q and (count_backslashes(cand) % 2 == 0):
+                if units[cand] == q and (_backslashes_before(units, line_start, cand) % 2 == 0):
                     open_idx = cand
                     break
                 cand -= 1
             if open_idx is None:
-                open_idx = find_raw_opener(line_start)
+                open_idx = _raw_quote(units, line_start, line_end, q)
             if open_idx is None:
                 return None
-            close_idx = find_escaped_closer(open_idx + 1)
+            close_idx = _closing_quote(units, open_idx + 1, line_end, q)
             if close_idx is None:
                 return None
 
-        # Effective count and descriptor span calculation
-        count = min(times, VIM_COUNT_CAP)
         if descriptor == "i":
-            if count >= 2:
+            if times >= 2:
                 return open_idx, close_idx + 1
             return open_idx + 1, close_idx
 
@@ -1196,14 +1196,14 @@ class Composer:
         start = open_idx
         end = close_idx + 1
         trailing_end = end
-        while trailing_end < line_end and units[trailing_end] in _QUOTE_BLANKS:
+        while trailing_end < line_end and units[trailing_end] in _BLANKS:
             trailing_end += 1
 
         if trailing_end > end:
             return start, trailing_end
 
         leading_start = start
-        while leading_start > line_start and units[leading_start - 1] in _QUOTE_BLANKS:
+        while leading_start > line_start and units[leading_start - 1] in _BLANKS:
             leading_start -= 1
         return leading_start, end
 

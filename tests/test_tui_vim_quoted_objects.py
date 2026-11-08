@@ -1,18 +1,9 @@
-"""Acceptance assertions AQ01-AQ12 for TUI Vim quoted text objects.
+"""Vim quoted text objects in the TUI composer: `i` and `a` with a double quote, single quote or backtick under
+`c`, `d` and `y`.
 
-Per OpenSpec change add-tui-vim-quoted-objects and tasks.md:
-- test_quote_operator_matrix (AQ01)
-- test_quote_scope_preserves_word_and_modes (AQ02)
-- test_quote_cursor_target_matrix (AQ03)
-- test_quote_escape_parity (AQ04)
-- test_quote_around_whitespace_line_local (AQ05)
-- test_quote_count_contract (AQ06)
-- test_quote_register_cursor_undo (AQ07)
-- test_quote_empty_policy (AQ08)
-- test_quote_no_match_noop (AQ09)
-- test_quote_atomic_content (AQ10)
-- test_app_quote_target_and_cancel (AQ11)
-- test_app_quote_submit_isolation (AQ12)
+The composer half pins the spans (counts, escapes, blanks, the caret on or off a quote, line-local scans,
+paste chips and images as one unit), the register, the caret and undo. The App half pins how the keys reach a
+pending object: Shift, Alt, Esc, Ctrl+C, Enter, Paste, pickers and questions.
 """
 
 from __future__ import annotations
@@ -47,7 +38,7 @@ def send_keys(composer: Composer, typed: str) -> None:
 
 class VimQuotedObjectsTests(unittest.TestCase):
     def test_quote_operator_matrix(self) -> None:
-        """AQ01: all six objects x c/d/y exact spans; no inserted target."""
+        """All six objects x c/d/y exact spans; no inserted target."""
         # For each quote char: ", ', `
         for q in ('"', "'", "`"):
             # inner tests: x "abc" z, caret on 'b'
@@ -121,7 +112,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
             self.assertFalse(c.pending)
 
     def test_quote_scope_preserves_word_and_modes(self) -> None:
-        """AQ02: iw/aw and off/masked/INSERT unchanged; invalid no-op."""
+        """`iw`/`aw` and off/masked/INSERT unchanged; invalid no-op."""
         # 1. Existing iw/aw remains unchanged: diw, daw, caw, y2aw
         c = make_vim_composer("hello world", caret=1)
         send_keys(c, "diw")
@@ -197,7 +188,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertEqual(c_ins.text, 'di"')
 
     def test_quote_cursor_target_matrix(self) -> None:
-        """AQ03: before/on/inside/closing/gap/after/adjacency literal outputs."""
+        """Before/on/inside/closing/gap/after/adjacency literal outputs."""
         for q in ('"', "'", "`"):
             text = f"xx {q}aa{q}  {q}bb{q} zz"
             # 0: 'x', 3: q, 4: 'a', 6: q, 7: ' ', 8: ' ', 9: q, 10: 'b', 12: q, 13: ' ', 15: 'z'
@@ -238,7 +229,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
             self.assertEqual(c._register.text, "b")
 
     def test_quote_escape_parity(self) -> None:
-        """AQ04: 1/2/3/4 backslashes, raw opener, escaped caret, mixed quotes."""
+        """1/2/3/4 backslashes, raw opener, escaped caret, mixed quotes."""
         for q in ('"', "'", "`"):
             # 1 backslash: odd -> escaped quote, does not close
             c = make_vim_composer(f"{q}a\\{q}b{q}", caret=1)
@@ -284,7 +275,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertEqual(c._register.text, 'a"b\'c')
 
     def test_quote_around_whitespace_line_local(self) -> None:
-        """AQ05: trailing-first blanks else leading; NBSP/newline excluded."""
+        """Trailing-first blanks else leading; NBSP/newline excluded."""
         # 1. Trailing blanks present: prefer trailing blanks
         c = make_vim_composer('a "x" \tq', caret=3)
         send_keys(c, 'ya"')
@@ -308,7 +299,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertFalse(c.pending)
 
     def test_quote_count_contract(self) -> None:
-        """AQ06: count placements/multiply/cap; no next-pair or count-loop."""
+        """Count placements/multiply/cap; no next-pair or count-loop."""
         # "aa" "bb", caret 1
         # yi" -> aa
         c = make_vim_composer('"aa" "bb"', caret=1)
@@ -425,7 +416,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertEqual(c._register.text, '"aa" ')
 
     def test_quote_register_cursor_undo(self) -> None:
-        """AQ07: c/d/y p/P u/Ctrl+R exact state/metadata; grouped change."""
+        """`c`/`d`/`y`, `p`/`P`, `u`/Ctrl+R exact state/metadata; grouped change."""
         # di"
         c = make_vim_composer('x "abc" z', caret=3)
         send_keys(c, 'di"')
@@ -471,7 +462,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertFalse(c._register.linewise)
 
     def test_quote_empty_policy(self) -> None:
-        """AQ08: empty register/caret compatibility and count2 endpoints."""
+        """Empty register/caret compatibility and count2 endpoints."""
         for q in ('"', "'", "`"):
             text = f"{q}{q}"
             for start_caret in (0, 1):
@@ -511,7 +502,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
                 self.assertFalse(c._register.linewise)
 
     def test_quote_no_match_noop(self) -> None:
-        """AQ09: no quote/malformed/after last/cross-line preserve state."""
+        """No quote/malformed/after last/cross-line preserve state."""
         seed_reg = _Register("SEED", {}, {}, False)
 
         # 1. No quote on line
@@ -563,7 +554,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertFalse(c.pending)
 
     def test_quote_atomic_content(self) -> None:
-        """AQ10: opaque paste/image and grapheme syntax/boundary protection."""
+        """Opaque paste/image and grapheme syntax/boundary protection."""
         # 1. Grapheme starting with quote + combining mark is not syntax delimiter
         # e.g. '"' + combining acute \u0301 -> single grapheme atom
         q_comb = '"\u0301'
@@ -624,7 +615,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertIn("\ue000", c2.images)
 
     def test_app_quote_target_and_cancel(self) -> None:
-        """AQ11: actual App Shift/Alt/Esc/Ctrl+C/picker/slot/Paste/armed exit."""
+        """Actual App Shift/Alt/Esc/Ctrl+C/picker/slot/Paste/armed exit."""
         app, client = make_app()
         app.composer.set_vim(True)
         type_text(app, 'x "abc" z')
@@ -657,8 +648,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertEqual(app.composer.text, 'x "abc" z')
         app.escape_armed = None
 
-        # 3. Ctrl+C during pending cancels pending, preserves draft/turn/exit arm
-        app.exit_armed_at = app.clock()
+        # 3. Ctrl+C with no exit armed cancels pending and keeps the draft (an armed exit: the lifecycle tests)
         app._on_input(Key(CHAR, "d"))
         app._on_input(Key(CHAR, "i"))
         self.assertTrue(app.composer.pending)
@@ -666,8 +656,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertFalse(app.composer.pending)
         self.assertEqual(app.composer.text, 'x "abc" z')
         self.assertIsNone(app.exit_code)
-        self.assertIsNotNone(app.exit_armed_at)
-        app.exit_armed_at = None
+        self.assertIsNone(app.exit_armed_at)
 
         # 4. Protocol Alt cancels pending quote target
         app._on_input(Key(CHAR, "d"))
@@ -677,7 +666,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertFalse(app.composer.pending)
         self.assertEqual(app.composer.text, 'x "abc" z')
 
-        # Legacy Alt quote cancels quote target
+        # Legacy Alt is Esc and the key: Esc cancels the object, the quote is then a fresh key (a no-op)
         app._on_input(Key(CHAR, "d"))
         app._on_input(Key(CHAR, "i"))
         self.assertTrue(app.composer.pending)
@@ -685,7 +674,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertFalse(app.composer.pending)
         self.assertEqual(app.composer.text, 'x "abc" z')
 
-        # Legacy Alt-w executes word target diw
+        # Legacy Alt-w the same way: Esc cancels the object, then w moves a word and deletes nothing
         app.composer.text = "hello world"
         app.composer.caret = 1
         app._on_input(Key(CHAR, "d"))
@@ -693,7 +682,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         self.assertTrue(app.composer.pending)
         app._on_input(Key(CHAR, "w", alt=True, protocol=False))
         self.assertFalse(app.composer.pending)
-        self.assertEqual(app.composer.text, " world")
+        self.assertEqual((app.composer.text, app.composer.caret), ("hello world", 6))
 
         # 5. Paste drops pending and inserts paste
         app.composer.text = 'x "abc" z'
@@ -729,7 +718,7 @@ class VimQuotedObjectsTests(unittest.TestCase):
         app.slot = None
 
     def test_app_quote_submit_isolation(self) -> None:
-        """AQ12: pending Enter cancels; fresh Enter sends/reset; continuation."""
+        """Pending Enter cancels; fresh Enter sends/reset; continuation."""
         app, client = make_app()
         app.composer.set_vim(True)
         type_text(app, 'x "abc" z')
@@ -898,32 +887,70 @@ class QuoteLifecycleRegressionTests(unittest.TestCase):
             app.turn_pending = True
         return app, client
 
-    def test_busy_armed_cancellation_and_fresh_exit(self):
+    def test_busy_armed_cancellation_and_exit(self):
+        # Esc over a half-typed command only drops it, and so does Ctrl+C, unless the Ctrl+C is the second press of
+        # an armed exit: that one exits as it does over no command.
+        ctrl_c = Key(CHAR, 'c', ctrl=True)
         for busy in (False, True):
-            for prefix in ('3', 'd', 'di', 'ya', '2d3i'):
-                for event in (ESC, Key(CHAR, 'c', ctrl=True)):
-                    with self.subTest(busy=busy, prefix=prefix, event=event):
-                        app, client = self.app_fixture(busy)
-                        app.exit_armed_at = app.clock()
-                        app.exit_armed_by_interrupt = True
-                        app.escape_armed = ('clear', app.clock())
-                        type_text(app, prefix)
-                        before = (app.composer._state(), app.turn_pending, app.exit_armed_at, app.exit_armed_by_interrupt)
-                        app._on_input(event)
-                        self.assertEqual((app.composer._state(), app.turn_pending, app.exit_armed_at, app.exit_armed_by_interrupt), before)
-                        self.assertFalse(app.composer.pending)
-                        self.assertIsNone(app.exit_code)
-                        self.assertEqual(client.calls, [])
-                        if event.name == ESCAPE:
-                            self.assertIsNone(app.escape_armed)
-                        else:
+            for prefix in ('3', 'd', 'di', 'ya', '2d3i', '2f'):
+                for armed in (False, True):
+                    for event in (ESC, ctrl_c):
+                        with self.subTest(busy=busy, prefix=prefix, armed=armed, event=event):
+                            app, client = self.app_fixture(busy)
+                            if armed:
+                                app.exit_armed_at = app.clock()
+                                app.exit_armed_by_interrupt = True
+                            app.escape_armed = ('clear', app.clock())
+                            type_text(app, prefix)
+                            self.assertTrue(app.composer.pending)
+                            before = (app.composer._state(), app.turn_pending, app.exit_armed_at,
+                                      app.exit_armed_by_interrupt)
                             app._on_input(event)
-                            self.assertEqual(app.exit_code, 0)
+                            self.assertFalse(app.composer.pending)
+                            self.assertEqual(client.calls, [])
+                            if event is ctrl_c and armed:
+                                self.assertEqual(app.exit_code, 0)
+                                continue
+                            self.assertEqual((app.composer._state(), app.turn_pending, app.exit_armed_at,
+                                              app.exit_armed_by_interrupt), before)
+                            self.assertIsNone(app.exit_code)
+                            if event is ESC:
+                                self.assertIsNone(app.escape_armed)
 
-    def test_object_nontarget_globals_cancel_without_stale_edit(self):
+    def test_second_ctrl_c_exits_over_a_pending_command_on_an_empty_composer(self):
+        for prefix in ('d', '2d', 'di', 'g', 'r', '3', 'f'):
+            with self.subTest(prefix=prefix):
+                app, client = make_app()
+                app.composer.set_vim(True)
+                app._on_input(ESC)
+                self.assertTrue(app.composer.normal)
+                app._on_input(Key(CHAR, 'c', ctrl=True))  # the first press arms the exit
+                self.assertIsNotNone(app.exit_armed_at)
+                self.assertIsNone(app.exit_code)
+                type_text(app, prefix)
+                self.assertTrue(app.composer.pending)
+                app._on_input(Key(CHAR, 'c', ctrl=True))
+                self.assertEqual(app.exit_code, 0)
+                self.assertEqual(client.calls, [])
+
+    def test_esc_over_a_pending_object_or_target_holds_a_waiting_continue(self):
+        for prefix in ('di', 'ca', '2f'):
+            with self.subTest(prefix=prefix):
+                app, client = self.app_fixture()
+                app.auto_continue = (app.sid, app.clock() + 60.0)
+                type_text(app, prefix)
+                self.assertTrue(app.composer.pending)
+                app._on_input(ESC)
+                self.assertFalse(app.composer.pending)
+                self.assertIsNone(app.auto_continue)
+                self.assertEqual(app.composer.text, 'x "abc" z')
+                self.assertEqual(client.calls, [])
+
+    def test_object_non_global_chords_cancel_without_stale_edit(self):
+        # Ctrl+T and Shift+Tab stay global shortcuts over a pending object, as over a pending `d`
+        # (`test_other_pending_commands_keep_global_shortcuts`); a chord no global takes cancels it.
         for prefix in ('di', 'ca', 'yi'):
-            for event in (Key(CHAR, 't', ctrl=True), Key(TAB, shift=True),
-                          Key(CHAR, 't', ctrl=True, alt=True), Key(TAB, shift=True, ctrl=True)):
+            for event in (Key(CHAR, 't', ctrl=True, alt=True), Key(TAB, shift=True, ctrl=True)):
                 with self.subTest(prefix=prefix, event=event):
                     app, client = self.app_fixture()
                     before = app.composer._state()
@@ -935,6 +962,16 @@ class QuoteLifecycleRegressionTests(unittest.TestCase):
                     app._on_input(Key(CHAR, '"'))
                     self.assertEqual(app.composer._state(), before)
                     self.assertEqual(client.calls, [])
+
+    def test_legacy_alt_cancels_a_pending_object_then_acts_as_a_fresh_key(self):
+        for char, caret in (('w', 6), ('"', 1), ("'", 1)):
+            with self.subTest(char=char):
+                composer = make_vim_composer('hello "world"', caret=1)
+                send_keys(composer, 'di')
+                self.assertTrue(composer.pending)
+                composer.handle(Key(CHAR, char, alt=True))
+                self.assertFalse(composer.pending)
+                self.assertEqual((composer.text, composer.caret), ('hello "world"', caret))
 
     def test_decoded_quote_and_shared_undo_routes(self):
         for wire in (b'"', b'\x1b[34;2u', b'\x1b[27;2;34~', b'\x1b[34;3u'):
