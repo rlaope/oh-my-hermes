@@ -3,8 +3,10 @@
 Before the TUI draws, the launch waits for the gateway to come up and to open the session (`_LaunchWait` in
 `omh.tui.app`). A gateway that is restarting (the attach child exits `GATEWAY_NOT_READY_EXIT`: Hermes' `starting` /
 `draining` verdict, or a refused socket) or that drops the connection while the session opens is tried again
-within `LAUNCH_WAIT_SECONDS`, saying so; past it the launch says what to do and falls back. A normal launch says
-nothing at all.
+within `LAUNCH_WAIT_SECONDS`, saying so; past it the launch says what to do and exits 1 (never Hermes' own TUI,
+which would ask the same gateway). A gateway draining for a restart (`runtime_draining` on the session call, or
+its record's `restart_requested`) is waited through up to the drain's cap, the line naming the work it lets
+finish. A normal launch says nothing at all.
 """
 
 from __future__ import annotations
@@ -20,13 +22,24 @@ from _tui_gateway_replay import EXIT, Scenario, materialize, replay_env, spans
 from test_tui_app import FAST_GRACE, NO_TERMIOS, AppTestCase, Run, Step, TtyStream, startup_answers
 from omh.tui import app as app_module
 from omh.tui.attach import gateway_attach
-from omh.tui.gateway import GATEWAY_NOT_READY_EXIT, GatewayClient, GatewayTimeout, GatewayUnavailable, gateway_spawn
+from omh.tui.bot_board import Gateway
+from omh.tui.gateway import (
+    GATEWAY_NOT_READY_EXIT,
+    GatewayCallError,
+    GatewayClient,
+    GatewayTimeout,
+    GatewayUnavailable,
+    gateway_spawn,
+)
+from omh.tui.gateway_restart import RestartImpact
 
 REFUSED_LINE = "omh-attach: could not reach Hermes' gateway: [Errno 61] Connection refused"
 RESTARTING = "the Hermes gateway is restarting; waiting…"
 OPENING = "waiting for the Hermes gateway to open a session…"
 CONNECTING = "connecting to the Hermes gateway…"
 GAVE_UP = "did not answer within"
+DRAINING = "the Hermes gateway restarts after"
+DRAIN_GAVE_UP = "was still restarting after"
 
 
 def fast_wait(**overrides: float):
@@ -77,6 +90,31 @@ class LaunchWaitCase(AppTestCase):
 
         return make
 
+    def assert_gave_up(self, run: Run) -> None:
+        """Exit 1 and no fallback asked: Hermes' own TUI would ask the same gateway."""
+        self.assertEqual(run.code, 1, run.stderr.getvalue())
+        self.assertFalse(run.fallback_sentinel.exists(), "a gateway that was not answering asked for the fallback")
+
+    @staticmethod
+    def draining(root: Path, work: int, cap: float) -> Callable[[object, str], RestartImpact]:
+        """`read_impact` reading a record of a live gateway with a restart asked: Hermes letting `work` turns finish."""
+        impact = RestartImpact(root, Gateway("draining", True, restart_requested=True, active_agents=work),
+                               wait_seconds=cap)
+        return lambda environ, profile: impact
+
+    @staticmethod
+    def refusing_as_draining(times: int | None) -> Callable[[int, object], None]:
+        """A session.create Hermes refuses as `runtime_draining`, as its session API answers one while the gateway
+        drains for a restart: the first `times` calls, or every call with None."""
+        calls: list[int] = []
+
+        def refuse(number: int, _cancel: object) -> None:
+            calls.append(number)
+            if times is None or len(calls) <= times:
+                raise GatewayCallError("session.create", 4001, "runtime_draining", {"reason": "runtime_draining"})
+
+        return refuse
+
     def launch(self, run: Run, make_client: Callable[..., GatewayClient], stderr: io.StringIO | None = None) -> Run:
         run.stderr = TtyStream() if stderr is None else stderr
         run.code = app_module.main(
@@ -125,17 +163,14 @@ class LaunchWaitTests(LaunchWaitCase):
         refused = [lambda _own, n=n: self.refusing_spawn(run, f"refused-{n}") for n in range(50)]
         with fast_wait(LAUNCH_WAIT_SECONDS=1.0, LAUNCH_MIN_TRY_SECONDS=0.4):
             self.launch(run, self.clients(run, refused))
-        self.assert_fell_back(run)
+        self.assert_gave_up(run)
         self.assertGreaterEqual(len(run.clients), 2)
         said = run.stderr.getvalue()
         self.assertIn(RESTARTING, said)
         self.assertRegex(said, r"omh: the Hermes gateway did not answer within [1-9]\d*s;")  # the seconds waited
         self.assertIn("`hermes gateway status`", said)
         self.assertIn(f"  {REFUSED_LINE}", said)
-        # The fallback marker keeps why the TUI did not start, never the countdown.
-        marker = run.fallback_sentinel.read_text(encoding="utf-8")
-        self.assertIn(GAVE_UP, marker)
-        self.assertNotIn(RESTARTING, marker)
+        self.assertNotIn(DRAINING, said)  # no record said the gateway drains: the plain restarting line
 
     def test_a_session_that_is_slow_to_open_says_what_it_waits_for_and_opens(self) -> None:
         run = self.normal()
@@ -172,7 +207,7 @@ class LaunchWaitTests(LaunchWaitCase):
 
         with fast_wait():
             self.launch(run, self.on_call(run, "session.create", timed_out))
-        self.assert_fell_back(run)
+        self.assert_gave_up(run)
         said = run.stderr.getvalue()
         self.assertRegex(said, r"omh: the Hermes gateway did not answer within \d+s;")  # the seconds waited
         self.assertIn("`hermes gateway status`", said)
@@ -223,8 +258,9 @@ class LaunchWaitTests(LaunchWaitCase):
 
         with fast_wait():
             self.launch(run, picked)
-        self.assert_fell_back(run)
+        self.assert_gave_up(run)  # the gateway kept going away as not ready: Hermes' own TUI would meet the same
         self.assertEqual(len(run.clients), 1 + app_module.SESSION_RETRY_LIMIT)
+        self.assertIn(GAVE_UP, run.stderr.getvalue())
 
     def test_a_gateway_that_crashes_on_the_session_call_falls_back_at_once(self) -> None:
         # Not a restart: the child exits 1 while the create waits. No new gateway, no "restarting".
@@ -236,6 +272,62 @@ class LaunchWaitTests(LaunchWaitCase):
         said = run.stderr.getvalue()
         self.assertNotIn(RESTARTING, said)
         self.assertIn("could not open a Hermes session", said)
+
+    def test_a_session_refused_while_the_gateway_drains_is_asked_again_and_opens_once_admitted(self) -> None:
+        # Hermes lets two bot turns finish before its restart: the create is refused as runtime_draining twice, on
+        # the same live gateway, and the TUI opens on the third ask. Never Hermes' own TUI, which would be refused too.
+        run = self.normal()
+        with fast_wait(LAUNCH_DRAIN_RETRY_SECONDS=0.05), \
+                patch.object(app_module, "read_impact", self.draining(run.root, 2, 1800.0)):
+            self.launch(run, self.on_call(run, "session.create", self.refusing_as_draining(2)))
+        self.assertEqual((run.terminal.stalled, run.code), ("", 0), run.stderr.getvalue())
+        self.assertFalse(run.fallback_sentinel.exists())
+        self.assertEqual(len(run.clients), 1)  # the gateway is live: the same client asks again
+        said = run.stderr.getvalue()
+        self.assertIn(f"{DRAINING} 2 running turns (it allows up to 30 min); waiting…", said)
+        self.assertIn("ctrl+c leaves", said)
+        self.assertNotIn(RESTARTING, said)
+
+    def test_a_session_refused_as_draining_past_the_drain_cap_is_given_up_on_without_a_fallback(self) -> None:
+        # The bound grows once to the drain's cap (plus the plain wait); a gateway still refusing past it is given
+        # up on with the drain's own sentence, exit 1, no fallback.
+        run = self.normal()
+        with fast_wait(LAUNCH_WAIT_SECONDS=0.3, LAUNCH_MIN_TRY_SECONDS=0.2, LAUNCH_DRAIN_RETRY_SECONDS=0.05), \
+                patch.object(app_module, "read_impact", self.draining(run.root, 1, 0.2)):
+            self.launch(run, self.on_call(run, "session.create", self.refusing_as_draining(None)))
+        self.assert_gave_up(run)
+        self.assertEqual(len(run.clients), 1)
+        said = run.stderr.getvalue()
+        self.assertIn(f"{DRAINING} 1 running turn (it allows up to 0.2 s)", said)
+        self.assertRegex(said, rf"omh: the Hermes gateway {DRAIN_GAVE_UP} [1-9]\d*s\.")
+        self.assertIn("`hermes gateway status`", said)
+        self.assertNotIn(GAVE_UP, said)
+
+    def test_a_draining_refusal_without_a_readable_record_is_still_waited_through(self) -> None:
+        # The refusal itself is the evidence: no record, so the line names the work generically and Hermes' default
+        # cap bounds the wait.
+        run = self.normal()
+        with fast_wait(LAUNCH_DRAIN_RETRY_SECONDS=0.05), \
+                patch.object(app_module, "read_impact", lambda environ, profile: RestartImpact(None, None)):
+            self.launch(run, self.on_call(run, "session.create", self.refusing_as_draining(1)))
+        self.assertEqual((run.terminal.stalled, run.code), ("", 0), run.stderr.getvalue())
+        self.assertIn(f"{DRAINING} its running work (it allows up to 30 min)", run.stderr.getvalue())
+
+    def test_an_attach_the_draining_gateway_refuses_is_waited_for_past_the_plain_bound(self) -> None:
+        # The attach child exits not ready while the record says the gateway drains: the plain bound (0.5 s) would
+        # give up, the drain-aware one waits the cap (0.6 s) and the plain wait on top, paced slower.
+        run = self.normal()
+        refused = [lambda _own, n=n: self.refusing_spawn(run, f"refused-{n}") for n in range(50)]
+        started = time.monotonic()
+        with fast_wait(LAUNCH_WAIT_SECONDS=0.5, LAUNCH_MIN_TRY_SECONDS=0.1, LAUNCH_DRAIN_RETRY_SECONDS=0.1), \
+                patch.object(app_module, "read_impact", self.draining(run.root, 0, 0.6)):
+            self.launch(run, self.clients(run, refused))
+        self.assert_gave_up(run)
+        self.assertGreaterEqual(time.monotonic() - started, 0.9)
+        said = run.stderr.getvalue()
+        self.assertIn(f"{DRAINING} its running work (it allows up to 0.6 s)", said)
+        self.assertIn(GAVE_UP, said)
+        self.assertNotIn(RESTARTING, said)
 
     def test_off_a_terminal_each_phase_is_one_line_and_nothing_is_rewritten(self) -> None:
         run = self.normal()
