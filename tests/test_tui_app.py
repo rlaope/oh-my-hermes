@@ -2438,6 +2438,8 @@ def resumed_other(messages: list[dict] | None = None) -> dict:
 # The bytes the TUI reads from the path Hermes staged an image at: the fixtures' paths name no real file.
 KEPT_IMAGE = b"\x89PNG\r\n\x1a\nfixture"
 DETACHED = ("image.detach", {"result": {"detached": True, "count": 0}})
+# Hermes' answer to the preview the TUI asks for each attached image, when `display.inline_images` is off.
+RENDERED_OFF = ("image.render", {"result": {"mode": "off"}})
 
 
 @unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
@@ -2445,7 +2447,7 @@ DETACHED = ("image.detach", {"result": {"detached": True, "count": 0}})
 class AttachmentTests(AppTestCase):
     def test_image_is_a_token_in_the_composer_and_the_echo_lists_it_under_the_prompt(self) -> None:
         upload = "/fixture/hermes-home/images/upload_1.png"
-        answers = (*startup_answers(), ("image.attach", {"result": SHOT}), DETACHED,
+        answers = (*startup_answers(), ("image.attach", {"result": SHOT}), DETACHED, RENDERED_OFF,
                    ("image.attach_bytes", {"result": {"attached": True, "path": upload, "count": 1}}))
         run = self.prepare(Scenario("session", spans("session", "startup", "create", "plain_turn"), answers=answers))
         terminal = run.terminal
@@ -2485,6 +2487,7 @@ class AttachmentTests(AppTestCase):
             ("clipboard.paste", {"result": {"attached": False, "message": "No image found in clipboard"}}),
             ("clipboard.paste", {"result": CLIP}),
             DETACHED,
+            RENDERED_OFF,
         )
         run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=answers))
         terminal = run.terminal
@@ -2512,6 +2515,7 @@ class AttachmentTests(AppTestCase):
                 "text": "[User attached file: /fixture/project/notes.txt]"}}),
             ("input.detect_drop", {"result": {"matched": False}}),
             DETACHED,
+            RENDERED_OFF,
         )
         run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=answers))
         terminal = run.terminal
@@ -2559,7 +2563,7 @@ class AttachmentTests(AppTestCase):
         self.assertEqual(run.calls("input.detect_drop"), [])
 
     def test_cmd_backspace_takes_the_text_and_the_image_and_nothing_stages_it_again(self) -> None:
-        answers = (*startup_answers(), ("image.attach", {"result": SHOT}), DETACHED)
+        answers = (*startup_answers(), ("image.attach", {"result": SHOT}), DETACHED, RENDERED_OFF)
         run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=answers))
         terminal = run.terminal
         terminal.script(
