@@ -535,6 +535,7 @@ LOCALIZED_REPLIES = {
     "ko": "브랜치를 푸시했고 지금 CI가 돌고 있습니다.",
     "ja": "ブランチをプッシュしました。いまCIが動いています。",
     "zh": "已推送分支，持续集成正在运行。",
+    "zh-Hant": "已推送分支，持續整合正在執行。",
 }
 
 
@@ -567,9 +568,44 @@ class ReplyLanguageTests(unittest.TestCase):
 
     def test_a_kanji_only_japanese_reply_reads_as_chinese(self) -> None:
         # The stated limit: with no run of two kana nothing in the text tells
-        # Japanese from Chinese, so it gets the Chinese copy.
-        self.assertEqual(reply_language("設定変更完了。全試験合格。"), "zh")
-        self.assertEqual(reply_language("設定を変更し完了。"), "zh")
+        # Japanese from Chinese, so it gets a Chinese copy. Kanji such as 設
+        # and 試 share their Traditional forms, so it gets the Traditional one.
+        self.assertEqual(reply_language("設定変更完了。全試験合格。"), "zh-Hant")
+        self.assertEqual(reply_language("設定を変更し完了。"), "zh-Hant")
+        self.assertEqual(reply_language("完了。全部合格。"), "zh")
+
+    def test_traditional_chinese_is_told_from_simplified(self) -> None:
+        # Script-specific forms decide; shared characters and code say nothing.
+        for reply, language in (
+            ("已推送分支，持續整合正在執行。", "zh-Hant"),
+            ("這個設定還沒完成，請稍後再試。", "zh-Hant"),
+            ("这个设置还没完成，请稍后再试。", "zh"),
+            ("修改了 src/quality/reply_lint.py 檔案，測試通過", "zh-Hant"),
+            ("完成。全部通过。", "zh"),
+            ("完成。全部合格。", "zh"),
+            # The same failure reports in each script: no common-word list
+            # covers 敗, 錯, 誤, 衝, 監 or 結, the national character sets do.
+            ("CI 失敗了，原因是 lint 錯誤。", "zh-Hant"),
+            ("CI 失败了，原因是 lint 错误。", "zh"),
+            ("合併衝突，需要你決定保留哪一邊。", "zh-Hant"),
+            ("合并冲突，需要你决定保留哪一边。", "zh"),
+            ("監看程序結束，結果是失敗。", "zh-Hant"),
+            ("监看程序结束，结果是失败。", "zh"),
+            ("修復完成。", "zh-Hant"),
+            ("修复完成。", "zh"),
+        ):
+            with self.subTest(reply=reply):
+                self.assertEqual(reply_language(reply), language)
+
+    def test_without_the_cjk_codecs_chinese_keeps_the_simplified_copy(self) -> None:
+        # A Python built without its CJK codecs cannot tell the scripts apart;
+        # the reply is still Chinese and keeps the copy it always had.
+        with mock.patch.object(remote_wait_nudge, "_TRADITIONAL_CODEC", "omh-no-such-codec"), mock.patch.object(
+            remote_wait_nudge, "_SIMPLIFIED_CODEC", "omh-no-such-codec-either"
+        ):
+            self.assertEqual(reply_language("CI 失敗了，原因是 lint 錯誤。"), "zh")
+            self.assertEqual(reply_language("CI 失败了，原因是 lint 错误。"), "zh")
+        self.assertEqual(reply_language("CI 失敗了，原因是 lint 錯誤。"), "zh-Hant")
 
     def test_code_is_not_prose(self) -> None:
         fenced = "Updated the greeting.\n\n```python\nGREETING = \"안녕하세요 여러분\"\n```\n\nCI is green."

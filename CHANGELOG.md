@@ -877,6 +877,17 @@ All notable changes will be documented here.
   turning shaping off until that row is cleared in `omh setup` or with
   `omh model-chains provider clear`.
 
+- **A reply written in Traditional Chinese now ends with a Traditional
+  Chinese stop sentence.** On a turn a failed watcher's notice opened and
+  nothing re-armed, OMH appends one sentence in the reply's own language.
+  Every Chinese reply used to get the Simplified copy, so a reader in Taiwan
+  or Hong Kong saw a script they had not written in. A Chinese reply now
+  gets 「沒有任何工作會再次喚醒這個對話。如需繼續，請傳送一則訊息。」 when its
+  Traditional-only characters outnumber its Simplified-only ones, read from
+  Python's own Big5 and GB2312 codecs; Simplified replies are unchanged. A
+  kanji-only Japanese reply, already read as Chinese, now usually gets the
+  Traditional copy. (Reported and first fixed by @sykuang in #2654.)
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and
