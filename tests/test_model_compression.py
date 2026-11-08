@@ -89,15 +89,18 @@ class ModelCompressionRoutingTests(unittest.TestCase):
         for message in (
             "quantize this model",
             "distill this model",
-            "distill this model into a smaller one",
+            "distill this 70B into an 8B",
             "prune 50% of the weights in llama with SparseGPT",
             "should we do quantization-aware training or post-training quantization",
-            "make this model smaller so it fits on a 24GB GPU without losing quality",
+            "make the model smaller so our llm fits on one 24GB GPU",
             "which calibration data should I use for GPTQ",
-            "quantize the model to 4-bit for our 12gb gpu",
+            "quantize the model with gptq",
             "이 모델 양자화해줘",
             "지식 증류로 작은 모델 만들어줘",
-            "모델 경량화해서 gpu 메모리 줄여줘",
+            "GGUF로 양자화해줘",
+            "70B 모델을 8B로 증류해줘",
+            "이 모델 4비트로 양자화해줘",
+            "llama 모델 경량화해줘",
         ):
             with self.subTest(message=message):
                 route = _route(message)
@@ -119,6 +122,19 @@ class ModelCompressionRoutingTests(unittest.TestCase):
             "3d 모델 경량화해줘",
             "게임 캐릭터 모델 압축",
             "our teacher student ratio is too high",
+            # A word of statistics, 3D, games, signals or know-how beside a
+            # shared phrase is not a word of model weights.
+            "prune the model of unused parameters before I fit the ANOVA again",
+            "3D 모델 경량화해서 GPU 부하 줄이고 싶어",
+            "make the model smaller so the GPU renders faster in Blender",
+            "the churn model has poor accuracy, distill the model into a one-page summary for execs",
+            "quantize the model of the grid to 8-bit color for the pixel art",
+            "compress the model weights file with gzip for upload",
+            "run a knowledge distillation workshop so seniors pass know-how to new hires",
+            "팀 노하우를 지식 증류해서 문서로 정리해줘",
+            "회귀 모델 파라미터 줄이고 모델 압축해줘",
+            "이미지를 4비트로 양자화해줘",
+            "증류수 사러 가야 해",
         ):
             with self.subTest(message=message):
                 route = _route(message)
@@ -143,9 +159,14 @@ class ModelCompressionRoutingTests(unittest.TestCase):
             ("make the model smaller in blender", True),
             ("8-bit quantization of the audio signal", True),
             ("distill our model of customer churn into a one-pager", True),
-            ("distill this model into a smaller one", False),
+            ("distill this model into a smaller one", True),
+            ("prune the model of unused parameters before I fit the ANOVA again", True),
+            ("compress the model so it loads faster on the GPU in Unity", True),
+            ("knowledge distillation in education means what", True),
+            ("knowledge distillation", False),
+            ("distill the model into a 1.5b student", False),
             ("8-bit quantization of our llama checkpoint", False),
-            ("quantize the model to 4-bit", False),
+            ("quantize the model to 4-bit", True),
             ("quantize this model", False),
         ):
             with self.subTest(message=message):

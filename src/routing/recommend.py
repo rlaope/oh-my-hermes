@@ -66,6 +66,7 @@ from .policy import (
     media_input_operator_guard_applies,
     MODEL_COMPRESSION_ANCHORS,
     MODEL_COMPRESSION_SHARED_PHRASES,
+    names_a_parameter_count,
     ops_observability_external_blocked,
     ops_observability_generic_metrics_blocked,
 )
@@ -522,7 +523,6 @@ _MODEL_COMPRESSION_EXPLICIT_PHRASES = tuple(
         "model pruning",
         "2:4 sparsity",
         "model distillation",
-        "knowledge distillation",
         "smaller student model",
         "gptq",
         "awq",
@@ -534,24 +534,39 @@ _MODEL_COMPRESSION_EXPLICIT_PHRASES = tuple(
         "모델을 양자화",
         "모델 증류",
         "모델을 증류",
-        "지식 증류",
         "모델 프루닝",
         "모델을 프루닝",
         "모델 가지치기",
         "양자화 인식 학습",
     )
 )
-# "3D 모델 경량화" and "모델 압축" name a game asset as often as a network, so
-# these count as this skill's request only beside a word of model weights.
-# They are not pack phrases, so without one they add nothing: the Korean pack
-# has no everyday-sense row to withdraw them, and a request ending such as
-# "압축해줘" is a word of its own there.
-_MODEL_COMPRESSION_ANCHORED_PHRASES = tuple(
-    normalized_phrase(phrase) for phrase in ("모델 압축", "모델을 압축", "모델 경량화", "모델을 경량화")
+# Korean phrases a game asset, a team's know-how, a photo or distilled water
+# share ("3D 모델 경량화", "노하우를 지식 증류", "색상 양자화", "증류수"). They
+# are not pack phrases, because the Korean pack has no everyday-sense row to
+# withdraw them; each counts as this skill's request only beside a word of
+# model weights or a parameter count (`_MODEL_COMPRESSION_KOREAN_WEIGHT_WORDS`,
+# `names_a_parameter_count`), or beside the further words its row lists, all of
+# which must be said. Without that, it adds nothing. A word is matched with
+# `phrase_is_spoken`, so a particle after it still counts (`gguf로`, `가중치를`).
+_MODEL_COMPRESSION_KOREAN_WEIGHT_WORDS = tuple(
+    normalized_phrase(word) for word in (*sorted(MODEL_COMPRESSION_ANCHORS), "가중치", "q4_k_m", "q5_k_m", "q8_0")
 )
-_MODEL_COMPRESSION_ANCHOR_TOKENS = MODEL_COMPRESSION_ANCHORS | frozenset(
-    routing_tokens("양자화 증류 프루닝 가중치 파라미터 추론 정확도 4비트 8비트 온디바이스 엣지", stopwords=_STOPWORDS)
-)
+_MODEL_COMPRESSION_KOREAN_ANCHORED: dict[str, tuple[tuple[str, ...], ...]] = {
+    normalized_phrase(phrase): tuple(tuple(normalized_phrase(word) for word in words) for words in further)
+    for phrase, further in (
+        ("모델 압축", (("양자화",),)),
+        ("모델을 압축", (("양자화",),)),
+        ("모델 경량화", (("양자화",),)),
+        ("모델을 경량화", (("양자화",),)),
+        ("증류", (("양자화",),)),
+        # Know-how is distilled with no model in the sentence.
+        ("지식 증류", (("모델",),)),
+        # A photo's colors are quantized to 4 bits too, but not a model.
+        ("양자화", (("4비트", "모델"), ("8비트", "모델"))),
+    )
+}
+# "distill this 70b into an 8b" names the model by its parameter count.
+_MODEL_COMPRESSION_DISTILL_TOKENS = frozenset({"distill", "distil", "distilling", "distilled"})
 
 # `internal-audit` holds back every everyday token its phrases are built from.
 # Listed are the phrases that name testing or grading an internal control. A
@@ -5823,16 +5838,25 @@ def _model_finetuning_explicit_match(normalized_query: str) -> bool:
 
 
 def _model_compression_explicit_match(normalized_query: str, query_tokens: set[str]) -> bool:
-    """A phrase that names compressing a model, or an anchored phrase beside a word of model weights.
+    """A phrase that names compressing a model, a distill verb on a parameter count, or a Korean anchored phrase.
 
     The English shared phrases are in the explicit list: the everyday-sense
     check withdrew the skill before this runs when one arrived unanchored.
     """
     if any(phrase_is_spoken(normalized_query, phrase) for phrase in _MODEL_COMPRESSION_EXPLICIT_PHRASES):
         return True
-    return bool(query_tokens & _MODEL_COMPRESSION_ANCHOR_TOKENS) and any(
-        phrase_is_spoken(normalized_query, phrase) for phrase in _MODEL_COMPRESSION_ANCHORED_PHRASES
+    parameter_count = names_a_parameter_count(normalized_query)
+    if parameter_count and query_tokens & _MODEL_COMPRESSION_DISTILL_TOKENS:
+        return True
+    weight_word = parameter_count or any(
+        phrase_is_spoken(normalized_query, word) for word in _MODEL_COMPRESSION_KOREAN_WEIGHT_WORDS
     )
+    for phrase, further in _MODEL_COMPRESSION_KOREAN_ANCHORED.items():
+        if not phrase_is_spoken(normalized_query, phrase):
+            continue
+        if weight_word or any(all(phrase_is_spoken(normalized_query, word) for word in words) for words in further):
+            return True
+    return False
 
 
 def _data_pipelines_explicit_match(normalized_query: str) -> bool:

@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "51fe30394ebf4a502c02da93306f1b29582a6b5f3b2bc050e7ef58490c179d70",
+  "catalog_revision": "38929eb9709db30f292ace3e53a47c9df60438483609df0605cfa51b07f482e1",
   "files": {
     "omh-accessibility-audit/SKILL.md": "7f48005d7fd6e9e1b2b30f03eb412145e09971fcc629393a27c1a3c5e29d6cef",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -166,8 +166,8 @@
     "omh-memory-new/SKILL.md": "cec091cc9ca5f112ab6189a6ee6bcc48026e7f42cef6160c5e1c3d0b9445159e",
     "omh-mobile-release/SKILL.md": "de2625b0d225e1178feb2fd84496ffca79e72675e4fff1db8987499515a4272a",
     "omh-mobile-release/references/mobile-release-method.md": "830153825e1e2127914003459f931c403c3e4da17f501f258b269905550c00b3",
-    "omh-model-compression/SKILL.md": "221fd5684393b845a1ea5ae6b5de357079746af72f52ba0379e46c421ee3c1b2",
-    "omh-model-compression/references/compression-method.md": "fc372e8551a10a5dd7ef0dc58956f4629e884aba174edfcaa4cd3ac21799baeb",
+    "omh-model-compression/SKILL.md": "0be6895dba704545c566c5b9b5ed0a2e90764e317228985442708138f2e7735e",
+    "omh-model-compression/references/compression-method.md": "df342475c37e7c7be48b9ff6c639c5e7b76249323a161e9f0f23e1fb7e042a07",
     "omh-model-finetuning/SKILL.md": "f116806bf3a89550a2019084eca05a09679bd09d57a4fc276da32d535c6b0d39",
     "omh-model-finetuning/references/finetuning-method.md": "6db7d0f4141ef405d9ab189ae37c9793f772b0b6d84e063e9c7b1769c484dfd1",
     "omh-molecular-docking/SKILL.md": "219b190bfd7f829e56190c66e11837e040c5af6b02a842ba0cd34da9cd6587f2",

@@ -38,7 +38,7 @@ This is a Hermes-native `model-compression` workflow skill.
 Good example:
 
 - Prompt: Quantize our Llama 3.1 8B support classifier so it fits on one 16 GB GPU under vLLM, and tell me how much accuracy we lose.
-- Expected behavior: Size the target, measure the 16-bit baseline on the held-out tickets, run a 4-bit GPTQ or AWQ pass with calibration tickets kept apart from the eval, and keep it only if accuracy stays within the stated tolerance.
+- Expected behavior: Size the target and measure the 16-bit baseline on the held-out tickets. Try FP8 or weight-only quantization first; run a 4-bit GPTQ or AWQ pass, with calibration tickets kept apart from the eval, only if the KV budget or the GPU class rules that out. Keep the result only if accuracy stays within the stated tolerance.
 - Why: The runtime and memory budget pick the format, and the person's own tickets decide whether the smaller model is kept.
 
 Bad example:
@@ -70,7 +70,7 @@ Bad example:
 
 Use when a model's weights must get smaller or cheaper to fit a memory budget or cheaper hardware: post-training or quantization-aware quantization, structured or unstructured pruning, or distillation into a smaller student, gated by a comparison with the uncompressed baseline on the person's own task eval; OMH compresses nothing and runs no eval.
 
-    Strong routing signals: `model-compression`, `model compression`, `compress this model`, `compress the model`, `compress a model`, `compress our model`, `compress my model`, `quantize this model`, `quantize the model`, `quantize a model`, `quantize our model`, `quantize my model`, `prune this model`, `prune the model`, `prune a model`, `prune our model`, `prune my model`, `distill this model`, `distill the model`, `distill a model`, `distill our model`, `distill my model`, `make this model smaller`, `make the model smaller`, `structured pruning`, `unstructured pruning`, `weight pruning`, `magnitude pruning`, `4-bit quantization`, `8-bit quantization`, `into a smaller model`, `post-training quantization`, `quantization-aware training`, `model quantization`, `quantized model`, `int8 quantization`, `fp8 quantization`, `gptq`, `awq`, `bitsandbytes`, `model pruning`, `sparsegpt`, `model distillation`, `knowledge distillation`, `smaller student model`, `모델 양자화`, `모델 증류`, `지식 증류`, `모델 프루닝`, `모델 가지치기`, `양자화 인식 학습`
+    Strong routing signals: `model-compression`, `model compression`, `compress this model`, `compress the model`, `compress a model`, `compress our model`, `compress my model`, `quantize this model`, `quantize the model`, `quantize a model`, `quantize our model`, `quantize my model`, `prune this model`, `prune the model`, `prune a model`, `prune our model`, `prune my model`, `distill this model`, `distill the model`, `distill a model`, `distill our model`, `distill my model`, `make this model smaller`, `make the model smaller`, `structured pruning`, `unstructured pruning`, `weight pruning`, `magnitude pruning`, `4-bit quantization`, `8-bit quantization`, `into a smaller model`, `knowledge distillation`, `post-training quantization`, `quantization-aware training`, `model quantization`, `quantized model`, `int8 quantization`, `fp8 quantization`, `gptq`, `awq`, `bitsandbytes`, `model pruning`, `sparsegpt`, `model distillation`, `smaller student model`, `모델 양자화`, `모델 증류`, `모델 프루닝`, `모델 가지치기`, `양자화 인식 학습`
 
 ## Catalog Metadata
 

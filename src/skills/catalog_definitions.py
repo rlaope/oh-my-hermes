@@ -8591,6 +8591,8 @@ _DEFINITIONS = [
             "The goal is measurable performance of an application or system, not model handling; use `ultraperf`.",
             "The user wants benchmark-superiority or provider-readiness claims without measurements; decline the claim and offer the measurement plan from this skill's checklist.",
             "Making a model's weights smaller or cheaper by quantization, pruning or distillation into a student; use `model-compression`.",
+            "Serving a model behind an endpoint, or benchmarking that endpoint; use `inference-serving`.",
+            "Training a model on your own data with SFT, DPO or a LoRA adapter; use `model-finetuning`.",
         ),
         good_example=SkillExample(
             prompt="GLM 5.3 and 5.3 Flash just shipped; check what we should optimize for them.",

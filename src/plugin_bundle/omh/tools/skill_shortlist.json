@@ -1819,8 +1819,8 @@
 },
 {
 "anchors":"accelerator awq bitsandbyt compact copy datacenter fewer full gptq lose macbook mimic overflow size sparsegpt vram",
-"hangul":"가지 루닝 모델 양자 인식 자화 증류 지식 지치 치기 프루 학습",
-"hangul_anchors":"가지 루닝 모델 양자 인식 자화 증류 지식 지치 치기 프루 학습",
+"hangul":"가지 루닝 모델 양자 인식 자화 증류 지치 치기 프루 학습",
+"hangul_anchors":"가지 루닝 모델 양자 인식 자화 증류 지치 치기 프루 학습",
 "label":"omh-model-compression",
 "name":"model-compression",
 "situation":"Making a model smaller or cheaper by changing its weights",

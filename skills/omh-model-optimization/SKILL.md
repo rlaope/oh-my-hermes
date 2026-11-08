@@ -10,7 +10,7 @@ metadata:
     phase: model-onboarding
     role: tracker
     quality_tier: evidence-gated
-    related_skills: [omh-model-setup, ulw-perf, omh-model-compression]
+    related_skills: [omh-model-setup, ulw-perf, omh-model-compression, omh-inference-serving, omh-model-finetuning]
 ---
 
 # Model Optimization
@@ -27,6 +27,8 @@ This is a Hermes-native `model-optimization` workflow skill.
 - The goal is measurable performance of an application or system, not model handling; use `ulw-perf`.
 - The user wants benchmark-superiority or provider-readiness claims without measurements; decline the claim and offer the measurement plan from this skill's checklist.
 - Making a model's weights smaller or cheaper by quantization, pruning or distillation into a student; use `omh-model-compression`.
+- Serving a model behind an endpoint, or benchmarking that endpoint; use `omh-inference-serving`.
+- Training a model on your own data with SFT, DPO or a LoRA adapter; use `omh-model-finetuning`.
 
 ## Examples
 
