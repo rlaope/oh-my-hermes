@@ -508,7 +508,6 @@ def capture_project_memory_candidate(
                 ),
             }
         write_project_memory_candidate_unlocked(omh_home, candidate)
-        retired_held = _retire_held_recaptures(omh_home, candidate, lock=lock, clock=clock)
         write_memory_index(omh_home, lock=lock, clock=clock)
         auto_approved = False
         record: dict[str, object] = {}
@@ -532,6 +531,11 @@ def capture_project_memory_candidate(
             candidate = approved.get("candidate", candidate) if isinstance(approved.get("candidate"), dict) else candidate
             supersession = approved.get("supersession")
             auto_approved = True
+        # Retire the earlier held copies only once this capture has finished: an
+        # auto-safe approval that raises leaves them held, so an error result that
+        # says nothing is confirmed saved is true of them as well. The index lists
+        # candidate files, not statuses, so it needs no rewrite here.
+        retired_held = _retire_held_recaptures(omh_home, candidate, lock=lock, clock=clock)
     review_reason = "" if auto_approved else _capture_review_reason(
         candidate, policy, duplicate_of=duplicate_of, relative_phrase=relative_phrase, force_review=force_review
     )
@@ -970,9 +974,12 @@ def _retire_held_recaptures(
     "The same content" is the store's one dedup key, the normalized summary
     (`normalized_summary_key`), inside the successor's confinement: same scope,
     subject principal and audience, the set `_records_in_confinement` reads,
-    plus the same `correction_of`, because that marker decides what approval
-    supersedes. Only held candidates (pending or blocked review) are retired.
+    plus the same perspective and the same `correction_of`, because a
+    perspective decides which lens recalls it and that marker decides what
+    approval supersedes. Only held candidates (pending or blocked review) are retired.
     Approved, rejected, superseded and lifecycle candidates stay as they are.
+    It runs after any auto-safe approval of the successor, so an approval
+    that raises retires nothing.
     The retirement records why and names the successor, and approval refuses
     a retired copy. No person is asked: the newer capture is the one that
     stands. Runs under the store lock that approval and rejection hold, so a
@@ -1012,8 +1019,21 @@ def _retire_held_recaptures(
 
 
 def _held_confinement(candidate: dict[str, Any]) -> tuple[object, ...]:
+    """Scope, subject principal, audience, perspective and correction marker.
+
+    Perspective counts because a perspective-scoped record surfaces only
+    through a matching lens: the same summary observed of codex and of claude
+    is two memories, not one captured twice.
+    """
     scope = candidate.get("scope") if isinstance(candidate.get("scope"), dict) else {}
-    return (scope, _subject_principal(candidate), _audience_key(candidate), str(candidate.get("correction_of", "") or ""))
+    perspective = candidate.get("perspective") if isinstance(candidate.get("perspective"), dict) else None
+    return (
+        scope,
+        _subject_principal(candidate),
+        _audience_key(candidate),
+        perspective,
+        str(candidate.get("correction_of", "") or ""),
+    )
 
 
 def _audience_key(artifact: dict[str, object]) -> tuple[str, tuple[str, ...]] | None:

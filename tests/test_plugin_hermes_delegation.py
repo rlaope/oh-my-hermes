@@ -760,6 +760,8 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
             "claude-opus-5-5": ("anthropic", "medium", "writing", "anthropic", "openai"),
             "claude-sonnet-5-5": ("anthropic", "medium", "writing", "anthropic", "openai"),
             "claude-haiku-5-5": ("anthropic", "low", "simple-work", "anthropic", "openai"),
+            # Fable 5.1 heads no chain; at `xhigh` it sits third in architect.
+            "claude-fable-5-1": ("anthropic", "xhigh", "architect", "anthropic", "openai"),
         }
         # A contract in no shipped chain, named by no provider-family row,
         # has nothing for its aliases to inherit. Jev is that case by
@@ -2807,6 +2809,18 @@ class ServedModelAttestationTest(unittest.TestCase):
         # The requested side already spells the shared identity, so no third
         # name is added; `resolved` appears only when neither side names it.
         self.assertNotIn("resolved", attestation)
+
+    def test_fable_dotted_gateway_spelling_agrees_with_the_exact_id(self):
+        # Declared like the 5.5 dotted rows, so the sides agree as theirs do.
+        for requested, answering in (
+            ("claude-opus-5-5", "anthropic/claude-opus-5.5"),
+            ("claude-fable-5-1", "anthropic/claude-fable-5.1"),
+            ("claude-fable-5-1", "claude-fable-5.1"),
+        ):
+            with self.subTest(answering=answering):
+                attestation = served_model_attestation(requested, answering, request_attested=True)
+                self.assertEqual(attestation["verdict"], "agreement")
+                self.assertEqual(attestation["basis"], "resolved_match")
 
     def test_a_shared_identity_neither_side_spells_is_named_on_its_own(self):
         # Two speed tiers of one model: the sides agree on `glm-5.3`, and

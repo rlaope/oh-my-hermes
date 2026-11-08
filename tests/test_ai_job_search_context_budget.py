@@ -397,9 +397,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The routing reach round then moves the skills whose triggers or index text it narrows; the pin
         # before it was 0ae5f905...ebc5f.
         # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
-        # moves, and the pin before it was d4eb4e54...7ed7. A coding-owner choice then counts only for the request
-        # it was made in: only dag-ulw and maestro move, and the pin before it was b36ad311...1e91.
-        self.assertEqual(_digest(legacy_hashes), 'de44ac0410fce09accc2c53c02886863da4139f2dcf065e9d489df9d421ebece')
+        # moves, and the pin before it was d4eb4e54...7ed7.
+        # ralplan's acceptance line says plan-accept refuses a scaffold-only file unless
+        # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91. A coding-owner choice
+        # then counts only for the request it was made in: only dag-ulw and maestro move, and the pin before it was
+        # 51d4a5cf...9f51.
+        self.assertEqual(_digest(legacy_hashes), 'f5a53187249c43f9001174be5538531a4b393e37283e123f01f5dc2d44dd80d4')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

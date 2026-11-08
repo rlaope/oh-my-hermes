@@ -263,17 +263,17 @@ class EffortFloorTests(unittest.TestCase):
         self.assertEqual(route["selected_reasoning_effort"], "low")
         self.assertEqual(route["effort_change"]["kind"], EFFORT_FLOOR_KIND)
         # A model without a contract keeps the previous behavior byte for byte.
-        # (GPT-5.6 Sol and then Kimi K3, the earlier subjects here, left the
-        # shipped chains on 2026-09-23 and 2026-10-24; GLM 5.3 Flash has no
-        # contract and heads `quick`.)
+        # (GPT-5.6 Sol, Kimi K3 and GLM 5.3 Flash, the earlier subjects here,
+        # left the shipped chains on 2026-09-23 and 2026-10-24 or gained a
+        # contract; GLM 5.3 has no contract and heads `unspecified-low`.)
         route = resolve_model_route(
             "hermes",
             role="brain",
             requested_effort="off",
-            requested_category="quick",
-            active_models=("glm-5.3-flash",),
+            requested_category="unspecified-low",
+            active_models=("glm-5.3",),
         )
-        self.assertEqual(route["selected_model"], "glm-5.3-flash")
+        self.assertEqual(route["selected_model"], "glm-5.3")
         self.assertEqual(route["selected_reasoning_effort"], "off")
         self.assertNotIn("effort_change", route)
 
@@ -1660,7 +1660,6 @@ class ClaudeOpus55ContractTests(unittest.TestCase):
         for model_id in (
             "claude-opus-5",
             "opus",
-            "claude-fable-5-1",
             "claude-opus-5-5-20260922",
             "us.anthropic.claude-opus-5-5",
             "anthropic.claude-opus-5",
@@ -2118,6 +2117,75 @@ class GeminiArgonContractTests(unittest.TestCase):
         status, stdout, _stderr = run_cli(["coding", "model-contract", "--model", "gemini-4-argon"], output_json=False)
         self.assertEqual(status, 0)
         self.assertIn("reasoning efforts: low, medium, high (floor `low`)", stdout)
+
+
+class FableGrokContractTests(unittest.TestCase):
+    """Claude Fable 5.1 and Grok 4.7 gained exact contracts on 2026-11-07 so
+    the model-chain picker steps their own ladders."""
+
+    def test_a_no_thinking_rung_is_raised_to_the_floor_on_record(self) -> None:
+        for model_id in ("claude-fable-5-1", "grok-4.7"):
+            for effort in ("off", "minimal"):
+                with self.subTest(model_id=model_id, effort=effort):
+                    raised = contract_effort_floor(model_id, effort)
+                    assert raised is not None
+                    self.assertEqual(raised[0], "low")
+
+    def test_grok_max_passes_rather_than_dropping_to_the_floor(self) -> None:
+        self.assertIsNone(contract_effort_floor("grok-4.7", "max"))
+
+    def test_fable_resolves_to_its_own_contract_under_both_spellings(self) -> None:
+        # Never Opus 5.5's: the two share a vendor and a family, not a record.
+        for form in ("claude-fable-5-1", "claude-fable-5.1", "anthropic/claude-fable-5.1"):
+            with self.subTest(form=form):
+                self.assertEqual(contract_model_id(form), "claude-fable-5-1")
+        projection = model_contract_projection("anthropic/claude-fable-5.1")
+        assert projection is not None
+        self.assertEqual(projection["provenance"], "declared_inheritance")
+        self.assertEqual((projection["reasoning_mode"], projection["service_tier"]), ("thinking", "standard"))
+
+    def test_every_shipped_chain_rung_of_these_models_is_a_documented_rung(self) -> None:
+        from omh.coding.model_recommendations import SHIPPED_MODEL_RECOMMENDATIONS
+
+        for category, chain in SHIPPED_MODEL_RECOMMENDATIONS["categories"].items():
+            for entry in chain:
+                model_id = entry["model_alias"]
+                if model_id not in ("claude-fable-5-1", "grok-4.7"):
+                    continue
+                with self.subTest(category=category, model_id=model_id):
+                    contract = model_contract(model_id)
+                    assert contract is not None
+                    self.assertIn(entry["reasoning_effort"], contract["reasoning_efforts"])
+
+    def test_price_rows_mirror_the_contracts(self) -> None:
+        from omh.plugin_bundle.omh.hermes_delegation import APPROX_CACHE_READ_RATIO
+
+        for model_id in ("claude-fable-5-1", "grok-4.7"):
+            with self.subTest(model_id=model_id):
+                contract = model_contract(model_id)
+                assert contract is not None
+                pricing = contract["pricing_usd_per_mtok"]
+                self.assertEqual(APPROX_PRICE_PER_MTOK[model_id], (pricing["input"], pricing["output"]))
+                self.assertAlmostEqual(
+                    APPROX_CACHE_READ_RATIO[model_id] * pricing["input"], pricing["cached_input"]
+                )
+
+    def test_grok_prints_its_cutoff_and_no_output_limit_it_does_not_publish(self) -> None:
+        code, stdout, stderr = run_cli(["coding", "model-contract", "--model", "grok-4.7"], output_json=False)
+        self.assertEqual(code, 0, stderr)
+        self.assertIn(
+            "- context 500,000 tokens; input 500,000; output not stated; knowledge cutoff 2026-05",
+            stdout,
+        )
+
+    def test_glm_and_grok_build_stay_without_a_contract(self) -> None:
+        # GLM-5.3 and GLM-5.3-Flash: a contract would stop their undeclared
+        # speed tiers (`z-ai/glm-5.3-flash-ultrafast` is a real user spelling)
+        # projecting onto them. Grok Build 0.1: xAI documents no effort
+        # parameter.
+        for model_id in ("glm-5.3", "glm-5.3-flash", "glm-5.3-flash-ultrafast", "grok-build-0.1"):
+            with self.subTest(model_id=model_id):
+                self.assertIsNone(model_contract(model_id))
 
 
 class GrokBuildPriceTests(unittest.TestCase):
