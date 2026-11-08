@@ -399,10 +399,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The routing reach round then moves the skills whose triggers or index text it narrows; the pin
         # before it was 0ae5f905...ebc5f.
         # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
-        # moves, and the pin before it was d4eb4e54...7ed7. A coding-owner choice then counts only for the request
-        # it was made in: only dag-ulw and maestro move, and the pin before it was b36ad311...1e91. No learned
-        # coding-owner default then: only dag-ulw and maestro move again; the pin before it was de44ac04...ebece.
-        self.assertEqual(_digest(legacy_hashes), '79d4214ef009835cae710949f5e6250a8fcf7692662d36d4f815a37747bd2b69')
+        # moves, and the pin before it was d4eb4e54...7ed7.
+        # ralplan's acceptance line says plan-accept refuses a scaffold-only file unless
+        # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91. A coding-owner choice
+        # then counts only for the request it was made in, and no learned coding-owner default exists: only dag-ulw
+        # and maestro move, and the pin before it was 51d4a5cf...9f51.
+        self.assertEqual(_digest(legacy_hashes), '6a7626d314688f14641681e21dbf5502d647c652a716ada9a2d71d184672444c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

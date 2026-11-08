@@ -5,11 +5,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from _local_package import load_local_package
 
 load_local_package()
-from omh.plugin_bundle.omh import memory_governance
+from omh.plugin_bundle.omh import memory_admission, memory_governance
 from omh.memory import (
     approve_project_memory_candidate,
     build_memory_retirement,
@@ -299,6 +300,40 @@ class HeldRecaptureTests(unittest.TestCase):
         self.assertEqual(self._candidate(first["candidate_id"])["status"], "pending_review")
         self.assertNotIn("retired_held_candidates", other_text)
         self.assertNotIn("retired_held_candidates", other_scope)
+
+    def test_a_retired_copy_cannot_be_rejected_either(self) -> None:
+        first = capture_project_memory_candidate(self.paths, "Deploys go through staging first")["candidate"]
+        capture_project_memory_candidate(self.paths, "Deploys go through staging first")
+
+        with self.assertRaisesRegex(ValueError, "retired by a recapture"):
+            reject_project_memory_candidate(self.paths, first["candidate_id"], reason="stale")
+        self.assertEqual(self._candidate(first["candidate_id"])["status"], "retired")
+
+    def test_the_same_summary_under_another_perspective_is_another_memory(self) -> None:
+        codex = capture_project_memory_candidate(
+            self.paths, "Runs the lint step before pushing", observer="hermes", observed="codex"
+        )["candidate"]
+        claude = capture_project_memory_candidate(
+            self.paths, "Runs the lint step before pushing", observer="hermes", observed="claude-code"
+        )
+        self.assertEqual(self._candidate(codex["candidate_id"])["status"], "pending_review")
+        self.assertNotIn("retired_held_candidates", claude)
+
+        again = capture_project_memory_candidate(
+            self.paths, "Runs the lint step before pushing", observer="hermes", observed="codex"
+        )
+        self.assertEqual(again["retired_held_candidates"], [codex["candidate_id"]])
+        self.assertEqual(self._candidate(claude["candidate"]["candidate_id"])["status"], "pending_review")
+
+    def test_an_auto_safe_approval_that_raises_retires_nothing(self) -> None:
+        held = capture_project_memory_candidate(self.paths, "Deploys go through staging first")["candidate"]
+        write_setup_profile(self.paths, memory_mode="auto-safe")
+
+        with patch.object(memory_admission, "approve_project_memory_candidate", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                capture_project_memory_candidate(self.paths, "Deploys go through staging first")
+
+        self.assertEqual(self._candidate(held["candidate_id"])["status"], "pending_review")
 
     def test_recapture_of_an_approved_or_rejected_one_behaves_as_before(self) -> None:
         approved = capture_project_memory_candidate(self.paths, "Deploys go through staging first")["candidate"]

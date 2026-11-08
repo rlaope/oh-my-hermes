@@ -42,8 +42,11 @@ DRIFT_ERROR_CODES = frozenset({PARAM_REJECTED, METHOD_NOT_FOUND})
 # `config.get` is answered after the first frame and only sets the busy mode, which has a default (queue).
 # `session.list` is asked unprompted at the start of a fresh session, only to name the last one, and
 # `model.options` only fills `/model`'s picker and reads Hermes' configured default model, while
-# `/model <name>` still switches.
-OPTIONAL_METHODS = frozenset({"commands.catalog", "config.get", "model.options", "session.list", "skills.reload"})
+# `/model <name>` still switches. `image.render` only draws a preview under the prompt: a Hermes without it answers
+# METHOD_NOT_FOUND, the TUI keeps the label row, and the session goes on.
+OPTIONAL_METHODS = frozenset(
+    {"commands.catalog", "config.get", "image.render", "model.options", "session.list", "skills.reload"}
+)
 
 # Methods the TUI calls, with the only keys it ever sends. Sending a key outside
 # this map is a bug: a Hermes that does not know it rejects the whole call.
@@ -94,6 +97,10 @@ CLIENT_METHODS: dict[str, frozenset[str]] = {
     # file and answers its path, which `image.detach` then names).
     "image.attach_bytes": frozenset({"session_id", "filename", "content_base64"}),
     "image.detach": frozenset({"session_id", "path"}),
+    # Read-only inline preview of an image Hermes staged for the person (Hermes' `image.render`, `ImageRenderParams`
+    # in `tui_gateway/contracts/config_free_tier_control.py`, added in Hermes d4ac2edd5d). The gateway caps it at
+    # 64 columns by 16 rows and applies `display.inline_images`.
+    "image.render": frozenset({"path", "cols", "rows", "graphics", "terminal"}),
     "clipboard.paste": frozenset({"session_id"}),
     "input.detect_drop": frozenset({"session_id", "text"}),
     "slash.exec": frozenset({"command", "session_id"}),

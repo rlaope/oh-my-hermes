@@ -1176,6 +1176,12 @@ def reject_project_memory_candidate(
             raise FileNotFoundError(candidate_id)
         if expected_revision:
             _require_review_revision(candidate, expected_revision)
+        if str(candidate.get("status", "")) == "retired" and candidate.get("recaptured_as"):
+            # As approval refuses it: the same content lives on in its
+            # successor, and a rejected copy would read as that fact rejected.
+            raise ValueError(
+                f"candidate {candidate_id} was retired by a recapture; its successor is {candidate['recaptured_as']}"
+            )
         now = utc_now()
         safe_rejected_by = _redacted_metadata_label(rejected_by)
         candidate = _sanitize_project_memory_candidate(

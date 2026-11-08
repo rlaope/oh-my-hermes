@@ -106,8 +106,8 @@ class PortfolioTests(unittest.TestCase):
 
     def test_bounded_alias_contracts_and_exact_calibration(self):
         ids = ("gpt-6-astra", "gpt-6-astra-pro-flex", "gpt-6-astra-pro-max",
-               "gpt-6-astra-turbo", "anthropic/claude-fable-5.1", "claude-fable-5-1",
-               "gpt-6-astra-2026-09-03", "gpt-6-astra-pro-fast")
+               "gpt-6-astra-turbo", "anthropic.claude-fable-5-1", "claude-fable-5-1",
+               "gpt-6-astra-2026-09-03", "gpt-6-astra-pro-fast", "anthropic/claude-fable-5.1")
         rows = rows_for(*ids)
         self.assertEqual(rows[ids[0]]["calibration_coverage"], "exact")
         self.assertEqual(rows[ids[1]]["contract_coverage"], "declared_inheritance")
@@ -117,7 +117,11 @@ class PortfolioTests(unittest.TestCase):
         for model in ids[2:5]:
             self.assertEqual(rows[model]["contract_coverage"], "missing")
             self.assertEqual(rows[model]["disposition"], "unmeasured")
+        # Fable 5.1's Bedrock id is deliberately undeclared; its dotted
+        # gateway spelling is a declared row, like the 5.5 dotted rows.
         self.assertEqual(rows[ids[4]]["aliases"], [ids[4]])
+        self.assertEqual(rows[ids[8]]["contract_coverage"], "declared_inheritance")
+        self.assertEqual(rows[ids[8]]["contract_model_id"], "claude-fable-5-1")
         self.assertEqual(rows[ids[6]]["contract_coverage"], "declared_inheritance")
         self.assertEqual(rows[ids[6]]["contract_projection"]["provenance"], "dated_snapshot")
         # Sharing a base contract is not permission to inherit a mode/tier placement.
