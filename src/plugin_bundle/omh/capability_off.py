@@ -77,21 +77,38 @@ def disabled_families_in_profile(profile: Mapping[str, object] | None) -> frozen
 
 def disabled_family_ids(omh_home: str | Path | None) -> tuple[str, ...]:
     """The known family ids `<omh_home>/setup-profile.json` turns off, sorted; `()` when none or unreadable."""
+    return read_disabled_family_ids(omh_home)[0]
+
+
+def read_disabled_family_ids(omh_home: str | Path | None) -> tuple[tuple[str, ...], str]:
+    """(the family ids turned off, why the profile could not be read or "").
+
+    A missing profile is no policy, not a failure, and gives "". A profile that
+    exists but does not parse into an object gives the failure's class name, so
+    the turn can say routing went ahead without the policy.
+    """
     if omh_home is None or not str(omh_home):
-        return ()
+        return (), ""
     try:
         profile = json.loads((Path(omh_home) / SETUP_PROFILE_NAME).read_text(encoding="utf-8"))
-    except (OSError, ValueError, RecursionError):
-        return ()
+    except FileNotFoundError:
+        return (), ""
+    except (OSError, ValueError, RecursionError) as exc:
+        return (), type(exc).__name__
     if not isinstance(profile, dict):
-        return ()
+        return (), "ValueError"
     disabled = disabled_families_in_profile(profile)
-    return tuple(sorted(family_id for family_id, _, _ in _family_cards() if family_id in disabled))
+    return tuple(sorted(family_id for family_id, _, _ in _family_cards() if family_id in disabled)), ""
 
 
 def disabled_skill_families(omh_home: str | Path | None) -> dict[str, str]:
     """Each skill this home turned off, mapped to its family id; `{}` when nothing is off."""
-    disabled = set(disabled_family_ids(omh_home))
+    return skill_families_for(disabled_family_ids(omh_home))
+
+
+def skill_families_for(family_ids: tuple[str, ...]) -> dict[str, str]:
+    """Each member skill of `family_ids` but the core ones, mapped to its family id."""
+    disabled = set(family_ids)
     if not disabled:
         return {}
     return {
@@ -141,4 +158,6 @@ __all__ = [
     "disabled_skill_families",
     "enable_command",
     "family_label",
+    "read_disabled_family_ids",
+    "skill_families_for",
 ]

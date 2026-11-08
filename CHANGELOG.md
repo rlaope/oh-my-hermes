@@ -438,12 +438,15 @@ All notable changes will be documented here.
 - **A capability family turned off with `omh capability-policy disable` is no
   longer routed to.** Its skills used to lose their tools but kept being
   dispatched, offered as candidates, hinted and listed on the skill-candidate
-  line. Now none of those name them, and a request for that work is answered
-  with the family being off and `omh capability-policy enable <family>`
-  instead of being routed elsewhere. `omh_interact`, `omh chat interact`,
-  `omh_recommend` and the per-turn hint read the policy from the OMH home on
-  every call, so a profile-scoped home answers with its own. A home with
-  nothing turned off routes exactly as before. The operations family's card
+  line. Now none of those name them. A request the router would have
+  dispatched to one, or that names one, is answered with the family being off
+  and `omh capability-policy enable <family>` instead of being routed
+  elsewhere; anything else just goes on without the family. `omh_interact`,
+  `omh chat interact`, `omh chat route-hint`, `omh_recommend` (plugin and MCP),
+  route-answer checks and the per-turn hint read the policy from the OMH home
+  on every call, so a profile-scoped home answers with its own, and a policy
+  file that cannot be read is reported. A home with nothing turned off routes
+  exactly as before. The operations family's card
   now also lists `operating-rhythm`, `ops-review` and `reliability-review`,
   which belonged to it but were missing from the card.
 - **Business and operations skills now check what a practitioner checks.**

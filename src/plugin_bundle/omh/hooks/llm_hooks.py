@@ -25,6 +25,7 @@ from ..awareness import (
 from ..console_choices import console_choices_line
 from ..context_brief import build_context_brief
 from ..degradation import (
+    COMPONENT_CAPABILITY_POLICY_READ,
     COMPONENT_LOCALIZED_ROUTING_TEXT,
     COMPONENT_RUNTIME_STATUS_READ,
     degradation_payload,
@@ -41,7 +42,7 @@ from ..dag_open_run_nudge import open_run_line
 from ..hermes_session_commands import host_command_turn, host_context_removed, person_request_text
 from ..host_context import record_active_main_agent_model
 from ..host_observation import observe_plugin_hook_call
-from ..capability_off import disabled_skill_families
+from ..capability_off import read_disabled_family_ids, skill_families_for
 from ..installed_skills import hermes_loadable_skill_names, routable_skill_names
 from ..kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
 from ..native_todo import held_native_write_note
@@ -780,9 +781,20 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
     # The skills of a capability family this home turned off (`omh
     # capability-policy disable`) are cut the same way, read per turn from the
     # setup profile the memory tool reads. Nothing off leaves the set as is.
-    disabled_skills = disabled_skill_families(omh_home) if include_awareness else {}
+    disabled_skills: dict[str, str] = {}
+    if include_awareness:
+        disabled_families, policy_error = read_disabled_family_ids(omh_home)
+        disabled_skills = skill_families_for(disabled_families)
+        if policy_error:
+            # Routing goes ahead as though every family were on; say so.
+            degraded.append((COMPONENT_CAPABILITY_POLICY_READ, safe_error_type(policy_error)))
     installed_skills = routable_skill_names(installed_skills, disabled_skills)
-    capability_off_context = ""
+    # A person's request the router answers "this family is off" gets that
+    # answer and nothing else: no route hint, no candidate line. A child's
+    # brief is its orchestrator's words, not a request for the family.
+    capability_off_context = (
+        capability_off_hint_context(request_message, disabled_skills) if disabled_skills and not delegated else ""
+    )
     rendered_route_hint: dict[str, object] = {}
     if include_awareness:
         if is_first_turn:
@@ -812,8 +824,11 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
                 route_hint_payload, installed_skills, delegated=delegated, disabled=disabled_skills
             )
             route_hint_context = awareness_route_hint_context_from_payload(rendered_route_hint)
-        if route_hint_payload is not None:
-            capability_off_context = capability_off_hint_context(route_hint_payload, disabled_skills)
+        if capability_off_context:
+            # The off block is this request's answer; a next hint beside it
+            # would hand the work to another workflow after all.
+            rendered_route_hint = {}
+            route_hint_context = ""
         if route_hint_context:
             route_fingerprint = hashlib.sha256(route_hint_context.encode("utf-8")).hexdigest()
             if not claim_route_guidance_delivery(

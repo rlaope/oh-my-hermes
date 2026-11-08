@@ -2,13 +2,15 @@
 
 `omh capability-policy disable <family>` writes the family into
 `<omh_home>/setup-profile.json`. These tests write that file with the CLI's own
-writer in an isolated home and pin four things: a request for the family's
-work neither dispatches nor offers it and the answer names the family and the
+writer in an isolated home and pin five things: a request for the family's
+work neither dispatches nor offers it, and one the router would have
+dispatched (or that names the skill) is answered with the family and the
 command that turns it back on; the per-turn route hint and the skill-candidate
-line leave its skills out; a home with nothing turned off routes the whole
-routing-precision corpus exactly as a call without a home does; and every
-corpus route that names none of the turned-off skills is unchanged, so a
-sibling family routes as before.
+line leave its skills out, and the turn's "off" block fires exactly where the
+router's verdict does, never on a negative control; a home with nothing turned
+off routes the whole routing-precision corpus exactly as a call without a home
+does; and every corpus route that names none of the turned-off skills is
+unchanged, so a sibling family routes as before.
 
 The routing-precision corpus carries no home state, so these are unit tests
 over it rather than corpus cases.
@@ -23,6 +25,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from omh.capabilities.families import capability_family_projection
+from omh.mcp.bridge import _call_tool as mcp_call_tool
 from omh.capabilities.toggles import (
     build_capability_policy,
     disabled_family_workflows,
@@ -31,19 +34,35 @@ from omh.capabilities.toggles import (
 )
 from omh.paths import OmhPaths
 from omh.plugin_bundle.omh import capability_off, skill_shortlist
+from omh.plugin_bundle.omh.awareness import capability_off_hint_context
 from omh.plugin_bundle.omh.hooks import llm_hooks
 from omh.plugin_bundle.omh.installed_skills import reset_installed_skill_cache
 from omh.plugin_bundle.omh.tools import recommend_tool
+from omh.plugin_bundle.omh.tools.route_answer_tool import _verify_digest
 from omh.quality.routing_precision import ROUTING_INTERVENTION_CASES, ROUTING_PRECISION_CASES
-from omh.routing.chat import public_chat_route_payload, recommend_route_summary
+from omh.routing.chat import public_chat_route_payload, recommend_route_summary, route_chat_message
+from omh.routing.route_plan import public_workflow_identifier
 from omh.skills.catalog import CORE_SKILLS, installable_skill_names, omh_skill_display_name
 from omh.wrapper.contract import build_chat_interaction_payload
+from omh.wrapper.route_hints import build_chat_route_hint_payload
 
 FAMILY = "learn_and_gather"
 SIBLING = "retain_knowledge"
 EXPLICIT = "/omh-web-research compare redis and valkey"
-# A high-confidence clarify whose candidate, and whole shortlist, is in FAMILY.
+# A plain request the router dispatches to `ai-job-search` (FAMILY).
+NATURAL = "Help with my job search for library coordinator roles in Boston."
+# A high-confidence clarify whose candidate, and whole shortlist, is in FAMILY:
+# the router is asking, so the family is dropped without an "off" answer.
 PARAPHRASED = "research the latest vector database benchmarks and cite sources"
+# Negative controls the review measured the old hint block refusing.
+NEGATIVE_CONTROLS = (
+    ("operate_and_observe", "Explain what a cron job does."),
+    ("plan_and_decide", "plan looks good, go ahead"),
+    (FAMILY, 'Explain the phrase "our recruiting team runs a job search campaign".'),
+    (FAMILY, "Draft a tweet about the HellaSwag results our paper reported"),
+)
+# Its route question is rebuilt with FAMILY off (review: digest mismatch).
+QUESTION_MESSAGE = "Help our recruiting team run a job search campaign."
 # Ranks `omh-lifecycle-growth` (FAMILY) first on the skill-candidate line.
 CANDIDATE_MESSAGE = (
     "Activation fell after we changed the signup flow and new users churn in their first week. "
@@ -74,6 +93,13 @@ def _offered_skills(route: dict[str, object]) -> set[str]:
     if isinstance(plan, dict):
         names |= {str(step.get("skill") or "") for step in plan.get("steps", []) if isinstance(step, dict)}
     return names - {""}
+
+
+def _spellings(disabled: dict[str, str]) -> set[str]:
+    """Every name a route may carry for a turned-off skill: catalog, display and public."""
+    return set(disabled) | {omh_skill_display_name(name) for name in disabled} | {
+        public_workflow_identifier(name) for name in disabled
+    }
 
 
 def _corpus_messages() -> list[str]:
@@ -142,7 +168,8 @@ class RouterTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             paths = _home(Path(tmp), FAMILY)
             disabled = capability_off.disabled_skill_families(paths.omh_home)
-            for message in (EXPLICIT, PARAPHRASED):
+            self.assertEqual(public_chat_route_payload(NATURAL)["selected_skill"], "ai-job-search")
+            for message in (EXPLICIT, NATURAL):
                 route = public_chat_route_payload(message, disabled_skills=disabled)
                 self.assertEqual(route["action"], "clarify", message)
                 self.assertEqual(route["reason_code"], "capability_family_disabled", message)
@@ -154,6 +181,17 @@ class RouterTests(unittest.TestCase):
                 self.assertEqual(record["enable_command"], f"omh capability-policy enable {FAMILY}")
                 self.assertIn("Learn and gather", route["clarification"])
                 self.assertNotIn("``", route["routing_instruction"])
+
+    def test_a_clarify_the_router_only_asks_drops_the_family_without_an_off_answer(self) -> None:
+        plain = public_chat_route_payload(PARAPHRASED)
+        self.assertEqual((plain["action"], plain["confidence"], plain["explicit"]), ("clarify", "high", False))
+        with TemporaryDirectory() as tmp:
+            disabled = capability_off.disabled_skill_families(_home(Path(tmp), FAMILY).omh_home)
+        route = public_chat_route_payload(PARAPHRASED, disabled_skills=disabled)
+        self.assertNotIn("capability_family_off", route)
+        self.assertEqual(route["action"], "clarify")
+        self.assertEqual(_offered_skills(route) & _spellings(disabled), set())
+        self.assertNotIn("``", route["routing_instruction"])
 
     def test_the_chat_reply_names_the_family_and_the_command_that_turns_it_on(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -210,7 +248,7 @@ class CorpusTests(unittest.TestCase):
     def test_a_family_off_moves_only_the_routes_that_offered_it_and_never_offers_it(self) -> None:
         with TemporaryDirectory() as tmp:
             disabled = capability_off.disabled_skill_families(_home(Path(tmp), FAMILY).omh_home)
-        off = set(disabled)
+        off = _spellings(disabled)
         touched = 0
         for message, plain in self.plain.items():
             route = public_chat_route_payload(message, source="discord", disabled_skills=disabled)
@@ -225,6 +263,25 @@ class CorpusTests(unittest.TestCase):
                 # offered this family, routes byte for byte as before.
                 self.assertEqual(route, plain, message)
         self.assertGreater(touched, 0)
+
+    def test_the_turn_block_and_the_router_verdict_agree_on_every_message(self) -> None:
+        with TemporaryDirectory() as tmp:
+            disabled = capability_off.disabled_skill_families(_home(Path(tmp), FAMILY).omh_home)
+        disagree = [
+            message
+            for message in self.plain
+            if bool(capability_off_hint_context(message, disabled))
+            != ("capability_family_off" in public_chat_route_payload(message, disabled_skills=disabled))
+        ]
+        self.assertEqual(disagree, [])
+
+    def test_no_negative_control_is_answered_off_whichever_family_is_off(self) -> None:
+        for family_id in toggleable_family_ids():
+            disabled = capability_off.skill_families_for((family_id,))
+            refused = [
+                case.id for case in ROUTING_PRECISION_CASES if capability_off_hint_context(case.message, disabled)
+            ]
+            self.assertEqual(refused, [], family_id)
 
 
 class PreLlmCallTests(unittest.TestCase):
@@ -253,27 +310,101 @@ class PreLlmCallTests(unittest.TestCase):
             self.assertIn("selected=ulw-research", self._context(bare, PARAPHRASED, "s-bare"))
             self.assertIn("omh-lifecycle-growth", self._context(bare, CANDIDATE_MESSAGE, "s-bare-c"))
 
+            asked = self._context(paths, NATURAL, "s-natural")
             route = self._context(paths, PARAPHRASED, "s-route")
             candidates = self._context(paths, CANDIDATE_MESSAGE, "s-candidates")
             disabled = capability_off.disabled_skill_families(paths.omh_home)
 
-        off_names = set(disabled) | {omh_skill_display_name(name) for name in disabled}
-        self.assertIn("[OMH Capability Off]", route)
-        self.assertIn(f"omh capability-policy enable {FAMILY}", route)
+        off_names = _spellings(disabled)
+        # The router dispatched it: the turn says the family is off, and
+        # neither hints nor lists anything in its place.
+        self.assertIn("[OMH Capability Off]", asked)
+        self.assertIn(f"omh capability-policy enable {FAMILY}", asked)
+        self.assertNotIn("selected=", asked)
+        self.assertNotIn("Skills that may fit this request", asked)
+        # The router only asked: the family is dropped, with no "off" block.
+        self.assertNotIn("[OMH Capability Off]", route)
         self.assertEqual(set(_SELECTED.findall(route)) & off_names, set())
-        self.assertNotIn("Skills that may fit this request", route)
         self.assertNotIn("omh-lifecycle-growth", candidates)
         self.assertIn("Skills that may fit this request", candidates)
+
+    def test_negative_controls_get_no_off_block_on_any_turn(self) -> None:
+        with TemporaryDirectory() as tmp:
+            for index, (family_id, message) in enumerate(NEGATIVE_CONTROLS):
+                paths = _home(Path(tmp) / str(index), family_id)
+                for first in (True, False):
+                    skill_shortlist.reset_candidate_line_state()
+                    result = llm_hooks.pre_llm_call(
+                        user_message=message,
+                        session_id=f"neg-{index}-{first}",
+                        omh_home=str(paths.omh_home),
+                        hermes_home=str(paths.hermes_home),
+                        is_first_turn=first,
+                    )
+                    self.assertNotIn("[OMH Capability Off]", str((result or {}).get("context", "")), message)
+
+    def test_an_unreadable_policy_is_reported_as_a_degradation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _paths(Path(tmp))
+            paths.omh_home.mkdir(parents=True)
+            paths.setup_profile_path.write_text("{not json", encoding="utf-8")
+            result = llm_hooks.pre_llm_call(
+                user_message=NATURAL,
+                session_id="s-bad-policy",
+                omh_home=str(paths.omh_home),
+                hermes_home=str(paths.hermes_home),
+                is_first_turn=False,
+            )
+        components = (result or {}).get("omh_degradation", {}).get("components", [])
+        self.assertIn("capability_policy_read", [row.get("component") for row in components])
 
     def test_nothing_off_and_a_sibling_off_render_what_a_home_without_policy_renders(self) -> None:
         with TemporaryDirectory() as tmp:
             bare = _paths(Path(tmp) / "bare")
             nothing_off = _home(Path(tmp) / "none")
             sibling_off = _home(Path(tmp) / "sibling", SIBLING)
-            for index, message in enumerate((PARAPHRASED, CANDIDATE_MESSAGE, EXPLICIT)):
+            for index, message in enumerate((PARAPHRASED, CANDIDATE_MESSAGE, EXPLICIT, NATURAL)):
                 expected = self._context(bare, message, f"s-{index}")
                 self.assertEqual(self._context(nothing_off, message, f"s-{index}"), expected, message)
                 self.assertEqual(self._context(sibling_off, message, f"s-{index}"), expected, message)
+
+
+class OtherSurfaceTests(unittest.TestCase):
+    def test_a_route_question_built_with_the_family_off_verifies(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _home(Path(tmp), FAMILY)
+            disabled = capability_off.disabled_skill_families(paths.omh_home)
+            question = route_chat_message(QUESTION_MESSAGE, disabled_skills=disabled)["route_question"]
+            verified = _verify_digest(
+                {
+                    "message": QUESTION_MESSAGE,
+                    "question_digest": question["question_digest"],
+                    "omh_home": str(paths.omh_home),
+                }
+            )
+        self.assertEqual(verified[:3], (True, "matched", False))
+
+    def test_the_mcp_recommend_tool_lists_no_turned_off_skill(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _home(Path(tmp), FAMILY)
+            disabled = capability_off.disabled_skill_families(paths.omh_home)
+            result = mcp_call_tool(paths, "omh_recommend", {"message": EXPLICIT})
+        payload = result["payload"]
+        self.assertEqual([row["skill"] for row in payload["recommendations"] if row["skill"] in disabled], [])
+        self.assertEqual(payload["route"]["capability_family_off"]["family"], FAMILY)
+
+    def test_the_route_hint_command_neither_hints_nor_routes_the_family(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _home(Path(tmp), FAMILY)
+            disabled = capability_off.disabled_skill_families(paths.omh_home)
+            asked = build_chat_route_hint_payload(NATURAL, paths=paths)
+            hinted = build_chat_route_hint_payload(PARAPHRASED, paths=paths)
+            bare = build_chat_route_hint_payload(PARAPHRASED)
+        self.assertEqual(asked["route_hint"]["status"], "no_hint")
+        self.assertEqual(asked["route_decision"]["action"], "clarify")
+        self.assertIn("ulw-research", [hint["workflow"] for hint in bare["route_hint"]["hints"]])
+        workflows = {hint["workflow"] for hint in hinted["route_hint"].get("hints", [])}
+        self.assertEqual(workflows & _spellings(disabled), set())
 
 
 class RecommendToolTests(unittest.TestCase):
@@ -282,7 +413,7 @@ class RecommendToolTests(unittest.TestCase):
             paths = _home(Path(tmp), FAMILY)
             disabled = capability_off.disabled_skill_families(paths.omh_home)
             payload = json.loads(
-                recommend_tool.omh_recommend_handler({"message": PARAPHRASED, "omh_home": str(paths.omh_home)})
+                recommend_tool.omh_recommend_handler({"message": NATURAL, "omh_home": str(paths.omh_home)})
             )
         self.assertEqual([row["skill"] for row in payload["recommendations"] if row["skill"] in disabled], [])
         self.assertEqual(payload["route"]["capability_family_off"]["family"], FAMILY)

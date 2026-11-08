@@ -1677,6 +1677,18 @@ def route_chat_message(
     )
 
 
+def capability_off_verdict(message: str, disabled_skills: Mapping[str, str]) -> dict[str, object]:
+    """The `capability_family_off` record the chat route gives `message`, or `{}`.
+
+    The per-turn hint asks this rather than judging on its own, so the turn
+    says a family is off exactly where `omh_interact` would answer that it is.
+    """
+    if not disabled_skills or not message.strip():
+        return {}
+    record = route_chat_message(message, disabled_skills=disabled_skills).get(CAPABILITY_OFF_KEY)
+    return dict(record) if isinstance(record, dict) else {}
+
+
 def user_trigger_pack_route_hint(message: str) -> dict[str, str]:
     """Return this router's own dispatch for a message only a user pack recognises.
 
