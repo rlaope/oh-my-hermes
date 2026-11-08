@@ -109,6 +109,17 @@ class InProcessCaptureTests(unittest.TestCase):
         self.assertIn("`omh memory review` shows it and `omh memory approve` releases it", held["next_action"])
         self.assertEqual(scan_project_memory_records(self.paths), ([], []))
 
+    def test_a_held_capture_sent_again_names_the_copy_it_retired(self) -> None:
+        first = self.call(summary="The deploy freeze ends tomorrow.")
+        self.assertNotIn("retired_candidate_ids", first)
+
+        again = self.call(summary="The deploy freeze ends tomorrow.")
+
+        self.assertEqual(again["status"], "pending_review", again)
+        self.assertEqual(again["retired_candidate_ids"], [first["candidate_id"]])
+        earlier = json.loads((self.store / "memory" / "candidates" / f"{first['candidate_id']}.json").read_text(encoding="utf-8"))
+        self.assertEqual((earlier["status"], earlier["recaptured_as"]), ("retired", again["candidate_id"]))
+
     def test_unsafe_content_is_held_for_review_through_the_tool(self) -> None:
         # The safety classifier's verdict reaches the tool's status set as
         # pending_review with its own reason; the fake-runner suite pinned this

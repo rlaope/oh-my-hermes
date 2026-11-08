@@ -17,6 +17,7 @@ from omh.memory import (
     build_project_memory_review,
     capture_project_memory_candidate,
     read_memory_pins,
+    reject_project_memory_candidate,
     set_memory_pin,
     validate_project_memory_recall_pack,
 )
@@ -258,6 +259,73 @@ class DuplicateDetectionTests(unittest.TestCase):
             approved = approve_project_memory_candidate(paths, duplicate["candidate"]["candidate_id"])["record"]
 
             self.assertNotIn("duplicate_of", approved, "duplicate_of is review-time context, not record payload")
+
+
+class HeldRecaptureTests(unittest.TestCase):
+    """A held candidate captured again is retired in favour of the newer one."""
+
+    def setUp(self) -> None:
+        tmp = Path(self.enterContext(TemporaryDirectory()))
+        self.paths = resolve_paths(tmp / ".omh", tmp / ".hermes")
+        write_setup_profile(self.paths, memory_mode="review-first")
+
+    def _candidate(self, candidate_id: str) -> dict:
+        path = self.paths.memory_dir / "candidates" / f"{candidate_id}.json"
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_recapture_retires_the_held_one_with_its_reason(self) -> None:
+        first = capture_project_memory_candidate(self.paths, "Deploys go through staging first")["candidate"]
+        second = capture_project_memory_candidate(self.paths, "  deploys   go through STAGING first ")
+
+        earlier = self._candidate(first["candidate_id"])
+        self.assertEqual(earlier["status"], "retired")
+        self.assertEqual(earlier["retirement_reason"], "recaptured")
+        self.assertEqual(earlier["recaptured_as"], second["candidate"]["candidate_id"])
+        self.assertTrue(earlier["retired_at"])
+        self.assertEqual(second["retired_held_candidates"], [first["candidate_id"]])
+        self.assertEqual(second["candidate"]["status"], "pending_review")
+        review = build_project_memory_review(self.paths)
+        self.assertEqual([card["candidate_id"] for card in review["cards"]], [second["candidate"]["candidate_id"]])
+        with self.assertRaisesRegex(ValueError, "retired by a recapture"):
+            approve_project_memory_candidate(self.paths, first["candidate_id"])
+
+    def test_a_different_candidate_is_untouched(self) -> None:
+        first = capture_project_memory_candidate(self.paths, "Deploys go through staging first")["candidate"]
+        other_text = capture_project_memory_candidate(self.paths, "Deploys go through staging first, then canary")
+        other_scope = capture_project_memory_candidate(
+            self.paths, "Deploys go through staging first", scope_kind="project", scope_ref="another-project"
+        )
+
+        self.assertEqual(self._candidate(first["candidate_id"])["status"], "pending_review")
+        self.assertNotIn("retired_held_candidates", other_text)
+        self.assertNotIn("retired_held_candidates", other_scope)
+
+    def test_recapture_of_an_approved_or_rejected_one_behaves_as_before(self) -> None:
+        approved = capture_project_memory_candidate(self.paths, "Deploys go through staging first")["candidate"]
+        record = approve_project_memory_candidate(self.paths, approved["candidate_id"])["record"]
+        rejected = capture_project_memory_candidate(self.paths, "Releases ship on Fridays")["candidate"]
+        reject_project_memory_candidate(self.paths, rejected["candidate_id"], reason="not true")
+
+        again_approved = capture_project_memory_candidate(self.paths, "Deploys go through staging first")
+        again_rejected = capture_project_memory_candidate(self.paths, "Releases ship on Fridays")
+
+        self.assertEqual(self._candidate(approved["candidate_id"])["status"], "approved")
+        self.assertEqual(again_approved["candidate"]["duplicate_of"], record["record_id"])
+        self.assertEqual(again_approved["candidate"]["status"], "pending_review")
+        self.assertEqual(self._candidate(rejected["candidate_id"])["status"], "rejected")
+        self.assertEqual(again_rejected["candidate"]["status"], "pending_review")
+        self.assertNotIn("retired_held_candidates", again_approved)
+        self.assertNotIn("retired_held_candidates", again_rejected)
+
+    def test_an_auto_safe_recapture_retires_the_copy_held_for_a_relative_date(self) -> None:
+        write_setup_profile(self.paths, memory_mode="auto-safe")
+        held = capture_project_memory_candidate(self.paths, "The deploy freeze ends tomorrow")
+        self.assertEqual(held["review_reason"], "relative_time_phrase")
+
+        again = capture_project_memory_candidate(self.paths, "The deploy freeze ends tomorrow")
+
+        self.assertEqual(again["retired_held_candidates"], [held["candidate"]["candidate_id"]])
+        self.assertEqual(build_project_memory_review(self.paths)["pending_count"], 1)
 
 
 if __name__ == "__main__":

@@ -395,9 +395,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # agent-instructions then names `ulw-context`, the label that loads, in place of `omh-context`
         # (same length); only that body moves, and the pin before it was 0ac3cd4c...17f7.
         # The routing reach round then moves the skills whose triggers or index text it narrows; the pin
-        # before it was 0ae5f905...ebc5f. A coding-owner choice then counts only for the request it was made in:
-        # only dag-ulw and maestro move, and the pin before it was d4eb4e54...7ed7.
-        self.assertEqual(_digest(legacy_hashes), '2413aad2d1e1395fd1cf98a75820388e27ca15db511893c4a399cc531d3875da')
+        # before it was 0ae5f905...ebc5f.
+        # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
+        # moves, and the pin before it was d4eb4e54...7ed7. A coding-owner choice then counts only for the request
+        # it was made in: only dag-ulw and maestro move, and the pin before it was b36ad311...1e91.
+        self.assertEqual(_digest(legacy_hashes), 'de44ac0410fce09accc2c53c02886863da4139f2dcf065e9d489df9d421ebece')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

@@ -730,11 +730,14 @@ artifact, not a Discord/channel summary. Each `hermes_plan/v1` payload includes
 recorded plan artifact path, and coding-delegation handoff template. For
 implementation-shaped draft plans, `wrapper_contract.coding_delegate.argv_template`
 is the adapter contract for calling
-`omh coding delegate --executor codex --record --from-plan <accepted-plan.md>`
-after plan acceptance. `omh coding delegate --from-plan` rejects draft plans by
+`omh coding delegate --executor <selected-executor> --record --from-plan <accepted-plan.md>`
+after plan acceptance. Its `--executor` value is the setup profile's default
+executor, else `generic`; `--from-plan` without `--executor` resolves the same
+default as a plain `omh coding delegate`, and selects Codex only when Codex is
+named. `omh coding delegate --from-plan` rejects draft plans by
 default and uses the accepted artifact or generated context pack as executor
-context when the wrapper wants a run-backed Codex handoff and a future
-`runtime.run.run_id`. Blocked or non-coding plans keep `coding_delegate.available`
+context; a run-backed Codex handoff and a future `runtime.run.run_id` come
+from `--executor codex`. Blocked or non-coding plans keep `coding_delegate.available`
 false so wrappers do not infer execution from presentation text.
 
 `omh chat session` is the recovery layer for adapters that need button/thread
