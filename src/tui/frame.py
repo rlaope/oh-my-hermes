@@ -185,14 +185,17 @@ def build_frame(
         )
 
     budget = fit(tail)
-    # A tail cut short keeps one row of each run of blank rows (the two between two calls, `CALL_GAP_ROWS`), so the
-    # wider gap never costs a live row (#2342): the calls show as many as with one-row gaps, and a tail that fits
-    # keeps both rows. Scrollback has both either way.
+    # A tail too tall gives up the second row of its runs of blank rows (the two between two calls, `CALL_GAP_ROWS`),
+    # the oldest first and only as many as it is too tall by, so the wider gap never costs a live row (#2342) and the
+    # rows it frees never turn into pad rows over the working row (#2309); the newest gaps stay wide. Only with every
+    # run down to one row is the tail cut. Scrollback has both rows either way.
     if budget.tail < len(tail):
+        need = len(tail) - budget.tail
         live = len(tail) - tail_floor
-        kept = [row for index, row in enumerate(tail[:live]) if row or index == 0 or tail[index - 1]]
-        if len(kept) < live:
-            tail = [*kept, *tail[live:]]
+        doubled = [index for index in range(1, live) if not tail[index] and not tail[index - 1]][:need]
+        if doubled:
+            dropped = set(doubled)
+            tail = [row for index, row in enumerate(tail) if index not in dropped]
             budget = fit(tail)
     spacer = len(tail) - tail_floor - 1  # the blank row `tail_spacer` says stands right above the working rows
     # A tail cut short keeps its spacer and loses its oldest live row instead (owner, 2026-10-30: the working row

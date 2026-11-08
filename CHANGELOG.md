@@ -647,8 +647,9 @@ All notable changes will be documented here.
   run of calls now reads apart, as Claude Code's does; a folded row of
   loaded skills counts as a call. Every other pair of blocks keeps one
   blank row, and what a call printed under `⎿` stays right under it. When
-  the running calls do not fit, the live region keeps one blank row per gap,
-  so no call row is lost; scrollback has both.
+  the running calls do not fit, the oldest gaps in the live region give up
+  their second row first, only as many as needed, so no call row is lost and
+  no blank rows gather over the working row; scrollback has both.
 - **The router no longer picks a coding owner from earlier choices.** Three
   accepted answers to the coding-owner question used to make that owner a
   visible default for later requests. Now every request asks for an explicit
