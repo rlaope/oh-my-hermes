@@ -99,8 +99,8 @@ class ModelCompressionRoutingTests(unittest.TestCase):
             "지식 증류로 작은 모델 만들어줘",
             "GGUF로 양자화해줘",
             "70B 모델을 8B로 증류해줘",
-            "이 모델 4비트로 양자화해줘",
             "llama 모델 경량화해줘",
+            "distill our 7b model into a 1b for the phone",
         ):
             with self.subTest(message=message):
                 route = _route(message)
@@ -135,6 +135,16 @@ class ModelCompressionRoutingTests(unittest.TestCase):
             "회귀 모델 파라미터 줄이고 모델 압축해줘",
             "이미지를 4비트로 양자화해줘",
             "증류수 사러 가야 해",
+            # A billion is money, data or volume unless a second size or the
+            # word model follows; a bit width is a palette or a retro look.
+            "distill 5b gallons of whisky",
+            "distill the 10b dataset into a sample",
+            "our 2b budget model needs pruning, prune the model",
+            "the 3b plan: distill the model of our sales funnel into a slide",
+            "게임 모델 8비트로 양자화해서 레트로 느낌 내줘",
+            "3D 모델 압축해서 양자화된 정점으로 저장해줘",
+            "the transformer model in my electrical grid sim is too detailed, prune the model",
+            "post-training quantization of the ADC signal in the firmware",
         ):
             with self.subTest(message=message):
                 route = _route(message)
@@ -164,13 +174,34 @@ class ModelCompressionRoutingTests(unittest.TestCase):
             ("compress the model so it loads faster on the GPU in Unity", True),
             ("knowledge distillation in education means what", True),
             ("knowledge distillation", False),
-            ("distill the model into a 1.5b student", False),
+            ("distill the model into a 1.5b student", True),
+            ("our 2b budget model needs pruning, prune the model", True),
+            ("post-training quantization of the ADC signal in the firmware", True),
+            ("should we do quantization-aware training or post-training quantization", False),
             ("8-bit quantization of our llama checkpoint", False),
             ("quantize the model to 4-bit", True),
             ("quantize this model", False),
         ):
             with self.subTest(message=message):
                 self.assertIs(everyday_sense_phrase_unanchored(SKILL, normalized_phrase(message)), withdrawn)
+
+
+class ModelCompressionParameterCountTests(unittest.TestCase):
+    def test_a_size_names_a_model_only_twice_or_before_the_word_model(self) -> None:
+        from omh.routing.model_compression_cues import names_a_model_by_parameter_count
+
+        for message, named in (
+            ("distill this 70B into an 8B", True),
+            ("distill our 7b model into a 1b for the phone", True),
+            ("70B 모델을 8B로 증류해줘", True),
+            ("the 70b model is too slow", True),
+            ("distill 5b gallons of whisky", False),
+            ("distill the 10b dataset into a sample", False),
+            ("our 2b budget model needs pruning", False),
+            ("quantize it to 8bit", False),
+        ):
+            with self.subTest(message=message):
+                self.assertIs(names_a_model_by_parameter_count(normalized_phrase(message)), named)
 
 
 if __name__ == "__main__":

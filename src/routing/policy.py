@@ -30,7 +30,7 @@ from .reference_regions import executable_routing_text
 from .jev_addressing import jev_addressed_skill
 from .localization import normalized_phrase, phrase_is_spoken, routing_terms, routing_tokens
 from .materials_cues import OFFICE_FILE_MATERIAL_PHRASES
-from .model_compression_cues import MODEL_COMPRESSION_ANCHORS, MODEL_COMPRESSION_SHARED_PHRASES, names_a_parameter_count
+from .model_compression_cues import MODEL_COMPRESSION_ANCHORS, MODEL_COMPRESSION_SHARED_PHRASES
 from ..plugin_bundle.omh.dag_ulw_cues import DAG_ULW, asks_about_dag_ulw, dag_ulw_control, declines_dag_ulw, invokes_dag_ulw
 from ..plugin_bundle.omh.invocation_cues import invoked_instruction
 from ..coding.pi_family_interop import PI_DISTRIBUTION_HOST, RUNTIME_SHORT_NAME
@@ -2399,10 +2399,6 @@ def everyday_sense_phrase_unanchored(skill: str, normalized_query: str) -> bool:
     phrase_tokens = routing_tokens(" ".join(spoken))
     context = query_tokens - phrase_tokens if skill in _ANCHOR_OUTSIDE_PHRASE_SKILLS else query_tokens
     if context & anchors:
-        return False
-    # "distill this model into an 8b" names the model by its parameter count,
-    # which no word list holds.
-    if skill == "model-compression" and names_a_parameter_count(normalized_query):
         return False
     return bool(query_tokens - phrase_tokens - _EVERYDAY_SENSE_FILLER_TOKENS)
 

@@ -14,7 +14,6 @@ DEFINITION = SkillDefinition(
     (
         "model-compression",
         *MODEL_COMPRESSION_SHARED_PHRASES,
-        "post-training quantization",
         "quantization-aware training",
         "model quantization",
         "quantized model",
