@@ -800,6 +800,19 @@ All notable changes will be documented here.
   serves you pick that profile alone, which does not load new OMH code, or
   the whole gateway, which does. A refused or failed restart says why and the
   command to run instead. Bare `/gateway` is still Hermes' platform status.
+- **A fenced reply that opens with prose no longer mutes a judged Slack or
+  Discord thread, and a prompt queued behind a `!` line in the OMH TUI waits
+  for a turn that started while the command ran.** Only one word after a
+  reply's opening fence is read as its label (`text`, `c++`, `완료`), so
+  ```` ```Done for today ```` above a `[SHUTUP]` line is posted as written
+  rather than read as the marker. The next queued line after a `!` command
+  used to go once Hermes answered the command, even into a turn that had
+  started meanwhile; it now goes when that turn ends, or after the turn
+  Hermes runs next when that turn left it one. Esc on a prompt still
+  staging its images holds the lines queued behind it, with the
+  interrupt's notice, instead of leaving them unsent. A rewind still goes
+  ahead of lines already queued: queued behind them, its cut would drop
+  the turns they start.
 - **A resumed session with work left goes on by itself in the OMH TUI.**
   `omh --resume <id>`, `/resume` and the session picker opened the session
   and waited for the person to write, so an interrupted turn or an open
@@ -827,6 +840,29 @@ All notable changes will be documented here.
   note on the push result (arm a background watcher, or say the session has
   stopped); the reply the person reads is left as the model wrote it. The
   end-of-turn sentence remains only on a turn a failed watcher's notice opened.
+
+- **A Kilo Code or Vercel AI Gateway key no longer turns chain shaping off.**
+  `KILOCODE_API_KEY` or `AI_GATEWAY_API_KEY` in Hermes' `.env`, or a Hermes
+  login or credential pool row for `kilocode` or `ai-gateway`, counted as a
+  relay serving every model, so chains fell back to the shipped order and
+  category routes the session's own provider served were refused (an
+  Anthropic session routed 7 of 18 categories instead of 15, a Kimi session
+  none instead of 11). They now work the way a `commandcode` key does: a
+  route may name the relay, and a `routing/model-providers.json` route to a
+  relay this machine holds counts its alias as served, so a chain head sent
+  to the relay still leads and routes there. Nothing else about routing
+  moves. A key with a recorded gateway in `routing/providers.json` no longer
+  hides the relay, so a route naming it applies too. The same routes
+  document now works for a held `commandcode` relay, whose routed aliases
+  were demoted and reported as routed to an unknown provider. A
+  `providers.kilocode` or `providers.ai-gateway` block, or
+  `model.provider: kilocode` / `ai-gateway`, in `config.yaml` still counts
+  as a gateway the person declared. A key or login no longer lists either
+  relay in the `omh setup` provider step; the "a provider not listed here"
+  row still adds one. A `routing/providers.json` that already recorded the
+  relay (`"kilocode": "gateway"`, from an earlier `omh setup` pre-tick) keeps
+  turning shaping off until that row is cleared in `omh setup` or with
+  `omh model-chains provider clear`.
 
 ## 4.0.6 - 2026-11-04
 
