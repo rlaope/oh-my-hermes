@@ -96,8 +96,6 @@ HERMES_PROVIDER_KINDS: dict[str, str] = {
     "nous": "gateway",
     "copilot": "gateway",
     "copilot-acp": "gateway",
-    "ai-gateway": "gateway",
-    "kilocode": "gateway",
     "nvidia": "gateway",
     "ollama-cloud": "gateway",
     "bedrock": "gateway",
@@ -140,8 +138,6 @@ HERMES_ENV_KEY_PROVIDERS: dict[str, str] = {
     "OPENCODE_ZEN_API_KEY": "opencode-zen",
     "OPENCODE_GO_API_KEY": "opencode-go",
     "COPILOT_GITHUB_TOKEN": "copilot",
-    "AI_GATEWAY_API_KEY": "ai-gateway",
-    "KILOCODE_API_KEY": "kilocode",
     "NVIDIA_API_KEY": "nvidia",
     "OLLAMA_API_KEY": "ollama-cloud",
 }
@@ -151,9 +147,14 @@ HERMES_ENV_KEY_PROVIDERS: dict[str, str] = {
 # tables above counts as an account of kind `gateway`, which serves every
 # alias, so chain shaping turns off for everyone holding its key or login. A
 # provider here has no row in `HERMES_PROVIDER_KINDS` either: its key or auth
-# store entry only lets a route that names it pass.
+# store entry only lets a route that names it pass, there and in the serving
+# rule (`route_only_providers` in `effective_provider_entitlements`). A
+# `providers.<id>` block or `model.provider: <id>` in `config.yaml` still
+# counts as a `gateway` the person declared.
 ROUTE_ONLY_ENV_KEY_PROVIDERS: dict[str, str] = {
+    "AI_GATEWAY_API_KEY": "ai-gateway",
     "COMMANDCODE_API_KEY": "commandcode",
+    "KILOCODE_API_KEY": "kilocode",
 }
 
 # `model.provider: auto` is Hermes' resolution mode, not an account.
@@ -470,10 +471,16 @@ def auth_store_provider_ids(text: str, env_names: Iterable[str] = ()) -> list[st
     return sorted(name for name in found if PROVIDER_ID_RE.fullmatch(name))
 
 
-def route_only_provider_ids(hermes_home: Path) -> set[str]:
-    """Route-only providers this home holds a filled key or an auth store entry for."""
-    names = env_key_names(hermes_home, allowed=ROUTE_ONLY_ENV_KEY_PROVIDERS)
-    stored = auth_store_provider_ids(_read_text(hermes_home / "auth.json"), names)
+def route_only_provider_ids(hermes_home: str | Path | None = None) -> set[str]:
+    """Route-only providers this home holds a filled key or an auth store entry for.
+
+    An unbound profile home holds none, as in `detect_linked_providers`.
+    """
+    home = _hermes_home(hermes_home)
+    if home is None:
+        return set()
+    names = env_key_names(home, allowed=ROUTE_ONLY_ENV_KEY_PROVIDERS)
+    stored = auth_store_provider_ids(_read_text(home / "auth.json"), names)
     return {ROUTE_ONLY_ENV_KEY_PROVIDERS[name] for name in names} | (set(ROUTE_ONLY_ENV_KEY_PROVIDERS.values()) & set(stored))
 
 
