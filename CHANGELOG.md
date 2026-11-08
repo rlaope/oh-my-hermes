@@ -977,8 +977,8 @@ All notable changes will be documented here.
   details; a larger run keeps the drawn graph. A USAGE section at the top of
   the pane shows the chat's own tokens, cache hit, cost, context share,
   rolling tokens per second and first-token wait, read from its recorded
-  session row across compaction segments, and `—` for any figure nothing
-  reported. Contributed by @yqm-307 (#2665).
+  session row and its auxiliary calls across compaction segments, and `—`
+  for any figure nothing reported. Contributed by @yqm-307 (#2665).
 
 ## 4.0.6 - 2026-11-04
 

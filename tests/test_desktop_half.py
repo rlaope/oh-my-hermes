@@ -206,9 +206,9 @@ const scenarios = JSON.parse(readFileSync(scenariosPath, 'utf8'))
 const replay = scenario => {
   const realNow = Date.now
   try {
-    for (const [type, session, text, at] of scenario.events || []) {
+    for (const [type, session, text, at, turnId] of scenario.events || []) {
       Date.now = () => at
-      for (const [kind, fn] of eventHandlers) if (kind === type) fn({ type, session_id: session, payload: { text } })
+      for (const [kind, fn] of eventHandlers) if (kind === type) fn({ type, session_id: session, payload: { text, turn_id: turnId } })
     }
   } finally {
     Date.now = realNow
@@ -299,8 +299,16 @@ const local = {
   ttftWaits: events => {
     const clock = mod.newTurnClock()
     const ended = events.map(([type, session, text, now, turnId]) => mod.noteTurnEvent(clock, type, session, text, now, turnId))
-    return [ended, clock.turns]
+    return [ended, { ...clock.turns }]
   },
+  // The same fold: the chats a start is still pending for once the events are in.
+  ttftPending: events => {
+    const clock = mod.newTurnClock()
+    events.forEach(([type, session, text, now, turnId]) => mod.noteTurnEvent(clock, type, session, text, now, turnId))
+    return Object.keys(clock.started).sort()
+  },
+  // A lane record as the backend sends it, read into the detail's prompt legend.
+  laneLegend: record => mod.usageLegend(mod.laneUsage(record)),
   koreanStates: states => states.map(state => [state, mod.stateWord(state, 'en'), mod.stateWord(state, 'ko')]),
   // The pane body as the browser measures it: `clientWidth` px wide, one cell of the drawing's font `cell` px.
   measureCellsAt: (clientWidth, cell) => {
@@ -741,7 +749,31 @@ BEYOND_DAG_GRAPH = _dag_graph(
     [["Step 0", 16]],
     hidden_nodes=3,
 )
+SETTLED_DAG_GRAPH = _dag_graph(
+    [
+        _dag_lane("a", "Write a.txt", state="done", status="accepted", elapsed_seconds=47,
+                  usage={"input": 900, "cache_read": 6200, "cache_write": 600, "cost_usd": 0.0123}),
+        _dag_lane("sum", "Sum", state="done", status="accepted", elapsed_seconds=12),
+    ],
+    [("a", "sum")],
+    ["Write a.txt", "Sum"],
+    [],
+    dag_open=False,
+)
+PARTIAL_COST_GRAPH = _dag_graph(
+    [
+        _dag_lane("a", "Write a.txt", state="done", status="accepted", model="anthropic/claude-haiku-5-5",
+                  output_tokens=410, usage={"input": 900, "cache_read": 6200, "cache_write": 600, "cost_usd": 0.0123}),
+        _dag_lane("b", "Write b.txt", state="running", status="running", model="anthropic/claude-haiku-5-5",
+                  output_tokens=220, usage={"input": 700, "cache_read": 3100, "cache_write": 500}),
+    ],
+    [],
+    ["Write a.txt"],
+    [],
+)
 for _name, _data in {
+    "dag_settled": {**ESTABLISHED_PAYLOAD, "delegation_graph": SETTLED_DAG_GRAPH},
+    "dag_partial_cost": {**ESTABLISHED_PAYLOAD, "delegation_graph": PARTIAL_COST_GRAPH},
     "dag_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": DAG_GRAPH},
     "fanout_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": FANOUT_GRAPH},
     "dag_beyond_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": BEYOND_DAG_GRAPH, "delegation_drawing": DRAWING},
@@ -774,8 +806,18 @@ SCENARIOS["usage_board"] = {
     ],
     "data": {
         **ESTABLISHED_PAYLOAD,
-        "session_usage": {"model": "gpt-6-luna", "output": 630, "input": 1600, "cache_read": 9300, "cache_write": 1100, "cost_usd": 0.5},
+        "session_usage": {"session_id": "20260924_101010_abc123", "model": "gpt-6-luna", "output": 630, "input": 1600,
+                          "cache_read": 9300, "cache_write": 1100, "cost_usd": 0.5},
     },
+}
+# The chat switched and the last poll's answer, for the chat before, is still on screen.
+SCENARIOS["usage_board_switched"] = {**SCENARIOS["usage_board"], "stored": "20260925_090000_def456", "events": []}
+# The recorded row could not be read: the board keeps the stream.
+SCENARIOS["usage_board_read_failed"] = {
+    **SCENARIOS["usage_board"],
+    "events": [],
+    "data": {**ESTABLISHED_PAYLOAD,
+             "session_usage": {"session_id": "20260924_101010_abc123", "error": "OperationalError: database is locked"}},
 }
 SCENARIOS["usage_board_busy"] = {**SCENARIOS["usage_board"], "busy": True, "events": []}
 # No recorded row and no breakdown yet: only what the stream carries.
@@ -853,14 +895,43 @@ FORMATTER_CASES = {
           ["message.delta", "s", "x", 1200, "t1"], ["message.start", "s", None, 2000, "t2"], ["message.delta", "s", "y", 2300, "t2"]]],
         [[["message.start", "", None, 0], ["message.delta", "", "x", 5], ["message.start", "s", None, None], ["message.delta", "s", "x", 5]]],
         [[event for turn in range(12) for event in (["message.start", "s", None, turn * 100], ["message.delta", "s", "x", turn * 100 + turn])]],
+        # A turn interrupted before its first token (Hermes sends `message.complete`), then a turn that streams:
+        # only the second is timed, from its own start.
+        [[["message.start", "s", None, 0], ["message.complete", "s", None, 500], ["message.start", "s", None, 1000],
+          ["message.delta", "s", "x", 1300]]],
+        # The same with turn ids, ended by an error: a late chunk of the dead turn times nothing.
+        [[["message.start", "s", None, 0, "t1"], ["error", "s", None, 100], ["message.delta", "s", "late", 200, "t1"],
+          ["message.start", "s", None, 1000, "t2"], ["message.delta", "s", "y", 1250, "t2"]]],
+        # A start without a turn id replaces the last one (an older Hermes, or a follow-up turn's bare start), and
+        # a chunk of another turn than the pending one times nothing.
+        [[["message.start", "s", None, 0], ["message.start", "s", None, 1000], ["message.delta", "s", "x", 1200]]],
+        [[["message.start", "s", None, 0, "t1"], ["message.delta", "s", "x", 50, "t0"], ["message.delta", "s", "x", 80, "t1"]]],
     ],
+    "ttftPending": [
+        # Dead turns with no end event in view, and new chats: one pending start per chat, never one per turn.
+        [[["message.start", "s", None, turn * 10, f"t{turn}"] for turn in range(40)]
+         + [["message.start", "s", None, 500 + turn] for turn in range(40)]
+         + [["message.start", "u", None, 900], ["message.complete", "s", None, 950]]],
+    ],
+    "laneLegend": [
+        [{"usage": {"input": 0, "cache_read": 4000, "cache_write": 0, "output": 10}}],
+        [{"output_tokens": 300}],
+        [{"usage": {"input": 0, "cache_read": 0, "cache_write": 0, "output": 0, "cost_usd": 0}}],
+    ],
+    "sumCostText": [
+        [{"lanes": 2, "priced": 2, "cost": 0.0184, "estimated": True}],
+        [{"lanes": 2, "priced": 1, "cost": 0.0123, "estimated": False}],
+        [{"lanes": 2, "priced": 0, "cost": None, "estimated": False}],
+        [{"lanes": 1, "priced": 1, "cost": 0, "estimated": False}],
+    ],
+    "costText": [[0.0123, False], [0, False], [None, False], [0.0061, True]],
     "usageBoard": [
         # The stream alone, with a cost it does not vouch for.
         [{"live": {"prompt": 4000, "input": 500, "output": 300, "cache_hit_pct": 50, "cost_usd": 0.01}}],
         # Recorded counts win over the stream, and carry their own estimate mark.
-        [{"live": {"prompt": 1, "output": 1, "cache_hit_pct": 1}, "saved": {"input": 1600, "cache_read": 9300, "cache_write": 1100, "output": 630, "cost_usd": 0.0184, "cost_estimated": True}}],
+        [{"live": {"prompt": 1, "output": 1, "cache_hit_pct": 1}, "stored": "c1", "saved": {"session_id": "c1", "input": 1600, "cache_read": 9300, "cache_write": 1100, "output": 630, "cost_usd": 0.0184, "cost_estimated": True}}],
         # A recorded zero read is a 0.0% hit, not a dash.
-        [{"saved": {"input": 12000, "output": 100}}],
+        [{"stored": "c1", "saved": {"session_id": "c1", "input": 12000, "output": 100}}],
         [{}],
         [{"live": {"calls": 3}}],
         [{"live": {"context_used": 5000, "context_estimated": True}}],
@@ -869,6 +940,12 @@ FORMATTER_CASES = {
         # Entries without a count are left out of the composition.
         [{"breakdown": {"context_max": 100, "categories": [
             {"id": "a", "label": "A", "tokens": 600}, {"id": "b", "label": "B", "tokens": 0}, {"label": "C", "tokens": "x"}, None]}}],
+        # Another chat's row (the last poll's, across a switch), a row with no chat named, and a failed read.
+        [{"live": {"prompt": 4000, "output": 300}, "stored": "c2", "saved": {"session_id": "c1", "input": 1600, "output": 630, "cost_usd": 0.5}}],
+        [{"live": {"prompt": 4000, "output": 300}, "stored": "c1", "saved": {"input": 1600, "output": 630, "cost_usd": 0.5}}],
+        [{"live": {"prompt": 4000, "output": 300}, "stored": "c1", "saved": {"session_id": "c1", "error": "OperationalError: locked"}}],
+        # A provider-reported zero is a zero cost.
+        [{"stored": "c1", "saved": {"session_id": "c1", "input": 100, "output": 10, "cost_usd": 0}}],
     ],
     "elapsedText": [[12], [242], [7260], [None]],
     "costSegmentText": [
@@ -1005,9 +1082,27 @@ class DesktopBackendTests(unittest.TestCase):
             UsageTests.count(home, PARENT, 120, 4_000, 300, actual=0.5)
             named = plugin_api.hud_payload(home.hermes, PARENT)
             bare = plugin_api.hud_payload(home.hermes, "")
-        self.assertEqual(named["session_usage"], {"model": "gpt-6-luna", "output": 630, "input": 120,
-                                                  "cache_read": 4_000, "cache_write": 300, "cost_usd": 0.5})
+        self.assertEqual(named["session_usage"], {"session_id": PARENT, "model": "gpt-6-luna", "output": 630,
+                                                  "input": 120, "cache_read": 4_000, "cache_write": 300,
+                                                  "cost_usd": 0.5})
         self.assertNotIn("session_usage", bare, "no session is named, so no chat's figures are read")
+
+    def test_a_failed_usage_read_is_a_record_beside_a_hud_that_still_reads(self) -> None:
+        """Mutation: let the failure escape, drop it silently, or let it replace the reader's payload."""
+        from test_delegation_graph import UsageTests
+
+        with homes() as home:
+            home.session(PARENT, "gpt-6-luna", started=1.0)
+            UsageTests.with_columns(home)
+            UsageTests.count(home, PARENT, 120, 4_000, 300, actual=0.5)
+            read = plugin_api.hud_payload(home.hermes, PARENT)
+            graph = sys.modules["omh_desktop_bundle.delegation_graph"]
+            with mock.patch.object(graph, "session_usage", side_effect=RuntimeError("state.db is locked")):
+                failed = plugin_api.hud_payload(home.hermes, PARENT)
+        self.assertEqual(failed["session_usage"], {"session_id": PARENT, "error": "RuntimeError: state.db is locked"})
+        self.assertNotIn("error", failed, "the reader's payload is not an error record")
+        self.assertEqual({key: value for key, value in failed.items() if key != "session_usage"},
+                         {key: value for key, value in read.items() if key != "session_usage"})
 
     def test_a_big_run_or_a_narrow_pane_is_drawn_as_the_tree(self) -> None:
         self.assertEqual(plugin_api.SMALL_GRAPH_LANES, dag_block.SMALL_GRAPH_LANES)
@@ -1236,7 +1331,6 @@ class DesktopPluginFileTests(unittest.TestCase):
         self.assertEqual(struck, [".omh-pane-item[data-state=done] .omh-pane-item-label"])
 
 
-@unittest.skipUnless(NODE, "node is not installed; the widget harness needs it")
 def _split_at_dag(render: dict) -> tuple[list[dict], list[dict]]:
     """The pane's nodes above the DAG block (the usage board among them) and from its `DAG` header on."""
     nodes = render["structure"]
@@ -1244,6 +1338,7 @@ def _split_at_dag(render: dict) -> tuple[list[dict], list[dict]]:
     return nodes[:head], nodes[head:]
 
 
+@unittest.skipUnless(NODE, "node is not installed; the widget harness needs it")
 class DesktopPluginNodeTests(unittest.TestCase):
     def test_node_accepts_the_file_as_an_es_module(self) -> None:
         # `node --check` on a `.js` copy silently passes JSX (it is read as
@@ -1853,6 +1948,38 @@ class DesktopPluginNodeTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertFalse([node for node in renders[name]["structure"] if cards & set(node["className"].split())])
 
+    def test_a_settled_dag_ulw_run_is_one_summary_line_not_cards(self) -> None:
+        """Mutation: take the card view for a run whose every lane has settled (the TUI clears its block at run end)."""
+        render = self._drive()["renders"]["dag_settled"]
+        structure = render["structure"]
+        self.assertFalse([node for node in structure if {"omh-pane-dv-kpis", "omh-pane-dv-canvas", "omh-pane-dv-card"}
+                          & set(node["className"].split()) and "omh-pane-ub-kpis" not in node["className"]])
+        runs = [node["text"] for node in structure if node["className"] == "omh-pane-run"]
+        self.assertEqual(len(runs), 1)
+        self.assertTrue(runs[0].startswith("DAG · Write and sum · "), runs[0])
+        self.assertNotIn("DAG", [node["text"] for node in structure if node["className"] == "omh-pane-section-label"])
+
+    def test_a_partly_priced_run_marks_its_cost_as_a_floor(self) -> None:
+        """Mutation: show the priced lanes' sum as the run's cost, in the figures or in the by-model row."""
+        render = self._drive()["renders"]["dag_partial_cost"]
+        costs = dict(zip(self._classed(render, "omh-pane-dv-kpi-label"), self._classed(render, "omh-pane-dv-kpi-value")))
+        self.assertEqual(costs["Cost"], "≥$0.0123")
+        self.assertIn("1/2 nodes priced", self._classed(render, "omh-pane-dv-kpi-sub"))
+        rows = [[cell["text"] for cell in node["cells"]] for node in render["structure"] if "omh-pane-dv-mrow" in node["className"].split()]
+        self.assertEqual(rows[1:], [["claude-haiku-5-5", "2", "12.6k", "77.5%", "≥$0.0123"]])
+        self.assertEqual(self._drive()["formatters"]["sumCostText"], ["~$0.0184", "≥$0.0123", "—", "$0.0000"])
+        self.assertEqual(self._drive()["formatters"]["costText"], ["$0.0123", "$0.0000", "—", "~$0.0061"],
+                         "a provider-reported zero is a zero, not a dash")
+
+    def test_the_lane_detail_legend_shows_a_reported_zero_as_zero(self) -> None:
+        """Mutation: show a reported 0 as a dash beside its 0.0% share, or a count the lane never reported as 0."""
+        read_only, output_only, all_zero = self._drive()["formatters"]["laneLegend"]
+        self.assertEqual([(row["label"], row["count"], row["share"]) for row in read_only],
+                         [("Cache read", "4.0k", "100.0%"), ("Uncached input", "0", "0.0%"), ("Cache write", "0", "0.0%")])
+        self.assertEqual([(row["count"], row["share"]) for row in output_only], [("—", "—")] * 3,
+                         "a lane with no usage reported its output alone")
+        self.assertEqual([(row["count"], row["share"]) for row in all_zero], [("0", "—")] * 3)
+
     def test_the_dag_block_is_named_dag_and_its_stats_come_before_the_dag(self) -> None:
         """Mutation: label it `DELEGATION` again, or put the stats back under the cards."""
         renders = self._drive()["renders"]
@@ -1889,6 +2016,17 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(self._board(render, "omh-pane-dv-stats-c"), ["~15.7k"])
         pane = " ".join(render["byId"]["hud"])
         self.assertLess(pane.index("USAGE"), pane.index("PLAN"))
+
+    def test_the_board_never_shows_another_chats_recorded_row_or_a_failed_read(self) -> None:
+        """Mutation: show the row the last poll read for the chat before a switch, or a failed read's row as zeros."""
+        renders = self._drive()["renders"]
+        for name in ("usage_board_switched", "usage_board_read_failed"):
+            with self.subTest(name=name):
+                values = dict(zip(self._board(renders[name], "omh-pane-dv-kpi-label"),
+                                  self._board(renders[name], "omh-pane-dv-kpi-value")))
+                # The stream's 12000 prompt and 630 out; its hit rate; its cost unvouched (the row's $0.5000 is gone).
+                self.assertEqual((values["Tokens"], values["Cache hit"], values["Cost"]), ("12.6k", "77.0%", "—"))
+                self.assertNotIn("9.3k of 12.0k prompt", self._board(renders[name], "omh-pane-dv-kpi-sub"))
 
     def test_a_chat_with_only_a_stream_shows_what_it_carries_and_dashes_for_the_rest(self) -> None:
         render = self._drive()["renders"]["usage_board_stream_only"]
@@ -1929,10 +2067,22 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(waits[6][1], {"s": list(range(2, 12))}, "the last ten turns")
         self.assertTrue(all(waits[6][0][1::2]))
 
+    def test_a_dead_turn_never_times_the_next_one(self) -> None:
+        """Mutation: keep a start no text followed past the turn's end, keep a bare start over a newer one, or key
+        pending starts by turn so dead ones pile up."""
+        report = self._drive()["formatters"]
+        waits = report["ttftWaits"]
+        self.assertEqual(waits[7], [[False, False, False, True], {"s": [300]}], "interrupted, then a turn that streams")
+        self.assertEqual(waits[8], [[False, False, False, False, True], {"s": [250]}], "a late chunk of a failed turn")
+        self.assertEqual(waits[9], [[False, False, True], {"s": [200]}], "a bare start replaces the last one")
+        self.assertEqual(waits[10], [[False, False, True], {"s": [80]}], "another turn's chunk ends no wait")
+        self.assertEqual(report["ttftPending"], [["u"]], "one pending start per chat, gone at the turn's end")
+
     def test_the_usage_board_model_reads_each_figure_from_its_own_source(self) -> None:
         """Mutation: take the stream over the recorded row, drop the `~` from a cost the stream does not vouch for, or
         show a recorded zero read as a dash."""
-        streamed, recorded, zero_read, empty, calls_only, guessed, window, ragged = self._drive()["formatters"]["usageBoard"]
+        (streamed, recorded, zero_read, empty, calls_only, guessed, window, ragged,
+         other_chat, unnamed, failed, free) = self._drive()["formatters"]["usageBoard"]
 
         def cells(model: dict) -> dict:
             return {cell["label"]: (cell["value"], cell["sub"]) for cell in model["cells"]}
@@ -1962,6 +2112,10 @@ class DesktopPluginNodeTests(unittest.TestCase):
         )
         self.assertEqual([(part["label"], part["share"]) for part in ragged["parts"]], [("A", 1.0)])
         self.assertEqual(ragged["sum"], 600)
+        # A row for another chat, for no named chat, or a failed read: the stream's figures, the row's left out.
+        for model in (other_chat, unnamed, failed):
+            self.assertEqual((cells(model)["Tokens"], cells(model)["Cost"]), (("4.3k", "↓300 out · 4.0k in"), ("—", "unpriced")))
+        self.assertEqual(cells(free)["Cost"], ("$0.0000", ""), "a provider-reported zero is a zero cost")
 
     def test_a_korean_host_reads_the_usage_board_in_korean(self) -> None:
         hud = " ".join(self._drive()["korean"]["usage_board"]["byId"]["hud"])
@@ -1992,19 +2146,24 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(beyond["total"]["lanes"], 0)
 
     def test_the_dag_view_leaves_the_hosts_sideways_swipe_alone(self) -> None:
+        """Mutation: clip every drawing (native and team graphs too), clip in a narrow mouse window, or let the cards
+        scroll sideways."""
         css = self._drive()["style"]["css"]
-        view = [line for line in css.splitlines() if "omh-pane-dv" in line]
+        # A run past the card limit falls back to the drawn graph; on touch that drawing clips rather than eats the
+        # host's sideways swipe. Nothing else clips a drawing: elsewhere, and with a mouse, it still scrolls.
+        clipped = "@media (pointer:coarse){.omh-pane-dv .omh-pane-dag{overflow-x:hidden}}"
+        self.assertIn(clipped, css.splitlines())
+        self.assertEqual(re.findall(r"[^{}]*omh-pane-dag\{[^}]*overflow-x:hidden", css), [".omh-pane-dv .omh-pane-dag{overflow-x:hidden"])
+        view = [line for line in css.splitlines() if "omh-pane-dv" in line and line != clipped]
         self.assertTrue(view)
         self.assertNotIn("touch-action", css)
         for rule in [rule for line in view for rule in line.split("}") if "omh-pane-dv" in rule]:
             with self.subTest(rule=rule[:60]):
                 self.assertNotIn("overflow-x", rule)
         # A control is 32px tall on touch and reaches 44px through its padding box's pseudo-element.
-        coarse = next(line for line in view if line.startswith("@media (pointer:coarse)"))
+        coarse = next(line for line in view if line.startswith("@media (pointer:coarse),(max-width:640px)"))
         self.assertIn("height:32px", coarse)
         self.assertIn("inset:-7px -5px", coarse)
-        # A run past the card limit falls back to the drawn graph; on touch it clips rather than eats the host's sideways swipe.
-        self.assertIn("omh-pane-dag{overflow-x:hidden}", coarse)
 
     def test_a_korean_host_reads_the_dag_view_in_korean(self) -> None:
         hud = self._drive()["korean"]["dag_cards"]["byId"]["hud"]

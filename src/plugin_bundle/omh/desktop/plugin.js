@@ -1416,18 +1416,21 @@ function positive(value) {
   return Number.isFinite(value) && exceeds(value, 0) ? value : 0
 }
 
-// What one lane counted: input and cache from its `usage`, output from `output_tokens`.
+// What one lane counted, from its `usage` (its auxiliary calls included), output from `output_tokens` where the
+// usage names none. `reported` is whether the input and cache counts were read at all; a cost Hermes recorded,
+// a reported zero too, is `cost`.
 export function laneUsage(record) {
   const usage = record && record.usage && typeof record.usage === 'object' ? record.usage : null
-  const output = positive(record && record.output_tokens)
-  const cost = usage ? positive(usage.cost_usd) : 0
+  const output = positive(usage && Number.isFinite(usage.output) ? usage.output : record && record.output_tokens)
+  const cost = usage && Number.isFinite(usage.cost_usd) && reaches(usage.cost_usd, 0) ? usage.cost_usd : null
   return {
     seen: !!usage || exceeds(output, 0),
+    reported: !!usage,
     input: usage ? positive(usage.input) : 0,
     read: usage ? positive(usage.cache_read) : 0,
     write: usage ? positive(usage.cache_write) : 0,
     output,
-    cost: exceeds(cost, 0) ? cost : null,
+    cost,
     estimated: !!(usage && usage.cost_estimated)
   }
 }
@@ -1474,8 +1477,17 @@ export function percentText(ratio) {
   return ratio === null ? '—' : `${(ratio * 100).toFixed(1)}%`
 }
 
+// A recorded cost, a recorded zero as one; a dash where none was recorded.
 export function costText(cost, estimated) {
-  return (cost === null ? '' : costSegmentText({ cost_usd: cost, cost_approximate: estimated })) || '—'
+  if (cost === null || !Number.isFinite(cost)) return '—'
+  return exceeds(cost, 0) ? costSegmentText({ cost_usd: cost, cost_approximate: estimated }) : `$${(0).toFixed(4)}`
+}
+
+// Lanes' cost added up, marked `≥` while a lane that counted tokens has no cost: the priced lanes' floor, not the
+// run's total. A dash where no lane was priced.
+export function sumCostText(total) {
+  const text = costText(total.cost, total.estimated)
+  return total.cost !== null && exceeds(total.lanes, total.priced) ? `≥${text}` : text
 }
 
 // ---------------------------------------------------------------------------
@@ -1488,27 +1500,38 @@ export function costText(cost, estimated) {
 
 export const TTFT_KEEP = 10
 const FIRST_TOKEN_EVENTS = ['message.delta', 'reasoning.delta', 'thinking.delta']
+// What ends a turn on Hermes' stream, an interrupted or failed one included (`message.complete` carries its status).
+const TURN_END_EVENTS = ['message.complete', 'error']
 const PART_TONES = 8
 
 export function newTurnClock() {
-  return { started: {}, turns: {} }
+  return { started: Object.create(null), turns: Object.create(null) }
 }
 
-// Folds one gateway event into the clock. A turn starts at `message.start`,
-// keyed on the frame's `turn_id` so a start re-sent for the same turn (a
-// heartbeat or a resume) does not reset the wait; its wait ends at the first
-// streamed text. True where a wait just ended.
+// Folds one gateway event into the clock: one pending start per chat. A turn
+// starts at `message.start`; a start re-sent with the same `turn_id` keeps the
+// first time, and any other start, one without a `turn_id` included (an older
+// Hermes, or the bare start before a follow-up turn), replaces it. Its wait
+// ends at the first streamed text of that turn; a turn's end, or an error,
+// drops a start no text followed, so a dead turn never times the next one.
+// True where a wait just ended.
 export function noteTurnEvent(clock, type, sessionId, text, now, turnId) {
-  if (!sessionId || !Number.isFinite(now)) return false
-  if (type === 'message.start') {
-    const key = `${sessionId}|${turnId || ''}`
-    if (!Number.isFinite(clock.started[key])) clock.started[key] = now
+  if (!sessionId) return false
+  if (TURN_END_EVENTS.includes(type)) {
+    delete clock.started[sessionId]
     return false
   }
-  const began = clock.started[`${sessionId}|${turnId || ''}`]
-  if (!FIRST_TOKEN_EVENTS.includes(type) || !Number.isFinite(began) || typeof text !== 'string' || !text) return false
-  delete clock.started[`${sessionId}|${turnId || ''}`]
-  clock.turns[sessionId] = (clock.turns[sessionId] || []).concat([Math.max(0, now - began)]).slice(-TTFT_KEEP)
+  if (!Number.isFinite(now)) return false
+  const turn = typeof turnId === 'string' ? turnId : ''
+  const pending = clock.started[sessionId]
+  if (type === 'message.start') {
+    if (!(pending && turn && pending.turn === turn)) clock.started[sessionId] = { at: now, turn }
+    return false
+  }
+  if (!FIRST_TOKEN_EVENTS.includes(type) || !pending || typeof text !== 'string' || !text) return false
+  if (pending.turn && turn && pending.turn !== turn) return false
+  delete clock.started[sessionId]
+  clock.turns[sessionId] = (clock.turns[sessionId] || []).concat([Math.max(0, now - pending.at)]).slice(-TTFT_KEEP)
   return true
 }
 
@@ -1525,13 +1548,17 @@ export function speedText(tps) {
 }
 
 // `live` is the host's streamed usage of the focused chat, `saved` the chat's
-// recorded row as the reader sent it, `breakdown` the host's context breakdown
-// and `turns` the first-token waits (ms) this window timed. Recorded counts
-// win where there are any (they are exact and carry the cache split); the
-// stream stands in before the first row is written. Null where nothing is known.
+// recorded row as the reader sent it, `stored` the focused chat's stored id,
+// `breakdown` the host's context breakdown and `turns` the first-token waits
+// (ms) this window timed. Recorded counts win where there are any (they are
+// exact and carry the cache split); the stream stands in before the first row
+// is written. The row counts only for the chat it was read for: across a chat
+// switch the last poll's answer stays on screen until the next lands, and a
+// failed read (`error`) is no row. Null where nothing is known.
 export function usageBoard(input) {
   const live = input.live && typeof input.live === 'object' ? input.live : {}
-  const saved = input.saved && typeof input.saved === 'object' ? input.saved : {}
+  const sent = input.saved && typeof input.saved === 'object' ? input.saved : null
+  const saved = sent && !sent.error && !!input.stored && sent.session_id === input.stored ? sent : {}
   const crumbs = input.breakdown && typeof input.breakdown === 'object' ? input.breakdown : {}
   const turns = Array.isArray(input.turns) ? input.turns : []
   const recorded = {
@@ -1540,10 +1567,10 @@ export function usageBoard(input) {
     write: positive(saved.cache_write),
     output: positive(saved.output)
   }
-  const rows = exceeds(allTokens(recorded), 0)
-  const prompt = rows ? promptTokens(recorded) : positive(live.prompt) || positive(live.input)
-  const output = rows ? recorded.output : positive(live.output)
-  const hit = rows ? cacheHit(recorded) : Number.isFinite(live.cache_hit_pct) ? live.cache_hit_pct / 100 : null
+  const hasRecord = exceeds(allTokens(recorded), 0)
+  const prompt = hasRecord ? promptTokens(recorded) : positive(live.prompt) || positive(live.input)
+  const output = hasRecord ? recorded.output : positive(live.output)
+  const hit = hasRecord ? cacheHit(recorded) : Number.isFinite(live.cache_hit_pct) ? live.cache_hit_pct / 100 : null
   // The stream may carry a cost, but does not say whether Hermes priced it, so it keeps the approximate mark.
   const recordedCost = Number.isFinite(saved.cost_usd)
   const streamedCost = !recordedCost && exceeds(positive(live.cost_usd), 0)
@@ -1587,9 +1614,9 @@ export function usageBoard(input) {
       {
         label: t('dgCacheHit'),
         value: percentText(hit),
-        sub: rows && exceeds(prompt, 0) ? t('dgCacheHitSub', { read: tokenCountText(recorded.read), prompt: tokenCountText(prompt) }) : '',
+        sub: hasRecord && exceeds(prompt, 0) ? t('dgCacheHitSub', { read: tokenCountText(recorded.read), prompt: tokenCountText(prompt) }) : '',
         tip: t('ubCacheTip'),
-        ring: rows && exceeds(prompt, 0) ? recorded : null
+        ring: hasRecord && exceeds(prompt, 0) ? recorded : null
       },
       {
         label: t('dgCost'),
@@ -2163,7 +2190,8 @@ button.omh-pane-dv-mrow:hover{background:var(--chrome-action-hover)}
 .omh-pane-dv-arrow{font-family:${MONO};color:var(--omh-text-readable)}
 .omh-pane-dv-hl{margin:0 0 0 auto;padding:0;font:inherit;font-size:11px;color:var(--ui-accent);background:none;border:0;cursor:pointer}
 .omh-pane-dv-note{margin-top:8px;font-size:10.5px;color:var(--omh-text-readable)}
-@media (pointer:coarse),(max-width:640px){.omh-pane-dv-x,.omh-pane-dv-link,.omh-pane-dv-hl{position:relative;height:32px;padding:0 12px;-webkit-tap-highlight-color:transparent}.omh-pane-dv-hl{padding:0 6px}.omh-pane-dv-x::after,.omh-pane-dv-link::after,.omh-pane-dv-hl::after{content:'';position:absolute;inset:-7px -5px}.omh-pane-dv-chips,.omh-pane-dv-links,.omh-pane-dv-path{gap:14px 8px}.omh-pane-dv-path{margin-top:14px}.omh-pane-dv-stats-h{padding:16px 10px}.omh-pane-dv-mrow{padding:16px 0}.omh-pane-dv-mh{padding:0 0 3px}.omh-pane-dv-card{padding:9px 10px 10px;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}.omh-pane-dag{overflow-x:hidden}}
+@media (pointer:coarse),(max-width:640px){.omh-pane-dv-x,.omh-pane-dv-link,.omh-pane-dv-hl{position:relative;height:32px;padding:0 12px;-webkit-tap-highlight-color:transparent}.omh-pane-dv-hl{padding:0 6px}.omh-pane-dv-x::after,.omh-pane-dv-link::after,.omh-pane-dv-hl::after{content:'';position:absolute;inset:-7px -5px}.omh-pane-dv-chips,.omh-pane-dv-links,.omh-pane-dv-path{gap:14px 8px}.omh-pane-dv-path{margin-top:14px}.omh-pane-dv-stats-h{padding:16px 10px}.omh-pane-dv-mrow{padding:16px 0}.omh-pane-dv-mh{padding:0 0 3px}.omh-pane-dv-card{padding:9px 10px 10px;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}}
+@media (pointer:coarse){.omh-pane-dv .omh-pane-dag{overflow-x:hidden}}
 @container (min-width:520px){.omh-pane-dv-kpis.omh-pane-ub-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .omh-pane-ub-c0{--dv-k:var(--omh-brand)}
 .omh-pane-ub-c1{--dv-k:var(--ui-accent)}
@@ -2636,7 +2664,7 @@ function DagKpis({ dag }) {
     },
     {
       label: t('dgCost'),
-      value: costText(total.cost, total.estimated),
+      value: sumCostText(total),
       sub: total.lanes ? t('dgCostSub', { priced: total.priced, counted: total.lanes }) : t('dgCostNone'),
       tip: t('dgCostTip')
     },
@@ -2823,12 +2851,13 @@ function DagCanvas({ dag, pick, lit, onPick }) {
   ])
 }
 
-function chip(text, title, tone) {
+// `key` is the chip's place in its row, so two chips that read alike stay two.
+function chip(key, text, title, tone) {
   return node(
     'span',
     { className: `omh-pane-dv-chip${tone ? ` omh-pane-dv-chip-${tone}` : ''}`, title: title || undefined },
     [span('omh-pane-dv-chip-t', text)],
-    text
+    key
   )
 }
 
@@ -2850,9 +2879,23 @@ function laneLink(dag, id, onPick, label) {
   )
 }
 
+// The detail's prompt legend: each part's count and its share of the prompt. A count the lane reported reads as
+// written, a 0 as 0; a dash only where the lane reported no usage at all, or no prompt to take a share of.
+export function usageLegend(usage) {
+  const prompt = promptTokens(usage)
+  return USAGE_KEYS.map(function (key) {
+    const count = usage[key[0]]
+    return {
+      part: key[1],
+      label: t(key[2]),
+      count: usage.reported ? tokenCountText(count) : '—',
+      share: exceeds(prompt, 0) ? `${((count / prompt) * 100).toFixed(1)}%` : '—'
+    }
+  })
+}
+
 function LaneDetail({ dag, lane, onPick, seat }) {
   const usage = lane.usage
-  const prompt = promptTokens(usage)
   const facts = [
     [t('dgElapsed'), lane.elapsed === null ? '—' : elapsedText(lane.elapsed)],
     [t('dgTokens'), tokensText(allTokens(usage))],
@@ -2878,13 +2921,15 @@ function LaneDetail({ dag, lane, onPick, seat }) {
       )
     ]),
     node('div', { className: 'omh-pane-dv-chips' }, [
-      lane.category ? chip(lane.category) : null,
-      lane.model ? chip(`${lane.model}${lane.effort ? ` · ${lane.effort}` : ''}`, t('dgModelTip'), 'model') : chip(t('dgNotStarted'), t('dgNotStartedTip')),
-      chip(t('dgLayer', { count: lane.layer + 1 })),
-      lane.role && lane.role !== 'build' ? chip(lane.role) : null,
-      lane.origin ? chip(t(lane.origin === 'repair' ? 'dgRepair' : 'dgExtend'), '', 'warn') : null,
-      lane.unchecked ? chip(t('dagUnchecked', { count: 1 }), '', 'warn') : null,
-      lane.session ? chip(t('dgSession', { tail: lane.session }), lane.session) : null
+      lane.category ? chip('category', lane.category) : null,
+      lane.model
+        ? chip('model', `${lane.model}${lane.effort ? ` · ${lane.effort}` : ''}`, t('dgModelTip'), 'model')
+        : chip('model', t('dgNotStarted'), t('dgNotStartedTip')),
+      chip('layer', t('dgLayer', { count: lane.layer + 1 })),
+      lane.role && lane.role !== 'build' ? chip('role', lane.role) : null,
+      lane.origin ? chip('origin', t(lane.origin === 'repair' ? 'dgRepair' : 'dgExtend'), '', 'warn') : null,
+      lane.unchecked ? chip('unchecked', t('dagUnchecked', { count: 1 }), '', 'warn') : null,
+      lane.session ? chip('session', t('dgSession', { tail: lane.session }), lane.session) : null
     ]),
     lane.summary ? div('omh-pane-dv-text', lane.summary, 'summary') : null,
     node(
@@ -2899,12 +2944,11 @@ function LaneDetail({ dag, lane, onPick, seat }) {
       node(
         'div',
         { className: 'omh-pane-dv-legend' },
-        USAGE_KEYS.flatMap(function (key) {
-          const count = usage[key[0]]
+        usageLegend(usage).flatMap(function (row) {
           return [
-            span('omh-pane-dv-legend-k', [node('i', { className: `omh-pane-dv-swatch omh-pane-dv-${key[1]}` }, []), t(key[2])], `${key[1]}-k`),
-            span('omh-pane-dv-legend-n', tokensText(count), `${key[1]}-n`),
-            span('omh-pane-dv-legend-p', exceeds(prompt, 0) ? `${((count / prompt) * 100).toFixed(1)}%` : '—', `${key[1]}-p`)
+            span('omh-pane-dv-legend-k', [node('i', { className: `omh-pane-dv-swatch omh-pane-dv-${row.part}` }, []), row.label], `${row.part}-k`),
+            span('omh-pane-dv-legend-n', row.count, `${row.part}-n`),
+            span('omh-pane-dv-legend-p', row.share, `${row.part}-p`)
           ]
         })
       )
@@ -2975,7 +3019,7 @@ function DagStats({ dag, mark, onMark, onPick, open, onOpen }) {
         ),
         span(
           'omh-pane-dv-cell omh-pane-dv-num',
-          entry.total.priced ? costText(entry.total.cost, entry.total.estimated) : entry.total.lanes ? t('dgUnpriced') : '—',
+          entry.total.priced ? sumCostText(entry.total) : entry.total.lanes ? t('dgUnpriced') : '—',
           'p'
         )
       ],
@@ -3069,7 +3113,8 @@ function DagView({ dag, fallback }) {
 function DelegationSection({ payload }) {
   const view = delegationView(payload)
   if (!view) return null
-  const dag = dagModel(payload.delegation_graph)
+  // A run every lane of which has settled is one summary line, cards or not, as the TUI clears its block at run end.
+  const dag = view.settled ? null : dagModel(payload.delegation_graph)
   const drawing = view.settled ? null : drawingLines(payload)
   const lanes = view.settled || drawing
     ? []
@@ -3232,7 +3277,7 @@ function useTurns(sessionId) {
 // The focused chat's own figures, first in the pane. The host's atoms are read
 // as the host holds them; an older host lacks some, and a hook cannot be
 // skipped, so there the read lands on the gateway atom and its value is ignored.
-function UsageBoard({ saved }) {
+function UsageBoard({ saved, stored }) {
   const gateway = useValue(host.state.gateway)
   const streamRead = useValue(host.state.focusedUsage || host.state.gateway)
   const runtimeRead = useValue(host.state.focusedSessionId || host.state.gateway)
@@ -3255,7 +3300,7 @@ function UsageBoard({ saved }) {
       return before && before.queryKey[2] === runtime ? previous : undefined
     }
   })
-  const board = usageBoard({ live, saved, breakdown: composition.data, turns })
+  const board = usageBoard({ live, saved, stored, breakdown: composition.data, turns })
   if (!board) return null
   const bar = node(
     'div',
@@ -3310,7 +3355,7 @@ function HudPane() {
     sections.push(jsx(Skeleton, { className: 'omh-pane-skeleton', style: { width: '70%' } }, 'skeleton-1'))
     sections.push(jsx(Skeleton, { className: 'omh-pane-skeleton', style: { width: '45%' } }, 'skeleton-2'))
   } else {
-    sections.push(jsx(UsageBoard, { saved: payload ? payload.session_usage : null }, 'usage'))
+    sections.push(jsx(UsageBoard, { saved: payload ? payload.session_usage : null, stored: hud.sessionId }, 'usage'))
     if (payload) {
       sections.push(jsx(CatchesSection, { payload }, 'catches'))
       sections.push(jsx(PlanSection, { payload }, 'plan'))
@@ -3367,7 +3412,7 @@ export default {
     // The usage board's TTFT: a turn starts at `message.start`, its wait ends
     // at the first streamed text.
     if (typeof ctx.onEvent === 'function') {
-      const waits = ['message.start'].concat(FIRST_TOKEN_EVENTS)
+      const waits = ['message.start'].concat(FIRST_TOKEN_EVENTS, TURN_END_EVENTS)
       waits.forEach(function (type) {
         ctx.onEvent(type, function (event) {
           const payload = event && event.payload && typeof event.payload === 'object' ? event.payload : {}

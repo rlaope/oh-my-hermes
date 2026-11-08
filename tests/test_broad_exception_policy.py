@@ -82,7 +82,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "failure, and the record is what lets it say which one happened. Its second handler is the "
         "delegation drawing for the pane: a renderer failure becomes `delegation_drawing` with "
         "`error` under `omh_desktop_dag/v1` beside the reader's payload, and the pane draws the "
-        "lane rows it drew before the drawing existed.",
+        "lane rows it drew before the drawing existed. Its third handler is the named chat's "
+        "recorded figures for the pane's usage board: a failed read becomes `session_usage` with "
+        "`error` beside the reader's payload, and the board shows dashes for the recorded row and "
+        "keeps the host's own stream.",
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/jev_ask_client.py",
@@ -1107,7 +1110,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 111 -> 112 / 101 -> 102: the judged messenger room's `[SHUTUP]` side effects
 # (`messenger_judgement.judged_reply`: a failed mute or reaction still returns `[SILENT]`).
 # `llm_hooks.pre_llm_call`'s body moved to `_turn_context` unchanged.
-EXPECTED_HANDLER_COUNT = 112
+# 112 -> 113 / 102: a third handler inside the classified `plugin_api.hud_payload`, the
+# Desktop pane's usage board (a failure is a `session_usage` record with `error` beside a HUD
+# that still reads, and the board shows dashes for the recorded row).
+EXPECTED_HANDLER_COUNT = 113
 EXPECTED_ANCHOR_COUNT = 102
 
 
