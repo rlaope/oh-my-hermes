@@ -399,10 +399,16 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
         # moves, and the pin before it was d4eb4e54...7ed7.
         # ralplan's acceptance line says plan-accept refuses a scaffold-only file unless
-        # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91. A coding-owner choice
-        # then counts only for the request it was made in: only dag-ulw and maestro move, and the pin before it was
-        # 51d4a5cf...9f51.
-        self.assertEqual(_digest(legacy_hashes), 'f5a53187249c43f9001174be5538531a4b393e37283e123f01f5dc2d44dd80d4')
+        # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91.
+        # show-reel then sends its paid calls through spend-gate, and spend-gate counts subscription
+        # credits as a spend; only those two move. Its review round (credits read from the provider's
+        # own price, the credits receipt, the gate named at every paid run step) moves the same two.
+        # Merged with main after #2652: both sides' bodies; main's pin before that merge was
+        # b36ad311...1e91, and this branch's was f30c9ae0...ca61. Merged again after #2650: main's
+        # pin was 51d4a5cf...9f51, and this branch's was a5bce194...90de.
+        # A coding-owner choice then counts only for the request it was made in: only dag-ulw and maestro
+        # move, and the pin before it was 62bebac1...bd0b.
+        self.assertEqual(_digest(legacy_hashes), 'c0b3ab76dcb31bce5335b26c34a03ad339b5e1e2c7e713aacd33b64355c6df31')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -452,7 +458,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
-            'awareness_primer_markdown_chars': 3685,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55).
+            'awareness_primer_markdown_chars': 3973,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49) and on the card and cue lines (+239).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,
             'role_context_chars_max': 2600,
