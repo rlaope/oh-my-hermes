@@ -73,7 +73,6 @@ from .common import (
     _explicit_source_metadata,
     _paths,
     _print_json,
-    _resolved_executor,
     _wants_json,
     add_revision_guard_arguments,
 )
@@ -285,7 +284,7 @@ def cmd_chat_interact(args: argparse.Namespace) -> int:
                 limit=args.limit,
                 min_confidence=args.min_confidence,
                 include_message=args.include_message,
-                executor_target=_resolved_executor(args, default="choose"),
+                executor_target=_requested_executor(args),
                 source_metadata=source_metadata,
                 target_notice=_target_notice(args, source_metadata),
                 paths=_paths(args),
@@ -307,6 +306,18 @@ def cmd_chat_interact(args: argparse.Namespace) -> int:
     return 0
 
 
+def _requested_executor(args: argparse.Namespace) -> str:
+    """The owner the person named with ``--executor``, or "choose".
+
+    The setup-profile default is not resolved here: the wrapper reads it
+    itself and labels it `setup_profile`, so it is never taken for an owner
+    named in this request (it does not bypass the genre veto and is not
+    recorded as an explicit choice). The owner that runs is the same.
+    """
+    explicit = str(getattr(args, "executor", None) or "").strip()
+    return explicit or "choose"
+
+
 def cmd_chat_session_start(args: argparse.Namespace) -> int:
     try:
         event_or_message, source_metadata = _chat_input_and_metadata(args)
@@ -318,7 +329,7 @@ def cmd_chat_session_start(args: argparse.Namespace) -> int:
             limit=args.limit,
             min_confidence=args.min_confidence,
             source_metadata=source_metadata,
-            executor_target=_resolved_executor(args, default="choose"),
+            executor_target=_requested_executor(args),
             target_notice=_target_notice(args, source_metadata),
             platform_context=_platform_context(args),
             hermes_session_id=_command_hermes_session_id(),

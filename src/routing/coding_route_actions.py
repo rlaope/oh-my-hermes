@@ -191,6 +191,7 @@ def resolve_coding_route_decision(
             or str(requested_owner or "").strip().casefold() not in RECORDED_OWNER_UNSET_VALUES
         ),
         multiple_owners=len(owners) > 1,
+        profile_owner=str(recorded_owner or "").strip().casefold() not in RECORDED_OWNER_UNSET_VALUES,
         authority_blocked=bool(unsafe),
         owner_ready=owner_ready,
         capability_fit=capability_fit,

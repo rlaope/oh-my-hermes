@@ -480,6 +480,16 @@ All notable changes will be documented here.
   pushes out a hint already there, and a message over 1000 characters is not
   read. Hint text and routes are unchanged.
 
+- **A setup-profile default coding owner is no longer taken for one named
+  in the request.** `omh chat interact` and `omh chat session start` used to
+  resolve the profile's `default_executor` before the wrapper saw it, so the
+  wrapper labelled it `explicit`: it skipped the genre veto that holds a
+  non-coding request back from an external coding CLI, and it was recorded as
+  an explicit choice the person never made. The wrapper now reads the profile
+  itself and labels it `setup_profile`, the route decision is the
+  recorded-owner one, and nothing is recorded. The owner that runs is the
+  same, and `--executor` or an owner named in the message still counts as a
+  choice made in this request.
 - **The operations and board skills now name the commands and Hermes
   surfaces they depend on.** `cancel` lists what exists before clearing and
   hands a running scheduled job to `hermes cron pause` and `runs`, and to

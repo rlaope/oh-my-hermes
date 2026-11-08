@@ -38,6 +38,8 @@ The payload is deterministic local adapter data: recommended workflow, harness, 
 
 Implementation-shaped has a floor. A settings-only or single configuration change (a gateway channel policy, a mention rule, one config key) that the wrapper or Hermes can apply directly is a direct configuration action: apply it, verify the new value, and report it. Do not open a durable goal ledger, start a goal loop, or prepare an executor handoff for it. Escalate to a coding handoff only when the request needs code edits, tests, or multi-step implementation work that configuration cannot express.
 
+Who chose the coding owner is part of the payload (`executor_resolution.source`). `explicit` (`--executor`) and `message_mention` (named in the message) are a choice made in this request. `setup_profile` is the default the person set: it stands as the owner, but it is not a choice made in this request, so it does not bypass the genre veto and is not recorded as an explicit choice. Pass `--executor` only when the person named the owner; leave it out to use the profile default.
+
 Check `executor_readiness/v1` for Codex, Claude Code, Hermes, or oh-my runtime profiles before first dispatch. If readiness is `missing` or `blocked`, ask the user to choose another coding agent, configure PATH, continue in Hermes, or use prompt/runtime handoff; retry only after that state changes. A readiness probe is not dispatch, execution, verification, review, CI, or merge evidence.
 
 With `--record`, Codex-selected real executor handoffs create `.omh/runtime/runs/<run-id>/` prepared runtime runs with `observation_status: prepared_not_observed`. Executor-choice, prompt-only, runtime-handoff, clarify, and fallback responses remain wrapper/session state.
