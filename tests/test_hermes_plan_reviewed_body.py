@@ -93,10 +93,11 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             self.assertFalse(scaffold["plan"]["quality_gate"]["coding_handoff_ready"])
             self.assertEqual(contract["quality_gate"]["readiness"], "needs_reviewed_body")
             self.assertEqual(contract["next_action"], "record_reviewed_plan")
-            self.assertEqual(
-                contract["decision_gate"]["acceptance_requires"],
-                {"plan_body": "reviewed", "record_with": "--plan-file", "accept_scaffold_with": "--allow-scaffold"},
-            )
+            requirement = {"plan_body": "reviewed", "record_with": "--plan-file", "accept_scaffold_with": "--allow-scaffold"}
+            self.assertEqual(contract["decision_gate"]["acceptance_requires"], requirement)
+            # `available` keeps meaning "after acceptance"; the requirement rides beside it.
+            self.assertTrue(contract["coding_delegate"]["available"])
+            self.assertEqual(contract["coding_delegate"]["acceptance_requires"], requirement)
 
             body = root / "reviewed.md"
             body.write_text(REVIEWED, encoding="utf-8")
@@ -104,6 +105,7 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             self.assertEqual(reviewed["plan"]["quality_gate"]["readiness"], "ready_for_acceptance")
             self.assertEqual(reviewed["wrapper_contract"]["next_action"], "prepare_coding_delegation_after_plan_acceptance")
             self.assertNotIn("acceptance_requires", reviewed["wrapper_contract"]["decision_gate"])
+            self.assertNotIn("acceptance_requires", reviewed["wrapper_contract"]["coding_delegate"])
 
             _, unrecorded, _ = self._run(root, "hermes", "plan", task)
             self.assertEqual(unrecorded["plan"]["quality_gate"]["readiness"], "ready_for_acceptance")
@@ -111,6 +113,42 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             _, blocked, _ = self._run(root, "hermes", "plan", "--record", "help")
             self.assertEqual(blocked["plan"]["quality_gate"]["readiness"], "needs_clarification")
             self.assertEqual(blocked["wrapper_contract"]["next_action"], "ask_clarification")
+
+    def test_the_recorded_scaffold_file_says_what_stdout_says(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            task = "implement durable observation journal with tests"
+            _, scaffold, _ = self._run(root, "hermes", "plan", "--record", task)
+            self.assertEqual(scaffold["plan"]["deep_interview"]["after_answer_next_action"], "record_reviewed_plan")
+            self.assertEqual(
+                scaffold["wrapper_contract"]["deep_interview"]["after_answer_next_action"], "record_reviewed_plan"
+            )
+            text = Path(scaffold["artifact"]["path"]).read_text(encoding="utf-8")
+            self.assertIn("- Readiness: `needs_reviewed_body`", text)
+            self.assertIn("- Coding handoff ready: `false`", text)
+            self.assertIn("- Next action: `record_reviewed_plan`", text)
+            self.assertNotIn("ready_for_acceptance", text)
+            self.assertNotIn("accept_or_revise_plan", text)
+
+            body = root / "reviewed.md"
+            body.write_text(REVIEWED, encoding="utf-8")
+            _, reviewed, _ = self._run(root, "hermes", "plan", "--record", "--plan-file", str(body), task)
+            self.assertEqual(reviewed["plan"]["deep_interview"]["after_answer_next_action"], "accept_or_revise_plan")
+            reviewed_text = Path(reviewed["artifact"]["path"]).read_text(encoding="utf-8")
+            self.assertNotIn("needs_reviewed_body", reviewed_text)
+
+    def test_a_bundle_file_carries_no_plan_readiness_to_disagree_with_stdout(self) -> None:
+        # `mark_payload_as_planning_input` runs after the write; that is safe only
+        # while the bundle file renders none of the fields it changes.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = root / "bundle.md"
+            body.write_text("### Hard Constraints\n- keep p95\n", encoding="utf-8")
+            _, payload, _ = self._run(root, "hermes", "plan", "--record", "--plan-file", str(body), "--input-bundle", "Redis proposal")
+            self.assertEqual(payload["plan"]["quality_gate"]["readiness"], "input_not_a_plan")
+            text = Path(payload["artifact"]["path"]).read_text(encoding="utf-8")
+            for line in ("Readiness:", "Coding handoff ready:", "Next action:"):
+                self.assertNotIn(line, text)
 
     def test_re_accepting_an_accepted_scaffold_is_not_a_failure(self) -> None:
         with TemporaryDirectory() as tmp:

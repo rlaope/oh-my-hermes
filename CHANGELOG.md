@@ -190,6 +190,14 @@ All notable changes will be documented here.
   stay an answer. A token leaves the end of an answer only after
   sentence-ending punctuation, so `The marker - [SILENT]` stays as written.
 
+- **A spend whose cost is unknown is checked against a cap in its own units.**
+  The spend-gate rails page now names the spend-only cap the credits rule
+  points to. When no price gives a call's credits or cost, the person sets
+  that cap in the call's own units (images, characters or seconds), and the
+  call runs only when its planned count fits. Its ledger row keeps that
+  count and leaves the period total unknown, so the next spend asks what was
+  already spent.
+
 - **A queued line in the OMH TUI no longer starts ahead of a steer Hermes
   passes on as its next prompt.** When a turn ends on its own with a steer
   unread, the queue waits for the turn that runs it. If none starts, because
@@ -282,6 +290,18 @@ All notable changes will be documented here.
   reply that fills those rows, the fold row stays without its spacer, and the
   reply's top rows give way. Sizing the held briefings no longer renders a
   long streaming reply whole on every delta.
+- **show-reel asks through the spend gate before it spends the user's
+  ElevenLabs or codex credits.** Narration, voice, transcription, sound,
+  music and image runs on the user's own key or login now go through
+  `omh-spend-gate` first, at every step that runs them: a card names the
+  exact lines, voice and model or the job and its length, with the expected
+  credits from the provider's own price for that model (or says the cost is
+  unknown), and the person's typed yes to it is that run's exact-target
+  approval. `omh-spend-gate` now says a call billed to subscription credits
+  or plan usage is a spend, with its own row in the rails table, a receipt
+  of the output and the credits used, and a ledger row kept in credits. The
+  scripts are unchanged: they run only when invoked and exit 2 without a key.
+
 - **The round-end checks also run after edits made through the shell.**
   Hermes calls OMH's round-end hook only after a `patch` or `write_file`, so
   a turn that edited files only with `sed`, a heredoc script or `cat >` got
@@ -452,6 +472,17 @@ All notable changes will be documented here.
   their skill: `account takeover` and `suspected unauthorized access`, `telemetry
   audit`, `write a handover guide` and `인수인계 문서 써줘`, and in Korean `시장 규모` and
   `경쟁사 분석` right before a request to size or analyse.
+- **Every arrow line in the per-turn primer names skills a model can load.**
+  The generic tool map, workflow context cards and common cues named
+  catalog names (`research`, `img-summary`) and shorthand that was no skill
+  (`automation`); only the rendered rail page rewrote one of those lines.
+  The three lines now write `ulw-research`, `omh-image-cards` and the other
+  labels `skill_view` loads. The lane key lines still list catalog names.
+- **The per-turn primer's lane keys name skills a model can load.** Each
+  lane's `Key:` list named catalog names (`research`, `deep-interview`), so
+  one primer showed both `research` and `ulw-research`. The keys now read
+  `ulw-research`, `ulw-interview`, `omh-routing` and the other labels
+  `skill_view` loads.
 - **`omh coding delegate --from-plan` no longer picks Codex when no owner
   was named.** Leaving out `--executor` used to select Codex with
   `--from-plan` and `generic` without it. Both now resolve the same default:
@@ -544,10 +575,12 @@ All notable changes will be documented here.
   file. `--allow-scaffold` accepts the scaffold on purpose and still returns
   `reviewed_body: false`, and re-accepting an already accepted file still
   succeeds. The `hermes plan accept <path>` alias refuses the same way. The
-  stdout of a scaffold record says so in its machine fields too:
+  stdout of a scaffold record and the recorded file say so too (the file's
+  quality gate and next action match stdout):
   `quality_gate.readiness: needs_reviewed_body`, `coding_handoff_ready:
   false`, `next_action: record_reviewed_plan`, and
-  `decision_gate.acceptance_requires`. `ulw-plan`, the `omh-routing`
+  `decision_gate.acceptance_requires`, repeated on `coding_delegate`, whose
+  `available` still means available after acceptance. `ulw-plan`, the `omh-routing`
   wrapper reference and `docs/INSTALLATION.md` describe the refusal.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node

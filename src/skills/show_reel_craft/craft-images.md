@@ -27,6 +27,8 @@ Do not generate the faces of real people. It can lead to impersonation or misund
 
 ## Generating with codex-image
 
+> OMH note: every codex image run, `codex_imagegen_batch.sh` and `codex_ref_image.sh` alike, draws on the user's own ChatGPT plan. Run it only after `omh-spend-gate`'s card, which names how many images and the plan they draw on, and the person's typed yes to that card.
+
 ```bash
 <codex-image skill>/scripts/codex_imagegen_batch.sh <project>/assets/gen \
   "<prompt>::01_stage.png" "<prompt>::02_city.png" ...
@@ -75,6 +77,8 @@ python3 <photoreal skill>/scripts/build_prompt.py --subject "30대 한국인 엔
 - After generating, check the number of fingers, the pupils, stray lettering, and age.
 
 ## Making it look like a real subject (reference images)
+
+> OMH note: every codex image run, `codex_imagegen_batch.sh` and `codex_ref_image.sh` alike, draws on the user's own ChatGPT plan. Run it only after `omh-spend-gate`'s card, which names how many images and the plan they draw on, and the person's typed yes to that card.
 
 The codex-image batch script does not accept reference images. When putting a real subject such as a pet, a product, or a character into a new scene, use this script.
 
