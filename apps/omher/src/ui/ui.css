@@ -1,0 +1,73 @@
+/* Primitives: avatar, icon button, pill, spinner, popover. */
+.ui-av {
+  border-radius: 50%;
+  display: block;
+  flex: none;
+}
+.ui-ib {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex: none;
+}
+.ui-ib:hover {
+  background: var(--raise);
+  color: var(--ink);
+}
+.ui-pill {
+  height: 26px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+button.ui-pill:hover {
+  background: var(--raise);
+}
+.ui-pill .sep {
+  width: 1px;
+  height: 12px;
+  background: var(--line);
+}
+.ui-pill .eff {
+  color: var(--muted);
+  font-weight: 500;
+}
+.ui-spin {
+  display: inline-block;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--w1) 25%, transparent);
+  border-top-color: var(--w1);
+  animation: spin 0.8s linear infinite;
+}
+.ui-pop {
+  position: absolute;
+  z-index: 20;
+  background: var(--pop);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: var(--pop-shadow);
+  animation: pop 0.16s ease both;
+}
+.ui-pop-bottom {
+  top: calc(100% + 6px);
+}
+.ui-pop-top {
+  bottom: calc(100% + 6px);
+}
+.ui-pop-right {
+  right: 0;
+}
+.ui-pop-left {
+  left: 0;
+}
