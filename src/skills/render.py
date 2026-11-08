@@ -412,9 +412,10 @@ _CHECKPOINT_LINE_PREFIX = "- Generic-tool checkpoint:"
 def _shared_rail_context_markdown() -> str:
     """The rail's context block, with the checkpoint's targets written as loadable labels.
 
-    The plugin bundle's checkpoint line speaks catalog names because the per-turn
-    primer shares it. This page is what a skill reads when it is about to pick a
-    sibling, so here each target is a name `skill_view` loads.
+    The plugin bundle writes the checkpoint's targets as labels already, since the
+    per-turn primer carries the line with no render pass. This page is what a skill
+    reads when it is about to pick a sibling, so a catalog name that reaches the
+    line later is still written here as a name `skill_view` loads.
     """
     installed = _installable_skill_names()
 
@@ -1539,7 +1540,7 @@ artifacts; pass only event summaries and refs into Hermes chat context.
 
 Wrappers can run `omh memory inspect`, `omh memory pack`, and `omh memory apply` to review OMH-local or wrapper-supplied context before preparing a handoff. This emits `{MEMORY_REVIEW_SCHEMA}` and `{HANDOFF_CONTEXT_PACK_SCHEMA}` artifacts only; it does not read or mutate opaque Hermes internal memory.
 
-For planning-shaped requests, wrappers or operators can run `omh hermes plan` to create a deterministic `hermes_plan/v1` scaffold. The stdout `wrapper_contract` is the adapter contract for follow-on work; after acceptance, pass the accepted plan artifact or generated context pack to `omh coding delegate --from-plan <artifact> --executor <the owner the user chose>` (leaving `--executor` out selects codex) instead of treating Discord/channel summary text as the executor plan.
+For planning-shaped requests, wrappers or operators can run `omh hermes plan` to create a deterministic `hermes_plan/v1` scaffold. Record the reviewed plan with `omh hermes plan --record --plan-file <reviewed-plan.md> "<task>"`: `omh hermes plan-accept` refuses a scaffold-only file (stdout `quality_gate.readiness: needs_reviewed_body`) unless `--allow-scaffold` is passed because the user asked to accept the scaffold. The stdout `wrapper_contract` is the adapter contract for follow-on work; after acceptance, pass the accepted plan artifact or generated context pack to `omh coding delegate --from-plan <artifact> --executor <the owner the user chose>` (leaving `--executor` out resolves the same default as without `--from-plan`: the setup profile's default executor, else `generic`) instead of treating Discord/channel summary text as the executor plan.
 
 ## Backend Boundary
 
@@ -2216,7 +2217,7 @@ When the user states a durable preference, decision, fact, or lesson, remember i
 - **Retrieve instead** - Past-session history is not a memory candidate: what happened in an earlier conversation stays in Hermes' own session store and is recalled on demand through its native session-search tool when that tool is available. Memory carries only what is worth re-reading every turn - stable preferences, environment facts, long-lived instructions - because every retained record is context each later turn pays for.
 - **Defer** - Material whose source you cannot name, and any external provider/vector material, goes to review rather than capture.
 - **Target** - The capture writes OMH-local memory only. Hermes-native memory is a separate store with separate evidence: keep at most a short pointer line there, never a second copy, and never turn one store's result into the other's.
-- **Reply** - Tell the user in one short line what was remembered. On `pending_review` with `review_reason: relative_time_phrase`, restate the fact with an absolute date and capture it again in the same turn; report only what was finally remembered, and never hand the user a review step. If the restated capture is held again for the same reason (the word may be a name, such as a feature called "today"), reword around it once; if it is still held, say it was not kept. On `unsafe_content`, say the safety check held it and it was not kept (a credential-like value, instruction-shaped text, or a word such as "temp" or "hack" read as temporary progress), restate it without those and send it again; there is nothing to approve. On `policy_review_first`, say it is held for the person's review and by which policy. On `already_remembered`, say it was already kept; on `refused`, say why. When the result names a record with the same subject or similar wording (`subject_held_by`, `similar_record_id`) and the new fact restates it, call `omh_memory` with `action="correct"`, that `record_id` and the new summary, so the older record moves to history. On `error`, say nothing is confirmed saved; the operator fallback is `omh memory capture` in a terminal.
+- **Reply** - Tell the user in one short line what was remembered. On `pending_review` with `review_reason: relative_time_phrase`, restate the fact with an absolute date and capture it again in the same turn; report only what was finally remembered, and never hand the user a review step. If the restated capture is held again for the same reason (the word may be a name, such as a feature called "today"), reword around it once; if it is still held, say it was not kept. On `unsafe_content`, say the safety check held it and it was not kept (a credential-like value, instruction-shaped text, or a word such as "temp" or "hack" read as temporary progress), restate it without those and send it again; there is nothing to approve. On `policy_review_first`, say it is held for the person's review and by which policy. Sending the same summary again while an earlier copy is held retires that copy (`retired_candidate_ids` names it), so only the newest copy stays held; it is one fact, not two. On `already_remembered`, say it was already kept; on `refused`, say why. When the result names a record with the same subject or similar wording (`subject_held_by`, `similar_record_id`) and the new fact restates it, call `omh_memory` with `action="correct"`, that `record_id` and the new summary, so the older record moves to history. On `error`, say nothing is confirmed saved; the operator fallback is `omh memory capture` in a terminal.
 
 ## Memory Boundaries
 
@@ -3330,7 +3331,7 @@ Category: `{definition.category}`. Phase: `{definition.phase}`. Hermes role: `{d
 
 - Load the full-contract checklist and `references/render-qa-delivery.md` before claiming completion; separate generated, attached, received and published.
 - Preserve the user's stop conditions, language choices and literal tokens. Keep the host's reply language and persona independent of content language.
-- Report actual files, source package, observed checks and every missing required check; publication and spending need separate exact-target approval.
+- Report actual files, source package, observed checks and every missing required check; publication needs separate exact-target approval, and every paid call on the user's own credits or plan (ElevenLabs narration, voice, STT, SFX or music; codex images) runs only after `omh-spend-gate`'s card and their typed yes to it.
 
 ## Recovery Notes
 
@@ -4936,6 +4937,7 @@ Load this before money moves. OMH prepares the card and checks the receipt; the 
 | booking or deposit | the price breakdown: unit price, taxes, fees, deposit against balance, and the free-cancellation deadline | the booking reference from the provider | the cancellation window, stated as a date and time |
 | paid data endpoint or metered API | the price per call times the planned call count, with a ceiling on calls | the provider's usage record or invoice line for the run | usually none; stop at the ceiling |
 | subscription or renewal | the first charge, the renewal amount, the cadence, and the next charge date | the provider's invoice or subscription receipt | cancellation before the next charge date |
+| subscription credits or plan usage (a paid generation call on the person's own key or login) | the provider's own credit price for that model times the planned characters, seconds, or images, and the credits left on the plan when the key can read them; with no published price, the cost is unknown | the generated output with the credits used, from the credits left read again after the call or the provider's usage record; without either, charged with the amount unconfirmed | none; regenerate only what changed |
 
 A wallet transfer card shows the whole destination address, never a shortened one, and the person confirms the address as well as the amount: a lookalike address that shares the first and last characters is a known way to lose a transfer.
 
@@ -4961,7 +4963,7 @@ An outcome nobody saw -- a timeout, a dropped connection, a page that reloaded, 
 
 ## 4. Cap ledger
 
-`spend_cap_ledger/v1` is a list of rows the person can read: date, payee, amount, currency, rail, state, and receipt reference, with the running total against the cap. It never holds a card number, security code, wallet key, password, one-time code, or a whole receipt body. An `unknown` row counts against the cap until it is reconciled. The ledger lives where the person keeps it; OMH writes no ledger file of its own. When no ledger is supplied, ask the person for what they already spent against this cap in the period and put it on the card. If they cannot say, what is already spent is unknown: never assume zero and never show the full cap as remaining. The card says the cap cannot be checked, and the spend goes ahead only against a cap the person sets for this spend alone, with the total checked against it; for a recurring charge that cap also covers its renewals, and an `unknown` charge from a timed-out payment is still reconciled first, so a cap never stands in for that. Show the new row for the person to store.
+`spend_cap_ledger/v1` is a list of rows the person can read: date, payee, amount, currency, rail, state, and receipt reference, with the running total against the cap. It never holds a card number, security code, wallet key, password, one-time code, or a whole receipt body. An `unknown` row counts against the cap until it is reconciled. A credits row records credits, not currency: count it against a cap set in credits, or convert at the plan's own price per credit and say so, and until the credits used are read it counts its expected credits. For a call whose own cost is unknown, because no price gives its credits or cost, the person sets a spend-only cap for this call alone in its own units (images, characters, or seconds), and the planned count is checked against it: the call runs only when the count fits, and a larger count is a new card. Its ledger row records that count in those units and leaves the period total unknown, so the next spend's already-spent amount is unknown under the rule below. The ledger lives where the person keeps it; OMH writes no ledger file of its own. When no ledger is supplied, ask the person for what they already spent against this cap in the period and put it on the card. If they cannot say, what is already spent is unknown: never assume zero and never show the full cap as remaining. The card says the cap cannot be checked, and the spend goes ahead only against a spend-only cap, one the person sets for this spend alone, with the total checked against it; for a recurring charge that cap also covers its renewals, and an `unknown` charge from a timed-out payment is still reconciled first, so a cap never stands in for that. Show the new row for the person to store.
 """
 
 

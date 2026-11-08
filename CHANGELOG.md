@@ -11,8 +11,8 @@ All notable changes will be documented here.
   still do. Claude Code's temp directory stays inside the fence, and its
   result-file directory is explicitly allowed. A readiness decision stale
   only because it came from another checkout is re-observed at dispatch.
-  Naming Codex or Claude Code in a dag-ulw request in Hermes chat records
-  each owner's one-day choice; coding nodes can name their `owner`, and
+  Naming Codex or Claude Code in a dag-ulw request in Hermes chat chooses
+  each owner for that request's run; coding nodes can name their `owner`, and
   each owner's batch exports separately while cross-owner dependencies wait.
 - **In Slack and Discord group chats, telling the bot to be quiet now mutes
   it in that thread, and a message meant for someone else no longer opens a
@@ -175,12 +175,28 @@ All notable changes will be documented here.
   `hermes gateway start` to start it again, and the restart wait reads
   `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, as Hermes does.
 
+- **A recaptured memory now keeps a copy observed of another agent, and its
+  retired copy can no longer be rejected.** The retirement of an earlier held
+  copy also requires the same perspective, so the same summary observed of
+  codex and of claude-code stays two memories. Rejection refuses a copy
+  retired by a recapture as approval already did, a demotion of the same
+  Hermes entry reads that copy as held, and the retirement runs only after
+  an auto-safe approval succeeds.
+
 - **A messenger reply made only of `[SILENT]` and `[SHUTUP]` lines now counts
   as that marker.** Any `[SHUTUP]` among them mutes the thread with the 🫡
   reaction, where "be quiet" was lost or a bare marker could get text added
   to it. Tokens in a list, a quote, a table or a fence around several lines
   stay an answer. A token leaves the end of an answer only after
   sentence-ending punctuation, so `The marker - [SILENT]` stays as written.
+
+- **A spend whose cost is unknown is checked against a cap in its own units.**
+  The spend-gate rails page now names the spend-only cap the credits rule
+  points to. When no price gives a call's credits or cost, the person sets
+  that cap in the call's own units (images, characters or seconds), and the
+  call runs only when its planned count fits. Its ledger row keeps that
+  count and leaves the period total unknown, so the next spend asks what was
+  already spent.
 
 - **A queued line in the OMH TUI no longer starts ahead of a steer Hermes
   passes on as its next prompt.** When a turn ends on its own with a steer
@@ -232,6 +248,15 @@ All notable changes will be documented here.
   cells that want it. Its border line meets both rows' columns. `/history`
   lays the whole table out again. Alignment colons (`:---:`) are still not
   drawn.
+
+- **A memory captured again while an earlier copy waits for review leaves one
+  copy, not two.** The earlier held candidate with the same normalized
+  summary, the key the duplicate check already reads, in the same scope, is
+  retired with `retirement_reason: recaptured` and `recaptured_as` naming the
+  new one. Approval refuses the retired copy, the review queue drops it, and
+  the capture result lists it. Approved and rejected candidates are left as
+  they are, and no person is asked.
+
 - **`/gateway restart` says what each choice stops.** In a named profile the
   shared gateway serves, "Restart this profile" now says that profile's
   running turns stop now, since Hermes re-serves it without waiting. The
@@ -265,6 +290,18 @@ All notable changes will be documented here.
   reply that fills those rows, the fold row stays without its spacer, and the
   reply's top rows give way. Sizing the held briefings no longer renders a
   long streaming reply whole on every delta.
+- **show-reel asks through the spend gate before it spends the user's
+  ElevenLabs or codex credits.** Narration, voice, transcription, sound,
+  music and image runs on the user's own key or login now go through
+  `omh-spend-gate` first, at every step that runs them: a card names the
+  exact lines, voice and model or the job and its length, with the expected
+  credits from the provider's own price for that model (or says the cost is
+  unknown), and the person's typed yes to it is that run's exact-target
+  approval. `omh-spend-gate` now says a call billed to subscription credits
+  or plan usage is a spend, with its own row in the rails table, a receipt
+  of the output and the credits used, and a ledger row kept in credits. The
+  scripts are unchanged: they run only when invoked and exit 2 without a key.
+
 - **The round-end checks also run after edits made through the shell.**
   Hermes calls OMH's round-end hook only after a `patch` or `write_file`, so
   a turn that edited files only with `sed`, a heredoc script or `cat >` got
@@ -435,6 +472,26 @@ All notable changes will be documented here.
   their skill: `account takeover` and `suspected unauthorized access`, `telemetry
   audit`, `write a handover guide` and `인수인계 문서 써줘`, and in Korean `시장 규모` and
   `경쟁사 분석` right before a request to size or analyse.
+- **Every arrow line in the per-turn primer names skills a model can load.**
+  The generic tool map, workflow context cards and common cues named
+  catalog names (`research`, `img-summary`) and shorthand that was no skill
+  (`automation`); only the rendered rail page rewrote one of those lines.
+  The three lines now write `ulw-research`, `omh-image-cards` and the other
+  labels `skill_view` loads. The lane key lines still list catalog names.
+- **The per-turn primer's lane keys name skills a model can load.** Each
+  lane's `Key:` list named catalog names (`research`, `deep-interview`), so
+  one primer showed both `research` and `ulw-research`. The keys now read
+  `ulw-research`, `ulw-interview`, `omh-routing` and the other labels
+  `skill_view` loads.
+- **`omh coding delegate --from-plan` no longer picks Codex when no owner
+  was named.** Leaving out `--executor` used to select Codex with
+  `--from-plan` and `generic` without it. Both now resolve the same default:
+  the setup profile's default executor, else `generic`. Codex is selected
+  only when it is named or is the setup profile's default executor. The
+  `hermes plan` wrapper template and
+  `plan-accept --write-context-pack` follow the same default instead of
+  writing `codex`, and the `omh-routing` text that said the flag selects
+  Codex now says what it resolves.
 - **Business and operations skills now check what a practitioner checks.**
   The morning brief no longer claims a Gmail connection is draft-only from
   its scopes (every Gmail scope that creates drafts also sends); it enforces
@@ -500,6 +557,31 @@ All notable changes will be documented here.
   readers are told which steps need Hermes. The payload-density floor is
   re-derived, because those sample names had been counted as payload.
 
+- **A coding-owner choice now counts only for the request it was made in,
+  in dag-ulw as in ulw-maestro.** dag-ulw sends a coding node to Codex or
+  Claude Code only when the person named that owner in the dag-ulw request
+  that defines the run; the run keeps that choice for its later turns, and
+  nothing else carries over. A choice from an earlier request, from `omh chat`
+  or `omh coding`, or from any stored record no longer starts an external
+  coding CLI, so the one-day window is gone. A coding node that names no owner
+  runs on `delegate_task`. ulw-maestro's owner rule says the same: an earlier,
+  recorded or learned owner is not a choice, and it asks again.
+- **`omh hermes plan-accept` refuses a plan that is only the generated
+  scaffold.** A plan recorded without `--plan-file` holds generated goals,
+  options and risks, not the reviewed plan, and accepting it used to succeed
+  with only a `say`, so a coding handoff could carry the scaffold as the
+  accepted plan. Accepting such a file now exits 2, leaves it a draft, and
+  names the fix: record the reviewed plan with `--plan-file` and accept that
+  file. `--allow-scaffold` accepts the scaffold on purpose and still returns
+  `reviewed_body: false`, and re-accepting an already accepted file still
+  succeeds. The `hermes plan accept <path>` alias refuses the same way. The
+  stdout of a scaffold record and the recorded file say so too (the file's
+  quality gate and next action match stdout):
+  `quality_gate.readiness: needs_reviewed_body`, `coding_handoff_ready:
+  false`, `next_action: record_reviewed_plan`, and
+  `decision_gate.acceptance_requires`, repeated on `coding_delegate`, whose
+  `available` still means available after acceptance. `ulw-plan`, the `omh-routing`
+  wrapper reference and `docs/INSTALLATION.md` describe the refusal.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`
@@ -826,6 +908,14 @@ All notable changes will be documented here.
   Hermes resubmits itself after a crash, a run that needs repair, a draft,
   a queued line or an open question.
 
+- **Claude Fable 5.1 and Grok 4.7 step their own efforts in the model-chain
+  picker.** Each has a contract read from its vendor's docs, so `-`/`+`
+  follow Fable's `low` to `max` and Grok 4.7's `low` to `xhigh`, and the `?`
+  mark is gone from the `x-search` head. A route asking either for no
+  thinking is raised to `low` on record, since their APIs refuse or ignore
+  it. GLM 5.3, GLM 5.3 Flash and Grok Build 0.1 keep the shared steps for
+  now.
+
 - **A push no longer ends the reply with "the session has stopped, send a
   message".** After a `git push`, `gh pr create`, `gh pr merge` or
   `gh workflow run` with no watcher armed, OMH appended that sentence to the
@@ -836,6 +926,40 @@ All notable changes will be documented here.
   note on the push result (arm a background watcher, or say the session has
   stopped); the reply the person reads is left as the model wrote it. The
   end-of-turn sentence remains only on a turn a failed watcher's notice opened.
+
+- **A Kilo Code or Vercel AI Gateway key no longer turns chain shaping off.**
+  `KILOCODE_API_KEY` or `AI_GATEWAY_API_KEY` in Hermes' `.env`, or a Hermes
+  login or credential pool row for `kilocode` or `ai-gateway`, counted as a
+  relay serving every model, so chains fell back to the shipped order and
+  category routes the session's own provider served were refused (an
+  Anthropic session routed 7 of 18 categories instead of 15, a Kimi session
+  none instead of 11). They now work the way a `commandcode` key does: a
+  route may name the relay, and a `routing/model-providers.json` route to a
+  relay this machine holds counts its alias as served, so a chain head sent
+  to the relay still leads and routes there. Nothing else about routing
+  moves. A key with a recorded gateway in `routing/providers.json` no longer
+  hides the relay, so a route naming it applies too. The same routes
+  document now works for a held `commandcode` relay, whose routed aliases
+  were demoted and reported as routed to an unknown provider. A
+  `providers.kilocode` or `providers.ai-gateway` block, or
+  `model.provider: kilocode` / `ai-gateway`, in `config.yaml` still counts
+  as a gateway the person declared. A key or login no longer lists either
+  relay in the `omh setup` provider step; the "a provider not listed here"
+  row still adds one. A `routing/providers.json` that already recorded the
+  relay (`"kilocode": "gateway"`, from an earlier `omh setup` pre-tick) keeps
+  turning shaping off until that row is cleared in `omh setup` or with
+  `omh model-chains provider clear`.
+
+- **A reply written in Traditional Chinese now ends with a Traditional
+  Chinese stop sentence.** On a turn a failed watcher's notice opened and
+  nothing re-armed, OMH appends one sentence in the reply's own language.
+  Every Chinese reply used to get the Simplified copy, so a reader in Taiwan
+  or Hong Kong saw a script they had not written in. A Chinese reply now
+  gets 「沒有任何工作會再次喚醒這個對話。如需繼續，請傳送一則訊息。」 when its
+  Traditional-only characters outnumber its Simplified-only ones, read from
+  Python's own Big5 and GB2312 codecs; Simplified replies are unchanged. A
+  kanji-only Japanese reply, already read as Chinese, now usually gets the
+  Traditional copy. (Reported and first fixed by @sykuang in #2654.)
 
 ## 4.0.6 - 2026-11-04
 

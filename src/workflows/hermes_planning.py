@@ -118,7 +118,7 @@ def build_hermes_plan_payload(
     source: str = "generic",
     limit: int = 3,
     source_metadata: dict[str, str] | None = None,
-    executor_target: str = "codex",
+    executor_target: str = "generic",
     decision_artifact: DecisionArtifact | None = None,
 ) -> dict[str, object]:
     task = message.strip()
@@ -405,6 +405,50 @@ def mark_payload_as_planning_input(payload: dict[str, object]) -> None:
     )
 
 
+SCAFFOLD_ACCEPTANCE_REQUIREMENT = {
+    "plan_body": "reviewed",
+    "record_with": "--plan-file",
+    "accept_scaffold_with": "--allow-scaffold",
+}
+
+
+def mark_payload_as_scaffold_record(payload: dict[str, object]) -> None:
+    """Make a scaffold-only record say what `plan-accept` does with the file.
+
+    The recorded file holds the generated sections, which `plan-accept` refuses
+    without `--allow-scaffold`, so neither the machine fields nor the file may
+    call it ready for acceptance or hand a wrapper the coding step that follows
+    acceptance. Applied before the file is rendered, so the file and stdout say
+    the same. A blocked plan keeps its clarification fields: the question comes
+    first.
+    """
+    plan = payload.get("plan")
+    if not isinstance(plan, dict) or plan.get("status") != "draft":
+        return
+    contract = payload.get("wrapper_contract")
+    if not isinstance(contract, dict):
+        contract = {}
+    for holder in (plan, contract):
+        gate = holder.get("quality_gate")
+        if isinstance(gate, dict):
+            holder["quality_gate"] = {**gate, "readiness": "needs_reviewed_body", "coding_handoff_ready": False}
+        interview = holder.get("deep_interview")
+        if isinstance(interview, dict) and not interview.get("required", False):
+            holder["deep_interview"] = {**interview, "after_answer_next_action": "record_reviewed_plan"}
+    if not contract:
+        return
+    contract["next_action"] = "record_reviewed_plan"
+    decision_gate = contract.get("decision_gate")
+    if isinstance(decision_gate, dict):
+        decision_gate["acceptance_requires"] = dict(SCAFFOLD_ACCEPTANCE_REQUIREMENT)
+    # `available` keeps meaning "available after acceptance": wrapper sessions
+    # read it to offer the coding step, and `coding delegate --from-plan`
+    # already refuses a draft. The requirement rides beside it instead.
+    coding_delegate = contract.get("coding_delegate")
+    if isinstance(coding_delegate, dict) and coding_delegate.get("available"):
+        coding_delegate["acceptance_requires"] = dict(SCAFFOLD_ACCEPTANCE_REQUIREMENT)
+
+
 def validate_reviewed_body(body: str) -> str:
     """The reviewed plan text a caller wants recorded, or ValueError."""
     text = body.replace("\r\n", "\n").strip()
@@ -534,6 +578,7 @@ def update_hermes_plan_status(
     *,
     status: str,
     summary: str = "",
+    allow_scaffold: bool = False,
 ) -> dict[str, object]:
     if status not in PLAN_STATUSES:
         raise ValueError(f"unsupported plan status: {status}")
@@ -541,6 +586,24 @@ def update_hermes_plan_status(
     current = read_hermes_plan_artifact(plan_path)
     if current.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(f"expected {SCHEMA_VERSION} artifact")
+    # A file recorded without --plan-file holds the generated goals, options
+    # and risks, whatever the plan was. Accepting it would hand an executor
+    # that scaffold as "the accepted plan", so it is refused before anything
+    # is written unless the operator accepts the scaffold on purpose. A file
+    # already accepted stays acceptable, so a re-run of the same command is not
+    # turned into a failure.
+    if (
+        status == "accepted"
+        and current.get("plan_body") == "scaffold"
+        and current.get("status") != "accepted"
+        and not allow_scaffold
+    ):
+        raise ValueError(
+            f"refused to accept {plan_path}: it holds only the generated scaffold (plan_body: scaffold), "
+            "not a reviewed plan. Record the reviewed plan with "
+            '`omh hermes plan --record --plan-file <reviewed-plan.md> "<task>"` and accept that file, '
+            "or run `omh hermes plan-accept --allow-scaffold <path>` to accept the scaffold on purpose."
+        )
     original = plan_path.read_text(encoding="utf-8")
     updated = _replace_frontmatter_status(original, status=status, summary=summary)
     atomic_write_text(plan_path, updated, private=True)
@@ -555,9 +618,10 @@ def update_hermes_plan_status(
     note = ""
     if status == "accepted" and body_state == "scaffold":
         note = (
-            "This plan file holds only the generated scaffold, not a reviewed plan. "
-            "Accepting it accepts the scaffold; record the reviewed plan with --plan-file first."
-        )
+            "Accepted the generated scaffold on purpose (--allow-scaffold); it is not a reviewed plan. "
+            if allow_scaffold
+            else "This file holds only the generated scaffold, accepted earlier; it is not a reviewed plan. "
+        ) + "Record the reviewed plan with --plan-file to hand an executor the plan itself."
         result["reviewed_body"] = False
     elif status == "accepted" and body_state == "unknown":
         note = "This plan file does not record whether it holds a reviewed plan or only the generated scaffold."
@@ -607,7 +671,7 @@ def build_plan_handoff_message(artifact: dict[str, object]) -> str:
     )
 
 
-def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_target: str = "codex") -> dict[str, object]:
+def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_target: str = "generic") -> dict[str, object]:
     plan_artifact_path = str(artifact.get("path", ""))
     # Copied into each consumer below so editing one scope cannot rewrite the others.
     scope = {"kind": "project", "ref": project_identity()}
@@ -663,7 +727,7 @@ def write_plan_handoff_context_pack(
     paths: OmhPaths,
     artifact: dict[str, object],
     *,
-    executor_target: str = "codex",
+    executor_target: str = "generic",
 ) -> dict[str, object]:
     pack = build_plan_handoff_context_pack(artifact, executor_target=executor_target)
     path = paths.runtime_plan_context_dir / f"{Path(str(artifact.get('path', 'plan'))).stem}-context-pack.json"

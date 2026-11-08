@@ -178,7 +178,7 @@ class AcceptedPlanHandoffCliTests(unittest.TestCase):
             self.assertEqual((status, stderr), (0, ""))
             plan_path = json.loads(stdout)["artifact"]["path"]
 
-            status, _, stderr = run_cli([*common, "hermes", "plan-accept", plan_path, "--write-context-pack", "--executor", "codex"])
+            status, _, stderr = run_cli([*common, "hermes", "plan-accept", plan_path, "--allow-scaffold", "--write-context-pack", "--executor", "codex"])
             self.assertEqual((status, stderr), (0, ""))
 
             status, stdout, stderr = run_cli([*common, "coding", "delegate", "--executor", "codex", "--from-plan", plan_path])

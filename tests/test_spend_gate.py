@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 
 from _local_package import load_local_package
@@ -230,7 +231,8 @@ class SpendGateContractTests(unittest.TestCase):
     def test_only_an_observed_receipt_completes_a_spend(self) -> None:
         self.assertInBoth(
             "A quote is not a purchase and a confirmation is not a charge; call a spend done only on an observed "
-            "receipt -- an order id, a transaction id, or a receipt header -- with the amount charged.",
+            "receipt -- an order id, a transaction id, or a receipt header -- with the amount charged; a credits call's "
+            "receipt is its output with the credits used, as the credits rule below says.",
             _bodies(),
         )
         self.assertInBoth("keeps quoted, confirmed, submitted, charged, declined, and unknown as separate states", _bodies())
@@ -279,8 +281,8 @@ class SpendGateContractTests(unittest.TestCase):
     def test_an_unknown_amount_already_spent_is_never_zero(self) -> None:
         self.assertInBoth(
             "If they cannot say, what is already spent is unknown: never assume zero and never show the full cap as "
-            "remaining. The card says the cap cannot be checked, and the spend goes ahead only against a cap the "
-            "person sets for this spend alone, with the total checked against it; for a recurring charge that cap also "
+            "remaining. The card says the cap cannot be checked, and the spend goes ahead only against a spend-only cap, "
+            "one the person sets for this spend alone, with the total checked against it; for a recurring charge that cap also "
             "covers its renewals, and an `unknown` charge from a timed-out payment is still reconciled first, so a cap "
             "never stands in for that.",
             _references(),
@@ -322,6 +324,7 @@ class SpendGateContractTests(unittest.TestCase):
                         "booking or deposit",
                         "paid data endpoint or metered API",
                         "subscription or renewal",
+                        "subscription credits or plan usage (a paid generation call on the person's own key or login)",
                     },
                 )
                 for row in rows:
@@ -329,6 +332,110 @@ class SpendGateContractTests(unittest.TestCase):
                     self.assertEqual(len(cells), 4)
                     self.assertTrue(all(cell.strip() for cell in cells))
         self.assertInBoth(REFERENCE_PATH, _bodies())
+
+    def test_subscription_credits_count_as_a_spend_in_both_projections(self) -> None:
+        # A generation call on the person's own key spends their credits with
+        # no checkout page; the gate's scope has to say so, or a skill that
+        # sends it here finds no rule that applies.
+        for projection, body in _bodies().items():
+            with self.subTest(projection=projection):
+                self.assertIn("A paid call billed to the person's own subscription credits or plan usage", body)
+                self.assertIn("read from the provider's own price for that model, or says the cost is unknown", body)
+                self.assertIn("when neither can be read it is charged with the amount unconfirmed", body)
+                # The general receipt rule and the checklist point at the credits receipt
+                # instead of demanding an order id a credits call never has.
+                self.assertIn("a credits call's receipt is its output with the credits used", body)
+                self.assertIn("or, for a credits call, its output with the credits used or marked unconfirmed", body)
+
+    def test_show_reel_sends_its_paid_calls_through_the_gate(self) -> None:
+        # show-reel's ElevenLabs and codex scripts spend the user's own
+        # credits; each place that runs them or names the spend approval names
+        # this gate, and the gate's typed yes is that run's exact-target approval.
+        hermes_body = next(template.content for template in builtin_skill_templates() if template.name == "show-reel")
+        portable_body = next(template.content for template in agent_skill_templates() if template.name == "omh-show-reel")
+        hermes_refs = {
+            template.relative_path: template.content
+            for template in builtin_skill_reference_templates()
+            if template.skill_name == "show-reel"
+        }
+        portable_refs = {
+            template.relative_path: template.content
+            for template in agent_skill_reference_templates()
+            if template.skill_name == "omh-show-reel"
+        }
+        self.assertIn("runs only after `omh-spend-gate`'s card and their typed yes to it", hermes_body)
+        self.assertIn("goes through `omh-spend-gate` first", hermes_refs["references/full-contract.md"])
+        self.assertIn("goes through `omh-spend-gate` first", portable_body)
+        for projection, refs in (("hermes", hermes_refs), ("portable", portable_refs)):
+            with self.subTest(projection=projection):
+                audio = refs["references/audio-production.md"]
+                self.assertIn("so it goes through `omh-spend-gate` before\nit runs", audio)
+                self.assertIn("That yes is the exact-target approval for that run", audio)
+                self.assertIn("goes through `omh-spend-gate`'s card and typed yes first", refs["references/render-qa-delivery.md"])
+
+    def test_every_show_reel_section_that_runs_a_paid_script_names_the_gate(self) -> None:
+        # A run step is the command form (`$S/eleven.py tts`, `.../scripts/codex_imagegen_batch.sh`);
+        # `eleven.py check` and `voices` only read the account. Headings inside a code fence
+        # are shell comments, so a section starts only at a heading that begins with a capital or digit.
+        paid = re.compile(r"\$S/(?:eleven\.py (?!check|voices)|narrate\.py|codex_ref_image\.sh)|scripts/codex_imagegen_batch\.sh")
+        for skill, templates in (
+            ("show-reel", builtin_skill_reference_templates()),
+            ("omh-show-reel", agent_skill_reference_templates()),
+        ):
+            sections = [
+                (template.relative_path, section)
+                for template in templates
+                if template.skill_name == skill
+                for section in re.split(r"(?m)^(?=#{1,4} [A-Z0-9])", template.content)
+                if paid.search(section)
+            ]
+            with self.subTest(skill=skill):
+                self.assertTrue(sections)
+                self.assertEqual(
+                    [(path, section.splitlines()[0]) for path, section in sections if "omh-spend-gate" not in section],
+                    [],
+                )
+
+    def test_an_unknown_cost_call_is_checked_against_a_cap_in_its_own_units(self) -> None:
+        # The credits rule, show-reel and craft-brief send an unknown-cost call to
+        # "the spend-only cap"; the rails page names that cap and gives it a check
+        # that needs no price: the planned count in the call's own units.
+        for projection, reference in _references().items():
+            with self.subTest(projection=projection):
+                ledger = reference.split("## 4. Cap ledger", 1)[1]
+                self.assertIn("the spend goes ahead only against a spend-only cap, one the person sets for this spend alone", ledger)
+                unknown_cost = (
+                    "For a call whose own cost is unknown, because no price gives its credits or cost, the person sets a "
+                    "spend-only cap for this call alone in its own units (images, characters, or seconds), and the planned "
+                    "count is checked against it: the call runs only when the count fits"
+                )
+                self.assertIn(unknown_cost, ledger)
+                # Its row keeps the count in its own units, and the period total it
+                # leaves unknown sends the next spend to the already-spent rule.
+                self.assertIn(
+                    "Its ledger row records that count in those units and leaves the period total unknown, so the next "
+                    "spend's already-spent amount is unknown under the rule below.",
+                    ledger,
+                )
+                # It is a rule of its own, not part of the no-ledger branch that follows.
+                self.assertLess(ledger.index(unknown_cost), ledger.index("When no ledger is supplied"))
+        for projection, body in _bodies().items():
+            with self.subTest(projection=projection):
+                self.assertIn("or says the cost is unknown so the spend-only cap applies", body)
+        craft_brief = {
+            skill: next(
+                template.content
+                for template in templates
+                if template.skill_name == skill and template.relative_path == "references/craft-brief.md"
+            )
+            for skill, templates in (
+                ("show-reel", builtin_skill_reference_templates()),
+                ("omh-show-reel", agent_skill_reference_templates()),
+            )
+        }
+        for skill, text in craft_brief.items():
+            with self.subTest(skill=skill):
+                self.assertIn("`omh-spend-gate`'s spend-only cap applies", text)
 
     def test_each_sibling_is_named_once(self) -> None:
         mine = _definition(SKILL).do_not_use_when

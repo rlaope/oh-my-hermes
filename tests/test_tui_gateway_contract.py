@@ -140,9 +140,19 @@ class ClientMethodTests(unittest.TestCase):
         self.assertEqual(contract.undeclared_params("voice.toggle", {"on": True}), ["on"])
 
     def test_only_the_calls_a_session_does_without_are_optional(self) -> None:
-        optional = {"commands.catalog", "config.get", "model.options", "session.list", "skills.reload"}
+        optional = {"commands.catalog", "config.get", "image.render", "model.options", "session.list", "skills.reload"}
         self.assertEqual(contract.OPTIONAL_METHODS, optional)
         self.assertLessEqual(contract.OPTIONAL_METHODS, set(contract.CLIENT_METHODS))
+
+    def test_image_render_is_declared_with_its_five_keys_and_is_optional(self) -> None:
+        self.assertEqual(
+            contract.CLIENT_METHODS["image.render"],
+            frozenset({"path", "cols", "rows", "graphics", "terminal"}),
+        )
+        self.assertIn("image.render", contract.OPTIONAL_METHODS)
+        params = {"path": "/p.png", "cols": 40, "rows": 8, "graphics": True, "terminal": "kitty"}
+        self.assertEqual(contract.call_problem("image.render", params), "")
+        self.assertIn("session_id", contract.call_problem("image.render", {**params, "session_id": "live-1"}))
 
     def test_drift_errors_are_param_rejection_and_unknown_method_only(self) -> None:
         self.assertTrue(contract.is_drift_error({"code": 4000, "message": "extra fields"}))

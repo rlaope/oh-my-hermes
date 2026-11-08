@@ -219,7 +219,7 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
         source_metadata: dict[str, str] = {}
         plan_artifact: dict[str, object] | None = None
         context_pack = _context_pack(args)
-        executor_target = _resolved_executor_for_delegate(args)
+        executor_target = _resolved_executor(args, default="generic")
         attached_representations: list[str] = []
         # `--explicit-owner-choice` is a SEPARATE, deliberate flag from
         # `--executor`: bare `--executor` alone stays exactly as conservative
@@ -543,14 +543,6 @@ def _coding_delegate_runtime_skip_reason(payload: dict[str, object]) -> str:
     if payload.get("selected_executor_profile") != "codex" or not isinstance(payload.get("executor_handoff"), dict):
         return "codex_executor_handoff_required_for_runtime_record"
     return ""
-
-
-def _resolved_executor_for_delegate(args: argparse.Namespace) -> str:
-    if getattr(args, "executor", None):
-        return str(args.executor)
-    if getattr(args, "from_plan", None):
-        return "codex"
-    return _resolved_executor(args, default="generic")
 
 
 def _plan_source_metadata(artifact: dict[str, object]) -> dict[str, str]:
@@ -1816,9 +1808,13 @@ def cmd_coding_model_contract(args: argparse.Namespace) -> int:
         if contract.get("unsupported_parameters_note"):
             print(f"  {contract['unsupported_parameters_note']}")
     cutoff = str(contract.get("knowledge_cutoff", "") or "")
+    # A generative model cannot have a zero output limit, so 0 there means the
+    # vendor publishes none (Grok 4.7); a non-generative 0 is documented.
+    output = contract["max_output_tokens"]
+    unstated = output == 0 and str(contract.get("model_class", "")) != NON_GENERATIVE_MODEL_CLASS
     print(
         f"- context {contract['context_window_tokens']:,} tokens; input {contract['max_input_tokens']:,}; "
-        f"output {contract['max_output_tokens']:,}"
+        + ("output not stated" if unstated else f"output {output:,}")
         + (f"; knowledge cutoff {cutoff}" if cutoff else "; knowledge cutoff not stated")
     )
     if str(contract.get("model_class", "")) == NON_GENERATIVE_MODEL_CLASS:
