@@ -486,7 +486,7 @@ def _call_tool(paths: OmhPaths, name: str, arguments: dict[str, Any]) -> dict[st
             raise ValueError("omh_recommend.message is required")
         limit = _bounded_int(arguments.get("limit"), default=5, minimum=1, maximum=10)
         # A skill of a capability family this home turned off is not offered.
-        disabled = disabled_skill_families(paths.omh_home)
+        disabled = disabled_skill_families(getattr(paths, "omh_home", None))
         recommendations = [
             row
             for row in recommend_skills(message, limit=limit + len(disabled))
