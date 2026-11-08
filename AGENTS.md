@@ -195,6 +195,7 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   launched it starts the installed generation's `omh --resume <id>`.
   Read [`docs/OMH-TUI-BOUNDARY.md`](docs/OMH-TUI-BOUNDARY.md) before touching
   `src/tui/`.
+- **omher** (apps/omher/, the Tauri desktop app) is not part of core omh and nothing in src/ imports it. It shows Hermes bots, one main chat each, and the bot's other sessions read-only; it writes only to the main chat, reaches only the person's own loopback gateway through a local bridge, and makes no model or API call itself. Read [docs/OMHER-BOUNDARY.md](docs/OMHER-BOUNDARY.md) before touching it.
 - No Hermes core patching.
 - Runtime artifacts are local, deterministic, schema-versioned, and
   metadata-only by default.

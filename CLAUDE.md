@@ -51,6 +51,10 @@ held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
   list of imports, names and name flows measured from the script. It is not a
   sandbox: an allowed Hermes function called with other arguments, and where
   the grant's url points, are beyond it.
+- omher, the desktop app under `apps/omher/`: not core. Its Python bridge
+  reaches only the person's own gateway over loopback, writes only to a bot's
+  main chat, and makes no model or API call; nothing in `src/` imports it.
+  `docs/OMHER-BOUNDARY.md` states it and `tests/test_omher_boundary.py` pins it.
 
 ## Build & Test
 
