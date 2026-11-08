@@ -681,6 +681,13 @@ All notable changes will be documented here.
   returns to the chat.** The transcript view the wheel opens closes once the wheel brings it back to its
   end, so the composer is back without Esc or `q`. A view opened by Ctrl+O or
   `/history` still stays open at its end.
+- **The OMH TUI puts two blank rows between two tool calls of a turn.** A
+  run of calls now reads apart, as Claude Code's does; a folded row of
+  loaded skills counts as a call. Every other pair of blocks keeps one
+  blank row, and what a call printed under `⎿` stays right under it. When
+  the running calls do not fit, the oldest gaps in the live region give up
+  their second row first, only as many as needed, so no call row is lost and
+  no blank rows gather over the working row; scrollback has both.
 - **The router no longer picks a coding owner from earlier choices.** Three
   accepted answers to the coding-owner question used to make that owner a
   visible default for later requests. Now every request asks for an explicit

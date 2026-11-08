@@ -306,8 +306,21 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
     # (rows, cols, agents): the tool rows shown before the gaps existed, measured on origin/main dc007063f.
     BEFORE = {(10, 40, False): 1, (15, 60, False): 2, (19, 80, True): 1, (20, 80, True): 2, (24, 80, False): 3,
               (24, 80, True): 3, (30, 80, True): 3, (30, 80, False): 3}  # from 30 rows: the badge row too
+    # (rows, cols, plan, agents): the tool rows shown with 4 to 8 calls running, measured on origin/main dbdd47b98,
+    # in this scene, before two calls had two blank rows between them (#2675 review): a wider gap never
+    # shows fewer.
+    BEFORE_CALLS = {
+        (18, 80, False, False): (4, 5, 5, 5, 5), (18, 80, False, True): (3, 3, 3, 3, 3),
+        (18, 80, True, False): (2, 2, 2, 2, 2), (18, 80, True, True): (1, 1, 1, 1, 1),
+        (20, 80, False, False): (4, 5, 6, 6, 6), (20, 80, False, True): (4, 4, 4, 4, 4),
+        (20, 80, True, False): (3, 3, 3, 3, 3), (20, 80, True, True): (2, 2, 2, 2, 2),
+        (24, 80, False, False): (4, 5, 6, 7, 8), (24, 80, False, True): (4, 5, 6, 6, 6),
+        (24, 80, True, False): (4, 4, 4, 4, 4), (24, 80, True, True): (3, 3, 3, 3, 3),
+        (30, 80, False, False): (4, 5, 6, 7, 8), (30, 80, False, True): (4, 5, 6, 7, 8),
+        (30, 80, True, False): (4, 5, 6, 7, 7), (30, 80, True, True): (4, 5, 5, 5, 5),
+    }
 
-    def scene(self, rows: int, cols: int, agents: bool):
+    def scene(self, rows: int, cols: int, agents: bool, calls: int = 3, plan: bool = True):
         from omh.tui.gateway import Event
         from omh.tui.panels import HudSnapshot
         from test_tui_agent_view import STARTS, relay
@@ -319,12 +332,13 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
         app.background = "#0D1117"
         app.theme = app._themed()
         app.stored_id = "stored"
-        app.hud = HudSnapshot("stored", hud_payload(phased_plan(5, phases=2, active=2)), now[0])
+        if plan:
+            app.hud = HudSnapshot("stored", hud_payload(phased_plan(5, phases=2, active=2)), now[0])
         for index in range(30):
             app.transcript.add_notice(f"earlier line {index}")
         app._submit_prompt("해당 프로젝트 description기반으로 작성해줘 " * 3)
         app._on_event(Event("message.start", SID, {}))
-        for index in range(3):
+        for index in range(calls):
             now[0] += 0.2
             app._on_event(Event("tool.start", SID, {"tool_id": f"t{index}", "name": "read_file",
                                                     "context": f"f{index}.py"}))
@@ -339,6 +353,57 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
                 screen = self.scene(rows, cols, agents)
                 shown = sum("read_file" in row for row in screen)
                 self.assertGreaterEqual(shown, before, "\n".join(screen))
+
+    def test_as_many_running_calls_show_as_with_one_blank_row_between_them(self) -> None:
+        for (rows, cols, plan, agents), counts in self.BEFORE_CALLS.items():
+            for calls, before in enumerate(counts, 4):
+                with self.subTest(rows=rows, cols=cols, plan=plan, agents=agents, calls=calls):
+                    screen = self.scene(rows, cols, agents, calls, plan)
+                    shown = sum("read_file" in row for row in screen)
+                    self.assertGreaterEqual(shown, before, "\n".join(screen))
+
+    def test_running_calls_keep_two_blank_rows_where_they_fit_and_the_newest_where_the_tail_is_too_tall(self) -> None:
+        """2026-11-09: two blank rows between two calls, as scrollback has them; a live tail too tall gives up the
+        second row of its oldest gaps, only as many as it must, so no call row is lost (the tests above)."""
+        cases = {(42, 150, True, 3, True): [2, 2], (24, 80, False, 4, False): [2, 2, 2],
+                 (24, 80, False, 3, True): [1, 2], (24, 80, False, 6, False): [1, 1, 2, 2, 2],
+                 (24, 80, False, 7, False): [1, 1, 1, 1, 1, 2], (15, 60, False, 3, True): [1],
+                 (24, 80, False, 8, False): [1] * 7, (30, 80, True, 8, True): [1] * 4}
+        for (rows, cols, agents, count, plan), gaps in cases.items():
+            with self.subTest(rows=rows, cols=cols, agents=agents, calls=count, plan=plan):
+                screen = self.scene(rows, cols, agents, count, plan)
+                calls = [index for index, row in enumerate(screen) if "read_file" in row]
+                self.assertEqual([below - above - 1 for above, below in zip(calls, calls[1:])], gaps,
+                                 "\n".join(screen))
+                between = [row for above, below in zip(calls, calls[1:]) for row in screen[above + 1 : below]]
+                self.assertFalse(any(between), between)
+
+    def test_calls_that_start_and_end_one_after_another_never_leave_more_blank_rows_over_the_working_row(self) -> None:
+        """#2675 review 2: each finished call adds a `⎿` row; when that made the tail one row too tall, every gap gave
+        up a row at once and the freed rows came back as pad rows over `Working…` (8 of them at 42x150). Measured on
+        origin/main dbdd47b98, this sequence never has more than one blank row there."""
+        from omh.tui.gateway import Event
+        from test_tui_modes import SID, make_app
+
+        for rows, cols in ((42, 150), (30, 80), (24, 80)):
+            now = [100.0]
+            app, _client = make_app(rows=rows, cols=cols, clock=lambda: now[0])
+            for index in range(30):
+                app.transcript.add_notice(f"earlier line {index}")
+            app._submit_prompt("go do it " * 3)
+            app._on_event(Event("message.start", SID, {}))
+            for index in range(14):
+                steps = (("tool.start", {"context": f"f{index}.py"}), ("tool.complete", {"result": {"content": "x"}}))
+                for kind, payload in steps:
+                    now[0] += 0.2
+                    app._on_event(Event(kind, SID, {"tool_id": f"t{index}", "name": "read_file", **payload}))
+                    app._render()
+                    screen = app.terminal.screen.lines()
+                    working = next(at for at, row in enumerate(screen) if "Working…" in row)
+                    blank = next(count for count in range(working + 1) if count == working or screen[working - 1 - count])
+                    with self.subTest(rows=rows, cols=cols, step=f"{kind} {index}"):
+                        self.assertLessEqual(blank, 1, "\n".join(screen))
+
 
     def test_a_tall_terminal_still_gets_both_gaps_around_the_plan(self) -> None:
         screen = self.scene(42, 150, True)
@@ -369,6 +434,48 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
         self.assertNotIn("read_file(f0.py)", "\n".join(screen))  # the tail is cut
         self.assertEqual(screen[working - 1], "", "\n".join(screen))
         self.assertIn("read_file(f15.py)", screen[working - 2], "\n".join(screen))
+
+
+class CallGapOverflowTests(unittest.TestCase):
+    """A live tail too tall by k rows gives up the second blank row of its k oldest call gaps (`build_frame`): it
+    then fits exactly, with no pad row and no row lost; past every gap, it is cut from the top as before."""
+
+    ROWS = 24
+
+    def frame(self, tail: list[Line]):
+        composer = Composer(text="", caret=0)
+        return build_frame(cols=80, rows=self.ROWS, composer=composer, info=(Span("info"),), tail=tail, tail_floor=1,
+                           tail_spacer=True, min_height=self.ROWS - 1)
+
+    def tail(self, calls: int, gap: int, room: int, over: int) -> list[Line]:
+        """`calls` call rows `gap` blank rows apart, under filler rows that make the tail `over` rows taller than
+        `room`, then the spacer and the working row."""
+        rows: list[Line] = []
+        for index in range(calls):
+            rows += [()] * (gap if rows else 0) + [(Span(f"call {index}"),)]
+        rows += [(), (Span("Working…"),)]
+        return [(Span(f"earlier {index}"),) for index in range(room + over - len(rows))] + rows
+
+    def test_a_tail_too_tall_by_k_rows_gives_up_the_oldest_k_gaps_and_no_pad_row(self) -> None:
+        room = self.frame([(Span("x"),)] * 200).budget.tail
+        for over in (1, 3):
+            with self.subTest(over=over):
+                tail = self.tail(6, 2, room, over)
+                frame = self.frame(tail)
+                self.assertEqual(frame.budget.pad, 0)
+                self.assertEqual(frame.budget.tail, room)
+                shown = lines_text(list(frame.lines[: frame.budget.tail]))
+                first = len(tail) - len(self.tail(6, 2, 0, 0))  # the filler rows above the calls
+                expected = lines_text(tail[:first])
+                for index in range(6):
+                    expected += [""] * ((1 if index <= over else 2) if index else 0) + [f"call {index}"]
+                self.assertEqual(shown, expected + ["", "Working…"])
+
+    def test_a_tail_too_tall_for_every_gap_to_give_way_is_cut_as_with_one_row_gaps(self) -> None:
+        room = self.frame([(Span("x"),)] * 200).budget.tail
+        wide, narrow = self.tail(6, 2, room, 9), self.tail(6, 1, room, 4)  # five gaps give up a row each
+        self.assertEqual(lines_text(list(self.frame(wide).lines)), lines_text(list(self.frame(narrow).lines)))
+        self.assertEqual(self.frame(wide).budget.pad, 0)
 
 
 class HiddenComposerBudgetTests(unittest.TestCase):

@@ -2028,14 +2028,15 @@ class OpeningTests(AppTestCase):
         self.assertTrue(history[LOGO_ROWS].startswith(f"⚚ OH-MY-HERMES v{__version__} · resumed {STORED_ID}"))
         self.assertEqual(run.calls("session.list"), [])  # a resumed session needs no pointer to the last one
         self.assertEqual(
-            history[LOGO_ROWS + 2 : LOGO_ROWS + 15],
-            [  # each block on its rail, and a blank row between two calls, as for a live turn
+            history[LOGO_ROWS + 2 : LOGO_ROWS + 16],
+            [  # each block on its rail, a blank row between two blocks and two between two calls, as for a live turn
                 "┃ ❯ What is in this repo?",
                 "",
                 "┃ ⚚ Hermes",  # who wrote it; the record does not say which model, so none is named
                 "┃   Let me look.",
                 "",
                 "┃ ● terminal(ls -la)",
+                "",
                 "",
                 "┃ ● read_file(README.md)",
                 "",

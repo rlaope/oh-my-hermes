@@ -875,7 +875,8 @@ class ApprovalOutcomeTests(unittest.TestCase):
         app._on_input(Key(ENTER))
         (group,) = app.transcript.blocks
         rows = lines_text(block_rows(group, 80, THEME))
-        self.assertEqual(rows, ["┃ ● read_file(README.md)  0.1s", "┃   ⎿  Read 1 line", "", f"┃ ○ terminal({self.COMMAND})",
+        self.assertEqual(rows, ["┃ ● read_file(README.md)  0.1s", "┃   ⎿  Read 1 line", "", "",
+                                f"┃ ○ terminal({self.COMMAND})",
                                 f"┃   ⎿  ✓ allowed once · {self.COMMAND}"])
 
     def asked_after_a_read(self) -> tuple[object, object, Clock]:

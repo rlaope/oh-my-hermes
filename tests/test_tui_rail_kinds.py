@@ -169,7 +169,7 @@ class GroupingTests(unittest.TestCase):
     def test_any_other_call_breaks_the_run(self) -> None:
         rows = calls(loaded("a", "dag-ulw"), ToolRow("b", "terminal", "pwd", TOOL_OK, duration_s=0.1),
                      loaded("c", "hermes-agent"), loaded("d", "omh-terminal"))
-        self.assertEqual(rows, ["┃ ● Loaded 1 skill · dag-ulw  0.7s", "", "┃ ● terminal(pwd)  0.1s", "",
+        self.assertEqual(rows, ["┃ ● Loaded 1 skill · dag-ulw  0.7s", "", "", "┃ ● terminal(pwd)  0.1s", "", "",
                                 "┃ ● Loaded 2 skills · hermes-agent, omh-terminal  1.4s"])
 
     def test_tool_details_alone_and_a_folded_name_in_the_skill_hue(self) -> None:
@@ -183,23 +183,23 @@ class GroupingTests(unittest.TestCase):
         self.assertEqual(running, ["┃ ○ Loaded 2 skills · dag-ulw, hermes-agent"])  # no time until each has one
         failed = ToolRow("b", "skill_view", "nope", TOOL_ERROR, duration_s=0.1, output=("Skill not found: nope",))
         rows = calls(loaded("a", "dag-ulw"), failed, loaded("c", "hermes-agent"))
-        self.assertEqual(rows, ["┃ ● Loaded 1 skill · dag-ulw  0.7s", "", "┃ ✗ skill_view(nope)  0.1s",
-                                "┃   ⎿  Skill not found: nope", "", "┃ ● Loaded 1 skill · hermes-agent  0.7s"])
+        self.assertEqual(rows, ["┃ ● Loaded 1 skill · dag-ulw  0.7s", "", "", "┃ ✗ skill_view(nope)  0.1s",
+                                "┃   ⎿  Skill not found: nope", "", "", "┃ ● Loaded 1 skill · hermes-agent  0.7s"])
 
     def test_a_draft_or_a_cut_off_call_is_not_counted_as_loaded(self) -> None:
         # #2223 review 6: a draft names nothing yet (an empty label left `· x, ,`), a cut-off call loaded nothing.
         draft = ToolRow("b", "skill_view", "", TOOL_GENERATING)
         self.assertEqual(calls(loaded("a", "dag-ulw"), loaded("c", "hermes-agent"), draft),
-                         ["┃ ● Loaded 2 skills · dag-ulw, hermes-agent  1.4s", "", "┃ ◌ skill_view"])
+                         ["┃ ● Loaded 2 skills · dag-ulw, hermes-agent  1.4s", "", "", "┃ ◌ skill_view"])
         cut = ToolRow("b", "skill_view", "omh-docs", TOOL_INTERRUPTED)
         self.assertEqual(calls(loaded("a", "dag-ulw"), cut),
-                         ["┃ ● Loaded 1 skill · dag-ulw  0.7s", "", "┃ ▪ skill_view(omh-docs)"])
+                         ["┃ ● Loaded 1 skill · dag-ulw  0.7s", "", "", "┃ ▪ skill_view(omh-docs)"])
         nameless = ToolRow("d", "skill_view", "", TOOL_OK, duration_s=0.1)
         self.assertEqual(calls(loaded("a", "dag-ulw"), nameless), ["┃ ● Loaded 2 skills · dag-ulw  0.8s"])
 
     def test_the_details_view_unfolds_the_run(self) -> None:
         rows = calls(loaded("a", "dag-ulw"), loaded("b", "hermes-agent"), expanded=True)
-        self.assertEqual(rows, ["┃ ● skill_view(dag-ulw)  0.7s", "┃   ⎿  loaded skill dag-ulw", "",
+        self.assertEqual(rows, ["┃ ● skill_view(dag-ulw)  0.7s", "┃   ⎿  loaded skill dag-ulw", "", "",
                                 "┃ ● skill_view(hermes-agent)  0.7s", "┃   ⎿  loaded skill hermes-agent"])
 
     def test_a_turn_counts_every_folded_call(self) -> None:
