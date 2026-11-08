@@ -11,8 +11,8 @@ All notable changes will be documented here.
   still do. Claude Code's temp directory stays inside the fence, and its
   result-file directory is explicitly allowed. A readiness decision stale
   only because it came from another checkout is re-observed at dispatch.
-  Naming Codex or Claude Code in a dag-ulw request in Hermes chat records
-  each owner's one-day choice; coding nodes can name their `owner`, and
+  Naming Codex or Claude Code in a dag-ulw request in Hermes chat chooses
+  each owner for that request's run; coding nodes can name their `owner`, and
   each owner's batch exports separately while cross-owner dependencies wait.
 - **In Slack and Discord group chats, telling the bot to be quiet now mutes
   it in that thread, and a message meant for someone else no longer opens a
@@ -557,6 +557,15 @@ All notable changes will be documented here.
   readers are told which steps need Hermes. The payload-density floor is
   re-derived, because those sample names had been counted as payload.
 
+- **A coding-owner choice now counts only for the request it was made in,
+  in dag-ulw as in ulw-maestro.** dag-ulw sends a coding node to Codex or
+  Claude Code only when the person named that owner in the dag-ulw request
+  that defines the run; the run keeps that choice for its later turns, and
+  nothing else carries over. A choice from an earlier request, from `omh chat`
+  or `omh coding`, or from any stored record no longer starts an external
+  coding CLI, so the one-day window is gone. A coding node that names no owner
+  runs on `delegate_task`. ulw-maestro's owner rule says the same: an earlier,
+  recorded or learned owner is not a choice, and it asks again.
 - **`omh hermes plan-accept` refuses a plan that is only the generated
   scaffold.** A plan recorded without `--plan-file` holds generated goals,
   options and risks, not the reviewed plan, and accepting it used to succeed

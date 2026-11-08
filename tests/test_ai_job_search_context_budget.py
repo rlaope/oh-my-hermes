@@ -153,8 +153,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was 41011a72...3bc7.
             # 537954 -> 537829 and the digest re-derived: the routing reach round, -125 (itemized at the same
             # limit); the pin before it was b1ad64a5...590b.
-            (skill_capabilities, 537829, FULL_ROW_DELTA_CAP,
-             'c5c17f8447a21a90f56652c76ca61560d12e987acf34f9d459d418765e562eb0',
+            # 537829 -> 538004 and the digest re-derived: a coding-owner choice counts only for the request it was
+            # made in, in the dag-ulw and maestro rows (+175, itemized at the same limit); the pin before it was
+            # c5c17f84...2eb0.
+            (skill_capabilities, 538004, FULL_ROW_DELTA_CAP,
+             'cbc660582e53ada0b9beacda30b0e72ab2f72068152892f04701cbe2c11636bc',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -403,7 +406,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Merged with main after #2652: both sides' bodies; main's pin before that merge was
         # b36ad311...1e91, and this branch's was f30c9ae0...ca61. Merged again after #2650: main's
         # pin was 51d4a5cf...9f51, and this branch's was a5bce194...90de.
-        self.assertEqual(_digest(legacy_hashes), '62bebac1a0b2d516c936f3966ec321cdee21c66815b6b477b618473eda7abd0b')
+        # A coding-owner choice then counts only for the request it was made in: only dag-ulw and maestro
+        # move, and the pin before it was 62bebac1...bd0b.
+        self.assertEqual(_digest(legacy_hashes), 'c0b3ab76dcb31bce5335b26c34a03ad339b5e1e2c7e713aacd33b64355c6df31')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

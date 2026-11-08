@@ -55,7 +55,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If this run lacks an explicit coding-owner choice, no handoff stands yet; mark prompt composition unresolved and hand back the choose_executor question without selecting a CLI.
+- If this request lacks an explicit coding-owner choice, no handoff stands yet; mark prompt composition unresolved and hand back the choose_executor question without selecting a CLI.
 - If the scratch-edit permission probe fails, retain the composed prompt and discovered skill names, mark execution not_observed, and hand back the denied permission and required grant change before retrying.
 - If dispatch returns no session or thread id, retain the dispatch receipt, mark steering unresolved, and hand back the explicit unsteerable note and any observed unit result without claiming a resumable session.
 
@@ -82,7 +82,7 @@ Reasoning demand: `heavy`
 Quality bar:
 
 - Planning is not execution permission. Handoff requests authorize preparation only; explicit execution requests authorize only their scope, subject to readiness and permission probes. Clarify missing authority.
-- Require an explicit owner choice for this run: named now, confirmed when asked, or recorded as `accepted_explicit_choice`. Recommendations, plan mentions and previous owners do not count. For a missing, ambiguous or unready owner, ask `choose_executor` once and stop; never choose for the user.
+- Require an explicit owner choice made in this request: named in it, or confirmed when asked. A choice counts only for the request it was made in; an earlier request's owner, a recorded or learned owner, recommendations and plan mentions do not count, so ask again. For a missing, ambiguous or unready owner, ask `choose_executor` once and stop; never choose for the user.
 - Owner selection alone is not dispatch permission: `prepare a Codex handoff only` or `use Codex, do not dispatch` stays preparation-only. `Use Codex to implement this now` supplies both the owner choice and dispatch permission within scope, with no redundant confirmation. After readiness and permission probes, invoke the fanout-dispatch bridge (`omh coding run` for one unit); clarify missing owner or action authority first.
 - State the handoff mode before composing: the claude-code handoff record is prompt-only (`coding_prompt_handoff/v1` -- that record is never dispatchable and never described as a run; a user-commanded Claude Code run goes through the bridge below, and only the fanout-dispatch bridge -- `omh coding fanout dispatch` or its `omh coding run` single-run entry -- ever spawns a CLI), codex is a dispatchable `coding_executor_handoff/v1`, and omx-runtime/pi-family-runtime/omc-runtime are `coding_runtime_handoff/v1`.
 - Compose the prompt from the selected profile's DISCOVERED skills via `omh coding executor-skills --profile <profile>`: arrange the returned skills by the unit's role recipe, one named skill per step, using each skill's own invocation string verbatim (`/name`, `/pack:name` from its manifest, `$name` for a codex pack) -- never a guessed prefix. Empty discovery gets one explicit line -- "no installed skills discovered for <profile>; prompt composed generically" -- then compose generically. Load `references/executor-prompt-composition.md` for the full procedure.
@@ -123,7 +123,7 @@ Delegation transparency:
 
 Required inputs:
 
-- explicit coding-owner choice for this run
+- explicit coding-owner choice made in this request
 - task or unit description
 - the chosen profile's discovered executor skill set
 
@@ -139,7 +139,7 @@ Artifact expectations:
 
 Safety rules:
 
-- Never prepare a handoff without an explicit owner choice for this run -- a routing recommendation, a plan mention, or a previous run's owner is not a choice for this run.
+- Never prepare a handoff without an explicit owner choice made in this request -- a routing recommendation, a plan mention, or an earlier request's owner is not a choice for this one.
 - Prepared, composed, or shown is never dispatch, execution, review, CI, or merge evidence.
 - Never route a Hermes-owned lane through this engine; the Hermes harness stays the default coding path.
 - Never carry a discovered skill's description text into a composed prompt -- only its name and invocation string ever leave discovery; the description stays inside the classifier.
