@@ -474,6 +474,185 @@ class RunShardTests(unittest.TestCase):
             self.assertEqual(ran.returncode, 2)
             self.assertFalse((root / "never.json").exists())
 
+    def test_run_subtest_recording_failure_and_error_dominance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "test_subtests.py").write_text(
+                "import unittest\n"
+                "class TestSub(unittest.TestCase):\n"
+                "    def test_sub_failure(self):\n"
+                "        with self.subTest(i=0):\n"
+                "            pass\n"
+                "        with self.subTest(i=1):\n"
+                "            self.fail('sub failure')\n"
+                "        with self.subTest(i=2):\n"
+                "            pass\n"
+                "    def test_sub_error_dominates_failure(self):\n"
+                "        with self.subTest(i=0):\n"
+                "            self.fail('sub failure')\n"
+                "        with self.subTest(i=1):\n"
+                "            raise RuntimeError('sub error')\n"
+                "        with self.subTest(i=2):\n"
+                "            pass\n"
+                "    def test_sub_passing(self):\n"
+                "        with self.subTest(i=0):\n"
+                "            pass\n",
+                encoding="utf-8",
+            )
+            plan_path = root / "plan.json"
+            write_json(root / "quarantine.json", {"version": 1, "entries": []})
+            write_json(root / "timings.json", {"version": 1, "durations": {}})
+            result = run_tool(
+                PLAN_PY,
+                "--shards",
+                "1",
+                "--durations",
+                str(root / "timings.json"),
+                "--quarantine",
+                str(root / "quarantine.json"),
+                "--out",
+                str(plan_path),
+                "--start-dir",
+                str(root),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            out = root / "result.json"
+            ran = run_tool(
+                RUN_PY,
+                "--plan",
+                str(plan_path),
+                "--lane",
+                "fixture",
+                "--shard",
+                "0",
+                "--out",
+                str(out),
+                "--start-dir",
+                str(root),
+            )
+            self.assertNotEqual(ran.returncode, 0)
+            payload = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(payload["failures"], ["test_subtests.TestSub.test_sub_failure"])
+            self.assertEqual(payload["errors"], ["test_subtests.TestSub.test_sub_error_dominates_failure"])
+            self.assertIn("test_subtests.TestSub.test_sub_passing", payload["executed"])
+
+    def test_run_monotone_outcome_hierarchy_and_subtest_normalization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "test_monotone.py").write_text(
+                "import unittest\n"
+                "class TestSubtestErrorThenAssert(unittest.TestCase):\n"
+                "    def test_case(self):\n"
+                "        with self.subTest(s=1):\n"
+                "            raise RuntimeError('sub error')\n"
+                "        self.fail('ordinary failure')\n"
+                "class TestSubtestErrorThenSkip(unittest.TestCase):\n"
+                "    def test_case(self):\n"
+                "        with self.subTest(s=1):\n"
+                "            raise RuntimeError('sub error')\n"
+                "        self.skipTest('ordinary skip')\n"
+                "class TestSubtestErrorThenTeardownFail(unittest.TestCase):\n"
+                "    def tearDown(self):\n"
+                "        self.fail('teardown failure')\n"
+                "    def test_case(self):\n"
+                "        with self.subTest(s=1):\n"
+                "            raise RuntimeError('sub error')\n"
+                "class TestSubtestErrorThenTeardownSkip(unittest.TestCase):\n"
+                "    def tearDown(self):\n"
+                "        self.skipTest('teardown skip')\n"
+                "    def test_case(self):\n"
+                "        with self.subTest(s=1):\n"
+                "            raise RuntimeError('sub error')\n"
+                "class TestSubtestSkipOnly(unittest.TestCase):\n"
+                "    def test_case(self):\n"
+                "        with self.subTest(s=1):\n"
+                "            self.skipTest('skip sub')\n"
+                "class TestExpectedFailure(unittest.TestCase):\n"
+                "    @unittest.expectedFailure\n"
+                "    def test_case(self):\n"
+                "        self.fail('expected failure')\n"
+                "class TestUnexpectedSuccess(unittest.TestCase):\n"
+                "    @unittest.expectedFailure\n"
+                "    def test_case(self):\n"
+                "        pass\n",
+                encoding="utf-8",
+            )
+            plan_path = root / "plan.json"
+            write_json(root / "quarantine.json", {"version": 1, "entries": []})
+            write_json(root / "timings.json", {"version": 1, "durations": {}})
+            result = run_tool(
+                PLAN_PY,
+                "--shards",
+                "1",
+                "--durations",
+                str(root / "timings.json"),
+                "--quarantine",
+                str(root / "quarantine.json"),
+                "--out",
+                str(plan_path),
+                "--start-dir",
+                str(root),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            # Test serial runner
+            out_serial = root / "result_serial.json"
+            ran_serial = run_tool(
+                RUN_PY,
+                "--plan",
+                str(plan_path),
+                "--lane",
+                "fixture",
+                "--shard",
+                "0",
+                "--out",
+                str(out_serial),
+                "--start-dir",
+                str(root),
+            )
+            self.assertNotEqual(ran_serial.returncode, 0)
+            payload_serial = json.loads(out_serial.read_text(encoding="utf-8"))
+
+            # Test worker runner (--workers 2)
+            out_worker = root / "result_worker.json"
+            ran_worker = run_tool(
+                RUN_PY,
+                "--plan",
+                str(plan_path),
+                "--lane",
+                "fixture",
+                "--shard",
+                "0",
+                "--workers",
+                "2",
+                "--out",
+                str(out_worker),
+                "--start-dir",
+                str(root),
+            )
+            self.assertNotEqual(ran_worker.returncode, 0)
+            payload_worker = json.loads(out_worker.read_text(encoding="utf-8"))
+
+            for payload in (payload_serial, payload_worker):
+                # subtest error -> ordinary assert retains error
+                self.assertIn("test_monotone.TestSubtestErrorThenAssert.test_case", payload["errors"])
+                # subtest error -> ordinary skip retains error
+                self.assertIn("test_monotone.TestSubtestErrorThenSkip.test_case", payload["errors"])
+                # subtest error -> teardown fail retains error
+                self.assertIn("test_monotone.TestSubtestErrorThenTeardownFail.test_case", payload["errors"])
+                # subtest error -> teardown skip retains error
+                self.assertIn("test_monotone.TestSubtestErrorThenTeardownSkip.test_case", payload["errors"])
+                # skipped-only subtest maps to planned parent ID
+                self.assertIn("test_monotone.TestSubtestSkipOnly.test_case", payload["skipped"])
+                # expected failure recorded as executed (passed)
+                self.assertIn("test_monotone.TestExpectedFailure.test_case", payload["executed"])
+                # unexpected success recorded as failure
+                self.assertIn("test_monotone.TestUnexpectedSuccess.test_case", payload["failures"])
+
+                # Exact planned ID accounting: each planned ID appears exactly once
+                accounted = payload["executed"] + payload["skipped"] + payload["failures"] + payload["errors"]
+                self.assertEqual(sorted(accounted), payload["planned"])
+
 
 @dataclass(frozen=True, slots=True)
 class ResultSpec:
