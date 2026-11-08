@@ -43,6 +43,17 @@ def _state_db(home: Path, *session_ids: str) -> None:
     connection.close()
 
 
+class WindowsTests(unittest.TestCase):
+    def test_on_windows_the_launch_stays_on_the_shared_gateway_whatever_is_saved(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = _root(Path(tmp))
+            paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
+            write_runtime_choice(paths.omh_home, RUNTIME_OWN)
+            with patch.object(bare_launch.os, "name", "nt"):
+                self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args([]), paths))
+            self.assertFalse(tui_home_path(paths.omh_home).exists())
+
+
 class EnvironmentTests(unittest.TestCase):
     def test_the_bots_home_rides_the_environment_only_on_the_own_runtime(self) -> None:
         base = dict(python="/py", site="/site", omh_home=Path("/o"), fallback_sentinel=Path("/t/f"), session_file=Path("/t/s"))
@@ -55,6 +66,7 @@ class EnvironmentTests(unittest.TestCase):
             self.assertTrue(name.startswith("OMH_TUI_"), name)  # the gateway child never sees them
 
 
+@unittest.skipIf(os.name == "nt", "the OMH TUI does not run on Windows: the launch stays on the shared gateway there")
 class DecisionTests(unittest.TestCase):
     def test_nothing_saved_or_shared_stays_on_the_shared_gateway(self) -> None:
         with TemporaryDirectory() as tmp:
