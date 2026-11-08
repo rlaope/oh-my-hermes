@@ -5320,8 +5320,14 @@ Before calling the bot integration ready, verify these points:
 - `omh coding lifecycle report --run <run-id>` does not claim final completion
   while executor, verification, review, CI, or merge-readiness evidence is
   missing.
-- `omh hermes plan --source discord --record "<message>"` writes a
-  `hermes_plan/v1` artifact under the same Hermes home that the bot uses.
+- `omh hermes plan --source discord --record --plan-file <reviewed-plan.md> "<message>"`
+  writes a `hermes_plan/v1` artifact holding the reviewed plan under the same
+  Hermes home that the bot uses. Without `--plan-file` the file holds only the
+  generated scaffold: stdout reports `quality_gate.readiness:
+  needs_reviewed_body`, `coding_handoff_ready: false`, `next_action:
+  record_reviewed_plan` and `decision_gate.acceptance_requires`, and
+  `omh hermes plan-accept` refuses the file with exit code 2 unless
+  `--allow-scaffold` is passed.
 - That planning command does not create a runtime `run.json` or
   `coding_delegation.json`; `.hermes/plans/` is a user-facing draft surface, not
   observed execution evidence.

@@ -124,6 +124,20 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             self.assertFalse(again["reviewed_body"])
             self.assertIn("accepted earlier", again["say"])
 
+    def test_plan_accept_takes_the_ask_every_time_executor(self) -> None:
+        # A setup profile's `choose` default already reaches the context pack,
+        # so the flag accepts the same value instead of rejecting it.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            body = root / "reviewed.md"
+            body.write_text(REVIEWED, encoding="utf-8")
+            _, payload, _ = self._run(root, "hermes", "plan", "--record", "--plan-file", str(body), "Move sessions")
+            status, accepted, stderr = self._run(
+                root, "hermes", "plan-accept", payload["artifact"]["path"], "--write-context-pack", "--executor", "choose"
+            )
+            self.assertEqual((status, stderr), (0, ""))
+            self.assertEqual(accepted["context_pack"]["context_pack"]["executor_target"], "choose")
+
     def test_allow_scaffold_changes_nothing_for_a_reviewed_plan(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

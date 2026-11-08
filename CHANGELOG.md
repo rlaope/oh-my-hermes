@@ -439,7 +439,8 @@ All notable changes will be documented here.
   was named.** Leaving out `--executor` used to select Codex with
   `--from-plan` and `generic` without it. Both now resolve the same default:
   the setup profile's default executor, else `generic`. Codex is selected
-  only when it is named. The `hermes plan` wrapper template and
+  only when it is named or is the setup profile's default executor. The
+  `hermes plan` wrapper template and
   `plan-accept --write-context-pack` follow the same default instead of
   writing `codex`, and the `omh-routing` text that said the flag selects
   Codex now says what it resolves.
@@ -515,8 +516,13 @@ All notable changes will be documented here.
   accepted plan. Accepting such a file now exits 2, leaves it a draft, and
   names the fix: record the reviewed plan with `--plan-file` and accept that
   file. `--allow-scaffold` accepts the scaffold on purpose and still returns
-  `reviewed_body: false`. The `hermes plan accept <path>` alias refuses the
-  same way. `ulw-plan` and `docs/INSTALLATION.md` describe the refusal.
+  `reviewed_body: false`, and re-accepting an already accepted file still
+  succeeds. The `hermes plan accept <path>` alias refuses the same way. The
+  stdout of a scaffold record says so in its machine fields too:
+  `quality_gate.readiness: needs_reviewed_body`, `coding_handoff_ready:
+  false`, `next_action: record_reviewed_plan`, and
+  `decision_gate.acceptance_requires`. `ulw-plan`, the `omh-routing`
+  wrapper reference and `docs/INSTALLATION.md` describe the refusal.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`

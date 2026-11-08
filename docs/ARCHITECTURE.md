@@ -734,7 +734,7 @@ is the adapter contract for calling
 after plan acceptance. Its `--executor` value is the setup profile's default
 executor, else `generic`; `--from-plan` without `--executor` resolves the same
 default as a plain `omh coding delegate`, and selects Codex only when Codex is
-named. `omh coding delegate --from-plan` rejects draft plans by
+named or is the setup profile's default executor. `omh coding delegate --from-plan` rejects draft plans by
 default and uses the accepted artifact or generated context pack as executor
 context; a run-backed Codex handoff and a future `runtime.run.run_id` come
 from `--executor codex`. Blocked or non-coding plans keep `coding_delegate.available`

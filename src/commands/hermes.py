@@ -391,7 +391,7 @@ def _add_hermes_commands(sub) -> None:
         help="Accept a plan recorded without --plan-file (plan_body: scaffold). Refused by default: it is not a reviewed plan.",
     )
     plan_accept.add_argument("--write-context-pack", action="store_true", help="Write a handoff_context_pack/v1 pointer for the accepted plan.")
-    plan_accept.add_argument("--executor", type=canonical_executor_profile, default=None, choices=("codex", "generic", "claude-code", "hermes", "omx-runtime", "pi-family-runtime", "omc-runtime"))
+    plan_accept.add_argument("--executor", type=canonical_executor_profile, default=None, choices=("choose", "codex", "generic", "claude-code", "hermes", "omx-runtime", "pi-family-runtime", "omc-runtime"))
     plan_accept.set_defaults(func=cmd_hermes_plan_accept)
 
     plan_revise = hermes_sub.add_parser("plan-revise", help="Mark a file-backed Hermes plan as revised.")
