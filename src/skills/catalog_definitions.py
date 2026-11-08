@@ -1514,7 +1514,7 @@ _DEFINITIONS = [
             "never substitutes for the Hermes harness path or picks the owner itself."
         ),
         required_inputs=(
-            "explicit coding-owner choice for this run",
+            "explicit coding-owner choice made in this request",
             "task or unit description",
             "the chosen profile's discovered executor skill set",
         ),
@@ -1527,8 +1527,8 @@ _DEFINITIONS = [
             "prepared external handoff record when a wrapper can record it",
         ),
         safety_rules=(
-            "Never prepare a handoff without an explicit owner choice for this run -- a routing recommendation, "
-            "a plan mention, or a previous run's owner is not a choice for this run.",
+            "Never prepare a handoff without an explicit owner choice made in this request -- a routing "
+            "recommendation, a plan mention, or an earlier request's owner is not a choice for this one.",
             "Prepared, composed, or shown is never dispatch, execution, review, CI, or merge evidence.",
             "Never route a Hermes-owned lane through this engine; the Hermes harness stays the default coding "
             "path.",
@@ -1547,8 +1547,9 @@ _DEFINITIONS = [
         quality_bar=(
             "Planning is not execution permission. Handoff requests authorize preparation only; explicit execution "
             "requests authorize only their scope, subject to readiness and permission probes. Clarify missing authority.",
-            "Require an explicit owner choice for this run: named now, confirmed when asked, or "
-            "recorded as `accepted_explicit_choice`. Recommendations, plan mentions and previous owners do not count. "
+            "Require an explicit owner choice made in this request: named in it, or confirmed when asked. A choice "
+            "counts only for the request it was made in; an earlier request's owner, a recorded or learned owner, "
+            "recommendations and plan mentions do not count, so ask again. "
             "For a missing, ambiguous or unready owner, ask `choose_executor` once and stop; never choose for the user.",
             "Owner selection alone is not dispatch permission: `prepare a Codex handoff only` or `use Codex, "
             "do not dispatch` stays preparation-only. `Use Codex to implement this now` supplies both the owner "
@@ -1681,7 +1682,7 @@ _DEFINITIONS = [
             "give this job to the agent I chose",
         ),
         recovery_notes=(
-            "If this run lacks an explicit coding-owner choice, no handoff stands yet; mark prompt composition unresolved and hand back the choose_executor question without selecting a CLI.",
+            "If this request lacks an explicit coding-owner choice, no handoff stands yet; mark prompt composition unresolved and hand back the choose_executor question without selecting a CLI.",
             "If the scratch-edit permission probe fails, retain the composed prompt and discovered skill names, mark execution not_observed, and hand back the denied permission and required grant change before retrying.",
             "If dispatch returns no session or thread id, retain the dispatch receipt, mark steering unresolved, and hand back the explicit unsteerable note and any observed unit result without claiming a resumable session.",
         ),

@@ -1006,7 +1006,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # regression's variables, fruit trees, audio bit depth, a Blender asset and a 3D asset in Korean
             # stay off it (+11); "distill this model", a reach case kept off rules-distill, now dispatches to
             # model-compression and moves to the intervention corpus (-1).
-            expected=1466,
+            # model-compression review round: the review's statistics, 3D, game, signal and know-how
+            # sentences and fresh ones with an ordinary anchor-like word beside a shared phrase (+24).
+            expected=1490,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1610,7 +1612,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # model-compression: eight compression requests (two through the ko pack, one the "distill this
             # model" reach case moved from the negative corpus) and three that keep inference-serving,
             # rules-distill and model-finetuning (+11).
-            expected=1292,
+            # model-compression review round: GGUF and 4-bit Korean quantization, 70B-to-8B distillation in
+            # both languages, and a llama model slimmed in Korean reach the skill (+8).
+            expected=1300,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

@@ -374,8 +374,11 @@ NON_SKILL_BACKTICKS = frozenset(
 # pointing back. `model-optimization`'s old quantize/distill line named
 # `inference-serving` and `model-finetuning`; it now names only the new skill.
 # Eight new cases less that one, eight new pairs less its two, one new owner.
-EXPECTED_DEFERENCE_CASES = 467
-EXPECTED_DEFERENCE_PAIRS = 494
+# Its review round gives model-optimization back one line each for serving
+# (`inference-serving`) and training (`model-finetuning`): two cases, and the
+# two pairs it had lost.
+EXPECTED_DEFERENCE_CASES = 469
+EXPECTED_DEFERENCE_PAIRS = 496
 EXPECTED_DEFERRING_OWNERS = 139
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,

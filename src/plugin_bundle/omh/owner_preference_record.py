@@ -1,10 +1,10 @@
 """`coding_owner_preference/v1`: the closed schema of the explicit coding-owner choice, and who it names.
 
 The one validator of the record. The router's reader and writer
-(`omh.routing.owner_preference`) import it from here, and so does `omh_dag`'s
-export, so a record means the same thing to every reader: a missing,
-malformed, reset or hand-written record names no owner, and no external
-coding CLI may be selected from it.
+(`omh.routing.owner_preference`) import it from here: a missing, malformed,
+reset or hand-written record names no owner, and no external coding CLI may
+be selected from it. `omh_dag` reads no record: a dag-ulw run's owners are
+the ones named in the request that defined it (`named_owner_choice`).
 
 Pure and stdlib only, and it imports nothing from `omh`: Hermes loads this
 directory with its own interpreter (#1623). The opaque-reference check is
@@ -35,34 +35,15 @@ OWNER_PREFERENCE_PATH_SEGMENTS: Final = ("routing", "owner-preference.json")
 # selected owner only when route state carries one of these provenances:
 # the user answered the coding-owner question (`record_accepted_explicit_choice`)
 # or named the CLI in their own words (`record_in_message_explicit_naming`).
-# The main route family keeps only those two router writers. Hermes chat adds
-# `record_named_owner_choices` as an in-message writer for per-owner families
-# only; it never writes the main family or advances its learning streak.
+# The route families keep only those two router writers. A dag-ulw run reads
+# none of them: its owners are the ones named in the request that defined it
+# (`named_owner_choice`).
 # Deriving an external owner from a message that does NOT name that CLI —
 # topic, language, history, or heuristics — stays forbidden.
 OWNER_PREFERENCE_EXPLICIT_CHOICE_PROVENANCES: Final = (
     "accepted_explicit_choice",
     "in_message_naming",
 )
-
-# One route family keeps one owner, so a second CLI the person names replaces the
-# first. Each explicit choice is therefore also kept under a per-owner family
-# (`<route family>.<owner>`, e.g. `ulw-coding-delivery.codex`), so choices of
-# different owners stand side by side: a dag-ulw run can then send one node to
-# Codex and another to Claude Code. The separator is a character the opaque
-# reference allows and no owner profile contains.
-PER_OWNER_FAMILY_SEPARATOR: Final = "."
-
-
-def per_owner_route_family(route_family: str, owner: str) -> str:
-    """The family that keeps ``owner``'s own explicit choice for ``route_family``."""
-    return f"{route_family}{PER_OWNER_FAMILY_SEPARATOR}{owner}"
-
-
-def is_per_owner_route_family(route_family: str) -> bool:
-    """Whether ``route_family`` is a per-owner family (it is never mirrored again)."""
-    return PER_OWNER_FAMILY_SEPARATOR in route_family
-
 
 STATE_KEYS: Final = frozenset({"schema_version", "record_type", "privacy", "routes", "updated_at"})
 PRIVACY_KEYS: Final = frozenset({"mode", "learning_source", "excluded_signals"})
@@ -213,20 +194,3 @@ def route_errors(key: object, route: object) -> list[str]:
     elif provenance == "in_message_naming":
         errors.append(f"route {family} in_message_naming provenance requires a naming_cue")
     return errors
-
-
-def explicit_choice(state: object, *, route_family: str) -> tuple[str, str]:
-    """(provenance, owner) an explicit-choice writer recorded for one route family, or ("", "").
-
-    ("", "") for a missing, malformed, reset or raw-written state: then no
-    external coding CLI may appear as the selected owner.
-    """
-    if not isinstance(state, Mapping) or validate_owner_preference(state):
-        return "", ""
-    route = state["routes"].get(route_family)
-    if not route or not route.get("selected_owner"):
-        return "", ""
-    provenance = str(route.get("provenance", "") or "")
-    if provenance not in OWNER_PREFERENCE_EXPLICIT_CHOICE_PROVENANCES:
-        return "", ""
-    return provenance, str(route["selected_owner"])

@@ -34,7 +34,8 @@ INDEX_DELTA_CAP = 86  # One 85-character line and its joining newline.
 FULL_ROW_DELTA_CAP = 3072  # One 3070-character JSON row + comma/space.
 STANDALONE_ROW_DELTA_CAP = 935  # One 933-character row + comma/space.
 REGISTRY_DELTA_CAP = 244  # 227-character trigger row + 17-character role entry.
-REPEATED_DELTA_CAP = 1943  # Workflow Lane 497 + Runtime Evidence 1446.
+# 1943 -> 1627: the Runtime Evidence reply-voice paragraph became one line (1446 -> 1130).
+REPEATED_DELTA_CAP = 1627  # Workflow Lane 497 + Runtime Evidence 1130.
 
 
 def _digest(value: object) -> str:
@@ -156,11 +157,16 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); the pin before it was 41011a72...3bc7.
             # 537954 -> 537829 and the digest re-derived: the routing reach round, -125 (itemized at the same
             # limit); the pin before it was b1ad64a5...590b.
+            # 537829 -> 538004 and the digest re-derived: a coding-owner choice counts only for the request it was
+            # made in, in the dag-ulw and maestro rows (+175, itemized at the same limit); the pin before it was
+            # c5c17f84...2eb0.
             # model-compression adds one row to each producer (+3975 full, +947
             # standalone); dropping only that row reproduces c5c17f84...62eb0 and
             # 5f2c0396...52d48 at the old bases 537829 and 144536.
-            (skill_capabilities, 541804, FULL_ROW_DELTA_CAP,
-             'f775179f02d7006ee209e93e47b78a49c2f86ea788634cfcb6e905003016e78f',
+            # Merged with main: 538004 + 3975 = 541979; dropping only the
+            # model-compression row reproduces main's cbc66058...36bc.
+            (skill_capabilities, 541979, FULL_ROW_DELTA_CAP,
+             '1258e7e1391eb1d56e08e9417bc4d4ae430f92a31346335aeb9cc2c119c0cd11',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -227,7 +233,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # `omh-routing`, one character shorter than `oh-my-hermes`.
         # 496 -> 341: the lane line drops its sample of member names, which did not load.
         self.assertEqual(len(sections['Workflow Lane']), 341)
-        self.assertEqual(len(sections['Runtime Evidence']), 1446)
+        self.assertEqual(len(sections['Runtime Evidence']), 1130)
         self.assertLessEqual(len(feature[0].content.encode()), 5735)
         legacy_templates = [t for t in templates if t.name != FEATURE]
         legacy_hashes = {}
@@ -413,13 +419,19 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Merged with main after #2652: both sides' bodies; main's pin before that merge was
         # b36ad311...1e91, and this branch's was f30c9ae0...ca61. Merged again after #2650: main's
         # pin was 51d4a5cf...9f51, and this branch's was a5bce194...90de.
+        # A coding-owner choice then counts only for the request it was made in: only dag-ulw and maestro
+        # move, and the pin before it was 62bebac1...bd0b.
+        # Every body's reply-voice paragraph then becomes one line pointing at the shared rail, so every body
+        # moves; the pin before it was c0b3ab76...df31.
         # Re-derived for model-compression: its body joins the legacy set, and
         # inference-serving, model-finetuning, model-optimization and
         # rules-distill each gain one Do Not Use line naming it. Without the new
         # body the repeated bytes reproduce 92262; its Workflow Lane rail adds 341.
         # Merged with main: both sides' bodies; main's pin before that merge was
         # 62bebac1...7abd0b, and this branch's was a25a40f0...19bb2.
-        self.assertEqual(_digest(legacy_hashes), 'bdc90eb328e0a93d0a3074993ef33e35ad0b7e41b461b7df954747be1591b8a4')
+        # Merged with main again: main's pin was 4da0a2a3...f96c, and this
+        # branch's was bdc90eb3...b8a4.
+        self.assertEqual(_digest(legacy_hashes), '43186eb67208f5215798aceca101725ff21d48b837c860607533e8db318cb987')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -441,7 +453,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # github-issue-intake their own Completion Checklists, in place of the feature-surface defaults those
         # bodies repeated (-865).
         # 114629 -> 92262: the lane line's sample of member names was the same text in every lane mate.
-        self.assertEqual(legacy['repeated']['bytes'], 92603)
+        # 92262 -> 83098: every body's reply-voice paragraph became one line pointing at the shared rail.
+        # model-compression's Workflow Lane rail adds 341 to main's 83098.
+        self.assertEqual(legacy['repeated']['bytes'], 83439)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -469,14 +483,14 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'plugin_tool_schema_chars': 72525,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
-            'awareness_primer_markdown_chars': 3973,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49) and on the card and cue lines (+239).
+            'awareness_primer_markdown_chars': 4051,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78).
             'awareness_primer_context_chars': 1560,  # The same sentence (+120).
             'awareness_workflow_context_chars_max': 1500,
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1650000,  # Re-derived from 1499208 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
-            'full_profile_skill_body_repeated_chars': 110000,  # Re-derived from 94049 measured, +10%, up to the next 10,000.
+            'full_profile_skill_body_chars': 1600000,  # Re-derived from 1450927 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
+            'full_profile_skill_body_repeated_chars': 100000,  # Re-derived from 84569 measured, +10%, up to the next 10,000.
             'skill_density_filler_hits': 0,
         }
         metrics = {m.name: m for m in budget_metrics()}

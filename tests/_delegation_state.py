@@ -113,6 +113,7 @@ class Homes:
 def homes() -> Iterator[Homes]:
     """Fresh homes, named to the bundle the way Hermes names them: through the environment."""
     from omh.plugin_bundle.omh import delegation_ledger
+    from omh.plugin_bundle.omh.named_owner_choice import reset_turn_owners
 
     with TemporaryDirectory() as tmp, patch.dict(
         os.environ, {"OMH_HOME": str(Path(tmp) / "omh"), "HERMES_HOME": str(Path(tmp) / "hermes")}
@@ -121,11 +122,13 @@ def homes() -> Iterator[Homes]:
         delegation_ledger._titles.clear()
         delegation_ledger._spawned.clear()
         delegation_ledger._spawned_ids.clear()
+        reset_turn_owners()  # a coding owner one test's request named is no other test's choice
         yield Homes(Path(tmp))
         delegation_ledger._roots.clear()
         delegation_ledger._titles.clear()
         delegation_ledger._spawned.clear()
         delegation_ledger._spawned_ids.clear()
+        reset_turn_owners()
 
 
 def start(homes: Homes, child: str, subagent_id: str, goal: str, *, parent: str = PARENT, turn: str = "turn-3",

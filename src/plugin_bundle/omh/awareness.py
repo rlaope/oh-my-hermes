@@ -7233,7 +7233,8 @@ def awareness_primer_markdown() -> str:
     for lane in payload["lanes"]:
         if not isinstance(lane, dict):
             continue
-        skills = [str(skill) for skill in lane["skills"][:4]]
+        # The per-turn primer has no render pass, so each key is written as its loadable label.
+        skills = [_loadable_skill_label(str(skill)) for skill in lane["skills"][:4]]
         lane_lines.append(
             f"- **{lane['label']}**: {lane['use_for']}. Key: `{'`, `'.join(skills)}`."
         )
@@ -7640,6 +7641,43 @@ def _ulw_retired_hint_target(
     return _ULW_RETIRED_TARGET_HOME, remapped_actions.get(next_action, next_action)
 
 
+# Hand-picked labels the mechanical prefix rule cannot derive. Mirrors
+# `skills/catalog_types.OMH_SKILL_DISPLAY_NAME_OVERRIDES`; the copy exists
+# because a copied plugin bundle has no catalog import, and
+# `tests/test_display_names.py` locks the two together.
+_DISPLAY_LABEL_OVERRIDES: tuple[tuple[str, str], ...] = (
+    ("omh-docs", "product-docs"),
+    ("omh-decide", "strategy-brief"),
+    ("ulw-context", "context"),
+    ("ulw-interview", "deep-interview"),
+    ("ulw-plan", "ralplan"),
+    ("ulw-goal", "ultragoal"),
+    ("ulw-process", "ultraprocess"),
+    ("ulw-qa", "ultraqa"),
+    ("ulw-work", "ultrawork"),
+    ("ulw-perf", "ultraperf"),
+    ("omh-browser", "browser-operator"),
+    ("omh-files", "workspace-file-operator"),
+    ("omh-terminal", "command-operator"),
+    ("omh-apps", "connector-operator"),
+    ("omh-live-info", "live-info-operator"),
+    ("omh-media-input", "media-input-operator"),
+    ("omh-voice-input", "voice-operator"),
+    ("omh-image-cards", "img-summary"),
+    ("dag-ulw", "dag-ulw"),
+)
+
+
+def _loadable_skill_label(workflow: str) -> str:
+    """The label `skill_view` loads for a catalog workflow name, by the same rules as the map below."""
+    if workflow == "oh-my-hermes":
+        return "omh-routing"
+    for display, name in _DISPLAY_LABEL_OVERRIDES:
+        if name == workflow:
+            return display
+    return f"{'ulw-' if workflow in _ULW_ENGINE_WORKFLOWS else 'omh-'}{workflow}"
+
+
 @lru_cache(maxsize=1)
 def _canonical_workflow_by_display_name() -> dict[str, str]:
     """Map every `omh-`/`ulw-` display label this module knows back to its workflow name.
@@ -7654,31 +7692,7 @@ def _canonical_workflow_by_display_name() -> dict[str, str]:
         f"{'ulw-' if workflow in _ULW_ENGINE_WORKFLOWS else 'omh-'}{workflow}": workflow for workflow in workflows
     }
     mapping["omh-routing"] = "oh-my-hermes"
-    # Hand-picked labels the mechanical prefix rule cannot derive. Mirrors
-    # `skills/catalog_types.OMH_SKILL_DISPLAY_NAME_OVERRIDES`; the copy exists
-    # because a copied plugin bundle has no catalog import, and
-    # `tests/test_display_names.py` locks the two together.
-    for display, workflow in (
-        ("omh-docs", "product-docs"),
-        ("omh-decide", "strategy-brief"),
-        ("ulw-context", "context"),
-        ("ulw-interview", "deep-interview"),
-        ("ulw-plan", "ralplan"),
-        ("ulw-goal", "ultragoal"),
-        ("ulw-process", "ultraprocess"),
-        ("ulw-qa", "ultraqa"),
-        ("ulw-work", "ultrawork"),
-        ("ulw-perf", "ultraperf"),
-        ("omh-browser", "browser-operator"),
-        ("omh-files", "workspace-file-operator"),
-        ("omh-terminal", "command-operator"),
-        ("omh-apps", "connector-operator"),
-        ("omh-live-info", "live-info-operator"),
-        ("omh-media-input", "media-input-operator"),
-        ("omh-voice-input", "voice-operator"),
-        ("omh-image-cards", "img-summary"),
-        ("dag-ulw", "dag-ulw"),
-    ):
+    for display, workflow in _DISPLAY_LABEL_OVERRIDES:
         if workflow in workflows:
             mapping[display] = workflow
         else:

@@ -180,7 +180,10 @@ FROZEN_HANGUL_TRIGGERS_BY_SKILL: dict[str, int] = {
     # carries so a later Korean miss is not papered over by padding it; 모델
     # 압축 and 모델 경량화 are not pack phrases because a 3D asset is compressed
     # and slimmed too, and they count only beside a word of model weights.
-    "model-compression": 6,
+    # 6 -> 5 (2026-11-08, #2664 review): 지식 증류 leaves the pack too; a team
+    # distills its know-how, so it counts only beside a weight word, a
+    # parameter count or 모델. A narrowing that costs an entry.
+    "model-compression": 5,
     "model-setup": 10,  # +3 (모델 세팅/모델 체인/카테고리별 모델): chain-interview vocabulary, owner request 2026-08-21
     "morning-brief": 4,
     "oh-my-hermes": 2,

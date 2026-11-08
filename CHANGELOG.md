@@ -11,8 +11,8 @@ All notable changes will be documented here.
   still do. Claude Code's temp directory stays inside the fence, and its
   result-file directory is explicitly allowed. A readiness decision stale
   only because it came from another checkout is re-observed at dispatch.
-  Naming Codex or Claude Code in a dag-ulw request in Hermes chat records
-  each owner's one-day choice; coding nodes can name their `owner`, and
+  Naming Codex or Claude Code in a dag-ulw request in Hermes chat chooses
+  each owner for that request's run; coding nodes can name their `owner`, and
   each owner's batch exports separately while cross-owner dependencies wait.
 - **In Slack and Discord group chats, telling the bot to be quiet now mutes
   it in that thread, and a message meant for someone else no longer opens a
@@ -189,6 +189,14 @@ All notable changes will be documented here.
   to it. Tokens in a list, a quote, a table or a fence around several lines
   stay an answer. A token leaves the end of an answer only after
   sentence-ending punctuation, so `The marker - [SILENT]` stays as written.
+
+- **A spend whose cost is unknown is checked against a cap in its own units.**
+  The spend-gate rails page now names the spend-only cap the credits rule
+  points to. When no price gives a call's credits or cost, the person sets
+  that cap in the call's own units (images, characters or seconds), and the
+  call runs only when its planned count fits. Its ledger row keeps that
+  count and leaves the period total unknown, so the next spend asks what was
+  already spent.
 
 - **A queued line in the OMH TUI no longer starts ahead of a steer Hermes
   passes on as its next prompt.** When a turn ends on its own with a steer
@@ -484,6 +492,11 @@ All notable changes will be documented here.
   (`automation`); only the rendered rail page rewrote one of those lines.
   The three lines now write `ulw-research`, `omh-image-cards` and the other
   labels `skill_view` loads. The lane key lines still list catalog names.
+- **The per-turn primer's lane keys name skills a model can load.** Each
+  lane's `Key:` list named catalog names (`research`, `deep-interview`), so
+  one primer showed both `research` and `ulw-research`. The keys now read
+  `ulw-research`, `ulw-interview`, `omh-routing` and the other labels
+  `skill_view` loads.
 - **`omh coding delegate --from-plan` no longer picks Codex when no owner
   was named.** Leaving out `--executor` used to select Codex with
   `--from-plan` and `generic` without it. Both now resolve the same default:
@@ -558,6 +571,15 @@ All notable changes will be documented here.
   readers are told which steps need Hermes. The payload-density floor is
   re-derived, because those sample names had been counted as payload.
 
+- **A coding-owner choice now counts only for the request it was made in,
+  in dag-ulw as in ulw-maestro.** dag-ulw sends a coding node to Codex or
+  Claude Code only when the person named that owner in the dag-ulw request
+  that defines the run; the run keeps that choice for its later turns, and
+  nothing else carries over. A choice from an earlier request, from `omh chat`
+  or `omh coding`, or from any stored record no longer starts an external
+  coding CLI, so the one-day window is gone. A coding node that names no owner
+  runs on `delegate_task`. ulw-maestro's owner rule says the same: an earlier,
+  recorded or learned owner is not a choice, and it asks again.
 - **`omh hermes plan-accept` refuses a plan that is only the generated
   scaffold.** A plan recorded without `--plan-file` holds generated goals,
   options and risks, not the reviewed plan, and accepting it used to succeed
@@ -567,10 +589,12 @@ All notable changes will be documented here.
   file. `--allow-scaffold` accepts the scaffold on purpose and still returns
   `reviewed_body: false`, and re-accepting an already accepted file still
   succeeds. The `hermes plan accept <path>` alias refuses the same way. The
-  stdout of a scaffold record says so in its machine fields too:
+  stdout of a scaffold record and the recorded file say so too (the file's
+  quality gate and next action match stdout):
   `quality_gate.readiness: needs_reviewed_body`, `coding_handoff_ready:
   false`, `next_action: record_reviewed_plan`, and
-  `decision_gate.acceptance_requires`. `ulw-plan`, the `omh-routing`
+  `decision_gate.acceptance_requires`, repeated on `coding_delegate`, whose
+  `available` still means available after acceptance. `ulw-plan`, the `omh-routing`
   wrapper reference and `docs/INSTALLATION.md` describe the refusal.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
@@ -638,6 +662,15 @@ All notable changes will be documented here.
   head can't take (`+` to `xhigh`, then a switch to Gemini 4 Argon) keeps the
   picker open on that row, with every other edit intact, until you fix it or
   cancel. Stored values nobody touched are left as they are and marked.
+- **Every Hermes skill body carries the reply-voice rule as one line.** The
+  paragraph each body repeated becomes one line that keeps the rule's core:
+  reply in the user's own words and the host's own voice, the SOUL.md persona
+  owns reply language, tone, speech level and sentence endings in progress
+  updates too, the user's language where the persona sets none, and OMH shapes
+  structure and content only. The record-term and turn-ending clauses live once
+  in the shared rail's Reply Language And Host Voice and Turn Ending sections,
+  which already held them. Portable agent-skills bodies keep the full
+  paragraph, since their hosts have no shared rail.
 - **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
   `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
   or Enter opens sessions or bots, folds the plan, searches history, cycles

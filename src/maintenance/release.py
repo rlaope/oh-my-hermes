@@ -992,9 +992,14 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # keeps its exclusions in do_not_use_when only (-104), model-optimization drops two triggers (-44),
 # morning-brief's and native-debugging's index text (-6, -4), and the named phrases joining agent-ops-review,
 # code-review, security-event-response, verification-gate and wiki (+3, +2, +14, +6, +8); -125 in all.
+# 540901 -> 541076: a coding-owner choice counts only for the request it was made in. dag-ulw's handoff policy and
+# fourth safety rule drop the one-day window (+90); ulw-maestro's required input, first safety rule and owner-choice
+# quality bar say the same (+85). Measured per row from the producer; no headroom.
 # 540901 -> 544876: one `model-compression` capability row (3973) plus its
 # separator (+3975); no other row moved. Measured per row from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 544876
+# Merged with main: 541076 (main) + 3975 for the `model-compression` row = 545051,
+# re-derived from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545051
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -2200,10 +2205,13 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # 1521089 -> 1499208 (the ceiling 1700000 -> 1650000): each body's `Current lane` line drops its sample of up to
 # eight member names and a `+N more` count, none of which `skill_view` loads, and the cross-lane rail fix adds its
 # hand-off labels. 1,499,208 plus 10%, rounded up to the next 50,000, is 1,650,000.
-FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1499208
+# 1499208 -> 1450927 (the ceiling 1650000 -> 1600000): every body's reply-voice paragraph becomes one line; the
+# record-term and turn-ending clauses it repeated live in the shared rail's Reply Language And Host Voice and Turn
+# Ending sections, which already held them. 1,450,927 plus 10%, rounded up to the next 50,000, is 1,600,000.
+FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1450927
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1650000
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1600000
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # Repeated bytes: characters of full-profile SKILL.md `##` sections that are
 # byte-identical to the same section in another skill -- the second and later
@@ -2314,9 +2322,11 @@ FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # defaults those bodies repeated (-865). 116,571 plus 10%, rounded up to the next 10,000, is still 130,000.
 # 116571 -> 94049 (the ceiling 130000 -> 110000): the same lane line, whose sample of names was the same text in
 # every lane mate. 94,049 plus 10%, rounded up to the next 10,000, is 110,000.
-FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 94049
+# 94049 -> 84569 (the ceiling 110000 -> 100000): the same one-line reply-voice rule, shorter in every section that
+# repeats it. 84,569 plus 10%, rounded up to the next 10,000, is 100,000.
+FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 84569
 FULL_PROFILE_SKILL_BODY_REPEATED_CEILING_STEP_CHARS = 10000
-FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT = 110000
+FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT = 100000
 
 
 @dataclass(frozen=True)

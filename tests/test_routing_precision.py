@@ -99,7 +99,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # model-compression adds eleven compress, quantize, prune and distill
         # controls in another sense and moves "distill this model" to the
         # intervention corpus.
-        self.assertEqual(payload["summary"]["case_count"], 1466)
+        # Its review round adds twenty-four controls with an ordinary
+        # statistics, 3D, game, signal or know-how word beside a shared phrase.
+        self.assertEqual(payload["summary"]["case_count"], 1490)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -263,7 +265,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # systematic-review adds four screening requests and two owner-keeping controls.
         # The ops-review pair keeps `리스크블로커` and `주요리스크와 블로커`.
         # model-compression adds eight compression requests and three owner-keeping controls.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1292)
+        # Its review round adds eight requests that missed: GGUF and 4-bit Korean
+        # quantization, distillation by parameter count, a llama model slimmed.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1300)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

@@ -248,8 +248,6 @@ SITES: dict[tuple[str, str], tuple[str, list[Case]]] = {
         "omh.plugin_bundle.omh.todo_store", [lambda m: m._stamp_epoch]),
     ("src/plugin_bundle/omh/todo_store.py", "_validated_stamp"): (
         "omh.plugin_bundle.omh.todo_store", [lambda m: lambda s: m._validated_stamp(s, "done", "done_at")]),
-    ("src/plugin_bundle/omh/tools/dag_tool.py", "_timestamp"): (
-        "omh.plugin_bundle.omh.tools.dag_tool", [lambda m: m._timestamp]),
     ("src/quality/agent_debug_incident.py", "_epoch"): (
         "omh.quality.agent_debug_incident", [lambda m: m._epoch]),
     ("src/quality/capability_gap_scout.py", "_parse_timestamp"): (
