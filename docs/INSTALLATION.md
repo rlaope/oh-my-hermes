@@ -1738,7 +1738,16 @@ When the OMH TUI cannot start, `omh` says why in one line on stderr and opens
 Hermes instead, so you lose the OMH screen, never the session. For a reason
 that is the OMH TUI's own — Windows or another terminal without `termios`,
 its frontend missing, or a Hermes whose gateway no longer speaks what the TUI
-was built for — that is Hermes' own TUI (`hermes --tui`). With `TERM=dumb`,
+was built for — that is Hermes' own TUI (`hermes --tui`). A gateway that is
+there but not answering is not such a reason, since Hermes' own TUI would ask
+the same gateway: a launch while it restarts waits for it on one shell line
+(`omh: the Hermes gateway is restarting; waiting… (12s)`), and while it drains
+for a restart, letting running turns finish first (a `/gateway restart` of the
+whole gateway while a bot's turn runs, up to Hermes' `restart_after_turn_timeout`,
+30 minutes by default), the line names that work (`the Hermes gateway restarts
+after 2 running turns (it allows up to 30 min); waiting… (40s) · ctrl+c
+leaves`) and the launch opens once the gateway is back. Past the wait it says
+what to check (`hermes gateway status`) and exits 1. With `TERM=dumb`,
 with `OMH_NO_TUI=1`, or with no Node for Hermes' launcher (Hermes' TUI needs
 it too), it is plain `hermes`, which opens what your `display.interface`
 chooses. `omh` reopens Hermes' terminal only

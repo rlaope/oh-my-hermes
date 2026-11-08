@@ -5,10 +5,14 @@ frontend its environment. Everything that can stop the TUI from starting is
 settled before the first byte is drawn, and each such failure exits through
 `request_fallback` (the file `omh` named, then `FALLBACK_EXIT`), so `omh`
 opens Hermes' own terminal instead: a terminal that cannot run the TUI, a
-gateway that does not start, and a session call (create or resume) this
-Hermes refuses or no longer understands. A resume Hermes refuses as itself
-(not_found, permission_denied, ...) is said and exits 1 instead: Hermes'
-own TUI would open a new session in its place without a word. The busy
+gateway child that does not start or crashes, and a session call (create or
+resume) this Hermes refuses or no longer understands. Not a gateway that is
+there but not answering: one restarting, draining for a restart (Hermes'
+`runtime_draining`, waited through up to the drain's cap, the shell's line
+naming the work it lets finish), or silent past the wait is said and exits
+1, since Hermes' own TUI would ask the same gateway. A resume Hermes refuses
+as itself (not_found, permission_denied, ...) is said and exits 1 too:
+Hermes' own TUI would open a new session in its place without a word. The busy
 mode and the command catalog are asked for without waiting; drift in either
 is met in the loop, as drift in any call is. An attach hand-off is refused
 with exit 1 and a line naming `hermes --tui --resume <id>` (0 would make
@@ -168,6 +172,7 @@ from .gateway_restart import (
     DEFAULT_PROFILE,
     RestartImpact,
     RestartRun,
+    duration_text,
     impact_lines,
     manual_command,
     read_impact,
@@ -612,7 +617,9 @@ INTERRUPTED_EXIT = 130
 # How long a launch waits for the Hermes gateway before the TUI draws (`_LaunchWait`): for it to come up, and for it
 # to open the session. A gateway that is not answering yet (`GatewayUnavailable.not_ready`: a restart, a refused
 # socket) or that drops the launch's connection while the session opens is tried again within it, while the shell's
-# terminal says what the launch waits for. Past it the launch says what to do, then falls back as before.
+# terminal says what the launch waits for. Past it the launch says what to do and exits 1: Hermes' own TUI, the
+# fallback, asks the same gateway, so it is opened only for a failure that is the OMH TUI's own (a crash of its
+# attach child, a refusal of its contract).
 LAUNCH_WAIT_SECONDS = 60.0
 # A normal launch says nothing: the first waiting line comes only after this much quiet.
 LAUNCH_WAIT_QUIET_SECONDS = 1.5
@@ -627,6 +634,21 @@ LAUNCH_RESTARTING = "omh: the Hermes gateway is restarting; waiting… ({seconds
 LAUNCH_OPENING = "omh: waiting for the Hermes gateway to open a session… ({seconds}s)"
 LAUNCH_GAVE_UP = (
     "omh: the Hermes gateway did not answer within {seconds}s; it may still be restarting. "
+    "Check it with `hermes gateway status`, then run `omh` again."
+)
+# A gateway draining for a restart (Hermes' `restart_requested` in its record, letting running work finish first, up
+# to `agent.restart_after_turn_timeout`) refuses a new or resumed session as `runtime_draining` and answers no attach
+# as ready. The launch waits through the drain and the restart that follows: its bound grows to the drain's cap once,
+# the shell's line says what the gateway waits for, and a try is a session call or a spawn, so tries are paced slower.
+RUNTIME_DRAINING = "runtime_draining"
+LAUNCH_DRAIN_RETRY_SECONDS = 5.0
+LAUNCH_DRAINING = (
+    "omh: the Hermes gateway restarts after {work} (it allows up to {cap}); waiting… ({seconds}s) · "
+    "ctrl+c leaves"
+)
+LAUNCH_DRAINING_WORK = ("its running work", "1 running turn", "{count} running turns")  # unknown, one, more
+LAUNCH_DRAIN_GAVE_UP = (
+    "omh: the Hermes gateway was still restarting after {seconds}s. "
     "Check it with `hermes gateway status`, then run `omh` again."
 )
 # Closing the gateway on exit: stdin EOF, then terminate, then kill. The live
@@ -9620,15 +9642,25 @@ class _LaunchWait:
     phase and the seconds waited, rewritten in place on a terminal (written once per phase anywhere else).
     It writes to the stream itself, not through `_Told`: a fallback says again why the TUI did not start, never
     the countdown. `done` erases the line before anything else is said or drawn.
+
+    `read_impact` reads the record of the gateway the launch waits for (`gateway_restart.read_impact`): a gateway
+    draining for a restart is waited through (`restarting`), with the bound grown once to the drain's cap and the
+    line saying what it lets finish. `gave_up` is set once the bound ran out on a gateway that was there but not
+    answering: the launch then exits rather than falling back.
     """
 
     def __init__(
-        self, stream: TextIO, clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep
+        self, stream: TextIO, clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
+        read_impact: Callable[[], RestartImpact] | None = None,
     ) -> None:
         self.stream = stream
         self.clock = clock
         self.sleep = sleep
+        self.read_impact = read_impact
         self.started = clock()
+        self.bound = LAUNCH_WAIT_SECONDS
+        self.drain_cap: float | None = None  # the drain's cap once a draining gateway was seen; grown into `bound` once
+        self.gave_up = False
         self.phase = LAUNCH_CONNECTING
         self.shown = ""  # the line on the terminal now; "" when none is
         self.said: list[str] = []  # each phase's first line, in order
@@ -9638,10 +9670,30 @@ class _LaunchWait:
         return self.clock() - self.started
 
     def left(self) -> float:
-        return max(LAUNCH_WAIT_SECONDS - self.waited(), 0.0)
+        return max(self.bound - self.waited(), 0.0)
 
     def can_retry(self) -> bool:
         return self.left() >= LAUNCH_MIN_TRY_SECONDS
+
+    def restarting(self, refused: bool = False) -> bool:
+        """Whether the gateway drains for a restart: its record says so (a live process with a restart asked), or
+        `refused` says Hermes just refused the session as `runtime_draining`. Then the phase names the work it lets
+        finish and the bound grows, once, to that drain's cap (`restart_after_turn_timeout`, Hermes' default without
+        a readable record) plus the launch's own wait for the restart after it. With no live record to read, a drain
+        once seen is still the phase; a record that says otherwise (the gateway stopped, or starting again) ends it."""
+        impact = self.read_impact() if self.read_impact is not None else RestartImpact(None, None)
+        gateway = impact.gateway
+        draining = refused or (gateway is not None and gateway.live and gateway.restart_requested) or (
+            gateway is None and self.drain_cap is not None)
+        if not draining:
+            return False
+        if self.drain_cap is None:
+            self.drain_cap = impact.wait_seconds
+            self.bound = max(self.bound, self.waited() + self.drain_cap + LAUNCH_WAIT_SECONDS)
+        count = gateway.active_agents if gateway is not None else 0
+        work = LAUNCH_DRAINING_WORK[min(count, 2)].format(count=count)
+        self.phase = LAUNCH_DRAINING.format(work=work, cap=duration_text(self.drain_cap), seconds="{seconds}")
+        return True
 
     def __call__(self) -> bool:
         waited = self.waited()
@@ -9665,10 +9717,14 @@ class _LaunchWait:
         except (OSError, ValueError):
             self.broken = True
 
-    def pause(self) -> None:
-        """The wait before trying again, saying that the gateway is restarting."""
-        self.phase = LAUNCH_RESTARTING
-        until = self.clock() + LAUNCH_RETRY_SECONDS
+    def pause(self, seconds: float = LAUNCH_RETRY_SECONDS) -> None:
+        """The wait before trying again, saying that the gateway is restarting; a gateway draining for its restart
+        is said as such (`restarting`), and paced at `LAUNCH_DRAIN_RETRY_SECONDS`."""
+        if self.restarting():
+            seconds = max(seconds, LAUNCH_DRAIN_RETRY_SECONDS)
+        else:
+            self.phase = LAUNCH_RESTARTING
+        until = self.clock() + seconds
         while (remaining := until - self.clock()) > 0:
             self()
             self.sleep(min(remaining, CANCEL_POLL_SECONDS))
@@ -9702,6 +9758,7 @@ def _start_gateway(
         if wait is not None:
             wait.done()
             if error.not_ready or not wait.left():
+                wait.gave_up = True  # there, not answering: Hermes' own TUI would meet the same, so no fallback
                 _say(stderr, LAUNCH_GAVE_UP.format(seconds=math.ceil(wait.waited())))
         _say(stderr, f"omh: the Hermes gateway did not start: {error}")
         for line in error.stderr_tail[-STARTUP_TAIL_LINES:]:
@@ -9754,7 +9811,8 @@ def _run(
     launcher prints nothing, and the shell still sees 0.
     """
     first = client
-    wait = _LaunchWait(getattr(stderr, "stream", stderr))  # past `_Told`: the countdown is not re-said
+    # Past `_Told`: the countdown is not re-said. The record read is the gateway's that serves the launcher's home.
+    wait = _LaunchWait(getattr(stderr, "stream", stderr), read_impact=lambda: read_impact(environ, ""))
     spawned: list[GatewayClient] = []  # the clients spawned here in place of one that was not answering
 
     def spawn_again() -> GatewayClient:
@@ -9770,7 +9828,7 @@ def _run(
             opened = _open_session(client, stderr, wait, respawn)
             if not isinstance(opened, tuple):
                 client = opened
-                return request_fallback(environ, stderr.said())
+                return 1 if wait.gave_up else request_fallback(environ, stderr.said())
             client, ready = opened
             if app is None:
                 app = App(
@@ -9794,12 +9852,25 @@ def _run(
             app.client = client
             wait.phase = LAUNCH_OPENING
             try:
-                app.startup(wait=wait, timeout=max(wait.left(), CALL_ANSWER_SECONDS))
+                while True:
+                    try:
+                        app.startup(wait=wait, timeout=max(wait.left(), CALL_ANSWER_SECONDS))
+                        break
+                    except GatewayCallError as error:
+                        # Hermes drains for a restart: the gateway is live and admits no session until it has let
+                        # its running work finish, stopped and come back. Asked again on this client while the wait
+                        # allows; the stop then ends this client as not ready, and the respawn below reattaches.
+                        if error.reason != RUNTIME_DRAINING or not wait.restarting(refused=True) or not wait.can_retry():
+                            raise
+                        wait.pause(LAUNCH_DRAIN_RETRY_SECONDS)
                 break
             except GatewayUnavailable as error:
                 failure: GatewayUnavailable = error
             except (GatewayCallError, GatewayTimeout) as error:
                 wait.done()
+                if isinstance(error, GatewayCallError) and error.reason == RUNTIME_DRAINING:
+                    _say(stderr, LAUNCH_DRAIN_GAVE_UP.format(seconds=math.ceil(wait.waited())))
+                    return 1
                 resume = environ.get("HERMES_TUI_RESUME", "")
                 if resume and isinstance(error, GatewayCallError) and not error.drift:
                     # Hermes refused this session as itself (not_found, permission_denied, ...): its own TUI, the
@@ -9811,12 +9882,14 @@ def _run(
                         sentence=f" {sentence}" if sentence else "",
                     ))
                     return 1
-                if isinstance(error, GatewayTimeout):
-                    _say(stderr, LAUNCH_GAVE_UP.format(seconds=math.ceil(wait.waited())))
                 _say(stderr, f"omh: the OMH TUI could not open a Hermes session: {error}")
+                if isinstance(error, GatewayTimeout):  # there, not answering: Hermes' own TUI would wait the same
+                    _say(stderr, LAUNCH_GAVE_UP.format(seconds=math.ceil(wait.waited())))
+                    return 1
                 return request_fallback(environ, stderr.said())
             # The gateway went away as not ready while the session opened (a restart's going-away close): another
-            # try, at most `SESSION_RETRY_LIMIT`. Any other exit (a crash answering the call) falls back at once.
+            # try, at most `SESSION_RETRY_LIMIT`; past that, or past the wait, the launch gives up as on a gateway
+            # that never answered. Any other exit (a crash answering the call) falls back at once.
             if respawn is not None and failure.not_ready and wait.can_retry() and session_retries < SESSION_RETRY_LIMIT:
                 session_retries += 1
                 client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=CLOSE_GRACE_SECONDS)
@@ -9829,6 +9902,9 @@ def _run(
                     failure = error
             wait.done()
             _say(stderr, f"omh: the OMH TUI could not open a Hermes session: {failure}")
+            if failure.not_ready:
+                _say(stderr, LAUNCH_GAVE_UP.format(seconds=math.ceil(wait.waited())))
+                return 1
             return request_fallback(environ, stderr.said())
         wait.done()
         terminal = app.terminal

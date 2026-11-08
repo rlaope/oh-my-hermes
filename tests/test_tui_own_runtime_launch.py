@@ -118,6 +118,7 @@ class DecisionTests(unittest.TestCase):
             self.assertIn("could not prepare the TUI's own runtime home (disk full)", stderr.getvalue())
 
 
+@unittest.skipIf(os.name == "nt", "fixture executable uses a POSIX shebang")
 class LaunchTests(unittest.TestCase):
     def test_the_launcher_gets_the_tui_home_and_the_tui_is_told_the_bots_home(self) -> None:
         with TemporaryDirectory() as tmp:
