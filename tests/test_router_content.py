@@ -326,7 +326,9 @@ class RouterContentTests(unittest.TestCase):
         # a past decision (33,172 -> 33,214 measured); the same 22-byte allowance is kept.
         # 33,236 -> 33,274: descriptions backtick the sibling they hand to, so the rewrite can give it its
         # label (33,214 -> 33,252 measured); the same 22-byte allowance is kept.
-        self.assertLess(len(rendered.encode("utf-8")), 33_274)
+        # 33,274 -> 33,622: `model-compression` adds its index entry (33,138 ->
+        # 33,486 measured, +348); the existing allowance is kept, not widened.
+        self.assertLess(len(rendered.encode("utf-8")), 33_622)
         for line in rendered.splitlines():
             self.assertLess(len(line.encode("utf-8")), 400, line)
 
@@ -522,9 +524,12 @@ class RouterContentTests(unittest.TestCase):
             # above holds: `systematic-review`'s 194-byte line moves it past
             # 33,100 (33,172 measured).
             if template.skill_name == "oh-my-hermes" and template.relative_path == "references/workflow-registry.md":
-                limit = 33_841
+                # 33,841 -> 34,079: `model-compression` adds its 217-byte trigger
+                # row and 21-byte planner token (33,808 -> 34,046 measured, +238);
+                # the existing headroom is kept.
+                limit = 34_079
             elif template.skill_name == "oh-my-hermes" and template.relative_path == "references/catalog-index.md":
-                limit = 33_274
+                limit = 33_622
             else:
                 limit = 33_100
             self.assertLess(len(template.content.encode("utf-8")), limit, template.relative_path)

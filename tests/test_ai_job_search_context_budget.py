@@ -66,9 +66,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 13326 -> 13416 and the digest re-derived: systematic-review adds one
         # index line (+90 with its newline); dropping only that line reproduces
         # 61fb0902...f7f9b / 13326.
-        self.assertEqual(_digest(legacy), '4b82ff50629ea1e2db50d5994ab8bc0f65094b9e432f0f5c91aed98b046d5ca5')
-        self.assertEqual(len('\n'.join(legacy)), 13416)
-        delta = len('\n'.join(lines)) - 13416
+        # 13416 -> 13506 and the digest re-derived: model-compression adds one
+        # index line (+90 with its newline); dropping only that line reproduces
+        # 4b82ff50...d5ca5 / 13416.
+        self.assertEqual(_digest(legacy), 'a1761286649df00a74f79cd49acb7284e6ea4480e2cdc9bf3e1cf6c45f2d05af')
+        self.assertEqual(len('\n'.join(legacy)), 13506)
+        delta = len('\n'.join(lines)) - 13506
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, INDEX_DELTA_CAP)
         # A catalog ratchet is exact; do not carry the old row's unused slack.
@@ -159,11 +162,18 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # c5c17f84...2eb0.
             # 538004 -> 538044 and the digest re-derived: no learned coding-owner default; the maestro and dag-ulw
             # rows say which choice stands (+40, itemized at the same limit); the pin before it was cbc66058...36bc.
-            (skill_capabilities, 538044, FULL_ROW_DELTA_CAP,
-             '3cb600bd1434f53caa7464cf49cf4426ea6ec6133a105df42f31fa7de0c2e829',
+            # model-compression adds one row to each producer (+3975 full, +947
+            # standalone); dropping only that row reproduces c5c17f84...62eb0 and
+            # 5f2c0396...52d48 at the old bases 537829 and 144536.
+            # Merged with main: 538004 + 3975 = 541979; dropping only the
+            # model-compression row reproduces main's cbc66058...36bc.
+            # Merged with main again: 538044 + 3975 = 542019; dropping only the
+            # model-compression row reproduces main's 3cb600bd...e829.
+            (skill_capabilities, 542019, FULL_ROW_DELTA_CAP,
+             '4fff984f2984445112daabeb15919cd7ac283527ed42b13267aa549eead1c1d6',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
-            (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
-             '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
+            (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
+             '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
              release.STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
         ):
             with self.subTest(producer=producer.__name__):
@@ -203,14 +213,18 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # trigger row (255 bytes) and its researcher token (+21); removing
         # only those reproduces 29ebe70f...7063.
         # Digest re-derived for the reach round: the registry rows of the triggers it drops.
-        self.assertEqual(_digest(legacy), 'd32edf2216a679aa88fdffccdd9564a44443ea1336b663c24b8ae373e8634ea5')
+        # 33564 -> 33802 and the digest re-derived: model-compression adds its
+        # 217-byte trigger row and a 21-byte planner token (+238); dropping both
+        # reproduces d32edf22...e34ea5 / 33564.
+        self.assertEqual(_digest(legacy), '4be90d470edd9238c5b375c0318ad20dc49544621d79b43f44b5b446a96ee2fa')
         baseline = len(''.join(legacy).encode())
-        self.assertEqual(baseline, 33564)
+        self.assertEqual(baseline, 33802)
         # 33_100 -> 33_318: main's ru pack and repro-audit (+222 over 32874) used
         # the gate's room and sprite-forge adds its 221-byte row and token; each
         # side alone fit, the merged tree measures 33317. The gate stays exact.
         # 33_318 -> 33_594: systematic-review's 276 bytes; the gate stays exact.
-        self.assertLess(baseline, 33_594)  # The existing content keeps its old gate.
+        # 33_594 -> 33_803: model-compression's 238 bytes; the gate stays exact.
+        self.assertLess(baseline, 33_803)  # The existing content keeps its old gate.
         self.assertLessEqual(len(registry.encode()) - baseline, REGISTRY_DELTA_CAP)
 
     def test_repeated_growth_is_only_mandatory_rails_and_existing_bodies_survive(self) -> None:
@@ -416,7 +430,17 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # No learned coding-owner default then: only dag-ulw and maestro move, and the pin before it was
         # 4da0a2a3...f96c. Its review then lists the shared rail among omh-routing's own references, which its
         # one-line reply rule names; only that body moves, and the pin before it was 8484c56d...21dd.
-        self.assertEqual(_digest(legacy_hashes), '15b8c2cd20e6e7fc7da7253eeece9abd8e80bf14cb6165dd7579485b239e9716')
+        # Re-derived for model-compression: its body joins the legacy set, and
+        # inference-serving, model-finetuning, model-optimization and
+        # rules-distill each gain one Do Not Use line naming it. Without the new
+        # body the repeated bytes reproduce 92262; its Workflow Lane rail adds 341.
+        # Merged with main: both sides' bodies; main's pin before that merge was
+        # 62bebac1...7abd0b, and this branch's was a25a40f0...19bb2.
+        # Merged with main again: main's pin was 4da0a2a3...f96c, and this
+        # branch's was bdc90eb3...b8a4.
+        # Merged with main a third time: main's pin was 15b8c2cd...9716, and this
+        # branch's was 43186eb6...b987.
+        self.assertEqual(_digest(legacy_hashes), '758d8116dbdf5811dc81aee0ef5e70a78c463c0d7b3b5d4400254d0232949152')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -439,7 +463,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # bodies repeated (-865).
         # 114629 -> 92262: the lane line's sample of member names was the same text in every lane mate.
         # 92262 -> 83098: every body's reply-voice paragraph became one line pointing at the shared rail.
-        self.assertEqual(legacy['repeated']['bytes'], 83098)
+        # model-compression's Workflow Lane rail adds 341 to main's 83098.
+        self.assertEqual(legacy['repeated']['bytes'], 83439)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

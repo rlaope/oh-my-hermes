@@ -127,6 +127,7 @@ _PORTABILITY: dict[str, str] = {
     'omh-data-pipelines': PORTABILITY_PORTABLE,
     # required_inputs: the failing task and held-out examples, what cheaper fixes scored, the data's shape, the base model; expected_outputs: a fine-tune decision, method, data plan, baseline comparison and promotion gate prepared for an operator, so no Hermes runtime is needed.
     'omh-model-finetuning': PORTABILITY_PORTABLE,
+    'omh-model-compression': PORTABILITY_PORTABLE,
     # required_inputs: platforms and build numbers, how signing is held, the shipped SDKs, the beta and its testers, observed crash figures; expected_outputs: signing, privacy, beta, rollout and hotfix plans prepared for an operator, so no Hermes runtime is needed.
     'omh-mobile-release': PORTABILITY_PORTABLE,
     # required_inputs: the control, its population, sampling guidance, materiality, observed evidence; expected_outputs: control, sample design, evidence requests, re-performance record and a criteria-derived grade prepared for an auditor, so no Hermes runtime is needed.
@@ -485,6 +486,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'iac-change/references/iac-change-method.md',
     'data-pipelines/references/pipeline-method.md',
     'model-finetuning/references/finetuning-method.md',
+    'model-compression/references/compression-method.md',
     'mobile-release/references/mobile-release-method.md',
     'internal-audit/references/control-audit-method.md',
     'data-share-review/references/data-share-method.md',

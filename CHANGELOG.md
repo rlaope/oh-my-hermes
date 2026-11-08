@@ -410,6 +410,20 @@ All notable changes will be documented here.
   `app-debugging`, `code-review` and `codebase-onboarding` get their own
   smaller fixes. No backward-compatibility layer: the producers and their
   generated files ship together.
+- **Making a model smaller now has its own skill, `omh-model-compression`.**
+  "Quantize this model", "distill this model into a smaller one", GPTQ, AWQ,
+  GGUF, FP8, bitsandbytes, pruning and their Korean phrases (`모델 양자화`,
+  `지식 증류`, ...) reach a plan that sizes the target from the hardware,
+  memory budget and runtime, tries the cheapest method first, keeps
+  calibration data apart from the held-out eval, and keeps a smaller model
+  only when it holds quality against the uncompressed baseline on the
+  person's own task, with perplexity or KL divergence as a secondary signal.
+  Its reference quotes each command with the page it was read on. A phrase
+  that other fields share ("compress the model", "structured pruning",
+  "8-bit quantization") routes here only beside a word of model weights, so
+  a Blender asset, a business model, fruit trees and audio stay where they
+  were. `inference-serving`, `model-finetuning`, `model-optimization` and
+  `rules-distill` now name the new skill in their Do Not Use lines.
 - **The research and knowledge skills say what an expert needs and stop pointing
   at dead ends.** `omh-long-document-reading` runs the Hermes pdf skill's own
   environment instead of telling the model to `pip install`, keeps its range

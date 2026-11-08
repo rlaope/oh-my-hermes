@@ -1002,7 +1002,16 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Its re-review keeps `주가` and `time in` as they were and pins the lookups instead of the compounds.
             # The ops-review pair's follow-up adds four sentences where `리스크` or `블로커` is only spelled across
             # other words or split by a space.
-            expected=1456,
+            # model-compression: a video, image colors, a hedge, whisky, a show flat, a churn model, a
+            # regression's variables, fruit trees, audio bit depth, a Blender asset and a 3D asset in Korean
+            # stay off it (+11); "distill this model", a reach case kept off rules-distill, now dispatches to
+            # model-compression and moves to the intervention corpus (-1).
+            # model-compression review round: the review's statistics, 3D, game, signal and know-how
+            # sentences and fresh ones with an ordinary anchor-like word beside a shared phrase (+24).
+            # Its second review round: billions of money, data or volume, game, pixel-art and 3D bit widths,
+            # grid transformers and firmware quantization stay off it (+18).
+            # Its third review round: two billions of money or data, each followed by a noun, stay off it (+4).
+            expected=1512,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1603,7 +1612,13 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # blocker pair in either order, a repeat schedule, and a softened market request.
             # The ops-review pair's follow-up adds the pair written as one word and inside a longer word, which a
             # word-opening rule lost.
-            expected=1281,
+            # model-compression: eight compression requests (two through the ko pack, one the "distill this
+            # model" reach case moved from the negative corpus) and three that keep inference-serving,
+            # rules-distill and model-finetuning (+11).
+            # model-compression review round: GGUF and 4-bit Korean quantization, 70B-to-8B distillation in
+            # both languages, and a llama model slimmed in Korean reach the skill (+8).
+            # Its second review round drops the Korean 4-bit case, which falls back to main (-1).
+            expected=1299,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

@@ -96,7 +96,15 @@ class RoutingPrecisionTests(unittest.TestCase):
         # parser and "Hermes with OMH" before a task stay off it too.
         # systematic-review adds six review, screening and criteria controls.
         # The ops-review pair keeps `리스크` and `블로커` spelled across other words out.
-        self.assertEqual(payload["summary"]["case_count"], 1456)
+        # model-compression adds eleven compress, quantize, prune and distill
+        # controls in another sense and moves "distill this model" to the
+        # intervention corpus.
+        # Its review round adds twenty-four controls with an ordinary
+        # statistics, 3D, game, signal or know-how word beside a shared phrase.
+        # Its second review round adds eighteen: billions that are money, data or
+        # volume, game and 3D bit widths, grid transformers, firmware quantization.
+        # Its third review round adds four: two billions of money or data.
+        self.assertEqual(payload["summary"]["case_count"], 1512)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -259,7 +267,11 @@ class RoutingPrecisionTests(unittest.TestCase):
         # the user's own migrate / rewrite ask reach workflow-learning.
         # systematic-review adds four screening requests and two owner-keeping controls.
         # The ops-review pair keeps `리스크블로커` and `주요리스크와 블로커`.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1281)
+        # model-compression adds eight compression requests and three owner-keeping controls.
+        # Its review round adds eight requests that missed: GGUF and 4-bit Korean
+        # quantization, distillation by parameter count, a llama model slimmed.
+        # Its second review round drops the Korean 4-bit case, which falls back to main.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1299)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

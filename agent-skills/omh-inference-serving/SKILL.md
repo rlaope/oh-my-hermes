@@ -25,6 +25,7 @@ This is an OMH `inference-serving` workflow skill, projected for Agent Skills ho
 - The user wants their own machine's model routing or providers configured.
 - The question is whether a coding runtime/executor can run at all.
 - The goal is application or system performance rather than the serving endpoint itself; use `ulw-perf`.
+- The ask is producing the smaller weights -- GPTQ or AWQ calibration, pruning, or a distilled student -- and proving they still do the task; use `omh-model-compression`.
 
 ## Examples
 

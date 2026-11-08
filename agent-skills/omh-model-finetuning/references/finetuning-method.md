@@ -28,7 +28,7 @@ Tune prompts and retrieval on a development split. The held-out set is touched o
 
 SFT first and DPO after is the common order when both kinds of data exist.
 
-Distillation, training a smaller model on a larger model's outputs, is SFT on teacher outputs. The data plan names the teacher and whether its terms allow training on its outputs, and the comparison runs the teacher, the distilled student, and the untuned student on the same held-out eval. Pruning and quantization change existing weights and are not fine-tuning; OMH has no pruning workflow. A LoRA or other adapter trains a small set of extra weights: cheaper, swappable, and easy to roll back; train full weights only when an adapter measured short of the gap.
+Training on a larger model's outputs to teach a new behavior is SFT on teacher outputs. The data plan names the teacher and whether its terms allow training on its outputs, and the comparison runs the teacher, the trained student, and the untuned student on the same held-out eval. When the goal is a smaller copy of an existing model, distillation belongs to `omh-model-compression`, with pruning and quantization, which change existing weights and are not fine-tuning. A LoRA or other adapter trains a small set of extra weights: cheaper, swappable, and easy to roll back; train full weights only when an adapter measured short of the gap.
 
 ## 3. Training data checklist
 

@@ -10,7 +10,7 @@ metadata:
     phase: inference-serving
     role: operator
     quality_tier: observed-command-gated
-    related_skills: [omh-model-optimization, omh-model-setup, omh-executor-runtime-readiness, ulw-perf]
+    related_skills: [omh-model-optimization, omh-model-setup, omh-executor-runtime-readiness, ulw-perf, omh-model-compression]
 ---
 
 # Inference Serving
@@ -27,6 +27,7 @@ This is a Hermes-native `inference-serving` workflow skill.
 - The user wants their own machine's model routing or providers configured; use `omh-model-setup`.
 - The question is whether a coding runtime/executor can run at all; use `omh-executor-runtime-readiness`.
 - The goal is application or system performance rather than the serving endpoint itself; use `ulw-perf`.
+- The ask is producing the smaller weights -- GPTQ or AWQ calibration, pruning, or a distilled student -- and proving they still do the task; use `omh-model-compression`.
 
 ## Examples
 

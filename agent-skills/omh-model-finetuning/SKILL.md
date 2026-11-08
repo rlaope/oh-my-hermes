@@ -30,6 +30,7 @@ This is an OMH `model-finetuning` workflow skill, projected for Agent Skills hos
 - The ask is serving an existing model behind an endpoint or benchmarking that endpoint; use `omh-inference-serving`.
 - The ask is building an application on top of a hosted model -- RAG, structured output, prompt versions; use `omh-llm-app-dev`.
 - The ask is learning from an OMH run, a missed route, or a skill improvement candidate.
+- The ask is a smaller or cheaper copy of an existing network -- quantization, pruning, or distillation into a student whose goal is size; use `omh-model-compression`.
 
 ## Examples
 

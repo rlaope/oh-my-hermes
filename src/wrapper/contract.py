@@ -313,6 +313,8 @@ VISIBLE_ACTIONS = (
     "show_replay_plan",
     "prepare_finetune_decision",
     "show_promotion_gate",
+    "prepare_compression_plan",
+    "show_compression_quality_gate",
     "prepare_mobile_release_plan",
     "show_rollout_halt",
     "prepare_control_test_plan",
@@ -1190,6 +1192,8 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "show_replay_plan": ("show_replay_plan", "Show the replay plan"),
     "prepare_finetune_decision": ("prepare_finetune_decision", "Decide on fine-tuning"),
     "show_promotion_gate": ("show_promotion_gate", "Show the promotion gate"),
+    "prepare_compression_plan": ("prepare_compression_plan", "Plan the compression"),
+    "show_compression_quality_gate": ("show_compression_quality_gate", "Show the quality gate"),
     "prepare_mobile_release_plan": ("prepare_mobile_release_plan", "Plan the store release"),
     "show_rollout_halt": ("show_rollout_halt", "Show the halt thresholds"),
     "prepare_control_test_plan": ("prepare_control_test_plan", "Plan the control test"),
@@ -2460,6 +2464,37 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "training run",
             "eval score",
             "checkpoint promoted",
+        ],
+    },
+    "model-compression": {
+        "kind": "compression_plan",
+        "headline": "I can plan how to make this model smaller, and keep it only if it still does your task.",
+        "body": (
+            "I will size the target from your hardware, memory budget and runtime, measure the uncompressed model on your "
+            "held-out task examples, pick the cheapest method that fits (post-training quantization before pruning or "
+            "distillation), plan calibration data kept apart from that eval, and keep a smaller model only within your "
+            "stated tolerance. I compress nothing and run no eval."
+        ),
+        "phase": "compression_plan_prepared",
+        "next_action": "prepare_compression_plan",
+        "artifact_schema": "compression_target/v1",
+        "claim_boundary_suffix": "It is not a compressed model, a measured size, or an eval score until the output is observed.",
+        "actions": [
+            {"id": "prepare_compression_plan", "label": "Plan the compression", "style": "primary"},
+            {"id": "show_compression_quality_gate", "label": "Show the quality gate", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "size_the_target_from_hardware_and_runtime",
+            "measure_the_uncompressed_baseline_on_the_task",
+            "choose_the_cheapest_method_that_fits",
+            "plan_calibration_data_apart_from_the_eval",
+            "keep_only_a_candidate_within_tolerance",
+        ],
+        "evidence_not_observed": [
+            "compressed model",
+            "measured size",
+            "eval score",
         ],
     },
     "mobile-release": {
