@@ -1020,6 +1020,13 @@ All notable changes will be documented here.
   session row and its auxiliary calls across compaction segments, and `—`
   for any figure nothing reported. Contributed by @yqm-307 (#2665).
 
+- **The OMH TUI puts two blank rows between two tool calls of a turn.** A
+  run of calls now reads apart, as Claude Code's does; a folded row of
+  loaded skills counts as a call. Every other pair of blocks keeps one
+  blank row, and what a call printed under `⎿` stays right under it. On a
+  terminal too short to show the running calls whole, the live region keeps
+  one of the two, so the wider gap never costs a call row.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and

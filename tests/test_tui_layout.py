@@ -340,6 +340,18 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
                 shown = sum("read_file" in row for row in screen)
                 self.assertGreaterEqual(shown, before, "\n".join(screen))
 
+    def test_two_running_calls_keep_two_blank_rows_where_rows_allow_and_one_on_a_short_terminal(self) -> None:
+        """2026-11-09: two blank rows between two calls, as scrollback has them; a short terminal keeps one of them,
+        so the wider gap never costs a live call row (the test above)."""
+        for (rows, cols, agents), gap in {(42, 150, True): 2, (24, 80, False): 2, (15, 60, False): 1}.items():
+            with self.subTest(rows=rows, cols=cols, agents=agents):
+                screen = self.scene(rows, cols, agents)
+                calls = [index for index, row in enumerate(screen) if "read_file" in row]
+                self.assertEqual({below - above - 1 for above, below in zip(calls, calls[1:])}, {gap},
+                                 "\n".join(screen))
+                between = [row for above, below in zip(calls, calls[1:]) for row in screen[above + 1 : below]]
+                self.assertFalse(any(between), between)
+
     def test_a_tall_terminal_still_gets_both_gaps_around_the_plan(self) -> None:
         screen = self.scene(42, 150, True)
         plan = next(index for index, row in enumerate(screen) if row.startswith("[Plan]"))

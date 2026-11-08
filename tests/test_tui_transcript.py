@@ -32,6 +32,7 @@ from omh.tui.transcript import (
     STEER_TAKEN,
     GUTTER,
     OUTPUT_PREVIEW_ROWS,
+    AgentDoneBlock,
     AssistantBlock,
     CommandBlock,
     SteerBlock,
@@ -202,6 +203,46 @@ class SpacingTests(LoopTestCase):
         expected = ["┃ ❯ first", "", "▸ thought for 0.0s", "", "┃ ● terminal(ls)  0.5s", "", "┃ ⚚ Hermes", "┃   done", "", "┃ ❯ second"]
         self.assertEqual(lines_text(self.taken), expected)
         self.assertEqual(self.history(details=False), expected)
+
+    def test_two_blank_rows_between_two_calls_one_between_other_blocks_none_over_a_calls_output(self) -> None:
+        """Owner, 2026-11-09: two calls of a turn read apart, two blank rows between them (a folded run of loads is a
+        call of its group); every other pair of blocks keeps one, and what a call printed hangs under it."""
+        self.user("go")
+        self.step(ev("message.start"))
+        self.step(ev("reasoning.delta", text="look first"))
+        self.step(ev("message.delta", text="Looking.\n"))
+        self.step(ev("tool.start", tool_id="a", name="terminal", context="ls"))
+        self.step(ev("tool.complete", tool_id="a", name="terminal", result={"output": "a.py", "exit_code": 0}))
+        self.step(ev("tool.start", tool_id="b", name="read_file", context="a.py"))
+        self.assertEqual(self.live()[-3:], ["", "", "┃ ○ read_file(a.py)"])  # the live tail as scrollback has it
+        self.step(ev("tool.complete", tool_id="b", name="read_file", result={"content": "x"}))
+        self.step(ev("tool.start", tool_id="c", name="skill_view", context="dag-ulw"))
+        self.step(ev("tool.complete", tool_id="c", name="skill_view", result={"success": True, "name": "dag-ulw"}))
+        self.step(ev("message.delta", text="Done.\n"))
+        self.transcript.add_aside(AgentDoneBlock("explore", facts=("5s",)))
+        self.transcript.add_notice("gateway reconnected")
+        self.step(ev("message.complete", status="complete"))
+        self.transcript.add_turn_summary(3.0, None)
+        self.user("next")
+        heads = [(index, text) for index, text in enumerate(lines_text(self.taken)) if text]
+        gaps = [(above[:9], below[:9], at - over - 1) for (over, above), (at, below) in zip(heads, heads[1:])]
+        self.assertEqual(gaps, [
+            ("┃ ❯ go", "▸ thought", 1),           # prompt → thinking
+            ("▸ thought", "┃ ⚚ Herme", 1),         # thinking → reply
+            ("┃ ⚚ Herme", "┃   Looki", 0),
+            ("┃   Looki", "┃ ● termi", 1),          # reply → call
+            ("┃ ● termi", "┃   ⎿  a.", 0),          # call → its output
+            ("┃   ⎿  a.", "┃ ● read_", 2),          # call → call
+            ("┃ ● read_", "┃   ⎿  Re", 0),
+            ("┃   ⎿  Re", "┃ ● Loade", 2),          # call → folded run of loads, in the same group
+            ("┃ ● Loade", "┃ ⚚ Herme", 1),          # call → reply
+            ("┃ ⚚ Herme", "┃   Done.", 0),
+            ("┃   Done.", "● explore", 1),          # reply → briefing
+            ("● explore", "· gateway", 1),          # briefing → notice
+            ("· gateway", "  ✻ 3s · ", 1),          # notice → done line
+            ("  ✻ 3s · ", "┃ ❯ next", 1),           # done line → prompt
+        ])
+        self.assertEqual(lines_text(self.taken), self.history(details=False))
 
     def test_a_resumed_reply_renders_like_a_streamed_one(self) -> None:
         self.user("hi")
@@ -824,7 +865,7 @@ class ReasoningAndToolTests(LoopTestCase):
         self.step(ev("tool.generating", name="read_file"))
         self.step(ev("tool.generating", name="search_files"))
         self.step(ev("tool.start", tool_id="a", name="read_file", context="src/a.py"), at=1.0)
-        self.assertEqual(self.live(), ["┃ ○ read_file(src/a.py)", "", "┃ ◌ search_files"])
+        self.assertEqual(self.live(), ["┃ ○ read_file(src/a.py)", "", "", "┃ ◌ search_files"])
         self.step(ev("tool.start", tool_id="b", name="search_files", args={"pattern": "needle"}), at=1.1)
         self.step(ev("tool.complete", tool_id="a", name="read_file", duration_s=0.5, result={"content": "x"}))
         self.step(ev("tool.complete", tool_id="b", name="search_files", duration_s=0.7, result={"error": "rg failed"}))
@@ -837,8 +878,10 @@ class ReasoningAndToolTests(LoopTestCase):
                 "┃ ● read_file(src/a.py)  0.5s",
                 "┃   ⎿  Read 1 line",
                 "",
+                "",
                 "┃ ✗ search_files(needle)  0.7s",
                 "┃   ⎿  rg failed",
+                "",
                 "",
                 "┃ ✗ terminal(pytest)  2.0s",
                 "┃   ⎿  1 failed",
@@ -846,8 +889,8 @@ class ReasoningAndToolTests(LoopTestCase):
         )
         self.assertEqual(self.taken[0][0], rail_cell(THEME.accent))  # the launch look's rail; the mark says done
         # A failure's first line is grey like any result; its rail and its `✗` say it failed.
-        self.assertEqual(self.taken[4][-1].style, THEME.faint)
-        self.assertEqual([self.taken[row][0] for row in (3, 4)], [rail_cell(THEME.error)] * 2)  # search_files' rail
+        self.assertEqual(self.taken[5][-1].style, THEME.faint)
+        self.assertEqual([self.taken[row][0] for row in (4, 5)], [rail_cell(THEME.error)] * 2)  # search_files' rail
         self.step(ev("message.complete", text="Done.", status="complete"))
         self.assertIn("┃   ⎿  rg failed", self.history())
         self.assertIn("┃   ⎿  1 failed", self.history())
@@ -859,8 +902,8 @@ class ReasoningAndToolTests(LoopTestCase):
         self.step(ev("tool.start", tool_id="b", name="read_file", context="b.py"))
         self.step(ev("tool.complete", tool_id="b", name="read_file", duration_s=0.1, result={"content": ""}))
         flushed = self.step(ev("message.complete", text="", status="complete"))
-        self.assertEqual(flushed, ["┃ ● read_file(a.py)  0.1s", "┃   ⎿  Read 0 lines", "", "┃ ● read_file(b.py)  0.1s",
-                                   "┃   ⎿  Read 0 lines"])  # a blank row between two calls
+        self.assertEqual(flushed, ["┃ ● read_file(a.py)  0.1s", "┃   ⎿  Read 0 lines", "", "",
+                                   "┃ ● read_file(b.py)  0.1s", "┃   ⎿  Read 0 lines"])  # two blank rows between two calls
 
     def test_a_denied_approval_shows_as_denied(self) -> None:
         self.user("Use your terminal tool to run exactly this shell command: rm -rf ./omh-m0-probe-dir")
@@ -972,9 +1015,9 @@ class ToolDraftTests(LoopTestCase):
         self.step(ev("tool.generating", name="tool_call"))
         self.step(ev("tool.generating", name="read_file"))
         self.step(ev("tool.start", tool_id="a", name="read_file", context="a.py"))
-        self.assertEqual(self.live(), ["┃ ◌ tool_call", "", "┃ ○ read_file(a.py)"])
+        self.assertEqual(self.live(), ["┃ ◌ tool_call", "", "", "┃ ○ read_file(a.py)"])
         self.step(ev("tool.start", tool_id="b", name="todo_list", context="planning 1 task(s)"))
-        self.assertEqual(self.live(), ["┃ ○ todo_list(planning 1 task(s))", "", "┃ ○ read_file(a.py)"])
+        self.assertEqual(self.live(), ["┃ ○ todo_list(planning 1 task(s))", "", "", "┃ ○ read_file(a.py)"])
 
     def test_two_bridge_drafts_become_their_calls_in_the_order_they_started(self) -> None:
         # Each start claims the first unclaimed bridge draft, so the rows keep the order the calls began in.
@@ -982,9 +1025,9 @@ class ToolDraftTests(LoopTestCase):
         self.step(ev("tool.generating", name="tool_call"))
         self.step(ev("tool.generating", name="tool_call"))
         self.step(ev("tool.start", tool_id="a", name="todo_list", context="planning 1 task(s)"))
-        self.assertEqual(self.live(), ["┃ ○ todo_list(planning 1 task(s))", "", "┃ ◌ tool_call"])
+        self.assertEqual(self.live(), ["┃ ○ todo_list(planning 1 task(s))", "", "", "┃ ◌ tool_call"])
         self.step(ev("tool.start", tool_id="b", name="web_search", context="hermes agent"))
-        self.assertEqual(self.live(), ["┃ ○ todo_list(planning 1 task(s))", "", "┃ ○ web_search(hermes agent)"])
+        self.assertEqual(self.live(), ["┃ ○ todo_list(planning 1 task(s))", "", "", "┃ ○ web_search(hermes agent)"])
 
     def test_a_streamed_attempt_hermes_discards_leaves_no_row_and_no_count(self) -> None:
         self.step(ev("message.start"))
@@ -1353,8 +1396,10 @@ class InlineDiffTests(LoopTestCase):
                 "┃ ✗ patch(src/app.py)  0.3s",
                 "┃   ⎿  denied",
                 "",
+                "",
                 "┃ ✗ patch(src/app.py)  0.3s",
                 "┃   ⎿  old_string not found in src/app.py",
+                "",
                 "",
                 "┃ ✗ patch(src/app.py)  0.3s",
                 "┃   ⎿  no change",

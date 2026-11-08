@@ -1060,7 +1060,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   terminal whatever is saved. Each row of the `/theme` picker shows the
   look's colours on its ground.
 - Each tool call is a block of its own on a rail in its state's
-  colour, with a blank row between two calls and no header over a turn's
+  colour, with two blank rows between two calls (one between any other two
+  blocks) and no header over a turn's
   calls: its state's mark (below), its name, and what it ran on (a path, a
   command, a query) in parentheses, cut with `…` where the row is too narrow
   (`┃ ● terminal(rm -rf ./tmp-cache)  1.9s`). Under it (`  ⎿  `) it shows the first three lines of what the tool
@@ -1093,7 +1094,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   run, say), the last three lines it printed, under the
   count of the lines above them. An edit's diff hangs under the same `⎿`, and a long diff counts
   its rest the same way. A resumed session's earlier calls (`omh --resume`,
-  `/resume`, a switch) are drawn the same way, a blank row between two,
+  `/resume`, a switch) are drawn the same way, two blank rows between two,
   with a grey `●` on a grey rail, since Hermes' record of them keeps no
   outcome, and an edit's diff under it where Hermes kept the one it showed.
   Ctrl+O opens the whole transcript with every detail

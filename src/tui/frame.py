@@ -185,6 +185,14 @@ def build_frame(
         )
 
     budget = fit(tail)
+    # On a terminal too short to show the tail whole and `SPACER_LIVE_ROWS` live rows, a run of blank rows (the two
+    # between two calls, `CALL_GAP_ROWS`) keeps one, so the wider gap never costs one of the few live rows (#2342).
+    if budget.tail < len(tail) and budget.tail - tail_floor - 1 < SPACER_LIVE_ROWS:
+        live = len(tail) - tail_floor
+        kept = [row for index, row in enumerate(tail[:live]) if row or index == 0 or tail[index - 1]]
+        if len(kept) < live:
+            tail = [*kept, *tail[live:]]
+            budget = fit(tail)
     spacer = len(tail) - tail_floor - 1  # the blank row `tail_spacer` says stands right above the working rows
     # A tail cut short keeps its spacer and loses its oldest live row instead (owner, 2026-10-30: the working row
     # read glued to the last block), so long as `SPACER_LIVE_ROWS` live rows still show above it; on a terminal too
