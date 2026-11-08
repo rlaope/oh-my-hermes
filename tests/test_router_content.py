@@ -389,8 +389,8 @@ class RouterContentTests(unittest.TestCase):
         # language, speech level, endings, and progress updates, with the
         # user's language as the fallback; 13,329 measured.
         # 13,600 -> 13,900: the tail's one reply line takes back the
-        # turn-ending rule (finished work ends without a question; a decision
-        # left to the user ends on one specific question); 13,630 measured.
+        # turn-ending rule (delivered work ends without a question; a choice
+        # the person asked to make ends on one specific question); 13,701 measured.
         self.assertLess(len(router.content.encode("utf-8")), 13_900)
         self.assertIn("best-effort Hermes prompt guidance", router.content)
         self.assertIn("does not override Hermes core routing", router.content)
@@ -478,8 +478,8 @@ class RouterContentTests(unittest.TestCase):
         # language, speech level, endings, and progress updates, with the
         # user's language as the fallback; 13,329 measured.
         # 13,600 -> 13,900: the tail's one reply line takes back the
-        # turn-ending rule (finished work ends without a question; a decision
-        # left to the user ends on one specific question); 13,630 measured.
+        # turn-ending rule (delivered work ends without a question; a choice
+        # the person asked to make ends on one specific question); 13,701 measured.
         self.assertLess(len(router.content.encode("utf-8")), 13_900)
         # 24,500 -> 25,300: workflow-registry.md carries one row per routable
         # workflow, so the `web-research` split and the `codebase-uml` row
@@ -1256,11 +1256,13 @@ class RouterContentTests(unittest.TestCase):
             "OMH shapes structure and content only",
             # The turn-ending rule itself stays in the line: a live run loaded
             # the rail in none of its turns, so a pointer alone did not carry
-            # it, and decision replies stopped ending on one question. Finished
-            # work comes first, so completion is the default ending.
-            "Finished work ends with no question and no offer",
-            "when a decision only the user can make remains, end with one specific question about that decision",
-            "not a list of questions, a generic offer, or a footer",
+            # it, and decision replies stopped ending on one question. The test
+            # is the request itself, with delivery as the default: a clause
+            # keyed on "a decision remains" let open points inside finished
+            # work read as decisions and drew questions onto it.
+            "When the requested output is delivered, put any open points inside the result and end with no question or offer",
+            "only when the person asked to choose or decide and that choice is still theirs, end with one specific question about it",
+            "not a list, a generic offer, or a footer",
             "the shared rail's Reply Language And Host Voice and Turn Ending sections hold the full rule",
         )
         templates = {template.name: template.content for template in builtin_skill_templates()}
@@ -1333,8 +1335,8 @@ class RouterContentTests(unittest.TestCase):
         for template in builtin_skill_templates():
             with self.subTest(renderer="builtin_skill_templates", skill=template.name):
                 text = " ".join(template.content.split())
-                self.assertIn("Finished work ends with no question and no offer", text)
-                self.assertIn("end with one specific question about that decision", text)
+                self.assertIn("When the requested output is delivered, put any open points inside the result", text)
+                self.assertIn("only when the person asked to choose or decide and that choice is still theirs", text)
                 self.assertIn("Reply Language And Host Voice and Turn Ending sections hold the full rule", text)
                 self.assertNotIn("when a stop condition or a decision the user owns ends the turn", text)
 
