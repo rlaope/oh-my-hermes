@@ -127,7 +127,8 @@ class SkillContextCostTests(unittest.TestCase):
         # (+382, not search guidance).
         # 12,261 -> 12,409: web-research's Do-Not-Use line for market sizing (+148, not search guidance).
         # Each baseline -316: every body's reply-voice paragraph becomes one line (not search guidance).
-        baseline = {'research': 20_586, 'web-research': 12_093, 'source-finder': 9_093}
+        # Each baseline +205: the one reply line takes back the turn-ending rule (not search guidance).
+        baseline = {'research': 20_791, 'web-research': 12_298, 'source-finder': 9_298}
         for name, before in baseline.items():
             record = skill_record(name)
             body = record.body().content

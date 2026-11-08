@@ -765,6 +765,16 @@ All notable changes will be documented here.
   in the shared rail's Reply Language And Host Voice and Turn Ending sections,
   which already held them. Portable agent-skills bodies keep the full
   paragraph, since their hosts have no shared rail.
+- **A Hermes skill's reply ends on one specific question again when a
+  decision is left to the user.** The one reply line in every Hermes skill
+  body takes back the turn-ending rule, finished work first: finished work
+  ends with no question and no offer, and when a decision only the user can
+  make remains, the reply ends with one specific question about that
+  decision, not a list of questions, a generic offer, or a footer. With only
+  a pointer to the shared rail, models did not load the rail and decision
+  replies stopped ending on that question. The persona and language core and
+  the rail pointer stay as they were; portable agent-skills bodies already
+  carried the rule and are unchanged.
 - **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
   `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
   or Enter opens sessions or bots, folds the plan, searches history, cycles
