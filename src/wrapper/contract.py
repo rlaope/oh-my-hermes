@@ -167,7 +167,6 @@ VISIBLE_ACTIONS = (
     "prepare_handoff",
     "prepare_project_terms_context",
     "choose_executor",
-    "reset_coding_owner_preference",
     "show_prompt_handoff",
     "copy_prompt_handoff",
     "copy_fanout_resume",
@@ -6005,16 +6004,9 @@ def _resolve_delegate_executor_target(executor_target: str, paths: OmhPaths | No
         resolved = setup_default
         source = "setup_profile"
     else:
-        learned = resolve_coding_route_decision(
-            normalized_phrase(message),
-            owner_preference_state=read_owner_preference(paths) if paths else None,
-        )
-        if learned.source == "learned_owner_preference":
-            resolved = learned.selected_owner
-            source = "learned_owner_preference"
-        else:
-            resolved = "choose"
-            source = "caller_default"
+        # An earlier request's choice never selects the owner: the person chooses again.
+        resolved = "choose"
+        source = "caller_default"
 
     return resolved, {
         "schema_version": "executor_resolution/v1",
@@ -6068,9 +6060,9 @@ def _attach_coding_owner_handoff(
         # Narrower than `force_coding_handoff` above (which this call always
         # sets): only "explicit" (an operator/CLI-named owner) and
         # "message_mention" (named in the chat message text) are a genuine
-        # per-run owner choice. "setup_profile", "learned_owner_preference",
-        # and "caller_default" are resolved defaults, never a choice for this
-        # run, so they never bypass the intent-genre veto.
+        # per-run owner choice. "setup_profile" and "caller_default" are
+        # resolved defaults, never a choice for this run, so they never bypass
+        # the intent-genre veto.
         explicit_owner_choice=executor_resolution.get("source") in {"explicit", "message_mention"},
         preferred_workflow=str(route_payload.get("selected_skill", "")),
         preferred_workflow_score=_intish(route_payload.get("score", 0)),
@@ -6180,27 +6172,9 @@ def _owner_preference_state(delegation: Mapping[str, object]) -> dict[str, objec
     }
 
 
-def _append_owner_preference_actions(
-    actions: list[dict[str, object]],
-    delegation: Mapping[str, object],
-    *,
-    before_last: bool = False,
-) -> None:
-    decision = _nested(delegation, "coding_route_decision")
-    if not decision.get("owner_preference_override_available"):
-        actions.append(_action("choose_executor", "Change coding agent", "secondary"))
-        return
-    owner_actions = [
-        _action("choose_executor", "Override learned coding agent", "secondary"),
-        _action(
-            "reset_coding_owner_preference",
-            "Reset learned coding agent",
-            "secondary",
-            payload={"route_family": decision.get("owner_preference_route_family", "")},
-        ),
-    ]
-    insertion = max(0, len(actions) - 1) if before_last else len(actions)
-    actions[insertion:insertion] = owner_actions
+def _append_owner_preference_actions(actions: list[dict[str, object]]) -> None:
+    """The person can always change the coding agent; no learned default exists to override or reset."""
+    actions.append(_action("choose_executor", "Change coding agent", "secondary"))
 
 
 def _delegation_next_action(delegation: dict[str, object]) -> str:
@@ -8190,7 +8164,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                     },
                 )
             )
-        _append_owner_preference_actions(actions, delegation_payload)
+        _append_owner_preference_actions(actions)
         actions.append(_action("show_status", "Show status", "secondary"))
         next_action = "show_coding_handoff_status" if status_request else "send_to_executor"
         actions, next_action = _apply_action_gate_arbitration(actions, next_action, gate)
@@ -8257,7 +8231,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 _action("copy_prompt_handoff", f"Copy {label} prompt", "secondary", payload={"selected_executor_profile": selected}),
             ]
         )
-        _append_owner_preference_actions(actions, delegation_payload)
+        _append_owner_preference_actions(actions)
         if status_request:
             actions.append(
                 _action(
@@ -8348,7 +8322,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
             _action("start_swarm", "Start swarm", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
             _action("show_status", "Show status", "secondary"),
         ]
-        _append_owner_preference_actions(runtime_actions, delegation_payload, before_last=True)
+        _append_owner_preference_actions(runtime_actions)
         runtime_next_action = "show_coding_handoff_status" if status_request else "show_runtime_handoff"
         runtime_actions, runtime_next_action = _apply_action_gate_arbitration(runtime_actions, runtime_next_action, gate)
         return _chat_response(
@@ -8406,9 +8380,6 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "in parallel. Main coding stays delegated."
             )
         owner_preference_state = _owner_preference_state(delegation_payload)
-        reset_reason = str(owner_preference_state.get("owner_preference_reset_reason", ""))
-        if reset_reason:
-            body = f"{body} The learned coding-agent streak was reset: {reset_reason}."
         choice_actions, choice_next_action = _apply_action_gate_arbitration(
             [
                 _action("choose_executor", "Choose coding agent", "primary"),

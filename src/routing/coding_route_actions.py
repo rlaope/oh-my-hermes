@@ -40,7 +40,6 @@ CODING_ROUTE_NEXT_ACTIONS: tuple[str, ...] = (
 CODING_ROUTE_DECISION_SOURCES: tuple[str, ...] = (
     "request_named_executor",
     "recorded_setup_preference",
-    "learned_owner_preference",
     "request_capability_match",
     "user_choice_required",
 )
@@ -257,18 +256,6 @@ def resolve_coding_route_decision(
             **preference_fields,
         )
 
-    if owner_preference.action == "use_learned_default":
-        return CodingRouteDecision(
-            next_action=RECORDED_OWNER_NEXT_ACTION,
-            source="learned_owner_preference",
-            reason=owner_preference.reason,
-            confidence="high",
-            choice_required=False,
-            selected_owner=owner_preference.selected_owner,
-            matched_cues=("learned_owner_preference",),
-            **preference_fields,
-        )
-
     family, family_cues = _compatible_route_family(normalized_query)
     if family:
         return CodingRouteDecision(
@@ -354,7 +341,8 @@ def _owner_preference_fields(
         "owner_preference_route_family": getattr(decision, "route_family"),
         "owner_preference_evidence_count": getattr(decision, "evidence_count"),
         "owner_preference_override_available": getattr(decision, "override_available"),
-        "owner_preference_reset_available": getattr(decision, "action") == "use_learned_default",
+        # No learned default exists any more, so there is nothing to override or reset per request.
+        "owner_preference_reset_available": False,
         "owner_preference_reset_reason": reset_reason,
     }
 

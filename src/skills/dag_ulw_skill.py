@@ -50,7 +50,7 @@ DEFINITION = SkillDefinition(
         "`delegate_task` child, routed per category with `omh_delegate_route`. OMH's `omh_dag` tool keeps the "
         "graph, and only its calls start nodes: a `delegate_task` without the `[dag:<run>/<node>]` marker it "
         "returned is no node of the run. Coding nodes go to an external coding CLI only when the person named "
-        "that owner in the dag-ulw request that defines the run; a choice counts only for the request it was "
+        "that owner in a request that invokes dag-ulw and defines the run; a choice counts only for the request it was "
         "made in, so an earlier request's choice, `omh chat` or `omh coding` does not count. Then `omh_dag` "
         "lists each owner's nodes under `exports`. Otherwise no external CLI runs."
     ),
@@ -324,11 +324,13 @@ In the TUI a completion per node is fine; the panel and `/dag` draw the graph.
 
 A coding-owner choice counts only for the request it was made in, as it does for `ulw-maestro`: an
 external coding CLI spends the person's money and quota. The person chooses by naming Codex or Claude Code,
-or both, in the dag-ulw request itself (`/dag-ulw <goal> with codex`). `define` keeps the owners that
-request named for the whole run, and only for that run. An earlier request's choice, a choice made in
-`omh chat` or `omh coding`, and a recorded or learned preference never count. When the person wants an
-external owner and this request names none, ask them to name it in a dag-ulw request; do not reuse an
-earlier one.
+or both, in a request that invokes dag-ulw (`/dag-ulw <goal> with codex`, `dag-ulw로 ... codex로`); a
+request that only reads as big work, without invoking dag-ulw, names no owner. `define` keeps the owners
+that request named for the whole run, and only for that run. An earlier request's choice, a choice made in
+`omh chat` or `omh coding`, and a recorded preference never count. When the person wants an external owner
+and this request names none, ask them to name it in a request that invokes dag-ulw; do not reuse an
+earlier one. Defining the same run again changes nothing, so a newly named owner needs a new run id (or
+cancel this run and define it again).
 
 With such a choice:
 

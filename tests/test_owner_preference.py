@@ -44,7 +44,7 @@ def _record(state: dict[str, object], owner: str, index: int, **kwargs: object) 
 
 
 class OwnerPreferenceLearningTests(unittest.TestCase):
-    def test_first_three_choices_ask_and_fourth_uses_visible_learned_default(self) -> None:
+    def test_three_accepted_choices_never_make_a_default_and_the_fourth_asks(self) -> None:
         state = empty_owner_preference_state()
 
         for index in range(3):
@@ -54,13 +54,14 @@ class OwnerPreferenceLearningTests(unittest.TestCase):
             self.assertEqual(before.selected_owner, "")
             state = _record(state, "codex", index)
 
+        # The streak is kept as inert history; it never selects the owner.
         fourth = owner_preference_decision(state, route_family=ROUTE_FAMILY)
-        self.assertEqual(fourth.action, "use_learned_default")
-        self.assertEqual(fourth.selected_owner, "codex")
+        self.assertEqual(fourth.action, "ask_explicit_owner")
+        self.assertEqual(fourth.reason_code, "explicit_choice_required")
+        self.assertEqual(fourth.selected_owner, "")
         self.assertEqual(fourth.route_family, ROUTE_FAMILY)
         self.assertEqual(fourth.evidence_count, 3)
-        self.assertTrue(fourth.override_available)
-        self.assertIn("three", fourth.reason)
+        self.assertFalse(fourth.override_available)
 
         route = state["routes"][ROUTE_FAMILY]
         self.assertEqual(route["consecutive_accepted_explicit_choices"], 3)

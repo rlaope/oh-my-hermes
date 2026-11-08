@@ -3097,11 +3097,13 @@ omh coding model-routing status --json
 ```
 
 The report separates confirmed models from discovered-only metadata, Hermes
-aliases from Maestro category readiness, and owner-learning state from both.
-Its missing recommendation heads are advisory. To clear only one learned owner
-preference, an agent/maintainer may run `omh coding model-routing reset
---route-family <id>`; this does not alter aliases, recommendations, providers,
-or credentials.
+aliases from Maestro category readiness, and the stored coding-owner choices
+from both. Its missing recommendation heads are advisory. A stored choice
+selects no owner: a coding-owner choice counts only for the request it was made
+in, so the router asks again unless the request names an owner or the setup
+profile holds one. To clear one route's stored choices, an agent/maintainer may
+run `omh coding model-routing reset --route-family <id>`; this does not alter
+aliases, recommendations, providers, or credentials.
 
 ### External coding CLI handoff (claude-code / codex)
 

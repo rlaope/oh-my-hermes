@@ -3955,12 +3955,12 @@ def _add_coding_commands(sub) -> None:
 
     model_routing = coding_sub.add_parser(
         "model-routing",
-        help="Inspect local model routing readiness or reset owner-learning metadata.",
+        help="Inspect local model routing readiness or reset stored owner-choice metadata.",
     )
     model_routing_sub = model_routing.add_subparsers(dest="model_routing_command", required=True)
     model_routing_status = model_routing_sub.add_parser(
         "status",
-        help="Explain discovered/confirmed models, Hermes aliases, Maestro recommendations, and owner learning.",
+        help="Explain discovered/confirmed models, Hermes aliases, Maestro recommendations, and stored owner choices.",
     )
     model_routing_status.add_argument(
         "--discovery-home",
@@ -3971,7 +3971,7 @@ def _add_coding_commands(sub) -> None:
     model_routing_status.set_defaults(func=cmd_coding_model_routing_status)
     model_routing_reset = model_routing_sub.add_parser(
         "reset",
-        help="Reset one learned coding-owner preference; no model/provider configuration is changed.",
+        help="Clear one route's stored coding-owner choices (they select no owner); no model/provider configuration is changed.",
     )
     model_routing_reset.add_argument("--route-family", required=True, help="Opaque route-family id to reset.")
     model_routing_reset.add_argument("--reason", default="operator_reset", help="Opaque metadata reason for the reset.")

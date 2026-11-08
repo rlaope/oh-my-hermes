@@ -1936,7 +1936,7 @@ def put_record(home, state: object) -> None:
 
 
 class ExportTests(unittest.TestCase):
-    """The coding owner the person already chose takes the coding nodes; everything else stays on delegate_task."""
+    """The coding owner the defining request named takes its coding nodes; everything else stays on delegate_task."""
 
     def _planned(self, home) -> dict:
         slots_table(home)  # ten free slots: the pool has room, and the coding nodes still go to the owner

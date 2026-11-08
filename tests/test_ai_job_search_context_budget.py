@@ -156,8 +156,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 537829 -> 538004 and the digest re-derived: a coding-owner choice counts only for the request it was
             # made in, in the dag-ulw and maestro rows (+175, itemized at the same limit); the pin before it was
             # c5c17f84...2eb0.
-            (skill_capabilities, 538004, FULL_ROW_DELTA_CAP,
-             'cbc660582e53ada0b9beacda30b0e72ab2f72068152892f04701cbe2c11636bc',
+            # 538004 -> 538044 and the digest re-derived: no learned coding-owner default; the maestro and dag-ulw
+            # rows say which choice stands (+40, itemized at the same limit); the pin before it was cbc66058...36bc.
+            (skill_capabilities, 538044, FULL_ROW_DELTA_CAP,
+             '3cb600bd1434f53caa7464cf49cf4426ea6ec6133a105df42f31fa7de0c2e829',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 144536, STANDALONE_ROW_DELTA_CAP,
              '5f2c0396e3f9971d0389191a3f175f5d9232463eb5e4436eaae709fa32052d48',
@@ -398,8 +400,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # before it was 0ae5f905...ebc5f.
         # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
         # moves, and the pin before it was d4eb4e54...7ed7. A coding-owner choice then counts only for the request
-        # it was made in: only dag-ulw and maestro move, and the pin before it was b36ad311...1e91.
-        self.assertEqual(_digest(legacy_hashes), 'de44ac0410fce09accc2c53c02886863da4139f2dcf065e9d489df9d421ebece')
+        # it was made in: only dag-ulw and maestro move, and the pin before it was b36ad311...1e91. No learned
+        # coding-owner default then: only dag-ulw and maestro move again; the pin before it was de44ac04...ebece.
+        self.assertEqual(_digest(legacy_hashes), '79d4214ef009835cae710949f5e6250a8fcf7692662d36d4f815a37747bd2b69')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

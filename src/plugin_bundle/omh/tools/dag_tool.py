@@ -1071,7 +1071,7 @@ def export_units(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
     that waits on a native or another owner's node goes in a later batch,
     once that node settled.
     """
-    # The pure helper keeps its legacy single-owner default; the tool passes the actual main-family choice (or "").
+    # The pure helper keeps its legacy single-owner default; the tool always passes "", so a node names its owner.
     default_owner = owner if default_owner is None else default_owner
     candidates = {str(node["id"]): node for node in record["nodes"]
                   if dag_run.is_coding(node) and node.get("owner", default_owner) == owner
