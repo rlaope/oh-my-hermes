@@ -646,9 +646,9 @@ All notable changes will be documented here.
 - **The OMH TUI puts two blank rows between two tool calls of a turn.** A
   run of calls now reads apart, as Claude Code's does; a folded row of
   loaded skills counts as a call. Every other pair of blocks keeps one
-  blank row, and what a call printed under `⎿` stays right under it. On a
-  terminal too short to show the running calls whole, the live region keeps
-  one of the two, so the wider gap never costs a call row.
+  blank row, and what a call printed under `⎿` stays right under it. When
+  the running calls do not fit, the live region keeps one blank row per gap,
+  so no call row is lost; scrollback has both.
 - **The router no longer picks a coding owner from earlier choices.** Three
   accepted answers to the coding-owner question used to make that owner a
   visible default for later requests. Now every request asks for an explicit

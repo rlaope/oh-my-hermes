@@ -215,6 +215,7 @@ class SpacingTests(LoopTestCase):
         self.step(ev("tool.complete", tool_id="a", name="terminal", result={"output": "a.py", "exit_code": 0}))
         self.step(ev("tool.start", tool_id="b", name="read_file", context="a.py"))
         self.assertEqual(self.live()[-3:], ["", "", "┃ ○ read_file(a.py)"])  # the live tail as scrollback has it
+        self.assertTrue(self.live()[-4], self.live())  # two blank rows, not three
         self.step(ev("tool.complete", tool_id="b", name="read_file", result={"content": "x"}))
         self.step(ev("tool.start", tool_id="c", name="skill_view", context="dag-ulw"))
         self.step(ev("tool.complete", tool_id="c", name="skill_view", result={"success": True, "name": "dag-ulw"}))

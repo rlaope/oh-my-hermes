@@ -185,9 +185,10 @@ def build_frame(
         )
 
     budget = fit(tail)
-    # On a terminal too short to show the tail whole and `SPACER_LIVE_ROWS` live rows, a run of blank rows (the two
-    # between two calls, `CALL_GAP_ROWS`) keeps one, so the wider gap never costs one of the few live rows (#2342).
-    if budget.tail < len(tail) and budget.tail - tail_floor - 1 < SPACER_LIVE_ROWS:
+    # A tail cut short keeps one row of each run of blank rows (the two between two calls, `CALL_GAP_ROWS`), so the
+    # wider gap never costs a live row (#2342): the calls show as many as with one-row gaps, and a tail that fits
+    # keeps both rows. Scrollback has both either way.
+    if budget.tail < len(tail):
         live = len(tail) - tail_floor
         kept = [row for index, row in enumerate(tail[:live]) if row or index == 0 or tail[index - 1]]
         if len(kept) < live:

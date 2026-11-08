@@ -306,8 +306,21 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
     # (rows, cols, agents): the tool rows shown before the gaps existed, measured on origin/main dc007063f.
     BEFORE = {(10, 40, False): 1, (15, 60, False): 2, (19, 80, True): 1, (20, 80, True): 2, (24, 80, False): 3,
               (24, 80, True): 3, (30, 80, True): 3, (30, 80, False): 3}  # from 30 rows: the badge row too
+    # (rows, cols, plan, agents): the tool rows shown with 4 to 8 calls running, measured on origin/main dbdd47b98,
+    # in this scene, before two calls had two blank rows between them (#2675 review): a wider gap never
+    # shows fewer.
+    BEFORE_CALLS = {
+        (18, 80, False, False): (4, 5, 5, 5, 5), (18, 80, False, True): (3, 3, 3, 3, 3),
+        (18, 80, True, False): (2, 2, 2, 2, 2), (18, 80, True, True): (1, 1, 1, 1, 1),
+        (20, 80, False, False): (4, 5, 6, 6, 6), (20, 80, False, True): (4, 4, 4, 4, 4),
+        (20, 80, True, False): (3, 3, 3, 3, 3), (20, 80, True, True): (2, 2, 2, 2, 2),
+        (24, 80, False, False): (4, 5, 6, 7, 8), (24, 80, False, True): (4, 5, 6, 6, 6),
+        (24, 80, True, False): (4, 4, 4, 4, 4), (24, 80, True, True): (3, 3, 3, 3, 3),
+        (30, 80, False, False): (4, 5, 6, 7, 8), (30, 80, False, True): (4, 5, 6, 7, 8),
+        (30, 80, True, False): (4, 5, 6, 7, 7), (30, 80, True, True): (4, 5, 5, 5, 5),
+    }
 
-    def scene(self, rows: int, cols: int, agents: bool):
+    def scene(self, rows: int, cols: int, agents: bool, calls: int = 3, plan: bool = True):
         from omh.tui.gateway import Event
         from omh.tui.panels import HudSnapshot
         from test_tui_agent_view import STARTS, relay
@@ -319,12 +332,13 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
         app.background = "#0D1117"
         app.theme = app._themed()
         app.stored_id = "stored"
-        app.hud = HudSnapshot("stored", hud_payload(phased_plan(5, phases=2, active=2)), now[0])
+        if plan:
+            app.hud = HudSnapshot("stored", hud_payload(phased_plan(5, phases=2, active=2)), now[0])
         for index in range(30):
             app.transcript.add_notice(f"earlier line {index}")
         app._submit_prompt("해당 프로젝트 description기반으로 작성해줘 " * 3)
         app._on_event(Event("message.start", SID, {}))
-        for index in range(3):
+        for index in range(calls):
             now[0] += 0.2
             app._on_event(Event("tool.start", SID, {"tool_id": f"t{index}", "name": "read_file",
                                                     "context": f"f{index}.py"}))
@@ -340,12 +354,22 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
                 shown = sum("read_file" in row for row in screen)
                 self.assertGreaterEqual(shown, before, "\n".join(screen))
 
-    def test_two_running_calls_keep_two_blank_rows_where_rows_allow_and_one_on_a_short_terminal(self) -> None:
-        """2026-11-09: two blank rows between two calls, as scrollback has them; a short terminal keeps one of them,
-        so the wider gap never costs a live call row (the test above)."""
-        for (rows, cols, agents), gap in {(42, 150, True): 2, (24, 80, False): 2, (15, 60, False): 1}.items():
-            with self.subTest(rows=rows, cols=cols, agents=agents):
-                screen = self.scene(rows, cols, agents)
+    def test_as_many_running_calls_show_as_with_one_blank_row_between_them(self) -> None:
+        for (rows, cols, plan, agents), counts in self.BEFORE_CALLS.items():
+            for calls, before in enumerate(counts, 4):
+                with self.subTest(rows=rows, cols=cols, plan=plan, agents=agents, calls=calls):
+                    screen = self.scene(rows, cols, agents, calls, plan)
+                    shown = sum("read_file" in row for row in screen)
+                    self.assertGreaterEqual(shown, before, "\n".join(screen))
+
+    def test_running_calls_keep_two_blank_rows_where_they_fit_and_one_where_the_tail_is_cut(self) -> None:
+        """2026-11-09: two blank rows between two calls, as scrollback has them; a live tail cut short keeps one of
+        them, so the wider gap never costs a live call row (the tests above)."""
+        cases = {(42, 150, True, 3, True): 2, (24, 80, False, 3, True): 1, (24, 80, False, 4, False): 2,
+                 (15, 60, False, 3, True): 1, (24, 80, False, 8, False): 1, (30, 80, True, 8, True): 1}
+        for (rows, cols, agents, count, plan), gap in cases.items():
+            with self.subTest(rows=rows, cols=cols, agents=agents, calls=count, plan=plan):
+                screen = self.scene(rows, cols, agents, count, plan)
                 calls = [index for index, row in enumerate(screen) if "read_file" in row]
                 self.assertEqual({below - above - 1 for above, below in zip(calls, calls[1:])}, {gap},
                                  "\n".join(screen))
