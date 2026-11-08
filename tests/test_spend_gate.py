@@ -404,12 +404,21 @@ class SpendGateContractTests(unittest.TestCase):
             with self.subTest(projection=projection):
                 ledger = reference.split("## 4. Cap ledger", 1)[1]
                 self.assertIn("the spend goes ahead only against a spend-only cap, one the person sets for this spend alone", ledger)
+                unknown_cost = (
+                    "For a call whose own cost is unknown, because no price gives its credits or cost, the person sets a "
+                    "spend-only cap for this call alone in its own units (images, characters, or seconds), and the planned "
+                    "count is checked against it: the call runs only when the count fits"
+                )
+                self.assertIn(unknown_cost, ledger)
+                # Its row keeps the count in its own units, and the period total it
+                # leaves unknown sends the next spend to the already-spent rule.
                 self.assertIn(
-                    "For a call whose own cost is unknown, because no price gives its credits or cost, the person sets the "
-                    "spend-only cap in the call's own units (images, characters, or seconds), and the planned count is "
-                    "checked against it",
+                    "Its ledger row records that count in those units and leaves the period total unknown, so the next "
+                    "spend's already-spent amount is unknown under the rule below.",
                     ledger,
                 )
+                # It is a rule of its own, not part of the no-ledger branch that follows.
+                self.assertLess(ledger.index(unknown_cost), ledger.index("When no ledger is supplied"))
         for projection, body in _bodies().items():
             with self.subTest(projection=projection):
                 self.assertIn("or says the cost is unknown so the spend-only cap applies", body)

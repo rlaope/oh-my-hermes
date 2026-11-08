@@ -194,7 +194,9 @@ All notable changes will be documented here.
   The spend-gate rails page now names the spend-only cap the credits rule
   points to. When no price gives a call's credits or cost, the person sets
   that cap in the call's own units (images, characters or seconds), and the
-  call runs only when its planned count fits.
+  call runs only when its planned count fits. Its ledger row keeps that
+  count and leaves the period total unknown, so the next spend asks what was
+  already spent.
 
 - **A queued line in the OMH TUI no longer starts ahead of a steer Hermes
   passes on as its next prompt.** When a turn ends on its own with a steer
