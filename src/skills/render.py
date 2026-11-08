@@ -412,9 +412,10 @@ _CHECKPOINT_LINE_PREFIX = "- Generic-tool checkpoint:"
 def _shared_rail_context_markdown() -> str:
     """The rail's context block, with the checkpoint's targets written as loadable labels.
 
-    The plugin bundle's checkpoint line speaks catalog names because the per-turn
-    primer shares it. This page is what a skill reads when it is about to pick a
-    sibling, so here each target is a name `skill_view` loads.
+    The plugin bundle writes the checkpoint's targets as labels already, since the
+    per-turn primer carries the line with no render pass. This page is what a skill
+    reads when it is about to pick a sibling, so a catalog name that reaches the
+    line later is still written here as a name `skill_view` loads.
     """
     installed = _installable_skill_names()
 

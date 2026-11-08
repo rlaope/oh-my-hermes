@@ -452,6 +452,12 @@ All notable changes will be documented here.
   their skill: `account takeover` and `suspected unauthorized access`, `telemetry
   audit`, `write a handover guide` and `인수인계 문서 써줘`, and in Korean `시장 규모` and
   `경쟁사 분석` right before a request to size or analyse.
+- **Every arrow line in the per-turn primer names skills a model can load.**
+  The generic tool map, workflow context cards and common cues named
+  catalog names (`research`, `img-summary`) and shorthand that was no skill
+  (`automation`); only the rendered rail page rewrote one of those lines.
+  The three lines now write `ulw-research`, `omh-image-cards` and the other
+  labels `skill_view` loads. The lane key lines still list catalog names.
 - **`omh coding delegate --from-plan` no longer picks Codex when no owner
   was named.** Leaving out `--executor` used to select Codex with
   `--from-plan` and `generic` without it. Both now resolve the same default:

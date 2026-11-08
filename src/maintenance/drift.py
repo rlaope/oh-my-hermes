@@ -1000,7 +1000,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # using their words in another sense, and three more for the phrases that failed that test. Its review
             # adds a case per hold-back and what the narrowing must keep out: `주가`, `time in`, the market gate.
             # Its re-review keeps `주가` and `time in` as they were and pins the lookups instead of the compounds.
-            expected=1452,
+            # The ops-review pair's follow-up adds four sentences where `리스크` or `블로커` is only spelled across
+            # other words or split by a space.
+            expected=1456,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1599,7 +1601,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # six requests that its named reach phrases carry. Its review adds what the narrowing must leave reaching.
             # Its re-review adds the stock and time lookups, a search through a web search connection, the risk and
             # blocker pair in either order, a repeat schedule, and a softened market request.
-            expected=1279,
+            # The ops-review pair's follow-up adds the pair written as one word and inside a longer word, which a
+            # word-opening rule lost.
+            expected=1281,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

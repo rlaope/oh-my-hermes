@@ -95,7 +95,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # OMH ignoring files, and a filler adverb, a why-question about a
         # parser and "Hermes with OMH" before a task stay off it too.
         # systematic-review adds six review, screening and criteria controls.
-        self.assertEqual(payload["summary"]["case_count"], 1452)
+        # The ops-review pair keeps `리스크` and `블로커` spelled across other words out.
+        self.assertEqual(payload["summary"]["case_count"], 1456)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -257,7 +258,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # before an add-tests request keeps ultrawork, and two reports quoting
         # the user's own migrate / rewrite ask reach workflow-learning.
         # systematic-review adds four screening requests and two owner-keeping controls.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1279)
+        # The ops-review pair keeps `리스크블로커` and `주요리스크와 블로커`.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1281)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )
