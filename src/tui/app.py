@@ -5429,6 +5429,11 @@ class App(ModesMixin, AgentViewMixin):
         text (the command, for a command's prompt) goes back after the draft
         and nothing is cut; when Hermes refuses the cut, the screen goes back
         to how it was before the send and nothing comes back to the draft.
+
+        It goes ahead of lines already queued, also while the queue waits for
+        the turn Hermes runs next (`hermes_next_due`), where a prompt joins the
+        queue: queued behind them, its cut would drop the turns they start.
+        They follow its turn.
         """
         rewind, self.rewind = self.rewind, None
         if rewind is None:
@@ -5511,8 +5516,10 @@ class App(ModesMixin, AgentViewMixin):
         return True
 
     def _drain_unless_busy(self) -> None:
-        """Send the next queued line now, unless a turn runs: then it goes when that turn ends, as any queued line."""
-        if not self._busy():
+        """Send the next queued line now, unless a turn runs: then it goes when that turn ends, as any queued line.
+        While the queue waits for the turn Hermes runs next (`hermes_next_due`) it goes at that turn's end, or when
+        the wait runs out (`_drain_when_hermes_next_missed`)."""
+        if not self._busy() and self.hermes_next_due is None:
             self._drain_queue()
 
     def _interrupt(self) -> None:
@@ -5521,10 +5528,13 @@ class App(ModesMixin, AgentViewMixin):
         A prompt taken but not sent yet (its images still staging, or waiting
         to) is not sent: it comes back to the draft with its tokens
         (`_give_back_unsent`), and with no turn running or sent besides it,
-        nothing is asked of Hermes.
+        nothing is asked of Hermes. Lines queued behind it are held, as after
+        any interrupt (`_hold_queue`): no turn ends to send them on.
         """
         if self._give_back_unsent() and not (self.transcript.running or self.claim == CLAIM_SUBMITTED):
             self.turn_pending = False
+            if self.queued and not self.queue_held:
+                self._hold_queue(INTERRUPTED_WHY)
             return
         if self.sid:
             self.interrupting = True
@@ -6321,7 +6331,8 @@ class App(ModesMixin, AgentViewMixin):
 
         `echo` is the line as the composer showed it, when paste chips made it
         differ. `drain_after` sends the next queued line once Hermes answered,
-        so a prompt queued behind it does not start a turn under its output.
+        so a prompt queued behind it does not start a turn under its output;
+        a turn that started while it ran keeps that line for its end.
         """
         echo = echo or f"{SHELL_PREFIX}{command}"
 
@@ -6350,14 +6361,14 @@ class App(ModesMixin, AgentViewMixin):
         elif not printed:
             self.transcript.add_output("exit 0", command=echo)
         if drain_after:
-            self._drain_queue()
+            self._drain_unless_busy()
 
     def _on_shell_refused(self, echo: str, error: Mapping[str, Any], drain_after: bool) -> bool:
         """Hermes' own words: a refusal of a dangerous command (4005) is a warning, a timeout or failure an error."""
         level = NOTICE_WARN if error.get("code") == SHELL_REFUSED else NOTICE_ERROR
         self.transcript.add_output(plain_sentence(as_text(error.get("message"))), level, command=echo)
         if drain_after:
-            self._drain_queue()
+            self._drain_unless_busy()
         return True
 
     def _recall_queue(self, event: Key | Paste) -> bool:
