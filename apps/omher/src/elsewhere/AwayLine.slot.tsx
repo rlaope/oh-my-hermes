@@ -42,7 +42,7 @@ export default function AwayLine({ bot, item }: SlotProps["elsewhereLine"]) {
           <i className={`src-sq src-${a.source}`} />
           {src}
         </span>
-        <span className="ew-ttl">{a.label}</span>
+        <span className="ew-ttl">{a.label?.trim() || a.title?.trim() || `${src} session`}</span>
         {a.running && <Spinner size={11} label={`${src} session working`} />}
         <span className="ew-tm" data-testid="away-time">
           {awayTime(a, now)}
