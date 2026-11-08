@@ -1427,30 +1427,32 @@ def _refresh_installed_plugin_bundle(args: argparse.Namespace) -> dict[str, obje
 def _refresh_tui_home(args: argparse.Namespace) -> dict[str, object] | None:
     """Rebuild the TUI's own runtime home (`tui/own_runtime.py`) from the root Hermes home this update targets.
 
-    Only where the OMH home's saved choice is `own` or the home already
-    exists; None otherwise. The plugin bundle the home links moved with this
-    update, and a skill or credential the root gained since the last launch
-    is carried now rather than at the next `omh`. A failure is noted and never
-    fails the update: the next bare `omh` builds the home again, or opens on
-    the shared gateway saying why.
+    Only where the OMH home's saved choice is `own`; None otherwise, so a home
+    left behind by `omh theme runtime shared` gets no fresh credential copies.
+    The plugin bundle the home links moved with this update, and a skill or
+    credential the root gained since the last launch is carried now rather
+    than at the next `omh`. A failure is noted and never fails the update: the
+    next bare `omh` builds the home again, or opens on the shared gateway
+    saying why.
     """
     from ..skin_pack import RUNTIME_OWN, read_runtime_choice
     from ..tui.own_runtime import build_tui_home, tui_home_path
 
     paths = _paths(args)
     home = tui_home_path(paths.omh_home)
-    if read_runtime_choice(paths.omh_home) != RUNTIME_OWN and not home.is_dir():
+    if read_runtime_choice(paths.omh_home) != RUNTIME_OWN:
         return None
     if getattr(args, "dry_run", False):
         return {"status": "dry_run", "tui_home": str(home)}
     try:
         built = build_tui_home(paths.omh_home, Path(paths.hermes_home))
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         print(f"note: the TUI's own runtime home was not refreshed: {exc}", file=sys.stderr)
         return {"status": "failed", "tui_home": str(home), "reason": str(exc)}
     return {
         "status": "refreshed" if built.refreshed else "current", "tui_home": str(home),
         "refreshed": list(built.refreshed), "skills": len(built.skills), "scrubbed": list(built.scrubbed),
+        "overwritten": list(built.overwritten), "config_platform_credentials": list(built.config_platform_credentials),
     }
 
 

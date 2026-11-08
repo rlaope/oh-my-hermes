@@ -107,7 +107,7 @@ class DoctorCheckTests(unittest.TestCase):
             (home / MARKER_FILE).write_text(json.dumps(marker), encoding="utf-8")
             (home / ".env").write_text("OPENAI_API_KEY=k\nSLACK_BOT_TOKEN=leak\n", encoding="utf-8")
             check = _tui_own_runtime_check(paths)
-            self.assertEqual((check.ok, check.severity), (True, "warning"))
+            self.assertEqual((check.ok, check.severity), (False, "blocking"))  # a credential on the TUI runtime fails the row
             self.assertIn("built from", check.message)
             self.assertIn("SLACK_BOT_TOKEN", check.message)
             self.assertIn("omh update", check.next_action)
@@ -135,13 +135,16 @@ class UpdateRefreshTests(unittest.TestCase):
             self.assertEqual(dry["status"], "dry_run")
             self.assertTrue((tui_home_path(paths.omh_home) / "config.yaml").is_file())
 
-    def test_an_existing_home_is_refreshed_even_after_switching_back_to_shared(self) -> None:
+    def test_a_home_left_behind_by_switching_back_to_shared_is_not_refreshed(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = _homes(Path(tmp))
             build_tui_home(paths.omh_home, paths.hermes_home, served=())
             write_runtime_choice(paths.omh_home, RUNTIME_SHARED)
+            before = (tui_home_path(paths.omh_home) / "config.yaml").stat().st_mtime_ns
+            (paths.hermes_home / "config.yaml").write_text("model: {other: 1}\n", encoding="utf-8")
             with patch.object(setup, "_paths", return_value=paths):
-                self.assertEqual(setup._refresh_tui_home(_args(paths))["status"], "current")
+                self.assertIsNone(setup._refresh_tui_home(_args(paths)))
+            self.assertEqual((tui_home_path(paths.omh_home) / "config.yaml").stat().st_mtime_ns, before)
 
     def test_a_failure_is_noted_and_does_not_raise(self) -> None:
         with TemporaryDirectory() as tmp:

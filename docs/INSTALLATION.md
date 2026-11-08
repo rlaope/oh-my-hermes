@@ -1716,17 +1716,26 @@ reaches it, and `/gateway restart` there restarts only that runtime, which
 loads new OMH code without a bot reconnecting.
 
 `omh` builds the home from the root Hermes home at every launch and refreshes
-only what changed: `config.yaml` and `auth.json` copied (model, providers and
-their keys, OMH's memory provider, OMH's skills through `skills.external_dirs`,
-the plugins), `.env` copied without any messaging credential (no adapter of
-the TUI runtime ever polls a bot's token), `SOUL.md` linked, `skills/` a link
-per skill over the root's and every served profile's (the root wins a name
-clash; a directory you put there yourself is left alone), and `plugins/omh`
-linked to the same OMH bundle the bots run. Sessions, Hermes' own memory,
-cron and kanban are the TUI home's. The bot board keeps reading the bots'
-home. `omh --hermes-home` and `omh -p <profile>` stay on the home they name;
-`omh --resume <id>` of a session that lives on the shared gateway opens there
-and says so; `omh theme runtime shared` goes back. `omh-tui-home.json` in
+only what changed: `config.yaml` copied (model, providers and their keys,
+OMH's memory provider, OMH's skills through `skills.external_dirs`, the
+plugins; a copy you changed in the TUI home is replaced, with a line saying
+so), `auth.json` copied only when the root's is newer (Hermes rotates OAuth
+refresh tokens into the store it read, so a TUI-home copy that moved later is
+kept), `.env` copied without any messaging credential, and the same names
+stripped from the environment the TUI is started with (no adapter of the
+TUI runtime ever polls a bot's token), `SOUL.md` linked, `skills/` a link per
+skill at its own `<category>/<skill>` path over the root's and every served
+profile's (a skill is any directory holding `SKILL.md`; the root wins a name
+clash; a skill or link you put there yourself is left alone and stands for
+its name), and `plugins/omh` linked to the same OMH bundle the bots run. A
+root `config.yaml` that connects a messaging platform under `platforms:`
+keeps bare `omh` on the shared gateway, with a line naming the entry.
+Sessions, Hermes' own memory, cron and kanban are the TUI home's. The bot
+board keeps reading the bots' home. `omh --hermes-home` and `omh -p <profile>`
+stay on the home they name; `omh --resume <id>` opens where that session is,
+whichever runtime is chosen, and says so when that differs (the id as the exit
+card printed it; a title is not looked up); `omh theme runtime shared` goes
+back. `omh-tui-home.json` in
 the home records what was built from what. `omh update` rebuilds the home
 too (the plugin bundle it links moved with the update), `omh doctor` has an
 `omh_tui_runtime` row (which runtime, what the home was built from, how many

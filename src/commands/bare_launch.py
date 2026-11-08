@@ -460,32 +460,51 @@ def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
 
     `own` is read from the OMH home's saved choice (`omh theme runtime own`).
     An explicit `--hermes-home` or `--profile` names a home of its own and
-    stays on the shared gateway, and so does `--resume <id>` of a session
-    that lives in the resolved home's store and not in the TUI home's: it
-    opens where it is, and one line says so. A home that cannot be built
-    says why in one line and opens on the shared gateway too.
+    stays on the shared gateway. `--resume <id>` opens where the session is,
+    whatever the choice: a session only the shared store knows opens on the
+    shared gateway, one only the TUI home's store knows opens there (the way
+    back the exit card printed, after `omh theme runtime shared` too), and
+    one line says so when that differs from the choice. The id is matched as
+    the TUI recorded it; Hermes' title and prefix lookups are not consulted. A
+    home that cannot be built, or whose root config names a messaging token
+    under `platforms:` (the TUI runtime must never poll a bot's token), says
+    why in one line and opens on the shared gateway. Not on Windows, where
+    the OMH TUI does not run.
     """
-    if getattr(args, "hermes_home", None) or getattr(args, "tui_profile", None):
+    if os.name == "nt" or getattr(args, "hermes_home", None) or getattr(args, "tui_profile", None):
         return None
     from ..skin_pack import RUNTIME_OWN, read_runtime_choice
     from ..tui.own_runtime import build_tui_home, tui_home_path
 
-    if read_runtime_choice(paths.omh_home) != RUNTIME_OWN:
-        return None
+    own = read_runtime_choice(paths.omh_home) == RUNTIME_OWN
     home = tui_home_path(paths.omh_home)
     resume = getattr(args, "tui_resume", None)
-    if resume:
+    if resume and (home / "state.db").is_file():
         from ..maintenance.hermes_resume import session_known
 
-        if not session_known(home / "state.db", resume) and session_known(Path(paths.hermes_home) / "state.db", resume):
+        in_own = session_known(home / "state.db", resume)
+        in_shared = session_known(Path(paths.hermes_home) / "state.db", resume)
+        if own and in_shared and not in_own:
             print(f"omh: session {resume} lives on the shared Hermes gateway; opening it there.", file=sys.stderr)
             return None
+        if not own and in_own and not in_shared:
+            print(f"omh: session {resume} lives on the TUI's own Hermes runtime; opening it there.", file=sys.stderr)
+            own = True
+    if not own:
+        return None
     try:
         built = build_tui_home(paths.omh_home, Path(paths.hermes_home))
-    except OSError as error:
+    except (OSError, ValueError) as error:
         print(f"omh: could not prepare the TUI's own runtime home ({error}); opening on the shared gateway.",
               file=sys.stderr)
         return None
+    if built.config_platform_credentials:
+        print(f"omh: the root config.yaml connects a messaging platform ({', '.join(built.config_platform_credentials)}), "
+              "which the TUI's own runtime must not poll beside the bots' gateway; opening on the shared gateway.",
+              file=sys.stderr)
+        return None
+    for name in built.overwritten:
+        print(f"omh: {name} in the TUI's own runtime home had been changed; the root's copy replaced it.", file=sys.stderr)
     return built.path
 
 
@@ -661,8 +680,15 @@ def _run_terminal(
         generation = _installer_generation() if relaunch is not None else None
         with exit_on_signals(), fallback_sentinel() as sentinel, hold_running_generation():
             marker = sentinel.with_name("relaunch")
+            # On the TUI's own runtime, a messaging token exported in this shell must not reach its gateway either
+            # (Hermes ranks the environment above `.env`): the same names the home's `.env` leaves out.
+            base = dict(os.environ)
+            if hermes_home is not None:
+                from ..tui.own_runtime import scrub_environment
+
+                base, _ = scrub_environment(base)
             environment = omh_tui_environment(
-                {**os.environ, "HERMES_HOME": str(launch_home)},
+                {**base, "HERMES_HOME": str(launch_home)},
                 python=sys.executable,
                 site=omh_import_root(),
                 omh_home=_tui_omh_home(args, paths),
