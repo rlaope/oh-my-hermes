@@ -57,7 +57,6 @@ _MODEL_DOCS: Final[dict[str, tuple[str, ...]]] = {
     "kimi-k3.1-pro-highspeed": ("MODEL_OPTI.md", "docs/MODEL-ONBOARDING.md"),
     "gemini-4-argon": ("MODEL_OPTI.md", "docs/MODEL-ONBOARDING.md"),
     "claude-fable-5-1": ("MODEL_OPTI.md", "docs/MODEL-ONBOARDING.md"),
-    "glm-5.3-flash": ("MODEL_OPTI.md", "docs/MODEL-ONBOARDING.md"),
     "grok-4.7": ("MODEL_OPTI.md", "docs/MODEL-ONBOARDING.md"),
     "jev-1.13.0": ("MODEL_OPTI.md", "docs/MODEL-ONBOARDING.md"),
 }

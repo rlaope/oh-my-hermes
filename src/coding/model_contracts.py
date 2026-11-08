@@ -1566,99 +1566,6 @@ _GEMINI_4_ARGON: Final[dict[str, object]] = {
     "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
 }
 
-# GLM-5.3-Flash (Z.ai), a separately trained smaller model rather than a speed
-# tier of GLM-5.3. Its page says the text parameters are consistent with
-# GLM-5.3 and that `thinking.type` accepts only `enabled`; the GLM-5.3 page
-# documents those parameters: reasoning always on, `reasoning_effort` of
-# `low`, `high`, and `max`. So `off` and `minimal` are raised to the floor
-# `low` on record, and `xhigh` to `max`, the lowest documented rung above it.
-# `medium` is deliberately NOT listed as unsupported: the docs do not say the
-# API rejects it, and the installed Hermes sends it verbatim on the zai route
-# (its GLM-5.3 table holds `medium` from a live probe), so raising it here
-# would record a rung the wire does not carry. The picker offers the three
-# documented rungs only.
-#
-# GLM-5.3 itself has no exact contract yet: the plugin's exact-contract
-# mirror stops an undeclared speed tier of a contracted base from projecting
-# onto it, which would unlabel `glm-5.3-highspeed` and `glm-5.3-ultrafast`
-# and split two tiers of one model into a disagreement.
-_GLM_5_3_FLASH: Final[dict[str, object]] = {
-    "schema_version": MODEL_CONTRACT_SCHEMA_VERSION,
-    "model_id": "glm-5.3-flash",
-    "reasoning_mode": "thinking",
-    "service_tier": "standard",
-    "family": "glm",
-    "generation": "glm-5.3-flash",
-    "released": "",
-    "rollout": (
-        "fully available on the Z.ai API and the GLM Coding Plan; the docs give no API release "
-        "date; a released id is not account-level readiness evidence"
-    ),
-    "served_ids": {"first_party": "glm-5.3-flash"},
-    "knowledge_cutoff": "",
-    "context_window_tokens": 1_000_000,
-    "max_input_tokens": 1_000_000,
-    "max_output_tokens": 128_000,
-    "limits_note": (
-        "a 1M-token context window and 128K maximum output are documented; no separate max-input "
-        "figure is published"
-    ),
-    "reasoning_efforts": ("low", "high", "max"),
-    "effort_floor": "low",
-    # The Flash page names no default; GLM-5.3's is `max`, and the Flash page
-    # recommends `max`.
-    "effort_default": "",
-    "unsupported_efforts": {
-        "off": (
-            "reasoning is always on; `thinking.type` accepts only `enabled` and a request that "
-            "disables it fails"
-        ),
-        "minimal": "not an accepted `reasoning_effort` value",
-        "xhigh": "not an accepted `reasoning_effort` value",
-    },
-    "tool_calling": {
-        "api": "chat_completions",
-        "note": (
-            "function calling is supported; streamed tool-call construction is off by default and "
-            "needs `stream` and `tool_stream` both enabled"
-        ),
-    },
-    "unsupported_parameters": ("thinking.type=disabled",),
-    "runtime_mechanisms": {
-        "preserved_thinking": "documented_not_observed",
-        "context_caching": "documented_not_observed",
-    },
-    "surface_notes": {
-        "hermes": (
-            "Hermes Agent at 2bd378ed1b matches the id as GLM-5.3 on the zai route and sends "
-            "`thinking.type=enabled` with `clear_thinking` false and a top-level "
-            "`reasoning_effort` from `low`, `medium`, `high`, `max`, `xhigh` sent as `max` and a "
-            "thinking-off request as `low`; observed in the Hermes source, not a vendor statement"
-        ),
-    },
-    "documented_traits": (
-        "text parameters are consistent with GLM-5.3: reasoning is always on and "
-        "`reasoning_effort` accepts `low`, `high`, and `max`; the recommended setting is `max`",
-        "a native multimodal model with 320B total and 18B activated parameters",
-    ),
-    # Z.ai list price (docs.z.ai/guides/overview/pricing, read 2026-11-07);
-    # cached input storage is listed as limited-time free.
-    "pricing_usd_per_mtok": {
-        "input": 0.15,
-        "cached_input": 0.03,
-        "output": 0.50,
-    },
-    "data_handling": _DATA_HANDLING_NOT_READ,
-    "sources": (
-        "https://docs.z.ai/guides/vlm/glm-5.3-flash",
-        "https://docs.z.ai/guides/llm/glm-5.3",
-        "https://docs.z.ai/guides/overview/migrate-to-glm-new",
-        "https://docs.z.ai/guides/overview/pricing",
-    ),
-    "sources_read": "2026-11-07",
-    "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
-}
-
 # Grok 4.7 (xAI). Reasoning cannot be disabled and `reasoning_effort` takes
 # `low`, `medium`, `high`, and `xhigh`, with `high` the default, so `off` and
 # `minimal` are raised to `low` on record. `max` is not listed as unsupported,
@@ -1674,13 +1581,14 @@ _GROK_4_7: Final[dict[str, object]] = {
     "released": "",
     "rollout": "listed on the xAI API with no release date; a released id is not account-level readiness evidence",
     "served_ids": {"first_party": "grok-4.7"},
-    "knowledge_cutoff": "",
+    "knowledge_cutoff": "2026-05",
     "context_window_tokens": 500_000,
     "max_input_tokens": 500_000,
-    "max_output_tokens": 500_000,
+    # Not published; 0 renders as "not stated", never as a documented limit.
+    "max_output_tokens": 0,
     "limits_note": (
         "a 500,000-token context window is documented; xAI publishes no separate input or output "
-        "cap, so both fields carry the window"
+        "cap, so the input field carries the window and the output field is 0 for not stated"
     ),
     "reasoning_efforts": ("low", "medium", "high", "xhigh"),
     "effort_floor": "low",
@@ -1890,7 +1798,6 @@ MODEL_CONTRACTS: Final[dict[str, Mapping[str, object]]] = {
     "kimi-k3.1-pro": _KIMI_K3_1_PRO,
     "kimi-k3.1-pro-highspeed": _KIMI_K3_1_PRO_HIGHSPEED,
     "gemini-4-argon": _GEMINI_4_ARGON,
-    "glm-5.3-flash": _GLM_5_3_FLASH,
     "grok-4.7": _GROK_4_7,
     "jev-1.13.0": _JEV_1_13,
 }
@@ -2010,6 +1917,16 @@ DECLARED_MODEL_CONTRACT_PROJECTIONS: Final[dict[str, Mapping[str, str]]] = {
     },
     "claude-haiku-5.5": {
         "contract_model_id": "claude-haiku-5-5",
+        "reasoning_mode": "thinking",
+        "service_tier": "standard",
+    },
+    # Claude Fable 5.1's dotted spelling, on the same terms: Hermes' static
+    # model catalog lists `claude-fable-5.1` for the Anthropic provider and
+    # `anthropic/claude-fable-5.1` for OpenRouter (hermes-agent 2bd378ed1b,
+    # read 2026-11-08). The Bedrock id is not declared here; it stays in the
+    # contract's `served_ids`.
+    "claude-fable-5.1": {
+        "contract_model_id": "claude-fable-5-1",
         "reasoning_mode": "thinking",
         "service_tier": "standard",
     },

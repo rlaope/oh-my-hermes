@@ -541,7 +541,7 @@ EXACT_MODEL_CONTRACT_ALIASES: frozenset[str] = frozenset(
     {
         "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-cyber", "gpt-6-luna",
         "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "deepseek-v4.1-flash",
-        "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed", "gemini-4-argon", "glm-5.3-flash", "grok-4.7",
+        "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed", "gemini-4-argon", "grok-4.7",
         "jev-1.13.0",
     }
 )
@@ -582,6 +582,9 @@ DECLARED_MODEL_ALIAS_PROJECTIONS: dict[str, tuple[str, str, str]] = {
     "claude-sonnet-5.5": ("claude-sonnet-5-5", "thinking", "standard"),
     "anthropic.claude-haiku-5-5": ("claude-haiku-5-5", "thinking", "standard"),
     "claude-haiku-5.5": ("claude-haiku-5-5", "thinking", "standard"),
+    # Claude Fable 5.1's dotted spelling (Hermes' static model catalog,
+    # 2026-11-08), on the same terms.
+    "claude-fable-5.1": ("claude-fable-5-1", "thinking", "standard"),
     # TypeSafe publishes two aliases for Jev (docs.typesafe.ai/models,
     # 2026-09-21); both point at `jev-1.13.0` today and both move on the next
     # release, so each is a declared projection with a read date.

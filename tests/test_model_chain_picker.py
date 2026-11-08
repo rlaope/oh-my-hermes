@@ -716,14 +716,14 @@ class EffortPickerTests(unittest.TestCase):
         payload = _payload(self.root)
         result, _ = _drive(payload, _down_to(payload, "unspecified-low") + [KEY_PLUS, KEY_ENTER])
         self.assertEqual(result["unspecified-low"][0], ("glm-5.3", "medium"))
+        result, _ = _drive(payload, _down_to(payload, "quick") + [KEY_PLUS, KEY_ENTER])
+        self.assertEqual(result["quick"][0], ("glm-5.3-flash", "medium"))
 
-    def test_contracted_glm_flash_grok_and_fable_heads_step_their_own_ladders_unmarked(self) -> None:
-        # GLM-5.3-Flash has no `medium`, so `+` from `low` lands on `high`;
+    def test_contracted_grok_and_fable_step_their_own_ladders_unmarked(self) -> None:
         # Grok 4.7's ladder is the shared four, now checked; Fable 5.1 reaches
         # `max`, which the shared steps never offered.
         payload = _payload(self.root)
         for alias, efforts in (
-            ("glm-5.3-flash", ["low", "high", "max"]),
             ("grok-4.7", ["low", "medium", "high", "xhigh"]),
             ("claude-fable-5-1", ["low", "medium", "high", "xhigh", "max"]),
         ):
@@ -732,13 +732,9 @@ class EffortPickerTests(unittest.TestCase):
                 self.assertEqual(row["efforts"], efforts)
                 self.assertEqual(row["efforts_source"], "contract")
                 self.assertTrue(row["efforts_configured"])
-        for category, head, effort in (("quick", "glm-5.3-flash", "low"), ("x-search", "grok-4.7", "high")):
-            with self.subTest(category=category):
-                row = _row_of(_frame(payload, category), category)
-                self.assertIn(f" {effort} ", row)
-                self.assertNotIn(f"{effort}?", row)
-        result, _ = _drive(payload, _down_to(payload, "quick") + [KEY_PLUS, KEY_ENTER])
-        self.assertEqual(result["quick"][0], ("glm-5.3-flash", "high"))
+        row = _row_of(_frame(payload, "x-search"), "x-search")
+        self.assertIn(" high ", row)
+        self.assertNotIn("high?", row)
         result, _ = _drive(payload, _down_to(payload, "x-search") + [KEY_PLUS, KEY_ENTER])
         self.assertEqual(result["x-search"][0], ("grok-4.7", "xhigh"))
         _write_overrides(self.root, {"swarm": (("claude-fable-5-1", "xhigh"),)})

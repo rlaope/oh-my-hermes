@@ -67,13 +67,14 @@ class ContractEffortOptionTests(unittest.TestCase):
     def test_kimi_low_high_max_only(self) -> None:
         self.assertEqual(contract_effort_option("kimi-k3.1-pro")["efforts"], ("low", "high", "max"))
 
-    def test_fable_glm_flash_and_grok_heads_carry_their_documented_ladders(self) -> None:
+    def test_fable_and_grok_heads_carry_their_documented_ladders(self) -> None:
         # Read from the vendor pages each contract cites: Fable 5.1 takes all
-        # five Claude levels, GLM-5.3-Flash GLM-5.3's three, and Grok 4.7
-        # xAI's four. None of them can turn reasoning off, so `none` is absent.
+        # five Claude levels and Grok 4.7 xAI's four. Neither can turn
+        # reasoning off, so `none` is absent. The dotted gateway spelling
+        # reaches Fable's contract through its declared row.
         for model_id, efforts in (
             ("claude-fable-5-1", ("low", "medium", "high", "xhigh", "max")),
-            ("glm-5.3-flash", ("low", "high", "max")),
+            ("anthropic/claude-fable-5.1", ("low", "medium", "high", "xhigh", "max")),
             ("grok-4.7", ("low", "medium", "high", "xhigh")),
         ):
             with self.subTest(model_id=model_id):
@@ -125,9 +126,10 @@ class ContractEffortOptionTests(unittest.TestCase):
             self.assertIsNone(contract_effort_option("gpt-6-luna"))
 
     def test_models_without_a_contract_are_unknown_not_wide_open(self) -> None:
-        # GLM-5.3 stays here until its speed tiers have declared rows (see the
-        # GLM-5.3-Flash contract); Grok Build 0.1 documents no effort parameter.
-        for model_id in ("glm-5.3", "grok-build-0.1", "gpt-5.6-terra", "custom:mine", ""):
+        # GLM-5.3 and GLM-5.3-Flash stay here until their speed tiers have
+        # declared rows (a contract stops `-ultrafast` projecting onto the
+        # base); Grok Build 0.1 documents no effort parameter.
+        for model_id in ("glm-5.3", "glm-5.3-flash", "grok-build-0.1", "gpt-5.6-terra", "custom:mine", ""):
             with self.subTest(model_id=model_id):
                 self.assertIsNone(contract_effort_option(model_id))
 
