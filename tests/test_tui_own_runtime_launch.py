@@ -189,6 +189,31 @@ class LaunchTests(unittest.TestCase):
                 self.assertEqual(json.loads(record.read_text()), [str(paths.hermes_home), None, None, "shell-token"])
 
 
+@unittest.skipIf(os.name == "nt", "fixture executable uses a POSIX shebang")
+class FallbackTests(unittest.TestCase):
+    def test_hermes_own_terminal_on_the_own_runtime_gets_no_shell_messaging_token(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = root / "child-env.json"
+            hermes = root / "hermes-bin"
+            hermes.write_text(
+                f"#!{sys.executable}\nimport json, os\n"
+                f"with open({str(record)!r}, 'w') as out: json.dump([os.environ.get('HERMES_HOME'), "
+                "os.environ.get('TELEGRAM_BOT_TOKEN')], out)\n",
+                encoding="utf-8",
+            )
+            hermes.chmod(0o755)
+            paths = resolve_paths(str(root / "omh"), str(root / "selected"))
+            tui_home = root / "tui-home"
+            with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "shell-token"}), \
+                    patch.object(bare_launch, "_omh_tui_blocker", return_value="fixture blocker"), \
+                    patch.object(bare_launch, "_node_available", return_value=False):
+                self.assertEqual(bare_launch._run_terminal(str(hermes), bare_launch_args([]), paths, hermes_home=tui_home), 0)
+                self.assertEqual(json.loads(record.read_text()), [str(tui_home), None])
+                self.assertEqual(bare_launch._run_terminal(str(hermes), bare_launch_args([]), paths), 0)
+                self.assertEqual(json.loads(record.read_text()), [str(paths.hermes_home), "shell-token"])
+
+
 class RestartChoiceTests(unittest.TestCase):
     def test_the_own_runtime_offers_its_restart_alone(self) -> None:
         choices = app_module.gateway_restart_choices("", own=True)

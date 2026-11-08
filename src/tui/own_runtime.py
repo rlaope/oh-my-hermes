@@ -77,7 +77,10 @@ MESSAGING_NAME_PREFIXES = (
 )
 MESSAGING_NAMES = frozenset({"HA_TOKEN", "HA_URL"})
 # The keys under a `platforms:` entry of `config.yaml` that make an adapter connect (`gateway/config.py`).
-PLATFORM_CREDENTIAL_KEYS = frozenset({"token", "api_key", "bot_token", "app_token", "webhook_url", "enabled"})
+PLATFORM_CREDENTIAL_KEYS = frozenset({
+    "token", "api_key", "bot_token", "app_token", "webhook_url", "enabled", "address", "password", "app_id", "app_secret",
+    "client_secret", "secret", "signing_secret",
+})
 HOME_MODE = 0o700
 FILE_MODE = 0o600
 
@@ -151,11 +154,13 @@ def scrub_environment(environ: dict[str, str]) -> tuple[dict[str, str], tuple[st
 
 
 def config_platform_credentials(config_text: str) -> tuple[str, ...]:
-    """`platforms.<name>.<key>` entries of a Hermes `config.yaml` that would connect an adapter: a top-level
-    `platforms:` block read line by line (two-space indented platform names, deeper credential keys), never parsed
-    as YAML. `enabled: false` does not count."""
+    """`platforms.<name>.<key>` entries of a Hermes `config.yaml` that would connect an adapter: the top-level
+    `platforms:` block read line by line, never parsed as YAML. The platform names sit at the indentation of the
+    block's first child; a credential key at any deeper level counts, `enabled: false` does not. A `platforms:` line
+    that carries a value of its own (flow style) counts whole unless it is empty (`{}`, `[]`, `null`)."""
     found: list[str] = []
     in_block = False
+    platform_indent: int | None = None
     platform = ""
     for raw in config_text.splitlines():
         line = raw.rstrip()
@@ -164,15 +169,24 @@ def config_platform_credentials(config_text: str) -> tuple[str, ...]:
         indent = len(line) - len(line.lstrip(" "))
         if indent == 0:
             in_block = line.startswith("platforms:")
-            platform = ""
+            platform_indent, platform = None, ""
+            if in_block:
+                inline = line.partition(":")[2].split("#", 1)[0].strip()
+                if inline and inline not in ("{}", "[]", "null", "~"):
+                    found.append(f"platforms: {inline}")
             continue
         if not in_block:
             continue
         key, sep, value = line.strip().partition(":")
         if not sep:
             continue
-        if indent == 2:
+        if platform_indent is None:
+            platform_indent = indent
+        if indent <= platform_indent:
             platform = key.strip()
+            inline = value.split("#", 1)[0].strip()
+            if inline and inline not in ("{}", "[]", "null", "~") and inline.lower() not in ("false", "no", "off"):
+                found.append(f"{platform}: {inline}")
             continue
         if platform and key.strip() in PLATFORM_CREDENTIAL_KEYS:
             value = value.split("#", 1)[0].strip().strip("'\"")
@@ -224,7 +238,7 @@ def iter_skills(skills_dir: Path) -> Iterator[tuple[str, Path]]:
 
 def _write_whole(target: Path, data: bytes, stamp: os.stat_result | None = None) -> None:
     """Write `data` to a temporary file beside `target` and move it into place, with `stamp`'s times carried over."""
-    temporary = target.with_name(f".{target.name}.omh-tmp")
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.omh-tmp")
     with open(temporary, "wb") as handle:
         handle.write(data)
     os.chmod(temporary, FILE_MODE)
@@ -299,7 +313,9 @@ def build_tui_home(omh_home: Path, root: Path, served: Sequence[str] | None = No
         platform_credentials = config_platform_credentials(_decode(data, source))
         target = home / "config.yaml"
         stamp = source.stat()
-        if _mtime(target) != stamp.st_mtime_ns or target.read_bytes() != data:
+        if platform_credentials:
+            pass  # never copied: the launch stays on the shared gateway and says why
+        elif _mtime(target) != stamp.st_mtime_ns or target.read_bytes() != data:
             previous = _mtime(target)
             if previous is not None and previous > stamp.st_mtime_ns:
                 overwritten.append("config.yaml")
@@ -342,7 +358,7 @@ def build_tui_home(omh_home: Path, root: Path, served: Sequence[str] | None = No
             names[name] = relative
             wanted[relative] = directory
     skills_dir = home / "skills"
-    root_dirs = [skills for _, skills in roots]
+    root_dirs = [root / "skills", root / "profiles"]  # links this made point here, served now or before
     kept_local: list[str] = []
     for entry in _walk(skills_dir):
         relative = entry.relative_to(skills_dir).as_posix()

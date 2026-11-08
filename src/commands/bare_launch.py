@@ -710,12 +710,23 @@ def _run_terminal(
             # The person closed the session: Hermes printed no epilogue, and the shell sees the 0 it always did.
             return 0 if returncode == CLOSED_EXIT else returncode
         blocker = "the OMH TUI did not start (its reason is above)"
-    return _run_hermes_fallback(hermes, args, paths, blocker, said, hermes_home=launch_home)
+    return _run_hermes_fallback(hermes, args, paths, blocker, said, hermes_home=launch_home,
+                                scrub=hermes_home is not None)
+
+
+def _fallback_environment(scrub: bool) -> dict[str, str]:
+    """The shell's environment for Hermes' own terminal; on the TUI's own runtime (`scrub`) without the messaging
+    names its gateway must never see, as the OMH TUI's own launch strips them."""
+    if not scrub:
+        return dict(os.environ)
+    from ..tui.own_runtime import scrub_environment
+
+    return scrub_environment(dict(os.environ))[0]
 
 
 def _run_hermes_fallback(
     hermes: str, args: argparse.Namespace, paths, reason: str, said: list[str] | None = None,
-    hermes_home: Path | None = None,
+    hermes_home: Path | None = None, scrub: bool = False,
 ) -> int:
     """Hermes' own TUI when only the OMH TUI is ruled out, else plain `hermes`.
 
@@ -737,7 +748,7 @@ def _run_hermes_fallback(
     print(f"omh: {reason}; opening {target}.", file=sys.stderr)
     returncode = int(subprocess.run(
         [hermes, *_hermes_passthrough_argv(args, tui=with_tui)],
-        env={**os.environ, "HERMES_HOME": str(hermes_home or paths.hermes_home)},
+        env={**_fallback_environment(scrub), "HERMES_HOME": str(hermes_home or paths.hermes_home)},
     ).returncode)
     if said:
         print(f"omh: {target} opened because the OMH TUI did not start; it said:", file=sys.stderr)

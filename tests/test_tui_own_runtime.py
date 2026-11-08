@@ -114,6 +114,12 @@ class NameTests(unittest.TestCase):
         self.assertEqual(config_platform_credentials(text), ("telegram.enabled", "telegram.token"))
         self.assertEqual(config_platform_credentials("platforms: {}\nmodel: {}\n"), ())
         self.assertEqual(config_platform_credentials(""), ())
+        # Other YAML shapes: four-space indentation, flow style, a credential under `extra`.
+        self.assertEqual(config_platform_credentials("platforms:\n    discord:\n        token: abc\n"), ("discord.token",))
+        self.assertEqual(config_platform_credentials("platforms: {discord: {token: abc}}\n"), ("platforms: {discord: {token: abc}}",))
+        self.assertEqual(config_platform_credentials("platforms:\n  email:\n    extra:\n      address: a@b\n      password: p\n"),
+                         ("email.address", "email.password"))
+        self.assertEqual(config_platform_credentials("platforms:\n  discord: false\n  slack: {}\n"), ())
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -270,6 +276,19 @@ class BuildTests(unittest.TestCase):
             second = build_tui_home(omh_home, root, served=("kami",))
             self.assertEqual(second.refreshed, ())
 
+    def test_links_into_a_profile_no_longer_served_are_removed(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = _root_home(Path(tmp), served=("kami", "zeta"))
+            omh_home = Path(tmp) / "omh"
+            omh_home.mkdir()
+            _skill(root / "profiles" / "zeta" / "skills", "devops/zeta-only", "zeta")
+            first = build_tui_home(omh_home, root, served=("kami", "zeta"))
+            self.assertIn("devops/zeta-only", first.skills)
+            second = build_tui_home(omh_home, root, served=("kami",))
+            self.assertNotIn("devops/zeta-only", second.skills)
+            self.assertEqual(second.kept_local, ())
+            self.assertIn("skills/devops/zeta-only (removed)", second.refreshed)
+
     def test_a_root_without_the_optional_files_still_builds(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp) / "hermes"
@@ -303,6 +322,7 @@ class BuildTests(unittest.TestCase):
             omh_home.mkdir()
             built = build_tui_home(omh_home, root, served=())
             self.assertEqual(built.config_platform_credentials, ("telegram.token",))
+            self.assertFalse((tui_home_path(omh_home) / "config.yaml").exists())  # never copied into the home
             marker = json.loads((tui_home_path(omh_home) / MARKER_FILE).read_text(encoding="utf-8"))
             self.assertEqual(marker["config_platform_credentials"], ["telegram.token"])
 
