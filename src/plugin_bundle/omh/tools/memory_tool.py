@@ -943,11 +943,15 @@ def _demote_entry(wanted: str, omh_home: Path, hermes_home: Path) -> dict[str, o
                 "refused", **fields, reason="previously_rejected", candidate_id=candidate_id,
                 next_action="A reviewer rejected this entry; keep it in Hermes.",
             )
-        if status in ("pending_review", "blocked_review_required"):
+        # A copy retired by a recapture lives on in its successor, so the entry
+        # is still held, not in an unknown state.
+        recaptured = status == "retired" and bool(candidate.get("recaptured_as"))
+        if status in ("pending_review", "blocked_review_required") or recaptured:
             return _demote_result(
                 "pending_review",
                 **fields,
                 candidate_id=candidate_id,
+                **({"recaptured_as": str(candidate["recaptured_as"])} if recaptured else {}),
                 next_action="A copy of this entry was already held and is not in memory; keep the Hermes entry.",
             )
         if status != "approved":

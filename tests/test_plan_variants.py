@@ -70,7 +70,7 @@ def _accepted_plan(tmp: str, *, task: str = TASK) -> dict[str, Any]:
     """Write a real plan through the real lifecycle, then accept it."""
     paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
     artifact = write_hermes_plan(paths, build_hermes_plan_payload(task))
-    update_hermes_plan_status(paths, artifact["path"], status="accepted")
+    update_hermes_plan_status(paths, artifact["path"], status="accepted", allow_scaffold=True)
     return read_hermes_plan_artifact(artifact["path"])
 
 
@@ -483,7 +483,7 @@ class PlanVariantCliTests(unittest.TestCase):
             self.assertEqual(status, 2)
             self.assertIn("accepted parent plan", stderr)
 
-            update_hermes_plan_status(paths, draft, status="accepted")
+            update_hermes_plan_status(paths, draft, status="accepted", allow_scaffold=True)
             status, _, stderr = run_cli(
                 base + ["hermes", "plan-variant", draft, "--name", "x", "--delta", "scope:docs"]
             )

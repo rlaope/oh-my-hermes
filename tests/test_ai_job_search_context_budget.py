@@ -395,12 +395,15 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # before it was 0ae5f905...ebc5f.
         # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
         # moves, and the pin before it was d4eb4e54...7ed7.
+        # ralplan's acceptance line says plan-accept refuses a scaffold-only file unless
+        # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91.
         # show-reel then sends its paid calls through spend-gate, and spend-gate counts subscription
         # credits as a spend; only those two move. Its review round (credits read from the provider's
         # own price, the credits receipt, the gate named at every paid run step) moves the same two.
-        # Merged with main after #2652: both sides' bodies; main's pin before the merge was
-        # b36ad311...1e91, and this branch's was f30c9ae0...ca61.
-        self.assertEqual(_digest(legacy_hashes), 'a5bce1941c3610987568cc3ee0b18547aee27d53659e06042e7bbacd498090de')
+        # Merged with main after #2652: both sides' bodies; main's pin before that merge was
+        # b36ad311...1e91, and this branch's was f30c9ae0...ca61. Merged again after #2650: main's
+        # pin was 51d4a5cf...9f51, and this branch's was a5bce194...90de.
+        self.assertEqual(_digest(legacy_hashes), '62bebac1a0b2d516c936f3966ec321cdee21c66815b6b477b618473eda7abd0b')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

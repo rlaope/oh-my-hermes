@@ -405,6 +405,39 @@ def mark_payload_as_planning_input(payload: dict[str, object]) -> None:
     )
 
 
+SCAFFOLD_ACCEPTANCE_REQUIREMENT = {
+    "plan_body": "reviewed",
+    "record_with": "--plan-file",
+    "accept_scaffold_with": "--allow-scaffold",
+}
+
+
+def mark_payload_as_scaffold_record(payload: dict[str, object]) -> None:
+    """Make stdout of a scaffold-only record say what `plan-accept` does with the file.
+
+    The recorded file holds the generated sections, which `plan-accept` refuses
+    without `--allow-scaffold`, so the machine fields must not call it ready for
+    acceptance or hand a wrapper the coding step that follows acceptance.
+    A blocked plan keeps its clarification fields: the question comes first.
+    """
+    plan = payload.get("plan")
+    if not isinstance(plan, dict) or plan.get("status") != "draft":
+        return
+    gate = plan.get("quality_gate")
+    if isinstance(gate, dict):
+        plan["quality_gate"] = {**gate, "readiness": "needs_reviewed_body", "coding_handoff_ready": False}
+    contract = payload.get("wrapper_contract")
+    if not isinstance(contract, dict):
+        return
+    contract_gate = contract.get("quality_gate")
+    if isinstance(contract_gate, dict):
+        contract["quality_gate"] = {**contract_gate, "readiness": "needs_reviewed_body", "coding_handoff_ready": False}
+    contract["next_action"] = "record_reviewed_plan"
+    decision_gate = contract.get("decision_gate")
+    if isinstance(decision_gate, dict):
+        decision_gate["acceptance_requires"] = dict(SCAFFOLD_ACCEPTANCE_REQUIREMENT)
+
+
 def validate_reviewed_body(body: str) -> str:
     """The reviewed plan text a caller wants recorded, or ValueError."""
     text = body.replace("\r\n", "\n").strip()
@@ -534,6 +567,7 @@ def update_hermes_plan_status(
     *,
     status: str,
     summary: str = "",
+    allow_scaffold: bool = False,
 ) -> dict[str, object]:
     if status not in PLAN_STATUSES:
         raise ValueError(f"unsupported plan status: {status}")
@@ -541,6 +575,24 @@ def update_hermes_plan_status(
     current = read_hermes_plan_artifact(plan_path)
     if current.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(f"expected {SCHEMA_VERSION} artifact")
+    # A file recorded without --plan-file holds the generated goals, options
+    # and risks, whatever the plan was. Accepting it would hand an executor
+    # that scaffold as "the accepted plan", so it is refused before anything
+    # is written unless the operator accepts the scaffold on purpose. A file
+    # already accepted stays acceptable, so a re-run of the same command is not
+    # turned into a failure.
+    if (
+        status == "accepted"
+        and current.get("plan_body") == "scaffold"
+        and current.get("status") != "accepted"
+        and not allow_scaffold
+    ):
+        raise ValueError(
+            f"refused to accept {plan_path}: it holds only the generated scaffold (plan_body: scaffold), "
+            "not a reviewed plan. Record the reviewed plan with "
+            '`omh hermes plan --record --plan-file <reviewed-plan.md> "<task>"` and accept that file, '
+            "or run `omh hermes plan-accept --allow-scaffold <path>` to accept the scaffold on purpose."
+        )
     original = plan_path.read_text(encoding="utf-8")
     updated = _replace_frontmatter_status(original, status=status, summary=summary)
     atomic_write_text(plan_path, updated, private=True)
@@ -555,9 +607,10 @@ def update_hermes_plan_status(
     note = ""
     if status == "accepted" and body_state == "scaffold":
         note = (
-            "This plan file holds only the generated scaffold, not a reviewed plan. "
-            "Accepting it accepts the scaffold; record the reviewed plan with --plan-file first."
-        )
+            "Accepted the generated scaffold on purpose (--allow-scaffold); it is not a reviewed plan. "
+            if allow_scaffold
+            else "This file holds only the generated scaffold, accepted earlier; it is not a reviewed plan. "
+        ) + "Record the reviewed plan with --plan-file to hand an executor the plan itself."
         result["reviewed_body"] = False
     elif status == "accepted" and body_state == "unknown":
         note = "This plan file does not record whether it holds a reviewed plan or only the generated scaffold."
