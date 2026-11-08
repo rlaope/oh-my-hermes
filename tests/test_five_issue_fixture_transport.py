@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 from _local_package import load_local_package
 load_local_package()
+from _verification_python import SHORT_INTERPRETER_CHARS
 from omh.coding.executor_readiness import negotiate_session_capability, observe_session_binary
 from omh.coding.fanout_capacity import AdmissionBinding, OwnerLaunchGate
 from omh.coding.fanout_dispatch import signal_safe_unit_runner
@@ -197,8 +198,10 @@ class FixtureTransportTests(unittest.TestCase):
                     captured.extend(str(command) for command in commands)
             return real_build(goal, units)
 
+        # The fixtures' interpreter budget (`_verification_python`): a longer base interpreter would crowd the
+        # command's cap, so `sys.executable` stands in for it.
         base_python = getattr(sys, "_base_executable", sys.executable)
-        if len(base_python) > 100 or not Path(base_python).exists():
+        if len(base_python) > SHORT_INTERPRETER_CHARS or not Path(base_python).exists():
             base_python = sys.executable
 
         with (
@@ -222,10 +225,7 @@ class FixtureTransportTests(unittest.TestCase):
 
         with TemporaryDirectory(prefix='isolated-home-') as home_dir:
             home = Path(home_dir)
-            with (
-                patch.dict(os.environ, {'HOME': str(home)}),
-                patch.dict(os.environ, {}, clear=False),
-            ):
+            with patch.dict(os.environ, {'HOME': str(home)}):
                 _ = os.environ.pop('CODEX_HOME', None)
                 result = diagnostics.run_case('D5')
             self.assertTrue(result['pass'], result['observations'])
