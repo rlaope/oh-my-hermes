@@ -39,6 +39,11 @@ ENV_TEXT = (
 )
 
 
+def _target(path: Path) -> str:
+    """Where a link leads, as the file system resolves it: Windows spells a link's own target with its prefix."""
+    return os.path.realpath(path)
+
+
 def _skill(root: Path, name: str, body: str = "body") -> Path:
     directory = root / name
     directory.mkdir(parents=True)
@@ -102,14 +107,14 @@ class BuildTests(unittest.TestCase):
             self.assertNotIn("ha-secret", env)
             self.assertEqual(built.scrubbed, ("DISCORD_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_HOME_CHANNEL", "HA_TOKEN"))
             self.assertTrue((home / "SOUL.md").is_symlink())
-            self.assertEqual(os.readlink(home / "plugins" / "omh"), str(root / "plugins" / "omh"))
+            self.assertEqual(_target(home / "plugins" / "omh"), _target(root / "plugins" / "omh"))
             self.assertFalse((home / "plugins" / "homeassistant").exists())  # a bot-side plugin is not the TUI's
             # The union: the root's three, kami's one of its own; the two shared names are the root's copies.
             self.assertEqual(built.skills, ("apple", "hyperframes", "sionic-onprem-gpu", "web"))
             self.assertEqual(built.clashes, (("apple", "kami"), ("web", "kami")))
-            self.assertEqual(os.readlink(home / "skills" / "apple"), str(root / "skills" / "apple"))
-            self.assertEqual(os.readlink(home / "skills" / "sionic-onprem-gpu"),
-                             str(root / "profiles" / "kami" / "skills" / "sionic-onprem-gpu"))
+            self.assertEqual(_target(home / "skills" / "apple"), _target(root / "skills" / "apple"))
+            self.assertEqual(_target(home / "skills" / "sionic-onprem-gpu"),
+                             _target(root / "profiles" / "kami" / "skills" / "sionic-onprem-gpu"))
             self.assertEqual((home / "skills" / "apple" / "SKILL.md").read_text(encoding="utf-8"), "# apple\nroot\n")
             marker = json.loads((home / MARKER_FILE).read_text(encoding="utf-8"))
             self.assertEqual(marker["schema_version"], MARKER_SCHEMA)
