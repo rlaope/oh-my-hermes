@@ -15,11 +15,13 @@ const ALLOW_LABEL: Record<ApprovalChoice, string> = {
   deny: "Denied",
 };
 
-/** Buttons in display order; only those the request offers are shown. */
+/** Buttons in display order; only those the request offers are shown. All carry the same weight: the card
+ *  never nudges toward allowing (a `rm -rf` must not have a bright "Allow" next to a faint "Deny"). Deny comes
+ *  first so the left-most, first-tabbed answer is the safe one. */
 const BUTTONS: { choice: ApprovalChoice; label: string; cls: string }[] = [
-  { choice: "once", label: "Allow once", cls: "fill" },
+  { choice: "deny", label: "Deny", cls: "soft" },
+  { choice: "once", label: "Allow once", cls: "soft" },
   { choice: "session", label: "Allow for session", cls: "soft" },
-  { choice: "deny", label: "Deny", cls: "ghost" },
 ];
 
 /** False once the turn that raised the card is over (the request expired unanswered). A card raised outside
@@ -141,7 +143,7 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
               aria-label="Your answer"
               onChange={(e) => setText(e.target.value)}
             />
-            <button type="submit" className="card-btn fill" disabled={busy || !text.trim()}>
+            <button type="submit" className="card-btn soft" disabled={busy || !text.trim()}>
               Answer
             </button>
           </form>

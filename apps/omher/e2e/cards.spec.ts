@@ -74,23 +74,25 @@ test("approval: card with mono command, neutral buttons; Deny collapses it and s
   expect(await cmd.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono|Menlo/i);
   const btn = (name: string) => card.getByRole("button", { name, exact: true });
   for (const name of ["Allow once", "Allow for session", "Deny"]) await expect(btn(name)).toBeVisible();
-  // no pink / brand gradient on any button; Deny is gray (no fill), Allow once is a filled neutral
+  // no pink / brand gradient on any button; every answer carries the same neutral weight; Deny comes first
   for (const name of ["Allow once", "Allow for session", "Deny"]) {
     const bgImage = await btn(name).evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(bgImage).toBe("none");
   }
-  const colors = await Promise.all(
-    ["Allow once", "Deny"].map((n) =>
+  const looks = await Promise.all(
+    ["Deny", "Allow once", "Allow for session"].map((n) =>
       btn(n).evaluate((el) => {
         const cs = getComputedStyle(el);
-        return { bg: cs.backgroundColor, fg: cs.color };
+        return `${cs.backgroundColor}|${cs.color}|${cs.boxShadow}|${cs.fontWeight}`;
       }),
     ),
   );
+  expect(new Set(looks).size).toBe(1);
   const rgb = (s: string) => (s.match(/[\d.]+/g) ?? []).map(Number);
-  const [r, g, b] = rgb(colors[0].bg);
+  const [r, g, b] = rgb(looks[0].split("|")[0]);
   expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(24); // neutral, not pink
-  expect(rgb(colors[1].bg)[3] ?? 1).toBe(0); // Deny: transparent
+  const order = await card.getByRole("button").allTextContents();
+  expect(order.slice(0, 3)).toEqual(["Deny", "Allow once", "Allow for session"]);
   await page.screenshot({ path: join(SHOTS, "cards-approval-dark.png") });
 
   const before = events.length;
