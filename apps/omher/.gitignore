@@ -5,3 +5,4 @@ src-tauri/gen/
 test-results/
 playwright-report/
 *.tsbuildinfo
+e2e/__shots__/
