@@ -340,6 +340,9 @@ class SpendGateContractTests(unittest.TestCase):
         for projection, body in _bodies().items():
             with self.subTest(projection=projection):
                 self.assertIn("A paid call billed to the person's own subscription credits or plan usage", body)
+                # The list is not closed: a codex text run is generated text, counted in calls.
+                self.assertIn("a transcription, generated text, or generated sound, music, or images", body)
+                self.assertIn("the calls, characters, seconds, or images it uses", body)
                 self.assertIn("read from the provider's own price for that model, or says the cost is unknown", body)
                 self.assertIn("when neither can be read it is charged with the amount unconfirmed", body)
                 # The general receipt rule and the checklist point at the credits receipt
@@ -402,11 +405,13 @@ class SpendGateContractTests(unittest.TestCase):
         # that needs no price: the planned count in the call's own units.
         for projection, reference in _references().items():
             with self.subTest(projection=projection):
+                rails = reference.split("## 1. Rails", 1)[1].split("## 2.", 1)[0]
+                self.assertIn("times the planned calls, characters, seconds, or images", rails)
                 ledger = reference.split("## 4. Cap ledger", 1)[1]
                 self.assertIn("the spend goes ahead only against a spend-only cap, one the person sets for this spend alone", ledger)
                 unknown_cost = (
                     "For a call whose own cost is unknown, because no price gives its credits or cost, the person sets a "
-                    "spend-only cap for this call alone in its own units (images, characters, or seconds), and the planned "
+                    "spend-only cap for this spend alone in its own units (calls, images, characters, or seconds), and the planned "
                     "count is checked against it: the call runs only when the count fits"
                 )
                 self.assertIn(unknown_cost, ledger)
@@ -436,6 +441,40 @@ class SpendGateContractTests(unittest.TestCase):
         for skill, text in craft_brief.items():
             with self.subTest(skill=skill):
                 self.assertIn("`omh-spend-gate`'s spend-only cap applies", text)
+
+    def test_every_show_reel_section_that_runs_codex_names_the_gate(self) -> None:
+        # codex draws on the user's ChatGPT plan whether it makes images or text: the
+        # `codex exec` script review and concept candidates are spends like the image
+        # runs, and with no price their spend-only cap is counted in calls.
+        runs_codex = re.compile(
+            r"\bcodex exec\b|\bcodex CLI is available\b|\$S/codex_ref_image\.sh|scripts/codex_imagegen_batch\.sh"
+        )
+        text_runs = re.compile(r"\bcodex exec\b|\bcodex CLI is available\b")
+        for skill, templates in (
+            ("show-reel", builtin_skill_reference_templates()),
+            ("omh-show-reel", agent_skill_reference_templates()),
+        ):
+            sections = [
+                (template.relative_path, section)
+                for template in templates
+                if template.skill_name == skill
+                for section in re.split(r"(?m)^(?=#{1,4} [A-Z0-9])", template.content)
+                if runs_codex.search(section)
+            ]
+            with self.subTest(skill=skill):
+                self.assertTrue(any(text_runs.search(section) for _path, section in sections))
+                self.assertEqual(
+                    [(path, section.splitlines()[0]) for path, section in sections if "omh-spend-gate" not in section],
+                    [],
+                )
+                self.assertEqual(
+                    [
+                        (path, section.splitlines()[0])
+                        for path, section in sections
+                        if text_runs.search(section) and "spend-only cap set in calls" not in section
+                    ],
+                    [],
+                )
 
     def test_each_sibling_is_named_once(self) -> None:
         mine = _definition(SKILL).do_not_use_when

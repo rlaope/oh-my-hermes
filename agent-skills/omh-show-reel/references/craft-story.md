@@ -222,6 +222,8 @@ If the codex CLI is available, have a different model read the narration script 
 codex exec --sandbox read-only --skip-git-repo-check --ephemeral -o <project>/research/narration_review.md - < <project>/research/narration_review_prompt.md
 ```
 
+> OMH note: `codex exec` draws on the user's own ChatGPT plan, and no price gives a call's cost. Run it only after `omh-spend-gate`'s card, which names the calls and what each sends, with a spend-only cap set in calls, and the person's typed yes to that card.
+
 Criteria to put in the prompt (pass it on stdin; if you pass it as an argument, codex stalls waiting for input):
 
 1. Find and fix translationese (overuse of 그녀/그들/~의 ~ (she / they / chained possessive "of")) and awkward rhythm

@@ -309,6 +309,12 @@ All notable changes will be documented here.
   first if a service runs the gateway, and is otherwise interrupted. `/image`
   and `/paste` now wait in the composer during the restart, as the other
   commands that call the gateway do.
+- **show-reel's codex script review and concept candidates go through the
+  spend gate.** Each `codex exec` text run draws on the user's ChatGPT plan
+  like a codex image run, so it now waits for `omh-spend-gate`'s card and the
+  person's typed yes. No price gives its cost, so its spend-only cap is set
+  in calls, a unit the rails page now lists.
+
 - **A finished dag child's briefing names it by its role and a coloured
   handle.** As Claude Code writes `● Teammate @x finished`, a dag node's child
   now reads `● build @notify finished` (`verify`, `review`, `baseline`: the
