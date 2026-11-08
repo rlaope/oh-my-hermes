@@ -413,29 +413,40 @@ SCAFFOLD_ACCEPTANCE_REQUIREMENT = {
 
 
 def mark_payload_as_scaffold_record(payload: dict[str, object]) -> None:
-    """Make stdout of a scaffold-only record say what `plan-accept` does with the file.
+    """Make a scaffold-only record say what `plan-accept` does with the file.
 
     The recorded file holds the generated sections, which `plan-accept` refuses
-    without `--allow-scaffold`, so the machine fields must not call it ready for
-    acceptance or hand a wrapper the coding step that follows acceptance.
-    A blocked plan keeps its clarification fields: the question comes first.
+    without `--allow-scaffold`, so neither the machine fields nor the file may
+    call it ready for acceptance or hand a wrapper the coding step that follows
+    acceptance. Applied before the file is rendered, so the file and stdout say
+    the same. A blocked plan keeps its clarification fields: the question comes
+    first.
     """
     plan = payload.get("plan")
     if not isinstance(plan, dict) or plan.get("status") != "draft":
         return
-    gate = plan.get("quality_gate")
-    if isinstance(gate, dict):
-        plan["quality_gate"] = {**gate, "readiness": "needs_reviewed_body", "coding_handoff_ready": False}
     contract = payload.get("wrapper_contract")
     if not isinstance(contract, dict):
+        contract = {}
+    for holder in (plan, contract):
+        gate = holder.get("quality_gate")
+        if isinstance(gate, dict):
+            holder["quality_gate"] = {**gate, "readiness": "needs_reviewed_body", "coding_handoff_ready": False}
+        interview = holder.get("deep_interview")
+        if isinstance(interview, dict) and not interview.get("required", False):
+            holder["deep_interview"] = {**interview, "after_answer_next_action": "record_reviewed_plan"}
+    if not contract:
         return
-    contract_gate = contract.get("quality_gate")
-    if isinstance(contract_gate, dict):
-        contract["quality_gate"] = {**contract_gate, "readiness": "needs_reviewed_body", "coding_handoff_ready": False}
     contract["next_action"] = "record_reviewed_plan"
     decision_gate = contract.get("decision_gate")
     if isinstance(decision_gate, dict):
         decision_gate["acceptance_requires"] = dict(SCAFFOLD_ACCEPTANCE_REQUIREMENT)
+    # `available` keeps meaning "available after acceptance": wrapper sessions
+    # read it to offer the coding step, and `coding delegate --from-plan`
+    # already refuses a draft. The requirement rides beside it instead.
+    coding_delegate = contract.get("coding_delegate")
+    if isinstance(coding_delegate, dict) and coding_delegate.get("available"):
+        coding_delegate["acceptance_requires"] = dict(SCAFFOLD_ACCEPTANCE_REQUIREMENT)
 
 
 def validate_reviewed_body(body: str) -> str:

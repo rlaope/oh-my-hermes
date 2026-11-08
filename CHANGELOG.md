@@ -553,10 +553,12 @@ All notable changes will be documented here.
   file. `--allow-scaffold` accepts the scaffold on purpose and still returns
   `reviewed_body: false`, and re-accepting an already accepted file still
   succeeds. The `hermes plan accept <path>` alias refuses the same way. The
-  stdout of a scaffold record says so in its machine fields too:
+  stdout of a scaffold record and the recorded file say so too (the file's
+  quality gate and next action match stdout):
   `quality_gate.readiness: needs_reviewed_body`, `coding_handoff_ready:
   false`, `next_action: record_reviewed_plan`, and
-  `decision_gate.acceptance_requires`. `ulw-plan`, the `omh-routing`
+  `decision_gate.acceptance_requires`, repeated on `coding_delegate`, whose
+  `available` still means available after acceptance. `ulw-plan`, the `omh-routing`
   wrapper reference and `docs/INSTALLATION.md` describe the refusal.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
