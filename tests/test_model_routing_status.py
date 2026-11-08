@@ -101,9 +101,14 @@ class ModelRoutingStatusTests(unittest.TestCase):
         self.assertEqual(payload["hermes"]["status"], "configured")
         self.assertEqual(payload["hermes"]["aliases"]["main"], "kimi-coding/kimi-k3.1-pro")
         self.assertEqual(payload["hermes"]["auth"]["status"], "unobserved")
-        learned = payload["owner_learning"]["routes"][ROUTE_FAMILY]
-        self.assertEqual(learned["status"], "learned")
-        self.assertEqual(learned["selected_owner"], "pi-family-runtime")
+        # Mutation: report "learned" or a selected owner again; a stored choice selects no owner.
+        stored = payload["owner_learning"]["routes"][ROUTE_FAMILY]
+        self.assertEqual(stored["status"], "recorded")
+        self.assertEqual(stored["recorded_owner"], "pi-family-runtime")
+        self.assertIs(stored["selects_owner"], False)
+        self.assertNotIn("selected_owner", stored)
+        self.assertEqual(payload["owner_learning"]["status"], "recorded")
+        self.assertNotIn("learned", json.dumps(payload["owner_learning"]))
         self.assertIsInstance(payload["next_action"], str)
         self.assertTrue(payload["next_action"])
 
@@ -138,6 +143,24 @@ class ModelRoutingStatusTests(unittest.TestCase):
         self.assertEqual(json.loads(stdout)["schema_version"], "model_routing_status/v1")
         self.assertEqual(len(stdout.splitlines()), 1)
 
+
+    def test_cli_text_reports_stored_choices_as_selecting_no_owner(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths, discovery_home = self._fixture(root)
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home", str(paths.omh_home),
+                    "--hermes-home", str(paths.hermes_home),
+                    "coding", "model-routing", "status",
+                    "--discovery-home", str(discovery_home),
+                ],
+                output_json=False,
+            )
+        self.assertEqual(status, 0, stderr)
+        self.assertIn("Stored owner choices: 1 (history only; they select no owner)", stdout)
+        self.assertNotIn("Owner learning", stdout)
+        self.assertNotIn("learned", stdout)
 
 class ModelRoutingResetTests(unittest.TestCase):
     def test_reset_changes_only_owner_preference_metadata_and_is_visible_in_status(self) -> None:

@@ -1480,7 +1480,9 @@ def cmd_coding_model_routing_status(args: argparse.Namespace) -> int:
     print(f"Discovered only (not execution proof): {discovered}")
     print(f"Hermes aliases ({hermes['status']}): {aliases}")
     print(f"Maestro missing recommendation heads: {', '.join(maestro['missing_heads']) or 'none'}")
-    print(f"Owner learning: {owner['status']}")
+    recorded = sum(1 for route in owner.get("routes", {}).values() if route.get("status") == "recorded")
+    print(f"Stored owner choices: {recorded or 'none'} (history only; they select no owner)"
+          if owner["status"] not in ("missing", "corrupt") else f"Stored owner choices: {owner['status']}")
     print(f"Next action: {payload['next_action']}")
     print(str(payload["claim_boundary"]))
     return 0

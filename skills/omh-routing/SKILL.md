@@ -144,6 +144,7 @@ Load these only when exact detail matters:
 - `references/evidence-boundaries.md` for prepared-vs-observed, target topology, memory, and compatibility rules.
 - `references/structural-code-search.md` for ast-grep structural code search patterns and the grep fallback.
 - `references/human-voice.md` before writing prose a person reads: AI-writing tells to remove, Korean habits, reply shape.
+- `references/skill-common-rail.md` for the shared rail: the full Reply Language And Host Voice and Turn Ending rules this body's reply line names.
 
 ## Recovery
 

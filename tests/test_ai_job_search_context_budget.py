@@ -414,8 +414,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Every body's reply-voice paragraph then becomes one line pointing at the shared rail, so every body
         # moves; the pin before it was c0b3ab76...df31.
         # No learned coding-owner default then: only dag-ulw and maestro move, and the pin before it was
-        # 4da0a2a3...f96c.
-        self.assertEqual(_digest(legacy_hashes), '8484c56d15dce5310bb17296be1d44f3b2aa13abbc7640198a26ef1bd29721dd')
+        # 4da0a2a3...f96c. Its review then lists the shared rail among omh-routing's own references, which its
+        # one-line reply rule names; only that body moves, and the pin before it was 8484c56d...21dd.
+        self.assertEqual(_digest(legacy_hashes), '15b8c2cd20e6e7fc7da7253eeece9abd8e80bf14cb6165dd7579485b239e9716')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

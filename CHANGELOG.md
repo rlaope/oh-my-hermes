@@ -624,6 +624,9 @@ All notable changes will be documented here.
   `omh coding model-routing status` and clearable with its `reset`, but it
   selects no owner. ulw-maestro now names the setup-profile default as a
   choice that stands, and dag-ulw says a newly named owner needs a new run id.
+  `omh_dag define` now refuses to define a cancelled run id again instead of
+  handing back the cancelled run, and `omh coding model-routing status`
+  reports stored choices as `recorded` history that selects no owner.
 - **The round-end check continues a turn less often.** A changed function's
   name in another file no longer continues the turn when every mention there
   is proven to need no change: another object's method of the same name, or

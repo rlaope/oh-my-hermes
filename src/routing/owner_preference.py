@@ -35,7 +35,7 @@ from ..system.paths import OmhPaths
 
 @dataclass(frozen=True)
 class OwnerPreferenceDecision:
-    """The safe routing projection of learned owner state."""
+    """The safe routing projection of the stored owner choices: whether this request bypasses or asks."""
 
     action: str
     reason_code: str
@@ -309,12 +309,12 @@ def write_owner_preference(paths: OmhPaths, state: Mapping[str, Any]) -> Path:
 
 def _decision(action: str, reason_code: str, route_family: str, count: int) -> OwnerPreferenceDecision:
     reasons = {
-        "non_coding_workflow": "Owner learning does not apply to a non-coding workflow.",
-        "non_ulw_workflow": "Owner learning does not apply outside an ULW workflow.",
-        "owner_named_in_request": "The request already names an owner, so learned state is bypassed.",
+        "non_coding_workflow": "No coding-owner question applies to a non-coding workflow.",
+        "non_ulw_workflow": "No coding-owner question applies outside an ULW workflow.",
+        "owner_named_in_request": "The request already names an owner, so no question is asked.",
         "multiple_owners_named": "Multiple named owners require a fresh explicit choice.",
         "authority_requires_choice": "The authority boundary requires a fresh explicit choice.",
-        "owner_unready": "The learned owner is not ready, so the owner choice is reopened.",
+        "owner_unready": "The owner is not ready, so the owner choice is reopened.",
         "capability_gap": "A required capability is not met, so the owner choice is reopened.",
         "explicit_choice_required": (
             "No owner is named in this request, and an earlier choice never counts for it; ask for an explicit choice."

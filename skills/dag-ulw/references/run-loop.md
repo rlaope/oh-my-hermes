@@ -138,7 +138,7 @@ that request named for the whole run, and only for that run. An earlier request'
 `omh chat` or `omh coding`, and a recorded preference never count. When the person wants an external owner
 and this request names none, ask them to name it in a request that invokes dag-ulw; do not reuse an
 earlier one. Defining the same run again changes nothing, so a newly named owner needs a new run id (or
-cancel this run and define it again).
+cancel this run and define one under a new id; a cancelled run id is not defined again).
 
 With such a choice:
 
