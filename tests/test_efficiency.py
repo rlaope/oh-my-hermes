@@ -2189,7 +2189,7 @@ class EfficiencyContractTests(unittest.TestCase):
             )
 
     def test_chat_interaction_reuses_executor_target_hint_cache(self) -> None:
-        contract_module._executor_target_from_message.cache_clear()
+        contract_module._executor_choice_from_message.cache_clear()
 
         first, first_resolution = contract_module._resolve_delegate_executor_target(
             "choose",
@@ -2201,7 +2201,8 @@ class EfficiencyContractTests(unittest.TestCase):
             None,
             message="open this in Codex and prepare the coding handoff",
         )
-        cache_info = contract_module._executor_target_from_message.cache_info()
+        # The owner-choice reader (owner cue: "open this in codex") is the cached one the resolver calls.
+        cache_info = contract_module._executor_choice_from_message.cache_info()
 
         self.assertEqual(first, "codex")
         self.assertEqual(second, "codex")

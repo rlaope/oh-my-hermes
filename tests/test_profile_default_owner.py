@@ -184,18 +184,72 @@ class ProfileOwnerRouteHintTests(unittest.TestCase):
                                    user_message=self.MESSAGE, is_first_turn=True)
         self.assertEqual(seen[:1], ["claude-code"])
 
-    def test_the_profile_reader_names_only_a_set_owner(self) -> None:
+    def test_the_profile_reader_names_only_an_executor_id_read_as_the_wrapper_reads_it(self) -> None:
+        # Mutation: drop the legacy mapping or the executor-id check; the hint then names an owner the wrapper does not.
+        from omh.coding.executors import canonical_executor_profile, legacy_executor_profile_ids
         from omh.plugin_bundle.omh.owner_preference_record import setup_profile_owner
 
+        legacy = legacy_executor_profile_ids("pi-family-runtime")
+        self.assertTrue(legacy)
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.assertEqual(setup_profile_owner(root), "")
-            (root / "setup-profile.json").write_text(json.dumps({"default_executor": "Codex"}), encoding="utf-8")
-            self.assertEqual(setup_profile_owner(root), "codex")
-            for raw in ('{"default_executor": "choose"}', '{"default_executor": "bad owner!"}', "[]", "{broken"):
+            for value, expected in (
+                ("codex", "codex"), (legacy[0], "pi-family-runtime"), ("notarealowner", ""), ("Codex", ""),
+                ("choose", ""),
+            ):
+                with self.subTest(value=value):
+                    (root / "setup-profile.json").write_text(json.dumps({"default_executor": value}), encoding="utf-8")
+                    self.assertEqual(setup_profile_owner(root), expected)
+                    wrapper = canonical_executor_profile(value)
+                    self.assertEqual(expected, wrapper if wrapper in contract.CODING_EXECUTOR_TARGETS
+                                     and wrapper != "choose" else "")
+            for raw in ("[]", "{broken"):
                 with self.subTest(raw=raw):
                     (root / "setup-profile.json").write_text(raw, encoding="utf-8")
                     self.assertEqual(setup_profile_owner(root), "")
+
+    def test_the_bundle_executor_ids_are_the_wrappers(self) -> None:
+        from omh.plugin_bundle.omh.owner_preference_record import SETUP_PROFILE_EXECUTORS
+
+        self.assertEqual(SETUP_PROFILE_EXECUTORS, set(contract.CODING_EXECUTOR_TARGETS) - {"choose"})
+
+
+class OwnerCueEntryPointTests(unittest.TestCase):
+    """A CLI named as what the work is about is not an owner choice on any entry point (#2679 review)."""
+
+    SUBJECT = "fix the codex adapter tests and open a pr"
+
+    def test_a_cli_named_as_the_subject_leaves_the_profile_default_in_charge(self) -> None:
+        # Mutation: read a bare product word as an owner again; Codex then runs and is recorded as chosen.
+        with TemporaryDirectory() as tmp:
+            homes = _Homes(Path(tmp))
+            for entry, payload in (
+                ("chat interact", homes.cli("chat", "interact", "--json", "--source", "discord", self.SUBJECT)),
+                ("chat session start", homes.cli("chat", "session", "start", "--source", "discord", self.SUBJECT)),
+            ):
+                interaction = _interaction(payload)
+                with self.subTest(entry=entry):
+                    self.assertEqual(interaction["executor_resolution"]["source"], "setup_profile")
+                    self.assertEqual(interaction["delegation"]["selected_executor_profile"], "claude-code")
+            delegated = homes.cli("coding", "delegate", self.SUBJECT)
+            stored = homes.store.exists()
+        self.assertEqual(delegated["selected_executor_profile"], "claude-code")
+        self.assertFalse(stored)
+
+    def test_the_plugin_tool_reads_the_same_cue(self) -> None:
+        from omh.plugin_bundle.omh.tools import chat_tool
+
+        with TemporaryDirectory() as tmp:
+            homes = _Homes(Path(tmp))
+            with patch.dict(os.environ, {"OMH_HOME": str(homes.omh), "HERMES_HOME": str(homes.hermes)}):
+                payload = json.loads(chat_tool.omh_interact_handler({
+                    "message": self.SUBJECT, "source": "discord", "record_session": False,
+                    "omh_home": str(homes.omh), "hermes_home": str(homes.hermes),
+                }))
+        self.assertEqual(_interaction(payload)["executor_resolution"]["source"], "setup_profile")
+        self.assertEqual(_interaction(payload)["delegation"]["selected_executor_profile"], "claude-code")
+
 
 class ProfileOwnerDecisionTests(unittest.TestCase):
     def test_a_profile_owner_bypasses_the_question_and_says_why(self) -> None:

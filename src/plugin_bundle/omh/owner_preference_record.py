@@ -21,6 +21,7 @@ from pathlib import Path
 import re
 from typing import Any, Final
 from .iso_datetime import strict_fromisoformat
+from .pi_family_names import LEGACY_RUNTIME_RECORD_VALUES
 
 OWNER_PREFERENCE_SCHEMA_VERSION: Final = "coding_owner_preference/v1"
 OWNER_PREFERENCE_RECORD_TYPE: Final = "coding_owner_preference"
@@ -199,15 +200,21 @@ def route_errors(key: object, route: object) -> list[str]:
 
 
 SETUP_PROFILE_FILE: Final = "setup-profile.json"
-_PROFILE_UNSET: Final = frozenset({"", "choose"})
+# The executor profile ids a setup profile may name, copied from `omh.coding_delegation.CODING_EXECUTOR_TARGETS`
+# (the bundle cannot import it); `tests/test_profile_default_owner.py` holds the two equal. "choose" is unset.
+SETUP_PROFILE_EXECUTORS: Final = frozenset(
+    {"codex", "claude-code", "omx-runtime", "pi-family-runtime", "omc-runtime", "generic", "hermes"}
+)
 
 
 def setup_profile_owner(omh_home: str | Path | None) -> str:
-    """The default coding owner `<omh_home>/setup-profile.json` names, or "".
+    """The default coding owner `<omh_home>/setup-profile.json` names, or "", read as the wrapper reads it.
 
-    Read per call, so a profile edit counts on the next turn. A missing,
-    unreadable or malformed profile, an unset value ("choose") or one that is
-    not an opaque reference names no owner: the hint then asks, as before.
+    Read per call, so a profile edit counts on the next turn. An id an older
+    release stored is mapped to the current one (`LEGACY_RUNTIME_RECORD_VALUES`);
+    a missing, unreadable or malformed profile, "choose", or a value that is not
+    an executor profile id names no owner, and the hint then asks, as the
+    wrapper does.
     """
     if omh_home is None or not str(omh_home):
         return ""
@@ -216,5 +223,6 @@ def setup_profile_owner(omh_home: str | Path | None) -> str:
     except (OSError, ValueError, RecursionError):
         return ""
     owner = profile.get("default_executor") if isinstance(profile, dict) else None
-    owner = owner.strip().casefold() if isinstance(owner, str) else ""
-    return owner if owner not in _PROFILE_UNSET and opaque_ref_ok(owner) else ""
+    owner = owner.strip() if isinstance(owner, str) else ""
+    owner = LEGACY_RUNTIME_RECORD_VALUES.get(owner, owner)
+    return owner if owner in SETUP_PROFILE_EXECUTORS else ""

@@ -48,6 +48,7 @@ from ..routing.chat import (
     route_question_observation,
 )
 from ..routing.coding_route_actions import coding_route_decision_payload, resolve_coding_route_decision
+from ..routing.executor_cues import owner_named_as_doer
 from ..routing.localization import normalized_phrase
 from ..routing.route_plan import public_workflow_identifier, with_public_skill_names
 from ..routing.route_question import apply_route_question_mode
@@ -5892,7 +5893,9 @@ def _build_chat_interaction_payload_uncached(
         base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "show_command_preview"))
         return _finish_interaction(base, target_notice)
 
-    resolved_executor_target, executor_resolution = _resolve_delegate_executor_target(executor_target, paths, message=message)
+    resolved_executor_target, executor_resolution = _resolve_delegate_executor_target(
+        executor_target, paths, message=message, status_subject=_route_is_coding_status_request(route_payload)
+    )
 
     if resolved_mode == "delegate":
         delegation = build_coding_delegation_payload(
@@ -6030,9 +6033,15 @@ def _build_chat_interaction_payload_uncached(
     return _finish_interaction(base, target_notice)
 
 
-def _resolve_delegate_executor_target(executor_target: str, paths: OmhPaths | None, *, message: str = "") -> tuple[str, dict[str, object]]:
+def _resolve_delegate_executor_target(
+    executor_target: str, paths: OmhPaths | None, *, message: str = "", status_subject: bool = False
+) -> tuple[str, dict[str, object]]:
     requested = str(executor_target or "choose").strip() or "choose"
-    message_hint = _executor_target_from_message(message)
+    # An owner named as the doer ("use codex"). A status question about a CLI ("is the codex session stuck?")
+    # names the CLI it asks about; that is the subject of the card, not a choice of who writes code.
+    message_hint = _executor_choice_from_message(message) or (
+        _executor_target_from_message(message) if status_subject else ""
+    )
     setup_default = "choose"
     setup_available = False
     if paths is not None:
@@ -6073,8 +6082,27 @@ def _resolve_delegate_executor_target(executor_target: str, paths: OmhPaths | No
 
 
 def executor_target_named_in_message(message: str) -> str:
-    """The coding owner the message names, read as the chat wrapper reads it (`message_mention`), or ""."""
-    return _executor_target_from_message(message)
+    """The coding owner the message names as the doer, read as the chat wrapper reads it (`message_mention`), or ""."""
+    return _executor_choice_from_message(message)
+
+
+@lru_cache(maxsize=4096)
+def _executor_choice_from_message(message: str) -> str:
+    """The owner the message names with an owner cue ("use codex", "codex로"); a bare product word is not one.
+
+    `_executor_target_from_message` still finds any mention, for the status checks that ask whether a CLI is named
+    at all; only this reader picks an owner.
+    """
+    folded = normalized_phrase(message)
+    lowered = f" {message.lower()} "
+    for target, hints in _MESSAGE_EXECUTOR_HINTS:
+        # Hermes's hints are already doer phrases ("hermes coding", "with hermes", "헤르메스만으로").
+        if target == "hermes":
+            if any(hint in lowered for hint in hints):
+                return target
+        elif any(owner_named_as_doer(folded, normalized_phrase(hint)) for hint in hints):
+            return target
+    return ""
 
 
 @lru_cache(maxsize=4096)

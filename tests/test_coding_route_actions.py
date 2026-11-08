@@ -29,6 +29,7 @@ from omh.routing.coding_route_actions import (
     RECORDED_OWNER_NEXT_ACTION,
     USER_CHOICE_NEXT_ACTION,
     named_coding_agent_phrase_parity,
+    named_executor_owners,
     resolve_coding_route_decision,
 )
 from omh.routing.localization import normalized_phrase
@@ -219,6 +220,73 @@ class CodingRouteActionVocabularyTests(unittest.TestCase):
                 self.assertEqual(decision.next_action, NAMED_EXECUTOR_NEXT_ACTION)
                 self.assertEqual(decision.selected_owner, "pi-family-runtime")
                 self.assertFalse(decision.choice_required)
+
+
+class OwnerCueTests(unittest.TestCase):
+    """An owner named in a message counts only as the doer, on positive evidence (#2679 review).
+
+    Each negative names a CLI as what the work is about; each positive names it with an owner cue. A new cue
+    form joins `routing/executor_cues.py` with a case here on each side.
+    """
+
+    NOT_AN_OWNER = (
+        # The CLI is the subject of the work, not who does it.
+        "fix the codex adapter tests and open a pr",
+        "codex 어댑터 테스트 고쳐줘",
+        "update the claude code docs",
+        "rename the opencode config loader",
+        "fix the bug in codex adapter",
+        # Filenames and hyphenated words were never owner names.
+        "check the codex-utils.py script",
+        "read the claude-code.md file",
+        # A negated cue chooses nothing.
+        "don't use codex for this",
+        "codex로 하지 마",
+        # A status question names the CLI it asks about; the wrapper keeps it as the card's subject only.
+        "codex 세션 지금 실행 중이야?",
+    )
+    OWNER = (
+        ("use codex to fix the login bug", ("codex",)),
+        ("fix the login bug with codex and open a pr", ("codex",)),
+        ("using claude code, fix the login bug", ("claude-code",)),
+        ("have claude code fix the login bug", ("claude-code",)),
+        ("let codex handle the parser fix", ("codex",)),
+        ("open this in codex and prepare the coding handoff", ("codex",)),
+        ("codex 세션 켜서 작업 시작하게 해줘", ("codex",)),
+        ("claude code 작업 세션 열어줘", ("claude-code",)),
+        ("open a codex session for the parser fix", ("codex",)),
+        ("codex로 이 버그 고쳐줘", ("codex",)),
+        ("codex한테 맡겨줘", ("codex",)),
+        ("codex 써서 고쳐줘", ("codex",)),
+        ("클로드 코드로 구현해줘", ("claude-code",)),
+        ("claude-code로 열어줘", ("claude-code",)),
+        ("opencode로 이 버그 고쳐줘", ("pi-family-runtime",)),
+        ("use codex or claude code to fix the login bug", ("codex", "claude-code")),
+        ("codex 말고 claude code로 구현해줘", ("claude-code",)),
+    )
+
+    def test_a_cli_named_as_the_subject_is_not_an_owner(self) -> None:
+        # Mutation: match a bare owner name again (`contains_boundary_phrase`); every case here then names one.
+        for message in self.NOT_AN_OWNER:
+            with self.subTest(message=message):
+                self.assertEqual(named_executor_owners(normalized_phrase(message)), ())
+
+    def test_an_owner_cue_names_the_owner(self) -> None:
+        for message, owners in self.OWNER:
+            with self.subTest(message=message):
+                self.assertEqual(named_executor_owners(normalized_phrase(message)), owners)
+
+    def test_the_wrapper_reads_the_same_cue(self) -> None:
+        from omh.wrapper.contract import executor_target_named_in_message
+
+        for message in self.NOT_AN_OWNER:
+            with self.subTest(message=message):
+                self.assertEqual(executor_target_named_in_message(message), "")
+        for message, owners in self.OWNER:
+            # The wrapper's own name table spells the pi family by its runtime names, not by "opencode".
+            if len(owners) == 1 and owners != ("pi-family-runtime",):
+                with self.subTest(message=message):
+                    self.assertEqual(executor_target_named_in_message(message), owners[0])
 
 
 class CodingRouteActionGuardTests(unittest.TestCase):

@@ -7,7 +7,7 @@ from typing import Any, Mapping
 from .executor_cues import (
     NAMED_CODING_AGENT_PHRASES,
     PI_FAMILY_CODING_AGENT_PHRASES,
-    contains_boundary_phrase,
+    owner_named_as_doer,
 )
 from .localization import normalized_phrase
 from .owner_preference import owner_preference_decision
@@ -67,16 +67,9 @@ NAMED_EXECUTOR_OWNER_PHRASES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("pi-family-runtime", PI_FAMILY_CODING_AGENT_PHRASES),
 )
 
-# Owner groups whose phrases hide inside ordinary words as raw substrings
-# (a word ending in the runtime's short name contains its runtime phrase, and
-# "api한테" contains "pi한테") or as
-# ordinary hyphenated words and filenames ("claudecode-notes", "claude-code.md",
-# "codex-utils.py" each contain a bare owner name that never named the
-# executor). These groups are matched with `contains_boundary_phrase`; every
-# other group keeps plain containment. `hermes`'s two-word phrases are
-# distinctive enough in practice that this fix is not extended to that group
-# here; extend it the same way if a similar hole is ever measured there.
-_BOUNDARY_MATCHED_OWNERS: frozenset[str] = frozenset({"codex", "claude-code", "pi-family-runtime"})
+# Every owner group is matched at a word boundary and only with an owner cue (`owner_named_as_doer`): a name
+# inside an ordinary word or filename ("api한테", "claude-code.md", "codex-utils.py") or a bare product word that
+# names what the work is about ("fix the codex adapter tests") is no owner choice.
 
 # Request-led compatible routes. These cues name the *shape* of the coding owner the
 # request needs, never a vendor, so Hermes can pick a compatible route family without
@@ -282,14 +275,14 @@ def resolve_coding_route_decision(
 
 
 def named_executor_owners(normalized_query: str) -> tuple[str, ...]:
-    """Return the distinct executor profile ids named in an already-normalized request."""
+    """Return the distinct executor profile ids an already-normalized request names as the one to do the work.
+
+    A name counts only with an owner cue (`owner_named_as_doer`): "use codex", "with claude code", "codex로".
+    "fix the codex adapter tests" names what the work is about, not who does it, and names no owner.
+    """
     owners: list[str] = []
     for owner, phrases in NAMED_EXECUTOR_OWNER_PHRASES:
-        if owner in _BOUNDARY_MATCHED_OWNERS:
-            matched = contains_boundary_phrase(normalized_query, _normalized_options(phrases))
-        else:
-            matched = bool(_matched_phrases(normalized_query, phrases))
-        if matched:
+        if any(owner_named_as_doer(normalized_query, phrase) for phrase in _normalized_options(phrases)):
             owners.append(owner)
     return tuple(owners)
 
