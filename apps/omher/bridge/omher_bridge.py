@@ -47,7 +47,16 @@ PEEK_CHARS = 400
 THINKING_MIN_GAP = 1.0
 CONNECT_TIMEOUT = 60.0
 OFFLINE_COOLDOWN = 10.0
-DEFAULT_HERMES_ROOT = Path.home() / ".hermes" / "hermes-agent"
+def _default_hermes_root() -> Path:
+    """The Hermes checkout whose venv runs this bridge (`<root>/venv/bin/python`), else ~/.hermes/hermes-agent."""
+    exe = Path(sys.executable)
+    for venv in (exe.parent.parent,):
+        if venv.name in ("venv", ".venv") and (venv.parent / "hermes_cli").is_dir():
+            return venv.parent
+    return Path.home() / ".hermes" / "hermes-agent"
+
+
+DEFAULT_HERMES_ROOT = _default_hermes_root()
 
 log = logging.getLogger("omher.bridge")
 
@@ -906,12 +915,21 @@ def main(argv=None) -> int:
         ap.error("--token is required")
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="omher-bridge %(levelname)s %(message)s")
     root = Path(args.hermes_root) if args.hermes_root else DEFAULT_HERMES_ROOT
-    try:
-        import hermes_cli.gateway_client  # noqa: F401
-    except ImportError:
-        if root.is_dir():
-            sys.path.insert(0, str(root))
+    ensure_hermes_on_path(root)
     return asyncio.run(amain(args))
+
+
+def ensure_hermes_on_path(root: Path, path: list | None = None) -> None:
+    """Put the Hermes checkout on sys.path even when `hermes_cli` already imports.
+
+    Hermes' venv installs `hermes_cli` as a package but not its top-level helper modules
+    (`hermes_dir_acl`, `hermes_constants`, …) that starting a gateway imports. Checking only
+    `import hermes_cli` therefore passed and every profile whose gateway was not already
+    running failed with `No module named 'hermes_dir_acl'`.
+    """
+    path = sys.path if path is None else path
+    if root.is_dir() and str(root) not in path:
+        path.insert(0, str(root))
 
 
 if __name__ == "__main__":

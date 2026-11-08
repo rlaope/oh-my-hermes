@@ -654,3 +654,37 @@ class Discovery(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HermesPath(unittest.TestCase):
+    """D1: starting a gateway imports Hermes' top-level modules (hermes_dir_acl, …) that its venv does
+    not install; the bridge must put the checkout on sys.path even when `hermes_cli` already imports."""
+
+    def test_root_is_added_even_when_hermes_cli_imports(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            path: list = ["/somewhere/site-packages"]
+            omher_bridge.ensure_hermes_on_path(Path(d), path)
+            self.assertEqual(path[0], d)
+            omher_bridge.ensure_hermes_on_path(Path(d), path)
+            self.assertEqual(path.count(d), 1)
+
+    def test_missing_root_is_ignored(self):
+        import omher_bridge
+        path: list = []
+        omher_bridge.ensure_hermes_on_path(Path("/nonexistent/hermes-agent"), path)
+        self.assertEqual(path, [])
+
+    def test_default_root_comes_from_the_interpreter_venv(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "hermes-agent"
+            (root / "hermes_cli").mkdir(parents=True)
+            (root / "venv" / "bin").mkdir(parents=True)
+            fake = root / "venv" / "bin" / "python"
+            real = sys.executable
+            try:
+                sys.executable = str(fake)
+                self.assertEqual(omher_bridge._default_hermes_root(), root)
+            finally:
+                sys.executable = real
