@@ -7,10 +7,8 @@ import { fileURLToPath } from "node:url";
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = join(dirname(fileURLToPath(import.meta.url)), "__shots__");
 
-// Vite's dev server listens on `localhost` (::1 on macOS), not 127.0.0.1 — the shared config's
-// baseURL points at 127.0.0.1, so pages are opened via localhost here.
 // Headless Chromium reports a light OS scheme; the sketch default is dark.
-test.use({ baseURL: `http://localhost:${Number(process.env.OMHER_PORT || 5307)}`, colorScheme: "dark" });
+test.use({ colorScheme: "dark" });
 
 /** One request to the mock bridge over its own websocket (mock.reset, mock.calls). */
 async function mock(op: string, params: Record<string, unknown> = {}): Promise<any> {
