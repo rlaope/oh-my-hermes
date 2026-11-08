@@ -121,6 +121,7 @@ import json
 import re
 import shlex
 from collections import Counter, OrderedDict
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Final
 
@@ -469,12 +470,15 @@ _HANGUL = "ᄀ-ᇿ㄰-㆏가-힣"
 _KANA = "぀-ゟ゠-ヿㇰ-ㇿｦ-ﾟ"
 _HAN = "㐀-䶿一-鿿豈-﫿"
 _CJK_CHARS = re.compile(f"[{_HANGUL}{_KANA}{_HAN}]")
-# Common characters whose Simplified and Traditional forms differ, paired by
-# position. A Han reply is Traditional only when its Traditional-only forms
-# outnumber its Simplified-only ones; a tie, including a reply built only from
-# shared characters, keeps the Simplified copy it always had.
-_HANS_ONLY = "这们个会说请没设为来时对与从还过点开关么样经发现进动务话题实问认应该传续试测码数据项档执连环"
-_HANT_ONLY = "這們個會說請沒設為來時對與從還過點開關麼樣經發現進動務話題實問認應該傳續試測碼數據項檔執連環"
+_HAN_CHAR = re.compile(f"[{_HAN}]")
+# Which Chinese script a Han character belongs to is read from the two
+# national character sets CPython ships codecs for: Big5 (Taiwan, Hong Kong)
+# holds Traditional forms and GB2312 (mainland) Simplified ones. A character
+# only one of them encodes is that script's own form (請, 測, 錯 against 请,
+# 测, 错); one both encode (完, 成, 合格) or neither does (Japanese 変, 験) says
+# nothing. No word list to keep up and no dependency.
+_TRADITIONAL_CODEC = "big5"
+_SIMPLIFIED_CODEC = "gb2312"
 _QUOTATION = re.compile(r'"[^"\n]*"|“[^”\n]*”|「[^」\n]*」|『[^』\n]*』')
 _SCRIPT_RUNS: Final = tuple(
     (language, re.compile(f"[{chars}]{{{REPLY_SCRIPT_MIN_RUN},}}"))
@@ -494,13 +498,14 @@ def reply_language(text: object) -> str:
     majority script: a Japanese reply is often mostly kanji, so a majority
     rule would call it Chinese.
 
-    A Chinese reply is ``zh-Hant`` when its Traditional-only forms outnumber
-    its Simplified-only ones, else ``zh``.
+    A Chinese reply is ``zh-Hant`` when its Traditional-only characters
+    outnumber its Simplified-only ones, else ``zh``; a tie, including a reply
+    built only from characters both scripts share, keeps ``zh``.
 
     The stated limit: a Japanese reply with no run of two kana (all kanji, or
-    kanji with single-kana particles) reads as Chinese, usually Traditional. Nothing in the text
-    tells the two apart without a dictionary. Anything else, including a
-    script with no copy here, is English.
+    kanji with single-kana particles) reads as Chinese, usually Traditional.
+    Nothing in the text tells the two apart without a dictionary. Anything
+    else, including a script with no copy here, is English.
     """
     prose = _INLINE_CODE.sub("", _FENCED_CODE.sub("", str(text or "")))
     prose = _NAME_TOKEN.sub(" ", _QUOTATION.sub(" ", prose))
@@ -508,14 +513,30 @@ def reply_language(text: object) -> str:
         return "en"
     for language, run in _SCRIPT_RUNS:
         if run.search(prose):
-            if language == "zh" and _count_in(prose, _HANT_ONLY) > _count_in(prose, _HANS_ONLY):
+            if language == "zh" and _traditional_leads(prose):
                 return "zh-Hant"
             return language
     return "en"
 
 
-def _count_in(text: str, chars: str) -> int:
-    return sum(1 for char in text if char in chars)
+def _traditional_leads(prose: str) -> bool:
+    lead = 0
+    for char in _HAN_CHAR.findall(prose):
+        traditional = _encodes(char, _TRADITIONAL_CODEC)
+        if traditional != _encodes(char, _SIMPLIFIED_CODEC):
+            lead += 1 if traditional else -1
+    return lead > 0
+
+
+@lru_cache(maxsize=8192)
+def _encodes(char: str, codec: str) -> bool:
+    # A host built without the CJK codecs answers LookupError for both, so
+    # every character says nothing and a Chinese reply keeps ``zh``.
+    try:
+        char.encode(codec)
+    except (UnicodeEncodeError, LookupError):
+        return False
+    return True
 
 
 def remote_wait_declines() -> dict[str, int]:
