@@ -1,0 +1,111 @@
+/* Approval / clarify cards. Neutral gray; no brand gradient or pink (selection and actions stay gray). */
+.card {
+  background: var(--raise);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 9px 10px 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-width: 76%;
+  font-size: 12px;
+}
+.card-title {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.card-cmd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--body);
+  background: var(--bg);
+  border-radius: var(--r-sm);
+  padding: 6px 9px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.card-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.card-btn {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.card-btn:disabled {
+  opacity: 0.55;
+}
+/* "Allow once": neutral filled */
+.card-btn.fill {
+  background: var(--ink);
+  color: var(--bg);
+}
+.card-btn.fill:not(:disabled):hover {
+  background: var(--body);
+}
+.card-btn.soft {
+  background: var(--raise2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+}
+.card-btn.soft:not(:disabled):hover {
+  background: var(--line-strong);
+}
+/* "Deny": gray */
+.card-btn.ghost {
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.card-btn.ghost:not(:disabled):hover {
+  background: var(--hover);
+  color: var(--body);
+}
+.card-ask {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.card-in {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--ink);
+  outline: 0;
+}
+.card-in:focus {
+  border-color: var(--quiet);
+}
+.card-in::placeholder {
+  color: var(--quiet);
+}
+.card-err {
+  font-size: 11px;
+  color: var(--danger);
+}
+/* collapsed: one gray line */
+.card-line .line-t {
+  color: var(--muted);
+}
+.card-line-d {
+  color: var(--quiet);
+}
