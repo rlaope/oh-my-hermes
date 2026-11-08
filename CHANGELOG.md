@@ -643,6 +643,12 @@ All notable changes will be documented here.
   returns to the chat.** The transcript view the wheel opens closes once the wheel brings it back to its
   end, so the composer is back without Esc or `q`. A view opened by Ctrl+O or
   `/history` still stays open at its end.
+- **The OMH TUI puts two blank rows between two tool calls of a turn.** A
+  run of calls now reads apart, as Claude Code's does; a folded row of
+  loaded skills counts as a call. Every other pair of blocks keeps one
+  blank row, and what a call printed under `⎿` stays right under it. On a
+  terminal too short to show the running calls whole, the live region keeps
+  one of the two, so the wider gap never costs a call row.
 - **The router no longer picks a coding owner from earlier choices.** Three
   accepted answers to the coding-owner question used to make that owner a
   visible default for later requests. Now every request asks for an explicit
@@ -1019,13 +1025,6 @@ All notable changes will be documented here.
   rolling tokens per second and first-token wait, read from its recorded
   session row and its auxiliary calls across compaction segments, and `—`
   for any figure nothing reported. Contributed by @yqm-307 (#2665).
-
-- **The OMH TUI puts two blank rows between two tool calls of a turn.** A
-  run of calls now reads apart, as Claude Code's does; a folded row of
-  loaded skills counts as a call. Every other pair of blocks keeps one
-  blank row, and what a call printed under `⎿` stays right under it. On a
-  terminal too short to show the running calls whole, the live region keeps
-  one of the two, so the wider gap never costs a call row.
 
 ## 4.0.6 - 2026-11-04
 
