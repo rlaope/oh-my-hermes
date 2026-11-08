@@ -215,6 +215,9 @@ def hud_payload(
     one is what makes the plan todo session-scoped rather than a
     most-recent-TUI guess. ``cols``, when positive, adds the active delegation
     graph's drawing (`delegation_drawing`) under ``delegation_drawing``.
+    A named session's own recorded figures (`delegation_graph.session_usage`)
+    come under ``session_usage``, where Hermes counted any; a failed read is a
+    record there with ``error`` naming the exception, beside a HUD that still reads.
     """
     session_ref = str(session or "").strip()
     try:
@@ -247,6 +250,15 @@ def hud_payload(
                 "error": f"{type(exc).__name__}: {exc}",
                 "schema_version": DRAWING_SCHEMA_VERSION,
             }
+    if session_ref:
+        try:
+            from omh_desktop_bundle import delegation_graph  # a sibling of the reader, through its private package
+
+            usage = delegation_graph.session_usage(Path(hermes_home), session_ref)
+        except Exception as exc:  # the HUD still reads; the board shows dashes for the row and keeps the stream
+            usage = {"session_id": session_ref, "error": f"{type(exc).__name__}: {exc}"}
+        if usage:
+            payload["session_usage"] = usage
     return payload
 
 
