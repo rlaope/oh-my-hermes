@@ -440,7 +440,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # branch's was bdc90eb3...b8a4.
         # Merged with main a third time: main's pin was 15b8c2cd...9716, and this
         # branch's was 43186eb6...b987.
-        self.assertEqual(_digest(legacy_hashes), '758d8116dbdf5811dc81aee0ef5e70a78c463c0d7b3b5d4400254d0232949152')
+        # show-reel's checklist then names `codex exec` text runs beside codex images as paid calls;
+        # only show-reel moves, and the pin before it was 758d8116...9152.
+        self.assertEqual(_digest(legacy_hashes), '7cd26de43b418b67722fbfbac68f4a5656f2f68017c849e6cec4a785121c73da')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

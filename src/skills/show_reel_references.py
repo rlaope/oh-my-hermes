@@ -881,7 +881,8 @@ The opt-in `eleven.py`/`narrate.py` (narration, SFX, music, STT) and
 `ELEVENLABS_API_KEY` or signed-in codex; they refuse without it, and the film
 falls back to local music and on-screen text.
 Each run that reaches ElevenLabs or codex (`eleven.py`, `narrate.py`,
-`codex_imagegen_batch.sh`, `codex_ref_image.sh`) spends the user's own
+`codex_imagegen_batch.sh`, `codex_ref_image.sh`, and the `codex exec` script
+review and concept candidates, with a spend-only cap set in calls) spends the user's own
 subscription credits or plan usage, so it goes through `omh-spend-gate` before
 it runs: show the target (which lines, voice and model, or which SFX, music, STT
 or image job and its length) and the expected credits read from the provider's

@@ -68,6 +68,8 @@ For each candidate, write the following.
 
 If the codex CLI is available, you can get candidates separately under the same request and conditions and compare them together. Mixing in another model's candidates adds directions to compare. The command format is the same as "Second script review" in `craft-story.md` (pass the prompt through stdin).
 
+> OMH note: each candidate run is a `codex exec` call on the user's own ChatGPT plan, and no price gives its cost. Run them only after `omh-spend-gate`'s card, which names how many calls, with a spend-only cap set in calls, and the person's typed yes to that card.
+
 ### 3) Choosing
 
 Score each candidate 1 to 5 on the criteria below and keep it as a table. Choose the highest-scoring candidate, or combine the strengths of two candidates.
