@@ -238,16 +238,17 @@ class RenderedSkillRailTests(unittest.TestCase):
             [t for t in targets if t in self.installed and omh_skill_display_name(t) != t], []
         )
 
-    def test_every_checkpoint_target_the_model_reads_is_a_loadable_label(self) -> None:
-        """The per-turn primer carries the checkpoint line as the bundle writes it, with no render pass."""
+    def test_every_arrow_target_the_model_reads_is_a_loadable_label(self) -> None:
+        """The per-turn primer carries its arrow lines as the bundle writes them, with no render pass."""
         labels = {omh_skill_display_name(name) for name in self.installed}
         primer = awareness_primer_markdown().split("\n")
         lines = {
-            "primer": primer[primer.index("Generic tool map:") + 1],
-            "shared rail": next(
-                row for row in awareness_shared_context_markdown().split("\n") if row.startswith("- Generic-tool checkpoint:")
-            ),
+            f"primer {header}": primer[primer.index(header) + 1]
+            for header in ("Workflow context cards:", "Common cues before generic tools:", "Generic tool map:")
         }
+        lines["shared rail"] = next(
+            row for row in awareness_shared_context_markdown().split("\n") if row.startswith("- Generic-tool checkpoint:")
+        )
         # The rail page ships only in the Hermes projection.
         rail = next(
             r.content
@@ -257,8 +258,14 @@ class RenderedSkillRailTests(unittest.TestCase):
         lines["rail page"] = next(row for row in rail.split("\n") if row.startswith("- Generic-tool checkpoint:"))
         for surface, line in lines.items():
             with self.subTest(surface=surface):
-                targets = re.findall(r"(?:(?<=->)|(?<=/))[a-z0-9-]+", line)
-                self.assertIn("omh-image-cards", targets)
+                # Each `;` part maps a cue to its skills after `->`, listed with `/`, `,` or `or`.
+                targets = [
+                    target.strip().rstrip(".")
+                    for part in line.split(";")
+                    for target in re.split(r"/|,|\bor\b", part.split("->", 1)[1])
+                    if target.strip().rstrip(".")
+                ]
+                self.assertIn("omh-frontend", targets)
                 self.assertEqual([t for t in targets if t not in labels], [])
 
     def test_the_lane_line_keeps_its_title_and_names_no_siblings(self) -> None:

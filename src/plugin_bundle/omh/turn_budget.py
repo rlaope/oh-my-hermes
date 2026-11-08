@@ -65,8 +65,12 @@ from .awareness import awareness_primer_context, awareness_primer_markdown
 # loads (`omh-accessibility-audit`, `ulw-research`), because a catalog name
 # reaches the model through this primer with no render pass and is not a name
 # it can load either. It measured 3726 (standing headroom kept as above).
+# 3734 -> 3973: the workflow context cards and the common cues before generic
+# tools write their targets as labels too, so the primer names one skill one
+# way; the cards also drop shorthand that was no skill (`automation`,
+# `workspace`, `learning`). It measured 3965 (standing headroom kept as above).
 AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT = 1560
-AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 3734
+AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 3973
 AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT = 1500
 ROLE_CONTEXT_CHAR_LIMIT = 2600
 # Per-request budgets, zero-slack: each is the value its producer measured,

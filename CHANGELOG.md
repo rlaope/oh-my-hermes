@@ -435,10 +435,12 @@ All notable changes will be documented here.
   their skill: `account takeover` and `suspected unauthorized access`, `telemetry
   audit`, `write a handover guide` and `인수인계 문서 써줘`, and in Korean `시장 규모` and
   `경쟁사 분석` right before a request to size or analyse.
-- **The per-turn primer's generic-tool map names skills a model can load.**
-  Its targets were catalog names (`research`, `img-summary`), which only the
-  rendered rail page rewrote; the primer itself now writes `ulw-research`,
-  `omh-image-cards` and the other labels `skill_view` loads.
+- **The per-turn primer names skills a model can load.** Its generic tool
+  map, workflow context cards and common cues named catalog names
+  (`research`, `img-summary`) and shorthand that was no skill (`automation`);
+  only the rendered rail page rewrote one of those lines. The primer now
+  writes `ulw-research`, `omh-image-cards` and the other labels `skill_view`
+  loads on all three.
 - **Business and operations skills now check what a practitioner checks.**
   The morning brief no longer claims a Gmail connection is draft-only from
   its scopes (every Gmail scope that creates drafts also sends); it enforces

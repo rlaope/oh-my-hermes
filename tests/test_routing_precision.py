@@ -95,7 +95,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # OMH ignoring files, and a filler adverb, a why-question about a
         # parser and "Hermes with OMH" before a task stay off it too.
         # systematic-review adds six review, screening and criteria controls.
-        self.assertEqual(payload["summary"]["case_count"], 1452)
+        # The ops-review pair keeps `리스크` and `블로커` spelled across other words out.
+        self.assertEqual(payload["summary"]["case_count"], 1456)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])

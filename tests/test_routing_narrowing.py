@@ -95,6 +95,18 @@ class OpsReviewPairTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertNotIn(self._PAIR, self._top(message)["matched"])
 
+    def test_a_word_only_spelled_across_other_words_is_not_the_pair(self) -> None:
+        # `갤러리 스크린샷` holds `리스크` once the spaces go; a word must open with it.
+        for message in (
+            "갤러리 스크린샷 블로커 정리해줘",
+            "디렉토리 스크롤 블로커 알려줘",
+            "쿼리 스크립트랑 블로커 정리해줘",
+            "블로 커 리스크 정리",
+        ):
+            with self.subTest(message=message):
+                self.assertNotIn(self._PAIR, self._top(message)["matched"])
+                self.assertNotEqual(_route(message)["selected_skill"], "ops-review")
+
 
 if __name__ == "__main__":
     unittest.main()

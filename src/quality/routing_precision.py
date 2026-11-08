@@ -10096,6 +10096,10 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("hold-ko-buzz-connection", "A service outside the connector list asks, and Buzz does not lead on `연결`", "구글 드라이브 연결 설정해줘", "answer_clarification", "", "buzz"),
     RoutingPrecisionCase("korean-market-verb-list", "Translating a market size is not sizing a market", "시장 규모 번역해줘", "answer_clarification", "", "market-research"),
     RoutingPrecisionCase("hold-ko-repeat-run-bug", "A bug about repeated runs never dispatches automation", "반복 실행하면 에러가 나", "answer_clarification", ""),
+    RoutingPrecisionCase("ko-ops-pair-inside-gallery-screenshot", "`리스크` spelled across `갤러리 스크린샷` is not the ops pair", "갤러리 스크린샷 블로커 정리해줘", "answer_clarification", "", "ops-review"),
+    RoutingPrecisionCase("ko-ops-pair-inside-directory-scroll", "`리스크` spelled across `디렉토리 스크롤` is not the ops pair", "디렉토리 스크롤 블로커 알려줘", "answer_clarification", "", "ops-review"),
+    RoutingPrecisionCase("ko-ops-pair-inside-query-script", "`리스크` spelled across `쿼리 스크립트` is not the ops pair", "쿼리 스크립트랑 블로커 정리해줘", "answer_clarification", "", "ops-review"),
+    RoutingPrecisionCase("ko-ops-pair-split-word", "A blocker split by a space is not the ops pair", "블로 커 리스크 정리", "answer_clarification", "", "ops-review"),
     RoutingPrecisionCase("native-debugging-dap-handshake", "A dap between friends is not a debugger session", "give me a dap, nice work today", "answer_clarification", ""),
     RoutingPrecisionCase("native-debugging-printf-opinion", "An opinion on printf and debuggers asks at most", "debugger or printf, which do people prefer", "answer_clarification", ""),
 )
