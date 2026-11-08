@@ -680,10 +680,12 @@ adapters), with duplicates skipped, and map the result to one `status`:
 A capture that persists a candidate retires every earlier held candidate
 (`pending_review` or `blocked_review_required`) with the same normalized
 summary, the key the duplicate check reads, inside the same confinement (scope,
-subject principal, audience) and with the same `correction_of`. The earlier
-candidate gets `status: retired`, `retirement_reason: recaptured` and
-`recaptured_as` naming the new candidate. Approval refuses it, and the review
-queue no longer lists it. Admission returns the ids as
+subject principal, audience, perspective) and with the same `correction_of`.
+It runs after any auto-safe approval of the new candidate, so an approval that
+fails retires nothing. The earlier candidate gets `status: retired`,
+`retirement_reason: recaptured` and `recaptured_as` naming the new candidate.
+Approval and rejection both refuse it, the review queue no longer lists it, and
+a demotion of the same Hermes entry still reads it as held. Admission returns the ids as
 `retired_held_candidates`, and the tool result returns them as
 `retired_candidate_ids`. No person is asked: the newer capture is the one that
 stands. Approved, rejected, superseded and lifecycle candidates are never

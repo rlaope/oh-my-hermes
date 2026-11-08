@@ -175,6 +175,14 @@ All notable changes will be documented here.
   `hermes gateway start` to start it again, and the restart wait reads
   `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, as Hermes does.
 
+- **A recaptured memory now keeps a copy observed of another agent, and its
+  retired copy can no longer be rejected.** The retirement of an earlier held
+  copy also requires the same perspective, so the same summary observed of
+  codex and of claude-code stays two memories. Rejection refuses a copy
+  retired by a recapture as approval already did, a demotion of the same
+  Hermes entry reads that copy as held, and the retirement runs only after
+  an auto-safe approval succeeds.
+
 - **A messenger reply made only of `[SILENT]` and `[SHUTUP]` lines now counts
   as that marker.** Any `[SHUTUP]` among them mutes the thread with the 🫡
   reaction, where "be quiet" was lost or a bare marker could get text added
@@ -454,7 +462,8 @@ All notable changes will be documented here.
   was named.** Leaving out `--executor` used to select Codex with
   `--from-plan` and `generic` without it. Both now resolve the same default:
   the setup profile's default executor, else `generic`. Codex is selected
-  only when it is named. The `hermes plan` wrapper template and
+  only when it is named or is the setup profile's default executor. The
+  `hermes plan` wrapper template and
   `plan-accept --write-context-pack` follow the same default instead of
   writing `codex`, and the `omh-routing` text that said the flag selects
   Codex now says what it resolves.
@@ -523,6 +532,20 @@ All notable changes will be documented here.
   readers are told which steps need Hermes. The payload-density floor is
   re-derived, because those sample names had been counted as payload.
 
+- **`omh hermes plan-accept` refuses a plan that is only the generated
+  scaffold.** A plan recorded without `--plan-file` holds generated goals,
+  options and risks, not the reviewed plan, and accepting it used to succeed
+  with only a `say`, so a coding handoff could carry the scaffold as the
+  accepted plan. Accepting such a file now exits 2, leaves it a draft, and
+  names the fix: record the reviewed plan with `--plan-file` and accept that
+  file. `--allow-scaffold` accepts the scaffold on purpose and still returns
+  `reviewed_body: false`, and re-accepting an already accepted file still
+  succeeds. The `hermes plan accept <path>` alias refuses the same way. The
+  stdout of a scaffold record says so in its machine fields too:
+  `quality_gate.readiness: needs_reviewed_body`, `coding_handoff_ready:
+  false`, `next_action: record_reviewed_plan`, and
+  `decision_gate.acceptance_requires`. `ulw-plan`, the `omh-routing`
+  wrapper reference and `docs/INSTALLATION.md` describe the refusal.
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`
@@ -882,6 +905,17 @@ All notable changes will be documented here.
   relay (`"kilocode": "gateway"`, from an earlier `omh setup` pre-tick) keeps
   turning shaping off until that row is cleared in `omh setup` or with
   `omh model-chains provider clear`.
+
+- **A reply written in Traditional Chinese now ends with a Traditional
+  Chinese stop sentence.** On a turn a failed watcher's notice opened and
+  nothing re-armed, OMH appends one sentence in the reply's own language.
+  Every Chinese reply used to get the Simplified copy, so a reader in Taiwan
+  or Hong Kong saw a script they had not written in. A Chinese reply now
+  gets 「沒有任何工作會再次喚醒這個對話。如需繼續，請傳送一則訊息。」 when its
+  Traditional-only characters outnumber its Simplified-only ones, read from
+  Python's own Big5 and GB2312 codecs; Simplified replies are unchanged. A
+  kanji-only Japanese reply, already read as Chinese, now usually gets the
+  Traditional copy. (Reported and first fixed by @sykuang in #2654.)
 
 ## 4.0.6 - 2026-11-04
 
