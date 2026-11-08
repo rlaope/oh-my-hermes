@@ -91,6 +91,8 @@ from .subagent_graph import _roster_progress_fields as roster_progress_fields
 GRAPH_SCHEMA_VERSION: Final = "delegation_graph/v1"
 GRAPH_NODE_LIMIT: Final = 48
 GRAPH_BYTE_LIMIT: Final = 24_576
+# The `sessions` columns a lane's `usage` reads, in the order `_usage` takes them.
+USAGE_COLUMNS: Final = ("input_tokens", "cache_read_tokens", "cache_write_tokens", "actual_cost_usd", "estimated_cost_usd")
 GRAPH_LINGER_SECONDS: Final = 15 * 60
 CHILD_STALE_SECONDS: Final = 30 * 60
 TEAM_FILE_LIMIT: Final = 16
@@ -259,7 +261,8 @@ def _carry_on(
         row = facts["sessions"][session]
         written = [item["output_tokens"] for item in (row, *rows) if item["output_tokens"]]
         facts["sessions"][session] = {**row, "ended_at": last["ended_at"], "end_reason": last["end_reason"],
-                                      "output_tokens": sum(written) if written else None}
+                                      "output_tokens": sum(written) if written else None,
+                                      "usage": _sum_usage([item["usage"] for item in (row, *rows)])}
         usages = [usage for usage in (facts["usage"].get(session), *(extra["usage"].get(s) for s in segments)) if usage]
         if usages:
             models = {usage["model"] for usage in usages if usage["model"]}
@@ -267,6 +270,71 @@ def _carry_on(
             facts["usage"][session] = {"rows": sum(usage["rows"] for usage in usages),
                                        "model": models.pop() if len(models) == 1 else "",
                                        "last_seen": max(seen) if seen else None}
+
+
+def _count(value: Any) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def _price(value: Any) -> float:
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) and value > 0 else 0.0
+
+
+def _usage(values: Sequence[Any]) -> dict[str, Any] | None:
+    """What a session's row counted besides its output, in `USAGE_COLUMNS` order; None when it counted none.
+
+    ``cost_usd`` is Hermes' recorded cost, the actual one first; ``cost_estimated`` marks one it only estimated.
+    A session Hermes did not price carries no cost, and no token is converted into one here.
+    """
+    uncached, read, write = (_count(value) for value in values[:3])
+    actual, estimated = _price(values[3]), _price(values[4])
+    if not (uncached or read or write or actual or estimated):
+        return None
+    usage: dict[str, Any] = {"input": uncached, "cache_read": read, "cache_write": write}
+    if actual or estimated:
+        usage["cost_usd"] = actual or estimated
+        if not actual:
+            usage["cost_estimated"] = True
+    return usage
+
+
+def _sum_usage(items: Sequence[Mapping[str, Any] | None]) -> dict[str, Any] | None:
+    """The usage of a conversation's segments added up; a cost is kept only when every counted segment has one."""
+    held = [item for item in items if item]
+    if not held:
+        return None
+    total: dict[str, Any] = {key: sum(item[key] for item in held) for key in ("input", "cache_read", "cache_write")}
+    if all("cost_usd" in item for item in held):
+        total["cost_usd"] = sum(item["cost_usd"] for item in held)
+        if any(item.get("cost_estimated") for item in held):
+            total["cost_estimated"] = True
+    return total
+
+
+def session_usage(hermes_home: Path, session_id: str) -> dict[str, Any] | None:
+    """What Hermes recorded for one chat, its compaction segments added up: the figures of the pane's usage board.
+
+    ``model`` is the one the chat's own row names, ``output`` its output tokens and, besides
+    them, the `_usage` keys. A cost is kept only where Hermes priced every counted segment, and no token is
+    turned into one. ``None`` where the chat has no row or its row counted nothing.
+    """
+    try:
+        connection = _connect(hermes_home)
+    except OSError:  # Python 3.11's `Path.is_file` raises where the home cannot be searched
+        return None
+    if connection is None:
+        return None
+    try:
+        ids = _segments(connection, session_id)
+        facts = state_facts(hermes_home, ids, [], connection=connection)
+    finally:
+        connection.close()
+    rows = [facts["sessions"][item] for item in ids if item in facts["sessions"]]
+    usage = _sum_usage([row["usage"] for row in rows]) or {}
+    output = sum(row["output_tokens"] or 0 for row in rows)
+    if not (usage or output):
+        return None
+    return {"model": (facts["sessions"].get(session_id) or rows[0])["model"], "output": output, **usage}
 
 
 def _effort(config: Mapping[str, Any]) -> str:
@@ -301,8 +369,10 @@ def state_facts(
                 ended = "ended_at" if "ended_at" in columns else "NULL"
                 reason = "end_reason" if "end_reason" in columns else "NULL"
                 written = "output_tokens" if "output_tokens" in columns else "NULL"
+                counted = ", ".join(name if name in columns else "NULL" for name in USAGE_COLUMNS)
                 for row in connection.execute(
-                    f"SELECT id, model, model_config, {ended}, {reason}, {written} FROM sessions WHERE id IN ({marks})",
+                    f"SELECT id, model, model_config, {ended}, {reason}, {written}, {counted} "
+                    f"FROM sessions WHERE id IN ({marks})",
                     ids,
                 ):
                     try:
@@ -316,6 +386,7 @@ def state_facts(
                         "ended_at": row[3] if isinstance(row[3], (int, float)) else None,
                         "end_reason": _text(row[4], 40),
                         "output_tokens": row[5] if isinstance(row[5], int) and row[5] > 0 else None,
+                        "usage": _usage(row[6:]),
                     }
                 facts["read"] = True
             except sqlite3.Error:
@@ -704,6 +775,9 @@ def _build(
             "ended_at": float(stop["observed_at"]) if isinstance(stop, Mapping) else None,
             "output_tokens": (facts["sessions"].get(session) or {}).get("output_tokens"),
         }
+        usage = (facts["sessions"].get(session) or {}).get("usage")
+        if usage:
+            row["usage"] = usage
         if reported:
             row["route_backend"] = reported["backend"]
             if reported.get("label"):
@@ -759,7 +833,7 @@ def _build(
             if child is not None:
                 derived = facts_for(child, model_of_node["root"])
                 node.update({key: derived[key] for key in ("model", "effort", "category", "category_source",
-                                                           "output_tokens")})
+                                                           "output_tokens", "usage") if key in derived})
                 node["session_tail"] = session_tail(child_session)
                 if states[unit_id] in ("dispatched", "repairing"):
                     # The team record says the attempt was sent; only the child's own records say it is moving.
@@ -997,7 +1071,7 @@ def _dag_nodes(
             facts = facts_for(child, model_of_node["root"])
             # Once a child exists its category is the recorded route's, shown only where its model matches.
             entry.update({key: facts[key] for key in ("model", "effort", "category", "category_source",
-                                                       "output_tokens")})
+                                                       "output_tokens", "usage") if key in facts})
             entry.update({key: facts[key] for key in ("route_backend", "route_label", "route_origin") if key in facts})
             if facts["category_source"] == "backend_route":
                 # The plan's lane holds where Hermes ran the option this run handed out; any other option is not it.

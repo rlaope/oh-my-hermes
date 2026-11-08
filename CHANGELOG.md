@@ -970,6 +970,16 @@ All notable changes will be documented here.
   kanji-only Japanese reply, already read as Chinese, now usually gets the
   Traditional copy. (Reported and first fixed by @sykuang in #2654.)
 
+- **The OMH pane now draws an active delegation as cards and shows what the
+  focused chat has spent.** A delegation or fanout run of up to 16 lanes
+  renders as layered node cards with edges, the critical path, bottleneck
+  chips and per-model stats, and a click on a card shows that node's
+  details; a larger run keeps the drawn graph. A USAGE section at the top of
+  the pane shows the chat's own tokens, cache hit, cost, context share,
+  rolling tokens per second and first-token wait, read from its recorded
+  session row across compaction segments, and `—` for any figure nothing
+  reported. Contributed by @yqm-307 (#2665).
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and

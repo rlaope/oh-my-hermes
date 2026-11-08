@@ -58,7 +58,11 @@
 // through ctx.rest('/hud'), which reaches /api/plugins/omh/hud inside the
 // gateway process; nothing is computed here beyond formatting and counting
 // the rows the reader sent, so a number the reader did not produce is never
-// displayed.
+// displayed. The usage board at the top is the one exception: it shows the
+// focused chat's own figures from what the host already holds (its streamed
+// usage and its context breakdown), beside the chat's recorded row the
+// reader sends, and times the wait for a turn's first token from the gateway
+// events this window sees.
 import {
   Badge,
   GlyphSpinner,
@@ -324,7 +328,75 @@ export const EN = {
   costUnknown: 'unknown',
   costEstimatedFromListPrice: 'estimated from list price',
   costReportedByGateway: 'reported by gateway',
-  routeUnassigned: 'unassigned'
+  routeUnassigned: 'unassigned',
+  dgTokens: 'Tokens',
+  dgTokensSub: '↓{out} out · {prompt} in',
+  dgTokensTip: 'All nodes: uncached input + cache read + cache write + output',
+  dgCacheHit: 'Cache hit',
+  dgCacheHitSub: '{read} of {prompt} prompt',
+  dgCacheHitTip: 'cache read ÷ (uncached input + cache read + cache write)',
+  dgCost: 'Cost',
+  dgCostSub: '{priced}/{counted} nodes priced',
+  dgCostNone: 'no usage yet',
+  dgCostTip: 'Only cost Hermes recorded; unpriced tokens are not converted',
+  dgNodeTime: 'Node time',
+  dgNodeTimeSub: function (vars) {
+    return `sum of ${plural(vars.count, 'node')}`
+  },
+  dgNodeTimeTip: 'Sum of node run time; parallel lanes make it larger than the wall clock',
+  dgWaitsOn: function (vars) {
+    return `Waits on ${plural(vars.count, 'lane')}`
+  },
+  dgStart: 'Start node',
+  dgAfter: '← {nodes}',
+  dgClose: 'Close',
+  dgLayer: 'layer {count}',
+  dgNotStarted: 'model ? (not started)',
+  dgNotStartedTip: 'No child has started this node; Hermes has recorded no model yet',
+  dgModelTip: 'model recorded for the child session',
+  dgElapsed: 'Elapsed',
+  dgOutput: 'Output',
+  dgUnpriced: 'unpriced',
+  dgCacheRead: 'Cache read',
+  dgInput: 'Uncached input',
+  dgCacheWrite: 'Cache write',
+  dgUsageTip: 'Percentages are of prompt tokens (uncached input + cache read + cache write); output is listed apart',
+  dgDependsOn: 'Depends on',
+  dgBlocks: 'Next · {count} downstream',
+  dgRepair: 'repair',
+  dgExtend: 'extend',
+  dgSession: 'session {tail}',
+  dgStats: 'Stats',
+  dgModels: function (vars) {
+    return plural(vars.count, 'model')
+  },
+  dgByModel: 'By model',
+  dgNodes: '#',
+  dgModelRowTip: "Click to highlight this model's nodes in the graph",
+  dgCriticalPath: 'Critical path',
+  dgBottlenecks: 'Bottlenecks',
+  dgBlocksTitle: '{title} (blocks {count})',
+  dgHighlight: 'Highlight',
+  dgClearHighlight: 'Clear highlight',
+  dgNote: 'Cost counts only what Hermes priced; unpriced tokens stay tokens. Cache hit = cache read ÷ prompt tokens.',
+  sectionUsage: 'USAGE',
+  ubCalls: function (vars) {
+    return plural(vars.count, 'call')
+  },
+  ubTokensTip: 'This chat only: uncached input + cache read + cache write + output. Sub-agents are in the DAG block',
+  ubCacheTip: 'cache read ÷ (uncached input + cache read + cache write), this chat only',
+  ubCostTip: 'Only cost Hermes recorded for this chat; unpriced tokens are not converted',
+  ubContext: 'Context',
+  ubContextSub: '{used} of {max}',
+  ubContextTip: 'Context window in use now: measured by the provider after a call, estimated before one (~)',
+  ubSpeed: 'TPS',
+  ubSpeedSub: 'avg call {latency}',
+  ubSpeedTip: 'Output tokens per second, rolling over the last 10 calls',
+  ubTtft: 'TTFT',
+  ubTtftSub: 'send → first token',
+  ubTtftAvg: 'avg {avg} · {count} turns',
+  ubTtftTip: 'Time from send to the first streamed token of the last turn, as this window saw it; tool time before that token counts',
+  ubParts: 'Prompt composition'
 }
 
 export const KO = {
@@ -456,7 +528,67 @@ export const KO = {
   costUnknown: '모름',
   costEstimatedFromListPrice: '정가 기준 추정',
   costReportedByGateway: '게이트웨이 보고',
-  routeUnassigned: '미배정'
+  routeUnassigned: '미배정',
+  dgTokens: '토큰',
+  dgTokensSub: '↓{out} 출력 · {prompt} 입력',
+  dgTokensTip: '모든 노드: 캐시 미사용 입력 + 캐시 읽기 + 캐시 쓰기 + 출력',
+  dgCacheHit: '캐시 적중',
+  dgCacheHitSub: '프롬프트 {prompt} 중 {read}',
+  dgCacheHitTip: '캐시 읽기 ÷ (캐시 미사용 입력 + 캐시 읽기 + 캐시 쓰기)',
+  dgCost: '비용',
+  dgCostSub: '{counted}개 노드 중 {priced}개 과금',
+  dgCostNone: '아직 사용량 없음',
+  dgCostTip: 'Hermes가 기록한 비용만 표시하며, 과금되지 않은 토큰은 환산하지 않습니다',
+  dgNodeTime: '노드 시간',
+  dgNodeTimeSub: '노드 {count}개 합계',
+  dgNodeTimeTip: '노드 실행 시간의 합계로, 병렬 레인 때문에 실제 경과 시간보다 클 수 있습니다',
+  dgWaitsOn: '레인 {count}개 대기 중',
+  dgStart: '시작 노드',
+  dgAfter: '← {nodes}',
+  dgClose: '닫기',
+  dgLayer: '{count}층',
+  dgNotStarted: '모델 ? (시작 전)',
+  dgNotStartedTip: '아직 이 노드를 시작한 자식이 없어 Hermes가 모델을 기록하지 않았습니다',
+  dgModelTip: '자식 세션에 기록된 모델',
+  dgElapsed: '경과',
+  dgOutput: '출력',
+  dgUnpriced: '미과금',
+  dgCacheRead: '캐시 읽기',
+  dgInput: '캐시 미사용 입력',
+  dgCacheWrite: '캐시 쓰기',
+  dgUsageTip: '비율은 프롬프트 토큰(캐시 미사용 입력 + 캐시 읽기 + 캐시 쓰기) 기준이며, 출력은 따로 표시합니다',
+  dgDependsOn: '선행 노드',
+  dgBlocks: '다음 노드 · 하위 {count}개 대기',
+  dgRepair: '복구',
+  dgExtend: '확장',
+  dgSession: '세션 {tail}',
+  dgStats: '통계',
+  dgModels: '모델 {count}개',
+  dgByModel: '모델별',
+  dgNodes: '노드',
+  dgModelRowTip: '클릭하면 그래프에서 이 모델의 노드를 강조합니다',
+  dgCriticalPath: '크리티컬 패스',
+  dgBottlenecks: '병목',
+  dgBlocksTitle: '{title} (후속 {count}개 대기)',
+  dgHighlight: '강조',
+  dgClearHighlight: '강조 해제',
+  dgNote: '비용은 Hermes가 과금한 것만 집계하며, 과금되지 않은 토큰은 토큰으로 남습니다. 캐시 적중 = 캐시 읽기 ÷ 프롬프트 토큰.',
+  sectionUsage: '사용량',
+  ubCalls: '호출 {count}회',
+  ubTokensTip: '이 채팅만: 캐시 미사용 입력 + 캐시 읽기 + 캐시 쓰기 + 출력. 서브에이전트는 DAG 블록에 있습니다',
+  ubCacheTip: '캐시 읽기 ÷ (캐시 미사용 입력 + 캐시 읽기 + 캐시 쓰기), 이 채팅만',
+  ubCostTip: 'Hermes가 이 채팅에 기록한 비용만 표시하며, 과금되지 않은 토큰은 환산하지 않습니다',
+  ubContext: '컨텍스트',
+  ubContextSub: '{max} 중 {used}',
+  ubContextTip: '지금 사용 중인 컨텍스트 윈도우: 호출 이후에는 공급자가 측정한 값, 그 전에는 추정값(~)입니다',
+  ubSpeed: 'TPS',
+  ubSpeedSub: '호출 평균 {latency}',
+  ubSpeedTip: '최근 호출 10회 기준 초당 출력 토큰',
+  ubTtft: 'TTFT',
+  ubTtftSub: '전송 → 첫 토큰',
+  ubTtftAvg: '평균 {avg} · {count}턴',
+  ubTtftTip: '전송부터 마지막 턴의 첫 스트리밍 토큰까지의 시간으로, 이 창에서 관측한 값입니다. 첫 토큰 전의 도구 시간도 포함됩니다',
+  ubParts: '프롬프트 구성'
 }
 
 const TABLES = { en: EN, ko: KO }
@@ -1268,6 +1400,416 @@ export function drawingLines(payload) {
 }
 
 // ---------------------------------------------------------------------------
+// The DAG view. A dag-ulw run's graph (the one carrying `dag_topology`) is
+// drawn as cards a pointer or a finger can open, in place of the backend's
+// box drawing: a card per lane in the row of its layer, an edge per
+// dependency, a strip of figures, the open lane's detail and the run's stats.
+// Every figure is one the reader sent: tokens and cost are added up here, and
+// the critical path and the bottlenecks are the backend's. Past DAG_CARD_LIMIT
+// lanes the cards give way to the drawing, which has a tree for a big run;
+// the figures and the stats stay.
+// ---------------------------------------------------------------------------
+
+export const DAG_CARD_LIMIT = 16
+
+function positive(value) {
+  return Number.isFinite(value) && exceeds(value, 0) ? value : 0
+}
+
+// What one lane counted: input and cache from its `usage`, output from `output_tokens`.
+export function laneUsage(record) {
+  const usage = record && record.usage && typeof record.usage === 'object' ? record.usage : null
+  const output = positive(record && record.output_tokens)
+  const cost = usage ? positive(usage.cost_usd) : 0
+  return {
+    seen: !!usage || exceeds(output, 0),
+    input: usage ? positive(usage.input) : 0,
+    read: usage ? positive(usage.cache_read) : 0,
+    write: usage ? positive(usage.cache_write) : 0,
+    output,
+    cost: exceeds(cost, 0) ? cost : null,
+    estimated: !!(usage && usage.cost_estimated)
+  }
+}
+
+// Lanes' usage added up. `lanes` counts those that counted anything, `priced` those Hermes priced.
+export function sumUsage(list) {
+  const total = { lanes: 0, priced: 0, input: 0, read: 0, write: 0, output: 0, cost: null, estimated: false }
+  list.forEach(function (usage) {
+    if (!usage.seen) return
+    total.lanes += 1
+    total.input += usage.input
+    total.read += usage.read
+    total.write += usage.write
+    total.output += usage.output
+    if (usage.cost !== null) {
+      total.cost = (total.cost || 0) + usage.cost
+      total.priced += 1
+      total.estimated = total.estimated || usage.estimated
+    }
+  })
+  return total
+}
+
+// The prompt side: what the model was sent, whether or not the cache answered it.
+export function promptTokens(usage) {
+  return usage.input + usage.read + usage.write
+}
+
+export function allTokens(usage) {
+  return promptTokens(usage) + usage.output
+}
+
+// Cache read over the prompt, or null where nothing was sent: no hit rate is not a zero one.
+export function cacheHit(usage) {
+  const prompt = promptTokens(usage)
+  return exceeds(prompt, 0) ? usage.read / prompt : null
+}
+
+export function tokensText(count) {
+  return exceeds(count, 0) ? tokenCountText(count) : '—'
+}
+
+export function percentText(ratio) {
+  return ratio === null ? '—' : `${(ratio * 100).toFixed(1)}%`
+}
+
+export function costText(cost, estimated) {
+  return (cost === null ? '' : costSegmentText({ cost_usd: cost, cost_approximate: estimated })) || '—'
+}
+
+// ---------------------------------------------------------------------------
+// The usage board: this chat's own figures, apart from the DAG's. The host's
+// stream and its context breakdown fill it; Hermes' recorded row (the HUD's
+// `session_usage`) adds the cost and the cache counts the stream lacks; the
+// wait for a first token is timed here, from the gateway events this window
+// sees. A figure nothing reported is a dash, never a zero.
+// ---------------------------------------------------------------------------
+
+export const TTFT_KEEP = 10
+const FIRST_TOKEN_EVENTS = ['message.delta', 'reasoning.delta', 'thinking.delta']
+const PART_TONES = 8
+
+export function newTurnClock() {
+  return { started: {}, turns: {} }
+}
+
+// Folds one gateway event into the clock. A turn starts at `message.start`,
+// keyed on the frame's `turn_id` so a start re-sent for the same turn (a
+// heartbeat or a resume) does not reset the wait; its wait ends at the first
+// streamed text. True where a wait just ended.
+export function noteTurnEvent(clock, type, sessionId, text, now, turnId) {
+  if (!sessionId || !Number.isFinite(now)) return false
+  if (type === 'message.start') {
+    const key = `${sessionId}|${turnId || ''}`
+    if (!Number.isFinite(clock.started[key])) clock.started[key] = now
+    return false
+  }
+  const began = clock.started[`${sessionId}|${turnId || ''}`]
+  if (!FIRST_TOKEN_EVENTS.includes(type) || !Number.isFinite(began) || typeof text !== 'string' || !text) return false
+  delete clock.started[`${sessionId}|${turnId || ''}`]
+  clock.turns[sessionId] = (clock.turns[sessionId] || []).concat([Math.max(0, now - began)]).slice(-TTFT_KEEP)
+  return true
+}
+
+const turnClock = newTurnClock()
+const turnListeners = new Set()
+
+export function latencyText(ms) {
+  if (!Number.isFinite(ms) || exceeds(0, ms)) return ''
+  return exceeds(1000, ms) ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`
+}
+
+export function speedText(tps) {
+  return exceeds(tps, 0) ? `${tps.toFixed(exceeds(10, tps) ? 1 : 0)} t/s` : '—'
+}
+
+// `live` is the host's streamed usage of the focused chat, `saved` the chat's
+// recorded row as the reader sent it, `breakdown` the host's context breakdown
+// and `turns` the first-token waits (ms) this window timed. Recorded counts
+// win where there are any (they are exact and carry the cache split); the
+// stream stands in before the first row is written. Null where nothing is known.
+export function usageBoard(input) {
+  const live = input.live && typeof input.live === 'object' ? input.live : {}
+  const saved = input.saved && typeof input.saved === 'object' ? input.saved : {}
+  const crumbs = input.breakdown && typeof input.breakdown === 'object' ? input.breakdown : {}
+  const turns = Array.isArray(input.turns) ? input.turns : []
+  const recorded = {
+    input: positive(saved.input),
+    read: positive(saved.cache_read),
+    write: positive(saved.cache_write),
+    output: positive(saved.output)
+  }
+  const rows = exceeds(allTokens(recorded), 0)
+  const prompt = rows ? promptTokens(recorded) : positive(live.prompt) || positive(live.input)
+  const output = rows ? recorded.output : positive(live.output)
+  const hit = rows ? cacheHit(recorded) : Number.isFinite(live.cache_hit_pct) ? live.cache_hit_pct / 100 : null
+  // The stream may carry a cost, but does not say whether Hermes priced it, so it keeps the approximate mark.
+  const recordedCost = Number.isFinite(saved.cost_usd)
+  const streamedCost = !recordedCost && exceeds(positive(live.cost_usd), 0)
+  const cost = recordedCost ? saved.cost_usd : streamedCost ? live.cost_usd : null
+  const counted = prompt + output
+  const used = positive(live.context_used) || positive(crumbs.context_used)
+  const max = positive(live.context_max) || positive(crumbs.context_max)
+  const guess = positive(live.context_used) ? live.context_estimated === true : crumbs.context_estimated === true
+  const percent = exceeds(max, 0) && exceeds(used, 0) ? Math.min(100, Math.round((used / max) * 100)) : null
+  const tps = positive(live.avg_tps)
+  const latency = positive(live.avg_latency_s)
+  const last = turns.length ? turns[turns.length - 1] : null
+  const mean = turns.length
+    ? turns.reduce(function (total, ms) {
+        return total + ms
+      }, 0) / turns.length
+    : 0
+  const listed = (Array.isArray(crumbs.categories) ? crumbs.categories : []).filter(function (entry) {
+    return entry && exceeds(positive(entry.tokens), 0)
+  })
+  const sum = listed.reduce(function (total, entry) {
+    return total + entry.tokens
+  }, 0)
+  const parts = listed.map(function (entry, index) {
+    return { id: String(entry.id || index), label: String(entry.label || entry.id || ''), tokens: entry.tokens, share: entry.tokens / sum }
+  })
+  if (!(exceeds(counted, 0) || exceeds(used, 0) || parts.length || turns.length || exceeds(tps, 0))) return null
+  const marked = guess ? '~' : ''
+  return {
+    model: String(live.model || saved.model || crumbs.model || ''),
+    calls: positive(live.calls),
+    sum,
+    parts,
+    cells: [
+      {
+        label: t('dgTokens'),
+        value: tokensText(counted),
+        sub: exceeds(counted, 0) ? t('dgTokensSub', { out: tokenCountText(output), prompt: tokenCountText(prompt) }) : '',
+        tip: t('ubTokensTip')
+      },
+      {
+        label: t('dgCacheHit'),
+        value: percentText(hit),
+        sub: rows && exceeds(prompt, 0) ? t('dgCacheHitSub', { read: tokenCountText(recorded.read), prompt: tokenCountText(prompt) }) : '',
+        tip: t('ubCacheTip'),
+        ring: rows && exceeds(prompt, 0) ? recorded : null
+      },
+      {
+        label: t('dgCost'),
+        value: costText(cost, streamedCost || saved.cost_estimated === true),
+        sub: cost === null ? (exceeds(counted, 0) ? t('dgUnpriced') : t('dgCostNone')) : '',
+        tip: t('ubCostTip')
+      },
+      {
+        label: t('ubContext'),
+        value: percent === null ? (exceeds(used, 0) ? `${marked}${tokenCountText(used)}` : '—') : `${marked}${percent}%`,
+        sub: percent === null ? '' : t('ubContextSub', { used: tokenCountText(used), max: tokenCountText(max) }),
+        tip: t('ubContextTip')
+      },
+      {
+        label: t('ubSpeed'),
+        value: speedText(tps),
+        sub: exceeds(latency, 0) ? t('ubSpeedSub', { latency: latencyText(latency * 1000) }) : '',
+        tip: t('ubSpeedTip')
+      },
+      {
+        label: t('ubTtft'),
+        value: last === null ? '—' : latencyText(last),
+        sub: exceeds(turns.length, 1) ? t('ubTtftAvg', { avg: latencyText(mean), count: turns.length }) : t('ubTtftSub'),
+        tip: t('ubTtftTip')
+      }
+    ]
+  }
+}
+
+// How many layers sit above a lane: the longest chain of lanes it waits on. A loop in the edges stops the walk.
+function dagLayer(id, parents, memo, trail) {
+  if (memo.has(id)) return memo.get(id)
+  let depth = 0
+  for (const up of parents.get(id) || []) {
+    if (trail.has(up)) continue
+    depth = Math.max(depth, 1 + dagLayer(up, parents, memo, new Set(trail).add(up)))
+  }
+  memo.set(id, depth)
+  return depth
+}
+
+// Every lane below this one, however far down.
+function below(id, children) {
+  const seen = new Set()
+  const walk = function (at) {
+    for (const next of children.get(at) || []) {
+      if (seen.has(next)) continue
+      seen.add(next)
+      walk(next)
+    }
+  }
+  walk(id)
+  return seen
+}
+
+// The lane ids a list of titles names (the backend names a topology's lanes by title); a title two lanes share goes
+// to the first lane, then the next.
+function idsForTitles(lanes, titles) {
+  const used = new Map()
+  return titles
+    .map(function (title) {
+      const key = safeText(title)
+      const taken = used.get(key) || 0
+      used.set(key, taken + 1)
+      const same = lanes.filter(function (lane) {
+        return lane.title === key
+      })
+      return same[taken] ? same[taken].id : ''
+    })
+    .filter(Boolean)
+}
+
+// The model of a DAG or verified fanout graph. Native/team graphs keep their drawing;
+// fanout has no backend critical-path record, so its path and bottlenecks stay empty.
+export function dagModel(graph) {
+  const fanout = !!graph && graph.source === 'fanout'
+  const topology = graph && graph.dag_topology
+  if (!graph || graph.status !== 'active' || (!fanout && (!topology || typeof topology !== 'object'))) return null
+  const records = lanesOf(graph)
+  if (!records.length) return null
+  const ids = new Set(
+    records.map(function (record) {
+      return safeText(record.id)
+    })
+  )
+  const edges = []
+  const taken = new Set()
+  const parents = new Map()
+  const children = new Map()
+  for (const edge of rows(graph.edges)) {
+    const from = safeText(edge.from)
+    const to = safeText(edge.to)
+    const key = `${from}|${to}`
+    if (!ids.has(from) || !ids.has(to) || from === to || taken.has(key)) continue
+    taken.add(key)
+    edges.push({ from, to })
+    parents.set(to, (parents.get(to) || []).concat([from]))
+    children.set(from, (children.get(from) || []).concat([to]))
+  }
+  const memo = new Map()
+  const lanes = records.map(function (record) {
+    const id = safeText(record.id)
+    const state = humanState(record.state) || 'unknown'
+    const model = safeText(record.model).split('/').pop()
+    const category = safeText(record.category)
+    const origin = safeText(record.dag_origin).split(':')[0]
+    return {
+      id,
+      title: safeText(record.title) || id,
+      state,
+      glyph: laneMark(state).glyph,
+      word: stateWord(state),
+      status: safeText(record.status),
+      tone: segmentTone(`status:${state}`),
+      border: segmentTone(`node:${state}`),
+      category: category === '?' ? '' : category,
+      model: model === '?' ? '' : model,
+      effort: safeText(record.effort),
+      role: safeText(record.role),
+      origin: origin === 'repair' || origin === 'extend' ? origin : '',
+      waits: Number.isInteger(record.waits_on) ? record.waits_on : 0,
+      elapsed: Number.isFinite(record.elapsed_seconds) ? record.elapsed_seconds : null,
+      session: safeText(record.session_tail),
+      summary: longText(record.summary),
+      unchecked: record.handoff_checked === false,
+      usage: laneUsage(record),
+      layer: dagLayer(id, parents, memo, new Set([id])),
+      parents: parents.get(id) || [],
+      children: children.get(id) || [],
+      blocks: below(id, children).size
+    }
+  })
+  const index = {}
+  lanes.forEach(function (lane) {
+    index[lane.id] = lane
+  })
+  const depth = lanes.reduce(function (most, lane) {
+    return Math.max(most, lane.layer)
+  }, 0)
+  const layers = []
+  for (let at = 0; reaches(depth, at); at += 1) {
+    layers.push(
+      lanes
+        .filter(function (lane) {
+          return lane.layer === at
+        })
+        .map(function (lane) {
+          return lane.id
+        })
+    )
+  }
+  const byModel = new Map()
+  lanes.forEach(function (lane) {
+    if (lane.model) byModel.set(lane.model, (byModel.get(lane.model) || []).concat([lane]))
+  })
+  const models = Array.from(byModel, function (entry) {
+    return {
+      model: entry[0],
+      count: entry[1].length,
+      total: sumUsage(
+        entry[1].map(function (lane) {
+          return lane.usage
+        })
+      )
+    }
+  }).sort(function (a, b) {
+    return allTokens(b.total) - allTokens(a.total)
+  })
+  const bottlenecks = []
+  rows(topology && topology.bottlenecks).forEach(function (row) {
+    const id = idsForTitles(lanes, [row[0]])[0]
+    if (id) bottlenecks.push({ id, blocks: Number(row[1]) || 0 })
+  })
+  return {
+    name: safeText(graph.name),
+    lanes,
+    index,
+    layers,
+    edges,
+    models,
+    bottlenecks,
+    path: idsForTitles(lanes, topology && Array.isArray(topology.critical_path) ? topology.critical_path : []),
+    total: sumUsage(
+      lanes.map(function (lane) {
+        return lane.usage
+      })
+    ),
+    seconds: lanes.reduce(function (sum, lane) {
+      return sum + (lane.elapsed || 0)
+    }, 0),
+    timed: countOf(lanes, function (lane) {
+      return lane.elapsed !== null
+    }),
+    hidden: Number(graph.hidden_nodes) || 0,
+    cards: !exceeds(lanes.length, DAG_CARD_LIMIT)
+  }
+}
+
+// What the card line under a lane's route says: a waiting lane the lanes it waits on, any other its state, time and output.
+export function laneStatus(lane) {
+  if (lane.state === 'waiting' && exceeds(lane.waits, 0)) return `${lane.glyph} ${t('dgWaitsOn', { count: lane.waits })}`
+  const time = lane.elapsed === null ? '' : ` ${elapsedText(lane.elapsed)}`
+  const output = exceeds(lane.usage.output, 0) ? ` · ↓${tokensText(lane.usage.output)}` : ''
+  return `${lane.glyph} ${lane.word}${time}${output}`
+}
+
+// The lane ids a highlight keeps lit: a model's lanes, or the critical path; null where nothing is highlighted.
+export function markedLanes(dag, mark) {
+  if (!mark) return null
+  if (mark.kind === 'path') return dag.path
+  return dag.lanes
+    .filter(function (lane) {
+      return lane.model === mark.value
+    })
+    .map(function (lane) {
+      return lane.id
+    })
+}
+
+// ---------------------------------------------------------------------------
 // What the pane and the status item render from one poll: the payload when
 // the reader answered, otherwise the one state the surface must say. A
 // transport failure keeps the last payload on screen under a quiet notice.
@@ -1526,6 +2068,113 @@ export const PANE_CSS = `
 .omh-pane-graph-detail{min-width:0;overflow-wrap:anywhere;color:var(--omh-text-readable)}
 .omh-pane-notice{margin:6px 12px 8px;border-radius:6px;background:var(--chrome-action-hover);padding:6px 8px;font-size:11px;color:var(--omh-text-readable);overflow-wrap:anywhere}
 .omh-pane-skeleton{height:10px;margin:6px 12px}
+.omh-pane-dv{min-width:0}
+.omh-pane-dv-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:6px 0 12px}
+@container (min-width:520px){.omh-pane-dv-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.omh-pane-dv-facts{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.omh-pane-dv-kpi{position:relative;display:flex;flex-direction:column;gap:1px;min-width:0;padding:7px 9px;background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:var(--radius-sm,2px);cursor:help}
+.omh-pane-dv-kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--omh-text-readable)}
+.omh-pane-dv-kpi-value{font-family:${MONO};font-size:15px;font-weight:600;line-height:1.25;color:var(--ui-text-primary);font-variant-numeric:tabular-nums}
+.omh-pane-dv-kpi-sub{font-family:${MONO};font-size:10.5px;line-height:1.3;color:var(--omh-text-readable);overflow-wrap:anywhere;text-wrap:balance}
+.omh-pane-dv-kpi-ring{position:absolute;right:8px;top:8px;display:flex}
+.omh-pane-dv-canvas{position:relative;padding:4px 18px 4px 0}
+.omh-pane-dv-edges{position:absolute;left:0;top:0;z-index:0;overflow:visible;pointer-events:none}
+.omh-pane-dv-row{position:relative;z-index:1;display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-bottom:34px}
+.omh-pane-dv-row:last-child{margin-bottom:0}
+.omh-pane-dv-card{--dv-c:var(--omh-mark);box-sizing:border-box;flex:1 1 0;min-width:118px;max-width:300px;display:flex;flex-direction:column;gap:2px;margin:0;padding:7px 9px 8px;text-align:left;background:var(--ui-bg-card);border:1px solid var(--dv-c);border-radius:var(--radius-sm,2px);color:inherit;font:inherit;cursor:pointer;overflow:hidden;transition:opacity .15s,border-color .15s,background-color .15s}
+.omh-pane-dv-card:hover{background:color-mix(in srgb,var(--ui-bg-card),var(--ui-text-primary) 6%)}
+.omh-pane-dv-card:focus-visible{outline:2px solid var(--omh-brand);outline-offset:1px}
+.omh-pane-dv-card[data-tone=accent]{--dv-c:var(--ui-accent)}
+.omh-pane-dv-card[data-tone=warn]{--dv-c:var(--omh-warn)}
+.omh-pane-dv-card[data-tone=error]{--dv-c:var(--ui-red)}
+.omh-pane-dv-picked{border-color:var(--omh-brand);outline:1px solid var(--omh-brand)}
+.omh-pane-dv-dim{opacity:.32}
+.omh-pane-dv-title{font-size:12px;font-weight:600;line-height:1.3;color:var(--ui-text-primary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.omh-pane-dv-line{font-family:${MONO};font-size:10.5px;line-height:1.35;color:var(--omh-text-readable);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.omh-pane-dv-wrap{white-space:normal;overflow:visible;overflow-wrap:anywhere;text-overflow:clip}
+.omh-pane-dv-cr{--dv-k:var(--omh-brand)}
+.omh-pane-dv-in{--dv-k:var(--omh-label)}
+.omh-pane-dv-cw{--dv-k:var(--ui-purple)}
+.omh-pane-dv-out{--dv-k:var(--omh-text-readable)}
+.omh-pane-dv-stack{display:flex;height:3px;margin-top:4px;border-radius:1px;background:var(--ui-stroke-tertiary);overflow:hidden}
+.omh-pane-dv-big{height:6px;margin:6px 0 8px;border-radius:2px}
+.omh-pane-dv-stack i{display:block;height:100%;min-width:0;background:var(--dv-k)}
+.omh-pane-dv-ring{display:block}
+.omh-pane-dv-track{fill:none;stroke:var(--ui-stroke-tertiary)}
+.omh-pane-dv-arc{fill:none;stroke:var(--dv-k)}
+.omh-pane-dv-edge,.omh-pane-dv-tip{--dv-e:var(--omh-mark);stroke:var(--dv-e);stroke-width:1.2}
+.omh-pane-dv-edge{fill:none}
+.omh-pane-dv-tip{fill:var(--dv-e);stroke-width:1}
+.omh-pane-dv-edge[data-tone=done],.omh-pane-dv-tip[data-tone=done]{--dv-e:var(--omh-text-readable)}
+.omh-pane-dv-edge[data-tone=accent],.omh-pane-dv-tip[data-tone=accent]{--dv-e:var(--ui-accent)}
+.omh-pane-dv-edge[data-tone=error],.omh-pane-dv-tip[data-tone=error]{--dv-e:var(--ui-red)}
+.omh-pane-dv-edge[data-hot=true],.omh-pane-dv-tip[data-hot=true]{--dv-e:var(--omh-brand)}
+.omh-pane-dv-edge[data-hot=true]{stroke-width:1.6}
+.omh-pane-dv-edge[data-hollow=true]{stroke-dasharray:4 3}
+.omh-pane-dv-tip[data-hollow=true]{fill:var(--background)}
+.omh-pane-dv-edge[data-dim=true],.omh-pane-dv-tip[data-dim=true]{opacity:.3}
+.omh-pane-dv-detail{margin-top:12px;padding:10px;min-width:0;background:var(--ui-bg-card);border:1px solid var(--omh-edge);border-radius:var(--radius-md,4px)}
+.omh-pane-dv-head{display:flex;align-items:flex-start;gap:8px}
+.omh-pane-dv-badge{display:inline-flex;align-items:center;gap:5px;margin-top:2px;font-family:${MONO};font-size:11px;font-weight:600;white-space:nowrap}
+.omh-pane-dv-name{min-width:0;font-size:13px;font-weight:700;line-height:1.35;overflow-wrap:anywhere}
+.omh-pane-dv-x{box-sizing:border-box;flex:none;margin:0 0 0 auto;padding:1px 6px;font:inherit;font-size:11px;color:var(--omh-text-readable);background:none;border:1px solid var(--ui-stroke-tertiary);border-radius:3px;cursor:pointer}
+.omh-pane-dv-x:hover{color:var(--ui-text-primary);background:var(--chrome-action-hover)}
+.omh-pane-dv-chips{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
+.omh-pane-dv-chip{box-sizing:border-box;display:inline-flex;align-items:center;max-width:100%;height:19px;margin:0;padding:0 7px;font-family:${MONO};font-size:10.5px;color:var(--ui-text-secondary);background:none;border:1px solid var(--ui-stroke-tertiary);border-radius:3px;white-space:nowrap}
+.omh-pane-dv-chip-t{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.omh-pane-dv-chip-model{color:var(--ui-text-primary);border-color:var(--omh-edge)}
+.omh-pane-dv-chip-warn{color:var(--omh-warn);border-color:var(--omh-warn)}
+.omh-pane-dv-link{position:relative;cursor:pointer}
+.omh-pane-dv-link:hover{color:var(--ui-text-primary);border-color:var(--omh-edge)}
+.omh-pane-dv-text{margin:0 0 8px;color:var(--ui-text-secondary);overflow-wrap:anywhere}
+.omh-pane-dv-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;margin:10px 0}
+.omh-pane-dv-fact{display:flex;flex-direction:column;min-width:0}
+.omh-pane-dv-fact-l{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--omh-text-readable)}
+.omh-pane-dv-fact-v{font-family:${MONO};font-size:12px;color:var(--ui-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.omh-pane-dv-usage{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--ui-stroke-tertiary)}
+.omh-pane-dv-usage-ring{display:flex;flex:none}
+.omh-pane-dv-legend{flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:2px 8px;align-items:baseline;font-family:${MONO};font-size:11px}
+.omh-pane-dv-legend-k{display:inline-flex;align-items:center;gap:5px;min-width:0;color:var(--ui-text-secondary);white-space:nowrap}
+.omh-pane-dv-swatch{display:inline-block;flex:none;width:7px;height:7px;border-radius:1px;background:var(--dv-k)}
+.omh-pane-dv-legend-n{text-align:right;color:var(--ui-text-primary)}
+.omh-pane-dv-legend-p{min-width:38px;text-align:right;color:var(--omh-text-readable)}
+.omh-pane-dv-sec{margin-top:8px;padding-top:8px;border-top:1px solid var(--ui-stroke-tertiary)}
+.omh-pane-dv-sec-l{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--omh-text-readable)}
+.omh-pane-dv-links{display:flex;flex-wrap:wrap;gap:4px}
+.omh-pane-dv-stats{margin:12px 0;background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:var(--radius-md,4px)}
+.omh-pane-dv-stats-h{display:flex;align-items:baseline;gap:8px;padding:8px 10px;list-style:none;cursor:pointer;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--omh-label)}
+.omh-pane-dv-stats-h::-webkit-details-marker{display:none}
+.omh-pane-dv-stats-h::before{content:'▸';color:var(--omh-text-readable)}
+.omh-pane-dv-stats[open] .omh-pane-dv-stats-h::before{content:'▾'}
+.omh-pane-dv-stats-c{margin-left:auto;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--omh-text-readable)}
+.omh-pane-dv-stats-body{padding:0 10px 10px}
+.omh-pane-dv-mrow{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1.5fr) 28px 54px minmax(60px,1fr) 56px;gap:0 8px;align-items:center;width:100%;margin:0;padding:4px 0;font-family:${MONO};font-size:11px;text-align:left;color:inherit;background:none;border:0;border-top:1px solid var(--ui-stroke-tertiary);transition:background-color .15s}
+button.omh-pane-dv-mrow{cursor:pointer}
+button.omh-pane-dv-mrow:hover{background:var(--chrome-action-hover)}
+.omh-pane-dv-mrow[data-on=true]{background:color-mix(in srgb,var(--omh-brand) 10%,transparent)}
+.omh-pane-dv-mh{padding:0 0 3px;font-family:inherit;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--omh-text-readable);border-top:0}
+.omh-pane-dv-cell{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.omh-pane-dv-num{text-align:right}
+.omh-pane-dv-mini{display:flex;align-items:center;gap:5px;min-width:0}
+.omh-pane-dv-bar{flex:1;height:4px;border-radius:2px;background:var(--ui-stroke-tertiary);overflow:hidden}
+.omh-pane-dv-bar i{display:block;height:100%;background:var(--omh-brand)}
+.omh-pane-dv-mini-n{min-width:32px;text-align:right}
+.omh-pane-dv-path{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:6px}
+.omh-pane-dv-path-l{margin-right:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--omh-text-readable)}
+.omh-pane-dv-arrow{font-family:${MONO};color:var(--omh-text-readable)}
+.omh-pane-dv-hl{margin:0 0 0 auto;padding:0;font:inherit;font-size:11px;color:var(--ui-accent);background:none;border:0;cursor:pointer}
+.omh-pane-dv-note{margin-top:8px;font-size:10.5px;color:var(--omh-text-readable)}
+@media (pointer:coarse),(max-width:640px){.omh-pane-dv-x,.omh-pane-dv-link,.omh-pane-dv-hl{position:relative;height:32px;padding:0 12px;-webkit-tap-highlight-color:transparent}.omh-pane-dv-hl{padding:0 6px}.omh-pane-dv-x::after,.omh-pane-dv-link::after,.omh-pane-dv-hl::after{content:'';position:absolute;inset:-7px -5px}.omh-pane-dv-chips,.omh-pane-dv-links,.omh-pane-dv-path{gap:14px 8px}.omh-pane-dv-path{margin-top:14px}.omh-pane-dv-stats-h{padding:16px 10px}.omh-pane-dv-mrow{padding:16px 0}.omh-pane-dv-mh{padding:0 0 3px}.omh-pane-dv-card{padding:9px 10px 10px;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}.omh-pane-dag{overflow-x:hidden}}
+@container (min-width:520px){.omh-pane-dv-kpis.omh-pane-ub-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.omh-pane-ub-c0{--dv-k:var(--omh-brand)}
+.omh-pane-ub-c1{--dv-k:var(--ui-accent)}
+.omh-pane-ub-c2{--dv-k:var(--omh-label)}
+.omh-pane-ub-c3{--dv-k:var(--omh-warn)}
+.omh-pane-ub-c4{--dv-k:var(--ui-blue)}
+.omh-pane-ub-c5{--dv-k:var(--ui-purple)}
+.omh-pane-ub-c6{--dv-k:color-mix(in srgb,var(--ui-blue) 45%,var(--ui-text-primary))}
+.omh-pane-ub-c7{--dv-k:var(--omh-text-readable)}
+.omh-pane-ub-parts{margin:0}
+.omh-pane-ub-legend{margin-top:2px}
 .omh-bar{display:inline-flex;height:100%;align-items:center;gap:4px;border-radius:0;padding:0 6px;font-size:.6875rem;color:var(--ui-text-tertiary);font-variant-numeric:tabular-nums;white-space:nowrap;transition:background-color .15s,color .15s}
 .omh-bar:hover{background:var(--chrome-action-hover);color:var(--ui-text-primary)}
 .omh-bar-brand{font-weight:700;color:var(--omh-brand)}
@@ -1898,12 +2547,529 @@ function DagDrawing({ lines }) {
   ))
 }
 
+// ---------------------------------------------------------------------------
+// The DAG view's parts: the figures strip, a card per lane with its edges, the
+// open lane's detail and the run's stats. State lives in DagView alone (the
+// open lane, the highlight, the stats fold); the polled payload only feeds it.
+// Nothing here scrolls sideways or listens for a gesture, and no touch-action
+// is set, so the host's own sideways swipe always reaches the app.
+// ---------------------------------------------------------------------------
+
+const USAGE_KEYS = [
+  ['read', 'cr', 'dgCacheRead'],
+  ['input', 'in', 'dgInput'],
+  ['write', 'cw', 'dgCacheWrite']
+]
+const ARROW_PX = 7
+const BEND_PX = 6
+
+// The prompt's split as a ring: cache read, uncached input, cache write.
+function UsageRing({ usage, size }) {
+  const total = promptTokens(usage)
+  const stroke = Math.max(3, size / 5)
+  const radius = (size - stroke) / 2
+  const circumference = 2 * Math.PI * radius
+  const mid = size / 2
+  let offset = 0
+  const arcs = []
+  USAGE_KEYS.forEach(function (key) {
+    const count = usage[key[0]]
+    if (!exceeds(count, 0) || !exceeds(total, 0)) return
+    const length = (count / total) * circumference
+    arcs.push(
+      node(
+        'circle',
+        {
+          className: `omh-pane-dv-arc omh-pane-dv-${key[1]}`,
+          cx: mid,
+          cy: mid,
+          r: radius,
+          strokeWidth: stroke,
+          strokeDasharray: `${length.toFixed(2)} ${(circumference - length).toFixed(2)}`,
+          strokeDashoffset: (-offset).toFixed(2),
+          transform: `rotate(-90 ${mid} ${mid})`
+        },
+        [],
+        key[1]
+      )
+    )
+    offset += length
+  })
+  return node('svg', { className: 'omh-pane-dv-ring', width: size, height: size, viewBox: `0 0 ${size} ${size}`, 'aria-hidden': 'true' }, [
+    node('circle', { className: 'omh-pane-dv-track', cx: mid, cy: mid, r: radius, strokeWidth: stroke }, [], 'track'),
+    ...arcs
+  ])
+}
+
+// The thin bar under a card (and over the detail): the same split, output last.
+function UsageStack({ usage, big }) {
+  return node(
+    'div',
+    { className: `omh-pane-dv-stack${big ? ' omh-pane-dv-big' : ''}` },
+    [
+      ['cr', usage.read],
+      ['in', usage.input],
+      ['cw', usage.write],
+      ['out', usage.output]
+    ].map(function (part) {
+      return node('i', { className: `omh-pane-dv-${part[0]}`, style: { flexGrow: part[1] } }, [], part[0])
+    })
+  )
+}
+
+function DagKpis({ dag }) {
+  const total = dag.total
+  const prompt = promptTokens(total)
+  const cells = [
+    {
+      label: t('dgTokens'),
+      value: tokensText(allTokens(total)),
+      sub: total.lanes ? t('dgTokensSub', { out: tokenCountText(total.output), prompt: tokenCountText(prompt) }) : '',
+      tip: t('dgTokensTip')
+    },
+    {
+      label: t('dgCacheHit'),
+      value: percentText(cacheHit(total)),
+      sub: exceeds(prompt, 0) ? t('dgCacheHitSub', { read: tokenCountText(total.read), prompt: tokenCountText(prompt) }) : '',
+      tip: t('dgCacheHitTip'),
+      ring: total
+    },
+    {
+      label: t('dgCost'),
+      value: costText(total.cost, total.estimated),
+      sub: total.lanes ? t('dgCostSub', { priced: total.priced, counted: total.lanes }) : t('dgCostNone'),
+      tip: t('dgCostTip')
+    },
+    {
+      label: t('dgNodeTime'),
+      value: dag.timed ? elapsedText(dag.seconds) : '—',
+      sub: dag.timed ? t('dgNodeTimeSub', { count: dag.timed }) : '',
+      tip: t('dgNodeTimeTip')
+    }
+  ]
+  return jsx(KpiGrid, { cells })
+}
+
+// Figure cells in a grid: a label, a value, a line under it, and a ring where
+// `ring` carries the usage it draws. `wide` is the usage board's three columns.
+function KpiGrid({ cells, wide }) {
+  return node(
+    'div',
+    { className: wide ? 'omh-pane-dv-kpis omh-pane-ub-kpis' : 'omh-pane-dv-kpis' },
+    cells.map(function (cell) {
+      return node(
+        'div',
+        { className: 'omh-pane-dv-kpi', title: cell.tip },
+        [
+          span('omh-pane-dv-kpi-label', cell.label),
+          span('omh-pane-dv-kpi-value', cell.value),
+          span('omh-pane-dv-kpi-sub', cell.sub),
+          cell.ring ? span('omh-pane-dv-kpi-ring', jsx(UsageRing, { usage: cell.ring, size: 26 })) : null
+        ],
+        cell.label
+      )
+    })
+  )
+}
+
+function routeText(lane) {
+  const model = lane.model ? `${lane.model}${lane.effort ? `:${lane.effort}` : ''}` : ''
+  return [lane.category, model].filter(Boolean).join(' · ') || '?'
+}
+
+function LaneCard({ dag, lane, picked, dim, onPick }) {
+  const after = lane.parents.length
+    ? t('dgAfter', {
+        nodes: lane.parents
+          .map(function (id) {
+            return dag.index[id].title
+          })
+          .join(', ')
+      })
+    : t('dgStart')
+  const named = lane.tone === 'accent' || lane.tone === 'error' ? toneClass(lane.tone) : lane.state === 'waiting' ? 'omh-pane-secondary' : ''
+  return node(
+    'button',
+    {
+      type: 'button',
+      className: `omh-pane-dv-card${picked ? ' omh-pane-dv-picked' : ''}${dim ? ' omh-pane-dv-dim' : ''}`,
+      'data-lane': lane.id,
+      'data-tone': lane.border,
+      'aria-pressed': picked,
+      onClick: function () {
+        onPick(picked ? '' : lane.id)
+      }
+    },
+    [
+      span(`omh-pane-dv-title ${named}`, lane.title),
+      span('omh-pane-dv-line omh-pane-dv-wrap', routeText(lane)),
+      span(`omh-pane-dv-line omh-pane-dv-wrap ${toneClass(lane.tone)}`, laneStatus(lane)),
+      span('omh-pane-dv-line omh-pane-dv-wrap', after),
+      jsx(UsageStack, { usage: lane.usage })
+    ]
+  )
+}
+
+// Where each edge runs, measured from the cards as laid out: out of a card's
+// foot, along the gap, into the next card's head. An edge over a skipped layer
+// takes the right-hand gutter. `tone` is the state of the pair it joins.
+function edgeLines(canvas, dag, pick, lit) {
+  const box = canvas.getBoundingClientRect()
+  const at = {}
+  canvas.querySelectorAll('[data-lane]').forEach(function (card) {
+    const r = card.getBoundingClientRect()
+    at[card.getAttribute('data-lane')] = { x: Math.round(r.left - box.left), y: Math.round(r.top - box.top), w: Math.round(r.width), h: Math.round(r.height) }
+  })
+  const gutter = Math.round(box.width) - 8
+  const lines = []
+  dag.edges.forEach(function (edge) {
+    const a = at[edge.from]
+    const b = at[edge.to]
+    if (!a || !b) return
+    const from = dag.index[edge.from]
+    const to = dag.index[edge.to]
+    const skip = exceeds(to.layer - from.layer, 1)
+    const x1 = a.x + Math.round(a.w / 2)
+    const y1 = a.y + a.h
+    const y2 = b.y
+    const x2 = b.x + Math.round(b.w / 2) + (skip ? Math.min(14, Math.round(b.w / 4)) : 0)
+    const bend = y2 - (skip ? 20 : 14)
+    let d
+    if (skip) {
+      d = `M${x1} ${y1} V${y1 + 12} H${gutter} V${bend} H${x2} V${y2 - ARROW_PX}`
+    } else if (exceeds(1, Math.abs(x2 - x1))) {
+      d = `M${x1} ${y1} V${y2 - ARROW_PX}`
+    } else {
+      const s = exceeds(x2, x1) ? 1 : -1
+      d = `M${x1} ${y1} V${bend - BEND_PX} Q${x1} ${bend} ${x1 + s * BEND_PX} ${bend} H${x2 - s * BEND_PX} Q${x2} ${bend} ${x2} ${bend + BEND_PX} V${y2 - ARROW_PX}`
+    }
+    const bad = from.state === 'failed' || from.state === 'interrupted'
+    const moving = from.state === 'done' && (to.state === 'running' || to.state === 'dispatched')
+    const settled = from.state === 'done' && to.state === 'done'
+    // An open lane lights its own edges; else a marked set (the path, a model) lights those between its lanes.
+    const focus = pick ? edge.from === pick || edge.to === pick : lit ? lit.indexOf(edge.from) !== -1 && lit.indexOf(edge.to) !== -1 : null
+    lines.push({
+      d,
+      tip: `M${x2 - 4} ${y2 - ARROW_PX} L${x2 + 4} ${y2 - ARROW_PX} L${x2} ${y2} Z`,
+      tone: bad ? 'error' : moving ? 'accent' : settled ? 'done' : 'wait',
+      hollow: !(moving || settled),
+      hot: focus === true,
+      dim: focus === false
+    })
+  })
+  return { width: Math.round(box.width), height: Math.round(box.height), lines }
+}
+
+function DagCanvas({ dag, pick, lit, onPick }) {
+  const [canvas, setCanvas] = useState(null)
+  const [drawn, setDrawn] = useState({ width: 0, height: 0, lines: [] })
+  // What decides the edges; a poll that changes none of it leaves them be, and a card that grows is the observer's.
+  const shape = [
+    pick,
+    lit ? lit.join(',') : '',
+    dag.edges
+      .map(function (edge) {
+        return `${edge.from}.${edge.to}`
+      })
+      .join(','),
+    dag.lanes
+      .map(function (lane) {
+        return `${lane.id}:${lane.state}`
+      })
+      .join(',')
+  ].join('|')
+  useEffect(
+    function () {
+      if (!canvas) return undefined
+      function draw() {
+        setDrawn(edgeLines(canvas, dag, pick, lit))
+      }
+      draw()
+      const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(draw) : null
+      if (observer) observer.observe(canvas)
+      return function () {
+        if (observer) observer.disconnect()
+      }
+    },
+    [canvas, shape]
+  )
+  return node('div', { className: 'omh-pane-dv-canvas', ref: setCanvas }, [
+    node(
+      'svg',
+      { className: 'omh-pane-dv-edges', width: drawn.width, height: drawn.height, 'aria-hidden': 'true' },
+      drawn.lines.flatMap(function (line, index) {
+        const flags = { 'data-tone': line.tone, 'data-hollow': line.hollow, 'data-hot': line.hot, 'data-dim': line.dim }
+        return [
+          node('path', { className: 'omh-pane-dv-edge', d: line.d, ...flags }, [], `e${index}`),
+          node('path', { className: 'omh-pane-dv-tip', d: line.tip, ...flags }, [], `a${index}`)
+        ]
+      }),
+      'edges'
+    ),
+    ...dag.layers.map(function (ids, at) {
+      return node(
+        'div',
+        { className: 'omh-pane-dv-row' },
+        ids.map(function (id) {
+          return jsx(
+            LaneCard,
+            { dag, lane: dag.index[id], picked: id === pick, dim: !!lit && lit.indexOf(id) === -1, onPick },
+            id
+          )
+        }),
+        `row-${at}`
+      )
+    })
+  ])
+}
+
+function chip(text, title, tone) {
+  return node(
+    'span',
+    { className: `omh-pane-dv-chip${tone ? ` omh-pane-dv-chip-${tone}` : ''}`, title: title || undefined },
+    [span('omh-pane-dv-chip-t', text)],
+    text
+  )
+}
+
+// A chip that opens another lane.
+function laneLink(dag, id, onPick, label) {
+  const lane = dag.index[id]
+  return node(
+    'button',
+    {
+      type: 'button',
+      className: 'omh-pane-dv-chip omh-pane-dv-link',
+      title: lane.title,
+      onClick: function () {
+        onPick(id)
+      }
+    },
+    [span('omh-pane-dv-chip-t', label || lane.title)],
+    `${id}-${label || ''}`
+  )
+}
+
+function LaneDetail({ dag, lane, onPick, seat }) {
+  const usage = lane.usage
+  const prompt = promptTokens(usage)
+  const facts = [
+    [t('dgElapsed'), lane.elapsed === null ? '—' : elapsedText(lane.elapsed)],
+    [t('dgTokens'), tokensText(allTokens(usage))],
+    [t('dgCacheHit'), percentText(cacheHit(usage))],
+    [t('dgCost'), usage.cost !== null ? costText(usage.cost, usage.estimated) : usage.seen ? t('dgUnpriced') : '—'],
+    [t('dgOutput'), exceeds(usage.output, 0) ? `↓${tokensText(usage.output)}` : '—']
+  ]
+  return node('div', { className: 'omh-pane-dv-detail', ref: seat, 'data-detail': lane.id }, [
+    node('div', { className: 'omh-pane-dv-head' }, [
+      span(`omh-pane-dv-badge ${toneClass(lane.tone)}`, `${lane.glyph} ${lane.word}`),
+      span('omh-pane-dv-name', lane.title),
+      node(
+        'button',
+        {
+          type: 'button',
+          className: 'omh-pane-dv-x',
+          title: 'Esc',
+          onClick: function () {
+            onPick('')
+          }
+        },
+        t('dgClose')
+      )
+    ]),
+    node('div', { className: 'omh-pane-dv-chips' }, [
+      lane.category ? chip(lane.category) : null,
+      lane.model ? chip(`${lane.model}${lane.effort ? ` · ${lane.effort}` : ''}`, t('dgModelTip'), 'model') : chip(t('dgNotStarted'), t('dgNotStartedTip')),
+      chip(t('dgLayer', { count: lane.layer + 1 })),
+      lane.role && lane.role !== 'build' ? chip(lane.role) : null,
+      lane.origin ? chip(t(lane.origin === 'repair' ? 'dgRepair' : 'dgExtend'), '', 'warn') : null,
+      lane.unchecked ? chip(t('dagUnchecked', { count: 1 }), '', 'warn') : null,
+      lane.session ? chip(t('dgSession', { tail: lane.session }), lane.session) : null
+    ]),
+    lane.summary ? div('omh-pane-dv-text', lane.summary, 'summary') : null,
+    node(
+      'div',
+      { className: 'omh-pane-dv-facts' },
+      facts.map(function (fact) {
+        return node('div', { className: 'omh-pane-dv-fact' }, [span('omh-pane-dv-fact-l', fact[0]), span('omh-pane-dv-fact-v', fact[1])], fact[0])
+      })
+    ),
+    node('div', { className: 'omh-pane-dv-usage', title: t('dgUsageTip') }, [
+      span('omh-pane-dv-usage-ring', jsx(UsageRing, { usage, size: 44 })),
+      node(
+        'div',
+        { className: 'omh-pane-dv-legend' },
+        USAGE_KEYS.flatMap(function (key) {
+          const count = usage[key[0]]
+          return [
+            span('omh-pane-dv-legend-k', [node('i', { className: `omh-pane-dv-swatch omh-pane-dv-${key[1]}` }, []), t(key[2])], `${key[1]}-k`),
+            span('omh-pane-dv-legend-n', tokensText(count), `${key[1]}-n`),
+            span('omh-pane-dv-legend-p', exceeds(prompt, 0) ? `${((count / prompt) * 100).toFixed(1)}%` : '—', `${key[1]}-p`)
+          ]
+        })
+      )
+    ]),
+    jsx(UsageStack, { usage, big: true }),
+    lane.parents.length
+      ? node('div', { className: 'omh-pane-dv-sec' }, [
+          span('omh-pane-dv-sec-l', t('dgDependsOn')),
+          node(
+            'div',
+            { className: 'omh-pane-dv-links' },
+            lane.parents.map(function (id) {
+              return laneLink(dag, id, onPick)
+            })
+          )
+        ], 'parents')
+      : null,
+    lane.children.length
+      ? node('div', { className: 'omh-pane-dv-sec' }, [
+          span('omh-pane-dv-sec-l', t('dgBlocks', { count: lane.blocks })),
+          node(
+            'div',
+            { className: 'omh-pane-dv-links' },
+            lane.children.map(function (id) {
+              return laneLink(dag, id, onPick)
+            })
+          )
+        ], 'children')
+      : null
+  ])
+}
+
+function DagStats({ dag, mark, onMark, onPick, open, onOpen }) {
+  const on = function (kind, value) {
+    return !!mark && mark.kind === kind && mark.value === value
+  }
+  const head = node('div', { className: 'omh-pane-dv-mrow omh-pane-dv-mh' }, [
+    span('omh-pane-dv-cell', t('dgByModel'), 'm'),
+    span('omh-pane-dv-cell omh-pane-dv-num', t('dgNodes'), 'n'),
+    span('omh-pane-dv-cell omh-pane-dv-num', t('dgTokens'), 't'),
+    span('omh-pane-dv-cell', t('dgCacheHit'), 'c'),
+    span('omh-pane-dv-cell omh-pane-dv-num', t('dgCost'), 'p')
+  ])
+  const table = dag.models.map(function (entry) {
+    const hit = cacheHit(entry.total)
+    return node(
+      'button',
+      {
+        type: 'button',
+        className: 'omh-pane-dv-mrow',
+        'data-on': on('model', entry.model),
+        title: `${entry.model} · ${t('dgModelRowTip')}`,
+        onClick: function () {
+          onMark({ kind: 'model', value: entry.model })
+        }
+      },
+      [
+        span('omh-pane-dv-cell', entry.model, 'm'),
+        span('omh-pane-dv-cell omh-pane-dv-num', `${entry.count}`, 'n'),
+        span('omh-pane-dv-cell omh-pane-dv-num', tokensText(allTokens(entry.total)), 't'),
+        span(
+          'omh-pane-dv-mini',
+          [
+            span('omh-pane-dv-bar', node('i', { style: { width: hit === null ? '0%' : `${hit * 100}%` } }, []), 'bar'),
+            span('omh-pane-dv-mini-n', percentText(hit), 'pct')
+          ],
+          'c'
+        ),
+        span(
+          'omh-pane-dv-cell omh-pane-dv-num',
+          entry.total.priced ? costText(entry.total.cost, entry.total.estimated) : entry.total.lanes ? t('dgUnpriced') : '—',
+          'p'
+        )
+      ],
+      entry.model
+    )
+  })
+  const path = dag.path.length
+    ? node('div', { className: 'omh-pane-dv-path' }, [
+        span('omh-pane-dv-path-l', t('dgCriticalPath'), 'label'),
+        ...dag.path.flatMap(function (id, index) {
+          return [index ? span('omh-pane-dv-arrow', '→', `ar-${index}`) : null, laneLink(dag, id, onPick)]
+        }),
+        node(
+          'button',
+          {
+            type: 'button',
+            className: 'omh-pane-dv-hl',
+            onClick: function () {
+              onMark({ kind: 'path', value: '' })
+            }
+          },
+          on('path', '') ? t('dgClearHighlight') : t('dgHighlight'),
+          'hl'
+        )
+      ], 'path')
+    : null
+  const blockers = dag.bottlenecks.length
+    ? node('div', { className: 'omh-pane-dv-path' }, [
+        span('omh-pane-dv-path-l', t('dgBottlenecks'), 'label'),
+        ...dag.bottlenecks.map(function (item) {
+          return laneLink(dag, item.id, onPick, t('dgBlocksTitle', { title: dag.index[item.id].title, count: item.blocks }))
+        })
+      ], 'blockers')
+    : null
+  return node(
+    'details',
+    {
+      className: 'omh-pane-dv-stats',
+      open,
+      onToggle: function (event) {
+        onOpen(event.currentTarget.open)
+      }
+    },
+    [
+      node('summary', { className: 'omh-pane-dv-stats-h' }, [span('', t('dgStats'), 'label'), span('omh-pane-dv-stats-c', t('dgModels', { count: dag.models.length }), 'count')], 'head'),
+      node('div', { className: 'omh-pane-dv-stats-body' }, [dag.models.length ? head : null, ...table, path, blockers, div('omh-pane-dv-note', t('dgNote'), 'note')], 'body')
+    ]
+  )
+}
+
+function DagView({ dag, fallback }) {
+  const [pick, setPick] = useState('')
+  const [mark, setMark] = useState(null)
+  const [statsOpen, setStatsOpen] = useState(true)
+  const [seat, setSeat] = useState(null)
+  // A lane opened below the cards is scrolled into reach once, when it opens.
+  useEffect(
+    function () {
+      if (seat && typeof seat.scrollIntoView === 'function') seat.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    },
+    [pick, seat]
+  )
+  const lane = dag.index[pick] || null
+  const toggle = function (next) {
+    setMark(function (now) {
+      return now && now.kind === next.kind && now.value === next.value ? null : next
+    })
+  }
+  return node(
+    'div',
+    {
+      className: 'omh-pane-dv',
+      onKeyDown: function (event) {
+        if (event.key === 'Escape') setPick('')
+      }
+    },
+    [
+      jsx(DagKpis, { dag }, 'kpis'),
+      jsx(DagStats, { dag, mark, onMark: toggle, onPick: setPick, open: statsOpen, onOpen: setStatsOpen }, 'stats'),
+      dag.cards ? jsx(DagCanvas, { dag, pick, lit: markedLanes(dag, mark), onPick: setPick }, 'canvas') : fallback,
+      exceeds(dag.hidden, 0) ? div('omh-pane-more', t('graphMore', { count: dag.hidden }), 'hidden') : null,
+      lane ? jsx(LaneDetail, { dag, lane, onPick: setPick, seat: setSeat }, 'detail') : null
+    ]
+  )
+}
+
 // While the graph runs, the TUI's drawing of it when the backend sent one,
 // else a row per lane; once every lane has settled, one summary line, as the
-// TUI's live block keeps.
+// TUI's live block keeps. A dag-ulw run takes the DAG view instead (cards with
+// their figures and stats), falling back to those only past DAG_CARD_LIMIT.
 function DelegationSection({ payload }) {
   const view = delegationView(payload)
   if (!view) return null
+  const dag = dagModel(payload.delegation_graph)
   const drawing = view.settled ? null : drawingLines(payload)
   const lanes = view.settled || drawing
     ? []
@@ -1923,6 +3089,21 @@ function DelegationSection({ payload }) {
           `lane-${index}`
         )
       })
+  if (dag) {
+    const beyondCards = drawing ? jsx(DagDrawing, { lines: drawing }, 'drawing') : lanes
+    return [
+      jsx(SectionHeader, { label: t('sectionDag') }, 'delegation-head'),
+      div(
+        'omh-pane-block',
+        [
+          // The cards name no run, so the summary line stays; a drawing past the card limit has its own header.
+          dag.cards || !drawing ? div('omh-pane-run', view.summary, 'run') : null,
+          jsx(DagView, { dag, fallback: dag.cards ? null : beyondCards }, 'dag')
+        ],
+        'delegation-body'
+      )
+    ]
+  }
   return [
     jsx(SectionHeader, { label: t('sectionDelegation') }, 'delegation-head'),
     div(
@@ -2021,6 +3202,102 @@ function GraphSection({ graph }) {
   ]
 }
 
+const NO_TURNS = []
+
+function readTurns(sessionId) {
+  return turnClock.turns[sessionId] || NO_TURNS
+}
+
+// The first-token waits this window timed for one chat, kept current as turns end.
+function useTurns(sessionId) {
+  const [turns, setTurns] = useState(function () {
+    return readTurns(sessionId)
+  })
+  useEffect(
+    function () {
+      const sync = function () {
+        setTurns(readTurns(sessionId))
+      }
+      turnListeners.add(sync)
+      sync()
+      return function () {
+        turnListeners.delete(sync)
+      }
+    },
+    [sessionId]
+  )
+  return turns
+}
+
+// The focused chat's own figures, first in the pane. The host's atoms are read
+// as the host holds them; an older host lacks some, and a hook cannot be
+// skipped, so there the read lands on the gateway atom and its value is ignored.
+function UsageBoard({ saved }) {
+  const gateway = useValue(host.state.gateway)
+  const streamRead = useValue(host.state.focusedUsage || host.state.gateway)
+  const runtimeRead = useValue(host.state.focusedSessionId || host.state.gateway)
+  const busyRead = useValue(host.state.busy || host.state.gateway)
+  const [partsOpen, setPartsOpen] = useState(true)
+  const live = host.state.focusedUsage && streamRead && typeof streamRead === 'object' ? streamRead : null
+  const runtime = host.state.focusedSessionId && typeof runtimeRead === 'string' ? runtimeRead : ''
+  const busy = host.state.busy ? busyRead === true : false
+  const turns = useTurns(runtime)
+  // Read when a call or a compression has moved the prompt and no turn is
+  // running, as the host's own gauge does, and never shown under another chat.
+  const composition = useQuery({
+    queryKey: [PLUGIN_ID, 'context', runtime, live ? live.calls : 0, live ? live.compressions : 0],
+    queryFn: function () {
+      return host.request('session.context_breakdown', { session_id: runtime })
+    },
+    enabled: gateway === 'open' && !!runtime && !busy && typeof host.request === 'function',
+    retry: false,
+    placeholderData: function (previous, before) {
+      return before && before.queryKey[2] === runtime ? previous : undefined
+    }
+  })
+  const board = usageBoard({ live, saved, breakdown: composition.data, turns })
+  if (!board) return null
+  const bar = node(
+    'div',
+    { className: 'omh-pane-dv-stack omh-pane-dv-big' },
+    board.parts.map(function (part, index) {
+      return node('i', { className: `omh-pane-ub-c${index % PART_TONES}`, style: { flexGrow: part.tokens } }, [], part.id)
+    })
+  )
+  const legend = node(
+    'div',
+    { className: 'omh-pane-dv-legend omh-pane-ub-legend' },
+    board.parts.flatMap(function (part, index) {
+      return [
+        node('span', { className: `omh-pane-dv-legend-k omh-pane-ub-c${index % PART_TONES}` }, [span('omh-pane-dv-swatch', ''), span('omh-pane-dv-chip-t', part.label)], `k-${part.id}`),
+        span('omh-pane-dv-legend-n', tokenCountText(part.tokens), `n-${part.id}`),
+        span('omh-pane-dv-legend-p', percentText(part.share), `p-${part.id}`)
+      ]
+    })
+  )
+  const composed = board.parts.length
+    ? node(
+        'details',
+        {
+          className: 'omh-pane-dv-stats omh-pane-ub-parts',
+          open: partsOpen,
+          onToggle: function (event) {
+            setPartsOpen(event.currentTarget.open)
+          }
+        },
+        [
+          node('summary', { className: 'omh-pane-dv-stats-h' }, [span('', t('ubParts'), 'label'), span('omh-pane-dv-stats-c', `~${tokenCountText(board.sum)}`, 'count')], 'head'),
+          node('div', { className: 'omh-pane-dv-stats-body' }, [bar, legend], 'body')
+        ],
+        'parts'
+      )
+    : null
+  return [
+    jsx(SectionHeader, { label: t('sectionUsage'), title: board.model, count: board.calls ? t('ubCalls', { count: board.calls }) : '' }, 'usage-head'),
+    div('omh-pane-block', node('div', { className: 'omh-pane-dv' }, [jsx(KpiGrid, { cells: board.cells, wide: true }, 'kpis'), composed]), 'usage-body')
+  ]
+}
+
 function HudPane() {
   const hud = useHud()
   // The body element, kept through a callback ref, is what the drawing's width is measured on.
@@ -2032,13 +3309,16 @@ function HudPane() {
   if (model.loading) {
     sections.push(jsx(Skeleton, { className: 'omh-pane-skeleton', style: { width: '70%' } }, 'skeleton-1'))
     sections.push(jsx(Skeleton, { className: 'omh-pane-skeleton', style: { width: '45%' } }, 'skeleton-2'))
-  } else if (payload) {
-    sections.push(jsx(CatchesSection, { payload }, 'catches'))
-    sections.push(jsx(PlanSection, { payload }, 'plan'))
-    sections.push(jsx(DelegationSection, { payload }, 'delegation'))
-    sections.push(jsx(SubagentSummary, { payload }, 'subagents'))
-    sections.push(jsx(RoutesSection, { payload, receivedAt: hud.receivedAt }, 'routes'))
-    sections.push(jsx(GraphSection, { graph: payload.graph }, 'graph'))
+  } else {
+    sections.push(jsx(UsageBoard, { saved: payload ? payload.session_usage : null }, 'usage'))
+    if (payload) {
+      sections.push(jsx(CatchesSection, { payload }, 'catches'))
+      sections.push(jsx(PlanSection, { payload }, 'plan'))
+      sections.push(jsx(DelegationSection, { payload }, 'delegation'))
+      sections.push(jsx(SubagentSummary, { payload }, 'subagents'))
+      sections.push(jsx(RoutesSection, { payload, receivedAt: hud.receivedAt }, 'routes'))
+      sections.push(jsx(GraphSection, { graph: payload.graph }, 'graph'))
+    }
   }
   return div('omh-pane', [
     jsx(Header, { model }),
@@ -2084,10 +3364,27 @@ export default {
       pluginI18n = ctx.i18n
     }
     const removeStyle = injectStyle()
+    // The usage board's TTFT: a turn starts at `message.start`, its wait ends
+    // at the first streamed text.
+    if (typeof ctx.onEvent === 'function') {
+      const waits = ['message.start'].concat(FIRST_TOKEN_EVENTS)
+      waits.forEach(function (type) {
+        ctx.onEvent(type, function (event) {
+          const payload = event && event.payload && typeof event.payload === 'object' ? event.payload : {}
+          if (noteTurnEvent(turnClock, type, event && event.session_id, payload.text, Date.now(), payload.turn_id)) {
+            turnListeners.forEach(function (listen) {
+              listen()
+            })
+          }
+        })
+      })
+    }
     ctx.onDispose(function () {
       removeStyle()
       rest = null
       pluginI18n = null
+      Object.assign(turnClock, newTurnClock())
+      turnListeners.clear()
     })
     ctx.registerMany([
       {

@@ -22,6 +22,7 @@ from omh.plugin_bundle.omh.delegation_graph import (  # noqa: E402
     fanout_graph,
     graph_fingerprint,
     graph_segments,
+    session_usage,
     team_unit_state,
 )
 from omh.plugin_bundle.omh.delegation_ledger import ledger_key  # noqa: E402
@@ -670,6 +671,135 @@ class OutputTokenTests(unittest.TestCase):
             {"unit_id": "core", "title": "Core", "owner": "codex", "depends_on": []}]},
             "roster": {"units": [{"unit_id": "core", "status": "running"}]}}
         self.assertNotIn("output_tokens", node(fanout_graph(record), "Core"))
+
+
+class UsageTests(unittest.TestCase):
+    """Each lane's `usage`: the input, cache and cost columns of its child's state.db row, absent where uncounted."""
+
+    @staticmethod
+    def with_columns(home) -> None:
+        for column, kind in (("input_tokens", "INTEGER"), ("cache_read_tokens", "INTEGER"),
+                             ("cache_write_tokens", "INTEGER"), ("actual_cost_usd", "REAL"),
+                             ("estimated_cost_usd", "REAL")):
+            home.execute(f"ALTER TABLE sessions ADD COLUMN {column} {kind} DEFAULT 0")
+
+    @staticmethod
+    def count(home, session: str, uncached: int, read: int, write: int, *, actual: float = 0.0,
+              estimated: float = 0.0) -> None:
+        home.execute("UPDATE sessions SET input_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?, "
+                     "actual_cost_usd = ?, estimated_cost_usd = ? WHERE id = ?",
+                     (uncached, read, write, actual, estimated, session))
+
+    def test_a_lane_carries_its_childs_input_cache_and_cost(self) -> None:
+        with homes() as home:
+            three_lanes(home)
+            self.with_columns(home)
+            self.count(home, "child-0", 120, 4_000, 300, actual=0.5)
+            self.count(home, "child-1", 10, 0, 0, estimated=0.02)
+            graph = built(home)
+        self.assertEqual(node(graph, "Refresh HUD docs")["usage"],
+                         {"input": 120, "cache_read": 4_000, "cache_write": 300, "cost_usd": 0.5})
+        self.assertEqual(node(graph, "Polish HUD CLI")["usage"],
+                         {"input": 10, "cache_read": 0, "cache_write": 0, "cost_usd": 0.02, "cost_estimated": True})
+        self.assertNotIn("usage", node(graph, "Update HUD tests"), "a child that counted nothing has no usage")
+        self.assertNotIn("usage", graph["nodes"][0], "the root is the conversation, not a lane")
+
+    def test_tokens_hermes_did_not_price_stay_tokens(self) -> None:
+        with homes() as home:
+            three_lanes(home)
+            self.with_columns(home)
+            self.count(home, "child-0", 50, 900, 0)
+            usage = node(built(home), "Refresh HUD docs")["usage"]
+        self.assertEqual(usage, {"input": 50, "cache_read": 900, "cache_write": 0})
+
+    def test_a_rotated_child_adds_its_segments_and_loses_a_cost_one_segment_lacks(self) -> None:
+        with homes() as home:
+            start(home, "child-0", "sa-0", "Long lane", now=NOW)
+            home.session("child-0", "glm-5.3-flash", parent=PARENT, started=NOW)
+            home.usage("child-0", "glm-5.3-flash", last_seen=NOW + 20)
+            home.rotate("child-0", "child-0b", at=NOW + 30)
+            home.usage("child-0b", "glm-5.3-flash", last_seen=NOW + 90)
+            self.with_columns(home)
+            self.count(home, "child-0", 100, 1_000, 50, actual=0.25)
+            self.count(home, "child-0b", 40, 3_000, 0)
+            summed = node(built(home), "Long lane")["usage"]
+            self.count(home, "child-0b", 40, 3_000, 0, actual=0.5)
+            priced = node(built(home), "Long lane")["usage"]
+        self.assertEqual(summed, {"input": 140, "cache_read": 4_000, "cache_write": 50})
+        self.assertEqual(priced, {"input": 140, "cache_read": 4_000, "cache_write": 50, "cost_usd": 0.75})
+
+    def test_a_state_db_without_the_columns_gives_no_usage_and_the_rest_stands(self) -> None:
+        with homes() as home:
+            three_lanes(home)
+            home.tokens("child-0", 1_234)
+            graph = built(home)
+        self.assertNotIn("usage", node(graph, "Refresh HUD docs"))
+        self.assertEqual(node(graph, "Refresh HUD docs")["output_tokens"], 1_234)
+
+    def test_a_count_that_moves_does_not_move_the_fingerprint(self) -> None:
+        with homes() as home:
+            three_lanes(home)
+            self.with_columns(home)
+            self.count(home, "child-0", 1, 2, 3)
+            first = built(home)
+            self.count(home, "child-0", 9_000, 8_000, 7_000)
+            self.assertEqual(graph_fingerprint(first), graph_fingerprint(built(home)))
+
+
+class SessionUsageTests(unittest.TestCase):
+    """`session_usage`: the figures the pane's usage board shows for the chat itself, not for its children."""
+
+    def test_a_chat_carries_its_own_figures_and_not_its_childrens(self) -> None:
+        with homes() as home:
+            home.session(PARENT, "gpt-6-luna", started=NOW)
+            home.session("child-0", "glm-5.3-flash", parent=PARENT, started=NOW)
+            UsageTests.with_columns(home)
+            home.tokens(PARENT, 630)
+            UsageTests.count(home, PARENT, 120, 4_000, 300, actual=0.5)
+            UsageTests.count(home, "child-0", 9, 9, 9, actual=9.0)
+            usage = session_usage(home.hermes, PARENT)
+        self.assertEqual(usage, {"model": "gpt-6-luna", "output": 630, "input": 120, "cache_read": 4_000,
+                                 "cache_write": 300, "cost_usd": 0.5})
+
+    def test_a_compacted_chat_adds_its_segments_and_loses_a_cost_one_segment_lacks(self) -> None:
+        with homes() as home:
+            home.session(PARENT, "gpt-6-luna", started=NOW)
+            home.rotate(PARENT, f"{PARENT}b", at=NOW + 30)
+            UsageTests.with_columns(home)
+            home.tokens(PARENT, 100)
+            home.tokens(f"{PARENT}b", 50)
+            UsageTests.count(home, PARENT, 100, 1_000, 50, actual=0.25)
+            UsageTests.count(home, f"{PARENT}b", 40, 3_000, 0)
+            usage = session_usage(home.hermes, PARENT)
+        self.assertEqual(usage, {"model": "gpt-6-luna", "output": 150, "input": 140, "cache_read": 4_000,
+                                 "cache_write": 50})
+
+    def test_an_estimated_cost_is_marked_and_an_unpriced_chat_has_none(self) -> None:
+        with homes() as home:
+            home.session(PARENT, "gpt-6-luna", started=NOW)
+            UsageTests.with_columns(home)
+            UsageTests.count(home, PARENT, 10, 20, 0, estimated=0.02)
+            estimated = session_usage(home.hermes, PARENT)
+            UsageTests.count(home, PARENT, 10, 20, 0)
+            unpriced = session_usage(home.hermes, PARENT)
+        self.assertEqual(estimated, {"model": "gpt-6-luna", "output": 0, "input": 10, "cache_read": 20,
+                                     "cache_write": 0, "cost_usd": 0.02, "cost_estimated": True})
+        self.assertEqual(unpriced, {"model": "gpt-6-luna", "output": 0, "input": 10, "cache_read": 20,
+                                    "cache_write": 0})
+
+    def test_a_state_db_without_the_columns_still_gives_the_output(self) -> None:
+        with homes() as home:
+            home.session(PARENT, "gpt-6-luna", started=NOW)
+            home.tokens(PARENT, 1_234)
+            usage = session_usage(home.hermes, PARENT)
+        self.assertEqual(usage, {"model": "gpt-6-luna", "output": 1_234})
+
+    def test_a_chat_with_no_row_or_no_count_or_no_database_has_no_figures(self) -> None:
+        with homes() as home:
+            self.assertIsNone(session_usage(home.hermes, "no-such-chat"))
+            home.session(PARENT, "gpt-6-luna", started=NOW)
+            self.assertIsNone(session_usage(home.hermes, PARENT))
+        self.assertIsNone(session_usage(Path("/nonexistent/hermes"), PARENT))
 
 
 class NoRaiseTests(unittest.TestCase):
