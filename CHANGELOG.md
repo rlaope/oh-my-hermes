@@ -528,6 +528,16 @@ All notable changes will be documented here.
   exactly as before. The operations family's card
   now also lists `operating-rhythm`, `ops-review` and `reliability-review`,
   which belonged to it but were missing from the card.
+- **A drag copy in the OMH TUI inside a herdr pane now reaches the clipboard
+  of the machine you are looking at, including over SSH.** herdr strips
+  TMUX from its panes and keeps the SSH variables its server started with,
+  so on a Mac the TUI used to put the copy on that Mac's own clipboard with
+  `pbcopy` and still say "copied", even for a person attached over SSH from
+  another machine. In a herdr pane the copy now goes out as OSC 52, which
+  herdr hands to its client's clipboard. A copy past the 192 KiB herdr takes
+  says it was not copied, and so does `/copy`. A tmux, screen or zellij
+  started inside the pane, or another terminal opened from it, keeps its own
+  rule. Reported by @foxion37 in #2672.
 - **Every arrow line in the per-turn primer names skills a model can load.**
   The generic tool map, workflow context cards and common cues named
   catalog names (`research`, `img-summary`) and shorthand that was no skill

@@ -29,7 +29,9 @@ from omh.tui.bot_board import BotBoard
 from omh.tui.clipboard import (
     COPY_OSC52,
     COPY_PBCOPY,
+    COPY_TOO_LARGE,
     COPY_UNCONFIRMED,
+    HERDR_CLIPBOARD_BYTES,
     PBCOPY_SECONDS,
     TMUX_QUERY_SECONDS,
     copy_route,
@@ -43,6 +45,7 @@ from omh.tui.style import Span
 from omh.tui.theme import DEFAULT_LAUNCH, DEFAULT_THEME, build_theme, on_band, with_prompt_band, without_colour
 from omh.tui.transcript import (
     NOTICE_ERROR,
+    NOTICE_INFO,
     NOTICE_OK,
     NOTICE_WARN,
     TOOL_ERROR,
@@ -67,6 +70,8 @@ BAR_GLYPHS = set("┃│▎▍▌▋▏▕▐┆┊╎║█")
 RAILED = (UserBlock, CommandBlock, AssistantBlock, ToolGroup, SteerBlock)
 REPLY = "first line of the reply\nsecond line"
 KITTY = {"TERM": "xterm-kitty"}
+# A herdr pane's own variables (herdr `src/pane.rs`): no TMUX, no SSH variables, whatever the client is.
+HERDR = {"TERM": "xterm-256color", "TERM_PROGRAM": "herdr", "HERDR_ENV": "1"}
 
 
 def every_block() -> list[object]:
@@ -266,6 +271,42 @@ class PagerDragTests(unittest.TestCase):
         self.assertEqual(osc52(app), ["first line of the reply"])
         self.assertEqual(drawn(app)[-1], "⚠ copy sent (terminal may not support OSC 52)")
 
+    def test_in_a_herdr_pane_on_a_local_mac_a_drag_goes_out_as_osc52_and_counts_as_copied(self) -> None:
+        # herdr strips TMUX and keeps the server's start env, so a pane on a Mac says nothing about a client over SSH.
+        app, copied = reply_app(HERDR, platform="darwin")
+        app.tmux_over_ssh = lambda environ: self.fail("asked tmux in a herdr pane")
+        drag(app, (1, row_of(app, "first line")), (60, row_of(app, "first line")))
+        self.assertEqual((osc52(app), copied), (["first line of the reply"], []))
+        self.assertTrue(any(text.startswith("\x1b]52;c;") for text in app.terminal.writes))  # type: ignore[attr-defined]
+        self.assertEqual(drawn(app)[-1], "✓ copied 23 chars to clipboard")
+
+    def test_in_a_herdr_pane_a_copy_past_what_herdr_takes_says_it_was_not_copied(self) -> None:
+        app, copied = reply_app(HERDR, platform="darwin")
+        at_most = app._copy_selection("é" * (HERDR_CLIPBOARD_BYTES // 2))  # two bytes each: right at the limit
+        self.assertEqual((at_most.text, at_most.level), (f"copied {HERDR_CLIPBOARD_BYTES // 2} chars to clipboard",
+                                                         "success"))
+        past = app._copy_selection("é" * (HERDR_CLIPBOARD_BYTES // 2) + "a")
+        self.assertEqual((past.text, past.level), ("not copied (herdr drops a copy over 192 KiB)", "warn"))
+        self.assertEqual(len(osc52(app)), 2)  # written all the same
+        self.assertEqual(copied, [])
+
+    def test_slash_copy_says_a_reply_past_what_herdr_takes_was_not_copied_where_herdr_takes_osc52(self) -> None:
+        cases = [
+            (HERDR, "", "Copied the last reply", NOTICE_INFO),
+            (HERDR, "a", "Not copied (herdr drops a copy over 192 KiB).", NOTICE_WARN),
+            ({**HERDR, "STY": "4242.pts-0.mac"}, "a", "Copied the last reply", NOTICE_INFO),  # screen's OSC 52 rules
+        ]
+        for environ, extra, said, level in cases:
+            with self.subTest(environ=environ, extra=extra):
+                app, _client = make_app(rows=12, cols=60, environ=environ)
+                app.transcript.blocks.append(AssistantBlock("é" * (HERDR_CLIPBOARD_BYTES // 2) + extra, done=True))
+                app._copy("")
+                notice = app.transcript.blocks[-1]
+                self.assertIsInstance(notice, NoticeBlock)
+                self.assertTrue(notice.text.startswith(said), notice.text)
+                self.assertEqual(notice.level, level)
+                self.assertEqual(len(osc52(app)), 1)
+
     def test_a_key_lets_the_selection_go(self) -> None:
         app, _copied = reply_app(KITTY)
         y = row_of(app, "first line")
@@ -294,6 +335,59 @@ class CopyRouteTests(unittest.TestCase):
         for environ, platform, route in cases:
             with self.subTest(environ=environ, platform=platform):
                 self.assertEqual(copy_route(environ, platform, lambda environ: False), route)  # tmux: a local client
+
+    def test_a_herdr_pane_with_no_multiplexer_inside_always_goes_out_as_osc52(self) -> None:
+        cases = [
+            (HERDR, "darwin"),
+            ({**HERDR, "SSH_CONNECTION": "10.0.0.2 5 10.0.0.1 22"}, "darwin"),
+            (HERDR, "linux"),
+            ({"TERM": "xterm-256color", "TERM_PROGRAM": "herdr"}, "darwin"),  # its TERM_PROGRAM alone
+            ({"TERM": "xterm-256color", "HERDR_ENV": "1"}, "darwin"),  # its own variable, no TERM_PROGRAM at all
+            ({**HERDR, "CURSOR_TRACE_ID": "leaked"}, "darwin"),  # `terminal_name` would say cursor
+        ]
+        for environ, platform in cases:
+            with self.subTest(environ=environ, platform=platform):
+                self.assertEqual(copy_route(environ, platform, lambda environ: self.fail("asked tmux")), COPY_OSC52)
+                self.assertEqual(copy_route(environ, platform, lambda environ: False, HERDR_CLIPBOARD_BYTES),
+                                 COPY_OSC52)
+                self.assertEqual(copy_route(environ, platform, lambda environ: False, HERDR_CLIPBOARD_BYTES + 1),
+                                 COPY_TOO_LARGE)
+
+    def test_a_tmux_inside_a_herdr_pane_keeps_the_tmux_rule(self) -> None:
+        asked: list[dict] = []
+
+        def over_ssh(answer: bool):
+            return lambda environ: asked.append(dict(environ)) is None and answer
+
+        nested = {**HERDR, "TERM_PROGRAM": "tmux", "TMUX": "/tmp/t,1,0"}
+        self.assertEqual(copy_route(nested, "darwin", over_ssh(True)), COPY_UNCONFIRMED)  # its last client is remote
+        self.assertEqual(copy_route(nested, "darwin", over_ssh(False)), COPY_PBCOPY)
+        self.assertEqual(copy_route(nested, "linux", over_ssh(False)), COPY_UNCONFIRMED)
+        self.assertEqual(len(asked), 2)  # asked on the Mac only, as outside herdr
+
+    def test_a_terminal_or_multiplexer_started_from_a_herdr_pane_keeps_its_own_route(self) -> None:
+        # `code .` or another terminal inherits HERDR_ENV and sets its own TERM_PROGRAM; herdr strips STY and ZELLIJ,
+        # so either one set is a screen or zellij started inside the pane, which keeps TERM_PROGRAM=herdr.
+        cases = [
+            ({"HERDR_ENV": "1", "TERM_PROGRAM": "vscode"}, "darwin", COPY_PBCOPY),
+            ({"HERDR_ENV": "1", "TERM_PROGRAM": "iTerm.app"}, "darwin", COPY_PBCOPY),
+            ({"HERDR_ENV": "1", "TERM_PROGRAM": "WezTerm"}, "darwin", COPY_OSC52),
+            ({**HERDR, "STY": "4242.pts-0.mac"}, "darwin", COPY_PBCOPY),
+            ({**HERDR, "STY": "4242.pts-0.mac"}, "linux", COPY_UNCONFIRMED),
+            ({**HERDR, "ZELLIJ": "0"}, "darwin", COPY_PBCOPY),
+            ({**HERDR, "ZELLIJ": "0", "SSH_CONNECTION": "10.0.0.2 5 10.0.0.1 22"}, "darwin", COPY_UNCONFIRMED),
+        ]
+        for environ, platform, route in cases:
+            with self.subTest(environ=environ, platform=platform):
+                self.assertEqual(copy_route(environ, platform, lambda environ: False), route)
+                self.assertEqual(copy_route(environ, platform, lambda environ: False, HERDR_CLIPBOARD_BYTES * 10), route)
+
+    def test_without_herdr_the_size_changes_no_route(self) -> None:
+        for environ, platform in (({"TERM": "xterm-kitty"}, "darwin"), ({"TERM_PROGRAM": "Apple_Terminal"}, "darwin"),
+                                  ({"TERM": "xterm-256color"}, "linux"), ({"HERDR_ENV": "0"}, "darwin")):
+            with self.subTest(environ=environ, platform=platform):
+                self.assertEqual(copy_route(environ, platform, lambda environ: False, HERDR_CLIPBOARD_BYTES * 10),
+                                 copy_route(environ, platform, lambda environ: False))
 
     def test_inside_tmux_pbcopy_waits_for_tmux_to_say_its_client_is_local(self) -> None:
         asked: list[dict] = []
