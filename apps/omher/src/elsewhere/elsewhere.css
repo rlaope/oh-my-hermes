@@ -1,0 +1,226 @@
+/* Elsewhere: header places chip, read-only away line + peek, Details panel lists. Ported from the sketch. */
+
+/* header chip */
+.ew-places {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  border-radius: var(--r);
+  border: 1px solid transparent;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex: none;
+}
+.ew-places:hover,
+.ew-places.on {
+  background: var(--raise);
+  border-color: var(--line);
+}
+.ew-pd {
+  display: flex;
+  gap: 3px;
+}
+
+/* source label: square + name */
+.ew-src {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex: none;
+}
+.ew-logo {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  object-fit: contain;
+}
+
+/* away line in the timeline */
+.ew-away {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ew-away-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+.ew-ttl {
+  color: var(--body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ew-tm {
+  color: var(--quiet);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex: none;
+}
+.ew-chev {
+  display: grid;
+  place-items: center;
+  color: var(--quiet);
+  transition: transform 0.2s;
+  flex: none;
+}
+.ew-away.open .ew-chev {
+  transform: rotate(90deg);
+}
+.ew-away-h:hover .ew-ttl {
+  color: var(--ink);
+}
+.ew-away-b {
+  margin: 4px 0 2px 3px;
+  padding: 8px 10px 4px 14px;
+  border-left: 1px solid color-mix(in srgb, var(--quiet) 50%, transparent);
+  background: color-mix(in srgb, var(--raise) 50%, transparent);
+  border-radius: 0 var(--r) var(--r) 0;
+}
+.ew-peek {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
+.ew-peek-m {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.ew-peek-m b {
+  font-weight: 600;
+  color: var(--body);
+  flex: none;
+  min-width: 42px;
+}
+.ew-peek-m span {
+  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.ew-peek-note {
+  font-size: 12px;
+  color: var(--quiet);
+}
+.ew-peek-f {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+  font-size: 11.5px;
+}
+.ew-open {
+  color: var(--body);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: default;
+}
+.ew-peek-f em {
+  font-style: normal;
+  color: var(--quiet);
+}
+
+/* Details panel */
+.ew-panel {
+  min-height: 0;
+}
+.ew-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+.ew-sec {
+  padding: 12px 16px 4px;
+  font-size: 10.5px;
+  color: var(--quiet);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  display: flex;
+}
+.ew-sec span {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ew-sess {
+  list-style: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 8px;
+}
+.ew-ss {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding: 7px 8px;
+  border-radius: var(--r);
+}
+.ew-ss.here {
+  background: var(--raise2);
+}
+.ew-ss .t1 {
+  color: var(--ink);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ew-ss .t2 {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ew-ss .st {
+  font-size: 11px;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ew-ss .st.run {
+  color: var(--muted);
+}
+.ew-ss .st.bad {
+  color: var(--danger);
+}
+.ew-ss.off .t1 {
+  color: var(--muted);
+}
+.ew-note {
+  margin: 6px 16px 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--body);
+}
+.ew-nw {
+  white-space: nowrap;
+}
+.ew-empty {
+  padding: 4px 16px;
+  font-size: 11.5px;
+  color: var(--quiet);
+}
