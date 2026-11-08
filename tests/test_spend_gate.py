@@ -340,6 +340,9 @@ class SpendGateContractTests(unittest.TestCase):
         for projection, body in _bodies().items():
             with self.subTest(projection=projection):
                 self.assertIn("A paid call billed to the person's own subscription credits or plan usage", body)
+                # The list is not closed: a codex text run is generated text, counted in calls.
+                self.assertIn("a transcription, generated text, or generated sound, music, or images", body)
+                self.assertIn("the calls, characters, seconds, or images it uses", body)
                 self.assertIn("read from the provider's own price for that model, or says the cost is unknown", body)
                 self.assertIn("when neither can be read it is charged with the amount unconfirmed", body)
                 # The general receipt rule and the checklist point at the credits receipt
@@ -402,11 +405,13 @@ class SpendGateContractTests(unittest.TestCase):
         # that needs no price: the planned count in the call's own units.
         for projection, reference in _references().items():
             with self.subTest(projection=projection):
+                rails = reference.split("## 1. Rails", 1)[1].split("## 2.", 1)[0]
+                self.assertIn("times the planned calls, characters, seconds, or images", rails)
                 ledger = reference.split("## 4. Cap ledger", 1)[1]
                 self.assertIn("the spend goes ahead only against a spend-only cap, one the person sets for this spend alone", ledger)
                 unknown_cost = (
                     "For a call whose own cost is unknown, because no price gives its credits or cost, the person sets a "
-                    "spend-only cap for this call alone in its own units (calls, images, characters, or seconds), and the planned "
+                    "spend-only cap for this spend alone in its own units (calls, images, characters, or seconds), and the planned "
                     "count is checked against it: the call runs only when the count fits"
                 )
                 self.assertIn(unknown_cost, ledger)

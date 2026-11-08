@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "8758bcdc786c7032404a507ec6ffe8eb00da751150a0f15aa91b0dc47d10f146",
+  "catalog_revision": "1a38e512c0e83b1a31d1b193d3af5dab0ad1f3134bd6ebd3d5ca831d1a765e1c",
   "files": {
     "omh-accessibility-audit/SKILL.md": "7f48005d7fd6e9e1b2b30f03eb412145e09971fcc629393a27c1a3c5e29d6cef",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -279,8 +279,8 @@
     "omh-source-finder/references/search-examples.md": "2dd2c4cb91f0388a3fcf5ba6fb13094bbc6234edab6dce28ac036334d3718821",
     "omh-source-finder/references/search-fields.md": "a237da3fc2ab1db91f86056bd53e95e860e130255d4461888607d7f4295e526f",
     "omh-source-finder/references/search-method.md": "21a9dd7a59e1b0941ab055c80089890679a394cc67fa4ae320358cd09043df1f",
-    "omh-spend-gate/SKILL.md": "64ddf4eb8ecc6a3283cac8b59ced559ae0d8d4487c164ac5fbd553f475a0ea5d",
-    "omh-spend-gate/references/spend-rails.md": "98d3b9cb0409a024e41921a6d30f1eca6d42432cb63f7474879c9c1d5b1de51a",
+    "omh-spend-gate/SKILL.md": "107bbb7b6cba70af478d4084d559c3bba34794b3b64dcc1a2643e4a9b0a29c74",
+    "omh-spend-gate/references/spend-rails.md": "039fead6caf736d20a9c6c1805ce4db221b7295ff25dc2e8b5807021683bd86d",
     "omh-sprite-forge/SKILL.md": "217808a2368281ae1133d72d88a29f68800146ecd781267f3e3f4d6b7e2c48fa",
     "omh-sprite-forge/references/character-art-direction.md": "4a27e23ecacd18452d5cfbf9955180d296ea6f96cdc7e305a9731866469685da",
     "omh-sprite-forge/references/execution-and-qa.md": "0fc4b018f0b8b5a79e3e607a698e9b658addb4f2c6805e1191609eb175a6ae2b",
