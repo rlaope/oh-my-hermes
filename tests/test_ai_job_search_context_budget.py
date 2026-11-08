@@ -34,7 +34,8 @@ INDEX_DELTA_CAP = 86  # One 85-character line and its joining newline.
 FULL_ROW_DELTA_CAP = 3072  # One 3070-character JSON row + comma/space.
 STANDALONE_ROW_DELTA_CAP = 935  # One 933-character row + comma/space.
 REGISTRY_DELTA_CAP = 244  # 227-character trigger row + 17-character role entry.
-REPEATED_DELTA_CAP = 1943  # Workflow Lane 497 + Runtime Evidence 1446.
+# 1943 -> 1627: the Runtime Evidence reply-voice paragraph became one line (1446 -> 1130).
+REPEATED_DELTA_CAP = 1627  # Workflow Lane 497 + Runtime Evidence 1130.
 
 
 def _digest(value: object) -> str:
@@ -220,7 +221,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # `omh-routing`, one character shorter than `oh-my-hermes`.
         # 496 -> 341: the lane line drops its sample of member names, which did not load.
         self.assertEqual(len(sections['Workflow Lane']), 341)
-        self.assertEqual(len(sections['Runtime Evidence']), 1446)
+        self.assertEqual(len(sections['Runtime Evidence']), 1130)
         self.assertLessEqual(len(feature[0].content.encode()), 5735)
         legacy_templates = [t for t in templates if t.name != FEATURE]
         legacy_hashes = {}
@@ -408,7 +409,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # pin was 51d4a5cf...9f51, and this branch's was a5bce194...90de.
         # A coding-owner choice then counts only for the request it was made in: only dag-ulw and maestro
         # move, and the pin before it was 62bebac1...bd0b.
-        self.assertEqual(_digest(legacy_hashes), 'c0b3ab76dcb31bce5335b26c34a03ad339b5e1e2c7e713aacd33b64355c6df31')
+        # Every body's reply-voice paragraph then becomes one line pointing at the shared rail, so every body
+        # moves; the pin before it was c0b3ab76...df31.
+        self.assertEqual(_digest(legacy_hashes), '4da0a2a3752ee2f732417d7c0e3e653fe6e491037720f37116e3fc79bf5af96c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -430,7 +433,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # github-issue-intake their own Completion Checklists, in place of the feature-surface defaults those
         # bodies repeated (-865).
         # 114629 -> 92262: the lane line's sample of member names was the same text in every lane mate.
-        self.assertEqual(legacy['repeated']['bytes'], 92262)
+        # 92262 -> 83098: every body's reply-voice paragraph became one line pointing at the shared rail.
+        self.assertEqual(legacy['repeated']['bytes'], 83098)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -464,8 +468,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1650000,  # Re-derived from 1499208 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
-            'full_profile_skill_body_repeated_chars': 110000,  # Re-derived from 94049 measured, +10%, up to the next 10,000.
+            'full_profile_skill_body_chars': 1600000,  # Re-derived from 1450927 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
+            'full_profile_skill_body_repeated_chars': 100000,  # Re-derived from 84569 measured, +10%, up to the next 10,000.
             'skill_density_filler_hits': 0,
         }
         metrics = {m.name: m for m in budget_metrics()}
