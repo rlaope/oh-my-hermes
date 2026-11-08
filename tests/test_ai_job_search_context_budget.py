@@ -393,9 +393,14 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # agent-instructions then names `ulw-context`, the label that loads, in place of `omh-context`
         # (same length); only that body moves, and the pin before it was 0ac3cd4c...17f7.
         # The routing reach round then moves the skills whose triggers or index text it narrows; the pin
-        # before it was 0ae5f905...ebc5f. Every body's reply-voice paragraph then becomes one line pointing at the
-        # shared rail, so every body moves; the pin before it was d4eb4e54...7ed7.
-        self.assertEqual(_digest(legacy_hashes), 'a248322d821ba7baadcaa34e2534ab667ed22ca5f3042004a9b80c8897fad92b')
+        # before it was 0ae5f905...ebc5f.
+        # memory-new's Reply then says a recapture retires the earlier held copy; only memory-new
+        # moves, and the pin before it was d4eb4e54...7ed7.
+        # ralplan's acceptance line says plan-accept refuses a scaffold-only file unless
+        # `--allow-scaffold`; only ralplan moves, and the pin before it was b36ad311...1e91. Every body's
+        # reply-voice paragraph then becomes one line pointing at the shared rail, so every body moves; the pin
+        # before it was 51d4a5cf...9f51.
+        self.assertEqual(_digest(legacy_hashes), '0db47bdc669ac8c5e5773a80d78f2b14dc670e9401916db7b2ee8476f3af2ac6')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

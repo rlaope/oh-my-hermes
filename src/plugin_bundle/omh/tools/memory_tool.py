@@ -772,6 +772,9 @@ def _map_capture_payload(payload: dict, lens: "_SessionLens | None" = None) -> d
         "record_id": str(record.get("record_id", "") or "") or None,
         "admission_state": _admission_state(record),
     }
+    if payload.get("retired_held_candidates"):
+        # Earlier held copies of this same summary, retired by this capture.
+        fields["retired_candidate_ids"] = [str(value) for value in payload["retired_held_candidates"]]
     new_id = str(record.get("record_id", "") or "") if payload.get("auto_approved") else ""
     hints, hint_action = _capture_hints(payload, candidate, new_id, lens)
     if not payload.get("captured"):
@@ -940,11 +943,15 @@ def _demote_entry(wanted: str, omh_home: Path, hermes_home: Path) -> dict[str, o
                 "refused", **fields, reason="previously_rejected", candidate_id=candidate_id,
                 next_action="A reviewer rejected this entry; keep it in Hermes.",
             )
-        if status in ("pending_review", "blocked_review_required"):
+        # A copy retired by a recapture lives on in its successor, so the entry
+        # is still held, not in an unknown state.
+        recaptured = status == "retired" and bool(candidate.get("recaptured_as"))
+        if status in ("pending_review", "blocked_review_required") or recaptured:
             return _demote_result(
                 "pending_review",
                 **fields,
                 candidate_id=candidate_id,
+                **({"recaptured_as": str(candidate["recaptured_as"])} if recaptured else {}),
                 next_action="A copy of this entry was already held and is not in memory; keep the Hermes entry.",
             )
         if status != "approved":
