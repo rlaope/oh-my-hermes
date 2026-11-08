@@ -558,6 +558,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.append(_agent_skills_pack_check())
     checks.append(_plugin_ulw_lifecycle_check(paths))
     checks.append(_omh_tui_check(paths))
+    checks.append(_tui_own_runtime_check(paths))
     checks.extend(_hermes_gateway_checks(paths))
     checks.append(_delegation_protocol_platform_check(paths))
     checks.append(_hermes_model_routing_check(paths))
@@ -749,6 +750,88 @@ def _omh_tui_check(paths: OmhPaths) -> Check:
         "omh_tui_support", True,
         "bare `omh` can open the OMH TUI: shim installed, Hermes launcher hook and gateway present, Node found"
         + versions,
+    )
+
+
+def _tui_own_runtime_check(paths: OmhPaths) -> Check:
+    """Where bare `omh` opens its sessions, and the state of the TUI's own runtime home when it has one.
+
+    Read-only (`tui_home_status`): the saved choice, the home's build marker,
+    its skill links, its `.env`, and the record of its gateway. On the shared
+    gateway the row says so and names the alternative. On the own runtime it
+    warns when the home is not built yet (the next `omh` builds it), was built
+    from another root than this doctor's Hermes home, has links to skills that
+    went, carries a messaging credential (a scrub that should never miss), or
+    runs a gateway with a messaging adapter connected, or was built from a root
+    config that connects a platform (never expected: the TUI runtime must not
+    poll a bot's token beside the bots' gateway). The home findings are
+    warnings, cleared by `omh update` or the next launch; a credential or an
+    adapter on the TUI runtime fails the row.
+    """
+    from ..skin_pack import RUNTIME_OWN, read_runtime_choice
+    from ..tui.own_runtime import tui_home_status
+
+    name = "omh_tui_runtime"
+    try:
+        status = tui_home_status(paths.omh_home, read_runtime_choice(paths.omh_home))
+    except OSError as error:
+        return Check(name, True, f"the TUI's own runtime home could not be read: {error}", observed=False)
+    if status.runtime != RUNTIME_OWN:
+        kept = f"; the TUI home at {status.home} is kept" if status.exists else ""
+        return Check(
+            name, True,
+            f"bare `omh` opens its sessions on the shared Hermes gateway (`omh theme runtime shared`){kept}",
+            detail={"runtime": status.runtime, "tui_home": str(status.home), "exists": status.exists},
+        )
+    detail: dict[str, object] = {
+        "runtime": status.runtime, "tui_home": str(status.home), "built_from": status.built_from,
+        "served": list(status.served), "skills": status.skill_count, "clashes": status.clash_count,
+        "broken_links": list(status.broken_links), "messaging_names": list(status.messaging_names),
+        "config_platform_credentials": list(status.config_platform_credentials),
+        "gateway_pid": status.gateway_pid, "platforms": list(status.platforms),
+    }
+    if not status.built:
+        return Check(
+            name, True, f"the TUI's own runtime home at {status.home} is not built yet", severity="warning",
+            next_action="run `omh` (bare) once, or `omh update`; either builds it from the root Hermes home",
+            detail=detail,
+        )
+    problems: list[str] = []
+    actions: list[str] = []
+    if Path(status.built_from).resolve() != Path(paths.hermes_home).resolve():
+        problems.append(f"built from {status.built_from}, not {paths.hermes_home}")
+        actions.append("run `omh update` to rebuild it from this Hermes home")
+    if status.broken_links:
+        problems.append(f"{len(status.broken_links)} skill link(s) point at skills that went ({', '.join(status.broken_links[:3])})")
+        actions.append("run `omh update` or `omh` to drop them")
+    credentials: list[str] = []
+    if status.messaging_names:
+        credentials.append(f"its .env carries messaging credentials ({', '.join(status.messaging_names[:3])})")
+        actions.append("run `omh update` to rebuild .env without them")
+    if status.config_platform_credentials:
+        credentials.append(f"the root config.yaml connects a platform ({', '.join(status.config_platform_credentials[:3])}), "
+                           "so bare `omh` opens on the shared gateway")
+        actions.append("move that platform's credentials out of the root config.yaml (a profile's config, or .env)")
+    if status.platforms:
+        credentials.append(f"its gateway reports messaging adapters connected ({', '.join(status.platforms)})")
+        actions.append("remove those credentials from the root .env or config, then `omh update`")
+    gateway = f"gateway running (pid {status.gateway_pid})" if status.gateway_live else "gateway not running (the next `omh` starts it)"
+    if credentials:
+        return Check(
+            name, False, f"the TUI's own runtime home at {status.home}: " + "; ".join([*credentials, *problems]) + f"; {gateway}",
+            next_action="; ".join(dict.fromkeys(actions)), detail=detail,
+        )
+    if problems:
+        return Check(
+            name, True, f"the TUI's own runtime home at {status.home}: " + "; ".join(problems) + f"; {gateway}",
+            severity="warning", next_action="; ".join(dict.fromkeys(actions)), detail=detail,
+        )
+    profiles = f" ({', '.join(status.served)} joined)" if status.served else ""
+    return Check(
+        name, True,
+        f"bare `omh` opens its sessions on the TUI's own Hermes runtime at {status.home}: built from "
+        f"{status.built_from}, {status.skill_count} skills{profiles}, no messaging credential; {gateway}",
+        detail=detail,
     )
 
 

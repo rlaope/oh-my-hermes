@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh update`, `omh doctor` and the menu bar know the TUI's own
+  runtime home.** Update rebuilds `<omh_home>/tui-home` when the runtime
+  choice is `own` or the home exists (the OMH plugin bundle it links moved
+  with the update); doctor's `omh_tui_runtime` row says which runtime bare
+  `omh` opens on and, for the own runtime, what the home was built from,
+  its skill count, links to skills that went, a messaging credential or a
+  connected adapter that should never be there, and whether its gateway
+  runs; the menu bar's settings carry `TUI runtime: own (gateway pid N)` or
+  `shared gateway`. From review: the skill union now links each skill at
+  its own `<category>/<skill>` path (a profile's skills inside a category
+  the root also has were dropped before), the messaging scrub matches by
+  prefix over every Hermes platform and strips the same names from the
+  TUI's process environment, a root `config.yaml` that connects a platform
+  keeps the launch on the shared gateway, `auth.json` is copied only when
+  the root's is newer, `--resume` opens where the session is whichever
+  runtime is chosen, and a credential on the TUI runtime fails the doctor
+  row.
 - **`omh theme runtime own` gives the OMH TUI a Hermes runtime of its own,
   so the bots' gateway restarts and drains never pause it.** Hermes serves
   every profile from one gateway per host and refuses its standalone entry
