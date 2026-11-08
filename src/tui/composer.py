@@ -409,6 +409,10 @@ def _first_blank_free(units: Sequence[str], start: int, end: int) -> int:
     return index if index < end else max(end - 1, start)
 
 
+_QUOTE_CHARS = ('"', "'", "`")
+_QUOTE_BLANKS = (" ", "\t")
+
+
 @dataclass(frozen=True)
 class _Register:
     """What a NORMAL deletion, change or yank took, for `p` and `P`: the text, its chips and images, and whether it
@@ -787,6 +791,14 @@ class Composer:
                 return self._normal_char(event.char)
             self._drop_pending()
             return NOTHING
+        if self._operator and self._prefix in ("i", "a"):
+            if event.name == CHAR:
+                if not (event.ctrl or event.alt):
+                    return self._normal_char(event.char)
+                if legacy_alt and event.char == "w":
+                    return self._normal_char(event.char)
+            self._drop_pending()
+            return NOTHING
         if is_leader_key(event) and not (self._operator or self._prefix):
             self._drop_pending()  # a count does not carry into a leader sequence
             self._leader = True
@@ -862,6 +874,8 @@ class Composer:
             self._drop_pending()
             if char == "w" and operator:
                 self._operate_span(operator, self._text_object_span(prefix, count))
+            elif char in _QUOTE_CHARS and operator:
+                self._operate_span(operator, self._quote_object_span(prefix, count, char))
             return NOTHING
         if prefix == "r":
             self._replace_chars(char, self._take_count() or 1)
@@ -1097,6 +1111,101 @@ class Composer:
                 while start > line_start and units[start - 1] in WORD_BREAKS:
                     start -= 1
         return start, end
+
+    def _quote_object_span(self, descriptor: str, times: int, q: str) -> tuple[int, int] | None:
+        """Line-local quoted text object (`i` or `a` with `"`, `'`, or `` ` ``) using atom indexes."""
+        if descriptor not in ("i", "a") or q not in _QUOTE_CHARS:
+            return None
+        units, _bounds, index = self._atoms()
+        line_start, line_end = _line_of(units, index)
+
+        def count_backslashes(pos: int) -> int:
+            b = 0
+            curr = pos - 1
+            while curr >= line_start and units[curr] == "\\":
+                b += 1
+                curr -= 1
+            return b
+
+        def find_escaped_closer(from_idx: int) -> int | None:
+            curr = from_idx
+            while curr < line_end:
+                u = units[curr]
+                if u == "\\":
+                    curr += 2
+                    continue
+                if u == q:
+                    return curr
+                curr += 1
+            return None
+
+        def find_raw_opener(from_idx: int) -> int | None:
+            curr = from_idx
+            while curr < line_end:
+                if units[curr] == q:
+                    return curr
+                curr += 1
+            return None
+
+        # Check if caret atom is exactly q
+        if index < line_end and units[index] == q:
+            # Enumerate pairs from line_start
+            found_pair: tuple[int, int] | None = None
+            scan_pos = line_start
+            while scan_pos < line_end:
+                open_pos = find_raw_opener(scan_pos)
+                if open_pos is None:
+                    break
+                close_pos = find_escaped_closer(open_pos + 1)
+                if close_pos is None:
+                    break
+                if open_pos <= index <= close_pos:
+                    found_pair = (open_pos, close_pos)
+                    break
+                scan_pos = close_pos + 1
+            if found_pair is None:
+                return None
+            open_idx, close_idx = found_pair
+        else:
+            # Backward scan strictly before index
+            cand = index - 1
+            open_idx: int | None = None
+            while cand >= line_start:
+                if units[cand] == q and (count_backslashes(cand) % 2 == 0):
+                    open_idx = cand
+                    break
+                cand -= 1
+            if open_idx is None:
+                open_idx = find_raw_opener(line_start)
+            if open_idx is None:
+                return None
+            close_idx = find_escaped_closer(open_idx + 1)
+            if close_idx is None:
+                return None
+
+        # Effective count and descriptor span calculation
+        count = min(times, VIM_COUNT_CAP)
+        if descriptor == "i":
+            if count >= 2:
+                return open_idx, close_idx + 1
+            return open_idx + 1, close_idx
+
+        # descriptor == "a"
+        # Includes delimiters plus contiguous trailing ASCII space/tab run;
+        # only if no trailing run, include contiguous preceding ASCII space/tab run.
+        start = open_idx
+        end = close_idx + 1
+        trailing_end = end
+        while trailing_end < line_end and units[trailing_end] in _QUOTE_BLANKS:
+            trailing_end += 1
+
+        if trailing_end > end:
+            return start, trailing_end
+
+        leading_start = start
+        while leading_start > line_start and units[leading_start - 1] in _QUOTE_BLANKS:
+            leading_start -= 1
+        return leading_start, end
 
     def _operate(self, operator: str, motion: str, times: int) -> None:
         """`d`, `c` or `y` over `motion` (`times` of it), or over `times` whole lines when `motion` is the operator."""

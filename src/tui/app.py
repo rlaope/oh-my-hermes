@@ -4491,7 +4491,10 @@ class App(ModesMixin, AgentViewMixin):
             self.composer._drop_pending()  # the picker owns input, including display keys that return below
         if self._display_key(event):
             return
-        if self.slot is None and self.composer.normal and self.composer._prefix in ("f", "F", "t", "T") and (
+        if self.slot is None and self.composer.normal and (
+            self.composer._prefix in ("f", "F", "t", "T")
+            or (bool(self.composer._operator) and self.composer._prefix in ("i", "a"))
+        ) and (
             self._front_picker() is None
         ):
             # A search target owns even global shortcuts; keep picker acquisition and Paste's usual route.
@@ -4502,6 +4505,8 @@ class App(ModesMixin, AgentViewMixin):
             if isinstance(event, Paste):
                 self.composer._drop_pending()
             else:
+                if isinstance(event, Key) and event.name == ESCAPE:
+                    self.escape_armed = None
                 self._on_composer(self._edit(self.composer, event), event)
                 return  # Composer keeps shared Ctrl undo/redo; every other non-target is consumed.
         if self.composer.leader and isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c":
@@ -4558,6 +4563,11 @@ class App(ModesMixin, AgentViewMixin):
             self._queue_head_steers()
         ):
             self._send_queued_now()
+            return
+        # If Composer has a pending command in Vim mode (count, operator, search, object prefix, or leader),
+        # Ctrl+C clears that pending command without clearing draft or exiting.
+        if isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c" and self.composer.pending:
+            self.composer._drop_pending()
             return
         # The second Ctrl+C leaves even over text while the info line names it (`_exit_said`): the queue an interrupt
         # gives back lands in the composer between the presses, and clearing it there would leave the TUI open. Any

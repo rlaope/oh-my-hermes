@@ -976,7 +976,7 @@ class PendingCharSearchShortcutTests(unittest.TestCase):
                 self.assertEqual(client.calls, [])
 
     def test_other_pending_commands_keep_global_shortcuts(self) -> None:
-        for command in ("d", "2d", "g", "r", "di"):
+        for command in ("d", "2d", "g", "r"):
             for event in (Key(CHAR, "t", ctrl=True), Key(TAB, shift=True)):
                 with self.subTest(command=command, event=event):
                     app, client = self.pending_app(command)
