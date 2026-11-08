@@ -1936,7 +1936,7 @@ def put_record(home, state: object) -> None:
 
 
 class ExportTests(unittest.TestCase):
-    """The coding owner the person already chose takes the coding nodes; everything else stays on delegate_task."""
+    """The coding owner the defining request named takes its coding nodes; everything else stays on delegate_task."""
 
     def _planned(self, home) -> dict:
         slots_table(home)  # ten free slots: the pool has room, and the coding nodes still go to the owner
@@ -2070,6 +2070,21 @@ class ExportTests(unittest.TestCase):
             later = call(action="export", run="next", owner="codex")
         self.assertEqual(ready["export"]["nodes"], ["api", "ui"])
         self.assertEqual(later["reason"], "owner_not_chosen")
+
+    def test_a_cancelled_run_is_not_defined_again_and_a_new_id_takes_the_owner(self) -> None:
+        # Mutation: let `define` reuse a cancelled run with the same nodes; it then answers "already defined" with
+        # no owners, and every later call is refused as cancelled.
+        with homes() as home:
+            call(action="define", run="feat", nodes=CODING)
+            call(action="cancel", run="feat")
+            choose(home, "codex")
+            again = call(action="define", run="feat", nodes=CODING)
+            fresh = call(action="define", run="feat-codex", nodes=CODING)
+            stored = json.loads(dag_run.record_path(home.omh, PARENT, "feat-codex").read_text(encoding="utf-8"))
+        self.assertEqual((again["status"], again["reason"]), ("refused", "run_cancelled"), again)
+        self.assertIn("new run id", again["say"])
+        self.assertEqual(fresh["status"], "ok", fresh)
+        self.assertEqual(stored["owners"], ["codex"])
 
     def test_a_run_record_keeps_only_known_owners(self) -> None:
         with homes() as home:

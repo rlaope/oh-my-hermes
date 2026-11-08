@@ -52,6 +52,8 @@ from ..routing.localization import normalized_phrase
 from ..routing.route_plan import public_workflow_identifier, with_public_skill_names
 from ..routing.route_question import apply_route_question_mode
 from ..plugin_bundle.omh.route_question_mode import read_route_question_mode
+from ..plugin_bundle.omh.capability_off import disabled_skill_families
+from ..routing.capability_off import CAPABILITY_NOTE_KEY, CAPABILITY_OFF_KEY
 from ..routing.policy import POINT_IN_TIME_WEB_GUARD
 from ..workflows.realtime_voice_trial_receipts import build_prepared_realtime_voice_chat_state
 from ..workflows.temporal_source_receipts import (
@@ -119,6 +121,7 @@ from .domain_context_attachment import (
 from ..skills.expert_question_rendering import domain_expert_question_body
 from .localized_copy import (
     SUPPORTED_COPY_LOCALES,
+    capability_note_sentence,
     chat_copy,
     consolidation_notice_line,
     detect_copy_locale,
@@ -167,7 +170,6 @@ VISIBLE_ACTIONS = (
     "prepare_handoff",
     "prepare_project_terms_context",
     "choose_executor",
-    "reset_coding_owner_preference",
     "show_prompt_handoff",
     "copy_prompt_handoff",
     "copy_fanout_resume",
@@ -5748,6 +5750,9 @@ def _build_chat_interaction_payload_uncached(
         include_message=include_message,
         skill_policy=skill_policy,
         active_design_direction_iteration=design_direction_iteration_context,
+        # The families this home turned off, read per call from the field the
+        # memory tool reads: a profile-scoped home is another file.
+        disabled_skills=disabled_skill_families(paths.omh_home) if paths is not None else None,
     )
     resolved_mode = _resolve_mode(mode, route_payload, message=message)
     domain_context = None
@@ -5779,6 +5784,17 @@ def _build_chat_interaction_payload_uncached(
             legacy_thread_key=str(base["thread_key"]),
         )
         base["platform"] = platform_envelope
+    capability_off = route_payload.get(CAPABILITY_OFF_KEY)
+    if isinstance(capability_off, dict):
+        # The person asked for work whose family this home turned off. The
+        # answer says so and names the command that turns it back on; no
+        # picker, plan, handoff or other workflow is offered in its place.
+        base["route"] = route_payload
+        base["chat_response"] = _capability_off_response(
+            capability_off, reason=str(route_payload.get("reason", "")), thread_key=str(base["thread_key"])
+        )
+        base["next_action"] = "show_command_preview"
+        return _finish_interaction(base, target_notice)
     is_catalog_question = _is_generic_skill_catalog_route(message, route_payload)
     if is_catalog_question and _route_recommendation_next_action(route_payload) != "show_command_preview":
         route_payload = _catalog_question_route_payload(route_payload)
@@ -6040,16 +6056,9 @@ def _resolve_delegate_executor_target(executor_target: str, paths: OmhPaths | No
         resolved = setup_default
         source = "setup_profile"
     else:
-        learned = resolve_coding_route_decision(
-            normalized_phrase(message),
-            owner_preference_state=read_owner_preference(paths) if paths else None,
-        )
-        if learned.source == "learned_owner_preference":
-            resolved = learned.selected_owner
-            source = "learned_owner_preference"
-        else:
-            resolved = "choose"
-            source = "caller_default"
+        # An earlier request's choice never selects the owner: the person chooses again.
+        resolved = "choose"
+        source = "caller_default"
 
     return resolved, {
         "schema_version": "executor_resolution/v1",
@@ -6103,9 +6112,9 @@ def _attach_coding_owner_handoff(
         # Narrower than `force_coding_handoff` above (which this call always
         # sets): only "explicit" (an operator/CLI-named owner) and
         # "message_mention" (named in the chat message text) are a genuine
-        # per-run owner choice. "setup_profile", "learned_owner_preference",
-        # and "caller_default" are resolved defaults, never a choice for this
-        # run, so they never bypass the intent-genre veto.
+        # per-run owner choice. "setup_profile" and "caller_default" are
+        # resolved defaults, never a choice for this run, so they never bypass
+        # the intent-genre veto.
         explicit_owner_choice=executor_resolution.get("source") in {"explicit", "message_mention"},
         preferred_workflow=str(route_payload.get("selected_skill", "")),
         preferred_workflow_score=_intish(route_payload.get("score", 0)),
@@ -6215,27 +6224,9 @@ def _owner_preference_state(delegation: Mapping[str, object]) -> dict[str, objec
     }
 
 
-def _append_owner_preference_actions(
-    actions: list[dict[str, object]],
-    delegation: Mapping[str, object],
-    *,
-    before_last: bool = False,
-) -> None:
-    decision = _nested(delegation, "coding_route_decision")
-    if not decision.get("owner_preference_override_available"):
-        actions.append(_action("choose_executor", "Change coding agent", "secondary"))
-        return
-    owner_actions = [
-        _action("choose_executor", "Override learned coding agent", "secondary"),
-        _action(
-            "reset_coding_owner_preference",
-            "Reset learned coding agent",
-            "secondary",
-            payload={"route_family": decision.get("owner_preference_route_family", "")},
-        ),
-    ]
-    insertion = max(0, len(actions) - 1) if before_last else len(actions)
-    actions[insertion:insertion] = owner_actions
+def _append_owner_preference_actions(actions: list[dict[str, object]]) -> None:
+    """The person can always change the coding agent; no learned default exists to override or reset."""
+    actions.append(_action("choose_executor", "Change coding agent", "secondary"))
 
 
 def _delegation_next_action(delegation: dict[str, object]) -> str:
@@ -8225,7 +8216,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                     },
                 )
             )
-        _append_owner_preference_actions(actions, delegation_payload)
+        _append_owner_preference_actions(actions)
         actions.append(_action("show_status", "Show status", "secondary"))
         next_action = "show_coding_handoff_status" if status_request else "send_to_executor"
         actions, next_action = _apply_action_gate_arbitration(actions, next_action, gate)
@@ -8292,7 +8283,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 _action("copy_prompt_handoff", f"Copy {label} prompt", "secondary", payload={"selected_executor_profile": selected}),
             ]
         )
-        _append_owner_preference_actions(actions, delegation_payload)
+        _append_owner_preference_actions(actions)
         if status_request:
             actions.append(
                 _action(
@@ -8383,7 +8374,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
             _action("start_swarm", "Start swarm", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
             _action("show_status", "Show status", "secondary"),
         ]
-        _append_owner_preference_actions(runtime_actions, delegation_payload, before_last=True)
+        _append_owner_preference_actions(runtime_actions)
         runtime_next_action = "show_coding_handoff_status" if status_request else "show_runtime_handoff"
         runtime_actions, runtime_next_action = _apply_action_gate_arbitration(runtime_actions, runtime_next_action, gate)
         return _chat_response(
@@ -8441,9 +8432,6 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "in parallel. Main coding stays delegated."
             )
         owner_preference_state = _owner_preference_state(delegation_payload)
-        reset_reason = str(owner_preference_state.get("owner_preference_reset_reason", ""))
-        if reset_reason:
-            body = f"{body} The learned coding-agent streak was reset: {reset_reason}."
         choice_actions, choice_next_action = _apply_action_gate_arbitration(
             [
                 _action("choose_executor", "Choose coding agent", "primary"),
@@ -9458,6 +9446,41 @@ def enhance_chat_interaction_with_routing_observation(
     return updated
 
 
+def _capability_off_response(record: Mapping[str, object], *, reason: str, thread_key: str) -> dict[str, object]:
+    command = str(record.get("enable_command", ""))
+    return _chat_response(
+        kind="capability_family_off",
+        headline=f"The {record.get('family_label', '')} capability family is turned off in this OMH home.",
+        body=reason,
+        phase="capability_family_off",
+        next_action="show_command_preview",
+        thread_key=thread_key,
+        actions=[_action("show_command_preview", "Turn it back on", "primary", payload={"command": command})],
+        claim_boundary="Nothing was dispatched; the family stays off until the command runs.",
+        extra_state={"capability_family_off": dict(record)},
+    )
+
+
+def _chat_response_with_capability_note(response: dict[str, object], note: Mapping[str, object]) -> dict[str, object]:
+    """The reply with the turned-off-family sentence in its body's own language, once.
+
+    The English clarification already says it and names the command; a
+    localized body (Korean, Japanese, ...) replaces that text, so it gets the
+    sentence in the language the body is written in, read from the body itself.
+    """
+    command = str(note.get("enable_command") or "")
+    body = str(response.get("body") or "")
+    if not command or command in body:
+        return response
+    sentence = capability_note_sentence(
+        detect_copy_locale(f"{response.get('plain_headline') or ''} {body}"),
+        skill=str(note.get("workflow") or ""),
+        family=str(note.get("family_label") or ""),
+        command=command,
+    )
+    return {**response, "body": f"{body}\n\n{sentence}" if body else sentence}
+
+
 def _finish_interaction(payload: dict[str, object], target_notice: dict[str, object] | None) -> dict[str, object]:
     if target_notice:
         payload["target_notice"] = target_notice
@@ -9467,6 +9490,14 @@ def _finish_interaction(payload: dict[str, object], target_notice: dict[str, obj
     response = payload.get("chat_response")
     if isinstance(response, dict):
         response = _chat_response_with_route_explanation(response, _nested(payload, "route"))
+        # A clarify whose best match is in a turned-off family carries that
+        # note on the reply in every language, not only in the English
+        # clarification text a localized body replaces.
+        capability_note = _nested(payload, "route").get(CAPABILITY_NOTE_KEY)
+        state = response.get("state")
+        if isinstance(capability_note, dict) and isinstance(state, dict):
+            state[CAPABILITY_NOTE_KEY] = dict(capability_note)
+            response = _chat_response_with_capability_note(response, capability_note)
         # A retired-engine alias route (#954 stage 5) shows exactly one line on
         # the status card -- the capability reason -- while the full
         # machine-readable selection stays on `route.alias_resolution` (Q5).

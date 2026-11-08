@@ -1547,9 +1547,9 @@ _DEFINITIONS = [
         quality_bar=(
             "Planning is not execution permission. Handoff requests authorize preparation only; explicit execution "
             "requests authorize only their scope, subject to readiness and permission probes. Clarify missing authority.",
-            "Require an explicit owner choice made in this request: named in it, or confirmed when asked. A choice "
-            "counts only for the request it was made in; an earlier request's owner, a recorded or learned owner, "
-            "recommendations and plan mentions do not count, so ask again. "
+            "Require an explicit owner choice made in this request: named in it, or confirmed when asked; a "
+            "default the person set in the setup profile also stands. A choice counts only for the request it was "
+            "made in: an earlier request's owner, recommendations and plan mentions do not count, so ask again. "
             "For a missing, ambiguous or unready owner, ask `choose_executor` once and stop; never choose for the user.",
             "Owner selection alone is not dispatch permission: `prepare a Codex handoff only` or `use Codex, "
             "do not dispatch` stays preparation-only. `Use Codex to implement this now` supplies both the owner "

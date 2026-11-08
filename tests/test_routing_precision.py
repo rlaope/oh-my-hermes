@@ -101,7 +101,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # intervention corpus.
         # Its review round adds twenty-four controls with an ordinary
         # statistics, 3D, game, signal or know-how word beside a shared phrase.
-        self.assertEqual(payload["summary"]["case_count"], 1490)
+        # Its second review round adds eighteen: billions that are money, data or
+        # volume, game and 3D bit widths, grid transformers, firmware quantization.
+        self.assertEqual(payload["summary"]["case_count"], 1508)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -267,7 +269,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # model-compression adds eight compression requests and three owner-keeping controls.
         # Its review round adds eight requests that missed: GGUF and 4-bit Korean
         # quantization, distillation by parameter count, a llama model slimmed.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1300)
+        # Its second review round drops the Korean 4-bit case, which falls back to main.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1299)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

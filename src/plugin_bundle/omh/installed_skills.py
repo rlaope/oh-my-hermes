@@ -30,14 +30,14 @@ own cached resolution in this process.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 import json
 import os
 from pathlib import Path, PurePosixPath
 import sys
 
 from .skill_ownership import skill_directories
-from .skill_shortlist import catalog_skill_names
+from .skill_shortlist import catalog_skill_label, catalog_skill_names
 
 MANIFEST_NAME = "manifest.json"
 SKILL_FILE = "SKILL.md"
@@ -246,6 +246,25 @@ def skill_not_installed(name: str, installed: frozenset[str] | None) -> bool:
     return catalog is not None and name in catalog
 
 
+def routable_skill_names(
+    installed: frozenset[str] | None, disabled: Mapping[str, str]
+) -> frozenset[str] | None:
+    """`installed`, less every skill of a turned-off capability family (`capability_off`).
+
+    Nothing turned off returns `installed` itself, so a home with no policy
+    renders what it rendered before. With a family off and the installed set
+    unknown, the whole catalog stands in for it, so the turned-off skills are
+    still left out; without a catalog sidecar there is nothing to cut from.
+    """
+    if not disabled:
+        return installed
+    base = installed if installed is not None else catalog_skill_names()
+    if base is None:
+        return None
+    off = {alias for name in disabled for alias in (name, catalog_skill_label(name)) if alias}
+    return frozenset(name for name in base if name not in off)
+
+
 def reset_installed_skill_cache() -> None:
     global _cache, _loadable_cache
     _cache = None
@@ -266,6 +285,7 @@ __all__ = [
     "installed_skill_labels",
     "installed_skill_names",
     "reset_installed_skill_cache",
+    "routable_skill_names",
     "skill_label_copies",
     "skill_not_installed",
 ]

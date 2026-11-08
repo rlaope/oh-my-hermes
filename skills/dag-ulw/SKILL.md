@@ -106,7 +106,7 @@ Quality bar:
 
 Handoff policy:
 
-Hermes owns the plan, the dispatch, the settling and the verdict; every node runs as Hermes' own `delegate_task` child, routed per category with `omh_delegate_route`. OMH's `omh_dag` tool keeps the graph, and only its calls start nodes: a `delegate_task` without the `[dag:<run>/<node>]` marker it returned is no node of the run. Coding nodes go to an external coding CLI only when the person named that owner in the dag-ulw request that defines the run; a choice counts only for the request it was made in, so an earlier request's choice, `omh chat` or `omh coding` does not count. Then `omh_dag` lists each owner's nodes under `exports`. Otherwise no external CLI runs.
+Hermes owns the plan, the dispatch, the settling and the verdict; every node runs as Hermes' own `delegate_task` child, routed per category with `omh_delegate_route`. OMH's `omh_dag` tool keeps the graph, and only its calls start nodes: a `delegate_task` without the `[dag:<run>/<node>]` marker it returned is no node of the run. Coding nodes go to an external coding CLI only when the person named that owner in a request that invokes dag-ulw and defines the run; a choice counts only for the request it was made in, so an earlier request's choice, `omh chat` or `omh coding` does not count. Then `omh_dag` lists each owner's nodes under `exports`. Otherwise no external CLI runs.
 
 Required inputs:
 

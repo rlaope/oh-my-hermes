@@ -315,9 +315,16 @@ def _family_payload(
     source_lanes = _string_tuple(definition.get("source_lanes", ()))
     source_workflows = _source_workflows(source_lanes, lane_by_id, available)
     family_id = str(definition["id"])
+    # A skill whose catalog family differs from its awareness lane's family is
+    # listed here too. The plugin bundle reads this list as the family's whole
+    # membership when a family is turned off, and a skill held only in
+    # `workflow_to_family` would keep routing after its family was disabled.
+    overridden = [workflow for workflow, owner in sorted(_workflow_family_overrides().items()) if owner == family_id]
     primary_workflows = [
         workflow
-        for workflow in _dedupe([*_string_tuple(definition.get("primary_workflows", ())), *source_workflows])
+        for workflow in _dedupe(
+            [*_string_tuple(definition.get("primary_workflows", ())), *source_workflows, *overridden]
+        )
         if workflow in available and _workflow_belongs_to_family(workflow, family_id, source_lanes)
     ]
     payload = {

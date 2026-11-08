@@ -160,13 +160,17 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 537829 -> 538004 and the digest re-derived: a coding-owner choice counts only for the request it was
             # made in, in the dag-ulw and maestro rows (+175, itemized at the same limit); the pin before it was
             # c5c17f84...2eb0.
+            # 538004 -> 538044 and the digest re-derived: no learned coding-owner default; the maestro and dag-ulw
+            # rows say which choice stands (+40, itemized at the same limit); the pin before it was cbc66058...36bc.
             # model-compression adds one row to each producer (+3975 full, +947
             # standalone); dropping only that row reproduces c5c17f84...62eb0 and
             # 5f2c0396...52d48 at the old bases 537829 and 144536.
             # Merged with main: 538004 + 3975 = 541979; dropping only the
             # model-compression row reproduces main's cbc66058...36bc.
-            (skill_capabilities, 541979, FULL_ROW_DELTA_CAP,
-             '1258e7e1391eb1d56e08e9417bc4d4ae430f92a31346335aeb9cc2c119c0cd11',
+            # Merged with main again: 538044 + 3975 = 542019; dropping only the
+            # model-compression row reproduces main's 3cb600bd...e829.
+            (skill_capabilities, 542019, FULL_ROW_DELTA_CAP,
+             '4fff984f2984445112daabeb15919cd7ac283527ed42b13267aa549eead1c1d6',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -423,6 +427,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # move, and the pin before it was 62bebac1...bd0b.
         # Every body's reply-voice paragraph then becomes one line pointing at the shared rail, so every body
         # moves; the pin before it was c0b3ab76...df31.
+        # No learned coding-owner default then: only dag-ulw and maestro move, and the pin before it was
+        # 4da0a2a3...f96c. Its review then lists the shared rail among omh-routing's own references, which its
+        # one-line reply rule names; only that body moves, and the pin before it was 8484c56d...21dd.
         # Re-derived for model-compression: its body joins the legacy set, and
         # inference-serving, model-finetuning, model-optimization and
         # rules-distill each gain one Do Not Use line naming it. Without the new
@@ -431,7 +438,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 62bebac1...7abd0b, and this branch's was a25a40f0...19bb2.
         # Merged with main again: main's pin was 4da0a2a3...f96c, and this
         # branch's was bdc90eb3...b8a4.
-        self.assertEqual(_digest(legacy_hashes), '43186eb67208f5215798aceca101725ff21d48b837c860607533e8db318cb987')
+        # Merged with main a third time: main's pin was 15b8c2cd...9716, and this
+        # branch's was 43186eb6...b987.
+        self.assertEqual(_digest(legacy_hashes), '758d8116dbdf5811dc81aee0ef5e70a78c463c0d7b3b5d4400254d0232949152')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

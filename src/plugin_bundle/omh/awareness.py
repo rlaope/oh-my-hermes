@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import lru_cache
 import hashlib
 import re
@@ -39,6 +39,7 @@ from .hermes_session_commands import (
     loop_timer_verdict,
     person_request_text,
 )
+from .capability_off import capability_off_sentence
 from .installed_skills import skill_not_installed
 from .native_tools import NATIVE_TODO_TOOL, OMH_TODO_HELD_PLANS, native_tool_presence_clause
 from .spend_signals import SPEND_GATE_PHRASES, spend_request_phrases
@@ -6735,6 +6736,75 @@ def route_hint_for_installed_skills(
     if installed is None:
         return payload
     return _route_hint_without(payload, lambda name: skill_not_installed(name, installed))
+
+
+def route_hint_without_disabled_skills(
+    payload: dict[str, object], disabled: Mapping[str, str]
+) -> dict[str, object]:
+    """The route hint with every skill of a turned-off capability family left out (`capability_off`).
+
+    Left out the way an uninstalled skill is: a selected hint goes whole and
+    the next becomes `selected=`; adjacent workflows are cut per hint. Hint
+    workflows may be display labels (`ulw-plan`), so each is read back to its
+    workflow name first. Nothing turned off returns the payload unchanged.
+    """
+    if not disabled:
+        return payload
+    names = _canonical_workflow_by_display_name()
+    return _route_hint_without(payload, lambda name: names.get(name, name) in disabled)
+
+
+def route_hint_withheld(payload: dict[str, object]) -> dict[str, object]:
+    """The route hint with every hint left out: the `no_hint` shape a request answered elsewhere renders."""
+    return _route_hint_without(payload, lambda name: True)
+
+
+CAPABILITY_OFF_HINT_HEAD = "[OMH Capability Off]"
+
+
+def capability_family_verdict(message: str, disabled: Mapping[str, str]) -> dict[str, object]:
+    """The router's verdict on a turned-off family for `message` (`routing.chat.capability_family_verdict`).
+
+    `{"verdict": "off" | "note", ...record}` or `{}`. A standalone host has no
+    router to ask and gets `{}`: the turned-off skills are still cut from the
+    hint, and the turn adds nothing.
+    """
+    if not disabled or not message.strip():
+        return {}
+    try:
+        from ...routing.chat import capability_family_verdict as router_verdict
+    except ImportError:
+        try:
+            from omh.routing.chat import capability_family_verdict as router_verdict
+        except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
+            return {}
+    return router_verdict(message, disabled)
+
+
+def capability_off_block(verdict: Mapping[str, object]) -> str:
+    """The turn's block for an "off" verdict, or "".
+
+    Only "off": the router decides, not the hint rail, which names skills on
+    medium evidence too. A "note" verdict (an open question) adds no block,
+    because 23 to 261 negative controls per family get one; the turn
+    withholds its route hint and candidate line instead.
+    """
+    if verdict.get("verdict") != "off":
+        return ""
+    workflow = str(verdict.get("workflow") or "")
+    family_id = str(verdict.get("family") or "")
+    if not workflow or not family_id:
+        return ""
+    return (
+        f"{CAPABILITY_OFF_HINT_HEAD} {capability_off_sentence(workflow, family_id)} "
+        "Do not load it or hand the request to another workflow; tell the person the family is off "
+        "and give them that command."
+    )
+
+
+def capability_off_hint_context(message: str, disabled: Mapping[str, str]) -> str:
+    """`capability_off_block` for `message`: the turn's "off" block, or ""."""
+    return capability_off_block(capability_family_verdict(message, disabled))
 
 
 def route_hint_without_engine_workflows(payload: dict[str, object]) -> dict[str, object]:

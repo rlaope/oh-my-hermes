@@ -88,11 +88,19 @@ class GatewayUnavailable(RuntimeError):
 class GatewayCallError(RuntimeError):
     """The gateway answered a call with a JSON-RPC error."""
 
-    def __init__(self, method: str, code: object, message: str) -> None:
+    def __init__(self, method: str, code: object, message: str, data: Mapping[str, Any] | None = None) -> None:
         super().__init__(f"{method} failed ({code}): {message}")
         self.method = method
         self.code = code
         self.message = message
+        self.data: Mapping[str, Any] = data or {}
+
+    @property
+    def reason(self) -> str:
+        """Hermes' refusal reason: the error's `data.reason` (its session API's `RuntimeStoreError`), else the
+        message, which the same refusals carry it in as well."""
+        reason = self.data.get("reason")
+        return reason if isinstance(reason, str) and reason else self.message
 
     @property
     def drift(self) -> bool:
@@ -333,7 +341,9 @@ class GatewayClient:
         if response is None:
             raise GatewayTimeout(method, timeout)
         if response.error is not None:
-            raise GatewayCallError(method, response.error.get("code"), str(response.error.get("message", "")))
+            data = response.error.get("data")
+            raise GatewayCallError(method, response.error.get("code"), str(response.error.get("message", "")),
+                                   data if isinstance(data, Mapping) else None)
         return response.result or {}
 
     def respond(self, request_id: str, frame: dict[str, Any]) -> None:

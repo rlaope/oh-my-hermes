@@ -5,13 +5,17 @@ from ..plugin_bundle.omh.awareness import (
     awareness_generic_tool_checkpoint_payload,
     awareness_route_hint,
     awareness_route_hint_context_from_payload,
+    route_hint_withheld,
+    route_hint_without_disabled_skills,
 )
+from ..plugin_bundle.omh.capability_off import disabled_skill_families
 from ..plugin_bundle.omh.degradation import degradation_chat_note
 from ..plugin_bundle.omh.hermes_session_commands import host_command_turn, host_context_removed, person_request_text
 from ..plugin_bundle.omh.route_answerers import answerer_ladder
 from ..plugin_bundle.omh.route_question_mode import ROUTE_QUESTION_MODE_OFF, read_route_question_mode
 from ..routing.catalog_questions import is_skill_catalog_question
 from ..routing.action_copy import next_action_label
+from ..routing.capability_off import CAPABILITY_OFF_KEY
 from ..routing.chat import DIRECT_ANSWER_REASON_CODES, route_chat_message
 from ..routing.reference_regions import executable_routing_text
 
@@ -71,13 +75,20 @@ def build_chat_route_hint_payload(
     )
     route_hint = awareness_route_hint(hint_message, max_hints=max_hints, context_removed=host_context_removed(message))
     route_hint = _route_hint_with_catalog_picker(route_hint, hint_message)
-    route = route_chat_message(message, source=source, limit=max_hints)
+    # A capability family this home turned off is neither hinted nor routed,
+    # and a request the router answers "this family is off" gets no hint.
+    omh_home = getattr(paths, "omh_home", None) if paths is not None else None
+    disabled = disabled_skill_families(omh_home) if omh_home else {}
+    route = route_chat_message(message, source=source, limit=max_hints, disabled_skills=disabled or None)
+    if disabled:
+        route_hint = route_hint_without_disabled_skills(route_hint, disabled)
+        if CAPABILITY_OFF_KEY in route:
+            route_hint = route_hint_withheld(route_hint)
     route_decision = route["route_decision"]
     route_question = route.get("route_question")
     route_question = route_question if isinstance(route_question, dict) else None
     # Only with an OMH home is there a config to read; `off` withholds the
     # question here exactly as it does on the interaction payload.
-    omh_home = getattr(paths, "omh_home", None) if paths is not None else None
     if omh_home and read_route_question_mode(omh_home)["mode"] == ROUTE_QUESTION_MODE_OFF:
         route_question = None
     generic_tool_checkpoint = _generic_tool_checkpoint()

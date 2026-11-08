@@ -607,6 +607,28 @@ def card_copy_voice_violations(
     return tuple(violations)
 
 
+# The sentence a clarification's body gains when its best match is in a
+# capability family this OMH home turned off. A localized body replaces the
+# English clarification that already says it, so without this a Korean reader
+# was never told. `{skill}`, `{family}` and `{command}` are filled in; the
+# family label stays its product name in every language.
+CAPABILITY_NOTE_SENTENCES: dict[str, str] = {
+    "en": "If you meant the work `{skill}` does, the {family} capability family is turned off in this OMH install; `{command}` turns it back on.",
+    "ko": "`{skill}` 작업을 원하셨다면, 이 OMH 설치에서 {family} 기능 묶음이 꺼져 있습니다. `{command}`로 다시 켤 수 있습니다.",
+    "ja": "`{skill}` の作業をお求めでしたら、この OMH では {family} の機能群がオフになっています。`{command}` で再びオンにできます。",
+    "zh": "如果需要 `{skill}` 的功能，此 OMH 中的 {family} 功能组已关闭；运行 `{command}` 即可重新开启。",
+    "es": "Si buscabas el trabajo de `{skill}`, la familia {family} está desactivada en este OMH; `{command}` la vuelve a activar.",
+    "fr": "Si vous cherchiez le travail de `{skill}`, la famille {family} est désactivée dans cet OMH ; `{command}` la réactive.",
+    "de": "Falls die Arbeit von `{skill}` gemeint war: Die Familie {family} ist in diesem OMH ausgeschaltet; `{command}` schaltet sie wieder ein.",
+}
+
+
+def capability_note_sentence(locale: str, *, skill: str, family: str, command: str) -> str:
+    """The turned-off-family sentence in `locale`, English for an unsupported one."""
+    template = CAPABILITY_NOTE_SENTENCES.get(_normalize_locale(locale), CAPABILITY_NOTE_SENTENCES["en"])
+    return template.format(skill=skill, family=family, command=command)
+
+
 # One line per recovery-action id, per locale, in the `_CARD_COPY` shape and
 # with the same English fallback.
 #

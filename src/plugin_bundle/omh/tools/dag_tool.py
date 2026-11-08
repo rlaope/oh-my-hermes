@@ -181,7 +181,7 @@ OMH_DAG_SCHEMA = {
                 "description": "settle failed: the child died on a provider error (an HTTP 400, no model call).",
             },
             "owner": {"type": "string", "enum": list(EXTERNAL_OWNERS),
-                      "description": "export: the coding owner the person already chose."},
+                      "description": "export: a coding owner named in the run's request."},
             "spawn_plan": {"type": "object"},
         },
         "required": ["action"],
@@ -423,6 +423,10 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
     found = _find(omh_home, segments, run)
     if found is not None:
         existing, path = found
+        if existing.get("cancelled_at") is not None:
+            # Reusing it would hand back a run every later call refuses as cancelled, and keep its old owners.
+            raise dag_run.DagRefusal(
+                "run_cancelled", f"Run {run} was cancelled; define the work again under a new run id.")
         if existing.get("digest") != record["digest"]:
             raise dag_run.DagRefusal(
                 "run_exists",
@@ -1071,7 +1075,7 @@ def export_units(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
     that waits on a native or another owner's node goes in a later batch,
     once that node settled.
     """
-    # The pure helper keeps its legacy single-owner default; the tool passes the actual main-family choice (or "").
+    # The pure helper keeps its legacy single-owner default; the tool always passes "", so a node names its owner.
     default_owner = owner if default_owner is None else default_owner
     candidates = {str(node["id"]): node for node in record["nodes"]
                   if dag_run.is_coding(node) and node.get("owner", default_owner) == owner

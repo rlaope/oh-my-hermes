@@ -344,7 +344,9 @@ class ProvenanceTests(unittest.TestCase):
         )
         self.assertTrue(external_owner_violation(payload, state))
 
-    def test_answer_sticks_and_reset_returns_the_hermes_default(self) -> None:
+    def test_answers_never_stick_and_reset_clears_their_history(self) -> None:
+        # A coding-owner choice counts only for the request it was made in: three answers leave history that
+        # selects no owner for the next request, and a reset clears that history.
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
 
@@ -357,15 +359,11 @@ class ProvenanceTests(unittest.TestCase):
             self.assertEqual(route["consecutive_accepted_explicit_choices"], 3)
             self.assertEqual(route["provenance"], "accepted_explicit_choice")
 
-            learned = build_chat_interaction_payload(
-                CODING_MESSAGE, source="discord", paths=paths
-            )
-            self.assertEqual(
-                _delegation(learned).get("selected_executor_profile"), "codex"
-            )
-            self.assertFalse(
-                external_owner_violation(learned, read_owner_preference(paths))
-            )
+            fourth = build_chat_interaction_payload(CODING_MESSAGE, source="discord", paths=paths)
+            selection = _selection(fourth)
+            self.assertIs(selection.get("choice_required"), True)
+            self.assertIsNone(_delegation(fourth).get("selected_executor_profile"))
+            self.assertFalse(external_owner_violation(fourth, read_owner_preference(paths)))
 
             reset = reset_owner_preference(
                 read_owner_preference(paths),
@@ -388,7 +386,6 @@ class ProvenanceTests(unittest.TestCase):
             self.assertIs(selection.get("choice_required"), True)
             self.assertEqual(selection.get("status"), "executor_choice_required")
             self.assertIsNone(_delegation(after).get("selected_executor_profile"))
-
 
 if __name__ == "__main__":
     unittest.main()

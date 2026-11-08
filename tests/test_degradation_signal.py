@@ -649,7 +649,7 @@ class DegradationPayloadUnitTests(unittest.TestCase):
     def test_the_cap_truncates_the_tail_and_reports_the_pre_cap_total(self) -> None:
         pairs = [
             (component, f"Error{index}")
-            for index in range(3)
+            for index in range(4)
             for component in (
                 COMPONENT_LOCALIZED_ROUTING_TEXT,
                 COMPONENT_LOOP_ROUTE_HINT_ASSESSMENT,
@@ -660,7 +660,7 @@ class DegradationPayloadUnitTests(unittest.TestCase):
 
         block = degradation_payload(pairs)
 
-        self.assertEqual(block["component_count"], 12)
+        self.assertEqual(block["component_count"], 16)
         self.assertEqual(len(block["components"]), MAX_DEGRADATION_COMPONENTS)
         self.assertTrue(block["components_truncated"])
 

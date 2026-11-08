@@ -1008,7 +1008,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # model-compression and moves to the intervention corpus (-1).
             # model-compression review round: the review's statistics, 3D, game, signal and know-how
             # sentences and fresh ones with an ordinary anchor-like word beside a shared phrase (+24).
-            expected=1490,
+            # Its second review round: billions of money, data or volume, game, pixel-art and 3D bit widths,
+            # grid transformers and firmware quantization stay off it (+18).
+            expected=1508,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1614,7 +1616,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # rules-distill and model-finetuning (+11).
             # model-compression review round: GGUF and 4-bit Korean quantization, 70B-to-8B distillation in
             # both languages, and a llama model slimmed in Korean reach the skill (+8).
-            expected=1300,
+            # Its second review round drops the Korean 4-bit case, which falls back to main (-1).
+            expected=1299,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

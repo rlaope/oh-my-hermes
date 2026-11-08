@@ -6,6 +6,7 @@ import hashlib
 import json
 from typing import Any
 
+from ..capability_off import disabled_skill_families
 from ..host_observation import (
     OBSERVATION_SCHEMA,
     attach_public_observation,
@@ -395,10 +396,13 @@ def _verify_digest(args: dict[str, Any]) -> tuple[bool, str, bool, dict[str, Any
         # invisible to the install. `loop_bridge` catches the pair for the
         # same reason.
         return False, "unavailable_without_package_backend", False, None
+    # The question was built with this home's turned-off families taken out,
+    # so it is re-derived the same way or its digest can never match.
+    disabled = disabled_skill_families(runtime_paths.plugin_home(args.get("omh_home"))) or None
     found = False
     for limit in range(1, MAX_CANDIDATES + 1):
         try:
-            route = route_chat_message(message, source=source, limit=limit)
+            route = route_chat_message(message, source=source, limit=limit, disabled_skills=disabled)
         except (ValueError, KeyError):
             # An unsupported source or a message the router refuses is the
             # caller's input, not a verdict about the digest.
