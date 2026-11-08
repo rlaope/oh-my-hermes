@@ -508,6 +508,7 @@ def capture_project_memory_candidate(
                 ),
             }
         write_project_memory_candidate_unlocked(omh_home, candidate)
+        retired_held = _retire_held_recaptures(omh_home, candidate, lock=lock, clock=clock)
         write_memory_index(omh_home, lock=lock, clock=clock)
         auto_approved = False
         record: dict[str, object] = {}
@@ -544,6 +545,7 @@ def capture_project_memory_candidate(
         "receipt_state": _capture_receipt_state(omh_home, record),
         **({"review_reason": review_reason} if review_reason else {}),
         **({"supersession": supersession} if supersession else {}),
+        **({"retired_held_candidates": retired_held} if retired_held else {}),
         **({"subject_held_by": subject_held_by} if subject_held_by else {}),
         **(
             {
@@ -769,6 +771,12 @@ def approve_project_memory_candidate(
             # Its record was corrected away; approving it again would bring the
             # corrected fact back beside its replacement.
             raise ValueError(f"candidate {candidate_id} was superseded by a correction and cannot be approved again")
+        if str(candidate.get("status", "")) == "retired" and candidate.get("recaptured_as"):
+            # The same content was captured again; approving this copy too
+            # would mint the fact twice.
+            raise ValueError(
+                f"candidate {candidate_id} was retired by a recapture; its successor is {candidate['recaptured_as']}"
+            )
         # Fail closed on correction/restore candidates: their payload lives under
         # "replacement", so the plain path would mint a record with an empty
         # summary and revision 1 -- and that garbage record then blocks the real
@@ -949,6 +957,63 @@ def _records_in_confinement(omh_home: Path, candidate: dict[str, object], *, now
             continue
         confined.append(record)
     return confined
+
+
+_HELD_CANDIDATE_STATUSES = ("pending_review", "blocked_review_required")
+
+
+def _retire_held_recaptures(
+    omh_home: Path, successor: dict[str, Any], *, lock: StoreLock, clock: Clock
+) -> list[str]:
+    """Retire every earlier held candidate this capture states again; return their ids.
+
+    "The same content" is the store's one dedup key, the normalized summary
+    (`normalized_summary_key`), inside the successor's confinement: same scope,
+    subject principal and audience, the set `_records_in_confinement` reads,
+    plus the same `correction_of`, because that marker decides what approval
+    supersedes. Only held candidates (pending or blocked review) are retired.
+    Approved, rejected, superseded and lifecycle candidates stay as they are.
+    The retirement records why and names the successor, and approval refuses
+    a retired copy. No person is asked: the newer capture is the one that
+    stands. Runs under the store lock that approval and rejection hold, so a
+    decision on the earlier candidate either lands first, and it is no longer
+    held, or reads the retirement.
+    """
+    key = normalized_summary_key(str(successor.get("summary", "")))
+    if not _matchable_summary_key(key):
+        return []
+    successor_id = str(successor.get("candidate_id", ""))
+    confinement = _held_confinement(successor)
+    with lock(memory_index_path(omh_home)):
+        held = [
+            earlier
+            for earlier in read_project_memory_candidates(omh_home)
+            if str(earlier.get("candidate_id", "")) != successor_id
+            and str(earlier.get("status", "")) in _HELD_CANDIDATE_STATUSES
+            and not str(earlier.get("lifecycle", "") or "")
+            and normalized_summary_key(str(earlier.get("summary", ""))) == key
+            and _held_confinement(earlier) == confinement
+        ]
+        # The clock is read only when something is retired, so a capture that
+        # retires nothing reads it exactly as often as before.
+        stamp = clock() if held else ""
+        for earlier in held:
+            write_project_memory_candidate_unlocked(
+                omh_home,
+                {
+                    **earlier,
+                    "status": "retired",
+                    "retired_at": stamp,
+                    "retirement_reason": "recaptured",
+                    "recaptured_as": successor_id,
+                },
+            )
+    return sorted(str(earlier.get("candidate_id", "")) for earlier in held)
+
+
+def _held_confinement(candidate: dict[str, Any]) -> tuple[object, ...]:
+    scope = candidate.get("scope") if isinstance(candidate.get("scope"), dict) else {}
+    return (scope, _subject_principal(candidate), _audience_key(candidate), str(candidate.get("correction_of", "") or ""))
 
 
 def _audience_key(artifact: dict[str, object]) -> tuple[str, tuple[str, ...]] | None:

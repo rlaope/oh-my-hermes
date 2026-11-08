@@ -232,6 +232,15 @@ All notable changes will be documented here.
   cells that want it. Its border line meets both rows' columns. `/history`
   lays the whole table out again. Alignment colons (`:---:`) are still not
   drawn.
+
+- **A memory captured again while an earlier copy waits for review leaves one
+  copy, not two.** The earlier held candidate with the same normalized
+  summary, the key the duplicate check already reads, in the same scope, is
+  retired with `retirement_reason: recaptured` and `recaptured_as` naming the
+  new one. Approval refuses the retired copy, the review queue drops it, and
+  the capture result lists it. Approved and rejected candidates are left as
+  they are, and no person is asked.
+
 - **`/gateway restart` says what each choice stops.** In a named profile the
   shared gateway serves, "Restart this profile" now says that profile's
   running turns stop now, since Hermes re-serves it without waiting. The

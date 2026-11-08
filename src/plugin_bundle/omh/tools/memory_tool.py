@@ -772,6 +772,9 @@ def _map_capture_payload(payload: dict, lens: "_SessionLens | None" = None) -> d
         "record_id": str(record.get("record_id", "") or "") or None,
         "admission_state": _admission_state(record),
     }
+    if payload.get("retired_held_candidates"):
+        # Earlier held copies of this same summary, retired by this capture.
+        fields["retired_candidate_ids"] = [str(value) for value in payload["retired_held_candidates"]]
     new_id = str(record.get("record_id", "") or "") if payload.get("auto_approved") else ""
     hints, hint_action = _capture_hints(payload, candidate, new_id, lens)
     if not payload.get("captured"):
