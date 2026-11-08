@@ -797,6 +797,18 @@ All notable changes will be documented here.
   stopped); the reply the person reads is left as the model wrote it. The
   end-of-turn sentence remains only on a turn a failed watcher's notice opened.
 
+- **A Kilo Code or Vercel AI Gateway key no longer turns chain shaping off.**
+  `KILOCODE_API_KEY` or `AI_GATEWAY_API_KEY` in Hermes' `.env`, or a Hermes
+  login or credential pool row for `kilocode` or `ai-gateway`, counted as a
+  relay serving every model, so chains fell back to the shipped order and
+  category routes the session's own provider served were refused (an
+  Anthropic session routed 7 of 18 categories instead of 15, a Kimi session
+  none instead of 11). They now work the way a `commandcode` key does: a
+  route may name the relay, and nothing else about routing moves. A key with
+  a recorded gateway in `routing/providers.json` no longer hides the relay, so
+  that route applies too. A `providers.kilocode` or `providers.ai-gateway`
+  block in `config.yaml` still counts as a gateway the person declared.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and

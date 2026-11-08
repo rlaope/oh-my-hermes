@@ -81,44 +81,67 @@ class TableTests(unittest.TestCase):
                 self.assertNotIn(name, detection.HERMES_ENV_KEY_PROVIDERS)
                 self.assertNotIn(provider_id, detection.HERMES_ENV_KEY_PROVIDERS.values())
 
+    # Relays Hermes reads one key for, each named here rather than read back
+    # from the table, so dropping a row from it fails these tests.
+    ROUTE_ONLY_RELAYS = (
+        ("COMMANDCODE_API_KEY", "commandcode"),
+        ("KILOCODE_API_KEY", "kilocode"),
+        ("AI_GATEWAY_API_KEY", "ai-gateway"),
+    )
+
     def test_a_route_only_key_leaves_detection_and_the_chains_alone(self) -> None:
         # In the detection table this key is an account of kind `gateway`,
         # which serves every alias: shaping would fall back to the shipped
         # order and a key-holder's working category routes would refuse.
-        with TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            without, with_key = root / "without" / "hermes", root / "with" / "hermes"
-            _write(without / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
-            _write(with_key / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\nCOMMANDCODE_API_KEY={KEY_VALUE}\n")
-            self.assertEqual(
-                [row["id"] for row in detection.detect_linked_providers(with_key)],
-                ["deepseek"],
-            )
-            self.assertEqual(
-                effective_mixture_category_chains(root / "with" / "omh", with_key),
-                effective_mixture_category_chains(root / "without" / "omh", without),
-            )
+        for name, provider_id in self.ROUTE_ONLY_RELAYS:
+            with self.subTest(name), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                without, with_key = root / "without" / "hermes", root / "with" / "hermes"
+                _write(without / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+                _write(with_key / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n{name}={KEY_VALUE}\n")
+                self.assertEqual(
+                    [row["id"] for row in detection.detect_linked_providers(with_key)],
+                    ["deepseek"],
+                )
+                self.assertEqual(
+                    effective_mixture_category_chains(root / "with" / "omh", with_key),
+                    effective_mixture_category_chains(root / "without" / "omh", without),
+                )
+                self.assertEqual(detection.route_only_provider_ids(with_key), {provider_id})
 
     def test_a_route_only_login_leaves_detection_and_the_chains_alone(self) -> None:
         # With a kind row, any of these counts as a `gateway` account and flips
         # category routes the same way the key does.
-        for label, store in (
-            ("manual row", {"credential_pool": {"commandcode": [{"source": "manual"}]}}),
-            ("active provider", {"active_provider": "commandcode"}),
-            ("provider state", {"providers": {"commandcode": {"token_type": "key"}}}),
-        ):
-            with self.subTest(label), TemporaryDirectory() as tmp:
-                root = Path(tmp)
-                without, held = root / "without" / "hermes", root / "held" / "hermes"
-                _write(without / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
-                _write(held / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
-                _write(held / "auth.json", _auth_store(**store))
-                self.assertEqual([row["id"] for row in detection.detect_linked_providers(held)], ["deepseek"])
+        for _name, provider_id in self.ROUTE_ONLY_RELAYS:
+            for label, store in (
+                ("manual row", {"credential_pool": {provider_id: [{"source": "manual"}]}}),
+                ("active provider", {"active_provider": provider_id}),
+                ("provider state", {"providers": {provider_id: {"token_type": "key"}}}),
+            ):
+                with self.subTest(provider_id, store=label), TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    without, held = root / "without" / "hermes", root / "held" / "hermes"
+                    _write(without / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+                    _write(held / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+                    _write(held / "auth.json", _auth_store(**store))
+                    self.assertEqual([row["id"] for row in detection.detect_linked_providers(held)], ["deepseek"])
+                    self.assertEqual(
+                        effective_mixture_category_chains(root / "held" / "omh", held),
+                        effective_mixture_category_chains(root / "without" / "omh", without),
+                    )
+                    self.assertEqual(detection.route_only_provider_ids(held), {provider_id})
+
+    def test_a_route_only_relay_block_in_config_stays_a_declared_gateway(self) -> None:
+        # Only the key and the login stop counting; a `providers.<id>` block is
+        # the person declaring the relay, and keeps the `gateway` default.
+        for _name, provider_id in self.ROUTE_ONLY_RELAYS:
+            with self.subTest(provider_id), TemporaryDirectory() as tmp:
+                home = Path(tmp) / "hermes"
+                _write(home / "config.yaml", f"providers:\n  {provider_id}:\n    base_url: https://relay.example/v1\n")
                 self.assertEqual(
-                    effective_mixture_category_chains(root / "held" / "omh", held),
-                    effective_mixture_category_chains(root / "without" / "omh", without),
+                    detection.detect_linked_providers(home),
+                    [{"id": provider_id, "kind": "gateway", "source": "config", "evidence": "config.yaml"}],
                 )
-                self.assertEqual(detection.route_only_provider_ids(held), {"commandcode"})
 
     def test_generic_and_implicit_tokens_are_not_provider_evidence(self) -> None:
         # Hermes' registry lists CLAUDE_CODE_OAUTH_TOKEN under its implicit

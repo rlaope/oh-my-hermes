@@ -96,8 +96,6 @@ HERMES_PROVIDER_KINDS: dict[str, str] = {
     "nous": "gateway",
     "copilot": "gateway",
     "copilot-acp": "gateway",
-    "ai-gateway": "gateway",
-    "kilocode": "gateway",
     "nvidia": "gateway",
     "ollama-cloud": "gateway",
     "bedrock": "gateway",
@@ -140,8 +138,6 @@ HERMES_ENV_KEY_PROVIDERS: dict[str, str] = {
     "OPENCODE_ZEN_API_KEY": "opencode-zen",
     "OPENCODE_GO_API_KEY": "opencode-go",
     "COPILOT_GITHUB_TOKEN": "copilot",
-    "AI_GATEWAY_API_KEY": "ai-gateway",
-    "KILOCODE_API_KEY": "kilocode",
     "NVIDIA_API_KEY": "nvidia",
     "OLLAMA_API_KEY": "ollama-cloud",
 }
@@ -151,9 +147,12 @@ HERMES_ENV_KEY_PROVIDERS: dict[str, str] = {
 # tables above counts as an account of kind `gateway`, which serves every
 # alias, so chain shaping turns off for everyone holding its key or login. A
 # provider here has no row in `HERMES_PROVIDER_KINDS` either: its key or auth
-# store entry only lets a route that names it pass.
+# store entry only lets a route that names it pass. A `providers.<id>` block
+# in `config.yaml` still counts as a `gateway` the person declared.
 ROUTE_ONLY_ENV_KEY_PROVIDERS: dict[str, str] = {
+    "AI_GATEWAY_API_KEY": "ai-gateway",
     "COMMANDCODE_API_KEY": "commandcode",
+    "KILOCODE_API_KEY": "kilocode",
 }
 
 # `model.provider: auto` is Hermes' resolution mode, not an account.
