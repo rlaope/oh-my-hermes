@@ -136,6 +136,9 @@ try {
         $command = "`$ErrorActionPreference = 'Stop'; try { & ([scriptblock]::Create([System.IO.File]::ReadAllText('$probeFile'))) omher@nope } catch { `$_.Exception.Message; exit 1 }; exit `$LASTEXITCODE"
         & $hostExe -NoProfile -ExecutionPolicy Bypass -Command $command *> $null
         $code = $LASTEXITCODE
+        # The probe failed on purpose. Clear its code: a runner that ends with `exit $LASTEXITCODE`
+        # (GitHub's pwsh shell does) would otherwise fail this passing test.
+        $global:LASTEXITCODE = 0
         Assert-Omh 'a failed script-block run exits non-zero' ($code -ne 0) $true
     } finally {
         Remove-Item -LiteralPath $probeFile -Force -ErrorAction SilentlyContinue
