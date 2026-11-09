@@ -1,3 +1,4 @@
+mod agent_chat;
 mod bridge;
 mod sessions;
 
@@ -5,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use agent_chat::{ChatOut, ChatSessions};
 use bridge::{Bridge, BridgeStatus};
 use sessions::{AgentInfo, Output, Sessions};
 use tauri::ipc::{Channel, InvokeResponseBody};
@@ -14,6 +16,7 @@ struct Shell {
     bridge: Arc<Bridge>,
     resource_dir: Option<PathBuf>,
     sessions: Arc<Sessions>,
+    chats: Arc<ChatSessions>,
 }
 
 /// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready.
@@ -51,20 +54,23 @@ pub(crate) fn allowed_external(url: &str) -> bool {
         && PREFIXES.iter().any(|p| url.starts_with(p))
 }
 
-/// The allow-listed agent programs (claude, codex, omh, pi, omp) and where each was found, if anywhere.
+/// The allow-listed agent programs (claude, codex, omh, pi, omp, grok), how each opens and where each
+/// was found, if anywhere.
 #[tauri::command]
 async fn sessions_agents() -> Result<Vec<AgentInfo>, String> {
     Ok(tauri::async_runtime::spawn_blocking(sessions::agents_on_this_machine).await.map_err(|e| e.to_string())?)
 }
 
-/// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal. Only an agent id crosses
-/// from the UI: no program path, command line or argument. Terminal output goes to `on_data` as raw bytes,
-/// the exit code (null after a signal) once to `on_exit`.
+/// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal (its own terminal UI). Only an
+/// agent id crosses from the UI: no program path, command line or argument; `resume` is a Claude Code
+/// session id that the shell checks is one (so the terminal view continues a chat). Terminal output goes
+/// to `on_data` as raw bytes, the exit code (null after a signal) once to `on_exit`.
 #[tauri::command]
 async fn session_start(
     shell: State<'_, Shell>,
     agent: String,
     cwd: String,
+    resume: Option<String>,
     cols: u16,
     rows: u16,
     on_data: Channel<InvokeResponseBody>,
@@ -72,7 +78,7 @@ async fn session_start(
 ) -> Result<u32, String> {
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        sessions.start_agent(&agent, std::path::Path::new(&cwd), cols, rows, move |ev| match ev {
+        sessions.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
@@ -110,6 +116,46 @@ async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || sessions.close_all()).await.map_err(|e| e.to_string())
 }
 
+/// Start allow-listed agent `agent` in folder `cwd` as a chat: its structured mode (the fixed arguments in
+/// the allow-list), with events for the chat view on `on_event` and, once, `{event:"exit", code, error}`.
+/// Only an agent id, a folder and optionally a Claude Code session id cross from the UI.
+#[tauri::command]
+async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
+    let chats = shell.chats.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), move |out| {
+            let _ = on_event.send(match out {
+                ChatOut::Event(e) => e,
+                ChatOut::Exit(code, error) => serde_json::json!({"event": "exit", "code": code, "error": error}),
+            });
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// What the person did in chat `id`: `{kind:"send", text}`, `{kind:"interrupt"}`,
+/// `{kind:"approve", request_id, choice}`, `{kind:"clarify", request_id, answer}`, `{kind:"model", model}`.
+#[tauri::command]
+async fn chat_input(shell: State<'_, Shell>, id: u32, input: agent_chat::Input) -> Result<(), String> {
+    let chats = shell.chats.clone();
+    tauri::async_runtime::spawn_blocking(move || chats.input(id, input)).await.map_err(|e| e.to_string())?
+}
+
+/// Stop the chat's program and forget the session.
+#[tauri::command]
+async fn chat_close(shell: State<'_, Shell>, id: u32) -> Result<(), String> {
+    shell.chats.close(id);
+    Ok(())
+}
+
+/// Stop every chat (the UI calls this when it loads, like `session_close_all`).
+#[tauri::command]
+async fn chat_close_all(shell: State<'_, Shell>) -> Result<(), String> {
+    let chats = shell.chats.clone();
+    tauri::async_runtime::spawn_blocking(move || chats.close_all()).await.map_err(|e| e.to_string())
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -132,13 +178,17 @@ pub fn run() {
             session_write,
             session_resize,
             session_close,
-            session_close_all
+            session_close_all,
+            chat_start,
+            chat_input,
+            chat_close,
+            chat_close_all
         ])
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
             bridge.start(resource_dir.clone());
-            app.manage(Shell { bridge, resource_dir, sessions: Sessions::new() });
+            app.manage(Shell { bridge, resource_dir, sessions: Sessions::new(), chats: ChatSessions::new() });
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -148,6 +198,7 @@ pub fn run() {
         if let RunEvent::Exit = event {
             if let Some(shell) = handle.try_state::<Shell>() {
                 shell.sessions.close_all();
+                shell.chats.close_all();
                 shell.bridge.stop();
             }
         }
