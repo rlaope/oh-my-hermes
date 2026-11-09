@@ -242,7 +242,14 @@ PANEL_OUT = 1200         # chars of output kept per run
 DIFF_MAX = 60_000        # chars of patch sent to the UI
 GIT_TIMEOUT = 4.0
 # The only git commands omher runs. All are reads; `--no-optional-locks` keeps `status` from writing the index.
-GIT_READS = {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",)}
+# `version` and the one fixed `config --list` query (_FILTER_QUERY) only feed the hardening in _git.
+GIT_READS = {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",), ("version",), ("config",)}
+# A repository's own config and attributes can name programs git runs during a read (core.fsmonitor, a
+# filter's clean/process command, a diff textconv or external driver, gpg.program for signed commits,
+# git inside a submodule). _git turns each of those off; see _hardened.
+_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+_FILTER_QUERY = ["config", "--list", "--null", "--name-only"]
+_ATTR_SOURCE: list[bool] = []  # cached: does this git know --attr-source (git >= 2.40)?
 
 
 def _json_obj(raw):
@@ -309,21 +316,56 @@ def read_terminal_runs(profile_dir: Path, limit: int = PANEL_RUNS) -> list[dict]
     return runs
 
 
-def _git(args: list[str], cwd: str | Path, timeout: float = GIT_TIMEOUT) -> str | None:
-    """Run one read-only git command; None on any failure. Only GIT_READS commands are allowed."""
+def _git(args: list[str], cwd: str | Path, timeout: float = GIT_TIMEOUT, hardened: list[str] | None = None) -> str | None:
+    """Run one read-only git command; None on any failure. Only GIT_READS commands are allowed, and every
+    call carries the flags that keep the repository's config from running programs (see _hardened; a
+    caller making several reads of one folder in a row may pass its result once)."""
     head = tuple(args[:2]) if args[:1] == ["worktree"] else (args[0],)
-    if head not in GIT_READS:
+    if head not in GIT_READS or (head == ("config",) and args != _FILTER_QUERY):
         raise ValueError(f"not a read-only git command: {args[:2]}")
+    pre = ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.quotepath=off",
+           "-c", "core.attributesFile=/dev/null"]  # Git for Windows maps /dev/null to NUL
+    if head in (("status",), ("diff",), ("log",)):
+        extra = _hardened(cwd, timeout) if hardened is None else hardened
+        if extra is None:
+            return None
+        pre += extra
+    if head in (("diff",), ("log",)):  # no diff driver, textconv or signature program, whatever the caller passed
+        safe = ["--no-ext-diff", "--no-textconv"] + (["--no-show-signature"] if head == ("log",) else [])
+        args = [args[0], *safe, *args[1:]]
     kw = {}
     if os.name == "nt":
         kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
     try:
-        r = subprocess.run(["git", "--no-optional-locks", *args], cwd=str(cwd), capture_output=True, text=True,
+        r = subprocess.run(["git", *pre, *args], cwd=str(cwd), capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=timeout, stdin=subprocess.DEVNULL,
-                           env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}, **kw)
+                           env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0",
+                                "GIT_ATTR_NOSYSTEM": "1"}, **kw)
     except (OSError, subprocess.SubprocessError):
         return None
     return r.stdout if r.returncode == 0 else None
+
+
+def _hardened(cwd: str | Path, timeout: float) -> list[str] | None:
+    """Extra global flags for a read that looks at file contents (status, diff, log): the in-tree
+    .gitattributes ignored (--attr-source=<empty tree>, git >= 2.40), and every filter driver the
+    repository's config defines emptied, which also covers drivers named from .git/info/attributes (which
+    --attr-source leaves on) and from .gitattributes on an older git. None refuses the read: the drivers
+    could not be listed, or one has a name `-c` cannot carry."""
+    if not _ATTR_SOURCE:
+        m = re.search(r"(\d+)\.(\d+)", _git(["version"], cwd, timeout) or "")
+        _ATTR_SOURCE.append(bool(m) and (int(m.group(1)), int(m.group(2))) >= (2, 40))
+    out = ["--attr-source=" + _EMPTY_TREE] if _ATTR_SOURCE[0] else []
+    names = _git(_FILTER_QUERY, cwd, timeout)
+    if names is None:
+        return None
+    drivers = {k[len("filter."):].rpartition(".")[0] for k in names.split("\0") if k.startswith("filter.")}
+    for d in sorted(drivers):
+        if not d or "=" in d or "\n" in d:
+            return None
+        out += ["-c", f"filter.{d}.clean=", "-c", f"filter.{d}.smudge=", "-c", f"filter.{d}.process=",
+                "-c", f"filter.{d}.required=false"]
+    return out
 
 
 def _norm(path: str | Path) -> str:
