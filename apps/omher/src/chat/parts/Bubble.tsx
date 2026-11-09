@@ -1,12 +1,24 @@
 import type { MessageItem } from "../../state/store";
+import { SourceIcon } from "../../ui";
 import { Markdown } from "./Markdown";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. */
-export function Bubble({ item, streaming }: { item: Pick<MessageItem, "kind" | "text" | "error">; streaming?: boolean }) {
+export function Bubble({
+  item,
+  streaming,
+}: {
+  item: Pick<MessageItem, "kind" | "text" | "error" | "reply">;
+  streaming?: boolean;
+}) {
   if (item.kind === "user") {
     return (
       <div className="msg u" data-testid="bubble-user">
         <div className="b">{item.text}</div>
+        {item.reply && (
+          <div className="msg-reply" data-testid="bubble-reply">
+            Reply target <SourceIcon source={item.reply.source} size={11} /> {item.reply.label}
+          </div>
+        )}
         {item.error && <div className="msg-err">Not sent · {item.error}</div>}
       </div>
     );

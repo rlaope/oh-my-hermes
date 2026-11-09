@@ -13,6 +13,7 @@ import type {
   ModelCurrent,
   ModelOptions,
   PeekMsg,
+  ReplyRef,
   Routine,
   BotInfo,
 } from "../lib/protocol";
@@ -50,6 +51,8 @@ export type MessageItem = {
   text: string;
   /** user rows only: the send failed (text of the bridge error). */
   error?: string;
+  /** user rows only: sent with "Reply there" (where the person pointed the bot). */
+  reply?: { source: string; label: string };
 };
 export type ActivityItem = { kind: "activity"; id: string; ts: number; turn: Turn };
 export type ApprovalItem = {
@@ -100,6 +103,15 @@ export interface Chat {
   openError?: string | null;
 }
 
+/** The composer's "Reply there" chip: a thread elsewhere the next message points the bot at. */
+export interface ReplyChip {
+  session_id: string;
+  source: string;
+  /** "#og-dev" (or the source name when the place is unknown). */
+  place: string;
+  kind: "thread" | "channel";
+}
+
 export interface Peek {
   messages: PeekMsg[];
   total: number;
@@ -141,6 +153,8 @@ export interface AppState {
   peeks: Record<string, Peek>;
   routines: Record<string, Routine[]>;
   models: Record<string, ModelOptions>;
+  /** Per bot: the composer's "Reply there" chip, if any. */
+  replyTo: Record<string, ReplyChip | null>;
   ui: Ui;
 }
 
@@ -220,6 +234,7 @@ export function initialState(): AppState {
     peeks: {},
     routines: {},
     models: {},
+    replyTo: {},
     ui: { panelOpen: false, theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general" },
   };
 }
@@ -279,8 +294,29 @@ function mergeByTs(base: ChatItem[], extra: ChatItem[]): ChatItem[] {
   return out;
 }
 
+/** "slack:C1:1794.5" + "#og-dev" -> { source: "slack", label: "#og-dev" }. */
+export function replyOf(ref: ReplyRef): { source: string; label: string } {
+  return { source: ref.target.split(":")[0] || "elsewhere", label: ref.label };
+}
+
+/** The chip for an away session, or null when it has no thread to reply in. */
+export function replyChipFor(a: Away): ReplyChip | null {
+  if (!a.reply_target) return null;
+  const parts = a.reply_target.split(":");
+  const source = parts[0] || a.source;
+  const name = SOURCE_NAMES[source] ?? source;
+  return { session_id: a.id, source, place: a.place?.trim() || name, kind: parts.length >= 3 ? "thread" : "channel" };
+}
+const SOURCE_NAMES: Record<string, string> = { slack: "Slack", discord: "Discord", telegram: "Telegram" };
+
 function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string): Chat {
-  const server: MessageItem[] = res.messages.map((m) => ({ kind: m.role, id: m.id, ts: m.ts, text: m.text }));
+  const server: MessageItem[] = res.messages.map((m) => ({
+    kind: m.role,
+    id: m.id,
+    ts: m.ts,
+    text: m.text,
+    ...(m.reply_to ? { reply: replyOf(m.reply_to) } : {}),
+  }));
   const ids = new Set(server.map((m) => m.id));
   const lastServerTs = server.length ? server[server.length - 1].ts : 0;
   const keep = chat.items.filter((i) => {
@@ -317,7 +353,8 @@ export type Action =
   | { type: "bots"; bots: Bot[] }
   | { type: "select"; bot: string }
   | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number }
-  | { type: "local.user"; bot: string; id: string; text: string; now: number }
+  | { type: "local.user"; bot: string; id: string; text: string; now: number; reply?: { source: string; label: string } }
+  | { type: "reply.set"; bot: string; chip: ReplyChip | null }
   | { type: "send.failed"; bot: string; id: string; error: string }
   | { type: "event"; ev: BridgeEvent; now: number }
   | { type: "approval.resolved"; bot: string; request_id: string; choice: ApprovalChoice }
@@ -478,8 +515,13 @@ export function reduce(state: AppState, a: Action): AppState {
       return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot), openError: null }));
     case "local.user":
       return touchChat(state, a.bot, (c) =>
-        withItems(c, [...c.items, { kind: "user", id: a.id, ts: a.now / 1000, text: a.text }]),
+        withItems(c, [
+          ...c.items,
+          { kind: "user", id: a.id, ts: a.now / 1000, text: a.text, ...(a.reply ? { reply: a.reply } : {}) },
+        ]),
       );
+    case "reply.set":
+      return { ...state, replyTo: { ...state.replyTo, [a.bot]: a.chip } };
     case "send.failed":
       return touchChat(state, a.bot, (c) =>
         withItems(
@@ -601,7 +643,10 @@ export function selectUnreadTotal(state: AppState): number {
 export interface Actions {
   init(): Promise<void>;
   selectBot(bot: string): Promise<void>;
+  /** Sends to the main chat; a "Reply there" chip goes along as `reply_to` and is then cleared. */
   send(text: string): Promise<void>;
+  /** Put (or clear, with null) the composer's "Reply there" chip for a bot. Sends nothing. */
+  setReplyTo(chip: ReplyChip | null, bot?: string): void;
   interrupt(): Promise<void>;
   respondApproval(requestId: string, choice: ApprovalChoice, bot?: string): Promise<void>;
   respondClarify(requestId: string, answer: string, bot?: string): Promise<void>;
@@ -632,6 +677,15 @@ export interface Store {
   subscribe(fn: () => void): () => void;
   dispatch(a: Action): void;
   actions: Actions;
+}
+
+function lastUserReplied(state: AppState, bot: string): boolean {
+  const items = state.chats[bot]?.items ?? [];
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const it = items[i];
+    if (it.kind === "user") return !!it.reply;
+  }
+  return false;
 }
 
 const errText = (e: unknown) =>
@@ -748,6 +802,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         dispatch({ type: "event", ev, now: now() });
         opts.onEvent?.(ev, state);
         if (ev.event === "elsewhere.update") void loadElsewhere(ev.bot);
+        // After a turn the person pointed at a thread, re-read the places so the bot's new reply shows there.
+        if (ev.event === "turn.end" && lastUserReplied(state, ev.bot)) void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
         if (ev.event === "bots.update") void reloadBots();
       });
@@ -772,12 +828,19 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const t = text.trim();
       if (!bot || !t) return;
       const id = `local-${++localSeq}`;
-      dispatch({ type: "local.user", bot, id, text: t, now: now() });
+      const chip = state.replyTo[bot] ?? null;
+      const reply = chip ? { source: chip.source, label: chip.place } : undefined;
+      dispatch({ type: "local.user", bot, id, text: t, now: now(), reply });
+      if (chip) dispatch({ type: "reply.set", bot, chip: null });
       try {
-        await bridge.request("chat.send", { bot, text: t });
+        await bridge.request("chat.send", chip ? { bot, text: t, reply_to: chip.session_id } : { bot, text: t });
       } catch (e) {
         dispatch({ type: "send.failed", bot, id, error: errText(e) });
       }
+    },
+    setReplyTo(chip, bot) {
+      const b = botArg(bot);
+      if (b) dispatch({ type: "reply.set", bot: b, chip });
     },
     async interrupt() {
       const bot = state.selectedBot;

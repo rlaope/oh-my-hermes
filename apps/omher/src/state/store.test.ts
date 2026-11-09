@@ -4,6 +4,7 @@ import {
   createStore,
   initialState,
   reduce,
+  replyChipFor,
   selectTimeline,
   type Action,
   type AppState,
@@ -394,5 +395,35 @@ describe("store", () => {
     expect(store.getState().ui).toMatchObject({ view: "settings", settingsPage: "providers" });
     store.actions.closeSettings();
     expect(store.getState().ui.view).toBe("chat");
+  });
+
+  it("Reply there: the chip goes along as reply_to once, then clears; a turn end re-reads the places", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    const a = away("e1", T0 / 1000 - 5, { place: "#og-dev", reply_target: "slack:C1:1794.5" });
+    const chip = replyChipFor(a)!;
+    expect(chip).toEqual({ session_id: "e1", source: "slack", place: "#og-dev", kind: "thread" });
+    expect(replyChipFor(away("c1", 1, { source: "cron" }))).toBeNull();
+    expect(replyChipFor(away("d1", 1, { source: "discord", reply_target: "discord:42" }))!.kind).toBe("channel");
+
+    store.actions.setReplyTo(chip);
+    expect(f.calls.filter((c) => c.op === "chat.send")).toHaveLength(0); // the chip alone sends nothing
+    await store.actions.send("결과 요약해서 남겨줘");
+    const sends = f.calls.filter((c) => c.op === "chat.send");
+    expect(sends.map((c) => c.params)).toEqual([{ bot: "kami", text: "결과 요약해서 남겨줘", reply_to: "e1" }]);
+    expect(store.getState().replyTo.kami).toBeNull();
+    expect(store.getState().chats.kami.items.at(-1)).toMatchObject({ kind: "user", reply: { source: "slack", label: "#og-dev" } });
+
+    const lists = () => f.calls.filter((c) => c.op === "elsewhere.list").length;
+    const before = lists();
+    f.emit({ event: "turn.end", bot: "kami", outcome: "done" });
+    expect(lists()).toBe(before + 1);
+
+    // the next message, without a chip, is plain
+    await store.actions.send("there");
+    expect(f.calls.filter((c) => c.op === "chat.send").at(-1)!.params).toEqual({ bot: "kami", text: "there" });
+    f.emit({ event: "turn.end", bot: "kami", outcome: "done" });
+    expect(lists()).toBe(before + 1);
   });
 });

@@ -30,6 +30,8 @@ export function Chat() {
           offline={bot.status === "offline"}
           onSend={(t) => void s.send(t)}
           onStop={() => void s.interrupt()}
+          reply={s.replyTo[bot.name] ?? null}
+          onClearReply={() => s.setReplyTo(null, bot.name)}
         />
       </div>
     </>

@@ -1,22 +1,28 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../../lib/protocol";
-import { ArrowUp, StopIcon } from "../../ui";
+import type { ReplyChip } from "../../state/store";
+import { ArrowUp, CloseIcon, SourceIcon, StopIcon } from "../../ui";
 
 const MAX_H = 200;
 
-/** Autosizing textarea. Enter sends, Shift+Enter breaks the line, `/` shows a skill hint, Stop interrupts. */
+/** Autosizing textarea. Enter sends, Shift+Enter breaks the line, `/` shows a skill hint, Stop interrupts.
+ *  A "Reply there" chip sits above the text: the next message points the bot at that thread (omher posts nothing). */
 export function Composer({
   bot,
   running,
   offline,
   onSend,
   onStop,
+  reply,
+  onClearReply,
 }: {
   bot: Bot;
   running: boolean;
   offline: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
+  reply?: ReplyChip | null;
+  onClearReply?: () => void;
 }) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -32,7 +38,7 @@ export function Composer({
 
   useLayoutEffect(() => {
     ref.current?.focus();
-  }, [bot.name]);
+  }, [bot.name, reply?.session_id]);
 
   const send = () => {
     if (!has || offline) return;
@@ -52,22 +58,54 @@ export function Composer({
         </div>
       )}
       <div className={`composer${has ? " has" : ""}`}>
-        <textarea
-          ref={ref}
-          rows={1}
-          value={text}
-          disabled={offline}
-          placeholder={offline ? `${bot.display_name} is offline` : `Message ${bot.display_name}`}
-          aria-label={`Message ${bot.display_name}`}
-          data-testid="composer"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-              e.preventDefault();
-              send();
+        <div className="composer-col">
+          {reply && (
+            <span className="reply-chip" data-testid="reply-chip" data-session={reply.session_id}>
+              <SourceIcon source={reply.source} size={12} />
+              <span className="rc-t">
+                {reply.place} <span className="rc-k">· {reply.kind}</span>
+              </span>
+              <button
+                type="button"
+                className="rc-x"
+                aria-label="Remove reply target"
+                title="Remove"
+                onClick={() => {
+                  onClearReply?.();
+                  ref.current?.focus();
+                }}
+                data-testid="reply-chip-remove"
+              >
+                <CloseIcon />
+              </button>
+            </span>
+          )}
+          <textarea
+            ref={ref}
+            rows={1}
+            value={text}
+            disabled={offline}
+            placeholder={
+              offline
+                ? `${bot.display_name} is offline`
+                : reply
+                  ? `Tell ${bot.display_name} what to post there`
+                  : `Message ${bot.display_name}`
             }
-          }}
-        />
+            aria-label={`Message ${bot.display_name}`}
+            data-testid="composer"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                e.preventDefault();
+                send();
+              } else if (e.key === "Backspace" && !text && reply) {
+                e.preventDefault();
+                onClearReply?.();
+              }
+            }}
+          />
+        </div>
         {showStop ? (
           <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={onStop} data-testid="stop">
             <StopIcon />
