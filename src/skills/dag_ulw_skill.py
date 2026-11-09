@@ -229,6 +229,12 @@ def run_loop_reference() -> str:
    (a retry takes the category's next option; a category no option matches carries none and runs on the
    backend's default). Under `profile_routes` OMH picks no profile: the tasks go as they are. Views name the
    option Hermes reports the child ran on, and a lane keeps its category only when that is the option handed out.
+   In `swarm`, `quick` and `simple-work` an option with a fast `service_tier` is tried before the same model's
+   normal one; elsewhere the normal one leads. Mark a node `local: true` when its material must not leave the
+   machine (customer data, keys, private documents): it runs only on a `model_map` option whose `base_url` is
+   on this machine or its private network (or provider `lmstudio`/`llamacpp`), a retry takes the next local
+   one, and with none left it is listed in `held_for_local_model`, never sent to a cloud model. Tell the
+   person; they add a local option or the node is settled blocked.
 3. `calls` never exceeds the free background slots (`slots.free`): a call past them would run blocking.
    In a one-shot session, `calls` also never carries more tasks than the remaining one-shot budget;
    nodes past it are listed in `held_for_slots`, and `slots.oneshot` shows the limit, the spent count
