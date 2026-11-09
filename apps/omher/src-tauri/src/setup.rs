@@ -170,7 +170,9 @@ mod tests {
     #[test]
     fn the_tauri_command_takes_no_text_from_the_page() {
         // The command's parameters are the app state and the output channel, nothing a page could fill.
-        let lib = include_str!("lib.rs");
+        // a Windows checkout has CRLF line endings (git autocrlf); read the source with LF so the searches hold
+        let lib = include_str!("lib.rs").replace("\r\n", "\n");
+        let lib = lib.as_str();
         let start = lib.find("async fn install_engine(").expect("install_engine command");
         let sig = &lib[start..start + lib[start..].find(") ->").unwrap()];
         assert!(!sig.contains("String") && !sig.contains("&str") && !sig.contains("Vec<"), "{sig}");
