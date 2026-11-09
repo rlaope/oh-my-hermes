@@ -304,14 +304,16 @@ All notable changes will be documented here.
   interpreter, so `python -m venv` linked it to the resolved base, the
   version-pinned keg (`/opt/homebrew/Cellar/python@3.15/3.15.0/...`); after
   `brew upgrade` and cleanup the launcher failed with `bad interpreter`. The
-  update now reads the running venv's `pyvenv.cfg`, follows its `command` back
-  to the interpreter the installer ran (through the bootstrap venv when an
-  older `omh` staged the generation), then tries its `home`, and uses the
-  first that runs the same major.minor; otherwise it keeps the old choice.
-  No vendor paths: it reads python.org, pyenv, uv and Windows
-  (`Scripts\python.exe`) venvs the same way. A generation staged before the
-  fix can be repaired in place; [Installation](docs/INSTALLATION.md) gives the
-  three commands. (#2683)
+  update now reads `pyvenv.cfg` in the running venv and in the bootstrap venv,
+  follows each `command` back to the interpreter the installer ran, then
+  tries each `home`, and uses the first that runs the same major.minor and
+  ABI flags; otherwise it keeps the old choice. The bootstrap venv matters
+  after three or more older updates, when cleanup has deleted the middle of
+  the chain. No vendor paths: python.org, pyenv, uv and Windows
+  (`Scripts\python.exe`) venvs are read the same way. `omh doctor` reports a
+  generation whose base is gone or version-pinned as `generation_base_python`
+  and prints the repair command; [Installation](docs/INSTALLATION.md) gives
+  the same repair for an `omh` that no longer starts. (#2683)
 
 - **`/gateway restart` says what each choice stops.** In a named profile the
   shared gateway serves, "Restart this profile" now says that profile's

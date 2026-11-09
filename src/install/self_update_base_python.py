@@ -29,6 +29,19 @@ VENV_COMMAND_MARKER = " -m venv "
 MAX_CREATOR_HOPS = 4
 
 
+def _is_file(path: Path) -> bool:
+    """`Path.is_file()` that answers False for a path the user cannot reach.
+
+    On Python 3.11-3.13 `is_file()` swallows only ENOENT, ENOTDIR, EBADF and
+    ELOOP, so a `home` under a folder this account cannot enter raised
+    `PermissionError` out of `omh update` instead of falling back.
+    """
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
 def venv_root(interpreter: Path) -> Path | None:
     """The venv an interpreter path sits in (`<venv>/bin/python`, `<venv>\\Scripts\\python.exe`), or None.
 
@@ -37,7 +50,7 @@ def venv_root(interpreter: Path) -> Path | None:
     version-pinned path.
     """
     root = interpreter.parent.parent
-    return root if (root / PYVENV_CFG).is_file() else None
+    return root if _is_file(root / PYVENV_CFG) else None
 
 
 def read_pyvenv_cfg(venv: Path) -> dict[str, str]:
@@ -54,65 +67,131 @@ def read_pyvenv_cfg(venv: Path) -> dict[str, str]:
     return values
 
 
-def creator_interpreter(config: dict[str, str]) -> Path | None:
+def _anchored(venv: Path, spelled: str) -> Path:
+    """A path a `pyvenv.cfg` records, read against the venv's folder when relative, never the cwd."""
+    path = Path(spelled)
+    return path if path.is_absolute() else venv / path
+
+
+def creator_interpreter(config: dict[str, str], venv: Path) -> Path | None:
     """The interpreter that created a venv, from `command = <interpreter> -m venv <dir>`; None when absent."""
     command = config.get("command", "")
     interpreter, separator, _target = command.partition(VENV_COMMAND_MARKER)
     interpreter = interpreter.strip()
-    return Path(interpreter) if separator and interpreter else None
+    return _anchored(venv, interpreter) if separator and interpreter else None
 
 
-def home_interpreters(home: str, *, version: tuple[int, int], is_windows: bool) -> list[Path]:
-    """The executables a venv's `home` directory holds for the running major.minor, most specific first."""
+def home_interpreters(config: dict[str, str], venv: Path, *, version: tuple[int, int], abiflags: str, is_windows: bool) -> list[Path]:
+    """The executables a venv's `home` folder holds for the running build, most specific first.
+
+    A free-threaded or debug build (`abiflags` `t`, `d`) shares its folder with
+    the default build (`python3.14t` beside `python3.14`), so its own name
+    leads; the caller's probe still refuses a name that runs another build.
+    """
+    home = config.get("home", "")
     if not home:
         return []
-    directory = Path(home)
-    if is_windows:
-        return [directory / "python.exe"]
+    directory = _anchored(venv, home)
     major, minor = version
-    return [directory / f"python{major}.{minor}", directory / f"python{major}", directory / "python"]
+    if is_windows:
+        names = [f"python{major}.{minor}{abiflags}.exe"] if abiflags else []
+        return [directory / name for name in (*names, "python.exe")]
+    names = [f"python{major}.{minor}{abiflags}"] if abiflags else []
+    return [directory / name for name in (*names, f"python{major}.{minor}", f"python{major}", "python")]
 
 
-def base_python_candidates(seed: str, *, version: tuple[int, int], is_windows: bool) -> list[str]:
+def base_python_candidates(seed: str, *, version: tuple[int, int], is_windows: bool, abiflags: str = "", anchors: tuple[str, ...] = ()) -> list[str]:
     """Interpreters to create a generation venv from instead of `seed`, most trusted first.
 
     `seed` is the interpreter the update would use today (the plan's, else the
-    running one). When it is a base interpreter, not inside a venv, there is
-    nothing to correct and the list is empty. When it is a venv's interpreter,
-    each `pyvenv.cfg` on the chain of creators contributes, oldest creator first:
+    running one). `anchors` are other venv interpreters whose chain also leads
+    to the installer's base: the bootstrap venv, which cleanup never deletes.
+    Each `pyvenv.cfg` on a chain of creators contributes:
 
     - the interpreter its `command` names, when that is a base interpreter
       (exactly what the installer ran); when it is another venv's
-      interpreter, that venv's own file is read first, so a generation staged
-      by an older `omh` still leads back to the installer's base;
-    - its `home` directory's `pythonX.Y` (`python.exe` on Windows).
+      interpreter, that venv's own file is read first;
+    - its `home` folder's `pythonX.Y` (`python.exe` on Windows).
 
-    Every candidate exists on disk; whether it runs `version` is the caller's check.
+    Every creator comes before every `home`, and the anchors' homes before the
+    seed chain's. Before this fix each generation was created by the one
+    before it, and cleanup keeps only the active, the previous and the
+    bootstrap generations; after three updates the seed's chain stops at a
+    deleted venv with only version-pinned `home` values left, while the
+    bootstrap still names the installer's base.
+
+    Every candidate exists on disk; whether it runs the same build is the caller's check.
     """
     seen: set[Path] = set()
-    ordered: list[str] = []
 
-    def visit(interpreter: Path, hops: int) -> None:
+    def walk(interpreter: Path, hops: int, creators: list[Path], homes: list[Path]) -> None:
         venv = venv_root(interpreter)
         if venv is None or hops > MAX_CREATOR_HOPS:
             return
-        key = Path(venv).absolute()
+        key = venv.absolute()
         if key in seen:
             return
         seen.add(key)
         config = read_pyvenv_cfg(venv)
-        creator = creator_interpreter(config)
-        found: list[Path] = []
+        creator = creator_interpreter(config, venv)
         if creator is not None:
             if venv_root(creator) is not None:
-                visit(creator, hops + 1)
+                walk(creator, hops + 1, creators, homes)
             else:
-                found.append(creator)
-        found.extend(home_interpreters(config.get("home", ""), version=version, is_windows=is_windows))
-        for path in found:
-            spelled = str(path)
-            if spelled != seed and spelled not in ordered and path.is_file():
-                ordered.append(spelled)
+                creators.append(creator)
+        homes.extend(home_interpreters(config, venv, version=version, abiflags=abiflags, is_windows=is_windows))
 
-    visit(Path(seed), 0)
+    seed_creators: list[Path] = []
+    seed_homes: list[Path] = []
+    walk(Path(seed), 0, seed_creators, seed_homes)
+    anchor_creators: list[Path] = []
+    anchor_homes: list[Path] = []
+    for anchor in anchors:
+        walk(Path(anchor), 0, anchor_creators, anchor_homes)
+    ordered: list[str] = []
+    for path in (*seed_creators, *anchor_creators, *anchor_homes, *seed_homes):
+        spelled = str(path)
+        if spelled != seed and spelled not in ordered and _is_file(path):
+            ordered.append(spelled)
     return ordered
+
+
+def pinned_base_finding(venv: Path, *, version: tuple[int, int], is_windows: bool, abiflags: str = "", anchors: tuple[str, ...] = ()) -> dict[str, str] | None:
+    """Why a venv's base interpreter will not survive, with the repair; None when it will.
+
+    `gone`: no interpreter is left in its `home` (a `brew cleanup` removed the
+    keg). `pinned`: its `home` interpreter is reachable under another,
+    stable spelling (`samefile`), so it breaks on the next patch upgrade. The
+    stable spelling is the first candidate `base_python_candidates` names.
+    Reads files only; nothing is run.
+    """
+    config = read_pyvenv_cfg(venv)
+    homes = home_interpreters(config, venv, version=version, abiflags=abiflags, is_windows=is_windows)
+    if not homes:
+        return None
+    python = venv / ("Scripts" if is_windows else "bin") / ("python.exe" if is_windows else "python")
+    bound = next((home for home in homes if _is_file(home)), None)
+    candidates = [Path(path) for path in base_python_candidates(str(python), version=version, abiflags=abiflags, is_windows=is_windows, anchors=anchors)]
+    spelled_homes = {str(home) for home in homes}
+    if bound is None:
+        state = "gone"
+        stable = next((path for path in candidates if str(path) not in spelled_homes), None)
+    else:
+        state = "pinned"
+        stable = next((path for path in candidates if str(path) not in spelled_homes and _same_file(path, bound)), None)
+        if stable is None:
+            return None
+    finding = {"state": state, "venv": str(venv), "home": str(homes[0]), "stable": str(stable or "")}
+    if stable is not None:
+        link = venv / "bin" / f"python{version[0]}.{version[1]}{abiflags}"
+        upgrade = f'"{stable}" -m venv --upgrade "{venv}"'
+        # `venv --upgrade` keeps an existing link, dangling or not, so the link goes first.
+        finding["repair"] = upgrade if is_windows else f'rm -f "{link}" && {upgrade}'
+    return finding
+
+
+def _same_file(left: Path, right: Path) -> bool:
+    try:
+        return left.samefile(right)
+    except OSError:
+        return False

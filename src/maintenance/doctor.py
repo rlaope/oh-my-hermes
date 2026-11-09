@@ -44,6 +44,7 @@ from ..install.installer import (
     profile_skill_names,
 )
 from ..install.plugin_bundle_import_scan import describe_findings, scan_bundle_core_imports
+from ..install.self_update_base_python import pinned_base_finding
 from ..install.support_materialization import legacy_support_paths
 from ..install.plugin_load_deadline import (
     ABANDONED_LOADER_CAP,
@@ -66,6 +67,7 @@ from ..paths import (
     OmhPaths,
     managed_command_generations_dir,
     managed_command_self_update_state_path,
+    managed_command_venv_dir,
     managed_current_workflow_pack_dir,
 )
 from ..plugin_bundle.omh import runtime_paths
@@ -554,6 +556,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.extend(_plugin_hook_error_checks(paths))
     checks.append(_retired_skill_install_check(paths))
     checks.append(_staged_update_recovery_check())
+    checks.append(_generation_base_python_check())
     checks.append(_flat_skill_layout_check(paths))
     checks.append(_agent_skills_pack_check())
     checks.append(_plugin_ulw_lifecycle_check(paths))
@@ -1536,6 +1539,57 @@ def _staged_update_recovery_check() -> Check:
         f"an `omh update` was interrupted while activating generation {candidate}",
         severity="warning",
         next_action="run `omh update`; it completes or rolls back that activation first",
+    )
+
+
+def _generation_base_python_check() -> Check:
+    """The active generation's venv must not hang on a base interpreter one patch upgrade removes (#2683).
+
+    Before the fix `omh update` created each generation's venv from inside a
+    venv, which bound it to the resolved, version-pinned base (a Homebrew
+    `Cellar/<version>` keg); after `brew upgrade` and cleanup the launcher
+    failed with `bad interpreter`. Read from files only.
+    """
+    state_path = managed_command_self_update_state_path()
+    if state_path is None or not state_path.is_file() or not _runs_from(state_path.parent):
+        return Check("generation_base_python", True, "no staged-update state for this command", observed=False)
+    try:
+        state = read_json_object(state_path)
+    except (OSError, ValueError):
+        # `staged_update_recovery` reports the unreadable file.
+        return Check("generation_base_python", True, "staged-update state unreadable; see staged_update_recovery", observed=False)
+    active = state.get("active")
+    active_path = str(active.get("path") or "") if isinstance(active, dict) else ""
+    if not active_path:
+        return Check("generation_base_python", True, "no active generation recorded", observed=False)
+    is_windows = os.name == "nt"
+    bootstrap = managed_command_venv_dir()
+    anchors = (str(bootstrap / ("Scripts" if is_windows else "bin") / ("python.exe" if is_windows else "python")),) if bootstrap is not None else ()
+    finding = pinned_base_finding(
+        Path(active_path) / "venv",
+        version=(sys.version_info.major, sys.version_info.minor),
+        abiflags=getattr(sys, "abiflags", ""),
+        is_windows=is_windows,
+        anchors=anchors,
+    )
+    if finding is None:
+        return Check("generation_base_python", True, "the active generation's base interpreter survives patch upgrades")
+    repair = finding.get("repair", "")
+    if finding["state"] == "gone":
+        message = f"the active generation's base interpreter {finding['home']} no longer exists, so `omh` from that generation cannot start"
+    else:
+        message = (
+            f"the active generation's base interpreter {finding['home']} is a version-pinned path; "
+            f"the next patch upgrade that removes it breaks `omh` with `bad interpreter`. {finding['stable']} names the same interpreter and survives"
+        )
+    return Check(
+        "generation_base_python",
+        False,
+        message,
+        severity="warning",
+        remediation="repair the venv in place from the stable interpreter; the next `omh update` stages from it on its own",
+        next_action=f"run `{repair}`" if repair else "re-run the OMH installer with the Python it was installed with",
+        detail=dict(finding),
     )
 
 
