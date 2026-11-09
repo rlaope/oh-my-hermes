@@ -50,9 +50,9 @@ flush boundary; thinking flushes as ONE collapsed row ("▸ thought for 4.2s");
 a tool group flushes when the next block arrives (message text, thinking) or
 at `message.complete`, as one row per call (`● name(argument summary)`, the
 mark a shape and a colour per state, `TOOL_MARKS`, and the name bold in its
-tool family's hue, `TOOL_FAMILIES`) with what it printed under `⎿`, a blank row
-between two calls, no header over them; a read or a load says in one line what
-it read instead (`_read_summary`), and an `omh_memory` or `omh_remember` recall that
+tool family's hue, `TOOL_FAMILIES`) with what it printed under `⎿`, two blank
+rows between two calls (`CALL_GAP_ROWS`), no header over them; a read or a load
+says in one line what it read instead (`_read_summary`), and an `omh_memory` or `omh_remember` recall that
 found records lists them, a line each (`_recall_lines`), which one band of the
 dag-ulw aura sweeps as the call completes, while its group is live and only
 where the aura moves (`_glint_band`). A run of consecutive plumbing calls
@@ -215,6 +215,9 @@ OUTPUT_INDENT = "  "
 # The rows a command's output shows under its echo; past them one row counts the rest (rows at that width, so the
 # count changes with it), which Ctrl+O's details view shows.
 OUTPUT_PREVIEW_ROWS = 12
+# Blank rows between two calls of one group (a folded run of plumbing calls is one of them): one more than between two
+# blocks, so a turn's calls read apart (owner's pick of 2026-11-09, after Claude Code's spacing).
+CALL_GAP_ROWS = 2
 OUTPUT_MORE = "… +{count} {noun} · ctrl+o shows all"
 # What a tool's output or a diff cut short says after its count: the key whose view shows the rest.
 SHOWS_ALL = " · ctrl+o shows all"
@@ -1530,9 +1533,9 @@ def _tool_rows(
     group: ToolGroup, width: int, theme: Theme, expanded: bool, now: float | None = None, glint: bool = False,
 ) -> list[Line]:
     """Each call on a rail (`_rail_style`): its own row (what ran, on what), what the person answered it right
-    under that, and what it printed under them, a blank row between two calls; a run of plumbing calls is one row,
-    unfolded again by `expanded`. A group with no call shows nothing. With `glint` (the aura moves) and `now`, a
-    recall's output rows carry the band that sweeps them once."""
+    under that, and what it printed under them, `CALL_GAP_ROWS` blank rows between two calls; a run of plumbing calls
+    is one row, a call as the others are, unfolded again by `expanded`. A group with no call shows nothing. With
+    `glint` (the aura moves) and `now`, a recall's output rows carry the band that sweeps them once."""
     inner = max(width - len(RAIL), 1)
     rows: list[Line] = []
     for unit in _units(group.tools, fold=not expanded):
@@ -1554,7 +1557,7 @@ def _tool_rows(
             else:
                 own.extend(_output_rows(tool, inner, theme, expanded, now if glint else None))
         rail = _rail(_rail_style(status, theme))
-        rows.extend([*([()] if rows else []), *(_within((*rail, *row), width) for row in own)])
+        rows.extend([*([()] * CALL_GAP_ROWS if rows else []), *(_within((*rail, *row), width) for row in own)])
     return rows
 
 

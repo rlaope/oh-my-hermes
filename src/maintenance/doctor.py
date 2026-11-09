@@ -44,6 +44,7 @@ from ..install.installer import (
     profile_skill_names,
 )
 from ..install.plugin_bundle_import_scan import describe_findings, scan_bundle_core_imports
+from ..install.self_update_base_python import pinned_base_finding
 from ..install.support_materialization import legacy_support_paths
 from ..install.plugin_load_deadline import (
     ABANDONED_LOADER_CAP,
@@ -66,6 +67,7 @@ from ..paths import (
     OmhPaths,
     managed_command_generations_dir,
     managed_command_self_update_state_path,
+    managed_command_venv_dir,
     managed_current_workflow_pack_dir,
 )
 from ..plugin_bundle.omh import runtime_paths
@@ -554,10 +556,12 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.extend(_plugin_hook_error_checks(paths))
     checks.append(_retired_skill_install_check(paths))
     checks.append(_staged_update_recovery_check())
+    checks.append(_generation_base_python_check())
     checks.append(_flat_skill_layout_check(paths))
     checks.append(_agent_skills_pack_check())
     checks.append(_plugin_ulw_lifecycle_check(paths))
     checks.append(_omh_tui_check(paths))
+    checks.append(_tui_own_runtime_check(paths))
     checks.extend(_hermes_gateway_checks(paths))
     checks.append(_delegation_protocol_platform_check(paths))
     checks.append(_hermes_model_routing_check(paths))
@@ -749,6 +753,88 @@ def _omh_tui_check(paths: OmhPaths) -> Check:
         "omh_tui_support", True,
         "bare `omh` can open the OMH TUI: shim installed, Hermes launcher hook and gateway present, Node found"
         + versions,
+    )
+
+
+def _tui_own_runtime_check(paths: OmhPaths) -> Check:
+    """Where bare `omh` opens its sessions, and the state of the TUI's own runtime home when it has one.
+
+    Read-only (`tui_home_status`): the saved choice, the home's build marker,
+    its skill links, its `.env`, and the record of its gateway. On the shared
+    gateway the row says so and names the alternative. On the own runtime it
+    warns when the home is not built yet (the next `omh` builds it), was built
+    from another root than this doctor's Hermes home, has links to skills that
+    went, carries a messaging credential (a scrub that should never miss), or
+    runs a gateway with a messaging adapter connected, or was built from a root
+    config that connects a platform (never expected: the TUI runtime must not
+    poll a bot's token beside the bots' gateway). The home findings are
+    warnings, cleared by `omh update` or the next launch; a credential or an
+    adapter on the TUI runtime fails the row.
+    """
+    from ..skin_pack import RUNTIME_OWN, read_runtime_choice
+    from ..tui.own_runtime import tui_home_status
+
+    name = "omh_tui_runtime"
+    try:
+        status = tui_home_status(paths.omh_home, read_runtime_choice(paths.omh_home))
+    except OSError as error:
+        return Check(name, True, f"the TUI's own runtime home could not be read: {error}", observed=False)
+    if status.runtime != RUNTIME_OWN:
+        kept = f"; the TUI home at {status.home} is kept" if status.exists else ""
+        return Check(
+            name, True,
+            f"bare `omh` opens its sessions on the shared Hermes gateway (`omh theme runtime shared`){kept}",
+            detail={"runtime": status.runtime, "tui_home": str(status.home), "exists": status.exists},
+        )
+    detail: dict[str, object] = {
+        "runtime": status.runtime, "tui_home": str(status.home), "built_from": status.built_from,
+        "served": list(status.served), "skills": status.skill_count, "clashes": status.clash_count,
+        "broken_links": list(status.broken_links), "messaging_names": list(status.messaging_names),
+        "config_platform_credentials": list(status.config_platform_credentials),
+        "gateway_pid": status.gateway_pid, "platforms": list(status.platforms),
+    }
+    if not status.built:
+        return Check(
+            name, True, f"the TUI's own runtime home at {status.home} is not built yet", severity="warning",
+            next_action="run `omh` (bare) once, or `omh update`; either builds it from the root Hermes home",
+            detail=detail,
+        )
+    problems: list[str] = []
+    actions: list[str] = []
+    if Path(status.built_from).resolve() != Path(paths.hermes_home).resolve():
+        problems.append(f"built from {status.built_from}, not {paths.hermes_home}")
+        actions.append("run `omh update` to rebuild it from this Hermes home")
+    if status.broken_links:
+        problems.append(f"{len(status.broken_links)} skill link(s) point at skills that went ({', '.join(status.broken_links[:3])})")
+        actions.append("run `omh update` or `omh` to drop them")
+    credentials: list[str] = []
+    if status.messaging_names:
+        credentials.append(f"its .env carries messaging credentials ({', '.join(status.messaging_names[:3])})")
+        actions.append("run `omh update` to rebuild .env without them")
+    if status.config_platform_credentials:
+        credentials.append(f"the root config.yaml connects a platform ({', '.join(status.config_platform_credentials[:3])}), "
+                           "so bare `omh` opens on the shared gateway")
+        actions.append("move that platform's credentials out of the root config.yaml (a profile's config, or .env)")
+    if status.platforms:
+        credentials.append(f"its gateway reports messaging adapters connected ({', '.join(status.platforms)})")
+        actions.append("remove those credentials from the root .env or config, then `omh update`")
+    gateway = f"gateway running (pid {status.gateway_pid})" if status.gateway_live else "gateway not running (the next `omh` starts it)"
+    if credentials:
+        return Check(
+            name, False, f"the TUI's own runtime home at {status.home}: " + "; ".join([*credentials, *problems]) + f"; {gateway}",
+            next_action="; ".join(dict.fromkeys(actions)), detail=detail,
+        )
+    if problems:
+        return Check(
+            name, True, f"the TUI's own runtime home at {status.home}: " + "; ".join(problems) + f"; {gateway}",
+            severity="warning", next_action="; ".join(dict.fromkeys(actions)), detail=detail,
+        )
+    profiles = f" ({', '.join(status.served)} joined)" if status.served else ""
+    return Check(
+        name, True,
+        f"bare `omh` opens its sessions on the TUI's own Hermes runtime at {status.home}: built from "
+        f"{status.built_from}, {status.skill_count} skills{profiles}, no messaging credential; {gateway}",
+        detail=detail,
     )
 
 
@@ -1453,6 +1539,64 @@ def _staged_update_recovery_check() -> Check:
         f"an `omh update` was interrupted while activating generation {candidate}",
         severity="warning",
         next_action="run `omh update`; it completes or rolls back that activation first",
+    )
+
+
+def _generation_base_python_check() -> Check:
+    """The active generation's venv must not hang on a base interpreter one patch upgrade removes (#2683).
+
+    Before the fix `omh update` created each generation's venv from inside a
+    venv, which bound it to the resolved, version-pinned base (a Homebrew
+    `Cellar/<version>` keg); after `brew upgrade` and cleanup the launcher
+    failed with `bad interpreter`. Read from files only.
+    """
+    state_path = managed_command_self_update_state_path()
+    if state_path is None or not state_path.is_file() or not _runs_from(state_path.parent):
+        return Check("generation_base_python", True, "no staged-update state for this command", observed=False)
+    try:
+        state = read_json_object(state_path)
+    except (OSError, ValueError):
+        # `staged_update_recovery` reports the unreadable file.
+        return Check("generation_base_python", True, "staged-update state unreadable; see staged_update_recovery", observed=False)
+    if not isinstance(state, dict):
+        return Check("generation_base_python", True, "no staged-update state for this command", observed=False)
+    active = state.get("active")
+    active_path = str(active.get("path") or "") if isinstance(active, dict) else ""
+    if not active_path:
+        return Check("generation_base_python", True, "no active generation recorded", observed=False)
+    is_windows = os.name == "nt"
+    bootstrap = managed_command_venv_dir()
+    anchors = (str(bootstrap / ("Scripts" if is_windows else "bin") / ("python.exe" if is_windows else "python")),) if bootstrap is not None else ()
+    version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    finding = pinned_base_finding(
+        Path(active_path) / "venv",
+        version=(sys.version_info.major, sys.version_info.minor),
+        abiflags=getattr(sys, "abiflags", ""),
+        is_windows=is_windows,
+        anchors=anchors,
+    )
+    if finding is None:
+        return Check("generation_base_python", True, "the active generation's base interpreter survives patch upgrades")
+    repair = finding.get("repair", "")
+    if finding["state"] == "gone":
+        message = f"the active generation's base interpreter {finding['home']} no longer exists, so `omh` from that generation cannot start"
+    else:
+        message = (
+            f"the active generation's base interpreter {finding['home']} is a version-pinned path; "
+            f"the next patch upgrade that removes it breaks `omh` with `bad interpreter`. {finding['stable']} names the same interpreter and survives"
+        )
+    return Check(
+        "generation_base_python",
+        False,
+        message,
+        severity="warning",
+        remediation="repair the venv in place from the stable interpreter; the next `omh update` stages from it on its own",
+        next_action=(
+            f"run `{repair}`; the interpreter it names must run Python {version}"
+            if repair
+            else f"re-run the OMH installer with a Python {version} interpreter"
+        ),
+        detail=dict(finding),
     )
 
 

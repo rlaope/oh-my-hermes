@@ -1918,6 +1918,15 @@ export function dagModel(graph) {
   }
 }
 
+// A settled dag-ulw run's model, for its figures alone, where any lane counted
+// anything; null otherwise, so a run that recorded nothing stays one line. A
+// settled run hides no lane (`dagRunSummary` reads none as settled then), so
+// the figures cover the whole run.
+export function closingDag(graph) {
+  const dag = dagModel(graph)
+  return dag && dag.total.lanes ? dag : null
+}
+
 // What the card line under a lane's route says: a waiting lane the lanes it waits on, any other its state, time and output.
 export function laneStatus(lane) {
   if (lane.state === 'waiting' && exceeds(lane.waits, 0)) return `${lane.glyph} ${t('dgWaitsOn', { count: lane.waits })}`

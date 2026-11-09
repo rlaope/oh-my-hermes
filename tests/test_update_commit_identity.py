@@ -176,6 +176,7 @@ class ProfileOnlyFailureExitCodeTests(unittest.TestCase):
                 agent_skills,
                 patch.object(setup_commands, "_sync_hermes_profiles", return_value=failed_rows),
                 patch.object(setup_commands, "_refresh_installed_menubar_app", return_value=None),
+                patch.object(setup_commands, "_refresh_tui_home", return_value=None),
             ):
                 status, stdout, _stderr = run_cli(argv)
         return status, json.loads(stdout)

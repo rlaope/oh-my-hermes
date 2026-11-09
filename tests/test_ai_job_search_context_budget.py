@@ -35,7 +35,8 @@ FULL_ROW_DELTA_CAP = 3072  # One 3070-character JSON row + comma/space.
 STANDALONE_ROW_DELTA_CAP = 935  # One 933-character row + comma/space.
 REGISTRY_DELTA_CAP = 244  # 227-character trigger row + 17-character role entry.
 # 1943 -> 1627: the Runtime Evidence reply-voice paragraph became one line (1446 -> 1130).
-REPEATED_DELTA_CAP = 1627  # Workflow Lane 497 + Runtime Evidence 1130.
+# 1627 -> 1903: that line takes back the turn-ending rule (1130 -> 1406).
+REPEATED_DELTA_CAP = 1903  # Workflow Lane 497 + Runtime Evidence 1406.
 
 
 def _digest(value: object) -> str:
@@ -237,7 +238,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # `omh-routing`, one character shorter than `oh-my-hermes`.
         # 496 -> 341: the lane line drops its sample of member names, which did not load.
         self.assertEqual(len(sections['Workflow Lane']), 341)
-        self.assertEqual(len(sections['Runtime Evidence']), 1130)
+        # 1130 -> 1406: the one reply line takes back the turn-ending rule.
+        self.assertEqual(len(sections['Runtime Evidence']), 1406)
         self.assertLessEqual(len(feature[0].content.encode()), 5735)
         legacy_templates = [t for t in templates if t.name != FEATURE]
         legacy_hashes = {}
@@ -440,7 +442,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # branch's was bdc90eb3...b8a4.
         # Merged with main a third time: main's pin was 15b8c2cd...9716, and this
         # branch's was 43186eb6...b987.
-        self.assertEqual(_digest(legacy_hashes), '758d8116dbdf5811dc81aee0ef5e70a78c463c0d7b3b5d4400254d0232949152')
+        # show-reel's checklist then names `codex exec` text runs beside codex images as paid calls;
+        # only show-reel moves, and the pin before it was 758d8116...9152.
+        # Its review round adds generated text and calls to spend-gate's credits rule; only
+        # spend-gate moves, and the pin before it was 7cd26de4...73da.
+        # Every body's one reply line then takes back the turn-ending rule, so every body moves; the pin
+        # before it was ed82a2da...ba22.
+        self.assertEqual(_digest(legacy_hashes), '18512bc6fe9492e38d1362409508b289f1f820c4b39f74843322de7bfa84beff')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -464,7 +472,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 114629 -> 92262: the lane line's sample of member names was the same text in every lane mate.
         # 92262 -> 83098: every body's reply-voice paragraph became one line pointing at the shared rail.
         # model-compression's Workflow Lane rail adds 341 to main's 83098.
-        self.assertEqual(legacy['repeated']['bytes'], 83439)
+        # 83439 -> 91443: the one reply line takes back the turn-ending rule (+276 in each repeated section).
+        self.assertEqual(legacy['repeated']['bytes'], 91443)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

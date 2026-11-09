@@ -1,0 +1,72 @@
+name: omher
+
+# omher (apps/omher): UI checks, the Tauri shell's Rust tests and an unsigned debug .app build, plus the
+# bridge's unit tests against a FakeGateway (no Hermes needed). Signing is a later step.
+
+on:
+  pull_request:
+    paths:
+      - "apps/omher/**"
+      - "docs/OMHER-BOUNDARY.md"
+      - "tests/test_omher_boundary.py"
+      - ".github/workflows/omher.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: omher-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.11"
+      - name: Install the bridge's test dependencies
+        run: python -m pip install "websockets>=14" pyyaml
+      - name: Bridge unit tests (FakeGateway)
+        working-directory: apps/omher
+        run: python -m unittest discover -s bridge/tests -v
+      - name: Boundary pins
+        env:
+          PYTHONPATH: tests
+        run: python -m unittest tests.test_omher_boundary -v
+
+  app:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Install pnpm
+        run: npm install --global pnpm@11
+      - name: Install dependencies
+        working-directory: apps/omher
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        working-directory: apps/omher
+        run: pnpm typecheck
+      - name: Unit tests (vitest)
+        working-directory: apps/omher
+        run: pnpm test
+      - name: Install Chromium for Playwright
+        working-directory: apps/omher
+        run: pnpm exec playwright install chromium
+      - name: End-to-end tests against the mock bridge
+        working-directory: apps/omher
+        run: pnpm exec playwright test --reporter=line
+      - name: Rust tests (Tauri shell)
+        working-directory: apps/omher/src-tauri
+        run: cargo test
+      - name: Build the unsigned debug .app
+        working-directory: apps/omher
+        run: pnpm tauri build --debug --bundles app
+      - name: Check the bridge ships inside the .app
+        working-directory: apps/omher/src-tauri/target/debug/bundle/macos
+        run: test -f omher.app/Contents/Resources/bridge/omher_bridge.py

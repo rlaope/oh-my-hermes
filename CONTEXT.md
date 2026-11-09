@@ -439,6 +439,27 @@ Hermes home — plugin readiness, activity rows, the plan todo, display lines.
 Status narration, never execution, review, CI, merge, or token-usage evidence.
 _Avoid_: runtime state (the payload is a read-only projection of it)
 
+### Desktop app
+
+**omher**:
+The macOS desktop app in `apps/omher/` (Tauri shell, React UI, a Python
+bridge). One Hermes profile is one bot; each bot has one main chat, the
+session titled `Bot Chat`, and omher shows its other sessions read-only. The
+app starts the bridge, which reaches the person's own Hermes gateway over
+loopback through Hermes' `connect_gateway`; omher makes no model or API call
+and is not part of the `omh` Python package. Boundary:
+`docs/OMHER-BOUNDARY.md`.
+_Avoid_: counting omher as an OMH execution surface, the OMH TUI, a Hermes
+Desktop plugin
+
+**Elsewhere**:
+A session of a bot's Hermes profile whose source is not one of `tui`, `cli`,
+`local`, `desktop`, `acp`, `api_server`, `omher` and which is not the bot's
+main chat: Slack, Discord, Telegram and cron sessions. omher lists them and
+reads their last messages and never sends, answers or interrupts in them.
+_Avoid_: other chats (omher has one chat per bot), shared session, a place to
+type
+
 ### Hermes terminal surfaces
 
 **Classic TUI**:

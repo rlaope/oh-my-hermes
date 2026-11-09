@@ -71,7 +71,7 @@ class SaidAndDoneTests(unittest.TestCase):
         self.assertEqual((header[2].text, header[2].style), ("⚚ Hermes", replace(THEME.brand, bold=True)))
         self.assertEqual(reply[-1], Span("hello", THEME.text))
         group = ToolGroup([ToolRow("a", "read_file", status=TOOL_OK), ToolRow("b", "terminal", status=TOOL_OK)], done=True)
-        rows = [row for row in block_rows(group, 40, THEME) if row]  # a blank row between two calls
+        rows = [row for row in block_rows(group, 40, THEME) if row]  # blank rows between two calls
         self.assertEqual([(row[4].text, row[4].style) for row in rows],
                          [("read_file", kind_style("read_file", THEME)), ("terminal", kind_style("terminal", THEME))])
         self.assertNotEqual(kind_style("read_file", THEME), kind_style("terminal", THEME))

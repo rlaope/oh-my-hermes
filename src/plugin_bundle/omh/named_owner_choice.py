@@ -20,6 +20,8 @@ import unicodedata
 
 from .dag_ulw_cues import invokes_dag_ulw
 from .executor_cues import SUBSTRING_NAMED_CODING_AGENT_PHRASES
+from .owner_cues import owner_named_as_doer
+from .text_fold import normalized_phrase
 
 
 # Map each existing unambiguous executor phrase to its external owner once.
@@ -47,16 +49,22 @@ _JA_NEGATIONS = (
 
 
 def named_owners(text: str) -> tuple[str, ...]:
-    """Return explicitly named, unnegated external owners in fixed order.
+    """Return the external owners named as the doer, unnegated, in fixed order.
 
-    Bare advisor names are absent from the shared executor cues. Latin word
-    boundaries prevent an ordinary larger word from naming an owner, while
-    allowing Japanese and Korean particles directly after a product name.
+    Bare advisor names are absent from the shared executor cues. A name counts
+    only with an owner cue, read by the same `owner_named_as_doer` the router and
+    the chat wrapper use: "/dag-ulw build it with codex", "codex로", "codexで".
+    "/dag-ulw fix the codex adapter tests" names what the work is about and
+    chooses no owner. Latin word boundaries keep an ordinary larger word from
+    naming an owner.
     """
     folded = " ".join(unicodedata.normalize("NFKC", text).casefold().replace("’", "'").split())
+    cue_text = normalized_phrase(text)
     found: set[str] = set()
     for phrase, owner in NAMED_OWNER_PHRASES:
         if phrase not in SUBSTRING_NAMED_CODING_AGENT_PHRASES:
+            continue
+        if not owner_named_as_doer(cue_text, normalized_phrase(phrase)):
             continue
         name = rf"(?<![a-z0-9_-]){re.escape(phrase)}(?![a-z0-9_-])"
         negated = [

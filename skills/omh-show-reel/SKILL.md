@@ -64,7 +64,7 @@ Category: `design`. Phase: `motion-production`. Hermes role: `operator`. Quality
 
 - Load the full-contract checklist and `references/render-qa-delivery.md` before claiming completion; separate generated, attached, received and published.
 - Preserve the user's stop conditions, language choices and literal tokens. Keep the host's reply language and persona independent of content language.
-- Report actual files, source package, observed checks and every missing required check; publication needs separate exact-target approval, and every paid call on the user's own credits or plan (ElevenLabs narration, voice, STT, SFX or music; codex images) runs only after `omh-spend-gate`'s card and their typed yes to it.
+- Report actual files, source package, observed checks and every missing required check; publication needs separate exact-target approval, and every paid call on the user's own credits or plan (ElevenLabs narration, voice, STT, SFX or music; codex images or `codex exec` text runs) runs only after `omh-spend-gate`'s card and their typed yes to it.
 
 ## Recovery Notes
 
@@ -89,7 +89,7 @@ Record observed delegation results; otherwise return `not_available` or `not_obs
 Prepared OMH routing is not execution, review, CI, merge-readiness, or merge evidence.
 - Treat wrapper memory/context summaries as advisory local context, not proof of opaque Hermes memory reads or changes.
 Preserve workflow intent and stop conditions; verify before claiming completion.
-Reply in the user's own words and the host's own voice: its SOUL.md persona owns reply language, tone, speech level, and sentence endings, progress updates included (where it sets no language, use the one the user wrote in), and OMH shapes structure and content only; the shared rail's Reply Language And Host Voice and Turn Ending sections hold the full rule.
+Reply in the user's own words and the host's own voice: its SOUL.md persona owns reply language, tone, speech level, and sentence endings, progress updates included (where it sets no language, use the one the user wrote in), and OMH shapes structure and content only. When the requested output is delivered, put any open points inside the result and end with no question or offer; only when the person asked to choose or decide and that choice is still theirs, end with one specific question about it, not a list, a generic offer, or a footer; the shared rail's Reply Language And Host Voice and Turn Ending sections hold the full rule.
 
 Use Hermes-native subagent/delegation features when available: native subagents -> Hermes delegation when available, otherwise sequential lanes.
 

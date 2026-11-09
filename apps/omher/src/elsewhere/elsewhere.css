@@ -1,0 +1,212 @@
+/* Elsewhere: header places chip, read-only away line + peek, Details panel lists. Ported from the sketch. */
+
+/* header chip */
+.ew-places {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  border-radius: var(--r);
+  border: 1px solid transparent;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex: none;
+}
+.ew-places:hover,
+.ew-places.on {
+  background: var(--raise);
+  border-color: var(--line);
+}
+.ew-pd {
+  display: flex;
+  gap: 3px;
+}
+
+/* source label: square + name */
+.ew-src {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex: none;
+}
+.ew-logo {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  object-fit: contain;
+}
+
+/* elsewhere in the timeline: an ordinary bot bubble ending in a link to its thread */
+.ew-msg .b {
+  white-space: normal;
+}
+.ew-link,
+.ew-where {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+.ew-where {
+  color: var(--muted);
+  text-decoration: none;
+}
+.ew-link:hover {
+  color: var(--ink);
+}
+.ew-working {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--quiet);
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+/* Details panel */
+.ew-panel {
+  min-height: 0;
+}
+.ew-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+.ew-sec {
+  padding: 12px 16px 4px;
+  font-size: 10.5px;
+  color: var(--quiet);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  display: flex;
+}
+.ew-sec span {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ew-sess {
+  list-style: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 8px;
+}
+.ew-ss {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding: 7px 8px;
+  border-radius: var(--r);
+}
+.ew-ss.here {
+  background: var(--raise2);
+}
+.ew-ss .t1 {
+  color: var(--ink);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ew-ss .t2 {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ew-ss .st {
+  font-size: 11px;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ew-ss .st.run {
+  color: var(--muted);
+}
+.ew-ss .st.bad {
+  color: var(--danger);
+}
+.ew-sess > li:not(.ew-ss) {
+  display: block;
+  min-width: 0;
+}
+a.ew-ss,
+div.ew-ss {
+  color: inherit;
+  text-decoration: none;
+  width: 100%;
+}
+.ew-ss > .t1 {
+  grid-column: 1;
+  min-width: 0;
+}
+.ew-ss > .st {
+  grid-column: 2;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+}
+.ew-ss.link {
+  cursor: pointer;
+}
+.ew-ss.link:hover {
+  background: var(--hover);
+}
+.ew-ss.link:hover .ew-go {
+  color: var(--body);
+}
+.ew-ss .t2 .ew-go {
+  margin-left: auto;
+  color: var(--quiet);
+  font-size: 11px;
+}
+.ew-live {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 5px;
+  background: var(--g-accent);
+}
+.ew-more {
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  border-radius: var(--r);
+}
+.ew-more:hover {
+  background: var(--hover);
+  color: var(--body);
+}
+.ew-ss.off .t1 {
+  color: var(--muted);
+}
+.ew-note {
+  margin: 6px 16px 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--body);
+}
+.ew-nw {
+  white-space: nowrap;
+}
+.ew-empty {
+  padding: 4px 16px;
+  font-size: 11.5px;
+  color: var(--quiet);
+}

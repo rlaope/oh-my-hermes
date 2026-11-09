@@ -1,0 +1,74 @@
+.routine {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+.routine-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.routine-row:hover .routine-t {
+  color: var(--body);
+}
+.routine-row:focus-visible {
+  outline: 1px solid var(--line-strong);
+  outline-offset: 1px;
+}
+.routine-ic {
+  width: 12px;
+  text-align: center;
+  color: var(--quiet);
+  font-size: 11px;
+  flex: none;
+}
+.routine-t {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.routine-name {
+  color: var(--body);
+}
+.routine-bad {
+  color: var(--danger);
+}
+.routine-chev {
+  display: inline-flex;
+  color: var(--quiet);
+  flex: none;
+  opacity: 0;
+}
+.routine-row:hover .routine-chev,
+.routine-row:focus-visible .routine-chev,
+.routine[data-open="true"] .routine-chev {
+  opacity: 1;
+}
+.routine-detail {
+  display: flex;
+  gap: 8px;
+  margin: 2px 0 4px 20px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: var(--raise);
+  color: var(--muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.routine-k {
+  color: var(--quiet);
+  flex: none;
+}

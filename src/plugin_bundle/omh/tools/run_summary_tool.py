@@ -30,7 +30,8 @@ from typing import Any
 from .. import dag_run
 from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
 from ..cost_receipt import build_cost_receipt
-from ..delegation_graph import graph_segments
+from ..delegation_graph import closing_usage, graph_segments, run_usage_text
+from ..delegation_ledger import read_ledger
 from ..sqlite_readonly import connect_readonly
 
 RUN_SUMMARY_CLAIM_BOUNDARY = (
@@ -59,6 +60,11 @@ _ELAPSED_UNITS: dict[str, str] = {"en": "s", "ko": "초", "ja": "秒", "zh": "�
 _GOAL_LABELS: dict[str, str] = {
     "en": "Goal check (DAG {run}): {verdict}", "ko": "목표 검증 (DAG {run}): {verdict}",
     "ja": "目標の検証 (DAG {run}): {verdict}", "zh": "目标验证 (DAG {run}): {verdict}",
+}
+# The line before it: what the run's children used, as Hermes recorded it (`delegation_graph.run_usage_text`).
+_DAG_USAGE_LABELS: dict[str, str] = {
+    "en": "DAG usage ({run}): {figures}", "ko": "DAG 사용량 ({run}): {figures}",
+    "ja": "DAG の使用量 ({run}): {figures}", "zh": "DAG 用量 ({run}): {figures}",
 }
 _ELAPSED_UNKNOWN: str = "unknown"
 
@@ -164,8 +170,8 @@ def _dag_goal(omh_home: Path, hermes_home: Path, session_id: str) -> dict[str, A
     The verdict is the record's own (`dag_run.goal_verdict`): the outcomes
     the parent settled and the handoff reads, never the model's words.
     """
-    runs = [item for segment in graph_segments(hermes_home, session_id)
-            for item in dag_run.session_runs(omh_home, segment)]
+    segments = graph_segments(hermes_home, session_id)
+    runs = [item for segment in segments for item in dag_run.session_runs(omh_home, segment)]
     if not runs:
         return None
     record = max(runs, key=lambda item: float(item[0].get("updated_at") or 0.0))[0]
@@ -174,8 +180,13 @@ def _dag_goal(omh_home: Path, hermes_home: Path, session_id: str) -> dict[str, A
     if state not in dag_run.FINISHED_STATES:
         return None
     verdict, reasons = dag_run.goal_verdict(record, derived)
-    return {"run": record["run"], "name": record["name"], "state": state, "verdict": verdict, "reasons": reasons,
+    goal = {"run": record["run"], "name": record["name"], "state": state, "verdict": verdict, "reasons": reasons,
             "claim_boundary": dag_run.VERDICT_CLAIM_BOUNDARY}
+    children = [child for segment in segments for child in (read_ledger(omh_home, segment) or {}).get("children", [])]
+    usage = closing_usage(hermes_home, record, children)
+    if usage is not None:
+        goal["usage"] = usage
+    return goal
 
 
 def _number(value: Any) -> float:
@@ -262,6 +273,8 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
     goal = _dag_goal(runtime_paths.plugin_home(args.get("omh_home")), home, session_id)
     if goal is not None:
         payload["dag_goal"] = goal
+        if "usage" in goal:
+            lines.append(_DAG_USAGE_LABELS[language].format(run=goal["name"], figures=run_usage_text(goal["usage"])))
         lines.append(_GOAL_LABELS[language].format(run=goal["name"], verdict=goal["verdict"]))
     payload.update(
         {

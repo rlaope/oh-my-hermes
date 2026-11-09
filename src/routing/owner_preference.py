@@ -74,6 +74,7 @@ def owner_preference_decision(
     coding_delivery: bool = True,
     ulw: bool = True,
     named_owner: bool = False,
+    profile_owner: bool = False,
     multiple_owners: bool = False,
     authority_blocked: bool = False,
     owner_ready: bool = True,
@@ -107,6 +108,9 @@ def owner_preference_decision(
     if not capability_fit:
         return _decision("ask_explicit_owner", "capability_gap", family, count)
 
+    if profile_owner:
+        # A default the person set in the setup profile stands; it is a setting, not a choice made in this request.
+        return _decision("bypass_owner_learning", "owner_set_in_setup_profile", family, count)
     return _decision("ask_explicit_owner", "explicit_choice_required", family, count)
 
 
@@ -316,6 +320,7 @@ def _decision(action: str, reason_code: str, route_family: str, count: int) -> O
         "authority_requires_choice": "The authority boundary requires a fresh explicit choice.",
         "owner_unready": "The owner is not ready, so the owner choice is reopened.",
         "capability_gap": "A required capability is not met, so the owner choice is reopened.",
+        "owner_set_in_setup_profile": "The setup profile holds the owner, so no question is asked.",
         "explicit_choice_required": (
             "No owner is named in this request, and an earlier choice never counts for it; ask for an explicit choice."
         ),

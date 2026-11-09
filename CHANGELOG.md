@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh update`, `omh doctor` and the menu bar know the TUI's own
+  runtime home.** Update rebuilds `<omh_home>/tui-home` when the runtime
+  choice is `own` or the home exists (the OMH plugin bundle it links moved
+  with the update); doctor's `omh_tui_runtime` row says which runtime bare
+  `omh` opens on and, for the own runtime, what the home was built from,
+  its skill count, links to skills that went, a messaging credential or a
+  connected adapter that should never be there, and whether its gateway
+  runs; the menu bar's settings carry `TUI runtime: own (gateway pid N)` or
+  `shared gateway`. From review: the skill union now links each skill at
+  its own `<category>/<skill>` path (a profile's skills inside a category
+  the root also has were dropped before), the messaging scrub matches by
+  prefix over every Hermes platform and strips the same names from the
+  TUI's process environment, a root `config.yaml` that connects a platform
+  keeps the launch on the shared gateway, `auth.json` is copied only when
+  the root's is newer, `--resume` opens where the session is whichever
+  runtime is chosen, and a credential on the TUI runtime fails the doctor
+  row.
 - **`omh theme runtime own` gives the OMH TUI a Hermes runtime of its own,
   so the bots' gateway restarts and drains never pause it.** Hermes serves
   every profile from one gateway per host and refuses its standalone entry
@@ -282,6 +299,22 @@ All notable changes will be documented here.
   the capture result lists it. Approved and rejected candidates are left as
   they are, and no person is asked.
 
+- **A Homebrew Python patch upgrade no longer breaks a self-updated `omh`.**
+  `omh update` created each generation's venv from the running venv's
+  interpreter, so `python -m venv` linked it to the resolved base, the
+  version-pinned keg (`/opt/homebrew/Cellar/python@3.15/3.15.0/...`); after
+  `brew upgrade` and cleanup the launcher failed with `bad interpreter`. The
+  update now reads `pyvenv.cfg` in the running venv and in the bootstrap venv,
+  follows each `command` back to the interpreter the installer ran, then
+  tries each `home`, and uses the first that runs the same major.minor and
+  ABI flags; otherwise it keeps the old choice. The bootstrap venv matters
+  after three or more older updates, when cleanup has deleted the middle of
+  the chain. No vendor paths: python.org, pyenv, uv and Windows
+  (`Scripts\python.exe`) venvs are read the same way. `omh doctor` reports a
+  generation whose base is gone or version-pinned as `generation_base_python`
+  and prints the repair command; [Installation](docs/INSTALLATION.md) gives
+  the same repair for an `omh` that no longer starts. (#2683)
+
 - **`/gateway restart` says what each choice stops.** In a named profile the
   shared gateway serves, "Restart this profile" now says that profile's
   running turns stop now, since Hermes re-serves it without waiting. The
@@ -292,6 +325,12 @@ All notable changes will be documented here.
   first if a service runs the gateway, and is otherwise interrupted. `/image`
   and `/paste` now wait in the composer during the restart, as the other
   commands that call the gateway do.
+- **show-reel's codex script review and concept candidates go through the
+  spend gate.** Each `codex exec` text run draws on the user's ChatGPT plan
+  like a codex image run, so it now waits for `omh-spend-gate`'s card and the
+  person's typed yes. No price gives its cost, so its spend-only cap is set
+  in calls, a unit the rails page now lists.
+
 - **A finished dag child's briefing names it by its role and a coloured
   handle.** As Claude Code writes `● Teammate @x finished`, a dag node's child
   now reads `● build @notify finished` (`verify`, `review`, `baseline`: the
@@ -457,6 +496,38 @@ All notable changes will be documented here.
   pushes out a hint already there, and a message over 1000 characters is not
   read. Hint text and routes are unchanged.
 
+- **A setup-profile default coding owner is no longer taken for one named
+  in the request.** `omh chat interact` and `omh chat session start` used to
+  resolve the profile's `default_executor` before the wrapper saw it, so the
+  wrapper labelled it `explicit`: it skipped the genre veto that holds a
+  non-coding request back from an external coding CLI, and it was recorded as
+  an explicit choice the person never made. The wrapper now reads the profile
+  itself and labels it `setup_profile`, the route decision is the
+  recorded-owner one, and nothing is recorded. An owner named in the message
+  now beats the profile default on every entry point: with the profile on
+  `claude-code`, "fix the login bug with codex" runs Codex through `chat
+  interact`, `chat session start` and `coding delegate`, as it already did
+  through the plugin `omh_interact` tool (those three ran Claude Code before).
+  With no profile set, `coding delegate` now takes that named owner too,
+  where it fell back to `generic`. `--executor` still wins over both. A CLI
+  counts as named only as the one to do the work ("use codex", "with claude
+  code", "have codex fix", "codex로", "codex한테", "클로드 코드로", "open this in
+  codex"): "fix the codex adapter tests" or "update the claude code docs"
+  names what the work is about and chooses no owner, on every entry point and
+  in the route decision, where a bare product name used to pick the owner.
+  A dag-ulw request reads the same cue: "/dag-ulw fix the codex adapter tests"
+  no longer sends a node that names `owner: codex` to Codex.
+  The CLI addressed as the one to act counts too ("codex가 고쳐줘", "codex,
+  fix ...", "get codex to ...", "codex please ...", "can codex fix ...",
+  "codexに…させて"). When a request mentions a coding CLI but not as the one
+  to do the work, and the profile default is a different CLI, nothing runs:
+  the owner is asked for, with the mentioned CLI named first ("fix the login
+  bug in codex", "codex에서 로그인 버그 고쳐줘") A CLI the request excludes ("don't use
+  codex", "codex 말고"), or names only inside a link or a filename, is no such
+  mention, and naming two owners as the doer asks on every entry point. The plugin tool and the turn's route
+  hint now say `owner_set_in_setup_profile` when the profile holds the owner,
+  where they said the owner had to be asked for.
+
 - **The operations and board skills now name the commands and Hermes
   surfaces they depend on.** `cancel` lists what exists before clearing and
   hands a running scheduled job to `hermes cron pause` and `runs`, and to
@@ -538,6 +609,19 @@ All notable changes will be documented here.
   says it was not copied, and so does `/copy`. A tmux, screen or zellij
   started inside the pane, or another terminal opened from it, keeps its own
   rule. Reported by @foxion37 in #2672.
+- **A turn whose message matches no stored memory gets no memory block.**
+  The live pack used to list such records by name in one English
+  `<record_index>` line, which Hermes wraps as context that "should inform
+  all responses". With a persona that sets no reply language, that line
+  alone moved a Korean-writing user's replies to English. Those records are
+  now withheld and named nowhere; with nothing else to serve, the provider
+  returns nothing. Records from this conversation and pinned records still
+  show in full, and so does a record whose subject or tag the message names
+  in another form ("tickets" for `ticket-tool-db-choice`). `omh_remember`
+  recall finds a withheld record by subject or words, and a recall that
+  matches nothing, or an empty one, now lists what is stored (subject, type
+  and id, without text), so "what did we decide last time?" reaches the
+  decision in two calls.
 - **Every arrow line in the per-turn primer names skills a model can load.**
   The generic tool map, workflow context cards and common cues named
   catalog names (`research`, `img-summary`) and shorthand that was no skill
@@ -681,6 +765,13 @@ All notable changes will be documented here.
   returns to the chat.** The transcript view the wheel opens closes once the wheel brings it back to its
   end, so the composer is back without Esc or `q`. A view opened by Ctrl+O or
   `/history` still stays open at its end.
+- **The OMH TUI puts two blank rows between two tool calls of a turn.** A
+  run of calls now reads apart, as Claude Code's does; a folded row of
+  loaded skills counts as a call. Every other pair of blocks keeps one
+  blank row, and what a call printed under `⎿` stays right under it. When
+  the running calls do not fit, the oldest gaps in the live region give up
+  their second row first, only as many as needed, so no call row is lost and
+  no blank rows gather over the working row; scrollback has both.
 - **The router no longer picks a coding owner from earlier choices.** Three
   accepted answers to the coding-owner question used to make that owner a
   visible default for later requests. Now every request asks for an explicit
@@ -735,6 +826,17 @@ All notable changes will be documented here.
   in the shared rail's Reply Language And Host Voice and Turn Ending sections,
   which already held them. Portable agent-skills bodies keep the full
   paragraph, since their hosts have no shared rail.
+- **A Hermes skill's reply ends on one specific question again when the
+  person asked to choose.** The one reply line in every Hermes skill body
+  takes back the turn-ending rule, keyed on the request: when the requested
+  output is delivered, open points go inside the result and the reply ends
+  with no question or offer; only when the person asked to choose or decide
+  and that choice is still theirs does it end with one specific question
+  about it, not a list, a generic offer, or a footer. With only a pointer to
+  the shared rail, models did not load the rail and replies that asked for a
+  choice stopped ending on that question. The persona and language core and
+  the rail pointer stay as they were; portable agent-skills bodies already
+  carried the rule and are unchanged.
 - **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
   `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
   or Enter opens sessions or bots, folds the plan, searches history, cycles
@@ -1068,6 +1170,20 @@ All notable changes will be documented here.
   leaves over any half-typed command, and Esc over a pending find holds a
   waiting `continue` as it does over any other command. Contributed by
   @DanRioDev (#2668).
+
+- **A finished dag-ulw run says what it used.** Once a run is done, stopped
+  or cancelled, `omh_dag` adds `usage` (its children's uncached input, cache
+  read, cache write and output tokens, and the cost Hermes recorded) and a
+  `usage_line` such as `DAG feat · 2 children · 13.2k tokens · cache 80.0% ·
+  $0.0500 (2/2 priced)`. Every child the run bound counts, an earlier retry's
+  too, each with its compaction segments and auxiliary calls. The cost is
+  only what Hermes priced: a child it did not price makes the figure a floor
+  (`≥`), an estimate keeps its `~`, and no token is converted into a price or
+  compared with a model the run did not use. `omh_run_summary` prints the
+  same figures as a `DAG usage` line before the goal check, and the Desktop
+  pane keeps the run's Tokens / Cache hit / Cost / Node time figures under
+  the summary line once the cards collapse, where before they vanished at
+  the moment the run ended. Asked for in #2684.
 
 ## 4.0.6 - 2026-11-04
 

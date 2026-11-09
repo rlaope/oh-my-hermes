@@ -51,6 +51,7 @@ class UpdateAgentSkillsTests(unittest.TestCase):
                 hermes_plugin_dir=self.home / "absent-plugin", hermes_home=self.home / ".hermes")))
             stack.enter_context(patch.object(setup, "_bootstrap_tui_surface", return_value={}))
             stack.enter_context(patch.object(setup, "_refresh_installed_menubar_app", return_value=None))
+            stack.enter_context(patch.object(setup, "_refresh_tui_home", return_value=None))
             profiles = stack.enter_context(patch.object(setup, "_sync_hermes_profiles", return_value=[]))
             stack.enter_context(patch.object(setup, "refresh_skill_dir_caches", return_value=[]))
             stack.enter_context(patch.object(setup, "managed_current_workflow_pack_dir", return_value=None))

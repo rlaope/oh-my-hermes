@@ -308,7 +308,7 @@ class RecallTests(_Home):
 
     def test_bad_query_or_limit_is_refused(self) -> None:
         for args, reason in (
-            ({}, "query_invalid"),
+            ({"query": "nul\x00byte"}, "query_invalid"),
             ({"query": "x" * 501}, "query_invalid"),
             ({"query": "deploy", "limit": 7}, "limit_invalid"),
             ({"query": "deploy", "limit": 0}, "limit_invalid"),

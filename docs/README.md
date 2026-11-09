@@ -165,6 +165,7 @@ findable only by knowing its filename.
 | Provider-neutral input fidelity and per-attempt sync receipts for an optional memory provider | [Memory Sync Fidelity](MEMORY-SYNC-FIDELITY.md) |
 | Bounded retry/replan/stop/escalate decisions for an observed error | [Failure Mender](failure-mender.md) |
 | What the OMH TUI and its gateway child send, answer, write, and may import | [OMH TUI Boundary](OMH-TUI-BOUNDARY.md) |
+| What the omher desktop app and its bridge send, write, and may import | [omher Boundary](OMHER-BOUNDARY.md) |
 
 ## Documentation Checks
 

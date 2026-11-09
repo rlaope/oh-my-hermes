@@ -1,0 +1,208 @@
+/* omher design tokens, ported from the approved sketch (sketches/omher/e-simple/index.html).
+   Dark is the default (:root); light lives under [data-theme="light"]. The app resolves the
+   "system" preference to dark/light in JS and writes the result to <html data-theme>. */
+
+:root {
+  color-scheme: dark;
+
+  /* brand: OMH logo (violet-magenta -> hot pink -> coral) and wordmark (lavender -> lime) */
+  --l1: #a646c4;
+  --l2: #d33c8d;
+  --l3: #e0595e;
+  --w1: #be79d0;
+  --w2: #f07cc4;
+  --w3: #f8929a;
+  --w4: #eaaf55;
+  --w5: #ccd465;
+  --g-logo: linear-gradient(120deg, var(--l1), var(--l2) 55%, var(--l3));
+  --g-word: linear-gradient(90deg, var(--w1), var(--w2) 30%, var(--w3) 55%, var(--w4) 80%, var(--w5));
+
+  /* accent: the colour set the person picks (Settings > Appearance). It paints only the accent points:
+     send button, unread badge, live dots, skill chip, spinner, your bubble. The logo never changes. */
+  --a1: var(--l1);
+  --a2: var(--l2);
+  --a3: var(--l3);
+  --g-accent: linear-gradient(120deg, var(--a1), var(--a2) 55%, var(--a3));
+  --on-accent: #fff;
+  --spin: var(--w1);
+
+  /* surfaces */
+  --page: #050406;
+  --bg: #0b090d;
+  --side: #121014;
+  --raise: #1b181e;
+  --raise2: #232026;
+  --line: #29252c;
+  --line-soft: #1c1a1f;
+  --line-strong: #3d3640;
+  --hover: rgba(255, 255, 255, 0.03);
+  --active-row: var(--raise2);
+  --search-bg: var(--raise2);
+  --grp-bg: var(--side);
+  --pop: #262229;
+  --seg-on: #3d3843;
+  --knob: #c9c2cc;
+  --toggle-off: #2e2a32;
+  --toggle-off-line: #3d3843;
+
+  /* text */
+  --ink: #f3eff4;
+  --body: #dcd6de;
+  --muted: #9a929d;
+  --quiet: #6f6872;
+  --ok: #7fd6a4;
+  --danger: #f08a8a;
+  --accent: #f07cc4;
+  --link: #b9b0ff;
+
+  /* bubbles: filled on both sides, no border */
+  --bub-bot: #1d1a20;
+  --bub-me: #3c2a3b;
+  --user: #26222a;
+
+  /* elsewhere source squares */
+  --src-discord: #5865f2;
+  --src-slack: #e8a33c;
+  --src-telegram: #2aabee;
+  --src-cron: var(--quiet);
+
+  /* text size (Settings > Appearance): messages and the composer only */
+  --fs-msg: 13px;
+  --lh-msg: 1.55;
+
+  /* shape + type */
+  --r: 6px;
+  --r-sm: 4px;
+  --r-bubble: 10px;
+  --side-x: 8px;
+  --side-w: 248px;
+  --panel-w: 300px;
+  --thread-w: 700px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, monospace;
+
+  --shadow: 0 40px 120px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --pop-shadow: 0 18px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --scrollbar: #2c272f;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --page: #e8e5ea;
+  --bg: #ffffff;
+  --side: #f7f5f8;
+  --raise: #f2eff3;
+  --raise2: #e9e5eb;
+  --line: #e3dee5;
+  --line-soft: #efecf1;
+  --line-strong: #cbc4cf;
+  --hover: rgba(0, 0, 0, 0.035);
+  --active-row: #ebe7ee;
+  --search-bg: #ebe7ee;
+  --grp-bg: #faf8fb;
+  --pop: #ffffff;
+  --seg-on: #ffffff;
+  --knob: #ffffff;
+  --toggle-off: #d9d3dc;
+  --toggle-off-line: #cbc4cf;
+
+  --ink: #19151b;
+  --body: #2c2630;
+  --muted: #605864;
+  --quiet: #756d7a;
+  --ok: #1f8a52;
+  --danger: #c0392b;
+  --accent: #c4367f;
+  --link: #5b4fd1;
+
+  --bub-bot: #f2f0f4;
+  --bub-me: #f3dcea;
+  --user: #f0edf2;
+
+  --src-slack: #d08a1e;
+
+  --shadow: 0 30px 80px rgba(40, 20, 40, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  --pop-shadow: 0 12px 32px rgba(40, 20, 40, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --scrollbar: #d6d0d9;
+}
+
+/* ---- colour sets ------------------------------------------------------------------------------
+   Each sets the accent gradient, the link colour and your bubble's tint, for dark and light.
+   "omh" is the default above (the logo's own colours). Selection states stay gray in every set. */
+
+/* "omh" restated so a swatch inside another set still shows the logo colours */
+[data-palette="omh"] {
+  --a1: var(--l1);
+  --a2: var(--l2);
+  --a3: var(--l3);
+}
+[data-palette="graphite"] {
+  --a1: #6a707c;
+  --a2: #565c67;
+  --a3: #454a54;
+  --spin: #a3a8b1;
+  --link: #c9cdd4;
+  --bub-me: #34363b;
+}
+[data-palette="ocean"] {
+  --a1: #2457c9;
+  --a2: #2f6fe4;
+  --a3: #3a7fe0;
+  --spin: #5ea2f5;
+  --link: #8cbcff;
+  --bub-me: #1f3150;
+}
+[data-palette="forest"] {
+  --a1: #157a51;
+  --a2: #1d9160;
+  --a3: #3c9d58;
+  --spin: #4cc08a;
+  --link: #86d9ab;
+  --bub-me: #1d3a2c;
+}
+[data-palette="sunset"] {
+  --a1: #d2461f;
+  --a2: #df6430;
+  --a3: #e5873a;
+  --spin: #f2884b;
+  --link: #ffb48c;
+  --bub-me: #45291d;
+}
+[data-palette="rose"] {
+  --a1: #c42f66;
+  --a2: #d6477c;
+  --a3: #de6390;
+  --spin: #ec6a9a;
+  --link: #ffa3c2;
+  --bub-me: #45202f;
+}
+
+[data-theme="light"][data-palette="graphite"] {
+  --link: #3f4550;
+  --bub-me: #e4e5e8;
+}
+[data-theme="light"][data-palette="ocean"] {
+  --link: #1d5fd1;
+  --bub-me: #d8e7fa;
+}
+[data-theme="light"][data-palette="forest"] {
+  --link: #16794d;
+  --bub-me: #d9eedf;
+}
+[data-theme="light"][data-palette="sunset"] {
+  --link: #b5521f;
+  --bub-me: #fae4d4;
+}
+[data-theme="light"][data-palette="rose"] {
+  --link: #b8285f;
+  --bub-me: #f8dce6;
+}
+
+[data-text="medium"] {
+  --fs-msg: 14px;
+}
+[data-text="large"] {
+  --fs-msg: 15px;
+  --lh-msg: 1.6;
+}

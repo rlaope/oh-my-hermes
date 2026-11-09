@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 import hashlib
 import os
@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
+import time
 from typing import Any, Literal, NotRequired, Protocol, TypedDict
 
 try:
@@ -19,6 +20,7 @@ try:
     from ..maintenance.hermes_gateway import recorded_gateway_starts, refresh_skill_dir_caches
     from ..system.local_store import FileLockTimeout, file_lock
     from ..system.paths import managed_command_venv_dir, resolve_paths
+    from .self_update_base_python import base_python_candidates
     from .self_update_platform import SelfUpdatePlatform
     from .self_update_state import CleanupResult, GenerationEntry, collect_garbage, commit_activation, generation_entry, interrupted_activation, load_state, mark_activation, mark_switched, migrate_legacy, pointer_target, record_pointer, recovery_target, restore_known_good, save_state, state_path, switch_current
     from .self_update_state_validation import require_generation_path, same_existing_path
@@ -28,6 +30,7 @@ except ImportError:  # pragma: no cover - direct-source installer smoke.
     from maintenance.hermes_gateway import recorded_gateway_starts, refresh_skill_dir_caches
     from system.local_store import FileLockTimeout, file_lock
     from system.paths import managed_command_venv_dir, resolve_paths
+    from install.self_update_base_python import base_python_candidates
     from install.self_update_platform import SelfUpdatePlatform
     from install.self_update_state import CleanupResult, GenerationEntry, collect_garbage, commit_activation, generation_entry, interrupted_activation, load_state, mark_activation, mark_switched, migrate_legacy, pointer_target, record_pointer, recovery_target, restore_known_good, save_state, state_path, switch_current
     from install.self_update_state_validation import require_generation_path, same_existing_path
@@ -35,6 +38,12 @@ except ImportError:  # pragma: no cover - direct-source installer smoke.
 RESULT_SCHEMA_VERSION = "command_package_self_update/v1"
 IDENTITY_CHANGE_SCHEMA_VERSION = "update_identity_change/v1"
 REENTRY_TIMEOUT_SECONDS = 600.0
+# A healthy interpreter answers the probe in about 50 ms. The budget bounds
+# every probe together, since they run while the update lock is held.
+BASE_PYTHON_PROBE_TIMEOUT_SECONDS = 10.0
+BASE_PYTHON_PROBE_BUDGET_SECONDS = 20.0
+BASE_PYTHON_MARKER = "omh-base-python:"
+BASE_PYTHON_PROBE = f"import sys; print({BASE_PYTHON_MARKER!r} + '%d.%d' % sys.version_info[:2] + getattr(sys, 'abiflags', ''))"
 # `omh update` exits with this when its own home refreshed and only a bot
 # profile failed. The activated generation runs; rolling it back cannot repair
 # a profile (the previous generation fails on the same profile), so a staged
@@ -158,6 +167,43 @@ def _run(runner: Runner, command: list[str], *, env: dict[str, str] | None = Non
 
 def _detail(value: subprocess.CompletedProcess[str], fallback: str) -> str:
     return str(value.stderr or value.stdout or fallback).strip()[:2000]
+
+
+def _probed_build(stdout: str) -> str:
+    """`3.15` / `3.14t` from the probe's marker line; other lines (a printing `sitecustomize`) are ignored."""
+    for line in stdout.splitlines():
+        if line.startswith(BASE_PYTHON_MARKER):
+            return line.removeprefix(BASE_PYTHON_MARKER).strip()
+    return ""
+
+
+def stable_base_python(seed: str, *, runner: Runner, platform: SelfUpdatePlatform, anchors: tuple[str, ...] = (), version: tuple[int, int] | None = None, abiflags: str | None = None, clock: Callable[[], float] = time.monotonic) -> str:
+    """The interpreter to create a generation venv from: the first stable base that runs this build, else `seed`.
+
+    `seed` run with `-m venv` from inside a venv links the generation to its
+    resolved base, a version-pinned path on Homebrew (#2683). The candidates
+    come from the `pyvenv.cfg` chains of `seed` and `anchors`
+    (`self_update_base_python`). Each runs once, isolated (`-I -S`), and is
+    kept only when it reports the running major.minor and ABI flags, so a
+    `python3` that moved to another minor release, or the default build beside
+    a free-threaded one, is never picked. CPU architecture is not compared:
+    a universal binary has none of its own, and the package is pure Python.
+    """
+    expected = version or (sys.version_info.major, sys.version_info.minor)
+    flags = getattr(sys, "abiflags", "") if abiflags is None else abiflags
+    wanted = f"{expected[0]}.{expected[1]}{flags}"
+    deadline = clock() + BASE_PYTHON_PROBE_BUDGET_SECONDS
+    for candidate in base_python_candidates(seed, version=expected, abiflags=flags, is_windows=platform.is_windows, anchors=anchors):
+        remaining = deadline - clock()
+        if remaining <= 0:
+            break
+        try:
+            probed = _run(runner, [candidate, "-I", "-S", "-c", BASE_PYTHON_PROBE], timeout=min(BASE_PYTHON_PROBE_TIMEOUT_SECONDS, remaining))
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if probed.returncode == 0 and _probed_build(str(probed.stdout or "")) == wanted:
+            return candidate
+    return seed
 
 
 def _stage(candidate: Path, package_url: str, base_python: str, *, runner: Runner, json_mode: bool, platform: SelfUpdatePlatform) -> tuple[bool, str]:
@@ -374,7 +420,9 @@ def run_installer_self_update(args: Any, plan: Mapping[str, object], *, runner: 
                 return _recover_known_good(root, state, args, runner, selected, result, hermes_home=paths.hermes_home)
             if not package_url:
                 raise OmhError("cannot update command package because no package URL is available")
-            staged, reason = _stage(candidate, package_url, str(plan.get("python") or sys.executable), runner=runner, json_mode=bool(getattr(args, "json", False)), platform=selected)
+            bootstrap = str(selected.scripts_dir(legacy) / ("python.exe" if selected.is_windows else "python"))
+            base_python = stable_base_python(str(plan.get("python") or sys.executable), runner=runner, platform=selected, anchors=(bootstrap,))
+            staged, reason = _stage(candidate, package_url, base_python, runner=runner, json_mode=bool(getattr(args, "json", False)), platform=selected)
             result.update(phase="staging", staging={"status": "ok" if staged else "failed", "reason": reason})
             if not staged:
                 _cleanup_candidate(root, candidate)

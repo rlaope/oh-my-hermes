@@ -113,7 +113,7 @@ class BarOnTheMainScreenTests(unittest.TestCase):
                             self.assertEqual(bars, set(), screen.lines())
                             continue
                         light = name == "NO_COLOR" and isinstance(block, (UserBlock, CommandBlock, SteerBlock))
-                        railed = [at for at, row in enumerate(rows) if row]  # the blank row between two calls has none
+                        railed = [at for at, row in enumerate(rows) if row]  # the blank rows between two calls have none
                         self.assertEqual(bars, {(at, 0) for at in railed}, screen.lines())
                         for at in railed:
                             self.assertEqual(rows[at][0].text, "│" if light else "┃")

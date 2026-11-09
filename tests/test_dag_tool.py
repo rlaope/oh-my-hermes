@@ -1578,6 +1578,100 @@ class ExtendTests(unittest.TestCase):
         self.assertEqual({row["id"]: row["state"] for row in done["nodes"]}["v2"], "superseded")
 
 
+class ClosingUsageTests(unittest.TestCase):
+    """#2684: a finished run carries what its children used, from Hermes' own rows; a running one carries nothing."""
+
+    @staticmethod
+    def _counted(home, session: str, uncached: int, read: int, write: int, output: int, *,
+                 actual: float | None = None, estimated: float | None = None) -> None:
+        home.session(session, "glm-5.3-flash", parent=PARENT, started=time.time())
+        home.tokens(session, output)
+        home.execute("UPDATE sessions SET input_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?, "
+                     "actual_cost_usd = ?, estimated_cost_usd = ? WHERE id = ?",
+                     (uncached, read, write, actual, estimated, session))
+
+    def _run(self, home) -> None:
+        slots_table(home)
+        for column, kind in (("input_tokens", "INTEGER DEFAULT 0"), ("cache_read_tokens", "INTEGER DEFAULT 0"),
+                             ("cache_write_tokens", "INTEGER DEFAULT 0"), ("actual_cost_usd", "REAL"),
+                             ("estimated_cost_usd", "REAL")):
+            home.execute(f"ALTER TABLE sessions ADD COLUMN {column} {kind}")
+        call(action="define", run="feat", nodes=[node("api", scope=("a.py",)),
+                                                 node("verify", role="verify", depends_on=("api",))])
+
+    def _finish(self, home, node_id: str) -> dict:
+        child_started(home, "feat", node_id)
+        handoff(home, "feat", node_id)
+        stop(home, f"child-{node_id}", now=time.time())
+        return call(action="settle", run="feat", node=node_id, outcome="accepted")
+
+    def test_a_done_run_adds_up_its_childrens_recorded_usage(self) -> None:
+        """Mutation: leave out a child, count the output in the cache share, or price an unpriced child."""
+        with homes() as home:
+            self._run(home)
+            self._counted(home, "child-api", 1_000, 8_000, 1_000, 500, actual=0.04)
+            first = self._finish(home, "api")
+            self._counted(home, "child-verify", 500, 2_000, 0, 200, estimated=0.01)
+            done = self._finish(home, "verify")
+            status = call(action="status", run="feat")
+        self.assertEqual(first["state"], "running")
+        self.assertNotIn("usage", first)
+        self.assertNotIn("usage_line", first)
+        self.assertEqual(done["state"], "done", done)
+        self.assertEqual(done["usage"], {"input": 1_500, "cache_read": 10_000, "cache_write": 1_000, "output": 700,
+                                         "cost_usd": 0.05, "cost_estimated": True, "children": 2,
+                                         "children_unrecorded": 0, "priced": 2})
+        self.assertEqual(done["usage_line"], "DAG feat · 2 children · 13.2k tokens · cache 80.0% · ~$0.0500 (2/2 priced)")
+        self.assertEqual(status["usage"], done["usage"])
+
+    def test_an_unpriced_child_makes_the_cost_a_floor_and_an_uncounted_one_is_named(self) -> None:
+        with homes() as home:
+            self._run(home)
+            self._counted(home, "child-api", 1_000, 0, 0, 100, actual=0.02)
+            self._finish(home, "api")
+            self._counted(home, "child-verify", 400, 0, 0, 50)
+            partial = self._finish(home, "verify")
+        self.assertEqual(partial["usage"]["cost_usd"], 0.02)
+        self.assertTrue(partial["usage"]["cost_partial"])
+        self.assertEqual(partial["usage_line"], "DAG feat · 2 children · 1.6k tokens · cache 0.0% · ≥$0.0200 (1/2 priced)")
+        with homes() as home:
+            self._run(home)
+            self._counted(home, "child-api", 300, 0, 0, 20)
+            self._finish(home, "api")
+            home.session("child-verify", "glm-5.3-flash", parent=PARENT, started=time.time())  # no count at all
+            unpriced = self._finish(home, "verify")
+        self.assertEqual(unpriced["usage_line"], "DAG feat · 1 child · 320 tokens · cache 0.0% · cost not recorded · 1 with no record")
+        self.assertNotIn("cost_usd", unpriced["usage"])
+
+    def test_the_run_summary_closes_with_the_same_figures_before_the_goal_line(self) -> None:
+        """Mutation: drop the usage line from the summary, or put it after the goal line."""
+        from omh.plugin_bundle.omh.tools.run_summary_tool import omh_run_summary_handler
+
+        with homes() as home:
+            self._run(home)
+            for column in ("reasoning_tokens", "api_call_count"):  # the summary's own row read needs them
+                home.execute(f"ALTER TABLE sessions ADD COLUMN {column} INTEGER DEFAULT 0")
+            home.session(PARENT, "claude-opus-5-5", started=time.time() - 60)
+            self._counted(home, "child-api", 1_000, 8_000, 1_000, 500, actual=0.04)
+            self._finish(home, "api")
+            self._counted(home, "child-verify", 500, 2_000, 0, 200, actual=0.01)
+            self._finish(home, "verify")
+            summary = json.loads(omh_run_summary_handler({"language": "ko"}, session_id=PARENT))
+        lines = summary["summary_text"].splitlines()
+        self.assertEqual(lines[-2:], ["DAG 사용량 (feat): 2 children · 13.2k tokens · cache 80.0% · $0.0500 (2/2 priced)",
+                                      "목표 검증 (DAG feat): verified"])
+        self.assertEqual(summary["dag_goal"]["usage"]["children"], 2)
+
+    def test_a_run_whose_children_counted_nothing_carries_no_usage(self) -> None:
+        with homes() as home:
+            self._run(home)
+            self._finish(home, "api")
+            done = self._finish(home, "verify")
+        self.assertEqual(done["state"], "done")
+        self.assertNotIn("usage", done)
+        self.assertNotIn("usage_line", done)
+
+
 class LifecycleTests(unittest.TestCase):
     def test_status_finds_the_run_from_a_later_segment(self) -> None:
         with homes() as home:

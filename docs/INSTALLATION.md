@@ -1060,7 +1060,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   terminal whatever is saved. Each row of the `/theme` picker shows the
   look's colours on its ground.
 - Each tool call is a block of its own on a rail in its state's
-  colour, with a blank row between two calls and no header over a turn's
+  colour, with two blank rows between two calls (one between any other two
+  blocks) and no header over a turn's
   calls: its state's mark (below), its name, and what it ran on (a path, a
   command, a query) in parentheses, cut with `…` where the row is too narrow
   (`┃ ● terminal(rm -rf ./tmp-cache)  1.9s`). Under it (`  ⎿  `) it shows the first three lines of what the tool
@@ -1093,7 +1094,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   run, say), the last three lines it printed, under the
   count of the lines above them. An edit's diff hangs under the same `⎿`, and a long diff counts
   its rest the same way. A resumed session's earlier calls (`omh --resume`,
-  `/resume`, a switch) are drawn the same way, a blank row between two,
+  `/resume`, a switch) are drawn the same way, two blank rows between two,
   with a grey `●` on a grey rail, since Hermes' record of them keeps no
   outcome, and an edit's diff under it where Hermes kept the one it showed.
   Ctrl+O opens the whole transcript with every detail
@@ -1716,18 +1717,32 @@ reaches it, and `/gateway restart` there restarts only that runtime, which
 loads new OMH code without a bot reconnecting.
 
 `omh` builds the home from the root Hermes home at every launch and refreshes
-only what changed: `config.yaml` and `auth.json` copied (model, providers and
-their keys, OMH's memory provider, OMH's skills through `skills.external_dirs`,
-the plugins), `.env` copied without any messaging credential (no adapter of
-the TUI runtime ever polls a bot's token), `SOUL.md` linked, `skills/` a link
-per skill over the root's and every served profile's (the root wins a name
-clash; a directory you put there yourself is left alone), and `plugins/omh`
-linked to the same OMH bundle the bots run. Sessions, Hermes' own memory,
-cron and kanban are the TUI home's. The bot board keeps reading the bots'
-home. `omh --hermes-home` and `omh -p <profile>` stay on the home they name;
-`omh --resume <id>` of a session that lives on the shared gateway opens there
-and says so; `omh theme runtime shared` goes back. `omh-tui-home.json` in
-the home records what was built from what.
+only what changed: `config.yaml` copied (model, providers and their keys,
+OMH's memory provider, OMH's skills through `skills.external_dirs`, the
+plugins; a copy you changed in the TUI home is replaced, with a line saying
+so), `auth.json` copied only when the root's is newer (Hermes rotates OAuth
+refresh tokens into the store it read, so a TUI-home copy that moved later is
+kept), `.env` copied without any messaging credential, and the same names
+stripped from the environment the TUI is started with (no adapter of the
+TUI runtime ever polls a bot's token), `SOUL.md` linked, `skills/` a link per
+skill at its own `<category>/<skill>` path over the root's and every served
+profile's (a skill is any directory holding `SKILL.md`; the root wins a name
+clash; a skill or link you put there yourself is left alone and stands for
+its name), and `plugins/omh` linked to the same OMH bundle the bots run. A
+root `config.yaml` that connects a messaging platform under `platforms:`
+keeps bare `omh` on the shared gateway, with a line naming the entry.
+Sessions, Hermes' own memory, cron and kanban are the TUI home's. The bot
+board keeps reading the bots' home. `omh --hermes-home` and `omh -p <profile>`
+stay on the home they name; `omh --resume <id>` opens where that session is,
+whichever runtime is chosen, and says so when that differs (the id as the exit
+card printed it; a title is not looked up); `omh theme runtime shared` goes
+back. `omh-tui-home.json` in
+the home records what was built from what. `omh update` rebuilds the home
+too (the plugin bundle it links moved with the update), `omh doctor` has an
+`omh_tui_runtime` row (which runtime, what the home was built from, how many
+skills, a messaging credential or adapter that should not be there, whether
+its gateway runs), and the menu bar's settings name the runtime and the TUI
+gateway's pid while it is live.
 
 When the OMH TUI cannot start, `omh` says why in one line on stderr and opens
 Hermes instead, so you lose the OMH screen, never the session. For a reason
@@ -5605,6 +5620,39 @@ needs `--force`.
 Pointer rollback alone does not prove shared-resource restoration or reverse
 all user/plugin state. Run `omh doctor` after recovery and inspect any remaining
 profile failures before treating the install as healthy.
+
+A staged generation's venv is created from the same stable base interpreter
+the installer used, not from the base the running `omh` resolves to. Run from
+inside a venv, `python -m venv` links the new venv to that venv's base with
+every symlink resolved, which on a Homebrew framework build is the
+version-pinned keg (`/opt/homebrew/Cellar/python@3.15/3.15.0/...`); a later
+`brew upgrade` plus cleanup removed it and left `omh` failing with
+`bad interpreter`. The update reads `pyvenv.cfg` in the running venv and in
+the bootstrap venv (`venv/` above, which cleanup never collects). From each it
+follows `command` back to the interpreter that created it, then tries its
+`home` folder's `pythonX.Y` (`python.exe` on Windows). Every creator is tried
+before every `home`, so a chain an older `omh` built, whose middle
+generations cleanup has since deleted, still reaches the installer's base
+through the bootstrap venv. It takes the first candidate that runs the same
+major.minor and ABI flags (`t` free-threaded, `d` debug) as the running `omh`,
+probing each once for at most 10 seconds and all of them for at most 20, and
+otherwise keeps the interpreter it would have used before. A move to another
+minor release (3.15 to 3.16) still needs a fresh install.
+
+A generation staged before this fix may already point at a removed keg, or at
+one the next upgrade removes. `omh doctor` reports both as
+`generation_base_python` and prints the repair command with this machine's
+paths. A `home` folder that is itself a link, such as uv's minor-version
+folder, moves with patch upgrades and is not reported. When the removed keg leaves `omh` unable to start at all, run the
+repair yourself from the stable interpreter, substituting your own minor
+version for `3.15`, then update as usual:
+
+```sh
+gen=~/.local/share/omh/generations/<id>/venv   # the id the launcher's error names
+rm "$gen/bin/python3.15"                        # the dangling link; --upgrade keeps an existing link
+/opt/homebrew/opt/python@3.15/bin/python3.15 -m venv --upgrade "$gen"
+omh --version
+```
 
 `omh update --recover-known-good` refuses rather than guesses when no retained
 generation exists. If the activation state file is unreadable or carries a schema

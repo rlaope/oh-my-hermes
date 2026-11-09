@@ -224,17 +224,16 @@ no section.
 
 When the selection carries `query_fallback` (the message matched no stored
 record; see [Recall Ranking and Delivery Usage](MEMORY.md#recall-ranking-and-delivery-usage)),
-the provider lists the readmitted records in one
-`<record_index count="N" reason="no_query_overlap">` line, by subject or by
-type and id, at most 8 then `+K more`, instead of rendering their summaries.
-Records captured in this conversation (by `source_ref`, for this session or
-its compaction ancestors) still render in full. The model reads an indexed record with `omh_remember` recall. CLI recall,
-`omh_memory` recall and coding handoffs don't index.
+the provider withholds the readmitted records: no summary, no name, no line,
+and no section at all when nothing else is shown. Records captured in this
+conversation (by `source_ref`, for this session or its compaction ancestors)
+still render in full. The model reads a withheld record with `omh_remember`
+recall. CLI recall, `omh_memory` recall and coding handoffs don't withhold.
 
 Selection cuts are `over_budget`; selected records lost to section rendering
 are `render_budget_exhausted`. These are different events. The receipt names
 selected IDs and rendered IDs separately, including selected-but-not-rendered
-records, and lists indexed records as `rendering.indexed_records`. Its
+records, and lists withheld records as `rendering.indexed_records`. Its
 content digest covers the full stored summary, not the potentially shorter
 escaped projection.
 

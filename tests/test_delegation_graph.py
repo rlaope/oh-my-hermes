@@ -21,7 +21,9 @@ from omh.plugin_bundle.omh.delegation_graph import (  # noqa: E402
     build_delegation_graph,
     fanout_graph,
     graph_fingerprint,
+    RUN_USAGE_CHILD_LIMIT,
     graph_segments,
+    run_usage,
     session_usage,
     team_unit_state,
 )
@@ -920,6 +922,46 @@ class SessionUsageTests(unittest.TestCase):
             home.session(PARENT, "gpt-6-luna", started=NOW)
             self.assertIsNone(session_usage(home.hermes, PARENT))
         self.assertIsNone(session_usage(Path("/nonexistent/hermes"), PARENT))
+
+
+class RunUsageTests(unittest.TestCase):
+    """`run_usage`: a dag run's children added up, each with its compaction segments and auxiliary calls (#2684)."""
+
+    def test_children_add_up_with_their_segments_and_a_repeated_id_counts_once(self) -> None:
+        """Mutation: drop a compacted child's later segment, or count a child named twice twice."""
+        with homes() as home:
+            home.session("child-0", "glm-5.3-flash", parent=PARENT, started=NOW)
+            home.rotate("child-0", "child-0b", at=NOW + 30)
+            home.session("child-1", "glm-5.3-flash", parent=PARENT, started=NOW)
+            UsageTests.with_columns(home)
+            home.tokens("child-0", 100)
+            home.tokens("child-0b", 50)
+            home.tokens("child-1", 10)
+            UsageTests.count(home, "child-0", 100, 1_000, 50, actual=0.25)
+            UsageTests.count(home, "child-0b", 40, 3_000, 0, actual=0.05)
+            UsageTests.count(home, "child-1", 5, 0, 0, actual=0.0)
+            usage = run_usage(home.hermes, ["child-0", "child-1", "child-0", "", "child-gone"])
+        self.assertEqual(usage, {"input": 145, "cache_read": 4_000, "cache_write": 50, "output": 160,
+                                 "cost_usd": 0.3, "children": 2, "children_unrecorded": 1, "priced": 2})
+
+    def test_children_past_the_cap_are_named_unread_and_the_cost_is_a_floor(self) -> None:
+        children = [f"child-{at}" for at in range(RUN_USAGE_CHILD_LIMIT + 2)]
+        with homes() as home:
+            UsageTests.with_columns(home)
+            for child in children:
+                home.session(child, "glm-5.3-flash", parent=PARENT, started=NOW)
+                UsageTests.count(home, child, 10, 0, 0, actual=0.01)
+            usage = run_usage(home.hermes, children)
+        self.assertEqual((usage["children"], usage["children_unread"], usage["priced"]),
+                         (RUN_USAGE_CHILD_LIMIT, 2, RUN_USAGE_CHILD_LIMIT))
+        self.assertTrue(usage["cost_partial"])
+
+    def test_no_child_no_count_or_no_database_is_no_usage(self) -> None:
+        with homes() as home:
+            self.assertIsNone(run_usage(home.hermes, []))
+            home.session("child-0", "glm-5.3-flash", parent=PARENT, started=NOW)
+            self.assertIsNone(run_usage(home.hermes, ["child-0"]))
+        self.assertIsNone(run_usage(Path("/nonexistent/hermes"), ["child-0"]))
 
 
 class NoRaiseTests(unittest.TestCase):

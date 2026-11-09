@@ -318,7 +318,7 @@
     "references/craft-brief.md": {
       "classification": "translated_derivative",
       "license": "MIT",
-      "local_sha256": "00758093b4c22bff04780848b489534c8231278c756e9dfbaabec690cbeeb725",
+      "local_sha256": "b645f0f2de47978bf7667613781607b02c1a81217588f418b6f91196649d8425",
       "modification_notice": "Translated from upstream references/brief.md@64521220a: complete English translation; cross-references renamed to references/craft-*.md; host install paths made placeholders; the default narration voice named by role; inline OMH notes where the locale/brief policy overrides an upstream default; OMH header",
       "upstream": [
         {
@@ -378,7 +378,7 @@
     "references/craft-story.md": {
       "classification": "translated_derivative",
       "license": "MIT",
-      "local_sha256": "1ef252c2de15407517234389c629cb7f1a003aeeccd3ba625d00e0fd4d1f6f59",
+      "local_sha256": "10009256d084798352037a7f2725978bf1bd93e7dcd11b7e74ecb04223da7ac9",
       "modification_notice": "Translated from upstream references/story.md@64521220a: complete English translation; cross-references renamed to references/craft-*.md; host install paths made placeholders; the default narration voice named by role; inline OMH notes where the locale/brief policy overrides an upstream default; OMH header",
       "upstream": [
         {
