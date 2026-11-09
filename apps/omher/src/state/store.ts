@@ -131,8 +131,10 @@ export interface Ui {
   panelTab: PanelTabId;
   theme: Theme;
   look: Look;
-  view: "chat" | "settings";
+  /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it. */
+  view: "chat" | "settings" | "session";
   settingsPage: string;
+  session: string | null;
 }
 
 export interface AppState {
@@ -226,7 +228,7 @@ export function initialState(): AppState {
     peeks: {},
     routines: {},
     models: {},
-    ui: { panelOpen: false, panelTab: "details", theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general" },
+    ui: { panelOpen: false, panelTab: "details", theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general", session: null },
   };
 }
 
@@ -340,7 +342,8 @@ export type Action =
   | { type: "ui.theme"; theme: Theme }
   | { type: "ui.look"; look: Partial<Look> }
   | { type: "ui.settings"; page?: string }
-  | { type: "ui.closeSettings" };
+  | { type: "ui.closeSettings" }
+  | { type: "ui.session"; id: string | null };
 
 function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
   const bot = ev.bot;
@@ -568,6 +571,10 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, view: "settings", settingsPage: a.page ?? state.ui.settingsPage } };
     case "ui.closeSettings":
       return { ...state, ui: { ...state.ui, view: "chat" } };
+    case "ui.session":
+      return a.id
+        ? { ...state, ui: { ...state.ui, view: "session", session: a.id } }
+        : { ...state, ui: { ...state.ui, view: state.ui.view === "session" ? "chat" : state.ui.view, session: null } };
     default:
       return state;
   }
@@ -626,6 +633,8 @@ export interface Actions {
   setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
   closeSettings(): void;
+  /** Show terminal session `id` in the main column; null goes back to the selected bot's chat. */
+  openSession(id: string | null): void;
   /** Re-read bots.list (names, status, picture revisions). */
   reloadBots(): Promise<void>;
   renameBot(bot: string, name: string): Promise<void>;
@@ -868,6 +877,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     openSettings: (page) => dispatch({ type: "ui.settings", page }),
     closeSettings: () => dispatch({ type: "ui.closeSettings" }),
+    openSession: (id) => dispatch({ type: "ui.session", id }),
     reloadBots,
     async renameBot(bot, name) {
       const r = await bridge.request("bots.rename", { bot, name });

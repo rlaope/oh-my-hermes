@@ -1,0 +1,303 @@
+/* SESSIONS: sidebar section, + menu, terminal view. */
+
+/* BOTS and SESSIONS share the sidebar height half and half; each list scrolls on its own. */
+.side-sec {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.side-sec + .side-sec {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.side-sec > .bot-list,
+.side-sec > .ss-list {
+  flex: 1 1 auto;
+}
+.side-sh-row {
+  position: relative; /* the + menu spans the section's width under this row */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 2px;
+  height: 22px;
+  padding-bottom: 4px;
+}
+.ss-add {
+  display: flex;
+}
+.ss-plus {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  color: var(--quiet);
+}
+.ss-plus:hover,
+.ss-plus[aria-expanded="true"] {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.ss-pop {
+  left: calc(-1 * var(--side-x) + 8px);
+  right: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.ss-h {
+  font-size: 10.5px;
+  color: var(--quiet);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 4px 6px 4px;
+}
+.ss-empty {
+  font-size: 12px;
+  color: var(--quiet);
+  padding: 6px;
+}
+.ss-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.ss-item:hover:not(:disabled) {
+  background: var(--raise2);
+}
+.ss-item:disabled {
+  color: var(--quiet);
+}
+.ss-item:disabled .ss-ic {
+  /* the official mark stays as is; "Not installed" in the text says why the row is off */
+  opacity: 1;
+}
+.ss-ic {
+  width: 18px;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.ss-n {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-cmd {
+  font-size: 10.5px;
+  color: var(--quiet);
+  background: none;
+  padding: 0;
+}
+.ss-missing {
+  font-size: 10.5px;
+  color: var(--quiet);
+  opacity: 0.8;
+  flex: none;
+}
+.ss-path {
+  font-size: 10.5px;
+  color: var(--quiet);
+  font-family: var(--mono);
+  max-width: 96px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+}
+.ss-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 6px 0 4px;
+}
+
+/* agent marks */
+.ag-mark {
+  flex: none;
+  display: block;
+}
+.ag-codex {
+  color: var(--ink);
+}
+.ag-img {
+  border-radius: 4px;
+}
+.ag-pi {
+  color: var(--ink);
+  padding: 1px;
+}
+
+/* rows */
+.ss-none {
+  padding: 4px var(--side-x);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--quiet);
+}
+.ss-none b {
+  color: var(--muted);
+  font-weight: 600;
+}
+.ss-row.bot {
+  padding: 0;
+  gap: 0;
+}
+.ss-open {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 7px var(--side-x);
+  text-align: left;
+}
+.ss-av,
+.ss-head-mark {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.ss-row .live-dot {
+  left: 26px;
+  top: 26px;
+  border-color: var(--side);
+}
+.ss-x {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  display: none;
+  place-items: center;
+  color: var(--quiet);
+  background: var(--active-row);
+}
+.ss-row:hover .ss-x,
+.ss-x:focus-visible {
+  display: grid;
+}
+.ss-x:hover {
+  color: var(--ink);
+  background: var(--seg-on);
+}
+.ss-row:hover .bot-t {
+  visibility: hidden;
+}
+.ss-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px var(--side-x);
+  border-radius: var(--r);
+  background: var(--active-row);
+  flex: none;
+}
+.ss-q {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-btn {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  background: var(--raise2);
+  color: var(--ink);
+  font-size: 11.5px;
+  flex: none;
+}
+.ss-btn:hover {
+  background: var(--seg-on);
+}
+
+/* main column */
+.ss-head-mark {
+  width: 26px;
+  height: 26px;
+}
+.ss-head-path {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ss-head-st {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--quiet);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ss-head-st.running,
+.ss-head-st.starting {
+  color: var(--muted);
+}
+/* the same live dot as the sidebar rows */
+.ss-head-st.running::before,
+.ss-head-st.starting::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--spin);
+  animation: pulse 1.4s infinite;
+}
+.ss-head-st.failed {
+  color: var(--danger);
+}
+.term-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 14px 6px 8px 16px;
+  background: var(--bg);
+}
+.term-box {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.term-host {
+  position: absolute;
+  inset: 0;
+}
+.term-host .xterm {
+  height: 100%;
+}
+.term-host .xterm .xterm-viewport {
+  /* xterm.css paints it #000; the theme background (on the scrollable element) shows through instead */
+  background-color: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
