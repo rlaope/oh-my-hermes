@@ -46,6 +46,7 @@ from ..delegation_backend_mode import (
     MODEL_MAP_BACKEND,
     PROFILE_ROUTES_BACKEND,
     STATUS_UNREADABLE,
+    FAST_TIER_CATEGORIES,
     option_chain,
     option_for,
     read_backend_mode,
@@ -126,13 +127,14 @@ def _backend_route(
             "note": "OMH routes only the default and model_map backends; `/delegation default` restores OMH routing.",
         }
     options = list(mode.get("options") or [])
-    carried = option_chain(chain, options, provider_routes) if chain else []
+    prefer_fast = category in FAST_TIER_CATEGORIES
+    carried = option_chain(chain, options, provider_routes, prefer_fast=prefer_fast) if chain else []
     matched = False
     if alias:
         # The lane's own model (the category head, or the user's explicit
         # model) leads; the rest of the chain follows as its fallbacks.
         provider, wire_model = provider_routes.get(alias, ("", ""))
-        name = option_for(options, alias, effort, wire_model=wire_model, provider=provider)
+        name = option_for(options, alias, effort, wire_model=wire_model, provider=provider, prefer_fast=prefer_fast)
         matched = bool(name)
         if name:
             carried = [{"option": name, "alias": alias, "reasoning_effort": effort}] + [

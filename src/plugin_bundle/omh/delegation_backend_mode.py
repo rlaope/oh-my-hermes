@@ -30,8 +30,10 @@ than guessing one.
 
 from __future__ import annotations
 
+import ipaddress
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+from urllib.parse import urlparse
 
 from .delegation_routing import _config_path, _read_config_snapshot, read_delegation_settings
 from .route_endpoint_guard import BOM
@@ -46,7 +48,23 @@ STATUS_READ = "read"
 STATUS_UNREADABLE = "unreadable"
 
 _NAME_LIMIT = 128
-_OPTION_FIELDS = ("provider", "model", "reasoning_effort", "base_url")
+_OPTION_FIELDS = ("provider", "model", "reasoning_effort", "base_url", "service_tier")
+
+# Categories whose work is many small or parallel children: an option with a
+# fast speed tier (`service_tier` fast/priority/ultrafast, Hermes' `/fast`
+# words) is tried first there, and a normal one first everywhere else. Hermes
+# refuses a tier the option's model does not offer, and that task then takes
+# the next option like any other provider error.
+FAST_TIER_CATEGORIES = frozenset({"swarm", "quick", "simple-work"})
+_FAST_TIERS = frozenset({"fast", "priority", "ultrafast"})
+
+# Providers Hermes runs on this machine with no base_url of their own
+# (`hermes_cli/providers.py`: LM Studio's 127.0.0.1 default, the managed
+# llama.cpp server). Any other option is local only through its base_url.
+_LOCAL_PROVIDERS = frozenset({"lmstudio", "lm-studio", "lm_studio", "llamacpp", "llama.cpp", "llama-cpp"})
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
+_CONTAINER_LOCAL_SUFFIXES = (".docker.internal", ".containers.internal", ".lima.internal", ".local")
+_TAILSCALE_CGNAT = ipaddress.IPv4Network("100.64.0.0/10")
 
 
 class _Unsupported(ValueError):
@@ -208,22 +226,30 @@ def _same_model(left: str, right: str) -> bool:
     return a == b or a.rsplit("/", 1)[-1] == b.rsplit("/", 1)[-1]
 
 
-def option_for(
+def is_fast_tier(option: Mapping[str, str]) -> bool:
+    """Whether a model_map option asks Hermes for a fast speed tier."""
+    return str(option.get("service_tier", "") or "").strip().casefold() in _FAST_TIERS
+
+
+def options_for(
     options: Sequence[Mapping[str, str]],
     alias: str,
     effort: str,
     *,
     wire_model: str = "",
     provider: str = "",
-) -> str:
-    """The user's model_map option that runs this chain entry, or ``""``.
+    prefer_fast: bool = False,
+) -> list[str]:
+    """Every model_map option that runs this chain entry, the preferred speed tier first.
 
     An option matches when its model is the entry's alias or wire model
     (provider path ignored), its provider -- when both name one -- agrees,
     and its effort is the entry's or unset. An option with a different
-    effort is not the same lane and does not match. The first option in the
-    user's own order wins.
+    effort is not the same lane and does not match. Options whose speed tier
+    is the preferred one (fast under ``prefer_fast``, normal otherwise) come
+    first; within a tier the user's own order holds.
     """
+    matched: list[Mapping[str, str]] = []
     for option in options:
         model = option.get("model", "")
         if not (_same_model(model, alias) or (wire_model and _same_model(model, wire_model))):
@@ -234,31 +260,83 @@ def option_for(
         option_effort = option.get("reasoning_effort", "").strip().casefold()
         if option_effort and option_effort != effort.strip().casefold():
             continue
-        return str(option.get("name", ""))
-    return ""
+        matched.append(option)
+    preferred = [option for option in matched if is_fast_tier(option) == prefer_fast]
+    rest = [option for option in matched if is_fast_tier(option) != prefer_fast]
+    return [str(option.get("name", "")) for option in preferred + rest]
+
+
+def option_for(
+    options: Sequence[Mapping[str, str]],
+    alias: str,
+    effort: str,
+    *,
+    wire_model: str = "",
+    provider: str = "",
+    prefer_fast: bool = False,
+) -> str:
+    """The user's model_map option that runs this chain entry, or ``""``: the first of `options_for`."""
+    names = options_for(options, alias, effort, wire_model=wire_model, provider=provider, prefer_fast=prefer_fast)
+    return names[0] if names else ""
 
 
 def option_chain(
     chain: Sequence[tuple[str, str]],
     options: Sequence[Mapping[str, str]],
     routes: Mapping[str, tuple[str, str]] | None = None,
+    *,
+    prefer_fast: bool = False,
 ) -> list[dict[str, str]]:
     """A category chain carried onto the user's options, in chain order.
 
     Each entry is ``{"option", "alias", "reasoning_effort"}``; chain entries
     no option serves are dropped, and an option already named earlier in the
-    chain is not repeated. ``routes`` maps an alias to ``(provider, wire
-    model)`` the way `resolve_provider_model` reads it.
+    chain is not repeated. An entry served by several options (one model at
+    two speed tiers) carries each, the preferred tier first, so a refused
+    tier falls over to the same model at the other. ``routes`` maps an alias
+    to ``(provider, wire model)`` the way `resolve_provider_model` reads it.
     """
     carried: list[dict[str, str]] = []
     named: set[str] = set()
     for alias, effort in chain:
         provider, wire_model = (routes or {}).get(alias, ("", ""))
-        name = option_for(options, alias, effort, wire_model=wire_model, provider=provider)
-        if name and name not in named:
-            named.add(name)
-            carried.append({"option": name, "alias": alias, "reasoning_effort": effort})
+        for name in options_for(options, alias, effort, wire_model=wire_model, provider=provider,
+                                prefer_fast=prefer_fast):
+            if name and name not in named:
+                named.add(name)
+                carried.append({"option": name, "alias": alias, "reasoning_effort": effort})
     return carried
+
+
+def _local_host(base_url: str) -> bool:
+    """Hermes' `is_local_endpoint`: loopback, container DNS, unqualified or `.local` hosts, private and Tailscale IPs."""
+    raw = base_url.strip()
+    try:
+        host = (urlparse(raw if "://" in raw else f"//{raw}").hostname or "").lower().rstrip(".")
+    except ValueError:
+        return False
+    if not host:
+        return False
+    if host in _LOCAL_HOSTS or host.endswith(_CONTAINER_LOCAL_SUFFIXES) or ("." not in host and ":" not in host):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return bool(address.is_private or address.is_loopback or address.is_link_local
+                or (isinstance(address, ipaddress.IPv4Address) and address in _TAILSCALE_CGNAT))
+
+
+def is_local_option(option: Mapping[str, str]) -> bool:
+    """Whether a model_map option runs on this machine or its private network.
+
+    Its ``base_url`` decides when it names one; with none, only a provider
+    Hermes itself serves locally counts. A cloud provider never does.
+    """
+    base_url = str(option.get("base_url", "") or "").strip()
+    if base_url:
+        return _local_host(base_url)
+    return str(option.get("provider", "") or "").strip().casefold() in _LOCAL_PROVIDERS
 
 
 def category_options(
@@ -275,9 +353,35 @@ def category_options(
         return {}
     options = list(mode.get("options") or [])
     return {
-        str(category): [entry["option"] for entry in option_chain(chain, options, routes)]
+        str(category): [
+            entry["option"]
+            for entry in option_chain(chain, options, routes, prefer_fast=category in FAST_TIER_CATEGORIES)
+        ]
         for category, chain in chains.items()
     }
+
+
+def category_local_options(
+    mode: Mapping[str, Any],
+    chains: Mapping[str, Sequence[tuple[str, str]]],
+    routes: Mapping[str, tuple[str, str]] | None = None,
+) -> dict[str, list[str]]:
+    """Each category's local model_map options, for a dag node marked ``local``.
+
+    Only options `is_local_option` accepts: those the category's chain names
+    first, in chain order, then every other local option in the user's
+    order (a local model is rarely one a shipped chain names). Empty unless
+    the backend is `model_map` and its options were read.
+    """
+    if mode.get("backend") != MODEL_MAP_BACKEND or mode.get("status") != STATUS_READ:
+        return {}
+    local = [option for option in mode.get("options") or [] if is_local_option(option)]
+    result: dict[str, list[str]] = {}
+    for category, chain in chains.items():
+        named = [entry["option"] for entry in option_chain(chain, local, routes,
+                                                            prefer_fast=category in FAST_TIER_CATEGORIES)]
+        result[str(category)] = named + [str(option["name"]) for option in local if option["name"] not in named]
+    return result
 
 
 # ── a block-YAML reader for the `delegation` section ─────────────────────

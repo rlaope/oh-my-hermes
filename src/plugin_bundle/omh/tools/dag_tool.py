@@ -59,6 +59,7 @@ from ..delegation_backend_mode import (
     DEFAULT_BACKEND,
     Quoted,
     _Unsupported,
+    category_local_options,
     category_options,
     delegation_section,
     read_backend_mode,
@@ -134,7 +135,7 @@ OMH_DAG_SCHEMA = {
     "description": (
         "Keep a dag-ulw run: small nodes the parent dispatches via delegate_task. define records nodes "
         "(id, label, category, prompt with TASK / DELIVERABLE / SCOPE / VERIFY / STOP WHEN, depends_on, "
-        "write_scope, role, owner) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
+        "write_scope, role, owner, local) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
         "than 48 nodes, and prompts naming none of the markers; a one-shot session caps nodes at "
         "delegation.oneshot_max_children. Lint is advice. ready returns delegate_task calls per category "
         "within the free slots: route each via omh_delegate_route, then delegate_task unchanged. After each "
@@ -165,6 +166,7 @@ OMH_DAG_SCHEMA = {
                         "write_scope": {"type": "array", "items": {"type": "string"}},
                         "role": {"type": "string", "enum": list(dag_run.ROLES)},
                         "owner": {"type": "string", "enum": list(EXTERNAL_OWNERS)},
+                        "local": {"type": "boolean"},
                     },
                     "required": ["id", "label", "category", "prompt"],
                 },
@@ -776,9 +778,11 @@ def _ready(
             pinned = True
     # A run defined before the person turned isolation on: nothing goes to a child while it is on.
     isolated = not waits and _isolation_holds(record, offered, coding, hermes_home)
+    backend = delegation_backend(omh_home, hermes_home)
+    local_held = [node_id for node_id in dag_run.local_blocked(record, offered, backend) if node_id not in coding]
     calls, held = ([], []) if waits or isolated else dag_run.calls_for(
         record, derived, free_slots=slots["free"], per_call=slots["cap"], omh_home=omh_home, now=now, skip=coding,
-        task_budget=task_budget, backend=delegation_backend(omh_home, hermes_home), limits=limits)
+        task_budget=task_budget, backend=backend, limits=limits)
     # With the one-shot budget spent, a held node never gets a child: once nothing else is out, it is the parent's.
     spent_out = task_budget is not None and held and task_budget - sum(len(call["tasks"]) for call in calls) <= 0
     mine: list[str] = []
@@ -798,6 +802,9 @@ def _ready(
         say = " ".join(part for part in (say, backend_say) if part)
     if held:
         extra["held_for_slots"] = held
+    if local_held and not (waits or isolated):
+        extra["held_for_local_model"] = local_held
+        say = " ".join(part for part in (say, _local_say(local_held, backend)) if part)
     if mine:
         extra["for_parent"] = mine
     if settled:
@@ -857,6 +864,19 @@ def _backend_say(calls: list[dict[str, Any]]) -> str:
             "omh_delegate_route, and pass the tasks unchanged.")
 
 
+def _local_say(held: list[str], backend: Mapping[str, Any] | None) -> str:
+    """Why local nodes were not handed out, and what the person can do; OMH never sends them to another model."""
+    names = ", ".join(held)
+    tried = str((backend or {}).get("backend") or "") == "model_map" and any(
+        (backend or {}).get("local_options", {}).values())
+    reason = ("every local model_map option for them has failed" if tried
+              else "no local model is set up for them: they need a model_map option whose base_url is on this "
+                   "machine or its private network (localhost, 192.168.x, a .local host), or provider lmstudio "
+                   "or llamacpp")
+    return (f"Nodes {names} are local and were not handed out: {reason}. They never go to a cloud model. Tell the "
+            "person, who can add or fix a local option (`hermes delegation config`), or settle them blocked.")
+
+
 def served_lint(findings: list[str], omh_home: Path, hermes_home: Path) -> list[str]:
     """The run's lint as the parent reads it: `review_not_review_category` is dropped where Hermes' model_map backend
     offers no option for `review` but some for `unspecified-high`, so the advice never moves a node to a category the
@@ -882,7 +902,8 @@ def delegation_backend(omh_home: Path, hermes_home: Path) -> dict[str, Any] | No
     routes, _status = load_model_provider_routes(omh_home)
     chains = effective_mixture_category_chains(omh_home, hermes_home)
     return {"backend": mode["backend"], "status": mode["status"],
-            "options": category_options(mode, chains, routes)}
+            "options": category_options(mode, chains, routes),
+            "local_options": category_local_options(mode, chains, routes)}
 
 
 # The profile settings that move `dag_run.Limits`: `plugins.entries.omh.settings.<name>`, in seconds or a count.

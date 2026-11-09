@@ -687,7 +687,17 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         # The node `role` field (+85, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped the same way, from
         # this and from the live schema below, so it can spend neither the approved schema nor the parked cap.
 
-        # The node `owner` field (+70, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped first, the same way.
+        # The node `local` field (+37, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped first, then `owner`.
+        def without_local(target: dict) -> int:
+            before = len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+            local = target["parameters"]["properties"]["nodes"]["items"]["properties"].pop("local")
+            self.assertEqual(local, {"type": "boolean"})
+            self.assertEqual(target["description"].count("write_scope, role, owner, local)"), 1)
+            target["description"] = target["description"].replace(
+                "write_scope, role, owner, local)", "write_scope, role, owner)", 1)
+            return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+
+        # The node `owner` field (+70, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped next, the same way.
         def without_owner(target: dict) -> int:
             before = len(json.dumps(target, sort_keys=True, ensure_ascii=False))
             owner = target["parameters"]["properties"]["nodes"]["items"]["properties"].pop("owner")
@@ -704,6 +714,7 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
             target["description"] = target["description"].replace("write_scope, role)", "write_scope)", 1)
             return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
 
+        self.assertEqual(without_local(legacy), 37)
         self.assertEqual(without_owner(legacy), 70)
         self.assertEqual(without_role(legacy), 85)
         encoded = json.dumps(legacy, sort_keys=True, ensure_ascii=False)
@@ -719,11 +730,12 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         # category values, so category growth cannot spend the parked cap.
         live = copy.deepcopy(schema)
         del live["parameters"]["properties"]["nodes"]["items"]["properties"]["category"]["enum"][-len(recipe):]
+        self.assertEqual(without_local(live), 37)
         self.assertEqual(without_owner(live), 70)
         self.assertEqual(without_role(live), 85)
         delta = len(json.dumps(live, sort_keys=True, ensure_ascii=False)) - len(encoded)
         self.assertEqual(
-            per_turn_context.plugin_tool_schema_chars_by_tool()["omh_dag"] - len(encoded) - delta, 75 + 85 + 70
+            per_turn_context.plugin_tool_schema_chars_by_tool()["omh_dag"] - len(encoded) - delta, 75 + 85 + 70 + 37
         )
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, 429)  # Measured feature cap, not general headroom.
