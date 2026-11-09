@@ -28,6 +28,8 @@ export function useShortcuts(): void {
     const onKey = (e: KeyboardEvent) => {
       const hit = shortcutFor(e, isMac());
       if (!hit) return;
+      // In a terminal session, Ctrl+<key> belongs to the program (Ctrl+K kills a line); ⌘ on macOS stays ours.
+      if (!isMac() && (e.target as HTMLElement | null)?.closest?.(".xterm")) return;
       const store = getStore();
       const s = store.getState();
       const a = store.actions;
