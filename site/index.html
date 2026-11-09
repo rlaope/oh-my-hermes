@@ -1300,7 +1300,7 @@ for (let i=0;i<6;i++) tick();
 if (!RM) setInterval(tick, 1400);
 
 /* ModelSwapLine: erase, retype the head model per category, glow while typing */
-const CH = [['deep','Claude Opus 5.5','high'],['ultrabrain','GPT-6 Astra','xhigh'],['quick','GLM 5.3 Flash','low'],['visual-engineering','Claude Opus 5.5','high'],['x-search','Grok 4.7','high'],['swarm','DeepSeek V4.1 Flash','low'],['review','GPT-6.1 Sol','xhigh']];
+const CH = [['deep','Claude Opus 5.5','high'],['ultrabrain','Claude Fable 5.1','xhigh'],['quick','GLM 5.3 Flash','low'],['visual-engineering','Claude Opus 5.5','high'],['x-search','Grok 4.7','high'],['swarm','DeepSeek V4.1 Flash','low'],['review','GPT-6.1 Sol','xhigh']];
 const swEl = $('[data-swap]'), swCat = $('[data-swcat]'), swEff = $('[data-sweff]'); let ci = 0;
 async function swapLoop(){
   const wait = ms => new Promise(r => setTimeout(r, ms));
