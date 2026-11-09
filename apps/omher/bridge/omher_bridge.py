@@ -11,9 +11,10 @@ differs. Makes no model or network call of its own.
 
 Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
-* The only session this bridge ever resumes, creates, submits to, interrupts or answers is the
-  bot's main chat (the session titled ``Bot Chat``). Every other session is only listed or read
-  (list / history), never attached.
+* The only sessions this bridge ever resumes, creates, submits to, interrupts or answers are the
+  bot's main chat (the session titled ``Bot Chat``) and the folder chats it created itself for an
+  oh-my-hermes SESSIONS entry (``folder.open``; closed with ``folder.close``). Every other session is
+  only listed or read (list / history), never attached.
 """
 from __future__ import annotations
 
@@ -38,6 +39,8 @@ from urllib.parse import parse_qs, urlsplit
 
 VERSION = "0.1.0"
 BOT_CHAT_TITLE = "Bot Chat"
+FOLDER_CHAT_PREFIX = "omher · "
+MAX_FOLDER_CHATS = 16
 LOCAL_SOURCES = frozenset({"tui", "cli", "local", "desktop", "acp", "api_server", "omher"})
 REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"]
 RUNNING_STATUSES = frozenset({"working", "streaming", "waiting", "starting"})
@@ -449,6 +452,24 @@ def chat_messages(rows) -> list[dict]:
 
 # ---------------------------------------------------------------- one Hermes gateway connection
 
+class FolderChat:
+    """A Hermes chat this bridge created in a folder the person picked (SESSIONS `+` > oh-my-hermes)."""
+
+    def __init__(self, fid: str, cwd: str, runtime_id: str, stored_id: str):
+        self.id = fid
+        self.cwd = cwd
+        self.runtime_id = runtime_id
+        self.stored_id = stored_id
+        self.generation = None
+        self.in_turn = False
+        self.last_thinking = -1e9
+        self.prompts: dict[str, int | None] = {}
+
+    @property
+    def ids(self) -> set[str]:
+        return {i for i in (self.runtime_id, self.stored_id) if i}
+
+
 class Conn:
     """State for one bot (= one profile = one gateway connection)."""
 
@@ -470,6 +491,7 @@ class Conn:
         self.last_elsewhere_emit = -1e9
         self.elsewhere_sig = None
         self.prompts: dict[str, int | None] = {}  # open prompt_id -> execution_generation
+        self.folders: dict[str, FolderChat] = {}  # folder chats this bridge created, by our own id
 
     @property
     def connected(self) -> bool:
@@ -511,6 +533,7 @@ class Bridge:
             "chat.set_model": self.op_set_model,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
+            "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
         }
 
     # ------------------------------------------------------------ lifecycle
@@ -679,6 +702,8 @@ class Bridge:
         conn.in_turn = False
         conn.main_id = conn.main_stored = conn.generation = None
         conn.prompts.clear()
+        folders = list(conn.folders.values())
+        conn.folders.clear()
         if pump is not None and pump is not asyncio.current_task():
             pump.cancel()
             with contextlib.suppress(BaseException):
@@ -687,6 +712,10 @@ class Bridge:
             with contextlib.suppress(BaseException):
                 await stack.aclose()
         if emit:
+            for f in folders:
+                if f.in_turn:
+                    await self.emit("turn.end", conn.name, session=f.id, outcome="error", error=reason or "gateway disconnected")
+                await self.emit("folder.closed", conn.name, session=f.id, reason=reason or "gateway disconnected")
             if was_turn:
                 await self.emit("turn.end", conn.name, outcome="error", error=reason or "gateway disconnected")
             conn.failed_at, conn.failed_msg = self.clock(), reason or f"{conn.name} is offline"
@@ -733,6 +762,9 @@ class Bridge:
             return await self._elsewhere_changed(conn)
         if sid and sid in conn.main_ids:
             return await self._main_event(conn, typ, params, payload)
+        for f in list(conn.folders.values()):
+            if sid and sid in f.ids:
+                return await self._main_event(conn, typ, params, payload, f)
         if typ in ("message.start", "message.complete"):  # someone else's session moved
             await self._elsewhere_changed(conn)
 
@@ -742,96 +774,109 @@ class Bridge:
             conn.last_elsewhere_emit = now
             await self.emit("elsewhere.update", conn.name)
 
-    async def _begin_turn(self, conn: Conn) -> None:
-        if not conn.in_turn:
-            conn.in_turn = True
-            await self.emit("turn.start", conn.name)
-            await self.emit("bot.status", conn.name, status="online", running=True)
+    async def _chat_emit(self, conn: Conn, chat: FolderChat | None, event: str, **fields) -> None:
+        """An event of the main chat (``chat`` None) or of a folder chat (tagged with ``session``)."""
+        if chat is not None:
+            fields["session"] = chat.id
+        await self.emit(event, conn.name, **fields)
 
-    async def _end_turn(self, conn: Conn, outcome: str, error: str | None = None) -> None:
-        conn.in_turn = False
-        conn.prompts.clear()
+    async def _begin_turn(self, conn: Conn, chat: FolderChat | None = None) -> None:
+        t = chat or conn
+        if not t.in_turn:
+            t.in_turn = True
+            await self._chat_emit(conn, chat, "turn.start")
+            if chat is None:
+                await self.emit("bot.status", conn.name, status="online", running=True)
+
+    async def _end_turn(self, conn: Conn, outcome: str, error: str | None = None, chat: FolderChat | None = None) -> None:
+        t = chat or conn
+        t.in_turn = False
+        t.prompts.clear()
         fields = {"outcome": outcome}
         if error:
             fields["error"] = error
-        await self.emit("turn.end", conn.name, **fields)
-        await self.emit("bot.status", conn.name, status="online", running=False)
+        await self._chat_emit(conn, chat, "turn.end", **fields)
+        if chat is None:
+            await self.emit("bot.status", conn.name, status="online", running=False)
 
-    async def _main_event(self, conn: Conn, typ: str, params: dict, p: dict) -> None:
-        name = conn.name
+    async def _main_event(self, conn: Conn, typ: str, params: dict, p: dict, chat: FolderChat | None = None) -> None:
+        t = chat or conn
+
+        async def out(event, **fields):
+            await self._chat_emit(conn, chat, event, **fields)
         if params.get("execution_generation") is not None:
-            conn.generation = params["execution_generation"]
+            t.generation = params["execution_generation"]
         if typ == "message.start":
-            await self._begin_turn(conn)
+            await self._begin_turn(conn, chat)
         elif typ == "status.update":
             text = p.get("text")
             if isinstance(text, str) and text.strip():
-                await self.emit("status", name, text=text.strip())
+                await out("status", text=text.strip())
         elif typ in ("thinking.delta", "reasoning.delta"):
             now = self.clock()
-            if now - conn.last_thinking >= THINKING_MIN_GAP:
-                conn.last_thinking = now
-                await self.emit("thinking", name)
+            if now - t.last_thinking >= THINKING_MIN_GAP:
+                t.last_thinking = now
+                await out("thinking")
         elif typ == "tool.start":
-            await self._begin_turn(conn)
+            await self._begin_turn(conn, chat)
             tool_id = str(p.get("tool_id") or p.get("tool_call_id") or "")
             tool = str(p.get("name") or p.get("tool_name") or "tool")
             context = p.get("context") if isinstance(p.get("context"), str) else ""
             args = p.get("args") if isinstance(p.get("args"), dict) else {}
-            await self.emit("tool.start", name, tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context))
+            await out("tool.start", tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context))
             if tool in ("skill_view", "skill_use"):
                 args = p.get("args") if isinstance(p.get("args"), dict) else {}
                 skill = str(args.get("name") or context).strip()
                 if skill:
-                    await self.emit("skill", name, name=skill)
+                    await out("skill", name=skill)
         elif typ == "tool.complete":
             dur = p.get("duration_s")
-            await self.emit("tool.end", name, tool_id=str(p.get("tool_id") or p.get("tool_call_id") or ""),
-                            name=str(p.get("name") or p.get("tool_name") or "tool"),
-                            ok=not p.get("is_error"), ms=int(round(dur * 1000)) if isinstance(dur, (int, float)) else 0)
+            await out("tool.end", tool_id=str(p.get("tool_id") or p.get("tool_call_id") or ""),
+                      name=str(p.get("name") or p.get("tool_name") or "tool"),
+                      ok=not p.get("is_error"), ms=int(round(dur * 1000)) if isinstance(dur, (int, float)) else 0)
         elif typ == "message.delta":
             text = p.get("text")
             if isinstance(text, str) and text:
-                await self._begin_turn(conn)
-                await self.emit("delta", name, text=text)
+                await self._begin_turn(conn, chat)
+                await out("delta", text=text)
         elif typ == "message.complete":
             text = p.get("text") if isinstance(p.get("text"), str) else ""
             turn = p.get("persisted_turn") if isinstance(p.get("persisted_turn"), dict) else {}
             mid = turn.get("final_assistant_row_id") or p.get("admission_id") or uuid.uuid4().hex
             status = p.get("status")
             if text.strip():
-                await self.emit("message", name, id=str(mid), text=text)
+                await out("message", id=str(mid), text=text)
             if status == "interrupted":
-                await self._end_turn(conn, "interrupted")
+                await self._end_turn(conn, "interrupted", chat=chat)
             elif status == "error":
-                await self._end_turn(conn, "error", str(p.get("error") or p.get("failure_reason") or "turn failed"))
+                await self._end_turn(conn, "error", str(p.get("error") or p.get("failure_reason") or "turn failed"), chat=chat)
             else:
-                await self._end_turn(conn, "done")
+                await self._end_turn(conn, "done", chat=chat)
         elif typ == "error":
-            if conn.in_turn:
-                await self._end_turn(conn, "error", str(p.get("message") or "error"))
+            if t.in_turn:
+                await self._end_turn(conn, "error", str(p.get("message") or "error"), chat=chat)
         elif typ == "approval.request":
             pid = str(p.get("prompt_id") or p.get("request_id") or "")
             if pid:
-                conn.prompts[pid] = p.get("execution_generation", params.get("execution_generation"))
-                await self._emit_approval(conn, pid, p)
+                t.prompts[pid] = p.get("execution_generation", params.get("execution_generation"))
+                await self._emit_approval(conn, pid, p, chat)
         elif typ == "clarify.request":
             pid = str(p.get("prompt_id") or p.get("request_id") or "")
             if pid:
-                conn.prompts[pid] = p.get("execution_generation", params.get("execution_generation"))
-                await self._emit_clarify(conn, pid, p)
+                t.prompts[pid] = p.get("execution_generation", params.get("execution_generation"))
+                await self._emit_clarify(conn, pid, p, chat)
 
-    async def _emit_approval(self, conn: Conn, pid: str, p: dict) -> None:
+    async def _emit_approval(self, conn: Conn, pid: str, p: dict, chat: FolderChat | None = None) -> None:
         choices = [c for c in (p.get("choices") or ["once", "deny"]) if c in ("once", "session", "always", "deny")]
-        await self.emit("approval.request", conn.name, request_id=pid,
-                        title=str(p.get("description") or "Allow this command?"),
-                        command=str(p.get("command") or ""), choices=choices or ["once", "deny"])
+        await self._chat_emit(conn, chat, "approval.request", request_id=pid,
+                              title=str(p.get("description") or "Allow this command?"),
+                              command=str(p.get("command") or ""), choices=choices or ["once", "deny"])
 
-    async def _emit_clarify(self, conn: Conn, pid: str, p: dict) -> None:
+    async def _emit_clarify(self, conn: Conn, pid: str, p: dict, chat: FolderChat | None = None) -> None:
         fields = {"request_id": pid, "question": str(p.get("question") or "")}
         if p.get("choices"):
             fields["choices"] = [str(c) for c in p["choices"]]
-        await self.emit("clarify.request", conn.name, **fields)
+        await self._chat_emit(conn, chat, "clarify.request", **fields)
 
     # ------------------------------------------------------------ main chat
 
@@ -880,30 +925,43 @@ class Bridge:
                 await (self._emit_clarify if x.get("kind") == "clarify" else self._emit_approval)(conn, pid, x)
         return Reply(result, replay if prompts else None)
 
+    async def _target(self, conn: Conn, p: dict) -> tuple[str, FolderChat | None]:
+        """The chat an op acts on: the main chat, or with ``session`` a folder chat this bridge created. Any
+        other id (a client-supplied ``session_id``, another session's id) is never used."""
+        fid = p.get("session")
+        if fid is None:
+            return await self._main(conn), None
+        chat = conn.folders.get(fid) if isinstance(fid, str) else None
+        if chat is None:
+            raise BridgeError("not_found", "no such folder chat")
+        return chat.runtime_id, chat
+
     async def op_chat_send(self, p) -> dict:
         text = p.get("text")
         if not isinstance(text, str) or not text.strip():
             raise BridgeError("bad_request", "missing text")
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
+        main, _chat = await self._target(conn, p)
         input_id = str(uuid.uuid4())
         await self._submit(conn, main, text, input_id)
         return {"input_id": input_id}
 
     async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str):
-        # The single place a turn is sent. It takes the main chat id and nothing else.
+        # The single place a turn is sent. It takes the main chat's id or a folder chat's that this bridge
+        # created (both from _target), and nothing else.
         return await self._call(conn, "prompt.submit", session_id=main_id, text=text, input_id=input_id)
 
-    async def _generation(self, conn: Conn, main: str):
-        if conn.generation is None:
+    async def _generation(self, conn: Conn, main: str, chat: FolderChat | None = None):
+        t = chat or conn
+        if t.generation is None:
             snap = await self._call(conn, "session.resume", session_id=main)
-            conn.generation = snap.get("execution_generation")
-        return conn.generation if conn.generation is not None else 0
+            t.generation = snap.get("execution_generation")
+        return t.generation if t.generation is not None else 0
 
     async def op_chat_interrupt(self, p) -> dict:
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
-        await self._call(conn, "session.interrupt", session_id=main, execution_generation=await self._generation(conn, main))
+        main, chat = await self._target(conn, p)
+        await self._call(conn, "session.interrupt", session_id=main, execution_generation=await self._generation(conn, main, chat))
         return {}
 
     async def op_approval_respond(self, p) -> dict:
@@ -911,10 +969,10 @@ class Bridge:
         if choice not in ("once", "session", "always", "deny") or not isinstance(rid, str) or not rid:
             raise BridgeError("bad_request", "need request_id and choice once|session|always|deny")
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
-        gen = conn.prompts.pop(rid, None)
+        main, chat = await self._target(conn, p)
+        gen = (chat or conn).prompts.pop(rid, None)
         await self._call(conn, "approval.respond", session_id=main, prompt_id=rid, choice=choice,
-                         execution_generation=gen if gen is not None else await self._generation(conn, main))
+                         execution_generation=gen if gen is not None else await self._generation(conn, main, chat))
         return {}
 
     async def op_clarify_respond(self, p) -> dict:
@@ -922,10 +980,44 @@ class Bridge:
         if not isinstance(answer, str) or not isinstance(rid, str) or not rid:
             raise BridgeError("bad_request", "need request_id and answer")
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
-        gen = conn.prompts.pop(rid, None)
+        main, chat = await self._target(conn, p)
+        gen = (chat or conn).prompts.pop(rid, None)
         await self._call(conn, "clarify.respond", session_id=main, prompt_id=rid, answer=answer,
-                         execution_generation=gen if gen is not None else await self._generation(conn, main))
+                         execution_generation=gen if gen is not None else await self._generation(conn, main, chat))
+        return {}
+
+    # ------------------------------------------------------------ folder chats (SESSIONS > oh-my-hermes)
+
+    async def op_folder_open(self, p) -> dict:
+        """Create a new Hermes chat for the bot in folder ``cwd`` (an existing absolute folder)."""
+        cwd = p.get("cwd")
+        if not isinstance(cwd, str) or not cwd.strip() or not os.path.isabs(cwd) or not os.path.isdir(cwd):
+            raise BridgeError("bad_request", "cwd must be an existing folder")
+        conn = await self._conn(p.get("bot"))
+        if len(conn.folders) >= MAX_FOLDER_CHATS:
+            raise BridgeError("bad_request", f"at most {MAX_FOLDER_CHATS} folder chats per bot")
+        leaf = Path(cwd).name or cwd
+        snap = await self._call(conn, "session.create", title=FOLDER_CHAT_PREFIX + leaf, cwd=cwd, cwd_explicit=True,
+                                follow_profile_config=True)
+        fid = "f" + uuid.uuid4().hex[:10]
+        chat = FolderChat(fid, cwd, str(snap["session_id"]), str(snap.get("stored_session_id") or snap["session_id"]))
+        if snap.get("execution_generation") is not None:
+            chat.generation = snap["execution_generation"]
+        conn.folders[fid] = chat
+        info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
+        return {"session": fid, "cwd": str(info.get("cwd") or cwd),
+                "model": str(info.get("model") or conn.bot["model"]),
+                "provider": str(info.get("provider") or conn.bot["provider"]),
+                "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"])}
+
+    async def op_folder_close(self, p) -> dict:
+        """Close a folder chat this bridge created: Hermes stops its agent; the conversation stays saved."""
+        conn = await self._conn(p.get("bot"))
+        fid = p.get("session")
+        chat = conn.folders.pop(fid, None) if isinstance(fid, str) else None
+        if chat is None:
+            raise BridgeError("not_found", "no such folder chat")
+        await self._call(conn, "session.close", session_id=chat.runtime_id)
         return {}
 
     # ------------------------------------------------------------ models
@@ -960,7 +1052,7 @@ class Bridge:
         if reasoning is not None and reasoning not in REASONING_LEVELS:
             raise BridgeError("bad_request", f"unknown reasoning level {reasoning}")
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
+        main, _chat = await self._target(conn, p)
 
         async def mutate(operation: str, payload: dict):
             snap = await self._call(conn, "session.resume", session_id=main)  # fresh revision + generation

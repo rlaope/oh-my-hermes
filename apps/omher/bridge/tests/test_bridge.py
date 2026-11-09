@@ -68,6 +68,10 @@ class FakeClient:
                     "info": dict(self.model_info), "revision": self.revision, "execution_generation": 3,
                     "prompts": []}
         if method == "session.create":
+            if params.get("cwd"):  # a folder chat (SESSIONS > oh-my-hermes)
+                n = len(self.find("session.create")) - 1
+                return {"session_id": f"rt-folder-{n}", "stored_session_id": f"stored-folder-{n}", "messages": [],
+                        "info": {**self.model_info, "cwd": params["cwd"]}, "revision": 0, "execution_generation": 0}
             return {"session_id": MAIN_RUNTIME, "stored_session_id": MAIN_STORED, "messages": [],
                     "info": dict(self.model_info), "revision": 0, "execution_generation": 0}
         if method == "session.title":
@@ -635,6 +639,84 @@ class ReadOnlyRule(BridgeCase):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic", "subprocess"):
             self.assertNotIn(needle, src, needle)
+
+
+class FolderChats(BridgeCase):
+    """SESSIONS > oh-my-hermes: a Hermes chat in a picked folder, through the same event path as the bot chat."""
+
+    async def test_open_send_events_answer_and_close(self):
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env() as env:
+                s = await self.open(env)
+                r = await s.req("folder.open", bot="kami", cwd=folder)
+                self.assertTrue(r["ok"], r)
+                fid = r["result"]["session"]
+                self.assertEqual(r["result"]["cwd"], folder)
+                c = env.clients["kami"]
+                create = c.find("session.create")
+                self.assertEqual(len(create), 1)
+                self.assertEqual(create[0]["cwd"], folder)
+                self.assertTrue(create[0]["cwd_explicit"])
+                self.assertEqual(create[0]["title"], "omher · " + Path(folder).name)
+                self.assertEqual(c.find("session.list"), [])  # never looks for or touches the Bot Chat
+
+                await s.req("chat.send", bot="kami", session=fid, text="list the files")
+                sub = c.find("prompt.submit")
+                self.assertEqual([x["session_id"] for x in sub], ["rt-folder-0"])
+                # the folder chat's events carry its id; the main chat's do not
+                c.push("message.start", {}, sid="rt-folder-0")
+                c.push("tool.start", {"tool_id": "t1", "name": "terminal", "args": {"command": "ls"}}, sid="rt-folder-0")
+                c.push("approval.request", {"prompt_id": "ap9", "command": "rm x", "description": "Delete", "choices": ["once", "deny"]},
+                       sid="rt-folder-0", execution_generation=2)
+                await s.until(lambda ev: any(e["event"] == "approval.request" for e in ev))
+                folder_ev = [e for e in s.events if e["event"] in ("turn.start", "tool.start", "approval.request")]
+                self.assertTrue(all(e.get("session") == fid for e in folder_ev), folder_ev)
+                self.assertNotIn("bot.status", [e["event"] for e in s.events if e.get("session")])
+                r = await s.req("approval.respond", bot="kami", session=fid, request_id="ap9", choice="once")
+                self.assertTrue(r["ok"], r)
+                self.assertEqual(c.find("approval.respond")[-1], {"session_id": "rt-folder-0", "prompt_id": "ap9", "choice": "once",
+                                                                  "execution_generation": 2})
+                await s.req("chat.interrupt", bot="kami", session=fid)
+                self.assertEqual(c.find("session.interrupt")[-1]["session_id"], "rt-folder-0")
+                c.push("message.complete", {"text": "two files", "status": "complete"}, sid="rt-folder-0")
+                await s.until(lambda ev: any(e["event"] == "turn.end" for e in ev))
+                msg = [e for e in s.events if e["event"] == "message"][0]
+                self.assertEqual((msg["session"], msg["text"]), (fid, "two files"))
+
+                self.assertTrue((await s.req("folder.close", bot="kami", session=fid))["ok"])
+                self.assertEqual(c.find("session.close"), [{"session_id": "rt-folder-0"}])
+                r = await s.req("chat.send", bot="kami", session=fid, text="again")
+                self.assertEqual(r["error"]["code"], "not_found")
+                self.assertEqual(len(c.find("prompt.submit")), 1)
+
+    async def test_refuses_bad_folders_and_foreign_ids(self):
+        async with Env() as env:
+            s = await self.open(env)
+            for cwd in (None, "", "relative/dir", "/no/such/folder/x9", 5):
+                r = await s.req("folder.open", bot="kami", cwd=cwd)
+                self.assertEqual(r["error"]["code"], "bad_request", cwd)
+            for op, kw in (("chat.send", {"text": "x"}), ("chat.interrupt", {}), ("folder.close", {}),
+                           ("approval.respond", {"request_id": "a", "choice": "deny"})):
+                for sid in ("20261108_235229_aaaf70c4", MAIN_RUNTIME, "rt-folder-0", 3):
+                    r = await s.req(op, bot="kami", session=sid, **kw)
+                    self.assertEqual(r["error"]["code"], "not_found", (op, sid))
+            c = env.clients["kami"]
+            self.assertEqual(c.find("prompt.submit"), [])
+            self.assertEqual(c.find("session.close"), [])
+            self.assertEqual(c.find("session.create"), [])
+
+    async def test_gateway_loss_closes_folder_chats(self):
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env() as env:
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                c.push("message.start", {}, sid="rt-folder-0")
+                await s.until(lambda ev: any(e["event"] == "turn.start" for e in ev))
+                c.events.put_nowait(GatewayClientError("gateway went away"))
+                await s.until(lambda ev: any(e["event"] == "folder.closed" for e in ev))
+                end = [e for e in s.events if e["event"] == "turn.end" and e.get("session") == fid]
+                self.assertEqual(end[0]["outcome"], "error")
 
 
 class Discovery(unittest.TestCase):
