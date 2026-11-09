@@ -35,6 +35,12 @@ window.OMH_I18N = {
       ja: "アプリをダウンロード",
       zh: "下载应用"
     },
+    "omher.desc": {
+      en: "Your Hermes bots, coding sessions and dag‑ulw runs — one window.",
+      ko: "Hermes 봇, 코딩 세션, dag‑ulw 실행을 한 창에서.",
+      ja: "Hermes のボット、コーディングセッション、dag‑ulw の実行をひとつの窓で。",
+      zh: "Hermes 机器人、编码会话和 dag‑ulw 运行，尽在一个窗口。"
+    },
     "nav.docs": {
       en: "Docs",
       ko: "문서",

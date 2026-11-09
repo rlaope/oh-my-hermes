@@ -467,35 +467,63 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 @media (max-width:720px){.nav > a.dlpill span{display:none}.nav > a.dlpill{padding:0 10px}}
 @media (max-width:480px){.nav .nav__icon{display:none}.top__in{padding:0 16px}}
 .dlbeam{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;mix-blend-mode:screen}
-.omher{position:relative;padding:96px var(--gut) 48px;text-align:center;overflow:hidden}
+.omher{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100svh - 8px);padding:138px var(--gut) 40px;text-align:center;overflow:hidden}
 .omher::before{content:"";position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(rgba(242,238,248,.035) 1px,transparent 1px) 0 0/56px 56px,linear-gradient(90deg,rgba(242,238,248,.035) 1px,transparent 1px) 0 0/56px 56px;
   -webkit-mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent);mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent)}
-.omher__t{position:relative;z-index:2;margin:0 0 28px;min-height:0;font:500 clamp(26px,3.2vw,38px)/1.15 var(--sans);letter-spacing:-.02em;color:var(--ink-3)}
-.omher__t b{color:var(--ink);font-weight:600}
-.omher__shot{position:relative;z-index:2;width:min(1080px,100%,calc((100svh - 330px) * 2.091));min-width:min(640px,100%);margin:0 auto;--reveal:1;--lit:0;--bx:80%}
+/* the seam into the OMH hero: one soft spectrum hairline */
+.omher::after{content:"";position:absolute;left:50%;bottom:0;width:min(880px,80%);height:1px;transform:translateX(-50%);pointer-events:none;opacity:.55;
+  background:linear-gradient(90deg,transparent,#a46cf5 22%,#f27bb6 42%,#ff9a5a 58%,#c6f36b 74%,transparent);box-shadow:0 0 18px 1px rgba(242,123,182,.28)}
+.omher__shot{position:relative;z-index:2;order:0;width:min(1240px,100%,calc((100svh - 372px) * 2.091));min-width:min(640px,100%);margin:0 auto;
+  --reveal:1;--lit:0;--bx:80%;--rx:0deg;--ry:0deg;--gx:50%;--gy:50%;--glare:0;--hit:0;
+  transform-origin:50% 40%}
+.omher__shot.is-tilt{transform:perspective(1600px) rotateX(var(--rx)) rotateY(var(--ry))}
 .omher__shot img{display:block;width:100%;height:auto;filter:drop-shadow(0 34px 60px rgba(0,0,0,.55));
   -webkit-mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%));mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%))}
 .omher__shot::before{content:"";position:absolute;inset:6% -4% -2%;z-index:-1;pointer-events:none;background:radial-gradient(50% 55% at 50% 45%,rgba(208,140,242,.12),rgba(242,123,182,.05) 55%,transparent 75%)}
-.omher__glow{position:absolute;inset:0;border-radius:1%/1.6%;overflow:hidden;pointer-events:none}
-.omher__glow::after{content:"";position:absolute;left:var(--bx);top:0;width:min(560px,54%);height:min(300px,36%);transform:translate(-50%,-40%);opacity:var(--lit);
-  background:radial-gradient(closest-side,rgba(255,250,253,.14),rgba(242,123,182,.04) 50%,transparent)}
-.omher__glow::before{content:"";position:absolute;left:calc(var(--bx) - 280px);top:0;width:560px;height:2px;opacity:var(--lit);background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),transparent);box-shadow:0 0 14px rgba(255,236,248,.7)}
-.omher__get{position:relative;z-index:2;display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin:40px auto 22px}
+.omher__glow{position:absolute;inset:0;border-radius:1%/1.6%;overflow:hidden;pointer-events:none;
+  -webkit-mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%));mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%))}
+/* light pooling under the impact, and the top border lit in the spectrum */
+.omher__glow::after{content:"";position:absolute;left:var(--bx);top:0;width:min(620px,58%);height:min(320px,40%);transform:translate(-50%,-42%);opacity:calc(var(--lit) * .9 + var(--hit) * .5);
+  background:radial-gradient(closest-side,rgba(250,248,255,.11),rgba(196,178,250,.04) 45%,transparent);mix-blend-mode:screen}
+.omher__glow::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;opacity:calc(var(--lit) + var(--hit) * .6);
+  background:radial-gradient(closest-side,#fff,rgba(255,255,255,0)) var(--bx) 0/220px 2px no-repeat,linear-gradient(90deg,#6be3f3,#a46cf5,#f27bb6,#ffc6e0,#a46cf5,#6be3f3) 0 0/200% 100%;
+  -webkit-mask-image:radial-gradient(260px 400% at var(--bx) 0,#000,transparent);mask-image:radial-gradient(260px 400% at var(--bx) 0,#000,transparent);
+  box-shadow:0 0 14px rgba(255,214,240,.5);animation:omher-edge 6s linear infinite}
+@keyframes omher-edge{to{background-position:var(--bx) 0,-200% 0}}
+/* glass: a faint spectrum sheen that sweeps across now and then, and a glare that follows the cursor */
+.omher__sheen{position:absolute;inset:0;border-radius:1%/1.6%;overflow:hidden;pointer-events:none;mix-blend-mode:screen;opacity:max(var(--glare),calc(var(--lit) * .9))}
+.omher__sheen::before{content:"";position:absolute;top:-20%;bottom:-20%;left:-60%;width:38%;transform:skewX(-18deg) translateX(0);
+  background:linear-gradient(90deg,transparent,rgba(107,227,243,.04) 30%,rgba(164,108,245,.06) 45%,rgba(242,123,182,.06) 58%,rgba(255,200,170,.04) 70%,transparent);
+  animation:omher-sheen 9s cubic-bezier(.45,.05,.3,1) 2.6s infinite}
+@keyframes omher-sheen{0%{transform:skewX(-18deg) translateX(0)}38%,100%{transform:skewX(-18deg) translateX(560%)}}
+.omher__sheen::after{content:"";position:absolute;inset:0;opacity:var(--glare);
+  background:radial-gradient(240px 190px at var(--gx) var(--gy),rgba(255,255,255,.13),rgba(242,123,182,.08) 40%,transparent 72%),
+    conic-gradient(from 200deg at var(--gx) var(--gy),rgba(164,108,245,.24),rgba(242,123,182,.22),rgba(255,170,130,.18),rgba(107,227,243,.22),rgba(164,108,245,.24));
+  -webkit-mask-image:radial-gradient(420px 320px at var(--gx) var(--gy),#000,transparent);mask-image:radial-gradient(420px 320px at var(--gx) var(--gy),#000,transparent)}
+.omher__meta{position:relative;z-index:2;order:1;margin:26px auto 0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.omher__t{margin:0 0 4px;min-height:0;font:500 11.5px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4)}
+.omher__t b{color:var(--ink-2);font-weight:600}
+.omher__d{margin:0;font:500 clamp(18px,1.75vw,25px)/1.3 var(--sans);letter-spacing:-.01em;color:var(--ink)}
+.omher__get{position:relative;z-index:2;order:2;display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin:24px auto 16px}
 .osbtn{display:inline-flex;align-items:center;gap:9px;height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--line-2);color:var(--ink);font:500 14px var(--sans);transition:border-color var(--fast),background var(--fast),transform var(--fast)}
 .osbtn:hover{border-color:var(--ink-3);background:rgba(255,255,255,.03)}
 .osbtn svg{width:16px;height:16px;fill:currentColor;flex:none}
 .osbtn--main{border-color:transparent;background:var(--ink);color:#0c0a12;font-weight:600}
 .osbtn--main:hover{background:#fff;border-color:transparent;transform:translateY(-1px)}
-.omher__cmd{position:relative;z-index:2;display:flex;align-items:stretch;width:fit-content;max-width:min(920px,100%);margin:0 auto;border:1px solid var(--line-2);border-radius:12px;background:rgba(17,14,24,.78);text-align:left}
+.omher__cmd{position:relative;z-index:2;order:3;display:flex;align-items:stretch;width:fit-content;max-width:min(920px,100%);margin:0 auto;border:1px solid var(--line-2);border-radius:12px;background:rgba(17,14,24,.78);text-align:left}
 .omher__cmd > div{flex:1;min-width:0;padding:12px 16px;font:400 12.5px/1.7 var(--mono);color:var(--ink);overflow-x:auto;white-space:nowrap;scrollbar-width:none}
 .omher__cmd > div::-webkit-scrollbar{display:none}
 .omher__cmd .p{color:var(--pink);margin-right:10px;user-select:none}
 @media (max-width:900px){.omher__cmd > div{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 64px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 64px),transparent)}}
+@media (prefers-reduced-motion:reduce){.omher__shot{transform:none}.omher__sheen::before,.omher__glow::before{animation:none}.omher__sheen::before{display:none}}
+/* the 01-08 rail belongs to the OMH sections; it stays hidden beside the omher block */
+.rail{transition:opacity var(--base) var(--ease)}
+body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
 /* the OMH hero keeps its content; it now starts right under the omher block instead of centring in a full screen */
 .omher + .hero{align-items:flex-start;padding-top:88px}
 .omher + .hero::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;z-index:1;pointer-events:none;background:linear-gradient(var(--bg),rgba(12,10,18,0))}
-@media (max-width:760px){.omher{padding:84px 20px 36px}.omher__shot{min-width:0;width:min(350px,100%)}.omher__cmd{border-radius:10px}.omher__cmd > div{padding:10px 28px 10px 18px}.omher__t{margin-bottom:18px}.osbtn{height:42px}.omher__get{gap:10px;margin:22px auto 10px}.omher + .hero{padding-top:72px}.omher__glow::after{display:none}.omher__get{flex-direction:column;align-items:stretch;width:min(350px,100%);max-width:none;margin:24px auto 12px}.osbtn{justify-content:center}.omher__cmd{width:min(350px,100%)}.omher__cmd > div{padding-right:28px}}
+@media (max-width:760px){.omher{min-height:0;padding:92px 20px 40px}.omher__shot{min-width:0;width:min(350px,100%);transform:none}.omher__cmd{border-radius:10px}.omher__cmd > div{padding:10px 28px 10px 18px}.omher__meta{margin-top:18px}.omher__d{font-size:16px;max-width:330px}.osbtn{height:42px;justify-content:center}.omher + .hero{padding-top:72px}.omher__glow::after{display:none}.omher__get{flex-direction:column;align-items:stretch;gap:10px;width:min(350px,100%);max-width:none;margin:20px auto 12px}.omher__cmd{width:min(350px,100%)}.omher__cmd > div{padding-right:28px}}
 </style>
 <script type="application/ld+json">
 {
@@ -577,14 +605,17 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 <canvas class="dlbeam" data-beam aria-hidden="true"></canvas>
 <main>
 <section class="omher" id="omher" aria-labelledby="omher-t" data-omher>
-  <h2 class="omher__t" id="omher-t"><b>omher</b> — the desktop app</h2>
-  <figure class="omher__shot" data-app-shot><picture><source media="(max-width: 600px)" srcset="assets/omher-app-mobile.webp" width="720" height="800"><img src="assets/omher-app.webp" alt="omher: the bot Kami runs a seven-part plan; the sidebar lists bots and Claude Code, Codex, omp and pi sessions, and the Runs tab shows the plan as a graph" width="2400" height="1148" fetchpriority="high" decoding="async"></picture><span class="omher__glow" aria-hidden="true"></span></figure>
+  <figure class="omher__shot" data-app-shot><picture><source media="(max-width: 600px)" srcset="assets/omher-app-mobile.webp" width="720" height="800"><img src="assets/omher-app.webp" alt="omher: the bot Kami runs a seven-part plan; the sidebar lists bots and Claude Code, Codex, omp and pi sessions, and the Runs tab shows the plan as a graph" width="2400" height="1148" fetchpriority="high" decoding="async"></picture><span class="omher__sheen" aria-hidden="true"></span><span class="omher__glow" aria-hidden="true"></span></figure>
+  <div class="omher__meta">
+    <h2 class="omher__t" id="omher-t"><b>omher</b> · the desktop app</h2>
+    <p class="omher__d" data-i18n="omher.desc">Your Hermes bots, coding sessions and dag‑ulw runs — one window.</p>
+  </div>
   <div class="omher__get" data-dl>
     <a class="osbtn osbtn--main" href="https://github.com/rlaope/oh-my-hermes/releases?q=omher" data-dl-k="mac-arm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c.02 2.4 2.1 3.2 2.13 3.21-.02.06-.33 1.14-1.1 2.26-.66.97-1.35 1.93-2.43 1.95-1.06.02-1.4-.63-2.62-.63s-1.6.61-2.6.65c-1.04.04-1.84-1.05-2.5-2.01-1.36-1.97-2.4-5.57-1-8 .69-1.21 1.93-1.97 3.28-1.99 1.02-.02 1.99.69 2.62.69.62 0 1.8-.85 3.04-.73.52.02 1.98.21 2.92 1.58-.08.05-1.74 1.02-1.74 3.02M14.37 4.68c.56-.68.93-1.62.83-2.56-.8.03-1.77.53-2.35 1.21-.51.6-.97 1.56-.85 2.48.9.07 1.81-.46 2.37-1.13"/></svg>macOS (Apple silicon)</a>
     <a class="osbtn" href="https://github.com/rlaope/oh-my-hermes/releases?q=omher" data-dl-k="mac-x64"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c.02 2.4 2.1 3.2 2.13 3.21-.02.06-.33 1.14-1.1 2.26-.66.97-1.35 1.93-2.43 1.95-1.06.02-1.4-.63-2.62-.63s-1.6.61-2.6.65c-1.04.04-1.84-1.05-2.5-2.01-1.36-1.97-2.4-5.57-1-8 .69-1.21 1.93-1.97 3.28-1.99 1.02-.02 1.99.69 2.62.69.62 0 1.8-.85 3.04-.73.52.02 1.98.21 2.92 1.58-.08.05-1.74 1.02-1.74 3.02M14.37 4.68c.56-.68.93-1.62.83-2.56-.8.03-1.77.53-2.35 1.21-.51.6-.97 1.56-.85 2.48.9.07 1.81-.46 2.37-1.13"/></svg>macOS (Intel)</a>
     <a class="osbtn" href="https://github.com/rlaope/oh-my-hermes/releases?q=omher" data-dl-k="win-exe"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.1 10.4 4v7.1H3zm0 13.8 7.4 1.1v-7H3zm8.3 1.2L21 21.5V13H11.3zm0-16.2V11.1H21V2.5z"/></svg>Windows</a>
   </div>
-  <div class="omher__cmd"><div><span class="p">$</span><code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta</code></div><button class="copy" data-copy-text="curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta">Copy</button></div>
+  <div class="omher__cmd" data-omher-cmd><div><span class="p">$</span><code>curl -fsSL https://omher.app/omher | sh</code></div><button class="copy" data-copy-text="curl -fsSL https://omher.app/omher | sh">Copy</button></div>
 </section>
 
 <section class="hero hero--center" aria-labelledby="h1" data-hero>
@@ -1693,8 +1724,7 @@ $$('[data-comm] a').forEach(a => a.addEventListener('pointermove', e => { const 
 <script>
 /* omher at the top. Downloads: newest omher-v* release from the GitHub API; the button for this OS goes first and
    becomes the primary one (Apple silicon vs Intel where the browser says); the releases page when the API fails.
-   Beam: our own canvas 2D column of light from the header Download pill to the promo shot, which it reveals.
-   30 fps cap, idle when the tab is hidden or the block is off-screen, one still frame under prefers-reduced-motion. */
+   The beam, the shot's tilt and glare, and the rail visibility live in beam.js. */
 (() => {
   const REL = 'https://github.com/rlaope/oh-my-hermes/releases?q=omher';
   const row = document.querySelector('[data-dl]'); if (!row) return;
@@ -1709,6 +1739,8 @@ $$('[data-comm] a').forEach(a => a.addEventListener('pointermove', e => { const 
   }
   order(os === 'win' ? 'win-exe' : os === 'mac' ? 'mac-arm' : null);
   if (os === 'other') btn('mac-arm').classList.add('osbtn--main');
+  const cmd = document.querySelector('[data-omher-cmd]');
+  if (cmd && os === 'win'){ const ps = 'irm https://omher.app/omher.ps1 | iex'; cmd.querySelector('code').textContent = ps; cmd.querySelector('.copy').dataset.copyText = ps; cmd.querySelector('.p').textContent = 'PS>'; }
   if (os === 'mac' && uad && uad.getHighEntropyValues) uad.getHighEntropyValues(['architecture']).then(h => { if (h.architecture === 'x86') order('mac-x64'); }).catch(() => {});
   const key = t => { const m = /^omher-v(\d+)\.(\d+)\.(\d+)(-.+)?$/.exec(t) || []; return [+m[1] || 0, +m[2] || 0, +m[3] || 0, m[4] ? 0 : 1]; };
   const newer = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
@@ -1723,91 +1755,8 @@ $$('[data-comm] a').forEach(a => a.addEventListener('pointermove', e => { const 
       row.dataset.version = v;
     }).catch(() => {});
 })();
-(() => {
-  const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const cv = document.querySelector('[data-beam]'), pill = document.querySelector('[data-dlpill]'), sec = document.querySelector('[data-omher]'), shot = document.querySelector('[data-app-shot]');
-  if (!cv || !pill || !sec || !shot || !cv.getContext) return;
-  const cx = cv.getContext('2d');
-  const copy = sec.querySelector('.omher__t');
-  const SW = 320, SH = 1024;
-  let W = 0, H = 0, S = 1, sprite = null;
-  function size(){ S = Math.min(devicePixelRatio || 1, 1.5); W = innerWidth; H = innerHeight; cv.width = Math.round(W*S); cv.height = Math.round(H*S); }
-  function build(){
-    const c = document.createElement('canvas'); c.width = SW; c.height = SH; const g = c.getContext('2d'), m = SW/2;
-    const cone = (t, b, stops) => { const gr = g.createLinearGradient(m-b, 0, m+b, 0); for (const [o, col] of stops) gr.addColorStop(o, col); g.fillStyle = gr; g.beginPath(); g.moveTo(m-t, 0); g.lineTo(m+t, 0); g.lineTo(m+b, SH); g.lineTo(m-b, SH); g.closePath(); g.fill(); };
-    cone(16, 150, [[0,'rgba(242,123,182,0)'],[.3,'rgba(242,123,182,.05)'],[.5,'rgba(255,236,246,.15)'],[.7,'rgba(242,123,182,.05)'],[1,'rgba(242,123,182,0)']]);
-    cone(6, 46, [[0,'rgba(255,214,236,0)'],[.3,'rgba(255,214,236,.15)'],[.5,'rgba(255,255,255,.4)'],[.7,'rgba(255,214,236,.15)'],[1,'rgba(255,214,236,0)']]);
-    cone(4, 16, [[0,'rgba(255,255,255,0)'],[.3,'rgba(255,255,255,.1)'],[.5,'rgba(255,255,255,.36)'],[.7,'rgba(255,255,255,.1)'],[1,'rgba(255,255,255,0)']]);
-    g.globalCompositeOperation = 'source-atop';
-    const tint = g.createLinearGradient(0, 0, 0, SH); tint.addColorStop(0, 'rgba(242,123,182,0)'); tint.addColorStop(.55, 'rgba(242,123,182,.12)'); tint.addColorStop(1, 'rgba(242,123,182,.3)');
-    g.fillStyle = tint; g.fillRect(0, 0, SW, SH);
-    g.globalCompositeOperation = 'destination-in';
-    const v = g.createLinearGradient(0, 0, 0, SH); v.addColorStop(0, 'rgba(0,0,0,.7)'); v.addColorStop(.3, 'rgba(0,0,0,.72)'); v.addColorStop(.85, 'rgba(0,0,0,.88)'); v.addColorStop(1, '#000');
-    g.fillStyle = v; g.fillRect(0, 0, SW, SH);
-    sprite = c;
-  }
-  const dust = Array.from({length: 40}, (_, i) => ({u: Math.random()*2 - 1, f: Math.random(), v: .035 + Math.random()*.07, a: .25 + Math.random()*.5, s: Math.random() < .2 ? 2 : 1.2, ph: Math.random()*6.3, pink: i % 3 === 0}));
-  let I = 0, pour = RM ? 1 : 0, reveal = RM ? 1 : 0, last = 0, raf = 0, seen = true, litSet = -1;
-  if (!RM) shot.style.setProperty('--reveal', '0');
-  const ease = x => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
-  function frame(t, dt){
-    const p = pill.getBoundingClientRect(), sr = shot.getBoundingClientRect();
-    const want = sr.bottom > H*.25 && p.bottom > 0 && p.bottom < sr.top;
-    if (RM) I = want ? 1 : 0;
-    else I = want ? Math.min(1, I + dt/420) : Math.max(0, I - dt/260);
-    if (want && !RM) pour = Math.min(1, pour + dt/900);
-    if (pour >= 1 && reveal < 1){ reveal = Math.min(1, reveal + dt/1300); shot.style.setProperty('--reveal', ease(reveal).toFixed(3)); }
-    cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, cv.width, cv.height);
-    if (I !== litSet){ shot.style.setProperty('--lit', I.toFixed(2)); litSet = I; }
-    if (I <= 0) return;
-    // aim at the Runs panel (the right 36% of the window), never past the pill's own column
-    const k = W < 760 ? .5 : 1, x0 = p.left + p.width/2, y0 = p.top + p.height*.7, y1 = sr.top + 2;
-    const xt = W < 600 ? Math.min(x0, sr.right - 40) : Math.max(sr.left + sr.width*.6, Math.min(x0 - 60, sr.right - 120)), full = Math.hypot(xt - x0, y1 - y0), ang = Math.atan2(xt - x0, y1 - y0);
-    shot.style.setProperty('--bx', (xt - sr.left).toFixed(0) + 'px');
-    const len = Math.max(0, full * ease(pour)); if (len < 4) return;
-    const flick = .93 + .05*Math.sin(t/430) + .02*Math.sin(t/97), amp = 1;
-    cx.setTransform(S, 0, 0, S, 0, 0);
-    let g = cx.createRadialGradient(x0, y0, 0, x0, y0, 80*k); g.addColorStop(0, 'rgba(255,255,255,.5)'); g.addColorStop(.4, 'rgba(255,230,244,.16)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-    cx.globalAlpha = I * flick * amp; cx.fillStyle = g; cx.beginPath(); cx.arc(x0, y0, 80*k, 0, 6.2832); cx.fill();
-    cx.save(); cx.translate(x0, y0); cx.rotate(-ang);
-    cx.drawImage(sprite, -SW/2*k, 0, SW*k, len);
-    for (const d of dust){
-      if (!RM){ d.f += d.v * dt/1000; if (d.f > 1){ d.f = 0; d.u = Math.random()*2 - 1; } }
-      const py = d.f * len, half = k*(5 + 40*d.f), px = d.u*half + Math.sin(t/900 + d.ph)*3*k;
-      const a = d.a * I * amp * Math.min(1, d.f*8) * (1 - d.f*.5) * (.6 + .4*Math.sin(t/300 + d.ph));
-      if (a <= .02) continue;
-      cx.globalAlpha = a; cx.fillStyle = d.pink ? '#f8b6d8' : '#fff'; cx.fillRect(px, py, d.s, d.s);
-    }
-    cx.restore();
-    const land = ease((pour - .7) / .3) * I * amp, yl = y0 + len*Math.cos(ang), xl = x0 + len*Math.sin(ang);
-    if (land > 0){
-      cx.save(); cx.beginPath(); cx.rect(0, 0, W, sr.top + 2); cx.clip(); cx.translate(xl, yl); cx.scale(1, .3);
-      g = cx.createRadialGradient(0, 0, 0, 0, 0, 230*k); g.addColorStop(0, 'rgba(255,240,250,.3)'); g.addColorStop(.4, 'rgba(242,123,182,.1)'); g.addColorStop(1, 'rgba(242,123,182,0)');
-      cx.globalAlpha = land * flick; cx.fillStyle = g; cx.beginPath(); cx.arc(0, 0, 230*k, 0, 6.2832); cx.fill();
-      g = cx.createRadialGradient(0, 0, 0, 0, 0, 80*k); g.addColorStop(0, 'rgba(255,255,255,.4)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-      cx.fillStyle = g; cx.beginPath(); cx.arc(0, 0, 80*k, 0, 6.2832); cx.fill();
-      cx.restore();
-    }
-    cx.globalAlpha = 1;
-  }
-  function loop(t){
-    raf = 0;
-    if (document.hidden || !seen){ I = 0; frame(t, 0); return; }
-    if (last && t - last < 33){ raf = requestAnimationFrame(loop); return; }
-    const dt = last ? Math.min(100, t - last) : 33; last = t;
-    frame(t, dt);
-    raf = requestAnimationFrame(loop);
-  }
-  function kick(){ if (RM){ if (!raf) raf = requestAnimationFrame(() => { raf = 0; frame(2000, 0); }); return; } if (!raf){ last = 0; raf = requestAnimationFrame(loop); } }
-  size(); build();
-  addEventListener('resize', () => { size(); kick(); });
-  document.addEventListener('visibilitychange', kick);
-  if (RM) addEventListener('scroll', kick, {passive: true});
-  new IntersectionObserver(es => { seen = es[0].isIntersecting; kick(); }).observe(sec);
-  new IntersectionObserver(es => document.body.classList.toggle('at-app', es[0].isIntersecting), {rootMargin: '0px 0px -55% 0px'}).observe(sec);
-  kick();
-})();
 </script>
+<script src="beam.js"></script>
 <script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>
