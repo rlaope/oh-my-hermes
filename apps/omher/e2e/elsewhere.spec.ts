@@ -73,7 +73,7 @@ test("header chip counts the other places and toggles the panel", async ({ page 
   await expect(page.getByTestId("places")).toHaveText("1 other place");
 });
 
-test("away line is one link to the thread, with no replayed messages", async ({ page }) => {
+test("elsewhere shows the bot's last answer as a bubble with a link to the thread", async ({ page }) => {
   const opened: string[] = [];
   await page.exposeFunction("__omherOpened", (u: string) => opened.push(u));
   await page.addInitScript(() => {
@@ -86,21 +86,50 @@ test("away line is one link to the thread, with no replayed messages", async ({ 
   const tl = page.getByTestId("timeline");
   await expect(tl.getByTestId("away")).toHaveCount(2); // newest two in the timeline; the rest live in the panel
   const slack = tl.locator('[data-testid=away][data-source=slack]');
-  await expect(slack).toContainText("Slack #og-dev");
-  await expect(slack).toContainText("gateway 502 on /v1/responses");
-  await expect(slack.getByTestId("away-time")).toHaveText(/^working · \d+m$/);
-  await expect(slack.getByRole("status")).toBeVisible(); // spinner while the session works
+  // same bubble as a bot answer
+  await expect(slack).toHaveClass(/\bmsg\b.*\ba\b/);
+  const [bg, botBg] = await Promise.all([
+    slack.locator(".b").evaluate((e) => getComputedStyle(e).backgroundColor),
+    tl.getByTestId("bubble-bot").first().locator(".b").evaluate((e) => getComputedStyle(e).backgroundColor),
+  ]);
+  expect(bg).toBe(botBg);
+  await expect(slack.getByTestId("away-text")).toHaveText("Reading gateway logs from 14:31. Upstream resets look like keep-alive expiry.");
+  await expect(slack.getByTestId("away-time")).toContainText(/working · \d+m/);
   const link = slack.getByTestId("away-link");
+  await expect(link).toHaveText("Slack #og-dev");
   await expect(link).toHaveAttribute("href", /^slack:\/\/channel\?/);
-  await expect(link).toHaveAttribute("title", "Open in Slack");
+  await expect(link).toHaveCSS("text-decoration-line", "underline");
 
   await link.click();
   await expect.poll(() => opened).toEqual([expect.stringMatching(/^slack:\/\/channel\?team=T1&id=C1/)]);
-  // no peek: nothing of that thread is replayed here, and no session is read
+  // the thread's history is never replayed or read here
   await expect(page.getByTestId("peek")).toHaveCount(0);
-  await expect(page.getByTestId("peek-msg")).toHaveCount(0);
   expect((await calls()).filter((c) => c.op === "elsewhere.peek")).toEqual([]);
   await expectNoInputs(page);
+});
+
+test("a session with no answer yet falls back to its title", async ({ page }) => {
+  await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {
+    const server = ws.connectToServer();
+    const ops = new Map<string, string>();
+    ws.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      ops.set(msg.id, msg.op);
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      if (ops.get(msg.id) === "elsewhere.list" && msg.ok) {
+        for (const s of msg.result.sessions) s.last_reply = null;
+        ws.send(JSON.stringify(msg));
+        return;
+      }
+      ws.send(raw);
+    });
+  });
+  await open(page);
+  const slack = page.getByTestId("timeline").locator('[data-testid=away][data-source=slack]');
+  await expect(slack.getByTestId("away-text")).toHaveText("gateway 502 on /v1/responses");
 });
 
 test("Details panel: identity, where the bot is, note, routines", async ({ page }) => {

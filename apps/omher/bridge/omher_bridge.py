@@ -191,28 +191,68 @@ def tool_detail(tool: str, args: dict, context: str, n: int = 160) -> str:
 def read_origins(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
     """Where each session lives (platform, channel name, ids) from the profile's own state.db, opened
     read-only. `session.list` carries no origin, and without it a session cannot link back to its thread."""
+    return {sid: v["origin"] for sid, v in read_session_facts(profile_dir, ids).items() if "origin" in v}
+
+
+def read_session_facts(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
+    """Per session: its origin and the bot's last answer there (`last_reply`, `last_reply_at`), read in two
+    queries from the profile's state.db, opened read-only. Nothing is written."""
     import sqlite3
     db = profile_dir / "state.db"
     if not ids or not db.is_file():
         return {}
+    marks = ",".join("?" * len(ids))
     try:
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
         try:
-            marks = ",".join("?" * len(ids))
-            rows = con.execute(f"SELECT id, origin_json FROM sessions WHERE id IN ({marks})", ids).fetchall()
+            origins = con.execute(f"SELECT id, origin_json FROM sessions WHERE id IN ({marks})", ids).fetchall()
+            try:
+                replies = con.execute(
+                    "SELECT m.session_id, m.content, m.timestamp FROM messages m JOIN ("
+                    "SELECT session_id, MAX(id) AS mid FROM messages WHERE role = 'assistant' AND content IS NOT NULL"
+                    f" AND TRIM(content) <> '' AND session_id IN ({marks}) GROUP BY session_id) x ON m.id = x.mid",
+                    ids).fetchall()
+            except sqlite3.Error:
+                replies = []
         finally:
             con.close()
     except sqlite3.Error:
         return {}
-    out = {}
-    for sid, raw in rows:
+    out: dict[str, dict] = {}
+    for sid, raw in origins:
         try:
             origin = json.loads(raw) if raw else None
         except ValueError:
             origin = None
         if isinstance(origin, dict):
-            out[sid] = origin
+            out.setdefault(sid, {})["origin"] = origin
+    for sid, content, ts in replies:
+        text = reply_gist(content if isinstance(content, str) else "")
+        if text:
+            out.setdefault(sid, {}).update(last_reply=text, last_reply_at=float(ts or 0.0))
     return out
+
+
+_MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+_MENTION = re.compile(r"<[@#!][^>]*>")
+_URL = re.compile(r"https?://\S+")
+
+
+def reply_gist(text: str, n: int = 220) -> str:
+    """The first paragraph of an answer as plain text: markdown marks, mentions and bare URLs removed,
+    clipped at a sentence end when one is near."""
+    para = next((p for p in re.split(r"\n\s*\n", text or "") if p.strip()), "")
+    t = _MD_LINK.sub(r"\1", para)
+    t = _MENTION.sub("", t)
+    t = _URL.sub("", t)
+    t = re.sub(r"^\s*(#+|[-*])\s+", "", t, flags=re.M)
+    t = re.sub(r"[*_`~]+", "", t)
+    t = " ".join(t.split())
+    if len(t) <= n:
+        return t
+    cut = t[:n]
+    end = max(cut.rfind(". "), cut.rfind("다. "), cut.rfind("요. "))
+    return cut[: end + 1].rstrip() if end > n * 0.5 else cut.rstrip() + "…"
 
 
 def origin_link(source: str, origin: dict) -> tuple[str | None, str | None]:
@@ -921,11 +961,12 @@ class Bridge:
                         "message_count": int(r.get("message_count") or 0), "running": bool(r.get("running"))})
         out.sort(key=lambda a: a["last_active"], reverse=True)
         out = out[:MAX_ELSEWHERE]
-        origins = await asyncio.to_thread(read_origins, conn.bot["path"], [a["id"] for a in out])
+        facts = await asyncio.to_thread(read_session_facts, conn.bot["path"], [a["id"] for a in out])
         for a in out:
-            url, place = origin_link(a["source"], origins.get(a["id"]) or {})
-            a["url"] = url
-            a["place"] = place
+            f = facts.get(a["id"]) or {}
+            a["url"], a["place"] = origin_link(a["source"], f.get("origin") or {})
+            a["last_reply"] = f.get("last_reply")
+            a["last_reply_at"] = f.get("last_reply_at")
         return out
 
     async def op_elsewhere_list(self, p) -> dict:

@@ -40,52 +40,35 @@
   object-fit: contain;
 }
 
-/* away line in the timeline */
-.ew-away {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+/* elsewhere in the timeline: an ordinary bot bubble ending in a link to its thread */
+.ew-msg .b {
+  white-space: normal;
 }
-.ew-away-h {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 24px;
-  width: 100%;
-  text-align: left;
-  font-size: 12px;
+.ew-link,
+.ew-where {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+.ew-where {
   color: var(--muted);
-  min-width: 0;
-}
-.ew-ttl {
-  color: var(--body);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.ew-tm {
-  color: var(--quiet);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  flex: none;
-}
-.ew-away-h.link {
-  cursor: pointer;
   text-decoration: none;
-  border-radius: var(--r-sm);
 }
-.ew-away-h.link:hover .ew-ttl {
+.ew-link:hover {
   color: var(--ink);
 }
-.ew-go {
-  color: var(--quiet);
+.ew-working {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
   font-size: 11px;
-  flex: none;
-}
-.ew-away-h.link:hover .ew-go {
-  color: var(--body);
+  color: var(--quiet);
+  white-space: nowrap;
+  vertical-align: 1px;
 }
 
 /* Details panel */

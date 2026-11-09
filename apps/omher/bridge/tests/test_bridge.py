@@ -491,7 +491,7 @@ class Elsewhere(BridgeCase):
             self.assertTrue(by["s-slack"]["running"])
             self.assertEqual(by["s-slack"]["message_count"], 12)
             for a in rows:
-                self.assertEqual(set(a), {"id", "source", "label", "title", "started_at", "last_active", "message_count", "running", "url", "place"})
+                self.assertEqual(set(a), {"id", "source", "label", "title", "started_at", "last_active", "message_count", "running", "url", "place", "last_reply", "last_reply_at"})
                 self.assertTrue(a["label"])
 
     async def test_active_list_adds_live_sessions_and_caps_at_twenty(self):
@@ -715,13 +715,38 @@ class ToolDetail(unittest.TestCase):
 class OriginLinks(unittest.TestCase):
     """Elsewhere sessions link to their thread; the origin comes from the profile's state.db, read-only."""
 
-    def _db(self, d: Path, rows):
+    def _db(self, d: Path, rows, messages=()):
         import sqlite3
         con = sqlite3.connect(d / "state.db")
         con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, origin_json TEXT)")
+        con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT, timestamp REAL)")
         con.executemany("INSERT INTO sessions VALUES (?, ?)", [(i, json.dumps(o) if o else None) for i, o in rows])
+        con.executemany("INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)", messages)
         con.commit()
         con.close()
+
+    def test_last_reply_is_the_bots_latest_answer_as_plain_text(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            self._db(Path(d), [("s1", {"platform": "slack", "chat_id": "C1"}), ("s2", None)], [
+                ("s1", "assistant", "old answer", 1.0),
+                ("s1", "user", "question", 2.0),
+                ("s1", "assistant", "**배포 끝났습니다.** <@U1> [PR](https://x/y)를 보세요.\n\n- detail", 3.0),
+                ("s1", "assistant", "   ", 4.0),
+                ("s2", "user", "only a question", 1.0),
+            ])
+            f = omher_bridge.read_session_facts(Path(d), ["s1", "s2"])
+        self.assertEqual(f["s1"]["last_reply"], "배포 끝났습니다. PR를 보세요.")
+        self.assertEqual(f["s1"]["last_reply_at"], 3.0)
+        self.assertNotIn("s2", f)
+
+    def test_reply_gist_clips_at_a_sentence(self):
+        import omher_bridge
+        long = "첫 문장입니다. " * 10 + "x" * 300
+        g = omher_bridge.reply_gist(long, n=100)
+        self.assertTrue(g.endswith("다."), g)
+        self.assertLessEqual(len(g), 100)
+        self.assertEqual(omher_bridge.reply_gist("y" * 300, n=50), "y" * 50 + "…")
 
     def test_slack_and_discord_links_and_places(self):
         import omher_bridge

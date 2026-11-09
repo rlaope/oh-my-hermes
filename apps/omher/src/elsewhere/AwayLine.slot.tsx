@@ -1,9 +1,9 @@
-// Timeline: one line per session this bot runs elsewhere (Slack, Discord, cron). It links to the thread in
-// its own app; omher does not replay that thread's messages here and never writes to it.
+// Timeline: what this bot last said in a thread elsewhere (Slack, Discord, cron), as an ordinary bot
+// bubble with one link back to the thread at the end. omher never writes to that thread.
 import type { SlotProps } from "../features";
 import { openExternal } from "../lib/openExternal";
 import { Spinner } from "../ui";
-import { awayTime, sourceName } from "./format";
+import { sourceName, workingFor } from "./format";
 import { useNow } from "./useNow";
 import "./elsewhere.css";
 
@@ -14,43 +14,36 @@ export default function AwayLine({ item }: SlotProps["elsewhereLine"]) {
   const now = useNow(a.running);
   const src = sourceName(a.source);
   const title = a.label?.trim() || a.title?.trim() || `${src} session`;
-  const where = a.place ? `${src} ${a.place}` : src;
-  const body = (
-    <>
-      <span className="ew-src">
-        <i className={`src-sq src-${a.source}`} />
-        {where}
-      </span>
-      <span className="ew-ttl">{title}</span>
-      {a.running && <Spinner size={11} label={`${src} session working`} />}
-      <span className="ew-tm" data-testid="away-time">
-        {awayTime(a, now)}
-      </span>
-      {a.url && (
-        <span className="ew-go" aria-hidden="true">
-          ↗
-        </span>
-      )}
-    </>
+  // cron has no thread to open: name the job instead ("Cron · superagent-observe")
+  const job = a.source === "cron" ? (a.label || a.title || "").split(" · ")[0].trim() : "";
+  const where = a.place ? `${src} ${a.place}` : job ? `${src} · ${job}` : src;
+  const text = a.last_reply?.trim() || title;
+  const link = a.url ? (
+    <a
+      className="ew-link"
+      href={a.url}
+      title={`Open in ${src}`}
+      data-testid="away-link"
+      onClick={(e) => {
+        e.preventDefault();
+        void openExternal(a.url!);
+      }}
+    >
+      {where}
+    </a>
+  ) : (
+    <span className="ew-where">{where}</span>
   );
   return (
-    <div className="ew-away" data-testid="away" data-source={a.source} data-session={a.id}>
-      {a.url ? (
-        <a
-          className="ew-away-h link"
-          href={a.url}
-          title={`Open in ${src}`}
-          data-testid="away-link"
-          onClick={(e) => {
-            e.preventDefault();
-            void openExternal(a.url!);
-          }}
-        >
-          {body}
-        </a>
-      ) : (
-        <div className="ew-away-h">{body}</div>
-      )}
+    <div className="msg a ew-msg" data-testid="away" data-source={a.source} data-session={a.id}>
+      <div className="b">
+        <span data-testid="away-text">{text}</span> {link}
+        {a.running && (
+          <span className="ew-working" data-testid="away-time">
+            <Spinner size={10} label={`${src} session working`} /> working · {workingFor(a.started_at, now)}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
