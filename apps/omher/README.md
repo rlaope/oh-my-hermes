@@ -2,7 +2,9 @@
 
 omher is a desktop app for your Hermes bots, on macOS and Windows. Each Hermes profile is one bot. Each bot has one main
 chat, and the app shows what that bot is doing in its other sessions (Slack, Discord, Telegram, cron)
-read-only. It is part of this repository but is not part of the `omh` Python package.
+read-only. Under the bots, SESSIONS starts a terminal agent (Claude Code, Codex, oh-my-hermes, pi, oh-my-pi) in a
+folder you pick and runs it inside the window, as if you had typed `claude` or `codex` in a terminal. It is part of
+this repository but is not part of the `omh` Python package.
 
 Boundary: [`docs/OMHER-BOUNDARY.md`](../../docs/OMHER-BOUNDARY.md).
 
@@ -31,7 +33,7 @@ Without `omher@beta` the one-liner installs only the `omh` command, as before.
 "omher needs Hermes and oh-my-hermes" with an **Install** button that runs the same one-liner without the app
 (`OMH_WITH_DESKTOP=0`), shows the output, and opens your bots when it finishes. omher needs Hermes only; OMH comes
 along because the installer sets both up. This is the only program omher runs besides its bridge
-([boundary rule 11](../../docs/OMHER-BOUNDARY.md)).
+([boundary rule 12](../../docs/OMHER-BOUNDARY.md)).
 
 ### Download
 
@@ -78,6 +80,12 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **Bridge** (`bridge/omher_bridge.py`): uses Hermes' `connect_gateway`, one connection per profile. It binds
   127.0.0.1 only and refuses any connection without the launch token.
 - **Mock bridge** (`e2e/mock-bridge.mjs`): the same protocol, scripted, for the Playwright tests.
+- **Sessions** (`src-tauri/src/sessions.rs`, `src/sessions/`): the SESSIONS `+` lists the agent programs found on
+  `PATH` and in the usual install folders (`~/.local/bin`, Homebrew, npm/pnpm/bun globals, `%APPDATA%\npm`), asks
+  for a folder, and starts the program in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
+  Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omh`, `pi`, `omp`, `grok`); the shell
+  refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
+  the program. In a plain browser (dev, e2e) a mock host echoes what you type instead.
 
 Rules the code keeps:
 
@@ -85,6 +93,8 @@ Rules the code keeps:
   sessions are listed and their history read, never resumed, answered, interrupted or written to.
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
 - **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
+- **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omh`, `pi`, `omp` or `grok`,
+  with no arguments, in the folder you picked; stopped when the session is closed or the app quits.
 
 ## Develop
 
@@ -99,6 +109,7 @@ pnpm tauri dev            # the app: starts the real bridge from ./bridge
 pnpm typecheck && pnpm test            # tsc, vitest
 pnpm e2e                  # Playwright (chromium) against the mock bridge
 (cd src-tauri && cargo test)           # the shell's Rust tests
+(cd src-tauri && cargo test real_agents_print_their_version -- --ignored --nocapture)  # `claude/codex --version` through the PTY
 python -m unittest discover -s bridge/tests -v   # bridge tests with a FakeGateway; needs no Hermes
 pnpm tauri build --debug --bundles app # a debug .app in src-tauri/target/debug/bundle/macos/
 pnpm tauri build --bundles dmg         # macOS release .dmg (ad-hoc signed)

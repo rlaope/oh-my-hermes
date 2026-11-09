@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import "../theme/tokens.css";
 import "../theme/base.css";
 import "./app.css";
@@ -10,6 +10,9 @@ import { DetailsFallback } from "./DetailsFallback";
 import { SettingsView } from "./SettingsView";
 import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
+
+// The terminal view (and xterm with it) loads when a session is first opened.
+const SessionView = lazy(() => import("../sessions/SessionView").then((m) => ({ default: m.SessionView })));
 
 export function App() {
   const s = useStore();
@@ -30,7 +33,13 @@ export function App() {
   return (
     <div className={`window${panelOpen ? " panel-open" : ""}`} data-testid="window">
       <Sidebar />
-      <main className="main">{s.ui.view === "settings" ? <SettingsView /> : <Chat />}</main>
+      <main className="main">
+        {s.ui.view === "settings" ? <SettingsView /> : s.ui.view === "session" ? (
+          <Suspense fallback={null}>
+            <SessionView />
+          </Suspense>
+        ) : <Chat />}
+      </main>
       {/* inert while closed: the off-screen panel takes no focus and no clicks */}
       <aside className="details" aria-hidden={!panelOpen} inert={!panelOpen} data-testid="details">
         {bot &&

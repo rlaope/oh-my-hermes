@@ -1,6 +1,6 @@
 """omher's boundary (docs/OMHER-BOUNDARY.md) pinned against the code: the doc's sentences, nothing in
-``src/`` reaching ``apps/omher``, and the bridge submitting a prompt from exactly one place, with the
-main chat's id."""
+``src/`` reaching ``apps/omher``, the bridge submitting a prompt from exactly one place, with the
+main chat's id, and SESSIONS starting only the five allow-listed agent programs."""
 
 from __future__ import annotations
 
@@ -12,6 +12,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "docs" / "OMHER-BOUNDARY.md"
 BRIDGE = ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py"
+SHELL = ROOT / "apps" / "omher" / "src-tauri" / "src"
+UI_AGENTS = ROOT / "apps" / "omher" / "src" / "sessions" / "agents.ts"
+SESSION_AGENTS = ("claude", "codex", "omh", "pi", "omp", "grok")
 CONTEXT = ROOT / "CONTEXT.md"
 DOCS_INDEX = ROOT / "docs" / "README.md"
 
@@ -26,6 +29,10 @@ RULES = (
     "The app starts the bridge as a child process and stops it when the app exits.",
     "The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.",
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
+    "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
+    " fixed allow-list: `claude`, `codex`, `omh`, `pi`, `omp`, `grok`, with no arguments,",
+    "The UI sends an agent id, never a command line or arguments; the shell refuses any other id.",
+    "The process is stopped when its session is closed and when the app exits.",
     "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing:",
     "The command is fixed in the shell; nothing from the page reaches it.",
 )
@@ -60,12 +67,13 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_eleven_numbered_rules(self) -> None:
-        # 11: rule 10 (the bridge's read-only git) and rule 11 (the one installer) each widened the boundary
-        # on purpose; the rules stay numbered 1..n with no gap or repeat.
+    def test_boundary_is_between_six_and_twelve_numbered_rules(self) -> None:
+        # 12: rule 10 (the bridge's read-only git), rule 11 (SESSIONS' allow-listed agents) and rule 12
+        # (the one installer) each widened the boundary on purpose; the rules stay numbered 1..n with no gap
+        # or repeat.
         text = DOC.read_text(encoding="utf-8")
         rules = re.findall(r"^(\d+)\. ", text, re.M)
-        self.assertTrue(6 <= len(rules) <= 11, len(rules))
+        self.assertTrue(6 <= len(rules) <= 12, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -77,7 +85,7 @@ class DocPins(unittest.TestCase):
 
 
 class TheOneInstaller(unittest.TestCase):
-    """Rule 11: the shell spawns the bridge and, on Install, one fixed installer; nothing else."""
+    """Rule 12: the shell spawns the bridge and, on Install, one fixed installer; nothing else."""
 
     def test_the_installer_is_the_omher_beta_one_liner_without_the_app(self) -> None:
         setup = SETUP_RS.read_text(encoding="utf-8")
@@ -105,7 +113,8 @@ class TheOneInstaller(unittest.TestCase):
             n = path.read_text(encoding="utf-8").count("Command::new(")
             if n:
                 spawns[path.name] = n
-        # bridge.rs starts the bridge with Hermes' Python; setup.rs runs the fixed installer.
+        # bridge.rs starts the bridge with Hermes' Python; setup.rs runs the fixed installer. Sessions (rule 11)
+        # start their allow-listed agent through the PTY's `spawn_command`, not `Command::new`.
         self.assertEqual(spawns, {"bridge.rs": 1, "setup.rs": 1})
 
     def test_the_install_command_takes_nothing_from_the_page(self) -> None:
@@ -194,6 +203,63 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             elif isinstance(node, ast.ImportFrom):
                 imported.add(node.module or "")
         self.assertEqual(sorted(i for i in imported if i in banned or i.split(".")[0] in banned), [])
+
+
+class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
+    """Rule 11: the Rust shell's allow-list, the commands that start a program, and the UI's list."""
+
+    def setUp(self) -> None:
+        self.sessions = (SHELL / "sessions.rs").read_text(encoding="utf-8")
+        self.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        self.prod = self.sessions.split("#[cfg(test)]\nmod tests", 1)[0]
+
+    def test_rust_allow_list_is_the_five_agents_and_each_id_is_its_program(self) -> None:
+        block = re.search(r"pub const AGENTS: \[Agent; (\d+)\] = \[(.*?)\];", self.prod, re.S)
+        self.assertIsNotNone(block)
+        rows = re.findall(r'Agent \{ id: "([^"]+)", program: "([^"]+)"', block.group(2))
+        self.assertEqual(int(block.group(1)), len(SESSION_AGENTS))
+        self.assertEqual([r[0] for r in rows], list(SESSION_AGENTS))
+        self.assertEqual([r[1] for r in rows], list(SESSION_AGENTS))
+
+    def test_ui_list_matches_the_rust_allow_list(self) -> None:
+        ui = UI_AGENTS.read_text(encoding="utf-8")
+        self.assertEqual(tuple(re.findall(r'\{ id: "([^"]+)", program: "\1"', ui)), SESSION_AGENTS)
+
+    def test_only_the_bridge_and_the_session_pty_start_processes(self) -> None:
+        """`Command::new` only in bridge.rs (Hermes' Python) and setup.rs (the one fixed installer, rule 12);
+        `spawn_command` only in sessions.rs."""
+        for path in sorted(SHELL.glob("*.rs")):
+            text = path.read_text(encoding="utf-8")
+            prod = text.split("#[cfg(test)]", 1)[0]
+            if path.name not in ("bridge.rs", "setup.rs"):
+                self.assertNotIn("Command::new", prod, path.name)
+            if path.name != "sessions.rs":
+                self.assertNotIn("spawn_command", text, path.name)
+        self.assertEqual(self.prod.count("spawn_command("), 1)
+
+    def test_session_start_takes_an_agent_id_and_no_command_or_args(self) -> None:
+        sig = re.search(r"async fn session_start\((.*?)\) -> ", self.lib, re.S)
+        self.assertIsNotNone(sig)
+        params = {p.split(":")[0].strip() for p in sig.group(1).split(",") if ":" in p}
+        self.assertEqual(params, {"shell", "agent", "cwd", "cols", "rows", "on_data", "on_exit"})
+        body = self.lib[sig.end():].split("\n}\n", 1)[0]
+        self.assertIn("start_agent(&agent", body)
+        self.assertNotIn(".spawn(", body)
+
+    def test_start_agent_resolves_argv_from_the_allow_list_only(self) -> None:
+        start = self.prod.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("launch_for(agent_id)?", start)
+        launch = self.prod.split("pub fn launch_for", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("agent(id).ok_or_else", launch)
+        # the only arguments ever added are cmd.exe's own for a Windows .cmd shim
+        argv = self.prod.split("pub fn argv_for", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(sorted(set(re.findall(r'"([^"]*)"\.into\(\)', argv))), ["/c", "cmd.exe"])
+        # the raw spawn is crate-internal, so no Tauri command can call it with its own argv
+        self.assertIn("pub(crate) fn spawn<F>", self.prod)
+
+    def test_sessions_stop_on_close_and_on_app_exit(self) -> None:
+        self.assertRegex(self.lib, r"RunEvent::Exit[\s\S]*shell\.sessions\.close_all\(\)")
+        self.assertIn("shell.sessions.close(id)", self.lib)
 
 
 if __name__ == "__main__":

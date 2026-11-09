@@ -1,4 +1,5 @@
 mod bridge;
+mod sessions;
 mod setup;
 
 use std::path::PathBuf;
@@ -7,14 +8,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bridge::{Bridge, BridgeStatus, Os};
+use sessions::{AgentInfo, Output, Sessions};
 use setup::InstallEvent;
-use tauri::ipc::Channel;
+use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{Manager, RunEvent, State};
 
 struct Shell {
     bridge: Arc<Bridge>,
     resource_dir: Option<PathBuf>,
     installing: Arc<AtomicBool>,
+    sessions: Arc<Sessions>,
 }
 
 /// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready.
@@ -118,6 +121,66 @@ async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>
     Ok(code)
 }
 
+/// The allow-listed agent programs (claude, codex, omh, pi, omp) and where each was found, if anywhere.
+#[tauri::command]
+async fn sessions_agents() -> Result<Vec<AgentInfo>, String> {
+    Ok(tauri::async_runtime::spawn_blocking(sessions::agents_on_this_machine).await.map_err(|e| e.to_string())?)
+}
+
+/// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal. Only an agent id crosses
+/// from the UI: no program path, command line or argument. Terminal output goes to `on_data` as raw bytes,
+/// the exit code (null after a signal) once to `on_exit`.
+#[tauri::command]
+async fn session_start(
+    shell: State<'_, Shell>,
+    agent: String,
+    cwd: String,
+    cols: u16,
+    rows: u16,
+    on_data: Channel<InvokeResponseBody>,
+    on_exit: Channel<Option<u32>>,
+) -> Result<u32, String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        sessions.start_agent(&agent, std::path::Path::new(&cwd), cols, rows, move |ev| match ev {
+            Output::Data(b) => {
+                let _ = on_data.send(InvokeResponseBody::Raw(b));
+            }
+            Output::Exit(code) => {
+                let _ = on_exit.send(code);
+            }
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Keystrokes (and pastes) from the terminal view into session `id`.
+#[tauri::command]
+async fn session_write(shell: State<'_, Shell>, id: u32, data: String) -> Result<(), String> {
+    shell.sessions.write(id, data.as_bytes())
+}
+
+#[tauri::command]
+async fn session_resize(shell: State<'_, Shell>, id: u32, cols: u16, rows: u16) -> Result<(), String> {
+    shell.sessions.resize(id, cols, rows)
+}
+
+/// Stop the session's program and forget the session.
+#[tauri::command]
+async fn session_close(shell: State<'_, Shell>, id: u32) -> Result<(), String> {
+    shell.sessions.close(id);
+    Ok(())
+}
+
+/// Stop every session. `main.tsx` calls this once per page load, before any UI renders, so a reloaded
+/// window leaves nothing running unseen.
+#[tauri::command]
+async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || sessions.close_all()).await.map_err(|e| e.to_string())
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -129,19 +192,31 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             bridge_url,
             bridge_status,
             bridge_retry,
             open_external,
             install_engine,
-            install_engine_command
+            install_engine_command,
+            sessions_agents,
+            session_start,
+            session_write,
+            session_resize,
+            session_close,
+            session_close_all
         ])
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
             bridge.start(resource_dir.clone());
-            app.manage(Shell { bridge, resource_dir, installing: Arc::new(AtomicBool::new(false)) });
+            app.manage(Shell {
+                bridge,
+                resource_dir,
+                installing: Arc::new(AtomicBool::new(false)),
+                sessions: Sessions::new(),
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -150,6 +225,7 @@ pub fn run() {
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
             if let Some(shell) = handle.try_state::<Shell>() {
+                shell.sessions.close_all();
                 shell.bridge.stop();
             }
         }

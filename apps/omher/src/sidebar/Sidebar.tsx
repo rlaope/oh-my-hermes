@@ -5,6 +5,8 @@ import { useStore } from "../state/store";
 import { slots } from "../features";
 import { CalendarIcon, GearIcon, GridIcon, IconButton, PlusIcon, SearchIcon } from "../ui";
 import { BotRow } from "./BotRow";
+import "../sessions/sessions.css";
+import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 
 export function Sidebar() {
   const s = useStore();
@@ -16,6 +18,7 @@ export function Sidebar() {
     ? s.bots.filter((b) => b.display_name.toLowerCase().includes(needle) || b.name.toLowerCase().includes(needle))
     : s.bots;
   const inSettings = s.ui.view === "settings";
+  const inChat = s.ui.view === "chat";
 
   return (
     <aside className="side" data-testid="sidebar">
@@ -42,20 +45,26 @@ export function Sidebar() {
           onKeyDown={(e) => e.key === "Escape" && setQ("")}
         />
       </label>
-      <div className="side-sh">Bots</div>
-      <nav className="bot-list" aria-label="Bots">
-        {bots.map((b) => (
-          <BotRow
-            key={b.name}
-            bot={b}
-            chat={s.chats[b.name]}
-            unread={s.unread[b.name] ?? 0}
-            active={!inSettings && s.selectedBot === b.name}
-            onSelect={() => void s.selectBot(b.name)}
-          />
-        ))}
-        {needle && bots.length === 0 && <div className="bot-empty">No bot named “{q.trim()}”</div>}
-      </nav>
+      <section className="side-sec" data-testid="side-bots">
+        <div className="side-sh">Bots</div>
+        <nav className="bot-list" aria-label="Bots">
+          {bots.map((b) => (
+            <BotRow
+              key={b.name}
+              bot={b}
+              chat={s.chats[b.name]}
+              unread={s.unread[b.name] ?? 0}
+              active={inChat && s.selectedBot === b.name}
+              onSelect={() => void s.selectBot(b.name)}
+            />
+          ))}
+          {needle && bots.length === 0 && <div className="bot-empty">No bot named “{q.trim()}”</div>}
+        </nav>
+      </section>
+      <section className="side-sec" data-testid="side-sessions">
+        <SessionsHeader />
+        <SessionList />
+      </section>
       <div className="side-foot">
         <button type="button" className="nav" disabled title="Coming in a later version" data-testid="nav-automations">
           <CalendarIcon />
