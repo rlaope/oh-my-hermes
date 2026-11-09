@@ -1,0 +1,339 @@
+/* Side panel tabs (Terminal, Schedule, Worktrees, Diff). Same tokens and small radii as the rest of the app;
+   selected tab is gray, never the brand gradient. */
+.pn-tabs {
+  gap: 2px;
+  padding: 0 8px 0 8px;
+  justify-content: flex-start;
+  border-bottom: 1px solid var(--line-soft);
+}
+.pn-tabs > :last-child {
+  margin-left: auto;
+}
+.pn-tab {
+  height: 26px;
+  padding: 0 7px;
+  border-radius: var(--r-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.pn-tab svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.pn-tab:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.pn-tab.on {
+  background: var(--raise2);
+  color: var(--ink);
+  font-weight: 600;
+}
+/* the tool tabs need room for commands and diffs */
+.window.panel-open:has(.pn-wide) {
+  --panel-w: 400px;
+}
+.pn-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.pn-body {
+  padding: 10px 10px 16px;
+  font-size: 12px;
+  color: var(--body);
+}
+.pn-sec {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 4px 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--quiet);
+}
+.pn-sec > span {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.pn-ref {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--quiet);
+}
+.pn-ref:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.pn-empty {
+  padding: 18px 8px;
+  text-align: center;
+  color: var(--quiet);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.pn-empty.bad {
+  color: var(--danger);
+}
+
+/* Terminal */
+.pn-run {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  background: var(--bg);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.pn-run.bad {
+  box-shadow: inset 2px 0 0 var(--danger);
+}
+.pn-run-h {
+  padding: 7px 10px 3px;
+}
+.pn-cmd {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-left: 12px;
+  text-indent: -12px;
+}
+.pn-cmd::before {
+  content: "$ ";
+  color: var(--quiet);
+}
+.pn-out {
+  margin: 0;
+  padding: 2px 10px 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.pn-more {
+  margin: 0 10px 4px;
+  font-size: 11px;
+  color: var(--link);
+}
+.pn-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 6px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 10.5px;
+  color: var(--quiet);
+  min-width: 0;
+}
+.pn-src {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.pn-cwd {
+  font-family: var(--mono);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pn-exit {
+  color: var(--danger);
+  flex: none;
+}
+.pn-ts {
+  margin-left: auto;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* rows: Schedule, Worktrees */
+.pn-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  width: 100%;
+  padding: 8px 8px;
+  border-radius: var(--r);
+  text-align: left;
+  color: inherit;
+}
+.pn-row.link:hover {
+  background: var(--hover);
+}
+.pn-row.off {
+  opacity: 0.6;
+}
+.pn-row b {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 12.5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pn-row b.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.pn-row .pn-s .mono {
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.pn-r {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pn-s {
+  color: var(--quiet);
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pn-st {
+  justify-self: end;
+  font-size: 10.5px;
+  color: var(--quiet);
+  white-space: nowrap;
+}
+.pn-st.ok {
+  color: var(--quiet);
+}
+.pn-st.bad {
+  color: var(--danger);
+}
+.pn-st.warn {
+  color: #d39b2a;
+  font-weight: 600;
+}
+[data-theme="light"] .pn-st.warn {
+  color: #a36d0c;
+}
+
+/* Diff */
+.pn-pick {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0 2px 10px;
+}
+.pn-pick select {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--raise);
+  color: var(--ink);
+  font-size: 12px;
+}
+.pn-diff,
+.pn-new {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  background: var(--bg);
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.df-f {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--raise);
+  color: var(--ink);
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: 11.5px;
+  border-top: 1px solid var(--line-soft);
+  overflow-wrap: anywhere;
+}
+.df-f:first-child {
+  border-top: 0;
+}
+.df-f:not(:first-child) {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.df-f span {
+  flex: none;
+  color: var(--quiet);
+  font-weight: 400;
+  font-family: var(--mono);
+}
+.n-add {
+  color: var(--ok);
+}
+.n-del {
+  color: var(--danger);
+}
+.df-l {
+  /* wrapped continuation lines indent past the +/- column */
+  padding: 0 10px 0 calc(10px + 1ch);
+  text-indent: -1ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+.df-l.h {
+  color: var(--quiet);
+  background: var(--raise);
+}
+.df-l.a {
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
+  color: var(--ink);
+}
+.df-l.d {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  color: var(--ink);
+}
+.pn-new {
+  margin-bottom: 8px;
+}
+.pn-foot {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.n-add, .n-del { font-style: normal; }
+
+/* long commands: four rendered rows until "Show all" */
+.pn-cmd:not(.all) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
+.pn-out:not(:hover) {
+  scrollbar-width: none;
+}

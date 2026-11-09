@@ -43,6 +43,21 @@ All notable changes will be documented here.
   child and clear it afterwards. Planning itself still runs in the parent
   session.
 
+- **dag-ulw names the node whose judgement decides the run, and gives it
+  `ultrabrain`.** The skill told the model to climb `quick` ->
+  `unspecified-low` -> `unspecified-high` and capped `ultrabrain` at one
+  node, but never said when to use it; on the owner's machine no node in recent
+  dag-ulw graphs used it. The skill now says that when one build node's
+  judgement decides the run (a design decision, a root cause, a contested
+  trade-off), it takes `ultrabrain` where the user's routes serve it, at most
+  one; every other node keeps the ladder, and review, baseline and verify
+  nodes keep their own rules.
+  `omh_dag define` adds the advice `no_judgement_node` to a graph of 4+ nodes
+  with no `ultrabrain`, `architect` or `forensics` node, with an exit (go on
+  when no node decides the run). Repair and extend rounds do not raise it,
+  and the reply leaves it out when the user's `model_map` options have no
+  `ultrabrain` option. Like all lint it never refuses a run.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
