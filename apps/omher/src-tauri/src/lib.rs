@@ -11,6 +11,7 @@ use tauri::{Manager, RunEvent, State};
 struct Shell {
     bridge: Arc<Bridge>,
     resource_dir: Option<PathBuf>,
+    logins: Arc<accounts::Logins>,
 }
 
 /// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready.
@@ -56,37 +57,45 @@ fn user_home() -> Result<PathBuf, String> {
 }
 
 /// The env a new session of `cli` starts with to use omher account `id` (`default` = the CLI's own home).
+/// SESSIONS calls this when it starts an agent with the account picked for new sessions.
 #[tauri::command]
 async fn account_env(cli: String, id: String) -> Result<Vec<(String, String)>, String> {
     accounts::account_env(&user_home()?, &cli, &id)
 }
 
-/// Save the CLIProxyAPI management key in the OS keychain. It is never written to a file or returned.
+/// Which coding CLIs are on this computer (PATH and the install folders a Dock-started app does not see).
 #[tauri::command]
-async fn cpa_key_set(key: String) -> Result<(), String> {
-    accounts::key_set(&key)
+async fn account_clis() -> Result<Vec<(&'static str, bool)>, String> {
+    tauri::async_runtime::spawn_blocking(accounts::clis_on_this_computer).await.map_err(|e| e.to_string())
 }
 
-/// Whether a management key is saved (never the key itself).
+/// The CLI's own login status for account `id`, through its fixed status command (Claude Code, Codex). Only
+/// signed in / email / plan / method come back; `null` for CLIs that have no status command.
 #[tauri::command]
-async fn cpa_key_present() -> Result<bool, String> {
-    Ok(accounts::key_present())
+async fn account_status(cli: String, id: String) -> Result<Option<accounts::LoginStatus>, String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || accounts::status(&home, &cli, &id)).await.map_err(|e| e.to_string())?
 }
 
+/// Start the CLI's own sign-in (`claude auth login`, `codex login`) with omher account `id` as its home. The
+/// browser part happens in the CLI; its plain output lines and then its exit arrive on `on_event`.
 #[tauri::command]
-async fn cpa_key_clear() -> Result<(), String> {
-    accounts::key_clear()
-}
-
-/// Send one CPA management request (the bridge's `accounts.cpa_action` result) to 127.0.0.1 with the saved key.
-#[tauri::command]
-async fn cpa_send(request: accounts::CpaRequest) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let key = accounts::key_get()?;
-        accounts::send_local(&request, &key)
+async fn account_login_start(
+    shell: State<'_, Shell>,
+    cli: String,
+    id: String,
+    on_event: tauri::ipc::Channel<accounts::LoginEvent>,
+) -> Result<u32, String> {
+    shell.logins.start(&user_home()?, &cli, &id, move |ev| {
+        let _ = on_event.send(ev);
     })
-    .await
-    .map_err(|e| e.to_string())?
+}
+
+/// Cancel a sign-in started above. Its exit still arrives on its channel.
+#[tauri::command]
+async fn account_login_cancel(shell: State<'_, Shell>, login: u32) -> Result<(), String> {
+    shell.logins.cancel(login);
+    Ok(())
 }
 
 /// Start the bridge again (the Retry button on the failed screen).
@@ -106,16 +115,16 @@ pub fn run() {
             bridge_retry,
             open_external,
             account_env,
-            cpa_key_set,
-            cpa_key_present,
-            cpa_key_clear,
-            cpa_send
+            account_clis,
+            account_status,
+            account_login_start,
+            account_login_cancel
         ])
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
             bridge.start(resource_dir.clone());
-            app.manage(Shell { bridge, resource_dir });
+            app.manage(Shell { bridge, resource_dir, logins: accounts::Logins::new() });
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -124,6 +133,7 @@ pub fn run() {
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
             if let Some(shell) = handle.try_state::<Shell>() {
+                shell.logins.cancel_all();
                 shell.bridge.stop();
             }
         }

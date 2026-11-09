@@ -170,48 +170,63 @@ const USAGE = {
   ],
 };
 
-// Accounts (accounts.*). Claude: 5 CLIProxyAPI auth files, management off (read-only rows, like this Mac).
-// Codex: omher's own stack, Default active. mock.accounts {limit: id} marks an omher Codex account limited
-// (as its usage record would), so the UI's auto-switch can be tested.
-let acctCodex, acctActive, acctLimited;
-const CPA_ROWS = () =>
-  ["alice", "bob", "carol", "dave", "erin"].map((n, i) => ({
-    id: `claude-${n}@example.com.json`,
-    email: `${n}@example.com`,
-    label: "",
-    state: i === 3 ? "disabled" : "ready",
-    expires_at: new Date((now() + 8 * 3600) * 1000).toISOString(),
-    last_refresh: new Date((now() - 600) * 1000).toISOString(),
-  }));
+// Accounts (accounts.*), shaped like the real bridge: every coding CLI, the CLI's own login first ("default").
+// Claude: signed in on this computer (owner@example.com), plus a local CLIProxyAPI holding 5 logins (counted
+// only). Codex: this computer + "Work", this computer in use. pi: on this computer, signed in. oh-my-pi, Grok,
+// Gemini: not installed. mock.accounts {limit: id, cli?} marks an account limited (as its usage record would).
+const ACCT_CLIS = ["claude", "codex", "pi", "omp", "grok", "gemini"];
+const ACCT_INSTALLED = { claude: true, codex: true, pi: true, omp: false, grok: false, gemini: false };
+let acct, acctActive, acctLimited, acctLabels;
 const ACCT_ID = /^[a-z0-9][a-z0-9._-]{0,39}$/;
 function accountsList() {
-  const codex = acctCodex.map((a) => {
-    const limited = acctLimited[a.id];
-    const state = !a.logged_in ? "login" : limited ? "limited" : a.id === acctActive.codex ? "active" : "ready";
-    return {
-      id: a.id,
-      label: a.label,
-      email: "",
-      state,
-      dir: a.id === "default" ? null : `/mock/.omher/accounts/codex/${a.id}`,
-      usage: a.id === "default" ? USAGE.default()[0] : null,
-      ...(limited ? { resets_at: limited } : {}),
-    };
-  });
   return {
-    groups: [
-      { cli: "claude", backend: "cpa", installed: true, active: null,
-        cpa: { port: 8317, management: false, strategy: "fill-first" }, accounts: CPA_ROWS() },
-      { cli: "codex", backend: "omher", installed: true, active: acctActive.codex, accounts: codex },
-    ],
+    groups: ACCT_CLIS.map((cli) => {
+      const rows = acct[cli].map((a) => {
+        const limited = acctLimited[`${cli}:${a.id}`];
+        const state = !a.logged_in ? "login" : limited ? "limited" : a.id === acctActive[cli] ? "active" : "ready";
+        return {
+          id: a.id,
+          label: a.id === "default" ? acctLabels[cli] ?? "" : a.label,
+          email: a.email ?? "",
+          state,
+          dir: a.id === "default" ? null : `/mock/.omher/accounts/${cli}/${a.id}`,
+          usage: cli === "codex" && a.id === "default" ? USAGE.default()[0] : null,
+          ...(limited ? { resets_at: limited } : {}),
+        };
+      });
+      return {
+        cli,
+        installed: ACCT_INSTALLED[cli],
+        active: acctActive[cli],
+        accounts: rows,
+        ...(cli === "claude" ? { also: { name: "CLIProxyAPI", accounts: 5 } } : {}),
+      };
+    }),
   };
+}
+const acctUpdate = () => setTimeout(() => broadcast({ event: "accounts.update", bot: "" }), 0);
+function acctFind(p) {
+  if (!ACCT_CLIS.includes(p.cli)) throw new OpError("bad_request", "unknown cli");
+  const id = p.account;
+  if (typeof id !== "string" || (id !== "default" && !ACCT_ID.test(id))) throw new OpError("bad_request", "bad account id");
+  const a = acct[p.cli].find((x) => x.id === id);
+  if (!a) throw new OpError("not_found", "no such account");
+  return a;
 }
 
 function reset() {
   usageFixture = "default";
-  acctCodex = [{ id: "default", label: "Default", logged_in: true }, { id: "work", label: "Work", logged_in: true }];
-  acctActive = { codex: "default" };
+  acct = {
+    claude: [{ id: "default", label: "", email: "owner@example.com", logged_in: true }],
+    codex: [{ id: "default", label: "", logged_in: true }, { id: "work", label: "Work", logged_in: true }],
+    pi: [{ id: "default", label: "", logged_in: true }],
+    omp: [{ id: "default", label: "", logged_in: false }],
+    grok: [{ id: "default", label: "", logged_in: false }],
+    gemini: [{ id: "default", label: "", logged_in: false }],
+  };
+  acctActive = Object.fromEntries(ACCT_CLIS.map((c) => [c, "default"]));
   acctLimited = {};
+  acctLabels = {};
   for (const t of Object.values(turns ?? {})) t?.timers.forEach(clearTimeout);
   bots = Object.fromEntries(BOT_SEED.map((b) => [b.name, { ...b }]));
   history = Object.fromEntries(
@@ -526,38 +541,50 @@ const OPS = {
   "usage.read": () => ({ providers: USAGE[usageFixture]() }),
   "accounts.list": () => accountsList(),
   "accounts.add": (p) => {
-    if (p.cli !== "codex") throw new OpError("bad_request", "mock: codex only");
+    if (!ACCT_CLIS.includes(p.cli)) throw new OpError("bad_request", "unknown cli");
     const label = String(p.label ?? "").trim().slice(0, 40);
+    const list = acct[p.cli];
     let id = label.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "");
     if (!id || id === "default") {
       let n = 2;
-      while (acctCodex.some((a) => a.id === `account-${n}`)) n += 1;
+      while (list.some((a) => a.id === `account-${n}`)) n += 1;
       id = `account-${n}`;
     }
-    if (acctCodex.some((a) => a.id === id)) throw new OpError("exists", `an account named ${id} already exists`);
-    acctCodex.push({ id, label: label || id, logged_in: false });
-    acctCodex = [acctCodex[0], ...acctCodex.slice(1).sort((a, b) => a.id.localeCompare(b.id))];
-    setTimeout(() => broadcast({ event: "accounts.update", bot: "" }), 0);
-    return { id, dir: `/mock/.omher/accounts/codex/${id}` };
+    if (list.some((a) => a.id === id)) throw new OpError("exists", `an account named ${id} already exists`);
+    list.push({ id, label, logged_in: false });
+    acct[p.cli] = [list[0], ...list.slice(1).sort((a, b) => a.id.localeCompare(b.id))];
+    acctUpdate();
+    return { id, dir: `/mock/.omher/accounts/${p.cli}/${id}` };
   },
   "accounts.set_active": (p) => {
-    if (p.cli !== "codex" || !acctCodex.some((a) => a.id === p.account)) throw new OpError("not_found", "no such account");
-    acctActive.codex = p.account;
-    setTimeout(() => broadcast({ event: "accounts.update", bot: "" }), 0);
+    acctFind(p);
+    acctActive[p.cli] = p.account;
+    acctUpdate();
+    return {};
+  },
+  "accounts.label": (p) => {
+    const a = acctFind(p);
+    const label = String(p.label ?? "").trim().slice(0, 40);
+    if (a.id === "default") acctLabels[p.cli] = label;
+    else a.label = label;
+    acctUpdate();
     return {};
   },
   "accounts.remove": (p) => {
-    const id = p.account;
-    if (p.cli !== "codex" || typeof id !== "string" || !ACCT_ID.test(id) || id === "default")
-      throw new OpError("bad_request", "bad account id");
-    if (!acctCodex.some((a) => a.id === id)) throw new OpError("not_found", "no such account");
-    acctCodex = acctCodex.filter((a) => a.id !== id);
-    if (acctActive.codex === id) acctActive.codex = "default";
-    setTimeout(() => broadcast({ event: "accounts.update", bot: "" }), 0);
+    const a = acctFind(p);
+    if (a.id === "default") throw new OpError("bad_request", "bad account id");
+    acct[p.cli] = acct[p.cli].filter((x) => x !== a);
+    if (acctActive[p.cli] === a.id) acctActive[p.cli] = "default";
+    acctUpdate();
     return {};
   },
-  "accounts.cpa_action": () => {
-    throw new OpError("cpa_management_off", "CPA management is off");
+  "accounts.discard": (p) => {
+    const a = acctFind(p);
+    if (a.id === "default") throw new OpError("bad_request", "bad account id");
+    if (a.logged_in) throw new OpError("signed_in", "this account is signed in; remove it from its menu");
+    acct[p.cli] = acct[p.cli].filter((x) => x !== a);
+    acctUpdate();
+    return {};
   },
   // ---- test control (not part of the protocol)
   "mock.usage": (p) => {
@@ -566,7 +593,12 @@ const OPS = {
     return {};
   },
   "mock.accounts": (p) => {
-    if (typeof p.limit === "string") acctLimited[p.limit] = now() + 2 * 3600;
+    const cli = typeof p.cli === "string" ? p.cli : "codex";
+    if (typeof p.limit === "string") acctLimited[`${cli}:${p.limit}`] = now() + 2 * 3600;
+    if (p.signed_in && typeof p.signed_in === "object") {
+      const a = acct[cli]?.find((x) => x.id === p.signed_in.id);
+      if (a) Object.assign(a, { logged_in: true, email: p.signed_in.email ?? "" });
+    }
     broadcast({ event: "accounts.update", bot: "" });
     return {};
   },

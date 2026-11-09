@@ -28,11 +28,11 @@ RULES = (
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
     "Outside Hermes, omher reads only the usage records coding CLIs write about themselves",
     "it never reads their auth files or tokens, writes nothing there and sends nothing anywhere.",
-    "Accounts (Settings › Accounts) are the one exception to rules 4, 5 and 11.",
-    "omher keeps only `email`, `disabled`, `expired`, `last_refresh` and `type`, and drops every other field, tokens included,",
-    "deletes only `~/.omher/accounts/<cli>/<id>/`.",
-    "with a management key kept in the OS keychain and never in a file.",
-    "omher never reads, copies or shows a token, and an account switch never stops a running session.",
+    "Accounts (Settings › Accounts) are the one exception to rules 4, 10 and 11.",
+    "a local CLIProxyAPI is only counted by its auth file names.",
+    "The app runs only the CLIs' own status and sign-in commands, as fixed argv (`claude auth status --json`, `claude auth login`,",
+    "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
+    "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
 )
 
 
@@ -140,10 +140,12 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
 
 
 class AccountsNeverCarryAToken(unittest.TestCase):
-    """Rule 12: fake CLIProxyAPI auth files and omher account folders full of token-like keys; no accounts
-    payload the bridge returns may name one."""
+    """Rule 12: fake CLI homes, omher account folders and CLIProxyAPI auth files full of token-like keys; no accounts
+    payload the bridge returns may name one, and the app runs only the CLIs' own fixed status / sign-in argv."""
 
-    TOKEN_KEYS = ("access_token", "refresh_token", "id_token", "api_key", "OPENAI_API_KEY")
+    TOKEN_KEYS = ("access_token", "refresh_token", "id_token", "api_key", "OPENAI_API_KEY", "tokens", "primaryApiKey")
+    ACCOUNTS_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "accounts.rs"
+    LIB_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "lib.rs"
 
     def test_fuzzed_auth_files_never_reach_an_accounts_payload(self) -> None:
         import importlib.util
@@ -165,23 +167,72 @@ class AccountsNeverCarryAToken(unittest.TestCase):
                 cpa.mkdir()
                 (cpa / "config.yaml").write_text('server:\n  port: 8317\nmanagement:\n  secret-key: "k"\n', encoding="utf-8")
                 for i in range(rnd.randint(1, 5)):
-                    body = {"type": rnd.choice(["claude", "codex", 7, None]), "email": rnd.choice([f"a{i}@example.com", {"access_token": secret}]),
-                            "disabled": rnd.choice([True, False, "x"]), "expired": rnd.choice(["2099-01-01T00:00:00Z", None, {"id_token": secret}])}
+                    body = {"email": rnd.choice([f"a{i}@example.com", {"access_token": secret}])}
                     body.update({k: secret for k in rnd.sample(self.TOKEN_KEYS, rnd.randint(1, len(self.TOKEN_KEYS)))})
-                    (cpa / f"{rnd.choice(['claude', 'codex'])}-a{i}@example.com.json").write_text(json.dumps(body), encoding="utf-8")
-                for cli in ("claude", "codex"):
+                    (cpa / f"claude-a{i}@example.com.json").write_text(json.dumps(body), encoding="utf-8")
+                # the CLIs' own homes on this computer
+                (home / ".codex").mkdir()
+                (home / ".codex" / "auth.json").write_text(json.dumps(
+                    {"OPENAI_API_KEY": secret, "auth_mode": rnd.choice(["chatgpt", secret, {"id_token": secret}]),
+                     "tokens": {k: secret for k in self.TOKEN_KEYS}}), encoding="utf-8")
+                (home / ".claude.json").write_text(json.dumps({"oauthAccount": rnd.choice(
+                    [{"emailAddress": "owner@example.com"}, {"emailAddress": {"refresh_token": secret}}, secret]),
+                    "primaryApiKey": secret}), encoding="utf-8")
+                for rel in (".pi/agent/auth.json", ".omp/agent/agent.db"):
+                    (home / rel).parent.mkdir(parents=True)
+                    (home / rel).write_text(json.dumps({k: secret for k in self.TOKEN_KEYS}), encoding="utf-8")
+                for cli in ob.ACCOUNT_CLIS:
                     folder = home / ".omher" / "accounts" / cli / f"acct-{round_}"
                     folder.mkdir(parents=True)
+                    (folder / "account.json").write_text(json.dumps(
+                        {"label": rnd.choice(["Work", {"access_token": secret}, 3]), "api_key": secret}), encoding="utf-8")
                     (folder / "auth.json").write_text(json.dumps({k: secret for k in self.TOKEN_KEYS}), encoding="utf-8")
                     (folder / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "w@example.com"},
                                                                      "primaryApiKey": secret}), encoding="utf-8")
-                for up in (True, False):
-                    text = json.dumps(ob.read_accounts(home, now=1.0, which=lambda c: f"/bin/{c}", probe=lambda _p, up=up: up))
-                    for needle in self.TOKEN_KEYS + (secret, "primaryApiKey"):
+                (home / ".omher" / "accounts" / "labels.json").write_text(
+                    json.dumps({"claude": {"id_token": secret}, "codex": secret[:3]}), encoding="utf-8")
+                for which in (lambda c: f"/bin/{c}", lambda c: None):
+                    text = json.dumps(ob.read_accounts(home, now=1.0, which=which))
+                    for needle in self.TOKEN_KEYS + (secret, "SECRET"):
                         self.assertNotIn(needle, text)
-                req = json.dumps(ob.cpa_request("disable", next(cpa.glob("*.json")).name, home, probe=lambda _p: True))
-                self.assertNotIn(secret, req)
-                self.assertNotIn('"k"', req)
+
+    def test_the_app_runs_only_the_fixed_status_and_sign_in_argv(self) -> None:
+        src = self.ACCOUNTS_RS.read_text(encoding="utf-8")
+        prod = src[: src.index("#[cfg(test)]")]
+        fixed = prod[prod.index("pub fn fixed_args"):]
+        fixed = fixed[: fixed.index("\n}\n")]
+        argv = re.findall(r'\("(\w+)", Step::(\w+)\) => Some\(&\[([^\]]*)\]\)', fixed)
+        self.assertEqual(
+            [(cli, step, [a.strip().strip('"') for a in args.split(",")]) for cli, step, args in argv],
+            [("claude", "Status", ["auth", "status", "--json"]), ("claude", "Login", ["auth", "login"]),
+             ("codex", "Help", ["--help"]), ("codex", "Status", ["login", "status"]), ("codex", "Login", ["login"])])
+        self.assertIn("_ => None", fixed)
+        # every spawn goes through `command(program, args, …)`, whose args come from `fixed_args` only
+        self.assertEqual(prod.count("Command::new("), 2)  # the CLI itself, or cmd.exe /c for a Windows npm shim
+        # the second argument of every `run_to_end(…)` / `command(…)` call is a `fixed_args` result
+        calls = re.findall(r"\b(?:run_to_end|command)\(&?program, (\w+)", prod)
+        self.assertEqual(len(calls), 5, calls)
+        self.assertEqual(set(calls), {"args", "help_args"})
+        self.assertNotIn(".arg(", prod.replace('c.arg("/c").arg(program)', ""))
+        # the page names a CLI and an account id; no Tauri command takes a program or an argument
+        lib = self.LIB_RS.read_text(encoding="utf-8")
+        for cmd in ("account_status", "account_login_start", "account_login_cancel", "account_clis", "account_env"):
+            sig = lib[lib.index(f"async fn {cmd}("):]
+            sig = sig[: sig.index(")")]
+            self.assertNotRegex(sig, r"\b(argv|args|program|command|path)\b", cmd)
+        self.assertNotIn("keyring", lib + src)
+        self.assertNotIn("cpa_send", lib)
+
+    def test_rust_spawns_only_in_bridge_and_accounts(self) -> None:
+        spawns = {}
+        for path in sorted((ROOT / "apps" / "omher" / "src-tauri" / "src").glob("*.rs")):
+            text = path.read_text(encoding="utf-8")
+            prod = text[: text.index("#[cfg(test)]")] if "#[cfg(test)]" in text else text
+            n = prod.count("Command::new(")
+            if n:
+                spawns[path.name] = n
+        # bridge.rs starts the bridge with Hermes' Python; accounts.rs runs the CLIs' fixed status / sign-in argv.
+        self.assertEqual(spawns, {"bridge.rs": 1, "accounts.rs": 2})
 
 
 if __name__ == "__main__":

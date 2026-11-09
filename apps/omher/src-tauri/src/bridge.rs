@@ -417,14 +417,14 @@ impl Bridge {
 /// A release build on Windows has no console of its own, so a console child (python.exe) would flash a
 /// terminal window. `CREATE_NO_WINDOW` keeps it hidden; elsewhere this does nothing.
 #[cfg(windows)]
-fn no_console_window(cmd: &mut Command) {
+pub(crate) fn no_console_window(cmd: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     cmd.creation_flags(CREATE_NO_WINDOW);
 }
 
 #[cfg(not(windows))]
-fn no_console_window(_cmd: &mut Command) {}
+pub(crate) fn no_console_window(_cmd: &mut Command) {}
 
 fn stop_locked(g: &mut Inner) {
     g.stdin = None; // EOF first: the bridge exits on its own

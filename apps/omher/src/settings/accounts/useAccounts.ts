@@ -1,16 +1,27 @@
-// Shared copy of accounts.list for the Accounts page and the auto-switch watcher, plus the watcher itself.
-// The watcher re-reads every minute (and on `accounts.update`); when an omher group's active account is
-// limited and auto-switch is on, it makes the next Ready account active (fill-first) and drops one quiet line
-// into the bot chat. Running sessions are never touched: only the account new sessions start with changes.
+// Shared copy of the Accounts data for the page and the auto-switch watcher: accounts.list from the bridge,
+// plus what the desktop app knows (which CLIs are on this computer, each CLI's own login status). The watcher
+// re-reads every minute (and on `accounts.update`); when a CLI's in-use account is limited and auto-switch is
+// on, the next signed-in account becomes the one new sessions use, with one quiet line in the bot chat.
+// Running sessions are never touched.
 import { useEffect, useSyncExternalStore } from "react";
-import type { AccountGroup } from "../../lib/protocol";
+import type { AccountCli, AccountGroup } from "../../lib/protocol";
 import { getStore, useStore } from "../../state/store";
+import { accountHost, type LoginStatus } from "./native";
 import { autoSwitchOn, nextAccount, switchNote } from "./rules";
 
 const REFRESH_MS = 60_000;
+const ASKS_STATUS: AccountCli[] = ["claude", "codex"];
 
-type Snap = { groups: AccountGroup[] | null; error: string | null; note: { cli: string; text: string; at: number } | null };
-let snap: Snap = { groups: null, error: null, note: null };
+type Snap = {
+  groups: AccountGroup[] | null;
+  error: string | null;
+  /** cli -> on this computer (desktop app), null when unknown. */
+  onComputer: Partial<Record<AccountCli, boolean>> | null;
+  /** `${cli}:${account}` -> the CLI's own status. */
+  status: Record<string, LoginStatus>;
+  note: { cli: string; text: string; at: number } | null;
+};
+let snap: Snap = { groups: null, error: null, onComputer: null, status: {}, note: null };
 const fns = new Set<() => void>();
 const set = (next: Partial<Snap>) => {
   snap = { ...snap, ...next };
@@ -18,26 +29,49 @@ const set = (next: Partial<Snap>) => {
 };
 let inflight: Promise<void> | null = null;
 
+const errText = (e: unknown) => (typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
+
+async function readStatuses(groups: AccountGroup[]): Promise<Record<string, LoginStatus>> {
+  const host = accountHost();
+  const out: Record<string, LoginStatus> = {};
+  const asks: Promise<void>[] = [];
+  for (const g of groups) {
+    if (!ASKS_STATUS.includes(g.cli)) continue;
+    for (const a of g.accounts) {
+      asks.push(
+        host.status(g.cli, a.id).then(
+          (st) => {
+            if (st) out[`${g.cli}:${a.id}`] = st;
+          },
+          () => {},
+        ),
+      );
+    }
+  }
+  await Promise.all(asks);
+  return out;
+}
+
 export function reloadAccounts(): Promise<void> {
-  inflight ??= getStore()
-    .actions.accounts()
-    .then(
-      async (r) => {
-        set({ groups: r.groups, error: null });
-        await autoSwitch(r.groups);
-      },
-      (e: unknown) => set({ error: typeof e === "object" && e && "message" in e ? String(e.message) : String(e) }),
-    )
-    .finally(() => {
+  inflight ??= (async () => {
+    try {
+      const [r, onComputer] = await Promise.all([getStore().actions.accounts(), accountHost().clis().catch(() => null)]);
+      set({ groups: r.groups, error: null, onComputer });
+      set({ status: await readStatuses(r.groups.filter((g) => onComputer?.[g.cli] ?? g.installed)) });
+      await autoSwitch(r.groups);
+    } catch (e) {
+      set({ error: errText(e) });
+    } finally {
       inflight = null;
-    });
+    }
+  })();
   return inflight;
 }
 
 async function autoSwitch(groups: AccountGroup[]): Promise<void> {
   const now = Date.now() / 1000;
   for (const g of groups) {
-    if (g.backend !== "omher" || !autoSwitchOn(g.cli)) continue;
+    if (!autoSwitchOn(g.cli)) continue;
     const move = nextAccount(g.accounts, {}, g.active);
     if (!move) continue;
     const text = switchNote(g, move.from, move.to, now);

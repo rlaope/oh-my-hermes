@@ -1,4 +1,4 @@
-/* Settings › Accounts. Quiet rows like the rest of Settings; selection and chips stay gray. */
+/* Settings › Accounts. Quiet rows like the rest of Settings; selection and pills stay gray. */
 .acc {
   --usage-amber: #e3a54a;
   --usage-red: #f08a8a;
@@ -7,57 +7,52 @@
   --usage-amber: #94600f;
   --usage-red: #d64545;
 }
+.acc-lead {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: -2px 0 4px 2px;
+}
 .acc-g {
-  margin-top: 18px;
+  margin-top: 20px;
 }
 .acc-gh {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin: 0 0 6px;
+  margin: 0 0 7px;
   padding-left: 2px;
   color: var(--ink);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .acc-gh b {
   font-weight: 600;
 }
-.acc-src {
-  font-size: 10.5px;
-  color: var(--quiet);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  padding: 0 5px;
-  line-height: 16px;
-}
-.acc-gh-r {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.acc-auto {
-  font-size: 11.5px;
-  color: var(--muted);
-}
-.acc-hint {
-  font-size: 11.5px;
-  color: var(--muted);
-  margin: 0 0 8px 2px;
-  line-height: 1.45;
-}
-.acc-hint.err {
-  color: var(--danger);
-}
-.acc-row {
+.acc-row,
+.acc-signin {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr) auto auto 26px;
   align-items: center;
   gap: 10px;
-  padding: 7px 10px 7px 12px;
-  min-height: 42px;
+  padding: 8px 10px 8px 12px;
+  min-height: 46px;
 }
-.acc-row + .acc-row {
+.acc-auto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.acc-auto b {
+  font-weight: 500;
+  color: var(--body);
+  margin-right: 2px;
+}
+.acc-signin {
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+}
+.st-grp > * + * {
   border-top: 1px solid var(--line);
 }
 .acc-ring {
@@ -65,49 +60,55 @@
   height: 26px;
   display: grid;
   place-items: center;
+  color: var(--muted);
 }
-.acc-row[data-state="disabled"] .acc-who,
-.acc-row[data-state="expired"] .acc-who {
-  opacity: 0.55;
+/* the usage ring around the CLI's mark, as in the sidebar */
+.acc-ring > * {
+  grid-area: 1 / 1;
+}
+.acc-row[data-state="login"] .acc-who {
+  opacity: 0.6;
 }
 .acc-who {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 1px;
 }
 .acc-n {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .acc-sub {
-  font-size: 11px;
-  color: var(--quiet);
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .acc-plan {
-  font-size: 11px;
-  color: var(--muted);
+  font-size: 12px;
+  color: var(--body);
+  white-space: nowrap;
 }
-.acc-row:not(:has(.acc-plan)) .acc-chip {
-  grid-column: 3 / 5;
-  justify-self: end;
-}
-.acc-chip {
+.acc-pill {
   font-size: 11px;
   line-height: 18px;
   padding: 0 7px;
   border-radius: var(--r-sm);
-  background: var(--raise2);
   color: var(--muted);
   white-space: nowrap;
+  box-shadow: inset 0 0 0 1px var(--line);
 }
-.acc-chip.st-active {
+.acc-pill.use {
   color: var(--ink);
   background: var(--seg-on);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
-.acc-chip.st-active::before {
+.acc-pill.use::before {
   content: "";
   display: inline-block;
   width: 6px;
@@ -117,15 +118,8 @@
   margin-right: 5px;
   vertical-align: 1px;
 }
-.acc-chip.st-limited {
+.acc-pill.lim {
   color: var(--usage-amber);
-}
-.acc-chip.st-expired,
-.acc-chip.st-disabled,
-.acc-chip.st-login {
-  color: var(--quiet);
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--line);
 }
 .acc-menu {
   position: relative;
@@ -136,7 +130,7 @@
   width: 24px;
   height: 22px;
   border-radius: var(--r-sm);
-  color: var(--muted);
+  color: var(--body);
   font-size: 14px;
   line-height: 1;
 }
@@ -167,21 +161,69 @@
 .acc-mi.danger {
   color: var(--danger);
 }
+/* one on/off switch per CLI; gray when on (selection colour), never the brand gradient */
+.acc-switch {
+  flex: none;
+  width: 26px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--raise2);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  position: relative;
+  transition: background 0.12s;
+}
+.acc-switch > span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.12s, background 0.12s;
+}
+.acc-switch[aria-checked="true"] {
+  background: var(--muted);
+  box-shadow: none;
+}
+.acc-switch[aria-checked="true"] > span {
+  transform: translateX(10px);
+  background: var(--bg);
+}
 .acc-foot {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 7px;
+}
+.acc-addbtn {
+  font-size: 12px;
+  color: var(--body);
+  padding: 3px 6px;
+  margin-left: -4px;
+  border-radius: var(--r-sm);
+}
+.acc-addbtn:disabled {
+  color: var(--quiet);
+}
+.acc-addbtn .nav-soon {
+  margin-left: 6px;
+}
+.acc-addbtn:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--hover);
 }
 .acc-add,
-.acc-key {
+.acc-rename {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
+}
+.acc-rename {
+  min-width: 0;
 }
 .acc-add input,
-.acc-key input {
+.acc-rename input {
   height: 26px;
   padding: 0 8px;
   border-radius: var(--r-sm);
@@ -189,39 +231,53 @@
   background: var(--bg);
   color: var(--ink);
   font-size: 12px;
-  width: 200px;
+  width: 220px;
 }
-.acc-cmd,
-.acc-login {
+.st-btn.primary {
+  background: var(--ink);
+  color: var(--bg);
+}
+.st-btn.primary:hover:not(:disabled) {
+  background: var(--ink);
+  opacity: 0.9;
+}
+.st-btn.danger {
+  color: var(--danger);
+}
+.acc-signin-t {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.acc-signin-t b {
+  font-weight: 500;
+}
+.acc-spin {
+  justify-self: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--ink);
+  animation: acc-spin 0.9s linear infinite;
+}
+@keyframes acc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.acc-also,
+.acc-msg,
+.acc-missing {
   font-size: 11.5px;
   color: var(--muted);
+  margin: 8px 0 0 2px;
 }
-.acc-login {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--grp-bg);
-}
-.acc-cmd code,
-.acc-login code,
-.acc-confirm code {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--body);
-  overflow-wrap: anywhere;
-}
-.acc-login code {
-  flex: 1;
-  min-width: 0;
-}
-.acc-x {
-  color: var(--quiet);
-  font-size: 14px;
-  width: 20px;
+.acc-missing {
+  margin-top: 26px;
 }
 .acc-confirm {
   display: flex;
@@ -238,9 +294,6 @@
   flex: 1;
   min-width: 0;
 }
-.st-btn.danger {
-  color: var(--danger);
-}
 .acc-toast {
   margin: 0 0 8px;
   padding: 7px 10px;
@@ -248,7 +301,4 @@
   background: var(--raise2);
   color: var(--body);
   font-size: 12px;
-}
-.acc-dots-ph {
-  width: 24px;
 }

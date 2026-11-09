@@ -1,67 +1,130 @@
-// Accounts rules, pure so vitest pins them: masking, state chips, and the CPA-style fill-first auto-switch.
+// Accounts rules, pure so vitest pins them: row names, plan words, the usage line, the in-use account, and the
+// fill-first auto-switch.
 import type { Account, AccountCli, AccountGroup, UsageProvider } from "../../lib/protocol";
 import { clock } from "../../sidebar/usageFormat";
+import type { LoginStatus } from "./native";
 
-export const CLI_NAME: Record<AccountCli, string> = { claude: "Claude", codex: "ChatGPT / Codex", grok: "Grok", gemini: "Gemini" };
-/** Short names for one-line notes ("Switched to Claude #2"). */
-export const CLI_SHORT: Record<AccountCli, string> = { claude: "Claude", codex: "Codex", grok: "Grok", gemini: "Gemini" };
-/** The env var a new session uses for an omher account (mirrors the Rust `home_var`). */
-export const HOME_VAR: Record<AccountCli, string> = {
-  claude: "CLAUDE_CONFIG_DIR",
-  codex: "CODEX_HOME",
-  grok: "GROK_HOME",
-  gemini: "GEMINI_CLI_HOME",
+export const CLIS: AccountCli[] = ["claude", "codex", "pi", "omp", "grok", "gemini"];
+export const CLI_NAME: Record<AccountCli, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  pi: "pi",
+  omp: "oh-my-pi",
+  grok: "Grok",
+  gemini: "Gemini CLI",
 };
-/** The CLI's own login, run with that env. */
-export const LOGIN_CMD: Record<AccountCli, string> = { claude: "claude, then /login", codex: "codex login", grok: "grok login", gemini: "gemini" };
-/** CLIProxyAPI's own login flags per CLI. */
-export const CPA_LOGIN: Record<AccountCli, string> = {
-  claude: "cliproxyapi -claude-login",
-  codex: "cliproxyapi -codex-login",
-  grok: "cliproxyapi -xai-login",
-  gemini: "cliproxyapi -login",
+/** How another subscription is added: the app runs the CLI's own sign-in (`run`), or a session of the CLI is
+ *  opened with the account's home and the person types /login (`session`). Grok and Gemini: not yet. */
+export const SIGN_IN: Record<AccountCli, "run" | "session" | null> = {
+  claude: "run",
+  codex: "run",
+  pi: "session",
+  omp: "session",
+  grok: null,
+  gemini: null,
 };
 
-/** "khope@sionic.ai" -> "k***@sionic.ai". Not an email -> unchanged. */
-export function maskEmail(email: string): string {
-  const at = email.indexOf("@");
-  if (at < 1) return email;
-  return `${email[0]}***${email.slice(at)}`;
+export const HEADER_LINE = "Subscriptions your coding sessions use. Bots use their own Hermes settings.";
+export const AUTO_SWITCH_LINE = "When this account hits its limit, new turns use the next one.";
+
+/** "max_20x" -> "Max 20x", "pro" -> "Pro", "chatgpt" -> "" (a login method is not a plan). */
+export function planName(plan?: string | null): string {
+  if (!plan) return "";
+  const p = plan.trim().toLowerCase();
+  if (!p || p === "chatgpt" || p === "api_key" || p === "claude.ai") return "";
+  return p
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(" ");
 }
 
-/** What a row is called outside the Accounts page: its label, else the masked email, else "#n". */
+/** What the row says it is: the full email (this is the owner's own computer), else its label, else
+ *  "This computer" for the CLI's own login, else "Account n". */
+export function rowTitle(a: Account, index: number): string {
+  if (a.email) return a.email;
+  if (a.label) return a.label;
+  return a.id === "default" ? "This computer" : `Account ${index + 1}`;
+}
+
+const METHOD: Record<string, string> = { chatgpt: "ChatGPT login", api_key: "API key", "claude.ai": "Claude login" };
+
+/** The small line under the title: the label (when the title is the email), where the login lives, and how it
+ *  signs in when there is no email to tell rows apart. */
+export function rowSub(a: Account & { method?: string | null }): string {
+  const parts: string[] = [];
+  if (a.email && a.label) parts.push(a.label);
+  if (a.id === "default" && (a.email || a.label)) parts.push("This computer");
+  if (a.id !== "default") parts.push("Added in omher");
+  const how = !a.email && a.method ? METHOD[a.method] : undefined;
+  if (how) parts.push(how);
+  return parts.join(" · ");
+}
+
+/** The name used outside this page (chat line, session menu): label, else the email, else "#n". */
 export function accountName(a: Account, index: number): string {
   if (a.label) return a.label;
-  if (a.email) return maskEmail(a.email);
-  return `#${index + 1}`;
+  if (a.email) return a.email;
+  return a.id === "default" ? "This computer" : `#${index + 1}`;
 }
 
-/** The state chip: Active / Ready / Limited until 14:00 / Expired / Disabled / Log in. */
-export function stateChip(a: Account, now: number): string {
-  switch (a.state) {
-    case "active":
-      return "Active";
-    case "ready":
-      return "Ready";
-    case "limited":
-      return typeof a.resets_at === "number" && a.resets_at > now ? `Limited until ${clock(a.resets_at, now)}` : "Limited";
-    case "expired":
-      return "Expired";
-    case "disabled":
-      return "Disabled";
-    case "login":
-      return "Log in";
-  }
+const SHORT_WINDOW: Record<string, string> = { "5 hours": "5-hour limit", Weekly: "Weekly limit" };
+
+/** One line per usage window: "5-hour limit: 62% used · resets 21:00". A % only when the record gave one. */
+export function usageLines(u: UsageProvider | null | undefined, now: number): string[] {
+  if (!u) return [];
+  return u.windows.map((w) => {
+    const name = SHORT_WINDOW[w.label] ?? w.label;
+    if (w.stale) return `${name}: no recent record`;
+    const pct = typeof w.used_percent === "number" ? `${Math.round(w.used_percent)}% used` : "";
+    if (typeof w.resets_at !== "number") return pct ? `${name}: ${pct}` : name;
+    const when = clock(w.resets_at, now);
+    if (!pct) return u.state === "limited" ? `${name}: limited until ${when}` : `${name}: resets ${when}`;
+    return `${name}: ${pct} · resets ${when}`;
+  });
+}
+
+/** A row with the CLI's status merged in (the status, when the app could ask, wins over the bridge's files). */
+export interface Row extends Account {
+  plan: string;
+  signedIn: boolean;
+  method: string | null;
+}
+
+export function mergeRow(a: Account, st: LoginStatus | null | undefined): Row {
+  const signedIn = st ? st.logged_in : a.state !== "login";
+  const state = !signedIn ? "login" : a.state === "login" ? "ready" : a.state;
+  return {
+    ...a,
+    state,
+    email: (st?.logged_in && st.email) || a.email,
+    plan: planName(st?.plan) || planName(a.usage?.plan),
+    signedIn,
+    method: st?.method ?? null,
+  };
+}
+
+/** The pill on a row: "In use", "Limited until 14:00", "Not signed in", or nothing. */
+export function pill(r: Row, inUse: boolean, now: number): string {
+  if (!r.signedIn) return "Not signed in";
+  if (r.state === "limited") return typeof r.resets_at === "number" && r.resets_at > now ? `Limited until ${clock(r.resets_at, now)}` : "Limited";
+  return inUse ? "In use" : "";
+}
+
+/** The account a new session of `cli` starts with, for the SESSIONS agent menu (null: the CLI's own login). */
+export function accountForNewSessions(groups: AccountGroup[] | null, cli: AccountCli): Account | null {
+  const g = groups?.find((x) => x.cli === cli);
+  if (!g) return null;
+  return g.accounts.find((a) => a.id === (g.active ?? "default")) ?? null;
 }
 
 function limited(a: Account, usage: Record<string, UsageProvider | null | undefined>): boolean {
-  return a.state === "limited" || a.state === "expired" || usage[a.id]?.state === "limited";
+  return a.state === "limited" || usage[a.id]?.state === "limited";
 }
 
 /**
- * Fill-first, like CLIProxyAPI's `routing.strategy: fill-first`: when the active account is limited or
- * expired, the first Ready account in list order takes over. Returns null when the active one is fine or no
- * other account is ready. `usage` (account id -> usage record) can mark an account limited on its own.
+ * Fill-first: when the in-use account is limited, the first signed-in account that is not limited takes over,
+ * in list order. Returns null when the in-use one is fine or no other account is ready.
  */
 export function nextAccount(
   accounts: Account[],
@@ -70,22 +133,20 @@ export function nextAccount(
 ): { from: number; to: number } | null {
   const from = accounts.findIndex((a) => (activeId ? a.id === activeId : a.state === "active"));
   if (from < 0) return null;
-  const cur = accounts[from];
-  if (!limited(cur, usage)) return null;
+  if (!limited(accounts[from], usage)) return null;
   const to = accounts.findIndex((a, i) => i !== from && a.state === "ready" && !limited(a, usage));
   return to < 0 ? null : { from, to };
 }
 
-/** "Switched to Claude #2 Work (limit on #1 Default, resets 14:00)" — the one quiet line in the bot chat. */
+/** "Switched Codex to Work (limit on This computer, resets 14:00)": the one quiet line in the bot chat. */
 export function switchNote(g: AccountGroup, from: number, to: number, now: number): string {
   const a = g.accounts[from];
   const b = g.accounts[to];
   const reset = typeof a.resets_at === "number" && a.resets_at > now ? `, resets ${clock(a.resets_at, now)}` : "";
-  const why = a.state === "expired" ? "expired" : "limit on";
-  return `Switched to ${CLI_SHORT[g.cli]} #${to + 1} ${accountName(b, to)} (${why} #${from + 1} ${accountName(a, from)}${reset})`;
+  return `Switched ${CLI_NAME[g.cli]} to ${accountName(b, to)} for new sessions (limit on ${accountName(a, from)}${reset})`;
 }
 
-/** Per-group auto-switch preference, on unless turned off (saved on this computer). */
+/** Per-CLI auto-switch, on unless turned off (saved on this computer). */
 export function autoSwitchOn(cli: AccountCli, store: Pick<Storage, "getItem"> | undefined = globalThis.localStorage): boolean {
   try {
     const raw = store?.getItem("omher.autoswitch");
@@ -106,6 +167,17 @@ export function setAutoSwitch(cli: AccountCli, on: boolean): void {
   }
 }
 
-/** The hint shown when CPA's management API is off. */
-export const CPA_OFF_HINT =
-  "CPA management is off. Turn it on in ~/.cli-proxy-api/config.yaml (management.secret-key) to manage accounts here.";
+/** Groups to show (on this computer, or holding added accounts) and the names of the rest. */
+export function splitGroups(
+  groups: AccountGroup[],
+  onComputer: Partial<Record<AccountCli, boolean>> | null,
+): { shown: AccountGroup[]; missing: string[] } {
+  const shown: AccountGroup[] = [];
+  const missing: string[] = [];
+  for (const g of groups) {
+    const here = onComputer?.[g.cli] ?? g.installed;
+    if (here || g.accounts.length > 1) shown.push(g);
+    else missing.push(CLI_NAME[g.cli]);
+  }
+  return { shown, missing };
+}

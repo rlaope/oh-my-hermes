@@ -147,57 +147,48 @@ export interface OpMap {
   "panel.diff": { params: { bot: string; path: string }; result: WorktreeDiff };
   /** Subscription usage of the CLIs on this machine, from their own session files (read-only). */
   "usage.read": { params: Record<string, never>; result: { providers: UsageProvider[] } };
-  /** Accounts per coding CLI: CLIProxyAPI's auth files (five fields, never a token) or omher's own stacks. */
+  /** The coding CLIs on this computer with their logins: the CLI's own home first, then omher's added ones. */
   "accounts.list": { params: Record<string, never>; result: { groups: AccountGroup[] } };
-  /** omher stacks only: a new folder ~/.omher/accounts/<cli>/<id>/ (logging in is the CLI's own). */
+  /** A new empty folder ~/.omher/accounts/<cli>/<id>/; the app then runs the CLI's own sign-in with it. */
   "accounts.add": { params: { cli: AccountCli; label: string }; result: { id: string; dir: string } };
-  /** omher stacks only: the account new sessions of the CLI start with (running sessions are untouched). */
+  /** The account new sessions of the CLI start with (running sessions are untouched). */
   "accounts.set_active": { params: { cli: AccountCli; account: string }; result: Record<string, never> };
-  /** omher stacks only: deletes ~/.omher/accounts/<cli>/<id>/ and nothing else. */
+  /** Deletes ~/.omher/accounts/<cli>/<id>/ and nothing else. */
   "accounts.remove": { params: { cli: AccountCli; account: string }; result: Record<string, never> };
-  /** CPA rows: the one management request to send (the desktop app adds the key from the keychain). */
-  "accounts.cpa_action": {
-    params: { action: "disable" | "enable" | "remove"; account: string };
-    result: { request: CpaRequest };
-  };
+  /** The person's own name for a row ("" clears it); `default` = the CLI's own login. */
+  "accounts.label": { params: { cli: AccountCli; account: string; label: string }; result: Record<string, never> };
+  /** A cancelled sign-in: removes the new folder; refused when the CLI did sign in there. */
+  "accounts.discard": { params: { cli: AccountCli; account: string }; result: Record<string, never> };
 }
 
-export type AccountCli = "claude" | "codex" | "grok" | "gemini";
-/** login = folder made, nobody logged in there yet. */
-export type AccountState = "active" | "ready" | "limited" | "expired" | "disabled" | "login";
+export type AccountCli = "claude" | "codex" | "pi" | "omp" | "grok" | "gemini";
+/** login = nobody is signed in there (yet). */
+export type AccountState = "active" | "ready" | "limited" | "login";
 
 export interface Account {
-  /** omher: the folder name ("default" = the CLI's own home). CPA: the auth file name. Never a token. */
+  /** "default" = the CLI's own home on this computer; otherwise the omher folder name. Never a token. */
   id: string;
   label: string;
+  /** Claude Code's signed-in email (from its own `.claude.json`), else "". */
   email: string;
   state: AccountState;
   /** Limited accounts: when the limit resets (seconds). */
   resets_at?: number | null;
-  /** CPA rows: when CPA's current login expires / was refreshed (ISO text). */
-  expires_at?: string | null;
-  last_refresh?: string | null;
-  /** omher rows: the folder new sessions use. */
+  /** omher accounts: the folder new sessions use. */
   dir?: string | null;
-  /** omher rows: the usage record found in that account's own folder. */
+  /** The usage record found in that account's own folder. */
   usage?: UsageProvider | null;
 }
 
 export interface AccountGroup {
   cli: AccountCli;
-  backend: "cpa" | "omher";
+  /** On the bridge's PATH (the desktop app re-checks the install folders). */
   installed: boolean;
-  /** omher backend: the active account id. CPA picks accounts itself (null). */
+  /** The account new sessions start with. */
   active: string | null;
-  cpa?: { port: number; management: boolean; strategy: string };
   accounts: Account[];
-}
-
-export interface CpaRequest {
-  port: number;
-  method: "PATCH" | "DELETE";
-  path: string;
-  body?: { name: string; disabled: boolean };
+  /** Another tool on this computer that holds logins for this CLI (only counted, managed there). */
+  also?: { name: string; accounts: number };
 }
 
 export type UsageState = "ok" | "near" | "limited" | "stale" | "connected";

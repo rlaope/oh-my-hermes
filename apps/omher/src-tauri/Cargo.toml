@@ -17,14 +17,3 @@ serde_json = "1"
 getrandom = "0.3"
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
-
-# The CLIProxyAPI management key lives in the OS keychain (macOS Keychain, Windows Credential Manager).
-[target.'cfg(target_os = "macos")'.dependencies]
-keyring = { version = "3", features = ["apple-native"] }
-
-[target.'cfg(windows)'.dependencies]
-keyring = { version = "3", features = ["windows-native"] }
-
-# Linux: the kernel keyring (no system library to build against; the key lasts until logout).
-[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
-keyring = { version = "3", features = ["linux-native"] }

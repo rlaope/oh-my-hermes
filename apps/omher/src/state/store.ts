@@ -21,7 +21,6 @@ import type {
   WorktreeDiff,
   AccountCli,
   AccountGroup,
-  CpaRequest,
 } from "../lib/protocol";
 
 export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff";
@@ -655,8 +654,9 @@ export interface Actions {
   addAccount(cli: AccountCli, label: string): Promise<{ id: string; dir: string }>;
   setActiveAccount(cli: AccountCli, id: string): Promise<void>;
   removeAccount(cli: AccountCli, id: string): Promise<void>;
-  /** CPA rows: the management request for the desktop app to send. */
-  cpaAction(action: "disable" | "enable" | "remove", id: string): Promise<CpaRequest>;
+  labelAccount(cli: AccountCli, id: string, label: string): Promise<void>;
+  /** A cancelled sign-in: the new, still empty folder goes. */
+  discardAccount(cli: AccountCli, id: string): Promise<void>;
   /** A quiet omher line in a bot's main chat (the selected bot when none is given). */
   systemNote(text: string, bot?: string): void;
   /** Every bridge event, for views that keep their own copy (Accounts listens for `accounts.update`). */
@@ -918,7 +918,12 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     async removeAccount(cli, id) {
       await bridge.request("accounts.remove", { cli, account: id });
     },
-    cpaAction: async (action, id) => (await bridge.request("accounts.cpa_action", { action, account: id })).request,
+    async labelAccount(cli, id, label) {
+      await bridge.request("accounts.label", { cli, account: id, label });
+    },
+    async discardAccount(cli, id) {
+      await bridge.request("accounts.discard", { cli, account: id });
+    },
     systemNote(text, bot) {
       const b = bot ?? state.selectedBot ?? state.bots[0]?.name;
       if (b) dispatch({ type: "system.note", bot: b, text, now: now() });
