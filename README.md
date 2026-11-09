@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren and Nova and five SESSIONS on Claude Code, Codex, pi, oh-my-pi and Grok in the sidebar; Kami plans a checkout redesign in 3 layers, 7 parts, shows the new cart step and runs pnpm test while a Slack #design thread answers in the chat; the Runs panel shows the live dag-ulw graph with Claude, Codex, GLM and Grok model marks on its nodes" width="900">
+<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren, Juno and Pip and five SESSIONS on Claude Code, Codex, oh-my-pi, pi and Grok in the sidebar; Kami plans a checkout redesign in 3 layers, 7 parts, shows the new cart step and runs pnpm test while a Slack #design thread answers in the chat; the Runs panel shows the plan card and the live dag-ulw graph with Claude, Codex and Grok marks on its nodes" width="900">
 
 ### omher, the desktop app
 
