@@ -5,10 +5,11 @@ import { useEffect, useState } from "react";
 import "./settings.css";
 import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
-import { useStore, type Theme } from "../state/store";
+import { useStore } from "../state/store";
 import { Avatar, GridIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
+import { Appearance } from "./Appearance";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 
 export const slot = "settings";
@@ -17,12 +18,6 @@ const APP_PAGES = [
   { id: "general", label: "General" },
   { id: "providers", label: "Providers" },
   { id: "computer", label: "Computer" },
-];
-
-const THEMES: { value: Theme; label: string }[] = [
-  { value: "system", label: "System" },
-  { value: "dark", label: "Dark" },
-  { value: "light", label: "Light" },
 ];
 
 const STATUS: Record<string, string> = { online: "Connected", offline: "Not connected", starting: "Starting…" };
@@ -301,18 +296,7 @@ function GeneralPage() {
   return (
     <div className="st-page">
       <div className="st-gh st-gh0">Appearance</div>
-      <div className="st-grp">
-        <Row title="Theme" hint="System follows your Mac">
-          <Seg
-            small
-            label="Theme"
-            value={s.ui.theme}
-            options={THEMES}
-            onChange={(t) => s.setTheme(t as Theme)}
-            testId="theme-seg"
-          />
-        </Row>
-      </div>
+      <Appearance />
       <div className="st-gh">Hermes</div>
       <div className="st-grp">
         <Row title="Hermes home">

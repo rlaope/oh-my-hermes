@@ -20,16 +20,16 @@ export function Sidebar() {
   return (
     <aside className="side" data-testid="sidebar">
       <div className="side-top">
+        <div className="brand">
+          <img src={logo} alt="" />
+          <b>omher</b>
+        </div>
         <div className="side-add">
           <IconButton label="Add a bot" onClick={() => AddBot && setAdding((v) => !v)} aria-expanded={adding} disabled={!AddBot}>
             <PlusIcon />
           </IconButton>
           {AddBot && adding && <AddBot onClose={() => setAdding(false)} />}
         </div>
-      </div>
-      <div className="brand">
-        <img src={logo} alt="" />
-        <b>omher</b>
       </div>
       <label className="search">
         <SearchIcon />
@@ -42,6 +42,7 @@ export function Sidebar() {
           onKeyDown={(e) => e.key === "Escape" && setQ("")}
         />
       </label>
+      <div className="side-sh">Bots</div>
       <nav className="bot-list" aria-label="Bots">
         {bots.map((b) => (
           <BotRow

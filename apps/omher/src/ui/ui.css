@@ -46,8 +46,8 @@ button.ui-pill:hover {
   display: inline-block;
   flex: none;
   border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--w1) 25%, transparent);
-  border-top-color: var(--w1);
+  border: 2px solid color-mix(in srgb, var(--spin) 25%, transparent);
+  border-top-color: var(--spin);
   animation: spin 0.8s linear infinite;
 }
 .ui-pop {

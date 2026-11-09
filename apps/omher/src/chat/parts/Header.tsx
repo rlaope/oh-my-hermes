@@ -24,7 +24,7 @@ export function Header({ bot, chat }: { bot: Bot; chat: Chat | undefined }) {
         title="Details"
         data-testid="who"
       >
-        <Avatar bot={bot.name} size={22} />
+        <Avatar bot={bot.name} size={26} />
         <span className="head-title">{bot.display_name}</span>
       </button>
       {Places && <Places bot={bot} />}

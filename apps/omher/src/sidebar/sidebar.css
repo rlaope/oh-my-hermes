@@ -1,7 +1,6 @@
 /* Sidebar: one icon column and one text column starting at --side-x. */
 .side {
   background: var(--side);
-  border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   padding: 0 8px 8px;
@@ -9,13 +8,12 @@
   min-width: 0;
 }
 .side-top {
-  height: 44px;
+  height: 52px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding-right: 3px;
+  justify-content: space-between;
+  padding-right: 2px;
   flex: none;
-  /* room for the macOS traffic lights on the left */
   -webkit-app-region: drag;
 }
 .side-top button {
@@ -30,8 +28,8 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 var(--side-x) 12px;
+  gap: 9px;
+  padding: 0 var(--side-x);
   flex: none;
 }
 .brand img {
@@ -51,17 +49,26 @@
   -webkit-text-fill-color: transparent;
 }
 .search {
-  height: 28px;
+  height: 30px;
   border-radius: var(--r);
   background: var(--search-bg);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 0 var(--side-x);
   color: var(--quiet);
-  margin: 0 0 10px;
+  margin: 0 0 14px;
   flex: none;
   cursor: text;
+}
+.side-sh {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--quiet);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 var(--side-x) 6px;
+  flex: none;
 }
 .search svg {
   width: 18px;
@@ -89,7 +96,7 @@
 .bot-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   overflow-y: auto;
   min-height: 0;
 }
@@ -97,7 +104,8 @@
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 7px var(--side-x);
+  padding: 8px var(--side-x);
+  transition: background 0.12s;
   border-radius: var(--r);
   text-align: left;
   width: 100%;
@@ -112,12 +120,12 @@
 }
 .bot .live-dot {
   position: absolute;
-  left: 32px;
-  top: 30px;
+  left: 34px;
+  top: 32px;
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--w1);
+  background: var(--spin);
   border: 2px solid var(--side);
   animation: pulse 1.4s infinite;
 }
@@ -176,7 +184,7 @@
   min-width: 15px;
   height: 15px;
   border-radius: 8px;
-  background: var(--g-logo);
+  background: var(--g-accent);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -230,15 +238,14 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px var(--side-x) 2px;
-  margin-top: 4px;
-  border-top: 1px solid var(--line);
+  padding: 8px var(--side-x) 2px;
+  margin-top: 6px;
   color: var(--ink);
   font-size: 12.5px;
 }
 .me-i {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--raise2);
   display: grid;

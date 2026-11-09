@@ -17,6 +17,15 @@
   --g-logo: linear-gradient(120deg, var(--l1), var(--l2) 55%, var(--l3));
   --g-word: linear-gradient(90deg, var(--w1), var(--w2) 30%, var(--w3) 55%, var(--w4) 80%, var(--w5));
 
+  /* accent: the colour set the person picks (Settings > Appearance). It paints only the accent points:
+     send button, unread badge, live dots, skill chip, spinner, your bubble. The logo never changes. */
+  --a1: var(--l1);
+  --a2: var(--l2);
+  --a3: var(--l3);
+  --g-accent: linear-gradient(120deg, var(--a1), var(--a2) 55%, var(--a3));
+  --on-accent: #fff;
+  --spin: var(--w1);
+
   /* surfaces */
   --page: #050406;
   --bg: #0b090d;
@@ -24,6 +33,7 @@
   --raise: #1b181e;
   --raise2: #232026;
   --line: #29252c;
+  --line-soft: #1c1a1f;
   --line-strong: #3d3640;
   --hover: rgba(255, 255, 255, 0.03);
   --active-row: var(--raise2);
@@ -47,7 +57,7 @@
 
   /* bubbles: filled on both sides, no border */
   --bub-bot: #1d1a20;
-  --bub-me: #38323f;
+  --bub-me: #3c2a3b;
   --user: #26222a;
 
   /* elsewhere source squares */
@@ -55,6 +65,10 @@
   --src-slack: #e8a33c;
   --src-telegram: #2aabee;
   --src-cron: var(--quiet);
+
+  /* text size (Settings > Appearance): messages and the composer only */
+  --fs-msg: 13px;
+  --lh-msg: 1.55;
 
   /* shape + type */
   --r: 6px;
@@ -81,6 +95,7 @@
   --raise: #f2eff3;
   --raise2: #e9e5eb;
   --line: #e3dee5;
+  --line-soft: #efecf1;
   --line-strong: #cbc4cf;
   --hover: rgba(0, 0, 0, 0.035);
   --active-row: #ebe7ee;
@@ -102,7 +117,7 @@
   --link: #5b4fd1;
 
   --bub-bot: #f2f0f4;
-  --bub-me: #e5dbec;
+  --bub-me: #f3dcea;
   --user: #f0edf2;
 
   --src-slack: #d08a1e;
@@ -110,4 +125,84 @@
   --shadow: 0 30px 80px rgba(40, 20, 40, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08);
   --pop-shadow: 0 12px 32px rgba(40, 20, 40, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.05);
   --scrollbar: #d6d0d9;
+}
+
+/* ---- colour sets ------------------------------------------------------------------------------
+   Each sets the accent gradient, the link colour and your bubble's tint, for dark and light.
+   "omh" is the default above (the logo's own colours). Selection states stay gray in every set. */
+
+/* "omh" restated so a swatch inside another set still shows the logo colours */
+[data-palette="omh"] {
+  --a1: var(--l1);
+  --a2: var(--l2);
+  --a3: var(--l3);
+}
+[data-palette="graphite"] {
+  --a1: #6a707c;
+  --a2: #565c67;
+  --a3: #454a54;
+  --spin: #a3a8b1;
+  --link: #c9cdd4;
+  --bub-me: #34363b;
+}
+[data-palette="ocean"] {
+  --a1: #2457c9;
+  --a2: #2f6fe4;
+  --a3: #3a7fe0;
+  --spin: #5ea2f5;
+  --link: #8cbcff;
+  --bub-me: #1f3150;
+}
+[data-palette="forest"] {
+  --a1: #157a51;
+  --a2: #1d9160;
+  --a3: #3c9d58;
+  --spin: #4cc08a;
+  --link: #86d9ab;
+  --bub-me: #1d3a2c;
+}
+[data-palette="sunset"] {
+  --a1: #d2461f;
+  --a2: #df6430;
+  --a3: #e5873a;
+  --spin: #f2884b;
+  --link: #ffb48c;
+  --bub-me: #45291d;
+}
+[data-palette="rose"] {
+  --a1: #c42f66;
+  --a2: #d6477c;
+  --a3: #de6390;
+  --spin: #ec6a9a;
+  --link: #ffa3c2;
+  --bub-me: #45202f;
+}
+
+[data-theme="light"][data-palette="graphite"] {
+  --link: #3f4550;
+  --bub-me: #e4e5e8;
+}
+[data-theme="light"][data-palette="ocean"] {
+  --link: #1d5fd1;
+  --bub-me: #d8e7fa;
+}
+[data-theme="light"][data-palette="forest"] {
+  --link: #16794d;
+  --bub-me: #d9eedf;
+}
+[data-theme="light"][data-palette="sunset"] {
+  --link: #b5521f;
+  --bub-me: #fae4d4;
+}
+[data-theme="light"][data-palette="rose"] {
+  --link: #b8285f;
+  --bub-me: #f8dce6;
+}
+
+[data-text="medium"] {
+  --fs-msg: 14px;
+}
+[data-text="large"] {
+  --fs-msg: 15px;
+  --lh-msg: 1.6;
 }

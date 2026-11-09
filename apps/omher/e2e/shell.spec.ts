@@ -83,7 +83,7 @@ test("select Kami shows history as filled bubbles; switching bots swaps the chat
   expect(style.border).toBe("0px");
   expect(style.radius).toBeLessThanOrEqual(10);
   const me = await tl.getByTestId("bubble-user").first().locator(".b").evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(me).toBe("rgb(56, 50, 63)"); // #38323f
+  expect(me).toBe("rgb(60, 42, 59)"); // #3c2a3b (OMH soft tint)
   await expect(page.getByTestId("header").getByText("Kami", { exact: true })).toBeVisible();
 });
 

@@ -107,9 +107,23 @@ export interface Peek {
 }
 
 export type Theme = "system" | "dark" | "light";
+/** Colour set for bubbles, links and the accent points (send, badges, live dots). The logo never changes. */
+export type Palette = "omh" | "graphite" | "ocean" | "forest" | "sunset" | "rose";
+/** soft = both sides in tinted bubbles (default); solid = your bubble in the accent colour; open = the bot
+ *  writes on the page and only your messages are bubbles. */
+export type BubbleStyle = "soft" | "solid" | "open";
+export const BUBBLE_STYLES: BubbleStyle[] = ["soft", "solid", "open"];
+export type TextSize = "small" | "medium" | "large";
+export interface Look {
+  palette: Palette;
+  bubbles: BubbleStyle;
+  text: TextSize;
+}
+export const PALETTES: Palette[] = ["omh", "graphite", "ocean", "forest", "sunset", "rose"];
 export interface Ui {
   panelOpen: boolean;
   theme: Theme;
+  look: Look;
   view: "chat" | "settings";
   settingsPage: string;
 }
@@ -166,6 +180,22 @@ const emptyChat = (): Chat => ({
   turnSeq: 0,
 });
 
+const DEFAULT_LOOK: Look = { palette: "omh", bubbles: "soft", text: "small" };
+
+function readLook(): Look {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem("omher.look") : null;
+    const v = raw ? (JSON.parse(raw) as Partial<Look>) : {};
+    return {
+      palette: PALETTES.includes(v.palette as Palette) ? (v.palette as Palette) : DEFAULT_LOOK.palette,
+      bubbles: BUBBLE_STYLES.includes(v.bubbles as BubbleStyle) ? (v.bubbles as BubbleStyle) : "soft",
+      text: v.text === "medium" || v.text === "large" ? v.text : "small",
+    };
+  } catch {
+    return { ...DEFAULT_LOOK };
+  }
+}
+
 function readTheme(): Theme {
   try {
     const v = typeof localStorage !== "undefined" ? localStorage.getItem("omher.theme") : null;
@@ -189,7 +219,7 @@ export function initialState(): AppState {
     peeks: {},
     routines: {},
     models: {},
-    ui: { panelOpen: false, theme: readTheme(), view: "chat", settingsPage: "general" },
+    ui: { panelOpen: false, theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general" },
   };
 }
 
@@ -300,6 +330,7 @@ export type Action =
   | { type: "model.set"; bot: string; current: ModelCurrent }
   | { type: "ui.panel"; open?: boolean }
   | { type: "ui.theme"; theme: Theme }
+  | { type: "ui.look"; look: Partial<Look> }
   | { type: "ui.settings"; page?: string }
   | { type: "ui.closeSettings" };
 
@@ -521,6 +552,8 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, panelOpen: a.open ?? !state.ui.panelOpen } };
     case "ui.theme":
       return { ...state, ui: { ...state.ui, theme: a.theme } };
+    case "ui.look":
+      return { ...state, ui: { ...state.ui, look: { ...state.ui.look, ...a.look } } };
     case "ui.settings":
       return { ...state, ui: { ...state.ui, view: "settings", settingsPage: a.page ?? state.ui.settingsPage } };
     case "ui.closeSettings":
@@ -578,6 +611,7 @@ export interface Actions {
   setModel(change: { model?: string; provider?: string; reasoning?: string }): Promise<void>;
   togglePanel(open?: boolean): void;
   setTheme(theme: Theme): void;
+  setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
   closeSettings(): void;
   /** Re-read bots.list (names, status, picture revisions). */
@@ -799,6 +833,14 @@ export function createStore(bridge: BridgeLike, opts: { now?: () => number } = {
         /* no storage */
       }
       dispatch({ type: "ui.theme", theme });
+    },
+    setLook(look) {
+      dispatch({ type: "ui.look", look });
+      try {
+        if (typeof localStorage !== "undefined") localStorage.setItem("omher.look", JSON.stringify(state.ui.look));
+      } catch {
+        /* no storage */
+      }
     },
     openSettings: (page) => dispatch({ type: "ui.settings", page }),
     closeSettings: () => dispatch({ type: "ui.closeSettings" }),
