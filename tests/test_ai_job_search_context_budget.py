@@ -174,8 +174,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # decomposition and hard-debugging lanes to ultrabrain and ideation to deep (+22, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was
             # 4fff984f...c1d6.
-            (skill_capabilities, 542041, FULL_ROW_DELTA_CAP,
-             'ad568c747268ba274182e0ac056b4abdd888cb6b5ee5162dae2498a48651fce5',
+            # 542041 -> 542159 and the digest re-derived: the dag-ulw row's ladder quality bar gives `ultrabrain` to
+            # the one build node whose judgement decides the run and says the verify node is not it (+118, at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was ad568c74...fce5.
+            # 542159 -> 542186 and the digest re-derived: the same sentence gives `ultrabrain` only where the routes
+            # serve it (+27); no other row moved.
+            (skill_capabilities, 542186, FULL_ROW_DELTA_CAP,
+             '8f6fb238f981d7fbfd42ca0d5c8732748a9b498337755e0f77c7aaf1e6669fa8',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -459,7 +464,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 52bbf25d...00ff.
         # Merged with the ultrabrain chain branch: model-setup's chain sentence names Fable 5.1 -> Astra
         # -> Opus 5.5; that branch's pin was b40a640d...731df, and this branch's was 88ddc8a4...71bf.
-        self.assertEqual(_digest(legacy_hashes), '0b3c71d9ad2ccf7047d714674f7c68164570a61be2a12e610fbd58abefdd1783')
+        # dag-ulw's ladder quality bar and run-loop lint then name the one judgement node that takes `ultrabrain`,
+        # only where the routes serve it; only dag-ulw moves, and the pin before it was 0b3c71d9...1783.
+        self.assertEqual(_digest(legacy_hashes), '4713baa9f74ee17d9a945ec0084647a1639830fed1a95f7349d79b9948bc5447')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

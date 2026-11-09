@@ -1020,7 +1020,12 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72566
 # 545091, re-derived from the producer.
 # 545091 -> 545113: ultrawork's handoff policy routes planning, decomposition and hard-debugging lanes to
 # ultrabrain and ideation to deep (+22); no other row moved. Measured per row from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545113
+# 545113 -> 545231: dag-ulw's ladder quality bar gives `ultrabrain` to the one build node whose judgement decides
+# the run (a design decision, a root cause, a contested trade-off), at most one, and says the verify node is not
+# that node (+118); no other row moved. Measured from the producer; no headroom.
+# 545231 -> 545258: the same sentence gives `ultrabrain` only "where your routes serve it", as the review clause
+# says for `review` (+27); no other row moved. Measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545258
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
