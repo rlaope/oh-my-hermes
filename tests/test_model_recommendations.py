@@ -294,7 +294,8 @@ class RecommendationCatalogTests(unittest.TestCase):
         # Qwen3-Coder with no Qwen successor. A chain names the current
         # generation of each line; an older id lives on only in a
         # machine-level override. Inside a chain Claude Opus 5.5 comes before
-        # Claude Fable 5.1 (owner decision, 2026-10-13, reversing 2026-09-06).
+        # Claude Fable 5.1 (owner decision, 2026-10-13, reversing 2026-09-06),
+        # except ultrabrain, which Fable 5.1 heads (owner decision, 2026-11-09).
         self.assertEqual(aliases("role_suggestions", "main"), [
             "gpt-6.1-sol", "claude-opus-5-5", "claude-fable-5-1", "gpt-6-astra", "kimi-k3.1-pro",
         ])
@@ -306,7 +307,10 @@ class RecommendationCatalogTests(unittest.TestCase):
         # an entry with none leaves the level to the executor CLI's default.
         self.assertEqual(catalog["last_resort"]["any"][0]["reasoning_effort"], "medium")
         expected = {
-            "ultrabrain": (["gpt-6-astra"], "xhigh"),
+            # Fable 5.1 heads ultrabrain ahead of Astra (owner decision,
+            # 2026-11-09); Astra alone left a user without OpenAI access no
+            # fallback before the parent model.
+            "ultrabrain": (["claude-fable-5-1", "gpt-6-astra", "claude-opus-5-5"], "xhigh"),
             # DeepSeek V4.1 Flash left `deep`: a Flash budget model does not
             # fit the strong tier; Opus 5.5 and Kimi K3.1 Pro carry the fallback.
             "deep": (["claude-opus-5-5", "gpt-6.1-sol", "kimi-k3.1-pro"], "high"),

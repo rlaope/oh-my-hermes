@@ -151,6 +151,45 @@ export interface OpMap {
     result: { avatar_rev: number | null };
   };
   "bots.info": { params: { bot: string }; result: BotInfo };
+  /** Side panel, all read-only: the bot's latest terminal runs, the git worktrees it worked in, one diff. */
+  "panel.terminal": { params: { bot: string }; result: { runs: TerminalRun[] } };
+  "panel.worktrees": { params: { bot: string }; result: { worktrees: Worktree[] } };
+  "panel.diff": { params: { bot: string; path: string }; result: WorktreeDiff };
+}
+
+export interface TerminalRun {
+  id: string;
+  command: string;
+  output: string;
+  exit_code: number | null;
+  cwd: string;
+  /** Where the run happened: "tui" (omher / desktop), "slack", "discord", "cron", … */
+  source: string;
+  session_id: string;
+  ts: number;
+}
+
+export interface Worktree {
+  path: string;
+  branch: string;
+  head: string;
+  repo: string;
+  /** Changed files, or null when git could not tell. */
+  dirty: number | null;
+  /** Newest terminal run of the bot in this worktree (seconds). */
+  last: number;
+}
+
+export interface WorktreeDiff {
+  path: string;
+  branch: string;
+  repo: string;
+  /** "uncommitted" (vs HEAD) or "last commit" when the tree is clean. */
+  scope: string;
+  /** Changed files; `untracked` ones are new files git does not track yet (listed without content). */
+  files: { path: string; add: number; del: number; untracked?: boolean }[];
+  patch: string;
+  truncated: boolean;
 }
 
 export type Op = keyof OpMap;

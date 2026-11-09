@@ -1,14 +1,21 @@
+import { memo } from "react";
 import type { MessageItem } from "../../state/store";
-import { SourceIcon } from "../../ui";
+import { Avatar, SourceIcon } from "../../ui";
 import { Markdown } from "./Markdown";
 
-/** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. */
-export function Bubble({
+/** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Memoized: a
+ * store change elsewhere (a streamed token) must not re-render every bubble and its face. */
+export const Bubble = memo(function Bubble({
   item,
   streaming,
+  bot,
+  face,
 }: {
   item: Pick<MessageItem, "kind" | "text" | "error" | "reply">;
   streaming?: boolean;
+  /** The bot whose face sits beside its bubble; `face` false keeps the indent without repeating it. */
+  bot?: string;
+  face?: boolean;
 }) {
   if (item.kind === "user") {
     return (
@@ -24,10 +31,11 @@ export function Bubble({
     );
   }
   return (
-    <div className={`msg a${streaming ? " streaming" : ""}`} data-testid={streaming ? "bubble-streaming" : "bubble-bot"}>
+    <div className={`msg a${streaming ? " streaming" : ""}${bot ? " face" : ""}`} data-testid={streaming ? "bubble-streaming" : "bubble-bot"}>
+      {bot && <Avatar bot={bot} size={28} className={`msg-face${face === false ? " blank" : ""}`} />}
       <div className="b md">
         <Markdown text={item.text} />
       </div>
     </div>
   );
-}
+});

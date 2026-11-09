@@ -134,7 +134,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         """Rule 2: a reply target is text handed to the bot. The bridge imports no sender (Hermes'
         send_message tool, its platform adapters, a Slack or Discord client), names no messenger API and
         runs no `hermes send`; the command appears only inside the block the bot reads."""
-        banned_roots = {"slack_sdk", "slack_bolt", "discord", "telegram", "subprocess"}
+        # subprocess is imported for rule 10's git reads only: its one call site runs `git` (checked below).
+        banned_roots = {"slack_sdk", "slack_bolt", "discord", "telegram"}
         banned_parts = ("send_message", "gateway.platforms", "plugins.platforms", "gateway.delivery")
         imported = []
         for node in ast.walk(self.tree):
@@ -144,6 +145,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
                 imported.append(node.module or "")
         offenders = [n for n in imported if n.split(".")[0] in banned_roots or any(p in n for p in banned_parts)]
         self.assertEqual(offenders, [])
+        runs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).startswith("subprocess.")]
+        self.assertEqual([ast.unparse(c.args[0]) for c in runs], ["['git', *pre, *args]"])
         for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):
             self.assertNotIn(host, self.source)
         hermes_send = [fn.name for fn in ast.walk(self.tree) if isinstance(fn, ast.FunctionDef)

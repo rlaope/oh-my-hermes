@@ -83,9 +83,63 @@ const ROUTINE_SEED = {
   default: [],
 };
 
+const PANEL_RUNS = {
+  kami: [
+    { id: "r3", command: "pytest tests/test_upstream.py -q", output: "............\n12 passed in 1.84s", exit_code: 0, cwd: "/w/gateway-keepalive", source: "tui", ago: 120 },
+    { id: "r2", command: 'rg -n "keepalive|idle_timeout" gateway/', output: "gateway/upstream.py:41:    idle_timeout = 75\ngateway/upstream.py:88:    keepalive=True,", exit_code: 0, cwd: "/w/gateway-keepalive", source: "tui", ago: 300 },
+    { id: "r1", command: "kubectl logs deploy/gateway --since=1h | grep -c 502", output: "37", exit_code: 0, cwd: "/w/gateway", source: "slack", ago: 900 },
+    { id: "r0", command: "git push origin fix/keepalive", output: "error: failed to push some refs", exit_code: 1, cwd: "/w/gateway-keepalive", source: "tui", ago: 1800 },
+  ],
+  friren: [],
+  default: [],
+};
+const PANEL_TREES = {
+  kami: [
+    { path: "/w/gateway-keepalive", branch: "fix/keepalive", head: "3f2c1a9e0", repo: "gateway", dirty: 2, ago: 120 },
+    { path: "/w/gateway", branch: "main", head: "a91b0c2d4", repo: "gateway", dirty: 0, ago: 900 },
+  ],
+  friren: [],
+  default: [],
+};
+const PANEL_DIFF = {
+  "/w/gateway-keepalive": {
+    scope: "uncommitted",
+    files: [
+      { path: "gateway/upstream.py", add: 1, del: 1 },
+      { path: "tests/test_upstream.py", add: 3, del: 0 },
+      { path: "notes/재시도.md", add: 0, del: 0, untracked: true },
+    ],
+    patch: [
+      "diff --git a/gateway/upstream.py b/gateway/upstream.py",
+      "--- a/gateway/upstream.py",
+      "+++ b/gateway/upstream.py",
+      "@@ -38,7 +38,7 @@ class Upstream:",
+      "     pool_size = 32",
+      "-    idle_timeout = 75",
+      "+    idle_timeout = 55  # under upstream's 60s",
+      "     retries = 2",
+      "diff --git a/tests/test_upstream.py b/tests/test_upstream.py",
+      "--- a/tests/test_upstream.py",
+      "+++ b/tests/test_upstream.py",
+      "@@ -1,3 +1,6 @@",
+      "+def test_idle_timeout_is_below_upstream():",
+      "+    assert Upstream().idle_timeout < 60",
+      "+",
+    ].join("\n"),
+  },
+  "/w/gateway": { scope: "last commit", files: [{ path: "README.md", add: 1, del: 0 }], patch: "a91b0c2 docs: note the 60s upstream limit\n\ndiff --git a/README.md b/README.md\n@@ -1 +1,2 @@\n # gateway\n+Upstream closes idle connections after 60s." },
+};
+
 const PROVIDERS = [
   { slug: "claude-proxy", name: "Claude (proxy)", models: ["Opus 5.5", "Sonnet 5.5", "Haiku 5"] },
   { slug: "openai", name: "OpenAI", models: ["gpt-5.5", "gpt-5.5-mini"] },
+  // several vendors behind one provider, so the picker's search and vendor chips have something to sort
+  {
+    slug: "openrouter",
+    name: "OpenRouter",
+    models: ["anthropic/claude-opus-5-5", "google/gemini-3-pro", "deepseek/deepseek-v4.1", "x-ai/grok-4.7", "qwen/qwen3-coder"],
+  },
+  { slug: "ollama", name: "Ollama", models: ["llama-4-maverick", "my-local-model"] },
 ];
 const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 
@@ -391,6 +445,18 @@ const OPS = {
       skills: i.skills,
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
+  },
+  "panel.terminal": (p) => ({
+    runs: (PANEL_RUNS[needBot(p).name] ?? []).map(({ ago, ...r }) => ({ ...r, session_id: "s-" + r.id, ts: now() - ago })),
+  }),
+  "panel.worktrees": (p) => ({
+    worktrees: (PANEL_TREES[needBot(p).name] ?? []).map(({ ago, ...w }) => ({ ...w, last: now() - ago })),
+  }),
+  "panel.diff": (p) => {
+    const b = needBot(p);
+    const w = (PANEL_TREES[b.name] ?? []).find((t) => t.path === p.path);
+    if (!w) throw new OpError("not_found", "not a worktree this bot worked in");
+    return { path: w.path, branch: w.branch, repo: w.repo, truncated: false, ...PANEL_DIFF[w.path] };
   },
   "routines.list": (p) => ({
     routines: (ROUTINE_SEED[needBot(p).name] ?? []).map((r) => ({

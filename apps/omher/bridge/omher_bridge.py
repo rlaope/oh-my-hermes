@@ -26,10 +26,12 @@ import logging
 import os
 import re
 import signal
+import subprocess
 import sys
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import AsyncExitStack
 from datetime import datetime
 from http import HTTPStatus
@@ -54,12 +56,21 @@ def default_hermes_home(environ=None, platform: str | None = None) -> Path:
     platform = sys.platform if platform is None else platform
     explicit = (environ.get("HERMES_HOME") or "").strip()
     if explicit:
-        return Path(os.path.expanduser(explicit))
+        return hermes_root_of(Path(os.path.expanduser(explicit)))
     if platform == "win32":
         local = (environ.get("LOCALAPPDATA") or "").strip()
         base = Path(local) if local else Path.home() / "AppData" / "Local"
         return base / "hermes"
     return Path.home() / ".hermes"
+
+
+def hermes_root_of(home: Path) -> Path:
+    """Hermes runs a profile with `HERMES_HOME=<root>/profiles/<name>`. omher shows every bot, so a home that is
+    a profile dir (its parent is `profiles` and the root above holds its own config) resolves to that root."""
+    parent = home.parent
+    if parent.name == "profiles" and (parent.parent / "config.yaml").is_file():
+        return parent.parent
+    return home
 
 
 def _default_hermes_root() -> Path:
@@ -102,13 +113,31 @@ def _snake(text: str) -> bool:
 
 # ---------------------------------------------------------------- profile discovery (files only)
 
+_YAML_CACHE: dict[str, tuple[int, int, dict]] = {}
+
+
 def _load_yaml(path: Path) -> dict:
+    """The parsed mapping in *path*, or {}. Parsed once per (path, mtime_ns, size): every op calls
+    discover_bots on the event loop, and a full config.yaml parse costs ~5 ms with the pure-Python loader.
+    The result is shared; callers that change it copy it first."""
+    key = str(path)
+    try:
+        st = path.stat()
+    except OSError:
+        _YAML_CACHE.pop(key, None)
+        return {}
+    hit = _YAML_CACHE.get(key)
+    if hit is not None and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
+        return hit[2]
     try:
         import yaml  # Hermes' own dependency; absent only outside its venv
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
+        loader = getattr(yaml, "CSafeLoader", None) or yaml.SafeLoader
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=loader)  # noqa: S506 - a safe loader
+        data = data if isinstance(data, dict) else {}
     except Exception:
-        return {}
+        data = {}
+    _YAML_CACHE[key] = (st.st_mtime_ns, st.st_size, data)
+    return data
 
 
 def discover_bots(home: Path) -> list[dict]:
@@ -216,7 +245,7 @@ def write_display_name(profile_dir: Path, name: str) -> None:
         pass  # Hermes' writer (or its lazy `utils` import) is not reachable: it failed before writing anything
     import yaml
     path = profile_dir / "profile.yaml"
-    data = _load_yaml(path)
+    data = dict(_load_yaml(path))  # a copy: the parsed mapping is cached and shared
     if name:
         data["display_name"] = name
     else:
@@ -231,6 +260,335 @@ def ro_uri(db: Path) -> str:
     and percent-escapes `?`, `#`, `%` and spaces, which a hand-built `file:{path}` mangles (a drive letter or
     a `#` in a folder name ended the path early)."""
     return Path(db).resolve().as_uri() + "?mode=ro"
+
+
+# ---------------------------------------------------------------- side panel (read-only)
+
+PANEL_RUNS = 40          # terminal runs shown in the Terminal tab
+PANEL_WINDOW = 8000      # newest message rows scanned (keeps the read fast on a large state.db)
+PANEL_OUT = 600          # chars of output kept per run (head and tail), clipped before the reply is encoded
+DIFF_MAX = 60_000        # chars of patch sent to the UI
+UNTRACKED_MAX = 200      # untracked entries listed in the Diff tab
+GIT_TIMEOUT = 4.0
+WORKTREES_TTL = 10.0     # seconds a scan of the bot's worktrees is reused by panel.diff
+GIT_POOL = 4             # git status calls run at once during a scan
+# The only git commands omher runs. All are reads; `--no-optional-locks` keeps `status` from writing the index.
+# `version` and the one fixed `config --list` query (_FILTER_QUERY) only feed the hardening in _git.
+GIT_READS = {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",), ("version",), ("config",)}
+# A repository's own config and attributes can name programs git runs during a read (core.fsmonitor, a
+# filter's clean/process command, a diff textconv or external driver, gpg.program for signed commits,
+# git inside a submodule). _git turns each of those off; see _hardened.
+_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+_FILTER_QUERY = ["config", "--list", "--null", "--name-only"]
+_ATTR_SOURCE: list[bool] = []  # cached: does this git know --attr-source (git >= 2.40)?
+
+
+def _json_obj(raw):
+    try:
+        v = json.loads(raw) if isinstance(raw, str) and raw else None
+    except ValueError:
+        return None
+    return v if isinstance(v, dict) else None
+
+
+def read_terminal_runs(profile_dir: Path, limit: int = PANEL_RUNS) -> list[dict]:
+    """The bot's latest terminal commands with their output, newest first, from state.db (read-only):
+    the command from the assistant's tool call, the output/exit code/cwd from the tool's result row."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not db.is_file():
+        return []
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            top = con.execute("SELECT MAX(id) FROM messages").fetchone()[0] or 0
+            lo = max(0, top - PANEL_WINDOW)
+            results = con.execute(
+                "SELECT m.tool_call_id, m.content, m.timestamp, m.session_id, s.source FROM messages m"
+                " LEFT JOIN sessions s ON s.id = m.session_id"
+                " WHERE m.id > ? AND m.role = 'tool' AND m.tool_name = 'terminal' ORDER BY m.id DESC LIMIT ?",
+                (lo, limit)).fetchall()
+            calls = con.execute(
+                "SELECT tool_calls FROM messages WHERE id > ? AND role = 'assistant' AND tool_calls LIKE ?",
+                (lo, '%"terminal"%')).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return []
+    commands: dict[str, dict] = {}
+    for (raw,) in calls:
+        try:
+            items = json.loads(raw) if raw else []
+        except ValueError:
+            continue
+        for c in items if isinstance(items, list) else []:
+            fn = c.get("function") if isinstance(c, dict) else None
+            if not isinstance(fn, dict) or fn.get("name") != "terminal":
+                continue
+            args = _json_obj(fn.get("arguments")) or {}
+            for key in (c.get("id"), c.get("call_id")):
+                if key:
+                    commands[str(key)] = args
+    runs = []
+    for call_id, content, ts, sid, source in results:
+        args = commands.get(str(call_id)) or {}
+        command = args.get("command")
+        if not isinstance(command, str) or not command.strip():
+            continue
+        res = _json_obj(content) or {}
+        out = res.get("output") if isinstance(res.get("output"), str) else (content if isinstance(content, str) else "")
+        out = _head_tail(out.rstrip(), PANEL_OUT)
+        cwd = res.get("cwd") or args.get("workdir") or ""
+        runs.append({"id": str(call_id), "command": command.strip(), "ts": float(ts or 0.0), "output": out,
+                     "exit_code": res.get("exit_code") if isinstance(res.get("exit_code"), int) else None,
+                     "cwd": str(cwd) if isinstance(cwd, str) else "", "source": str(source or ""),
+                     "session_id": str(sid or "")})
+    return runs
+
+
+def _head_tail(text: str, limit: int) -> str:
+    """At most `limit` chars: the head and the tail (where a failure usually says why), joined by an ellipsis."""
+    if len(text) <= limit:
+        return text
+    head = limit * 3 // 5
+    return text[:head] + "\n…\n" + text[-(limit - head - 3):]
+
+
+def _git(args: list[str], cwd: str | Path, timeout: float = GIT_TIMEOUT, hardened: list[str] | None = None) -> str | None:
+    """Run one read-only git command; None on any failure. Only GIT_READS commands are allowed, and every
+    call carries the flags that keep the repository's config from running programs (see _hardened; a
+    caller making several reads of one folder in a row may pass its result once)."""
+    head = tuple(args[:2]) if args[:1] == ["worktree"] else (args[0],)
+    if head not in GIT_READS or (head == ("config",) and args != _FILTER_QUERY):
+        raise ValueError(f"not a read-only git command: {args[:2]}")
+    pre = ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.quotepath=off",
+           "-c", "core.attributesFile=/dev/null"]  # Git for Windows maps /dev/null to NUL
+    if head in (("status",), ("diff",), ("log",)):
+        extra = _hardened(cwd, timeout) if hardened is None else hardened
+        if extra is None:
+            return None
+        pre += extra
+    if head in (("diff",), ("log",)):  # no diff driver, textconv or signature program, whatever the caller passed
+        safe = ["--no-ext-diff", "--no-textconv"] + (["--no-show-signature"] if head == ("log",) else [])
+        args = [args[0], *safe, *args[1:]]
+    kw = {}
+    if os.name == "nt":
+        kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    try:
+        r = subprocess.run(["git", *pre, *args], cwd=str(cwd), capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout, stdin=subprocess.DEVNULL,
+                           env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0",
+                                "GIT_ATTR_NOSYSTEM": "1"}, **kw)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def _hardened(cwd: str | Path, timeout: float) -> list[str] | None:
+    """Extra global flags for a read that looks at file contents (status, diff, log): the in-tree
+    .gitattributes ignored (--attr-source=<empty tree>, git >= 2.40), and every filter driver the
+    repository's config defines emptied, which also covers drivers named from .git/info/attributes (which
+    --attr-source leaves on) and from .gitattributes on an older git. None refuses the read: the drivers
+    could not be listed, or one has a name `-c` cannot carry."""
+    if not _ATTR_SOURCE:
+        m = re.search(r"(\d+)\.(\d+)", _git(["version"], cwd, timeout) or "")
+        _ATTR_SOURCE.append(bool(m) and (int(m.group(1)), int(m.group(2))) >= (2, 40))
+    out = ["--attr-source=" + _EMPTY_TREE] if _ATTR_SOURCE[0] else []
+    names = _git(_FILTER_QUERY, cwd, timeout)
+    if names is None:
+        return None
+    drivers = {k[len("filter."):].rpartition(".")[0] for k in names.split("\0") if k.startswith("filter.")}
+    for d in sorted(drivers):
+        if not d or "=" in d or "\n" in d:
+            return None
+        out += ["-c", f"filter.{d}.clean=", "-c", f"filter.{d}.smudge=", "-c", f"filter.{d}.process=",
+                "-c", f"filter.{d}.required=false"]
+    return out
+
+
+def _status_entries(status: str) -> list[tuple[str, str]]:
+    """(XY, path) pairs from `git status --porcelain -z` (a rename's or copy's source entry skipped)."""
+    out, parts, i = [], status.split("\0"), 0
+    while i < len(parts):
+        e = parts[i]
+        i += 1
+        if len(e) < 4:
+            continue
+        out.append((e[:2], e[3:]))
+        if e[0] in "RC":
+            i += 1
+    return out
+
+
+def _norm(path: str | Path) -> str:
+    """One spelling per folder: symlinks resolved (macOS /var -> /private/var, a symlinked home), case
+    folded where the OS ignores case."""
+    return os.path.normcase(os.path.realpath(str(path)))
+
+
+_WORKTREES: dict[str, tuple[float, list[dict]]] = {}  # profile dir -> (monotonic time, last scan)
+_WORKTREES_LOCK = threading.Lock()
+
+
+def cached_worktrees(profile_dir: Path, max_age: float = WORKTREES_TTL) -> list[dict]:
+    """The bot's last worktree scan when it is under `max_age` seconds old, else a fresh scan."""
+    with _WORKTREES_LOCK:
+        hit = _WORKTREES.get(str(profile_dir))
+    if hit and time.monotonic() - hit[0] < max_age:
+        return hit[1]
+    return read_worktrees(profile_dir)
+
+
+def read_worktrees(profile_dir: Path, runs: list[dict] | None = None, max_repos: int = 6) -> list[dict]:
+    """Git worktrees of the repositories the bot worked in, found from the folders its terminal runs used.
+    Each: path, branch, head, dirty (changed files), last (newest run there), repo. Newest first.
+    A scan from the bot's own runs is kept for cached_worktrees()."""
+    scan = runs is None
+    runs = read_terminal_runs(profile_dir, limit=400) if runs is None else runs
+    seen_at: dict[str, float] = {}
+    for r in runs:
+        cwd = r.get("cwd") or ""
+        if cwd:
+            seen_at[cwd] = max(seen_at.get(cwd, 0.0), float(r.get("ts") or 0.0))
+    seen_at = {c: t for c, t in seen_at.items() if os.path.isdir(c)}
+    norm: dict[str, str] = {}
+
+    def nm(path: str) -> str:
+        if path not in norm:
+            norm[path] = _norm(path)
+        return norm[path]
+
+    def under(cwd: str, wt: str) -> bool:
+        """cwd is the worktree or a folder in it that is not inside a nested repository."""
+        c, root = nm(cwd), nm(wt).rstrip(os.sep)
+        if c == root:
+            return True
+        if not c.startswith(root + os.sep):
+            return False
+        d = c
+        while d != root:
+            if os.path.lexists(os.path.join(d, ".git")):
+                return False
+            d = os.path.dirname(d)
+        return True
+
+    repos: dict[str, dict] = {}
+    for cwd, ts in sorted(seen_at.items(), key=lambda kv: -kv[1]):
+        known = [w for rp in repos.values() for w in rp["worktrees"] if under(cwd, w["path"])]
+        if known:
+            # already inside a listed worktree: no rev-parse needed (the deepest one owns the folder)
+            w = max(known, key=lambda w: len(nm(w["path"])))
+            w["last"] = max(w["last"], ts)
+            continue
+        if len(repos) >= max_repos:
+            continue
+        common = _git(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd)
+        if not common:
+            continue
+        key = _norm(common.strip())
+        if key not in repos:
+            listing = _git(["worktree", "list", "--porcelain"], cwd) or ""
+            wts, cur = [], {}
+            for line in listing.splitlines() + [""]:
+                if not line.strip():
+                    if cur.get("path"):
+                        wts.append(cur)
+                    cur = {}
+                elif line.startswith("worktree "):
+                    cur = {"path": line[9:], "branch": "", "head": "", "last": 0.0, "dirty": None}
+                elif line.startswith("HEAD "):
+                    cur["head"] = line[5:][:9]
+                elif line.startswith("branch "):
+                    cur["branch"] = line[7:].removeprefix("refs/heads/")
+                elif line == "detached":
+                    cur["branch"] = ""
+            main = Path(common.strip()).parent
+            repos[key] = {"repo": main.name, "worktrees": [w for w in wts if os.path.isdir(w["path"])]}
+        owners = [w for w in repos[key]["worktrees"] if under(cwd, w["path"])]
+        if owners:
+            w = max(owners, key=lambda w: len(nm(w["path"])))
+            w["last"] = max(w["last"], ts)
+    out = [{**w, "repo": rp["repo"]} for rp in repos.values() for w in rp["worktrees"] if w["last"] > 0]
+    out.sort(key=lambda w: -w["last"])
+    out = out[:30]
+
+    def dirty(w: dict) -> int | None:
+        status = _git(["status", "--porcelain", "-z", "--ignore-submodules=all"], w["path"])
+        return None if status is None else len(_status_entries(status))
+
+    if out:
+        with ThreadPoolExecutor(max_workers=min(GIT_POOL, len(out))) as pool:
+            for w, n in zip(out, pool.map(dirty, out)):
+                w["dirty"] = n
+    if scan:
+        with _WORKTREES_LOCK:
+            _WORKTREES[str(profile_dir)] = (time.monotonic(), out)
+    return out
+
+
+_DIFF_FILE = re.compile(r'^diff --git (?:"a/.*"|a/.+?) (?:"b/(?P<q>.*)"|b/(?P<p>.+))$')
+_DIFF_FLAGS = ["--no-color", "--ignore-submodules=all"]
+_C_ESC = {"a": "\a", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v", '"': '"', "\\": "\\"}
+
+
+def _unquote(s: str) -> str:
+    """Undo git's C-style quoting of a path (with core.quotepath=off only controls, quotes and backslashes)."""
+    raw, i = bytearray(), 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and i + 1 < len(s):
+            n = s[i + 1]
+            if n in "0123" and re.fullmatch(r"[0-7]{3}", s[i + 1:i + 4]):
+                raw.append(int(s[i + 1:i + 4], 8))
+                i += 4
+                continue
+            raw += _C_ESC.get(n, n).encode()
+            i += 2
+            continue
+        raw += c.encode()
+        i += 1
+    return raw.decode("utf-8", "replace")
+
+
+def read_diff(profile_dir: Path, path: str, runs: list[dict] | None = None) -> dict:
+    """Uncommitted changes (vs HEAD) of one worktree the bot worked in, or its last commit when clean.
+    Untracked files are listed by name (`untracked: true`, no content). `path` must be one of the bot's
+    worktrees (the scan cached_worktrees() keeps, or one over `runs`); anything else is refused."""
+    trees = cached_worktrees(profile_dir) if runs is None else read_worktrees(profile_dir, runs)
+    w = next((t for t in trees if _norm(t["path"]) == _norm(path or "")), None)
+    if not w and runs is None:  # a worktree newer than the kept scan
+        w = next((t for t in read_worktrees(profile_dir) if _norm(t["path"]) == _norm(path or "")), None)
+    if not w:
+        raise BridgeError("not_found", "not a worktree this bot worked in")
+    hard = _hardened(w["path"], GIT_TIMEOUT)
+    if hard is None:
+        raise BridgeError("unavailable", "git could not read this worktree")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        patch_f = pool.submit(_git, ["diff", "HEAD", *_DIFF_FLAGS], w["path"], 8.0, hard)
+        status = _git(["status", "--porcelain", "-z", "--ignore-submodules=all"], w["path"], GIT_TIMEOUT, hard) or ""
+        patch = patch_f.result()
+    untracked = [p for xy, p in _status_entries(status) if xy == "??"]
+    scope = "uncommitted"
+    if patch is not None and not patch.strip() and not untracked:
+        patch = _git(["log", "-1", "--format=%h %s", "--patch", *_DIFF_FLAGS], w["path"], 8.0, hard)
+        scope = "last commit"
+    if patch is None:
+        raise BridgeError("unavailable", "git could not read this worktree")
+    files, cur = [], None
+    for line in patch.splitlines():
+        m = _DIFF_FILE.match(line)
+        if m:
+            cur = {"path": _unquote(m.group("q")) if m.group("q") is not None else m.group("p"), "add": 0, "del": 0}
+            files.append(cur)
+        elif cur is not None and line.startswith("+") and not line.startswith("+++"):
+            cur["add"] += 1
+        elif cur is not None and line.startswith("-") and not line.startswith("---"):
+            cur["del"] += 1
+    if scope == "uncommitted":
+        files += [{"path": u, "add": 0, "del": 0, "untracked": True} for u in untracked[:UNTRACKED_MAX]]
+    truncated = len(patch) > DIFF_MAX or len(untracked) > UNTRACKED_MAX
+    return {"path": w["path"], "branch": w["branch"], "repo": w["repo"], "scope": scope, "files": files,
+            "patch": patch[:DIFF_MAX], "truncated": truncated}
 
 
 def read_bot_facts(profile_dir: Path) -> dict:
@@ -379,18 +737,55 @@ def read_session_facts(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
 
 _MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 _MENTION = re.compile(r"<[@#!][^>]*>")
-_URL = re.compile(r"https?://\S+")
+# ASCII URL characters only (RFC 3986), so a URL stops at the Korean particle glued to it ("…/2695에서").
+_URL = re.compile(r"https?://[A-Za-z0-9\-._~:/?#\[\]@!$&()*+,;=%]+")
+_URL_TAIL = ".,;:!?*_~"
+
+
+def _split_url(raw: str) -> tuple[str, str]:
+    """(url, tail): sentence punctuation and markdown marks after a URL are not part of it; a closing
+    bracket is only when the URL leaves it unbalanced (`(see https://x.y/a)` vs `…/wiki/Foo_(bar)`)."""
+    url = raw
+    while url:
+        if url[-1] in _URL_TAIL:
+            url = url[:-1]
+        elif url[-1] == ")" and url.count(")") > url.count("("):
+            url = url[:-1]
+        elif url[-1] == "]" and url.count("]") > url.count("["):
+            url = url[:-1]
+        else:
+            break
+    return url, raw[len(url):]
+
+
+def _short_url(url: str) -> str:
+    """A bare URL inside a sentence stays readable instead of leaving a hole ("… 에서 열립니다"):
+    `https://omher.app/docs/skills/` -> `omher.app/docs/skills`; a long path is cut to its host. The query
+    and fragment are always dropped: they carry tokens (`?token=…`), not words."""
+    u = re.sub(r"^[a-z][a-z0-9+.-]*://", "", url, flags=re.I)
+    u = re.split(r"[?#]", u, maxsplit=1)[0].rstrip("/")
+    u = re.sub(r"^www\.", "", u)
+    return u if len(u) <= 40 else u.split("/", 1)[0]
 
 
 def reply_gist(text: str, n: int = 220) -> str:
-    """The first paragraph of an answer as plain text: markdown marks, mentions and bare URLs removed,
-    clipped at a sentence end when one is near."""
+    """The first paragraph of an answer as plain text: markdown marks and mentions removed, bare URLs
+    shortened, clipped at a sentence end when one is near."""
     para = next((p for p in re.split(r"\n\s*\n", text or "") if p.strip()), "")
     t = _MD_LINK.sub(r"\1", para)
     t = _MENTION.sub("", t)
-    t = _URL.sub("", t)
+    urls: list[str] = []
+
+    def hold(m: "re.Match[str]") -> str:
+        # URLs sit behind placeholders while markdown marks are stripped, so `foo_bar` keeps its underscore
+        url, tail = _split_url(m.group(0))
+        urls.append(_short_url(url))
+        return f"\x00{len(urls) - 1}\x00{tail}"
+
+    t = _URL.sub(hold, t)
     t = re.sub(r"^\s*(#+|[-*])\s+", "", t, flags=re.M)
     t = re.sub(r"[*_`~]+", "", t)
+    t = re.sub(r"\x00(\d+)\x00", lambda m: urls[int(m.group(1))], t)
     t = " ".join(t.split())
     if len(t) <= n:
         return t
@@ -560,6 +955,8 @@ class Bridge:
             "chat.set_model": self.op_set_model,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
+            "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
+            "panel.diff": self.op_panel_diff,
         }
 
     # ------------------------------------------------------------ lifecycle
@@ -1113,6 +1510,21 @@ class Bridge:
     async def op_bots_info(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return await asyncio.to_thread(read_bot_facts, bot["path"])
+
+    async def op_panel_terminal(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return {"runs": await asyncio.to_thread(read_terminal_runs, bot["path"])}
+
+    async def op_panel_worktrees(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return {"worktrees": await asyncio.to_thread(read_worktrees, bot["path"])}
+
+    async def op_panel_diff(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        path = p.get("path")
+        if not isinstance(path, str) or not path:
+            raise BridgeError("bad_request", "missing path")
+        return await asyncio.to_thread(read_diff, bot["path"], path)
 
     async def op_routines_list(self, p) -> dict:
         return {"routines": read_routines(self._bot(p.get("bot"))["path"])}
