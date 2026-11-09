@@ -17,6 +17,7 @@ import type {
   BotInfo,
   TerminalRun,
   Worktree,
+  UsageProvider,
   WorktreeDiff,
 } from "../lib/protocol";
 
@@ -636,6 +637,8 @@ export interface Actions {
   panelTerminal(bot: string): Promise<{ runs: TerminalRun[] }>;
   panelWorktrees(bot: string): Promise<{ worktrees: Worktree[] }>;
   panelDiff(bot: string, path: string): Promise<WorktreeDiff>;
+  /** Subscription usage meters (sidebar); the meter keeps its own copy. */
+  usage(): Promise<{ providers: UsageProvider[] }>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -882,6 +885,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     panelTerminal: (bot) => bridge.request("panel.terminal", { bot }),
     panelWorktrees: (bot) => bridge.request("panel.worktrees", { bot }),
     panelDiff: (bot, path) => bridge.request("panel.diff", { bot, path }),
+    usage: () => bridge.request("usage.read", {}),
   };
 
   return {

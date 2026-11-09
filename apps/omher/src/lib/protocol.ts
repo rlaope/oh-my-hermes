@@ -144,6 +144,30 @@ export interface OpMap {
   "panel.terminal": { params: { bot: string }; result: { runs: TerminalRun[] } };
   "panel.worktrees": { params: { bot: string }; result: { worktrees: Worktree[] } };
   "panel.diff": { params: { bot: string; path: string }; result: WorktreeDiff };
+  /** Subscription usage of the CLIs on this machine, from their own session files (read-only). */
+  "usage.read": { params: Record<string, never>; result: { providers: UsageProvider[] } };
+}
+
+export type UsageState = "ok" | "near" | "limited" | "stale" | "connected";
+
+export interface UsageWindow {
+  /** "5 hours", "Weekly", "2d"… */
+  label: string;
+  /** Only when the source gave one (Codex does, Claude Code never does). */
+  used_percent?: number;
+  /** Seconds since epoch. */
+  resets_at?: number;
+  /** The reset time has passed since the source was written: no number is shown. */
+  stale?: boolean;
+}
+
+export interface UsageProvider {
+  id: "codex" | "claude" | "grok" | "gemini";
+  plan?: string;
+  windows: UsageWindow[];
+  state: UsageState;
+  /** mtime of the file the numbers came from; null when only the CLI was found on PATH. */
+  source_mtime: number | null;
 }
 
 export interface TerminalRun {

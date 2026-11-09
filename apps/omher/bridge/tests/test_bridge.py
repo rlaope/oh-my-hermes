@@ -1034,3 +1034,100 @@ class SidePanel(unittest.TestCase):
             with self.assertRaises(ob.BridgeError) as e:
                 ob.read_diff(prof, str(Path(d)))
             self.assertEqual(e.exception.code, "not_found")
+
+
+# Lines copied from real session files on the author's Mac, redacted (ids, request ids, cwd, branch removed).
+CODEX_LINE = ('{"timestamp":"2026-11-04T02:33:18.543Z","type":"event_msg","payload":{"type":"token_count","info":'
+              '{"total_token_usage":{"input_tokens":44192374,"output_tokens":89083},"model_context_window":353400},'
+              '"rate_limits":{"limit_id":"codex","limit_name":null,"primary":{"used_percent":15.0,"window_minutes":10080,'
+              '"resets_at":1794331456},"secondary":null,"credits":{"has_credits":true,"unlimited":false},'
+              '"individual_limit":null,"spend_control_reached":null,"plan_type":"pro","rate_limit_reached_type":null}}}')
+CLAUDE_LINE = ('{"type":"assistant","timestamp":"2026-11-09T04:06:43.709Z","message":{"model":"<synthetic>","role":"assistant",'
+               '"content":[{"type":"text","text":"You\'ve hit your weekly limit"}]},"apiError":"usage_limit_reached",'
+               '"apiErrorParams":{"rate_limit_info":{"status":"rejected","resetsAt":1794211200,"rateLimitType":"seven_day",'
+               '"overageStatus":"rejected","overageDisabledReason":"org_level_disabled","isUsingOverage":false}},'
+               '"error":"rate_limit","isApiErrorMessage":true,"apiErrorStatus":429,"cwd":"/w/repo"}')
+
+
+class Usage(unittest.TestCase):
+    """usage.read: the CLIs' own session files, tail-read, newest event wins; never a number the source lacks."""
+
+    def home(self) -> Path:
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        return Path(d.name)
+
+    def write(self, path: Path, *lines: str, mtime: float | None = None) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        if mtime is not None:
+            os.utime(path, (mtime, mtime))
+        return path
+
+    def test_codex_weekly_percent_and_plan_from_a_real_line(self):
+        h = self.home()
+        self.write(h / ".codex/sessions/2026/11/03/rollout-a.jsonl", '{"type":"session_meta"}', CODEX_LINE)
+        r = ob.read_usage(h, now=1794300000.0, which=lambda _: None)
+        self.assertEqual(r["providers"], [{
+            "id": "codex", "plan": "pro", "state": "ok", "source_mtime": (h / ".codex/sessions/2026/11/03/rollout-a.jsonl").stat().st_mtime,
+            "windows": [{"label": "Weekly", "used_percent": 15.0, "resets_at": 1794331456.0}]}])
+
+    def test_codex_newest_event_across_files_and_windows_and_near(self):
+        h = self.home()
+        old = CODEX_LINE.replace("2026-11-04T02:33:18", "2026-11-01T00:00:00")
+        new = CODEX_LINE.replace('"primary":{"used_percent":15.0,"window_minutes":10080',
+                                 '"primary":{"used_percent":73.0,"window_minutes":300').replace(
+            '"secondary":null', '"secondary":{"used_percent":60.0,"window_minutes":10080,"resets_at":1794700000}')
+        self.write(h / ".codex/sessions/2026/11/01/rollout-old.jsonl", old, mtime=1794000000)
+        self.write(h / ".codex/sessions/2026/11/04/rollout-new.jsonl", new, '{"type":"event_msg","payload":{"type":"agent_message"}}',
+                   mtime=1794100000)
+        p = ob.read_usage(h, now=1794300000.0, which=lambda _: None)["providers"][0]
+        self.assertEqual([(w["label"], w["used_percent"]) for w in p["windows"]], [("5 hours", 73.0), ("Weekly", 60.0)])
+        self.assertEqual(p["state"], "near")
+        self.assertEqual(ob._window_label(120), "2h")
+        self.assertEqual(ob._window_label(2880), "2d")
+
+    def test_claude_rejected_seven_day_is_limited_with_no_percent(self):
+        h = self.home()
+        self.write(h / ".claude/projects/-w-repo/s1.jsonl", '{"type":"user"}', CLAUDE_LINE)
+        p = ob.read_usage(h, now=1794200000.0, which=lambda _: None)["providers"][0]
+        self.assertEqual(p["id"], "claude")
+        self.assertEqual(p["state"], "limited")
+        self.assertEqual(p["windows"], [{"label": "Weekly", "resets_at": 1794211200.0}])
+        self.assertNotIn("used_percent", json.dumps(p))
+        self.assertNotIn("plan", p)
+
+    def test_a_reset_time_in_the_past_is_stale_and_loses_its_number(self):
+        h = self.home()
+        self.write(h / ".codex/sessions/2026/11/03/rollout-a.jsonl", CODEX_LINE)
+        self.write(h / ".claude/projects/-w-repo/s1.jsonl", CLAUDE_LINE)
+        ps = {p["id"]: p for p in ob.read_usage(h, now=1794400000.0, which=lambda _: None)["providers"]}
+        self.assertEqual(ps["codex"]["state"], "stale")
+        self.assertEqual(ps["codex"]["windows"], [{"label": "Weekly", "resets_at": 1794331456.0, "stale": True}])
+        self.assertEqual(ps["claude"]["state"], "stale")
+
+    def test_no_record_is_connected_when_the_cli_is_on_path_else_omitted(self):
+        h = self.home()
+        on_path = {"grok", "claude"}
+        r = ob.read_usage(h, now=1.0, which=lambda c: f"/bin/{c}" if c in on_path else None)
+        self.assertEqual([(p["id"], p["state"], p["windows"]) for p in r["providers"]],
+                         [("claude", "connected", []), ("grok", "connected", [])])
+        self.assertEqual(ob.read_usage(h, now=1.0, which=lambda _: None), {"providers": []})
+
+    def test_tail_read_only_reads_the_end_of_a_big_file_and_drops_the_cut_line(self):
+        h = self.home()
+        early = CODEX_LINE.replace('"used_percent":15.0', '"used_percent":99.0')
+        f = self.write(h / ".codex/sessions/2026/11/03/rollout-big.jsonl", early, "x" * 2000, CODEX_LINE)
+        lines = ob._tail_lines(f, '"rate_limits"', limit=len(CODEX_LINE) + 200)
+        self.assertEqual(len(lines), 1)
+        self.assertIn('"used_percent":15.0', lines[0])
+        self.assertEqual(ob._tail_lines(h / "missing.jsonl", "x"), [])
+
+    def test_usage_read_op_is_read_only_and_names_no_token(self):
+        src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
+        body = src[src.index("# ---------------------------------------------------------------- usage meters"):
+                   src.index("def read_routines(")]
+        for bad in ("write_text", "write_bytes", "open(path, \"w", "unlink", "rename(", "auth.json", "token\"", "credentials"):
+            self.assertNotIn(bad, body, bad)
+        bridge = ob.Bridge(token=TOKEN, hermes_home=Path(tempfile.gettempdir()))
+        self.assertIn("usage.read", bridge.ops)

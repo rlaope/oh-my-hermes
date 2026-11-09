@@ -5,6 +5,7 @@ import { useStore } from "../state/store";
 import { slots } from "../features";
 import { CalendarIcon, GearIcon, GridIcon, IconButton, PlusIcon, SearchIcon } from "../ui";
 import { BotRow } from "./BotRow";
+import { Usage } from "./Usage";
 
 export function Sidebar() {
   const s = useStore();
@@ -74,6 +75,7 @@ export function Sidebar() {
           <GearIcon />
           Settings
         </button>
+        <Usage />
         <div className="me">
           <span className="me-i" aria-hidden="true">
             Y

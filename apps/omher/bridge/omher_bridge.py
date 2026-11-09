@@ -444,6 +444,171 @@ def read_bot_facts(profile_dir: Path) -> dict:
             "last_active": last, "skills": skills, "routines": len(read_routines(profile_dir))}
 
 
+# ---------------------------------------------------------------- usage meters (read-only)
+
+USAGE_FILES = 5               # newest session files read per CLI
+USAGE_TAIL = 512 * 1024       # bytes read from the end of each file
+_CLAUDE_WINDOWS = {"five_hour": "5 hours", "seven_day": "Weekly", "seven_day_opus": "Weekly (Opus)",
+                   "seven_day_sonnet": "Weekly (Sonnet)"}
+
+
+def _tail_lines(path: Path, needle: str, limit: int = USAGE_TAIL):
+    """Lines of the last `limit` bytes of `path` that contain `needle`, newest first (a cut first line is dropped)."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - limit))
+            data = fh.read()
+    except OSError:
+        return []
+    lines = data.decode("utf-8", errors="replace").split("\n")
+    if size > limit:
+        lines = lines[1:]
+    return [ln for ln in reversed(lines) if needle in ln]
+
+
+def _newest(paths, n: int = USAGE_FILES) -> list[tuple[float, Path]]:
+    out = []
+    for p in paths:
+        try:
+            out.append((p.stat().st_mtime, p))
+        except OSError:
+            continue
+    out.sort(key=lambda t: -t[0])
+    return out[:n]
+
+
+def _window_label(minutes) -> str:
+    m = int(minutes or 0)
+    if m == 300:
+        return "5 hours"
+    if m == 10080:
+        return "Weekly"
+    if m <= 0:
+        return "Limit"
+    if m % 1440 == 0:
+        return f"{m // 1440}d"
+    return f"{max(1, round(m / 60))}h"
+
+
+def _finish(provider: dict, now: float) -> dict:
+    """A window whose reset time has passed loses its number (`stale`); a provider whose every window is stale
+    is `stale` itself. No number is ever made up: windows keep `used_percent` only when the source gave one."""
+    windows = provider["windows"]
+    for w in windows:
+        if w.get("resets_at") is not None and w["resets_at"] <= now:
+            w.pop("used_percent", None)
+            w["stale"] = True
+    if windows and all(w.get("stale") for w in windows):
+        provider["state"] = "stale"
+    return provider
+
+
+def _codex_usage(user_home: Path, now: float) -> dict | None:
+    root = user_home / ".codex" / "sessions"
+    if not root.is_dir():
+        return None
+    best = None  # (event ts, mtime, rate_limits)
+    for mtime, path in _newest(root.rglob("rollout-*.jsonl")):
+        for line in _tail_lines(path, '"rate_limits"'):
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            payload = ev.get("payload") if isinstance(ev, dict) else None
+            rl = payload.get("rate_limits") if isinstance(payload, dict) else None
+            if not isinstance(rl, dict) or not (rl.get("primary") or rl.get("secondary")):
+                continue
+            ts = _to_ts(ev.get("timestamp")) if ev.get("timestamp") else mtime
+            if best is None or ts > best[0]:
+                best = (ts, mtime, rl)
+            break  # newest usable event of this file
+    if best is None:
+        return None
+    ts, mtime, rl = best
+    windows = []
+    for key in ("primary", "secondary"):
+        w = rl.get(key)
+        if not isinstance(w, dict):
+            continue
+        out: dict = {"label": _window_label(w.get("window_minutes"))}
+        if isinstance(w.get("used_percent"), (int, float)):
+            out["used_percent"] = float(w["used_percent"])
+        if isinstance(w.get("resets_at"), (int, float)):
+            out["resets_at"] = float(w["resets_at"])
+        elif isinstance(w.get("resets_in_seconds"), (int, float)):
+            out["resets_at"] = ts + float(w["resets_in_seconds"])
+        windows.append(out)
+    top = max((w.get("used_percent", 0.0) for w in windows), default=0.0)
+    state = "limited" if rl.get("rate_limit_reached_type") or top >= 100 else "near" if top >= 70 else "ok"
+    provider = {"id": "codex", "windows": windows, "state": state, "source_mtime": mtime}
+    if isinstance(rl.get("plan_type"), str) and rl["plan_type"]:
+        provider["plan"] = rl["plan_type"]
+    return _finish(provider, now)
+
+
+def _find_key(obj, key: str, depth: int = 0):
+    if depth > 4 or not isinstance(obj, dict):
+        return None
+    if isinstance(obj.get(key), dict):
+        return obj[key]
+    for v in obj.values():
+        hit = _find_key(v, key, depth + 1)
+        if hit is not None:
+            return hit
+    return None
+
+
+def _claude_usage(user_home: Path, now: float) -> dict | None:
+    root = user_home / ".claude" / "projects"
+    if not root.is_dir():
+        return None
+    best = None  # (event ts, mtime, rate_limit_info)
+    for mtime, path in _newest(root.glob("*/*.jsonl")):
+        for line in _tail_lines(path, '"rate_limit_info"'):
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            info = _find_key(ev, "rate_limit_info")
+            if not info or not info.get("status"):
+                continue
+            ts = _to_ts(ev.get("timestamp")) if isinstance(ev, dict) and ev.get("timestamp") else mtime
+            if best is None or ts > best[0]:
+                best = (ts, mtime, info)
+            break
+    if best is None:
+        return None
+    _, mtime, info = best
+    kind = str(info.get("rateLimitType") or "")
+    window: dict = {"label": _CLAUDE_WINDOWS.get(kind) or (kind.replace("_", " ").capitalize() or "Limit")}
+    if isinstance(info.get("resetsAt"), (int, float)):
+        window["resets_at"] = float(info["resetsAt"])
+    status = str(info.get("status"))
+    state = "limited" if status == "rejected" else "near" if status == "allowed_warning" else "ok"
+    return _finish({"id": "claude", "windows": [window], "state": state, "source_mtime": mtime}, now)
+
+
+def read_usage(user_home: Path | None = None, *, now: float | None = None, which=None) -> dict:
+    """Subscription usage per CLI, from the CLIs' own local session files only (read-only, tail reads, no
+    network, no tokens). Codex gives percentages; Claude Code gives a state and a reset time, never a %.
+    A CLI with no usage record shows as `connected` when it is on PATH, and not at all otherwise."""
+    import shutil
+    user_home = Path(user_home) if user_home else Path.home()
+    now = time.time() if now is None else now
+    which = which or shutil.which
+    providers = []
+    for pid, reader, cli in (("codex", _codex_usage, "codex"), ("claude", _claude_usage, "claude"),
+                             ("grok", None, "grok"), ("gemini", None, "gemini")):
+        found = reader(user_home, now) if reader else None
+        if found is None and which(cli):
+            found = {"id": pid, "windows": [], "state": "connected", "source_mtime": None}
+        if found is not None:
+            providers.append(found)
+    return {"providers": providers}
+
+
 def read_routines(profile_dir: Path) -> list[dict]:
     try:
         data = json.loads((profile_dir / "cron" / "jobs.json").read_text(encoding="utf-8"))
@@ -693,7 +858,7 @@ class Bridge:
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
-            "panel.diff": self.op_panel_diff,
+            "panel.diff": self.op_panel_diff, "usage.read": self.op_usage_read,
         }
 
     # ------------------------------------------------------------ lifecycle
@@ -1243,6 +1408,9 @@ class Bridge:
     async def op_panel_worktrees(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return {"worktrees": await asyncio.to_thread(read_worktrees, bot["path"])}
+
+    async def op_usage_read(self, p) -> dict:
+        return await asyncio.to_thread(read_usage)
 
     async def op_panel_diff(self, p) -> dict:
         bot = self._bot(p.get("bot"))

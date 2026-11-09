@@ -26,6 +26,8 @@ RULES = (
     "The app starts the bridge as a child process and stops it when the app exits.",
     "The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.",
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
+    "Outside Hermes, omher reads only the usage records coding CLIs write about themselves",
+    "it never reads their auth files or tokens, writes nothing there and sends nothing anywhere.",
 )
 
 
@@ -39,9 +41,10 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_ten_numbered_rules(self) -> None:
+    def test_boundary_is_between_six_and_twelve_numbered_rules(self) -> None:
+        # 11 (CLI usage records) widened the cap from 10; a new surface still needs its own numbered rule.
         rules = re.findall(r"^\d+\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 10, len(rules))
+        self.assertTrue(6 <= len(rules) <= 12, len(rules))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
         context = CONTEXT.read_text(encoding="utf-8")

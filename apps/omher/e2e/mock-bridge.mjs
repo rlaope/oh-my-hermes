@@ -147,7 +147,31 @@ const INFO_SEED = {
   default: { places: {}, first: null, skills: 41 },
 };
 
+// Subscription usage (usage.read). "default": Codex 73 % / 60 %, Claude limited (no %), Grok on PATH only.
+// "stale": the same Codex record after both reset times passed (no numbers). Switch with mock.usage {fixture}.
+let usageFixture = "default";
+const USAGE = {
+  default: () => [
+    { id: "codex", plan: "pro", state: "near", source_mtime: now() - 120,
+      windows: [
+        { label: "5 hours", used_percent: 73, resets_at: now() + 107 * MIN },
+        { label: "Weekly", used_percent: 60, resets_at: now() + (4 * 24 + 23) * 3600 },
+      ] },
+    { id: "claude", state: "limited", source_mtime: now() - 600,
+      windows: [{ label: "Weekly", resets_at: now() + 3 * 3600 + 12 * MIN }] },
+    { id: "grok", state: "connected", source_mtime: null, windows: [] },
+  ],
+  stale: () => [
+    { id: "codex", plan: "pro", state: "stale", source_mtime: now() - 9 * 24 * 3600,
+      windows: [
+        { label: "5 hours", resets_at: now() - 8 * 24 * 3600, stale: true },
+        { label: "Weekly", resets_at: now() - 2 * 24 * 3600, stale: true },
+      ] },
+  ],
+};
+
 function reset() {
+  usageFixture = "default";
   for (const t of Object.values(turns ?? {})) t?.timers.forEach(clearTimeout);
   bots = Object.fromEntries(BOT_SEED.map((b) => [b.name, { ...b }]));
   history = Object.fromEntries(
@@ -459,7 +483,13 @@ const OPS = {
     };
     return { ...models[b.name] };
   },
+  "usage.read": () => ({ providers: USAGE[usageFixture]() }),
   // ---- test control (not part of the protocol)
+  "mock.usage": (p) => {
+    if (!(p.fixture in USAGE)) throw new OpError("bad_request", "unknown usage fixture");
+    usageFixture = p.fixture;
+    return {};
+  },
   "mock.calls": () => ({ calls: calls.map((c) => ({ ...c })) }),
   "mock.emit": (p) => {
     if (!Array.isArray(p.events)) throw new OpError("bad_request", "events must be an array");

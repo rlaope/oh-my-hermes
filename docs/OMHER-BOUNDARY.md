@@ -17,6 +17,7 @@ is in `apps/omher/README.md`.
 8. The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.
 9. omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture (`assets/avatar.*`, through Hermes' `profiles.set_asset` when the gateway runs); the profile id, folder, config and sessions never change.
 10. The only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`) with optional locks off, in folders the bot's own terminal runs used; omher never commits, checks out, pushes or edits a repository.
+11. Outside Hermes, omher reads only the usage records coding CLIs write about themselves (the newest `rate_limits` event in `~/.codex/sessions`, `rate_limit_info` in `~/.claude/projects`), from the end of their newest session files; it never reads their auth files or tokens, writes nothing there and sends nothing anywhere.
 
 ## What this does not claim
 
