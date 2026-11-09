@@ -1,5 +1,6 @@
 // Timeline: what this bot last said in a thread elsewhere (Slack, Discord, cron), as an ordinary bot
 // bubble with one link back to the thread at the end. omher never writes to that thread.
+import { memo } from "react";
 import type { SlotProps } from "../features";
 import { openExternal } from "../lib/openExternal";
 import { Avatar, SourceIcon, Spinner } from "../ui";
@@ -9,7 +10,13 @@ import "./elsewhere.css";
 
 export const slot = "elsewhereLine";
 
-export default function AwayLine({ bot, item, face }: SlotProps["elsewhereLine"]) {
+// The slot registry takes a plain function (memo() returns an object), so the default export stays a function
+// and the memoized body does the work: a streamed token must not re-render every away bubble and its face.
+export default function AwayLine(props: SlotProps["elsewhereLine"]) {
+  return <AwayBubble {...props} />;
+}
+
+const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["elsewhereLine"]) {
   const a = item.away;
   const now = useNow(a.running);
   const src = sourceName(a.source);
@@ -51,4 +58,4 @@ export default function AwayLine({ bot, item, face }: SlotProps["elsewhereLine"]
       </div>
     </div>
   );
-}
+});

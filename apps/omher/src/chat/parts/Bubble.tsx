@@ -1,9 +1,11 @@
+import { memo } from "react";
 import type { MessageItem } from "../../state/store";
 import { Avatar } from "../../ui";
 import { Markdown } from "./Markdown";
 
-/** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. */
-export function Bubble({
+/** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Memoized: a
+ * store change elsewhere (a streamed token) must not re-render every bubble and its face. */
+export const Bubble = memo(function Bubble({
   item,
   streaming,
   bot,
@@ -31,4 +33,4 @@ export function Bubble({
       </div>
     </div>
   );
-}
+});
