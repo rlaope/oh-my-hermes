@@ -391,7 +391,15 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # owners. No description (the skill's run-loop reference explains it).
 # Measured by per_turn_context.plugin_tool_schema_chars_by_tool() against base
 # df07e3573. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
+# 72525 -> 72561: the node `local` field on omh_dag (+37, 3138 -> 3175): a bare
+# boolean and the word in the description's field list, so a node whose
+# material must not leave the machine runs only on a local model_map option
+# and is held otherwise. No description (the skill's run-loop reference
+# explains it). omh_delegate_route's fallback sentence was corrected in the
+# same change (-1, 5296 -> 5295). Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against base a72f02362.
+# No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72561
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

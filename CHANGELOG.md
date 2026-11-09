@@ -1185,6 +1185,23 @@ All notable changes will be documented here.
   the summary line once the cards collapse, where before they vanished at
   the moment the run ended. Asked for in #2684.
 
+- **A dag node can be kept on a local model, and parallel lanes prefer a
+  fast speed tier.** Taken from Hermes' own model routes (the
+  `advanced-delegation` plugin documents a `local` route and a per-route
+  `service_tier`). Under a `model_map` delegation backend, a node marked
+  `local: true` runs only on an option whose `base_url` is on this machine
+  or its private network (or provider `lmstudio`/`llamacpp`); a provider
+  error moves it to the next local option, and with none left `ready` holds
+  it in `held_for_local_model` and says why. It never goes to a cloud model,
+  and under any other backend it is held. In `swarm`, `quick` and
+  `simple-work`, an option with a fast `service_tier` is tried before the
+  same model's normal one, and the normal one leads elsewhere; a tier the
+  model does not offer is refused by Hermes and falls over to the next
+  option. OMH only reads the options and writes none. `omh_delegate_route`
+  no longer tells the parent Hermes has no child fallback: a child takes
+  `delegation.fallback_providers` when the user sets them (Hermes 2026.9.7
+  and later).
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and

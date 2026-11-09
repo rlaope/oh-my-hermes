@@ -46,6 +46,7 @@ from ..delegation_backend_mode import (
     MODEL_MAP_BACKEND,
     PROFILE_ROUTES_BACKEND,
     STATUS_UNREADABLE,
+    FAST_TIER_CATEGORIES,
     option_chain,
     option_for,
     read_backend_mode,
@@ -126,13 +127,14 @@ def _backend_route(
             "note": "OMH routes only the default and model_map backends; `/delegation default` restores OMH routing.",
         }
     options = list(mode.get("options") or [])
-    carried = option_chain(chain, options, provider_routes) if chain else []
+    prefer_fast = category in FAST_TIER_CATEGORIES
+    carried = option_chain(chain, options, provider_routes, prefer_fast=prefer_fast) if chain else []
     matched = False
     if alias:
         # The lane's own model (the category head, or the user's explicit
         # model) leads; the rest of the chain follows as its fallbacks.
         provider, wire_model = provider_routes.get(alias, ("", ""))
-        name = option_for(options, alias, effort, wire_model=wire_model, provider=provider)
+        name = option_for(options, alias, effort, wire_model=wire_model, provider=provider, prefer_fast=prefer_fast)
         matched = bool(name)
         if name:
             carried = [{"option": name, "alias": alias, "reasoning_effort": effort}] + [
@@ -556,7 +558,7 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
         "have to clear at the end; call clear only to put the previous values back sooner. "
         "A restore is skipped, and says so, when the keys no longer hold what OMH wrote -- "
         "a value someone else set is never overwritten. Children already running keep their model. "
-        "Hermes has NO provider-side fallback: a child whose model the billing account "
+        "Unless delegation.fallback_providers is set, a child whose model the account "
         "cannot serve dies on an HTTP 400 yet its delegation still reports completed with "
         "the error text as the result — a completed child with no recorded model usage "
         "means exactly this. When that happens call action=fallback to advance the route "
