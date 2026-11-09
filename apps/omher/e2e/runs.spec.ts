@@ -45,6 +45,18 @@ async function openRuns(page: Page, bot = "kami") {
 async function mod(page: Page) {
   return (await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform))) ? "Meta" : "Control";
 }
+/** Unfolds the run list when it sits folded into the selected run's header ("All runs ▾"). */
+async function showList(page: Page) {
+  const t = page.getByTestId("run-list-toggle");
+  await expect(t).toBeVisible();
+  if ((await t.getAttribute("aria-expanded")) === "false") await t.click();
+  await expect(page.getByTestId("run-list")).toBeVisible();
+}
+/** Opens a run from the list (which then folds away again). */
+async function pickRow(page: Page, text: string | RegExp, testId = "run-row") {
+  await showList(page);
+  await page.getByTestId(testId).filter({ hasText: text }).click();
+}
 const panel = (page: Page) => page.getByTestId("run-graph-box");
 const full = (page: Page) => page.getByTestId("runs-full");
 type Box = { x: number; y: number; width: number; height: number };
@@ -70,12 +82,14 @@ test("Runs is the sixth tab; the header still holds one control; the panel is 46
   await expect.poll(async () => Math.round((await page.getByTestId("details").boundingBox())?.width ?? 0)).toBe(460);
   // the selected tab and the selected run are gray, never the brand gradient
   expect(await page.getByTestId("panel-tab-runs").evaluate((e) => getComputedStyle(e).backgroundImage)).toBe("none");
+  await showList(page);
   const sel = page.locator('[data-testid="run-row"][aria-current="true"]');
   expect(await sel.evaluate((e) => getComputedStyle(e).backgroundImage)).toBe("none");
 });
 
 test("the list: running first with a live dot, then newest; dots differ by state; the header badge shows progress", async ({ page }) => {
   await openRuns(page);
+  await showList(page);
   const rows = page.getByTestId("run-row");
   await expect(rows).toHaveCount(4);
   expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-state")))).toEqual(["running", "done", "cancelled", "done"]);
@@ -106,7 +120,7 @@ test("the list: running first with a live dot, then newest; dots differ by state
 
 test("the fan-out: 6 cards in 3 columns, every link drawn right-middle to left-middle, the failed node marked", async ({ page }) => {
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await pickRow(page, "Codex coexistence fixes");
   const box = panel(page);
   await expect(box).toHaveAttribute("data-run", FAN);
   const detail = await mock("runs.get", { bot: "kami", run: FAN });
@@ -166,7 +180,7 @@ test("the fan-out: 6 cards in 3 columns, every link drawn right-middle to left-m
 
 test("card titles wrap at words to three lines; two alike titles stay apart; the meta line is proportional", async ({ page }) => {
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await pickRow(page, "Codex coexistence fixes");
   const box = panel(page);
   await expect(box.getByTestId("run-node")).toHaveCount(6);
   await expect(box.locator(".rg-card.enter")).toHaveCount(0); // after the entrance
@@ -221,7 +235,7 @@ test("states look different: done, running, failed, waiting; selection is a gray
 
 test("clicking a node opens its drawer; a failed node offers 'Ask in chat', which only prefills the composer", async ({ page }) => {
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await pickRow(page, "Codex coexistence fixes");
   const box = panel(page);
   await box.locator('[data-node="t5-verify"]').click();
   const drawer = page.getByTestId("run-drawer");
@@ -260,6 +274,7 @@ test("clicking a node opens its drawer; a failed node offers 'Ask in chat', whic
 
 test("a cancelled run is labelled, its unfinished nodes dimmed", async ({ page }) => {
   await openRuns(page);
+  await showList(page);
   const r = page.getByTestId("run-row").filter({ hasText: "omh-dap" });
   await expect(r).toContainText("Cancelled");
   await r.click();
@@ -280,7 +295,7 @@ test("a bot with no runs says so", async ({ page }) => {
 
 test("40 nodes: no two cards overlap, the layout takes under 50 ms, crossings are reduced", async ({ page }) => {
   await openRuns(page, "default");
-  await page.getByTestId("run-row").filter({ hasText: "Big run" }).click();
+  await pickRow(page, "Big run");
   const box = panel(page);
   await expect(box).toHaveAttribute("data-run", BIG);
   const cards = box.getByTestId("run-node");
@@ -299,7 +314,7 @@ test("40 nodes: no two cards overlap, the layout takes under 50 ms, crossings ar
 test("a run larger than the panel opens on its running node, with edge fades and an 'Open full view' hint", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openRuns(page, "default");
-  await page.getByTestId("run-row").filter({ hasText: "Big run" }).click();
+  await pickRow(page, "Big run");
   const box = panel(page);
   await expect(box).toHaveAttribute("data-run", BIG);
   const graph = box.getByTestId("run-graph");
@@ -322,6 +337,16 @@ test("a run larger than the panel opens on its running node, with edge fades and
   // the hint sits in the legend row, on screen, and opens the full view
   const hint = box.getByTestId("run-full-hint");
   await expect(hint).toContainText(/Open full view (⌘⇧G|Ctrl\+Shift\+G)/);
+  // it says how many parts are not whole in the box
+  const cut = await box.evaluate((b) => {
+    const g = b.querySelector("[data-testid=run-graph]")!.getBoundingClientRect();
+    return [...b.querySelectorAll("[data-testid=run-node]")].filter((c) => {
+      const r = c.getBoundingClientRect();
+      return r.left < g.left - 1 || r.right > g.right + 1 || r.top < g.top - 1 || r.bottom > g.bottom + 1;
+    }).length;
+  });
+  expect(cut).toBeGreaterThan(0);
+  await expect(box.getByTestId("run-hidden")).toHaveText(`${cut} more ·`);
   const pane = (await page.getByTestId("details").boundingBox())!;
   const h = (await hint.boundingBox())!;
   expect(h.y + h.height).toBeLessThanOrEqual(pane.y + pane.height);
@@ -330,7 +355,7 @@ test("a run larger than the panel opens on its running node, with edge fades and
   await page.keyboard.press("Escape");
   // a small run fits: no fades, no hint
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await pickRow(page, "Codex coexistence fixes");
   await expect(box.getByTestId("run-graph")).toHaveAttribute("data-overflow", "false");
   await expect(box.getByTestId("run-full-hint")).toHaveCount(0);
   for (const k of ["l", "r", "t", "b"]) await expect(box.getByTestId(`run-fade-${k}`)).toHaveAttribute("data-on", "false");
@@ -339,7 +364,7 @@ test("a run larger than the panel opens on its running node, with edge fades and
 test("a run only a little wider than the panel is shown whole, scaled to fit, with nothing cut", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openRuns(page, "default");
-  await page.getByTestId("run-row").filter({ hasText: "omher v0.2" }).click();
+  await pickRow(page, "omher v0.2");
   const box = panel(page);
   const graph = box.getByTestId("run-graph");
   await expect(graph).toHaveAttribute("data-fit", /^0\.(8|9)\d$/);
@@ -378,6 +403,7 @@ test("the run list shows the 12 newest, running first, with 'Show all (N)'", asy
   });
   await openRuns(page);
   const rows = page.getByTestId("run-row");
+  await showList(page);
   await expect(rows).toHaveCount(12);
   const states = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-state")));
   const firstIdle = states.findIndex((x) => x !== "running");
@@ -392,11 +418,81 @@ test("the run list shows the 12 newest, running first, with 'Show all (N)'", asy
   await expect(rows).toHaveCount(12);
 });
 
+test("a selected run folds the list into its header; 'All runs' unfolds it; picking a run folds it again", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openRuns(page);
+  const toggle = page.getByTestId("run-list-toggle");
+  // folded: no rows, the section header carries the toggle, the selected run's title and state lead the panel
+  await expect(page.getByTestId("panel-runs")).toHaveAttribute("data-list", "closed");
+  await expect(toggle).toHaveText("All 7 runs"); // the bot's 4 and the CLI agents' 3
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByTestId("run-row")).toHaveCount(0);
+  await expect(page.getByTestId("cli-run-row")).toHaveCount(0);
+  await expect(page.getByTestId("run-list-more")).toHaveCount(0);
+  await expect(panel(page).getByTestId("run-state")).toContainText("Running");
+  // the graph starts high and the running node is on screen, whole, with no scrolling
+  const g = (await panel(page).getByTestId("run-graph").boundingBox())!;
+  expect(g.y).toBeLessThanOrEqual(360);
+  const live = (await panel(page).locator('[data-testid="run-node"][data-state="running"]').boundingBox())!;
+  expect(live.y + live.height).toBeLessThanOrEqual(800);
+  expect(await page.locator(".details .pn-scroll").evaluate((e) => e.scrollTop)).toBe(0);
+  // the graph box takes the rest of the panel (at least 320px) and the legend stays inside it
+  const wrap = (await panel(page).locator(".rn-gwrap").boundingBox())!;
+  expect(wrap.height).toBeGreaterThanOrEqual(320);
+  const pane = (await page.locator(".details .pn-scroll").boundingBox())!;
+  const leg = (await panel(page).getByTestId("run-legend").boundingBox())!;
+  expect(leg.y + leg.height).toBeLessThanOrEqual(pane.y + pane.height + 0.5);
+  // the toggle unfolds both lists; picking a run folds them away and opens it
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByTestId("run-row")).toHaveCount(4);
+  await expect(page.getByTestId("cli-run-row")).toHaveCount(3);
+  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await expect(panel(page)).toHaveAttribute("data-run", FAN);
+  await expect(page.getByTestId("run-row")).toHaveCount(0);
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  // the toggle also folds the list back without picking
+  await toggle.click();
+  await expect(page.getByTestId("run-row")).toHaveCount(4);
+  await toggle.click();
+  await expect(page.getByTestId("run-row")).toHaveCount(0);
+  await expect(panel(page)).toHaveAttribute("data-run", FAN);
+});
+
+test("the panel plan card is one line of words; the layer chips get a second line only when they all fit", async ({ page }) => {
+  await openRuns(page);
+  const plan = panel(page).getByTestId("run-plan");
+  const top = plan.locator(".rp-top");
+  const lh = await top.evaluate((e) => e.getBoundingClientRect().height);
+  expect(lh).toBeLessThanOrEqual(22);
+  await expect(top).toContainText("3 layers · 6 parts");
+  await expect(top.getByTestId("run-plan-counts")).toContainText("3 done");
+  // the goal moves to the card's tooltip in the panel
+  await expect(plan.locator(".rp-goal")).toHaveCount(0);
+  expect(await plan.getAttribute("title")).toContain("OMH suggests its own skills");
+  const chips = plan.getByTestId("run-plan-chips");
+  await expect(chips).toHaveAttribute("data-fits", "true");
+  await expect(chips).toBeVisible();
+  // a one-layer run has no chip row (it would repeat "1 layer")
+  await pickRow(page, "Ship the API fix", "cli-run-row");
+  await expect(panel(page).getByTestId("run-plan")).toContainText("1 layer · ");
+  await expect(panel(page).getByTestId("run-plan-chips")).toBeHidden();
+  // a run with more layers than one line holds: no chips, the card stays two rows shorter
+  await openRuns(page, "default");
+  await pickRow(page, "Big run");
+  const big = panel(page).getByTestId("run-plan-chips");
+  const fits = await big.getAttribute("data-fits");
+  const ol = await big.locator("ol").evaluate((e) => [e.scrollWidth, e.clientWidth]);
+  expect(fits).toBe(ol[0] <= ol[1] + 1 ? "true" : "false");
+  expect((await panel(page).getByTestId("run-plan").boundingBox())!.height).toBeLessThanOrEqual(fits === "true" ? 64 : 40);
+});
+
 test("the legend under the panel graph is never clipped by the panel's bottom", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openRuns(page);
-  for (const pick of [() => page.getByTestId("cli-run-row").first(), () => page.getByTestId("run-row").first()]) {
-    await pick().click();
+  for (const id of ["cli-run-row", "run-row"]) {
+    await showList(page);
+    await page.getByTestId(id).first().click();
     const legend = panel(page).getByTestId("run-legend");
     await expect(legend).toBeVisible();
     const pane = (await page.locator(".details .pn-scroll").boundingBox())!;
@@ -431,7 +527,7 @@ test("⌘⇧G and Expand open the full view over the chat; Esc and × close it; 
 
 test("full view: whole titles, a model mark on every routed node, route pill on one line", async ({ page }) => {
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await pickRow(page, "Codex coexistence fixes");
   await page.getByTestId("graph-expand").click();
   const f = full(page);
   const t5 = f.locator('[data-node="t5-verify"]');
@@ -496,7 +592,7 @@ test("reduced motion: no entrance, no shimmer, no pulse", async ({ browser }) =>
 
 test("full view: drag moves a card and its edges; the position is kept; Reset restores; a click opens the drawer", async ({ page }) => {
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await pickRow(page, "Codex coexistence fixes");
   await page.getByTestId("graph-expand").click();
   const f = full(page);
   await page.waitForTimeout(1600); // entrance done
@@ -635,7 +731,8 @@ test("plan card: title, goal, layers as chips, counts and time, first in the pan
   const [py, gy] = [(await plan.boundingBox())!.y, (await panel(page).getByTestId("run-graph").boundingBox())!.y];
   expect(py).toBeLessThan(gy);
   await expect(plan).toContainText("3 layers · 6 parts");
-  await expect(plan).toContainText("OMH suggests its own skills");
+  // the panel keeps the goal in the card's tooltip; the full view prints it
+  expect(await plan.getAttribute("title")).toContain("OMH suggests its own skills");
   expect(await plan.getByTestId("run-plan-layer").allInnerTexts()).toEqual(["L1 · 2", "L2 · 3", "L3 · 1"]);
   const counts = plan.getByTestId("run-plan-counts");
   // the failed node's two repairs are done: it counts as repaired, not as an open failure
@@ -646,12 +743,13 @@ test("plan card: title, goal, layers as chips, counts and time, first in the pan
   await page.getByTestId("graph-expand").click();
   const fp = full(page).getByTestId("run-plan");
   await expect(fp).toBeVisible();
+  await expect(fp.locator(".rp-goal")).toContainText("OMH suggests its own skills");
   expect(await fp.getByTestId("run-plan-layer").allInnerTexts()).toEqual(["L1 Plan + Build · 2 parts", "L2 Repair + Check · 3 parts", "L3 Verify · 1 part"]);
 });
 
 test("a run that has not started: 'Starts in 0:..' with Start now / Edit, which only prefill the composer", async ({ page }) => {
   await openRuns(page, "default");
-  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence (next)" }).click();
+  await pickRow(page, "Codex coexistence (next)");
   const plan = panel(page).getByTestId("run-plan");
   await expect(plan.getByTestId("run-plan-time")).toHaveText(/^Starts in 0:(0\d|10)$/);
   await plan.getByTestId("run-plan-start").click();
@@ -667,7 +765,7 @@ test("a run that has not started: 'Starts in 0:..' with Start now / Edit, which 
 
 test("cards show the helper's model and a one-line route pill from the route record", async ({ page }) => {
   await openRuns(page, "default");
-  await page.getByTestId("run-row").filter({ hasText: "omher v0.2" }).click();
+  await pickRow(page, "omher v0.2");
   const box = panel(page);
   const card = box.locator('[data-node="t7-t10-usage"]');
   await expect(card.getByTestId("node-mark")).toHaveAttribute("data-mark", "claude");
@@ -689,6 +787,7 @@ test("cards show the helper's model and a one-line route pill from the route rec
 
 test("a delegate fan-out without a dag is its own one-layer run", async ({ page }) => {
   await openRuns(page, "default");
+  await showList(page);
   const row = page.locator('[data-testid="run-row"][data-kind="delegate"]').first();
   await expect(row).toContainText("helpers");
   await row.click();
@@ -795,6 +894,7 @@ const CLI_LIVE = "claude:live-session";
 
 test("CLI runs: listed under the bot's own runs with the agent's mark and name; each opens as a graph", async ({ page }) => {
   await openRuns(page);
+  await showList(page);
   // the bot's own list is unchanged
   await expect(page.getByTestId("run-row")).toHaveCount(4);
   const rows = page.getByTestId("cli-run-row");
@@ -844,6 +944,7 @@ test("CLI runs: listed under the bot's own runs with the agent's mark and name; 
   await expect(page.getByTestId("run-summary")).toContainText("The Windows build compiles");
 
   // Codex: OpenAI marks with the child's own model
+  await showList(page);
   await rows.nth(2).click();
   await expect(box).toHaveAttribute("data-run", CLI_CODEX);
   await expect(box.getByTestId("node-mark")).toHaveCount(2);
@@ -864,6 +965,7 @@ for (const theme of ["dark", "light"] as const) {
     await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
     await openRuns(page);
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await showList(page);
     await page.getByTestId("cli-run-row").first().click();
     const box = panel(page);
     await expect(box).toHaveAttribute("data-run", CLI_LIVE);
@@ -882,6 +984,7 @@ for (const theme of ["dark", "light"] as const) {
     await page.waitForTimeout(900);
     await page.screenshot({ path: join(SHOTS, `T6-cli-full-${theme}.png`), animations: "disabled" });
     await page.keyboard.press("Escape");
+    await showList(page);
     await page.getByTestId("cli-run-row").nth(2).click();
     await expect(box).toHaveAttribute("data-run", CLI_CODEX);
     await page.waitForTimeout(900);

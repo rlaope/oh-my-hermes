@@ -14,7 +14,7 @@ export type GraphMode = "panel" | "full";
 // card heights carry the node's weight: a lead (plans, or unblocks several parts) is tallest, a leaf compact, the
 // closing gate sits in a wider column
 const SIZE = {
-  panel: { cardH: 80, heights: { lead: 90, normal: 80, leaf: 64, gate: 80 }, gateW: 1.15, gutter: 30, rowGap: 14, pad: 12, minCard: 100, maxCard: 168, labelH: 24, mark: 14 },
+  panel: { cardH: 80, heights: { lead: 90, normal: 80, leaf: 64, gate: 80 }, gateW: 1.15, gutter: 30, rowGap: 14, pad: 12, minCard: 100, maxCard: 300, labelH: 24, mark: 14 },
   full: { cardH: 160, heights: { lead: 180, normal: 160, leaf: 140, gate: 168 }, gateW: 1.2, loose: true, gutter: 88, rowGap: 36, pad: 24, minCard: 220, maxCard: 280, labelH: 32, mark: 18 },
 };
 const STAGGER = { panel: 50, full: 70 };
@@ -148,8 +148,9 @@ export function RunGraph({
   run: AgentRun;
   handoffs: Record<string, string>;
   mode: GraphMode;
-  /** Panel: told whether the run is larger than the box (the panel then offers the full view). */
-  onOverflow?: (over: boolean) => void;
+  /** Panel: told whether the run is larger than the box and how many parts are not whole on screen (the panel
+   *  then offers the full view). */
+  onOverflow?: (over: boolean, hidden: number) => void;
   /** Panel: the box's height cap (what the side panel has left under the plan card). */
   maxH?: number;
   /** The bot's own model: the last fallback for a node's logo. */
@@ -328,6 +329,8 @@ export function RunGraph({
   // node, and soft fades on the sides that hold more
   const pbox = useRef<HTMLDivElement>(null);
   const [more, setMore] = useState({ l: false, r: false, t: false, b: false });
+  // how many parts are not whole on screen: the panel's "Open full view" hint says so ("7 more")
+  const [hid, setHid] = useState(0);
   const measure = useCallback(() => {
     const el = pbox.current;
     if (!el) return;
@@ -338,7 +341,15 @@ export function RunGraph({
       b: el.scrollTop + el.clientHeight < el.scrollHeight - 1,
     };
     setMore((p) => (p.l === m.l && p.r === m.r && p.t === m.t && p.b === m.b ? p : m));
-  }, []);
+    // the box shows the run at its own size (a scaled one never overflows), so layout boxes compare with the scroll
+    const [x0, y0, x1, y1] = [el.scrollLeft, el.scrollTop, el.scrollLeft + el.clientWidth, el.scrollTop + el.clientHeight];
+    let h = 0;
+    for (const [id, p] of lay.pos) {
+      const s = lay.size.get(id)!;
+      if (p.x < x0 - 1 || p.x + s.w > x1 + 1 || p.y < y0 - 1 || p.y + s.h > y1 + 1) h++;
+    }
+    setHid(h);
+  }, [lay]);
   // a run only a little larger than the box is shown whole, scaled down (auto-fit); a larger one keeps its size and
   // the box scrolls to its focus node
   const fitK = useMemo(() => {
@@ -358,11 +369,14 @@ export function RunGraph({
       if (f) {
         const p = lay.pos.get(f.id)!;
         const s = lay.size.get(f.id)!;
-        // start at a column's left edge (never a sliced card) as far left as still shows the whole focus card
+        // start at a column's left edge or at the run's right end: of the starts that show the whole focus card, the
+        // one that puts it nearest the middle, so the parts after it (a repair, the closing check) show too. A column
+        // cut at the box's side sits under that side's fade.
         const maxL = el.scrollWidth - el.clientWidth;
-        const starts = lay.columns.map((c) => Math.max(0, c.x - z.pad)).sort((x, y) => x - y);
-        const fits = starts.find((x) => x <= p.x && p.x + s.w + z.pad <= x + el.clientWidth);
-        el.scrollLeft = Math.min(maxL, fits ?? Math.max(0, p.x + s.w / 2 - el.clientWidth / 2));
+        const mid = p.x + s.w / 2 - el.clientWidth / 2;
+        const starts = [...lay.columns.map((c) => Math.max(0, c.x - z.pad)).filter((x) => x < maxL), maxL];
+        const fits = starts.filter((x) => x <= p.x && p.x + s.w + z.pad <= x + el.clientWidth).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid))[0];
+        el.scrollLeft = Math.min(maxL, fits ?? Math.max(0, mid));
         el.scrollTop = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, p.y + s.h / 2 - el.clientHeight / 2));
       } else {
         el.scrollLeft = 0;
@@ -374,8 +388,8 @@ export function RunGraph({
   }, [run.id, mode, lay, maxH, fitK]);
   const overflows = more.l || more.r || more.t || more.b;
   useEffect(() => {
-    if (mode === "panel") onOverflow?.(overflows);
-  }, [overflows, mode, onOverflow]);
+    if (mode === "panel") onOverflow?.(overflows, overflows ? hid : 0);
+  }, [overflows, hid, mode, onOverflow]);
 
   const [hover, setHover] = useState<string | null>(null);
   const moved = Object.keys(over).length > 0;
@@ -393,6 +407,16 @@ export function RunGraph({
   }
   const edges = moved ? lay.edges.map((e) => ({ ...e, ...edgePath(at(e.from), sz(e.from), at(e.to), sz(e.to), lanes, z.rowGap) })) : lay.edges;
   const labels = useMemo(() => distinctLabels(run.nodes), [run.nodes]);
+  // panel: each column's label sits just over its own first card (a short column is centred against the tallest
+  // one, and a label at the top of the box then floats far above it)
+  const colTop = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const n of run.nodes) {
+      const y = lay.pos.get(n.id)!.y - z.labelH;
+      m.set(n.layer, Math.min(m.get(n.layer) ?? Infinity, y));
+    }
+    return m;
+  }, [run.nodes, lay, z.labelH]);
   // edges meeting at one card share one arrowhead (the last solid one wins, so a dashed edge never colours it)
   const arrowFor = new Map<string, string>();
   for (const e of [...edges].sort((a, b) => Number(!a.broken) - Number(!b.broken))) arrowFor.set(e.to, e.key);
@@ -407,8 +431,8 @@ export function RunGraph({
       data-testid="run-canvas"
     >
       {lay.columns.map((c) => (
-        <div key={c.layer} className="rg-col" style={{ left: c.x, top: c.y, width: lay.cardW }} data-testid="run-col">
-          {c.label}
+        <div key={c.layer} className="rg-col" style={{ left: c.x, top: mode === "panel" ? (colTop.get(c.layer) ?? c.y) : c.y, width: lay.cardW }} data-testid="run-col">
+          {mode === "panel" && lay.columns.length > 1 ? `L${c.layer + 1} ${c.label}` : c.label}
         </div>
       ))}
       <svg className={`rg-edges${hover ? " focus" : ""}`} width={lay.w} height={lay.h} aria-hidden overflow="visible">

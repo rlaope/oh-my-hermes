@@ -2,7 +2,7 @@
 // plus the full-size view over the chat column (⌘⇧G / Expand). Below the bot's own runs, the CLI agents' runs on
 // this machine (Claude Code subagents, Codex sub-agents) in the same list style. Nothing here retries, settles or
 // cancels.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
 import { cliName, sortRuns, span, type AgentRunSummary, type RunDetail } from "../lib/runs";
 import { getStore, useStore } from "../state/store";
@@ -57,31 +57,31 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
   return [ref, w];
 }
 
-const MIN_GRAPH_H = 220;
-const MAX_GRAPH_H = 460;
+const MIN_GRAPH_H = 320;
 const LEGEND_H = 40;
 
-/** The panel graph's height cap: the side panel's height less the run's own header and plan card above the graph
- *  and the pinned legend below it (the list above scrolls away), between MIN_GRAPH_H and MAX_GRAPH_H. The box then
- *  fits on screen whole and its own scroll does the rest. */
-function useRoom(ref: React.RefObject<HTMLElement | null>, ready: boolean): number {
-  const [h, setH] = useState(MAX_GRAPH_H);
+/** The panel graph box's height: the rest of the side panel under the run's header and plan card, less the pinned
+ *  legend, and at least MIN_GRAPH_H. A larger run scrolls inside the box; a shorter one sits near its top. With the run list collapsed everything above the graph counts, so the box ends
+ *  at the panel's bottom with nothing to scroll; with the list open the list scrolls away and only the run's own
+ *  header and plan card count. */
+function useRoom(ref: React.RefObject<HTMLElement | null>, ready: boolean, listOpen: boolean): number {
+  const [h, setH] = useState(MIN_GRAPH_H);
   useLayoutEffect(() => {
     const el = ref.current;
     const sc = el?.closest(".pn-scroll") as HTMLElement | null;
     const sec = el?.closest(".rn-run") as HTMLElement | null;
     if (!el || !sc || !sec) return;
     const read = () => {
-      const above = el.getBoundingClientRect().top - sec.getBoundingClientRect().top;
-      const room = Math.floor(sc.clientHeight - above - LEGEND_H - 12);
-      setH(Math.max(MIN_GRAPH_H, Math.min(MAX_GRAPH_H, room)));
+      const top = listOpen ? sec.getBoundingClientRect().top : sc.getBoundingClientRect().top - sc.scrollTop;
+      const above = el.getBoundingClientRect().top - top;
+      setH(Math.max(MIN_GRAPH_H, Math.floor(sc.clientHeight - above - LEGEND_H - 12)));
     };
     read();
     const ro = new ResizeObserver(read);
     ro.observe(sc);
     if (sc.firstElementChild) ro.observe(sc.firstElementChild);
     return () => ro.disconnect();
-  }, [ref, ready]);
+  }, [ref, ready, listOpen]);
   return h;
 }
 
@@ -109,7 +109,7 @@ function useRuns(bot: string, n = 0) {
 }
 
 /** One run in the list: state dot, title, tags, done/total and time. CLI runs carry their agent's mark and name. */
-function RunRow({ r, on, nowS, testId = "run-row" }: { r: AgentRunSummary; on: boolean; nowS: number; testId?: string }) {
+function RunRow({ r, on, nowS, onPick, testId = "run-row" }: { r: AgentRunSummary; on: boolean; nowS: number; onPick: () => void; testId?: string }) {
   const s = useStore();
   return (
     <li>
@@ -121,7 +121,10 @@ function RunRow({ r, on, nowS, testId = "run-row" }: { r: AgentRunSummary; on: b
         data-kind={r.kind}
         data-agent={r.agent}
         aria-current={on ? "true" : undefined}
-        onClick={() => s.openRun(r.id)}
+        onClick={() => {
+          s.openRun(r.id);
+          onPick();
+        }}
         title={[r.goal || r.title, r.cwd].filter(Boolean).join(" · ")}
       >
         <i className={r.state === "running" ? "rn-live" : `rn-dot ${r.state}${r.state === "done" && r.counts.failed > 0 ? " mixed" : ""}`} aria-label={r.state} />
@@ -201,6 +204,12 @@ function StatusBadge({ run, time }: { run: Pick<AgentRunSummary, "state" | "coun
   );
 }
 
+const Chevron = ({ up }: { up: boolean }) => (
+  <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d={up ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"} />
+  </svg>
+);
+
 const ExpandIcon = () => (
   <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
@@ -212,15 +221,27 @@ export function RunsTab({ bot }: { bot: Bot }) {
   const [n, setN] = useState(0);
   const [all, setAll] = useState(false);
   const [allCli, setAllCli] = useState(false);
+  // with a run selected the lists fold into the run's header ("All runs ▾"), so its graph starts high in the panel
+  const [listOpen, setListOpen] = useState(false);
   const { runs, cli, error } = useRuns(bot.name, n);
   const nowMs = useNow(!!runs?.some((r) => r.state === "running") || cli.some((r) => r.state === "running"));
   if (!runs) return <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label="Loading" />}</div>;
   const selected = pickRun([...runs, ...cli], s.ui.runId);
   const nowS = nowMs / 1000;
+  const lists = !selected || listOpen;
+  const picked = () => setListOpen(false);
   return (
-    <div className="pn-body rn" data-testid="panel-runs">
+    <div className="pn-body rn" data-testid="panel-runs" data-list={lists ? "open" : "closed"}>
       <div className="pn-sec">
-        {bot.display_name}'s runs<span>{runs.length}</span>
+        {bot.display_name}'s runs
+        {selected ? (
+          <button type="button" className="rn-toggle" data-testid="run-list-toggle" aria-expanded={listOpen} onClick={() => setListOpen((v) => !v)}>
+            All {runs.length + cli.length} runs
+            <Chevron up={listOpen} />
+          </button>
+        ) : (
+          <span className="rn-count">{runs.length}</span>
+        )}
         <button type="button" className="pn-ref" onClick={() => setN((x) => x + 1)} title="Refresh" aria-label="Refresh">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" width="12" height="12">
             <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
@@ -234,26 +255,26 @@ export function RunsTab({ bot }: { bot: Bot }) {
           When {bot.display_name} splits work into parallel parts, they show here.
         </div>
       )}
-      {runs.length > 0 && (
+      {lists && runs.length > 0 && (
         <ul className={`rn-list${all ? " all" : ""}`} data-testid="run-list">
           {shownRuns(runs, all, selected?.id).map((r) => (
-            <RunRow key={r.id} r={r} on={r.id === selected?.id} nowS={nowS} />
+            <RunRow key={r.id} r={r} on={r.id === selected?.id} nowS={nowS} onPick={picked} />
           ))}
         </ul>
       )}
-      {runs.length > LIST_CAP && (
+      {lists && runs.length > LIST_CAP && (
         <button type="button" className="rn-more" data-testid="run-list-more" onClick={() => setAll((v) => !v)}>
           {all ? "Show fewer" : `Show all (${runs.length})`}
         </button>
       )}
-      {cli.length > 0 && (
+      {lists && cli.length > 0 && (
         <>
           <div className="pn-sec rn-sec2">
             CLI agents<span>{cli.length}</span>
           </div>
           <ul className={`rn-list${allCli ? " all" : ""}`} data-testid="cli-run-list">
             {shownRuns(cli, allCli, selected?.id).map((r) => (
-              <RunRow key={r.id} r={r} on={r.id === selected?.id} nowS={nowS} testId="cli-run-row" />
+              <RunRow key={r.id} r={r} on={r.id === selected?.id} nowS={nowS} onPick={picked} testId="cli-run-row" />
             ))}
           </ul>
           {cli.length > LIST_CAP && (
@@ -263,19 +284,24 @@ export function RunsTab({ bot }: { bot: Bot }) {
           )}
         </>
       )}
-      {selected && <PanelRun key={selected.id} bot={bot} summary={selected} nowS={nowS} />}
+      {selected && <PanelRun key={selected.id} bot={bot} summary={selected} nowS={nowS} listOpen={lists} />}
     </div>
   );
 }
 
-function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; nowS: number }) {
+function PanelRun({ bot, summary, nowS, listOpen }: { bot: Bot; summary: AgentRunSummary; nowS: number; listOpen: boolean }) {
   const s = useStore();
   const { detail, error } = useDetail(bot.name, summary);
   const [open, setOpen] = useState<string | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
   const [over, setOver] = useState(false);
+  const [hidden, setHidden] = useState(0);
+  const onOverflow = useCallback((o: boolean, h: number) => {
+    setOver(o);
+    setHidden(h);
+  }, []);
   const run = detail?.run;
-  const room = useRoom(ref, !!run);
+  const room = useRoom(ref, !!run, listOpen);
   // a box taller than what the panel shows: bring the run's box into view once, so its focus node is on screen
   useEffect(() => {
     const el = ref.current;
@@ -297,12 +323,12 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
         </button>
       </div>
       {run && <PlanCard run={run} mode="panel" nowS={nowS} names={layerNames(run)} />}
-      <div className="rn-gwrap" ref={ref}>
+      <div className="rn-gwrap" ref={ref} style={{ height: room }}>
         {!run || !width ? (
           <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label="Loading" />}</div>
         ) : (
           <>
-            <RunGraph run={run} handoffs={detail!.handoffs} mode="panel" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} onOverflow={setOver} maxH={room} />
+            <RunGraph run={run} handoffs={detail!.handoffs} mode="panel" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} onOverflow={onOverflow} maxH={room - 2} />
           </>
         )}
       </div>
@@ -312,6 +338,11 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
           extra={
             over ? (
               <button type="button" className="rn-full-hint" data-testid="run-full-hint" onClick={() => s.setRunsFull(true)} title="Open the whole run over the chat">
+                {hidden > 0 && (
+                  <span className="rn-hidden" data-testid="run-hidden">
+                    {hidden} more ·
+                  </span>
+                )}
                 Open full view <kbd>{fullKey}</kbd>
               </button>
             ) : null

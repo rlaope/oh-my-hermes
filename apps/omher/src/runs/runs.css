@@ -174,7 +174,7 @@
   border-radius: 2px;
   background: rgba(var(--rn-green), 0.85);
 }
-.rn-badge.running .rn-bar i:not(.bad) {
+.rn-badge.running .rn-bar i:not(.bad):not(.run):not(.fix) {
   background: rgba(var(--rn-green), 0.85);
 }
 .rn-bar i.bad {
@@ -189,12 +189,33 @@
   line-height: 1.45;
   color: var(--quiet);
 }
+/* the graph box takes the rest of the panel's height (at least 320px); a shorter run sits near its top (at most 24px
+   down), so it reads from the top like a page */
 .rn-gwrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--bg);
+  /* a faint dot grid: the box reads as the run's canvas, not an empty frame, when the run is small */
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.2px) 0 0 / 16px 16px,
+    var(--bg);
   overflow: hidden;
+}
+.rn-gwrap::before,
+.rn-gwrap::after {
+  content: "";
+  flex: 1 1 0;
+}
+.rn-gwrap::before {
+  max-height: 24px;
+}
+.rn-gwrap::after {
+  flex-grow: 2;
+}
+.rn-gwrap > .rg-panel {
+  flex: none;
 }
 .rg-expand {
   flex: none;
@@ -870,6 +891,9 @@
   font-size: 12px;
   color: var(--body);
 }
+.rg-panel .rg-col {
+  color: var(--muted);
+}
 .rg-full .rg-col {
   font-size: 12px;
   font-weight: 500;
@@ -1338,8 +1362,46 @@
   opacity: 0.85;
 }
 .rp-panel {
-  margin: 0 0 12px;
-  padding: 10px 12px;
+  margin: 0 0 8px;
+  padding: 7px 10px;
+}
+/* panel: one line of words, the layer chips under it only when every chip fits on one line */
+.rp-line {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.rp-panel .rp-title {
+  flex: none;
+  font-size: 12px;
+}
+.rp-panel .rp-counts {
+  flex-wrap: nowrap;
+  margin-left: 0;
+  gap: 8px;
+  overflow: hidden;
+}
+.rp-panel .rp-row {
+  margin-top: 6px;
+}
+.rp-panel .rp-layers {
+  flex-wrap: nowrap;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.rp-panel .rp-row.rp-hide {
+  height: 0;
+  margin: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+.rp-panel .rp-act {
+  margin-top: 6px;
 }
 .rp-full {
   margin: 12px 16px 0;
@@ -1491,7 +1553,8 @@
 }
 .rn-bar i.run {
   right: auto;
-  background: linear-gradient(90deg, rgb(var(--rn-violet)), rgb(var(--rn-pink)));
+  /* under way, not done: a faint brand stripe, so 0/1 never reads as a nearly full bar */
+  background: repeating-linear-gradient(135deg, rgba(var(--rn-pink), 0.55) 0 3px, rgba(var(--rn-violet), 0.2) 3px 6px);
 }
 /* a repair link: solid amber, it is the way out of a failure, not a broken dependency */
 .rg-edge.repair .rg-line,
@@ -1810,7 +1873,7 @@
 .rg-fade.r {
   top: 0;
   bottom: 0;
-  width: 56px;
+  width: 72px;
 }
 .rg-fade.t,
 .rg-fade.b {
@@ -1820,11 +1883,11 @@
 }
 .rg-fade.l {
   left: 0;
-  background: linear-gradient(90deg, var(--bg) 45%, color-mix(in srgb, var(--bg) 60%, transparent) 75%, transparent);
+  background: linear-gradient(90deg, var(--bg) 66%, color-mix(in srgb, var(--bg) 55%, transparent) 84%, transparent);
 }
 .rg-fade.r {
   right: 0;
-  background: linear-gradient(270deg, var(--bg) 45%, color-mix(in srgb, var(--bg) 60%, transparent) 75%, transparent);
+  background: linear-gradient(270deg, var(--bg) 66%, color-mix(in srgb, var(--bg) 55%, transparent) 84%, transparent);
 }
 .rg-fade.t {
   top: 0;
@@ -1873,6 +1936,11 @@
   background: var(--hover);
   color: var(--ink);
 }
+.rn-hidden {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 .rn-full-hint kbd {
   font: inherit;
   font-size: 10.5px;
@@ -1893,6 +1961,24 @@
   border-radius: var(--r-sm);
   font-size: 11px;
   color: var(--muted);
+}
+.rn-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--body);
+}
+.rn-toggle:hover,
+.rn-toggle[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--ink);
 }
 .rn-more:hover {
   background: var(--hover);
