@@ -914,6 +914,9 @@ class Conn:
         self.last_elsewhere_emit = -1e9
         self.elsewhere_sig = None
         self.prompts: dict[str, int | None] = {}  # open prompt_id -> execution_generation
+        self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
+        self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
+        self.clarify_batch: bool | None = None  # the gateway asks a multi-question clarify as one request
 
     @property
     def connected(self) -> bool:
@@ -1125,6 +1128,9 @@ class Bridge:
         conn.in_turn = False
         conn.main_id = conn.main_stored = conn.generation = None
         conn.prompts.clear()
+        conn.asked.clear()
+        conn.batches.clear()
+        conn.clarify_batch = None
         if pump is not None and pump is not asyncio.current_task():
             pump.cancel()
             with contextlib.suppress(BaseException):
@@ -1168,6 +1174,8 @@ class Bridge:
             raise
 
     async def _on_frame(self, conn: Conn, frame) -> None:
+        if isinstance(frame, dict) and frame.get("method") == "clarify" and isinstance(frame.get("id"), str):
+            return await self._batch_clarify(conn, frame)
         if not isinstance(frame, dict) or frame.get("method") != "event":
             return
         params = frame.get("params")
@@ -1197,6 +1205,8 @@ class Bridge:
     async def _end_turn(self, conn: Conn, outcome: str, error: str | None = None) -> None:
         conn.in_turn = False
         conn.prompts.clear()
+        conn.asked.clear()
+        conn.batches.clear()
         fields = {"outcome": outcome}
         if error:
             fields["error"] = error
@@ -1266,18 +1276,77 @@ class Bridge:
             if pid:
                 conn.prompts[pid] = p.get("execution_generation", params.get("execution_generation"))
                 await self._emit_clarify(conn, pid, p)
+        elif typ in ("approval.settled", "clarify.settled"):
+            # The wait ended without omher's answer: the gateway timed it out, or it was answered elsewhere.
+            pid = str(p.get("prompt_id") or "")
+            if pid in conn.prompts:
+                conn.prompts.pop(pid, None)
+                await self._emit_expired(conn, pid, None)
+        elif typ == "request.cancel":
+            rid = str(p.get("id") or "")
+            if rid in conn.batches:
+                conn.batches.pop(rid, None)
+                reason = str(p.get("reason") or "")
+                await self._emit_expired(conn, rid, {"timeout": "timeout", "resolved": "resolved"}.get(reason, "cancelled"))
+
+    def _timeout(self, conn: Conn, pid: str, p: dict) -> dict:
+        t = p.get("timeout_s")
+        t = float(t) if isinstance(t, (int, float)) and not isinstance(t, bool) and t > 0 else None
+        conn.asked.setdefault(pid, (self.clock(), t))
+        return {"timeout_s": t} if t is not None else {}
 
     async def _emit_approval(self, conn: Conn, pid: str, p: dict) -> None:
         choices = [c for c in (p.get("choices") or ["once", "deny"]) if c in ("once", "session", "always", "deny")]
         await self.emit("approval.request", conn.name, request_id=pid,
                         title=str(p.get("description") or "Allow this command?"),
-                        command=str(p.get("command") or ""), choices=choices or ["once", "deny"])
+                        command=str(p.get("command") or ""), choices=choices or ["once", "deny"],
+                        **self._timeout(conn, pid, p))
 
     async def _emit_clarify(self, conn: Conn, pid: str, p: dict) -> None:
         fields = {"request_id": pid, "question": str(p.get("question") or "")}
         if p.get("choices"):
             fields["choices"] = [str(c) for c in p["choices"]]
-        await self.emit("clarify.request", conn.name, **fields)
+            if p.get("multi_select") is True:
+                fields["multi_select"] = True
+        await self.emit("clarify.request", conn.name, **fields, **self._timeout(conn, pid, p))
+
+    async def _batch_clarify(self, conn: Conn, frame: dict) -> None:
+        """Hermes' clarify tool asking several questions at once (a server->client ``clarify`` request with
+        ``questions``): one interview card. Only the main chat's asks are shown; omher answers them per
+        question with ``clarify.lock`` (op_clarify_respond)."""
+        params = frame.get("params") if isinstance(frame.get("params"), dict) else {}
+        if params.get("session_id") not in conn.main_ids:
+            return
+        rid = frame["id"]
+        questions = []
+        for q in params.get("questions") or []:
+            if not isinstance(q, dict) or not isinstance(q.get("qid"), str) or not str(q.get("question") or "").strip():
+                continue
+            item = {"qid": q["qid"], "question": str(q["question"])}
+            if q.get("choices"):
+                item["choices"] = [str(c) for c in q["choices"]]
+                if q.get("multi_select") is True:
+                    item["multi_select"] = True
+            questions.append(item)
+        if not questions:
+            return
+        conn.batches[rid] = [q["qid"] for q in questions]
+        first = questions[0]
+        fields = {"request_id": rid, "question": first["question"]}
+        if len(questions) == 1:
+            fields.update({k: first[k] for k in ("choices", "multi_select") if k in first})
+        else:
+            fields["questions"] = questions
+        await self.emit("clarify.request", conn.name, **fields, **self._timeout(conn, rid, params))
+
+    async def _emit_expired(self, conn: Conn, pid: str, reason: str | None) -> None:
+        asked_at, timeout = conn.asked.pop(pid, (None, None))
+        if reason is None:  # a settled prompt says no more: past its known deadline it timed out
+            if asked_at is None or timeout is None:
+                reason = "cancelled"
+            else:
+                reason = "timeout" if self.clock() - asked_at >= timeout - 1.0 else "resolved"
+        await self.emit("prompt.expired", conn.name, request_id=pid, reason=reason)
 
     # ------------------------------------------------------------ main chat
 
@@ -1319,12 +1388,17 @@ class Bridge:
                   "reasoning": str(info.get("reasoning_effort") or bot["reasoning"])}
         prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
 
+        asks = [x for x in (snap.get("open_requests") or [])
+                if isinstance(x, dict) and x.get("method") == "clarify" and isinstance(x.get("id"), str)]
+
         async def replay():  # prompts still waiting on the person
             for x in prompts:
                 pid = str(x["prompt_id"])
                 conn.prompts[pid] = x.get("execution_generation")
                 await (self._emit_clarify if x.get("kind") == "clarify" else self._emit_approval)(conn, pid, x)
-        return Reply(result, replay if prompts else None)
+            for x in asks:
+                await self._batch_clarify(conn, x)
+        return Reply(result, replay if prompts or asks else None)
 
     async def op_chat_send(self, p) -> dict:
         text = p.get("text")
@@ -1345,12 +1419,30 @@ class Bridge:
                 raise BridgeError("bad_request", "that session has no thread to reply in")
             text = f"{text.rstrip()}\n\n{reply_block(*ref)}"
         input_id = str(uuid.uuid4())
+        await self._probe_clarify_batch(conn)
         await self._submit(conn, main, text, input_id)
         return {"input_id": input_id}
 
+    async def _probe_clarify_batch(self, conn: Conn) -> None:
+        """Ask once per connection whether the gateway can send a turn's several clarify questions as one
+        request (``canonical_clarify_batch``). Sent with no flags, so it changes nothing on the gateway; an
+        older gateway that does not know the method leaves it off (one card per question, as before)."""
+        if conn.clarify_batch is not None:
+            return
+        try:
+            caps = await self._call(conn, "client.capabilities")
+        except BridgeError:
+            raise
+        except Exception as e:
+            if not _named(e, "GatewayRPCError"):
+                raise
+            caps = {}
+        conn.clarify_batch = isinstance(caps, dict) and caps.get("canonical_clarify_batch") is True
+
     async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str):
         # The single place a turn is sent. It takes the main chat id and nothing else.
-        return await self._call(conn, "prompt.submit", session_id=main_id, text=text, input_id=input_id)
+        batch = {"clarify_batch": True} if conn.clarify_batch else {}
+        return await self._call(conn, "prompt.submit", session_id=main_id, text=text, input_id=input_id, **batch)
 
     async def _generation(self, conn: Conn, main: str):
         if conn.generation is None:
@@ -1371,17 +1463,34 @@ class Bridge:
         conn = await self._conn(p.get("bot"))
         main = await self._main(conn)
         gen = conn.prompts.pop(rid, None)
+        conn.asked.pop(rid, None)
         await self._call(conn, "approval.respond", session_id=main, prompt_id=rid, choice=choice,
                          execution_generation=gen if gen is not None else await self._generation(conn, main))
         return {}
 
     async def op_clarify_respond(self, p) -> dict:
-        answer, rid = p.get("answer"), p.get("request_id")
-        if not isinstance(answer, str) or not isinstance(rid, str) or not rid:
+        answer, answers, rid = p.get("answer"), p.get("answers"), p.get("request_id")
+        if answers is not None:
+            if not isinstance(answers, dict) or not all(
+                    isinstance(k, str) and (v is None or isinstance(v, str)) for k, v in answers.items()):
+                raise BridgeError("bad_request", "answers must map question ids to text or null")
+        if (not isinstance(answer, str) and answers is None) or not isinstance(rid, str) or not rid:
             raise BridgeError("bad_request", "need request_id and answer")
         conn = await self._conn(p.get("bot"))
         main = await self._main(conn)
+        qids = conn.batches.get(rid)
+        if qids is not None:
+            # An interview: lock every question (null = skipped); the last lock hands Hermes the whole set.
+            got = answers if answers is not None else {qids[0]: answer}
+            for qid in qids:
+                await self._call(conn, "clarify.lock", request_id=rid, question_id=qid, answer=got.get(qid))
+            conn.batches.pop(rid, None)
+            conn.asked.pop(rid, None)
+            return {}
+        if answer is None:  # one gateway card per question: only the first answer applies
+            answer = next((v for v in answers.values() if v is not None), "")
         gen = conn.prompts.pop(rid, None)
+        conn.asked.pop(rid, None)
         await self._call(conn, "clarify.respond", session_id=main, prompt_id=rid, answer=answer,
                          execution_generation=gen if gen is not None else await self._generation(conn, main))
         return {}

@@ -1,9 +1,11 @@
 // App-wide keyboard shortcuts. ⌘ on macOS, Ctrl elsewhere:
 //   ⌘1…⌘9  open bot 1 to 9 (sidebar order)      ⌘K  focus the bot search
 //   ⌘.     show or hide Details                    ⌘,  Settings
+//   ⌘J     jump to the next approval or question waiting on you (any bot)
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
+// An approval card's own 1/2/3 keys live on the card (src/chat/cards), never here.
 import { useEffect } from "react";
-import { getStore } from "../state/store";
+import { getStore, selectAsks, selectSidebarBots, type Ask, type FocusAsk } from "../state/store";
 
 export const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -11,16 +13,24 @@ export const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/
 export function shortcutFor(
   e: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean },
   mac: boolean,
-): { kind: "bot"; index: number } | { kind: "search" | "details" | "settings" | "stop" } | null {
+): { kind: "bot"; index: number } | { kind: "search" | "details" | "settings" | "stop" | "next-ask" } | null {
   const mod = mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
   if (mod && !e.altKey && !e.shiftKey) {
     if (/^[1-9]$/.test(e.key)) return { kind: "bot", index: Number(e.key) - 1 };
     if (e.key.toLowerCase() === "k") return { kind: "search" };
     if (e.key === ".") return { kind: "details" };
     if (e.key === ",") return { kind: "settings" };
+    if (e.key.toLowerCase() === "j") return { kind: "next-ask" };
   }
   if (e.key === "Escape" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) return { kind: "stop" };
   return null;
+}
+
+/** The ask ⌘J goes to: the one after the last jumped-to (in age order), wrapping; the oldest first. */
+export function nextAsk(asks: Ask[], last: FocusAsk | null): Ask | null {
+  if (!asks.length) return null;
+  const at = last ? asks.findIndex((a) => a.bot === last.bot && a.item.id === last.id) : -1;
+  return asks[(at + 1) % asks.length];
 }
 
 export function useShortcuts(): void {
@@ -45,8 +55,11 @@ export function useShortcuts(): void {
       }
       e.preventDefault();
       if (hit.kind === "bot") {
-        const b = s.bots[hit.index];
+        const b = selectSidebarBots(s)[hit.index];
         if (b) void a.selectBot(b.name);
+      } else if (hit.kind === "next-ask") {
+        const n = nextAsk(selectAsks(s), s.ui.focusAsk);
+        if (n) void a.jumpToAsk(n.bot, n.item.id);
       } else if (hit.kind === "search") {
         const el = document.querySelector<HTMLInputElement>('input[aria-label="Search bots"]');
         el?.focus();

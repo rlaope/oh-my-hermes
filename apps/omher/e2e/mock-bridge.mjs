@@ -5,7 +5,8 @@
 //   node e2e/mock-bridge.mjs --port 5308 [--token T]
 //
 // Without --token it accepts `e2e` (playwright.config.ts) and `dev` (the UI's built-in default URL).
-// Test-control ops (not part of the protocol): mock.calls, mock.submits, mock.emit {events}, mock.reset.
+// Test-control ops (not part of the protocol): mock.calls, mock.submits, mock.emit {events}, mock.reset,
+// mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open).
 import http from "node:http";
 import crypto from "node:crypto";
 
@@ -381,17 +382,27 @@ const OPS = {
     const wait = pending.get(id);
     if (!wait || wait.bot !== b.name || wait.kind !== "approval") throw new OpError("not_found", `no pending approval ${id}`);
     pending.delete(id);
+    clearTimeout(wait.timer);
     resumeApproval(b.name, choice);
     return {};
   },
   "clarify.respond": (p) => {
     const b = needBot(p);
     const id = needStr(p, "request_id");
-    if (typeof p.answer !== "string") throw new OpError("bad_request", "missing answer");
+    const answers = p.answers;
+    if (answers !== undefined) {
+      if (!answers || typeof answers !== "object" || Array.isArray(answers) ||
+          !Object.values(answers).every((v) => v === null || typeof v === "string"))
+        throw new OpError("bad_request", "answers must map question ids to text or null");
+    } else if (typeof p.answer !== "string") throw new OpError("bad_request", "missing answer");
     const wait = pending.get(id);
     if (!wait || wait.bot !== b.name || wait.kind !== "clarify") throw new OpError("not_found", `no pending clarification ${id}`);
     pending.delete(id);
-    resumeClarify(b.name, p.answer);
+    clearTimeout(wait.timer);
+    if (wait.qids) {
+      const given = wait.qids.filter((q) => answers?.[q] != null).length;
+      resumeClarify(b.name, `${given} of ${wait.qids.length} answers`);
+    } else resumeClarify(b.name, p.answer ?? Object.values(answers).find((v) => v !== null) ?? "");
     return {};
   },
   "elsewhere.list": (p) => ({ sessions: awayFor(needBot(p).name) }),
@@ -498,6 +509,19 @@ const OPS = {
     reset();
     return {};
   },
+  "mock.ask": (p) => {
+    const b = needBot(p);
+    const kind = p.kind ?? "approval";
+    if (!["approval", "clarify", "interview"].includes(kind)) throw new OpError("bad_request", "kind is approval, clarify or interview");
+    if (turns[b.name]) throw new OpError("bad_request", `${b.name} is busy`);
+    turns[b.name] = { timers: [], text: `(${kind})` };
+    bots[b.name].running = true;
+    ev(b.name, "bot.status", { status: bots[b.name].status, running: true });
+    ev(b.name, "turn.start");
+    const timeout = Number.isInteger(p.timeout_ms) && p.timeout_ms > 0 ? p.timeout_ms : 0;
+    const request_id = kind === "approval" ? raiseApproval(b.name, timeout) : kind === "clarify" ? raiseClarify(b.name, timeout) : raiseInterview(b.name, timeout);
+    return { request_id };
+  },
 };
 
 function handleFrame(sock, text) {
@@ -574,6 +598,7 @@ function startTurn(bot, text) {
   ev(bot, "turn.start");
   if (text.startsWith("/approve")) return scriptApproval(bot);
   if (text.startsWith("/clarify")) return scriptClarify(bot);
+  if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
   scriptNormal(bot, text);
 }
 
@@ -633,6 +658,66 @@ function scriptClarify(bot) {
       ev(bot, "clarify.request", { request_id, question: "Which environment should I deploy to?", choices: ["staging", "production"] });
     }],
   ]);
+}
+
+// An ask the gateway gives up on: after `timeout` ms it stops waiting (prompt.expired) and the turn goes on.
+function expireLater(bot, request_id, timeout) {
+  if (!timeout) return undefined;
+  const t = turns[bot];
+  const h = setTimeout(() => {
+    if (!pending.has(request_id) || turns[bot] !== t) return;
+    pending.delete(request_id);
+    ev(bot, "prompt.expired", { request_id, reason: "timeout" });
+    say(bot, "No answer, so I left it as it was.");
+    endTurn(bot, "done");
+  }, timeout);
+  t.timers.push(h);
+  return h;
+}
+
+function raiseApproval(bot, timeout) {
+  const request_id = nextId("approval");
+  pending.set(request_id, { bot, kind: "approval", timer: expireLater(bot, request_id, timeout) });
+  ev(bot, "status", { text: "Preparing to clean the build folder…" });
+  ev(bot, "approval.request", {
+    request_id,
+    title: "Run shell command",
+    command: "rm -rf build/",
+    choices: ["once", "session", "always", "deny"],
+    ...(timeout ? { timeout_s: timeout / 1000 } : {}),
+  });
+  return request_id;
+}
+
+function raiseClarify(bot, timeout) {
+  const request_id = nextId("clarify");
+  pending.set(request_id, { bot, kind: "clarify", timer: expireLater(bot, request_id, timeout) });
+  ev(bot, "clarify.request", {
+    request_id,
+    question: "Which environment should I deploy to?",
+    choices: ["staging", "production"],
+    ...(timeout ? { timeout_s: timeout / 1000 } : {}),
+  });
+  return request_id;
+}
+
+// Hermes' clarify tool asking several questions at once: one interview card.
+const INTERVIEW = [
+  { qid: "q1", question: "Who is the release note for?", choices: ["Users", "Developers", "Both"] },
+  { qid: "q2", question: "Which sections should it have?", choices: ["Highlights", "Fixes", "Breaking changes", "Thanks"], multi_select: true },
+  { qid: "q3", question: "Anything to leave out?" },
+];
+function raiseInterview(bot, timeout) {
+  const request_id = nextId("interview");
+  pending.set(request_id, { bot, kind: "clarify", qids: INTERVIEW.map((q) => q.qid), timer: expireLater(bot, request_id, timeout) });
+  ev(bot, "status", { text: "Planning the release note…" });
+  ev(bot, "clarify.request", {
+    request_id,
+    question: INTERVIEW[0].question,
+    questions: INTERVIEW,
+    ...(timeout ? { timeout_s: timeout / 1000 } : {}),
+  });
+  return request_id;
 }
 
 function resumeClarify(bot, answer) {

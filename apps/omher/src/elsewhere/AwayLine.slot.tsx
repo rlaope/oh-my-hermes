@@ -5,7 +5,7 @@ import { memo, useState } from "react";
 import type { SlotProps } from "../features";
 import { openExternal } from "../lib/openExternal";
 import { getStore, replyChipFor } from "../state/store";
-import { Avatar, Popover, SourceIcon, Spinner } from "../ui";
+import { Avatar, LiveRing, Popover, SourceIcon } from "../ui";
 import { sourceName, workingFor } from "./format";
 import { useNow } from "./useNow";
 import "./elsewhere.css";
@@ -47,6 +47,12 @@ const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["else
     setMenu(false);
     if (chip) getStore().actions.setReplyTo(chip, bot);
   };
+  // still working there: the same live ring as the sidebar, around the place's mark
+  const mark = (
+    <LiveRing on={a.running} size={12} gap={4} label={`${src} session working`} testId="away-ring" seed={a.id}>
+      <SourceIcon source={a.source} size={12} />
+    </LiveRing>
+  );
   const link = a.url ? (
     <a
       className="ew-link"
@@ -58,12 +64,12 @@ const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["else
         void openExternal(a.url!);
       }}
     >
-      <SourceIcon source={a.source} size={12} />
+      {mark}
       <span className="ew-lt">{where}</span>
     </a>
   ) : (
     <span className="ew-where">
-      <SourceIcon source={a.source} size={12} />
+      {mark}
       <span className="ew-lt">{where}</span>
     </span>
   );
@@ -75,7 +81,7 @@ const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["else
           <span data-testid="away-text">{text}</span> {link}
           {a.running && (
             <span className="ew-working" data-testid="away-time">
-              <Spinner size={10} label={`${src} session working`} /> working · {workingFor(a.started_at, now)}
+              working · {workingFor(a.started_at, now)}
             </span>
           )}
         </div>

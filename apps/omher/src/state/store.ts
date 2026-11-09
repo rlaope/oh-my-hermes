@@ -9,6 +9,8 @@ import type {
   Bot,
   BridgeEvent,
   ChatOpenResult,
+  ClarifyAnswers,
+  ClarifyQuestion,
   HelloResult,
   ModelCurrent,
   ModelOptions,
@@ -60,6 +62,9 @@ export type MessageItem = {
   reply?: { source: string; label: string };
 };
 export type ActivityItem = { kind: "activity"; id: string; ts: number; turn: Turn };
+/** Why an ask stopped waiting without an answer from omher: the gateway timed it out, withdrew it, or it was
+ *  answered somewhere else (another Hermes window, Slack). */
+export type AskExpiry = "timeout" | "cancelled" | "resolved";
 export type ApprovalItem = {
   kind: "approval";
   id: string;
@@ -69,6 +74,7 @@ export type ApprovalItem = {
   command: string;
   choices: ApprovalChoice[];
   resolved?: ApprovalChoice;
+  expired?: AskExpiry;
 };
 export type ClarifyItem = {
   kind: "clarify";
@@ -77,7 +83,14 @@ export type ClarifyItem = {
   request_id: string;
   question: string;
   choices?: string[];
+  /** Several picks allowed (single question). */
+  multi?: boolean;
+  /** An interview: every question of the ask (2-5), answered in one card. */
+  questions?: ClarifyQuestion[];
   answer?: string;
+  /** Interview answers per question id (null = skipped). */
+  answers?: ClarifyAnswers;
+  expired?: AskExpiry;
 };
 export type AwayItem = { kind: "away"; id: string; ts: number; away: Away };
 export type RoutineItem = {
@@ -145,6 +158,17 @@ export interface Ui {
   look: Look;
   view: "chat" | "settings";
   settingsPage: string;
+  /** Sidebar: bots pinned to the top (in pin order) and bots hidden from the list. Saved on this computer. */
+  pinned: string[];
+  hidden: string[];
+  /** The ask card to scroll to and focus (set by the Needs-you strip and ⌘J); `seq` re-triggers the same one. */
+  focusAsk: FocusAsk | null;
+}
+
+export interface FocusAsk {
+  bot: string;
+  id: string;
+  seq: number;
 }
 
 export interface AppState {
@@ -186,6 +210,22 @@ export function activityText(name: string, detail: string): string {
   return d ? `${verb} ${d}` : verb;
 }
 
+/** The live text split for display: when it is the latest tool's text, `code` holds its command or path. */
+export function liveLabel(t: Turn): { verb: string; code?: string } {
+  const status = t.status || "Working…";
+  const last = t.steps[t.steps.length - 1];
+  if (last && last.detail && status === activityText(last.name, last.detail)) {
+    return { verb: activityText(last.name, ""), code: last.detail };
+  }
+  return { verb: status };
+}
+
+/** Whether a running turn has something for its activity line to say: a tool or skill ran, or the bot sent a
+ *  status of its own. Before that (only thinking) the chat shows the typing bubble instead of the line. */
+export function turnHasActivity(t: Turn): boolean {
+  return t.steps.length > 0 || t.skills.length > 0 || !!(t.status && t.status !== "Thinking…" && t.status !== "Working…");
+}
+
 // ---- state helpers --------------------------------------------------------------------------
 
 const emptyChat = (): Chat => ({
@@ -217,6 +257,24 @@ function readLook(): Look {
   }
 }
 
+function readList(key: string): string[] {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
+    const v: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveList(key: string, v: string[]): void {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* no storage */
+  }
+}
+
 function readTheme(): Theme {
   try {
     const v = typeof localStorage !== "undefined" ? localStorage.getItem("omher.theme") : null;
@@ -241,7 +299,17 @@ export function initialState(): AppState {
     routines: {},
     models: {},
     replyTo: {},
-    ui: { panelOpen: false, panelTab: "details", theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general" },
+    ui: {
+      panelOpen: false,
+      panelTab: "details",
+      theme: readTheme(),
+      look: readLook(),
+      view: "chat",
+      settingsPage: "general",
+      pinned: readList("omher.pinned"),
+      hidden: readList("omher.hidden"),
+      focusAsk: null,
+    },
   };
 }
 
@@ -364,7 +432,7 @@ export type Action =
   | { type: "send.failed"; bot: string; id: string; error: string }
   | { type: "event"; ev: BridgeEvent; now: number }
   | { type: "approval.resolved"; bot: string; request_id: string; choice: ApprovalChoice }
-  | { type: "clarify.resolved"; bot: string; request_id: string; answer: string }
+  | { type: "clarify.resolved"; bot: string; request_id: string; answer: string; answers?: ClarifyAnswers }
   | { type: "elsewhere"; bot: string; sessions: Away[] }
   | { type: "peek.loading"; id: string }
   | { type: "peek.loaded"; id: string; messages: PeekMsg[]; total: number }
@@ -377,7 +445,10 @@ export type Action =
   | { type: "ui.theme"; theme: Theme }
   | { type: "ui.look"; look: Partial<Look> }
   | { type: "ui.settings"; page?: string }
-  | { type: "ui.closeSettings" };
+  | { type: "ui.closeSettings" }
+  | { type: "ui.pin"; bot: string; on: boolean }
+  | { type: "ui.hide"; bot: string; on: boolean }
+  | { type: "ui.focusAsk"; bot: string; id: string };
 
 function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
   const bot = ev.bot;
@@ -431,6 +502,8 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     }
     case "approval.request":
       return touchChat(state, bot, (c) => {
+        // chat.open replays asks that are still waiting; the card is already there.
+        if (c.items.some((i) => i.kind === "approval" && i.request_id === ev.request_id)) return c;
         const base = patchTurn(c, (t) => ({ ...t, status: "Waiting for approval" }));
         const item: ApprovalItem = {
           kind: "approval",
@@ -445,17 +518,32 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       });
     case "clarify.request":
       return touchChat(state, bot, (c) => {
+        if (c.items.some((i) => i.kind === "clarify" && i.request_id === ev.request_id)) return c;
         const base = patchTurn(c, (t) => ({ ...t, status: "Waiting for your answer" }));
+        const qs = (ev.questions ?? []).filter((q) => q && typeof q.question === "string" && q.question.trim());
         const item: ClarifyItem = {
           kind: "clarify",
           id: `clarify-${ev.request_id}`,
           ts: now / 1000,
           request_id: ev.request_id,
-          question: ev.question,
+          question: ev.question || qs[0]?.question || "",
           choices: ev.choices,
+          ...(ev.multi_select ? { multi: true } : {}),
+          ...(qs.length > 1 ? { questions: qs } : {}),
         };
         return withItems(base, [...base.items, item]);
       });
+    case "prompt.expired":
+      return touchChat(state, bot, (c) =>
+        withItems(
+          c,
+          c.items.map((i) => {
+            if (i.kind === "approval" && i.request_id === ev.request_id && !i.resolved) return { ...i, expired: ev.reason };
+            if (i.kind === "clarify" && i.request_id === ev.request_id && i.answer === undefined) return { ...i, expired: ev.reason };
+            return i;
+          }),
+        ),
+      );
     case "turn.end":
       return touchChat(state, bot, (c) => {
         let base = c;
@@ -551,7 +639,11 @@ export function reduce(state: AppState, a: Action): AppState {
       return touchChat(state, a.bot, (c) =>
         withItems(
           c,
-          c.items.map((i) => (i.kind === "clarify" && i.request_id === a.request_id ? { ...i, answer: a.answer } : i)),
+          c.items.map((i) =>
+            i.kind === "clarify" && i.request_id === a.request_id
+              ? { ...i, answer: a.answer, ...(a.answers ? { answers: a.answers } : {}) }
+              : i,
+          ),
         ),
       );
     case "elsewhere":
@@ -610,6 +702,16 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, view: "settings", settingsPage: a.page ?? state.ui.settingsPage } };
     case "ui.closeSettings":
       return { ...state, ui: { ...state.ui, view: "chat" } };
+    case "ui.pin": {
+      const rest = state.ui.pinned.filter((b) => b !== a.bot);
+      return { ...state, ui: { ...state.ui, pinned: a.on ? [...rest, a.bot] : rest } };
+    }
+    case "ui.hide": {
+      const rest = state.ui.hidden.filter((b) => b !== a.bot);
+      return { ...state, ui: { ...state.ui, hidden: a.on ? [...rest, a.bot] : rest } };
+    }
+    case "ui.focusAsk":
+      return { ...state, ui: { ...state.ui, focusAsk: { bot: a.bot, id: a.id, seq: (state.ui.focusAsk?.seq ?? 0) + 1 } } };
     default:
       return state;
   }
@@ -643,6 +745,62 @@ export function selectTimeline(state: AppState, bot: string, maxAway = 2): Timel
 }
 const EMPTY_ITEMS: ChatItem[] = [];
 
+/** One approval or question still waiting on the person, in any bot's chat. */
+export interface Ask {
+  bot: string;
+  item: ApprovalItem | ClarifyItem;
+  /** seconds since epoch */
+  ts: number;
+}
+
+/** False once the ask is answered, expired, or the turn that raised it is over (it went unanswered). An ask
+ *  raised outside any known turn stays open until answered or expired. */
+export function askOpen(items: ChatItem[], it: ApprovalItem | ClarifyItem): boolean {
+  if (it.expired) return false;
+  if (it.kind === "approval" ? !!it.resolved : it.answer !== undefined) return false;
+  let owner: number | undefined;
+  for (const i of items) if (i.kind === "activity" && i.turn.startedAt <= it.ts * 1000 + 1) owner = i.turn.endedAt ?? -1;
+  return owner === undefined || owner === -1;
+}
+
+let asksCache: { chats: AppState["chats"]; out: Ask[] } | null = null;
+
+/** Every open ask across bots, oldest first. Memoised on `state.chats`, so safe to call from render. */
+export function selectAsks(state: AppState): Ask[] {
+  if (asksCache && asksCache.chats === state.chats) return asksCache.out;
+  const out: Ask[] = [];
+  for (const [bot, chat] of Object.entries(state.chats)) {
+    for (const it of chat.items) {
+      if ((it.kind === "approval" || it.kind === "clarify") && askOpen(chat.items, it)) out.push({ bot, item: it, ts: it.ts });
+    }
+  }
+  out.sort((a, b) => a.ts - b.ts);
+  asksCache = { chats: state.chats, out };
+  return out;
+}
+
+/** One plain line for an ask: "Allow `rm -rf build/`?" or the (first) question. */
+export function askText(it: ApprovalItem | ClarifyItem): string {
+  if (it.kind === "approval") return it.command ? `Allow \`${it.command}\`?` : it.title || "Allow this command?";
+  const n = it.questions?.length ?? 0;
+  return n > 1 ? `${n} questions: ${it.questions![0].question}` : it.question;
+}
+
+let sideCache: { bots: Bot[]; pinned: string[]; hidden: string[]; out: Bot[] } | null = null;
+
+/** The sidebar's bot order: pinned bots first (in pin order), then the rest as Hermes lists them; hidden bots
+ *  are left out. ⌘1…⌘9 follow this order too. Memoised. */
+export function selectSidebarBots(state: AppState): Bot[] {
+  const { bots } = state;
+  const { pinned, hidden } = state.ui;
+  if (sideCache && sideCache.bots === bots && sideCache.pinned === pinned && sideCache.hidden === hidden) return sideCache.out;
+  const shown = bots.filter((b) => !hidden.includes(b.name));
+  const pins = pinned.map((n) => shown.find((b) => b.name === n)).filter((b): b is Bot => !!b);
+  const out = [...pins, ...shown.filter((b) => !pinned.includes(b.name))];
+  sideCache = { bots, pinned, hidden, out };
+  return out;
+}
+
 export function selectUnreadTotal(state: AppState): number {
   return Object.values(state.unread).reduce((a, b) => a + b, 0);
 }
@@ -658,7 +816,8 @@ export interface Actions {
   setReplyTo(chip: ReplyChip | null, bot?: string): void;
   interrupt(): Promise<void>;
   respondApproval(requestId: string, choice: ApprovalChoice, bot?: string): Promise<void>;
-  respondClarify(requestId: string, answer: string, bot?: string): Promise<void>;
+  /** A text answer for one question, or every answer of an interview at once (one `clarify.respond`). */
+  respondClarify(requestId: string, answer: string | ClarifyAnswers, bot?: string): Promise<void>;
   loadElsewhere(bot?: string): Promise<void>;
   loadRoutines(bot?: string): Promise<void>;
   loadModels(bot?: string): Promise<void>;
@@ -671,6 +830,11 @@ export interface Actions {
   setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
   closeSettings(): void;
+  /** Sidebar row menu: pin to top / hide from the list (saved on this computer). */
+  pinBot(bot: string, on: boolean): void;
+  hideBot(bot: string, on: boolean): void;
+  /** Open the bot's chat and scroll to / focus one of its ask cards. */
+  jumpToAsk(bot: string, id: string): Promise<void>;
   /** Re-read bots.list (names, status, picture revisions). */
   reloadBots(): Promise<void>;
   renameBot(bot: string, name: string): Promise<void>;
@@ -880,8 +1044,16 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const b = botArg(bot);
       if (!b) return;
       try {
-        await bridge.request("clarify.respond", { bot: b, request_id: requestId, answer });
-        dispatch({ type: "clarify.resolved", bot: b, request_id: requestId, answer });
+        if (typeof answer === "string") {
+          await bridge.request("clarify.respond", { bot: b, request_id: requestId, answer });
+          dispatch({ type: "clarify.resolved", bot: b, request_id: requestId, answer });
+          return;
+        }
+        await bridge.request("clarify.respond", { bot: b, request_id: requestId, answers: answer });
+        const given = Object.values(answer).filter((v) => v !== null).length;
+        const total = Object.keys(answer).length;
+        const summary = `${given} of ${total}`;
+        dispatch({ type: "clarify.resolved", bot: b, request_id: requestId, answer: summary, answers: answer });
       } catch (e) {
         fail(e);
       }
@@ -931,6 +1103,18 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     openSettings: (page) => dispatch({ type: "ui.settings", page }),
     closeSettings: () => dispatch({ type: "ui.closeSettings" }),
+    pinBot(bot, on) {
+      dispatch({ type: "ui.pin", bot, on });
+      saveList("omher.pinned", state.ui.pinned);
+    },
+    hideBot(bot, on) {
+      dispatch({ type: "ui.hide", bot, on });
+      saveList("omher.hidden", state.ui.hidden);
+    },
+    async jumpToAsk(bot, id) {
+      dispatch({ type: "ui.focusAsk", bot, id });
+      if (state.selectedBot !== bot || state.ui.view !== "chat") await selectBot(bot);
+    },
     reloadBots,
     async renameBot(bot, name) {
       const r = await bridge.request("bots.rename", { bot, name });

@@ -81,6 +81,18 @@ export interface Routine {
 
 export type ApprovalChoice = "once" | "session" | "always" | "deny";
 
+/** One question of a clarify ask. Hermes' clarify tool asks 1-5 at once ("interview"); `qid` is its id. */
+export interface ClarifyQuestion {
+  qid: string;
+  question: string;
+  choices?: string[];
+  /** More than one choice may be picked; the answer is then a JSON array of labels. */
+  multi_select?: boolean;
+}
+
+/** Per-question answers of an interview: the text (or JSON array for multi-select), null = skipped. */
+export type ClarifyAnswers = Record<string, string | null>;
+
 export interface ModelProvider {
   slug: string;
   name: string;
@@ -128,8 +140,9 @@ export interface OpMap {
     params: { bot: string; request_id: string; choice: ApprovalChoice };
     result: Record<string, never>;
   };
+  /** One answer (`answer`) for a single question, or every answer of an interview at once (`answers`). */
   "clarify.respond": {
-    params: { bot: string; request_id: string; answer: string };
+    params: { bot: string; request_id: string; answer?: string; answers?: ClarifyAnswers };
     result: Record<string, never>;
   };
   "elsewhere.list": { params: { bot: string }; result: { sessions: Away[] } };
@@ -232,8 +245,21 @@ export type BridgeEvent =
       title: string;
       command: string;
       choices: ApprovalChoice[];
+      /** Seconds the gateway waits before giving up on it, when it says. */
+      timeout_s?: number;
     })
-  | (EventBase & { event: "clarify.request"; request_id: string; question: string; choices?: string[] })
+  | (EventBase & {
+      event: "clarify.request";
+      request_id: string;
+      question: string;
+      choices?: string[];
+      multi_select?: boolean;
+      /** Set when the bot asks several questions at once (an interview); `question` is then the first. */
+      questions?: ClarifyQuestion[];
+      timeout_s?: number;
+    })
+  /** An approval or question is no longer waiting (timed out, withdrawn, or answered somewhere else). */
+  | (EventBase & { event: "prompt.expired"; request_id: string; reason: "timeout" | "cancelled" | "resolved" })
   | (EventBase & { event: "turn.end"; outcome: "done" | "interrupted" | "error"; error?: string })
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })

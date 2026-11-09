@@ -3,7 +3,7 @@
 // "Worked for 2m 41s · 6 steps" and a click opens one detail row per step.
 import { useEffect, useState } from "react";
 import type { SlotProps } from "../../features";
-import { activityText, type Step, type Turn } from "../../state/store";
+import { liveLabel, type Step } from "../../state/store";
 import { ChevronRight, Spinner } from "../../ui";
 import { elapsed } from "../../app/time";
 import "./activity.css";
@@ -38,15 +38,6 @@ interface Label {
   code?: string;
 }
 
-/** The live text: when it is the latest tool's text, split it so the detail renders as code. */
-function liveLabel(t: Turn): Label {
-  const status = t.status || "Working…";
-  const last = t.steps[t.steps.length - 1];
-  if (last && last.detail && status === activityText(last.name, last.detail)) {
-    return { verb: activityText(last.name, ""), code: last.detail };
-  }
-  return { verb: status };
-}
 const labelText = (l: Label) => (l.code ? `${l.verb} ${l.code}` : l.verb);
 
 function LabelView({ label }: { label: Label }) {
