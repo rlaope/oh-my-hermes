@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Bot, BotInfo } from "../lib/protocol";
 import { useStore } from "../state/store";
-import { Avatar, Spinner } from "../ui";
+import { Avatar, SourceIcon, Spinner } from "../ui";
 import { shortTime } from "../app/time";
 
 const SIDE = 256;
@@ -272,7 +272,7 @@ export function BotFacts({ info }: { info: BotInfo | null | undefined }) {
         <div className="be-places" data-testid="bot-places">
           {places.map(([src, n]) => (
             <span key={src} className="be-place">
-              <i className={`src-sq src-${src}`} />
+              <SourceIcon source={src} size={12} />
               {placeName(src)}
               <b>{n}</b>
             </span>

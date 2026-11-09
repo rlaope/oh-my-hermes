@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { SlotProps } from "../../features";
 import type { ApprovalChoice } from "../../lib/protocol";
 import { getStore, useStore, type ApprovalItem, type ClarifyItem } from "../../state/store";
+import { riskOf } from "./risk";
 
 export const slot = "cards";
 
@@ -75,9 +76,16 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
     setBusy(null);
   };
 
+  const risks = riskOf(item.command || "");
   return (
-    <div className="card" data-testid="card-approval" role="group" aria-label={item.title}>
+    <div className={`card${risks.length ? " risky" : ""}`} data-testid="card-approval" role="group" aria-label={item.title}>
       <div className="card-title">{item.title || "Approval needed"}</div>
+      {risks.length > 0 && (
+        <div className="card-risk" data-testid="card-risk" role="note">
+          <span className="card-risk-ic" aria-hidden="true">!</span>
+          {risks.join(" · ")}
+        </div>
+      )}
       {item.command && <pre className="card-cmd">{item.command}</pre>}
       <div className="card-acts">
         {BUTTONS.filter((b) => item.choices.includes(b.choice)).map((b) => (

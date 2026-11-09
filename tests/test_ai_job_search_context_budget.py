@@ -457,7 +457,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # pin before it was 18512bc6...beff. Its review then has the child-route line clear the route once
         # the planning children are dispatched; only plan and ralplan move, and the pin before it was
         # 52bbf25d...00ff.
-        self.assertEqual(_digest(legacy_hashes), '88ddc8a41631513d09d875a1a5dbe821d350d079975a823f4a0cf4bffa6b71bf')
+        # Merged with the ultrabrain chain branch: model-setup's chain sentence names Fable 5.1 -> Astra
+        # -> Opus 5.5; that branch's pin was b40a640d...731df, and this branch's was 88ddc8a4...71bf.
+        self.assertEqual(_digest(legacy_hashes), '0b3c71d9ad2ccf7047d714674f7c68164570a61be2a12e610fbd58abefdd1783')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -507,7 +509,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 72561,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1).
+            'plugin_tool_schema_chars': 72566,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 4051,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78).

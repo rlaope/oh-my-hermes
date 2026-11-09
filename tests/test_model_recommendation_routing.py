@@ -333,11 +333,12 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
     def test_brain_steps_from_ultrabrain_to_deep_before_the_last_resort(self) -> None:
         # brain heads on ultrabrain; a set without an ultrabrain model steps to
         # deep, the next depth tier, and keeps deep's effort instead of the
-        # last-resort one.
+        # last-resort one. Opus 5.5 is in the ultrabrain chain, so it routes
+        # there at xhigh without a step.
         astra = _active("gpt-6-astra", "openai-codex", "gpt")
         sol = _active("gpt-6.1-sol", "openai-codex", "gpt")
         for active, model, effort, category in (
-            ([_OPUS], "ccapi/claude-opus-5-5", "high", "deep"),
+            ([_OPUS], "ccapi/claude-opus-5-5", "xhigh", "ultrabrain"),
             ([sol], "openai-codex/gpt-6.1-sol", "high", "deep"),
             ([_KIMI], "apitopia/kimi-k3.1-pro", "high", "deep"),
             ([astra, _OPUS], "openai-codex/gpt-6-astra", "xhigh", "ultrabrain"),
@@ -388,8 +389,9 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
         self.assertEqual(route["category"], "deep")
 
     def test_requested_category_is_never_widened(self) -> None:
+        sol = _active("gpt-6.1-sol", "openai-codex", "gpt")
         route = resolve_model_route(
-            "hermes", role="brain", requested_category="ultrabrain", active_models=[_OPUS]
+            "hermes", role="brain", requested_category="ultrabrain", active_models=[sol]
         )
         self.assertEqual(route["category"], "ultrabrain")
         self.assertEqual(route["selected_reasoning_effort"], "medium")

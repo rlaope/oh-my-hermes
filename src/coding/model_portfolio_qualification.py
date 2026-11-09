@@ -89,16 +89,18 @@ QUALIFICATION_HOLDS: Final[dict[str, dict[str, object]]] = {
 # The six routing-recipe categories (google-search, x-search, review, swarm,
 # forensics, synthesize) were added on 2026-10-28 from the owner's published
 # recipe; every slot they add is editorial and unmeasured.
+# ultrabrain gained Claude Fable 5.1 (head) and Claude Opus 5.5 (third) on
+# 2026-11-09 (owner decision), editorial and unmeasured.
 RECOMMENDATION_DECISIONS: Final[dict[str, tuple[str, ...]]] = {
     "claude-fable-5-1": (
         "categories:architect", "categories:artistry", "categories:capable",
-        "categories:visual-engineering", "role_suggestions:main",
+        "categories:ultrabrain", "categories:visual-engineering", "role_suggestions:main",
     ),
     "claude-haiku-5-5": ("categories:quick", "categories:simple-work"),
     "claude-opus-5-5": (
         "categories:architect", "categories:artistry", "categories:capable", "categories:deep",
         "categories:deep-work", "categories:forensics", "categories:google-search",
-        "categories:review", "categories:synthesize", "categories:unspecified-high",
+        "categories:review", "categories:synthesize", "categories:ultrabrain", "categories:unspecified-high",
         "categories:visual-engineering", "categories:writing", "last_resort:any", "role_suggestions:main",
     ),
     "claude-sonnet-5-5": ("categories:unspecified-low", "categories:writing"),

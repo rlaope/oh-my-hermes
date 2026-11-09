@@ -229,6 +229,12 @@
   font-variant-numeric: tabular-nums;
   flex: none;
 }
+/* App marks (Slack, Discord, Telegram, Cron) from ui/SourceIcon. Cron and unknown places use the text colour. */
+.src-ic {
+  flex: none;
+  display: inline-block;
+  color: var(--quiet);
+}
 .src-sq {
   width: 7px;
   height: 7px;

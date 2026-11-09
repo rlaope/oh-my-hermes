@@ -74,7 +74,7 @@ export default function AddBot({ onClose }: SlotProps["addBot"]) {
           })}
         </div>
         <div className="ab-sep" />
-        <button type="button" className="ab-new" disabled title="Not in this version" data-testid="addbot-create">
+        <button type="button" className="ab-new" disabled title="Coming in a later version" data-testid="addbot-create">
           Create a new bot<span className="ab-soon">Soon</span>
         </button>
       </div>

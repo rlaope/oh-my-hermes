@@ -6,7 +6,7 @@ import type { Away, Routine } from "../lib/protocol";
 import { useStore } from "../state/store";
 import { openExternal } from "../lib/openExternal";
 import { shortTime } from "../app/time";
-import { Avatar, CloseIcon, IconButton } from "../ui";
+import { Avatar, CloseIcon, IconButton, SourceIcon } from "../ui";
 import logo from "../assets/omher-mark.png";
 import { awayTime, cadence, nextRun, sourceList, sourceName } from "./format";
 import { useNow } from "./useNow";
@@ -96,7 +96,7 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
                 </span>
                 <span className="t2">
                   <span className="ew-src">
-                    <i className={`src-sq src-${a.source}`} />
+                    <SourceIcon source={a.source} size={12} />
                     {a.place ? `${src} ${a.place}` : src}
                   </span>
                   {a.url && <span className="ew-go">↗</span>}
