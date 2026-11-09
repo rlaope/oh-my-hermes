@@ -9,8 +9,9 @@
 (() => {
   const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const q = s => document.querySelector(s);
-  let cv = q('[data-beam]'); const pill = q('[data-dlpill]'), sec = q('[data-omher]'), shot = q('[data-app-shot]');
+  let cv = q('[data-beam]'); const pill = q('[data-dlpill]'), sec = q('[data-omher]'), shot = q('[data-app-shot]'), win = q('[data-app-win]') || shot;
   if (!cv || !pill || !sec || !shot) return;
+  let winDy = 0, cap = [0, 0, 0, 0];   // the window's top-left corner sits this fraction of its height below the top-right one (perspective in the composition)
 
   // the 01-08 section rail belongs to the OMH sections, not to the omher block
   new IntersectionObserver(es => document.body.classList.toggle('rail-off', es[0].isIntersecting), {rootMargin: '0px 0px -60% 0px'}).observe(sec);
@@ -45,7 +46,9 @@ void main(){
   const FS = `#version 300 es
 precision highp float;
 uniform vec2 uView, uA, uB;
-uniform vec3 uShot;            // shot left, right, top (CSS px)
+uniform vec3 uShot;            // window left, right, top edge at the impact (CSS px)
+uniform float uSlope;          // window top edge dy/dx
+uniform vec4 uHole;            // a caption pill the beam passes behind (CSS px; zero size = none)
 uniform float uScale, uTime, uI, uPour, uWide, uBright, uLand, uHov, uBurst, uStill;
 uniform float uPulse[4];
 out vec4 o;
@@ -67,11 +70,12 @@ void main(){
   float T = uTime;
   vec2 ab = uB - uA; float L = max(length(ab), 1.); vec2 dir = ab / L, nrm = vec2(-dir.y, dir.x);
   vec2 ap = p - uA; float along = dot(ap, dir), d = dot(ap, nrm);
+  float edgeY = uShot.z + uSlope * (p.x - uB.x);
   float t = clamp(along / L, 0., 1.);
   float reach = uPour * L;
   float env = smoothstep(reach + 2., reach - 36., along) * smoothstep(-4., 3., along);
-  float above = smoothstep(uShot.z + 1.5, uShot.z - 2., p.y);
-  float fadeIn = mix(smoothstep(uShot.z + 1., uShot.z - 5., p.y), 1., exp(-d * d / 60.));
+  float above = smoothstep(edgeY + 1.5, edgeY - 2., p.y);
+  float fadeIn = mix(smoothstep(edgeY + 1., edgeY - 5., p.y), 1., exp(-d * d / 60.));
   // widths: the spectrum fans out toward the window (about 1.6x the old beam at the bottom), with a thicker white core
   float wc = mix(5.2, 5.8, t) * uWide, wb = mix(16., 70., t) * uWide, wo = mix(34., 108., t) * uWide;
   float u = d / wb * 1.15;
@@ -89,22 +93,24 @@ void main(){
   float band = smoothstep(1.25, .6, abs(u));
   float energy = (.86 + .2 * flow + .1 * streak * streak) * (1. + 1.6 * pul);
   float core = exp(-d * d / (wc * wc)), sheath = exp(-d * d / (wc * wc * 5.)), halo = exp(-d * d / (wo * wo));
-  vec3 col = sat(sc, 1.1) * band * energy * mix(.95, 1.05, smoothstep(0., .6, t))
+  vec3 col = sat(sc, .85) * band * energy * mix(.22, .8, smoothstep(.1, .6, t))
     + vec3(.9, .9, .96) * halo * .05 * (.7 + .3 * flow)
-    + vec3(1., .99, .98) * (core * .8 + sheath * .06) * (.9 + .1 * streak + 1.2 * pul) * mix(1.9, 1., smoothstep(0., .35, t)) * mix(1., .7, smoothstep(.7, 1., t));
+    + vec3(1., .99, .98) * (core * .8 + sheath * .06) * (.9 + .1 * streak + 1.2 * pul) * mix(.55, 1., smoothstep(.08, .55, t)) * mix(1., .75, smoothstep(.75, 1., t));
   // sparkles drifting down inside the column, each in one spectral hue
   vec2 g = vec2(d / 12., (along - T * 90.) / 24.); vec2 gi = floor(g), gf = fract(g);
   float r = h21(gi + 17.);
   vec2 sp = vec2(.2 + .6 * h21(gi + 7.1), .2 + .6 * h21(gi + 3.3));
-  float spk = step(.9, r) * smoothstep(1.7, .2, length((gf - sp) * vec2(11., 24.)));
+  float spk = step(.95, r) * smoothstep(1.7, .2, length((gf - sp) * vec2(11., 24.)));
   spk *= (.45 + .55 * sin(T * (2.5 + r * 5.) + r * 40.)) * exp(-abs(d) / (wb * 1.2)) * smoothstep(.04, .2, t);
   col += mix(prism(u, drift), vec3(1.), .4) * spk * .55;
   col *= env * above * fadeIn * (1. + .45 * (uBright - 1.));
+  vec2 hc = (uHole.xy + uHole.zw) * .5, hh = (uHole.zw - uHole.xy) * .5;
+  if (hh.x > 1.){ vec2 q = abs(p - hc) - hh + 10.; float sd = length(max(q, 0.)) + min(max(q.x, q.y), 0.) - 10.; col *= mix(.5, 1., smoothstep(-8., 40., sd)); }
   // bloom on the pill
-  vec2 q0 = (p - uA) * vec2(.55, 2.2); float bl = 1.6 * exp(-length(q0) / 17.) * (.55 + .45 * uHov * (.75 + .25 * sin(T * 6.)));
+  vec2 q0 = (p - uA) * vec2(.55, 2.2); float bl = 1.2 * exp(-length(q0) / 11.) * (.55 + .45 * uHov * (.75 + .25 * sin(T * 6.)));
   col += vec3(1., .99, .98) * bl * .7;
   // impact on the shot's top edge: a rainbow fan that pools on the edge, and a spectral rim running along it
-  float dx = p.x - uB.x, dy = uShot.z - p.y;
+  float dx = p.x - uB.x, dy = edgeY - p.y;
   float inX = smoothstep(uShot.x - 2., uShot.x + 70., p.x) * smoothstep(uShot.y + 2., uShot.y - 70., p.x);
   float lift = smoothstep(-1.5, .5, dy) + (1. - smoothstep(-1.5, .5, dy)) * exp(dy / 7.) * .5;
   float fw = 150. * uWide;
@@ -114,8 +120,8 @@ void main(){
   float edge = exp(-pow((dy - .5) / 1.4, 2.)) * inX;
   float spread = exp(-pow(dx / 280., 2.)) * (.82 + .18 * sin(abs(dx) * .02 - T * 2.4));
   float sw = .05 * sin(T * .45);
-  vec3 imp = sat(prism(-dx / fw, sw), 1.1) * fan * (.48 + .22 * cz) + prism(-dx / (fw * 1.7), sw) * pool * (.4 + .12 * cz) + sat(prism(-dx / 260., sw + .03 * sin(T * .7)), 1.15) * edge * spread * 1.15
-    + vec3(1., .98, .97) * exp(-pow(dx / 22., 2.) - pow(max(dy, 0.) / 5., 2.)) * lift * .55;
+  vec3 imp = sat(prism(-dx / fw, sw), 1.) * fan * (.36 + .16 * cz) + prism(-dx / (fw * 1.7), sw) * pool * (.4 + .12 * cz) + sat(prism(-dx / 260., sw + .03 * sin(T * .7)), 1.15) * edge * spread * 1.15
+    + vec3(1., .98, .97) * exp(-pow(dx / 20., 2.) - pow(max(dy, 0.) / 5., 2.)) * lift * .26;
   float arrive = 0.;
   for (int k = 0; k < 4; k++){ float s = uPulse[k]; if (s < 0.) continue; float a = T - s - L / ${FLOW}.; arrive += step(0., a) * exp(-a * 5.); }
   col += imp * uLand * (1. + 1.4 * arrive) * (1. + .45 * (uBright - 1.));
@@ -149,7 +155,7 @@ void main(){
       gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
       if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
       gl.useProgram(prog); gl.bindVertexArray(gl.createVertexArray());
-      for (const n of ['uBox', 'uView', 'uA', 'uB', 'uShot', 'uScale', 'uTime', 'uI', 'uPour', 'uWide', 'uBright', 'uLand', 'uHov', 'uBurst', 'uStill', 'uPulse']) U[n] = gl.getUniformLocation(prog, n);
+      for (const n of ['uBox', 'uView', 'uA', 'uB', 'uShot', 'uSlope', 'uHole', 'uScale', 'uTime', 'uI', 'uPour', 'uWide', 'uBright', 'uLand', 'uHov', 'uBurst', 'uStill', 'uPulse']) U[n] = gl.getUniformLocation(prog, n);
     } catch (e) { console.warn('[beam] shader failed, using canvas 2D', e); gl = null; }
   }
   // a context that failed to build its program cannot hand the canvas to 2D; swap in a fresh canvas
@@ -167,6 +173,9 @@ void main(){
     W = innerWidth; H = innerHeight;
     const k = gl ? RES : Math.min(devicePixelRatio || 1, 1.5);
     cv.width = Math.max(1, Math.round(W * k)); cv.height = Math.max(1, Math.round(H * k));
+    const cs = getComputedStyle(shot);
+    winDy = parseFloat(cs.getPropertyValue('--win-dy')) || 0;
+    cap = (cs.getPropertyValue('--cap') || '').trim().split(/\s+/).map(v => (parseFloat(v) || 0) / 100);
   }
 
   function drawGL(f) {
@@ -176,7 +185,7 @@ void main(){
     const t = clamp(Math.min(f.y0 - 60, f.y1 - 200), 0, H), b = clamp(f.y1 + 30, 0, H);
     if (r - l < 2 || b - t < 2) return;
     gl.uniform4f(U.uBox, l, t, r, b); gl.uniform2f(U.uView, W, H); gl.uniform1f(U.uScale, cv.width / W);
-    gl.uniform2f(U.uA, f.x0, f.y0); gl.uniform2f(U.uB, f.x1, f.y1); gl.uniform3f(U.uShot, f.sr.left, f.sr.right, f.y1);
+    gl.uniform2f(U.uA, f.x0, f.y0); gl.uniform2f(U.uB, f.x1, f.y1); gl.uniform3f(U.uShot, f.sr.left, f.sr.right, f.y1); gl.uniform1f(U.uSlope, f.slope); gl.uniform4f(U.uHole, f.hole[0], f.hole[1], f.hole[2], f.hole[3]);
     gl.uniform1f(U.uTime, f.t); gl.uniform1f(U.uI, S.I); gl.uniform1f(U.uPour, ease(S.pour));
     gl.uniform1f(U.uWide, 1 + .16 * S.near); gl.uniform1f(U.uBright, 1 + .3 * S.near + .4 * S.hov); gl.uniform1f(U.uLand, f.land);
     gl.uniform1f(U.uHov, S.hov); gl.uniform1f(U.uBurst, S.burst); gl.uniform1f(U.uStill, RM ? 1 : 0);
@@ -235,20 +244,22 @@ void main(){
   const setVar = (n, v) => { if (S.css[n] !== v) { S.css[n] = v; shot.style.setProperty(n, v); } };
   function frame(now, dt) {
     const t = RM ? 4 : (now - S.t0) / 1000;
-    const p = pill.getBoundingClientRect(), sr = shot.getBoundingClientRect();
-    const x0 = p.left + p.width / 2, y0 = p.bottom - 7, y1 = sr.top + 1;
-    const gap = y1 - p.bottom, want = sr.bottom > H * .2 && p.bottom > 0 && p.width > 0 && gap > 10;
+    const p = pill.getBoundingClientRect(), sr = win.getBoundingClientRect();
+    // the window's top edge runs from its top-right corner (sr.top) down to the top-left one
+    const slope = -winDy * sr.height / Math.max(sr.width, 1), edgeAt = x => sr.top + (x - sr.right) * slope + 1;
+    const x0 = p.left + p.width / 2, y0 = p.bottom - 7;
+    const gap = sr.top - p.bottom, want = sr.bottom > H * .2 && p.bottom > 0 && p.width > 0 && gap > 10;
     const vis = want ? smooth(10, 44, gap) : 0;
     if (RM) S.I = vis; else S.I = clamp(S.I + clamp(vis - S.I, -dt / 260, dt / 420), 0, 1);
     if (want && !RM) S.pour = Math.min(1, S.pour + dt / 900);
     if (S.pour >= 1 && S.reveal < 1) { S.reveal = Math.min(1, S.reveal + dt / 1300); setVar('--reveal', ease(S.reveal).toFixed(3)); }
     const kf = ms => RM ? 1 : 1 - Math.exp(-dt / ms);
     // landing point: under the pill on the shot's right side, leaning toward the cursor
-    const base = W < 600 ? Math.min(x0, sr.right - 40) : clamp(x0 - 90, sr.left + sr.width * .55, sr.right - 70);
+    const base = W < 600 ? Math.min(x0, sr.right - 40) : clamp(x0 - 440, sr.left + sr.width * .42, sr.right - 230);
     const live = !RM && S.mx >= 0 && S.my < sr.bottom + 120;
-    const target = live ? clamp(base + (S.mx - base) * .42, sr.left + 40, sr.right - 40) : base;
+    const target = live ? clamp(base + (S.mx - base) * .42, sr.left + 120, sr.right - 200) : base;
     S.lean = S.lean == null || RM ? target : S.lean + (target - S.lean) * kf(280);
-    const x1 = S.lean;
+    const x1 = S.lean, y1 = edgeAt(x1);
     const nearT = live ? smooth(260, 40, segDist(S.mx, S.my, x0, y0, x1, y1)) : 0;
     S.near += (nearT - S.near) * kf(220);
     S.hov += (S.hovT - S.hov) * kf(160);
@@ -261,7 +272,7 @@ void main(){
     S.rx += ((moving ? (.5 - ny) * 5 : 0) - S.rx) * kf(moving ? 160 : 170);   // max 2.5deg
     if (!moving && Math.abs(S.rx) + Math.abs(S.ry) < .35) S.rx = S.ry = 0;    // snap flat: no resampled raster at rest
     S.gl += ((over ? 1 : 0) - S.gl) * kf(200);
-    if (over) { setVar('--gx', (nx * shot.offsetWidth).toFixed(0) + 'px'); setVar('--gy', (ny * shot.offsetHeight).toFixed(0) + 'px'); }
+    if (over) { setVar('--gx', (nx * win.offsetWidth).toFixed(0) + 'px'); setVar('--gy', (ny * win.offsetHeight).toFixed(0) + 'px'); }
     // the 3D transform only while tilted: an untilted shot stays a plain, crisply rastered layer
     const tilted = Math.abs(S.rx) + Math.abs(S.ry) > 0;
     if (tilted !== S.tilted) { S.tilted = tilted; shot.classList.toggle('is-tilt', tilted); }
@@ -270,7 +281,8 @@ void main(){
     const hit = S.burst > 0 && t > S.burst ? Math.exp(-(t - S.burst) * 3) : 0;
     setVar('--lit', (S.I * land * (1 + .25 * S.near + .3 * S.hov)).toFixed(2)); setVar('--bx', (x1 - sr.left).toFixed(0) + 'px'); setVar('--hit', hit.toFixed(2));
     S.geo = stats.geo = {x0, y0, x1, y1, len: Math.hypot(x1 - x0, y1 - y0)};
-    const f = {t, x0, y0, x1, y1, sr, land};
+    const so = shot.getBoundingClientRect(), hole = cap.length === 4 && cap[2] > cap[0] ? [so.left + cap[0] * so.width, so.top + cap[1] * so.height, so.left + cap[2] * so.width, so.top + cap[3] * so.height] : [0, 0, 0, 0];
+    const f = {t, x0, y0, x1, y1, sr, land, slope, hole};
     if (gl) drawGL(f); else if (cx) draw2d(f, dt);
   }
 
