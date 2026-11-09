@@ -8,6 +8,7 @@ import { Sidebar } from "../sidebar/Sidebar";
 import { Chat } from "../chat/Chat";
 import { DetailsFallback } from "./DetailsFallback";
 import { SettingsView } from "./SettingsView";
+import { SessionView } from "../sessions/SessionView";
 import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
 
@@ -30,7 +31,9 @@ export function App() {
   return (
     <div className={`window${panelOpen ? " panel-open" : ""}`} data-testid="window">
       <Sidebar />
-      <main className="main">{s.ui.view === "settings" ? <SettingsView /> : <Chat />}</main>
+      <main className="main">
+        {s.ui.view === "settings" ? <SettingsView /> : s.ui.view === "session" ? <SessionView /> : <Chat />}
+      </main>
       <aside className="details" aria-hidden={!panelOpen} data-testid="details">
         {bot &&
           (Details ? (
