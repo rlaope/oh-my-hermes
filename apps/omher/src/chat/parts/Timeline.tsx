@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { Bot } from "../../lib/protocol";
 import { selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
@@ -38,6 +38,17 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
     if (lastBot.current !== bot.name || pinned.current) el.scrollTop = el.scrollHeight;
     lastBot.current = bot.name;
   }, [bot.name, items, streaming, typing]);
+
+  // Files the bot sent load after the row is drawn and make it taller: stay at the bottom if pinned.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (pinned.current) el.scrollTop = el.scrollHeight;
+    });
+    for (const row of el.querySelectorAll(".row-assistant")) ro.observe(row);
+    return () => ro.disconnect();
+  }, [bot.name, items]);
 
   const render = (it: TimelineItem, prev?: TimelineItem): ReactNode => {
     switch (it.kind) {

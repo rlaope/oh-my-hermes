@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
 import { noteFor, showNote, windowWatched } from "../lib/notify";
+import { promptText } from "../chat/parts/attachFiles";
 import type {
   Away,
   ApprovalChoice,
@@ -22,6 +23,9 @@ import type {
   TerminalRun,
   Worktree,
   WorktreeDiff,
+  MediaFile,
+  AttachKind,
+  AttachResult,
 } from "../lib/protocol";
 
 export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff";
@@ -61,7 +65,25 @@ export type MessageItem = {
   error?: string;
   /** user rows only: sent with "Reply there" (where the person pointed the bot). */
   reply?: { source: string; label: string };
+  /** user rows only: files sent with it, shown from the local copies (never read back). */
+  files?: SentFile[];
+  /** user rows only: the prompt text actually sent when it differs from `text` (files add `@file:` refs). */
+  sent?: string;
 };
+
+/** A file the person sent, as their own bubble shows it. `url` is a blob URL for pictures and video. */
+export interface SentFile {
+  name: string;
+  size: number;
+  kind: "image" | "video" | "file";
+  url: string | null;
+}
+
+/** One file to send: the Hermes attach call it takes, its bytes, and how the bubble shows it. */
+export interface OutFile extends SentFile {
+  attach: AttachKind;
+  read: () => Promise<string>;
+}
 export type ActivityItem = { kind: "activity"; id: string; ts: number; turn: Turn };
 /** Why an ask stopped waiting without an answer from omher: the gateway timed it out, withdrew it, or it was
  *  answered somewhere else (another Hermes window, Slack). */
@@ -401,7 +423,10 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string):
     if (i.kind !== "user" && i.kind !== "assistant") return true;
     if (ids.has(i.id)) return false;
     if (i.id.startsWith("local-")) {
-      return !server.some((s) => s.kind === "user" && s.text === i.text && s.ts >= i.ts - 120);
+      const sent = i.sent ?? i.text;
+      const twin = server.find((s) => s.kind === "user" && s.text === sent && s.ts >= i.ts - 120);
+      if (twin && i.files) Object.assign(twin, { text: i.text, files: i.files, sent }); // keep the local pictures
+      return !twin;
     }
     return i.ts >= lastServerTs;
   });
@@ -431,7 +456,16 @@ export type Action =
   | { type: "bots"; bots: Bot[] }
   | { type: "select"; bot: string }
   | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number }
-  | { type: "local.user"; bot: string; id: string; text: string; now: number; reply?: { source: string; label: string } }
+  | {
+      type: "local.user";
+      bot: string;
+      id: string;
+      text: string;
+      now: number;
+      reply?: { source: string; label: string };
+      files?: SentFile[];
+      sent?: string;
+    }
   | { type: "reply.set"; bot: string; chip: ReplyChip | null }
   | { type: "send.failed"; bot: string; id: string; error: string }
   | { type: "event"; ev: BridgeEvent; now: number }
@@ -656,7 +690,15 @@ export function reduce(state: AppState, a: Action): AppState {
       return touchChat(state, a.bot, (c) =>
         withItems(c, [
           ...c.items,
-          { kind: "user", id: a.id, ts: a.now / 1000, text: a.text, ...(a.reply ? { reply: a.reply } : {}) },
+          {
+            kind: "user",
+            id: a.id,
+            ts: a.now / 1000,
+            text: a.text,
+            ...(a.reply ? { reply: a.reply } : {}),
+            ...(a.files?.length ? { files: a.files } : {}),
+            ...(a.sent !== undefined && a.sent !== a.text ? { sent: a.sent } : {}),
+          },
         ]),
       );
     case "reply.set":
@@ -874,6 +916,8 @@ export interface Actions {
   send(text: string): Promise<void>;
   /** Put (or clear, with null) the composer's "Reply there" chip for a bot. Sends nothing. */
   setReplyTo(chip: ReplyChip | null, bot?: string): void;
+  /** Attach each file in order (`chat.attach`), then send. Rejects, sending nothing, if any attach fails. */
+  sendWithFiles(text: string, files: OutFile[]): Promise<void>;
   interrupt(): Promise<void>;
   respondApproval(requestId: string, choice: ApprovalChoice, bot?: string): Promise<void>;
   /** A text answer for one question, or every answer of an interview at once (one `clarify.respond`). */
@@ -916,6 +960,8 @@ export interface Actions {
   panelTerminal(bot: string): Promise<{ runs: TerminalRun[] }>;
   panelWorktrees(bot: string): Promise<{ worktrees: Worktree[] }>;
   panelDiff(bot: string, path: string): Promise<WorktreeDiff>;
+  /** A file the bot sent (`MEDIA:` line); never cached in the store. */
+  readMedia(bot: string, path: string, info?: boolean): Promise<MediaFile>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -1101,6 +1147,28 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const b = botArg(bot);
       if (b) dispatch({ type: "reply.set", bot: b, chip });
     },
+    async sendWithFiles(text, files) {
+      const bot = state.selectedBot;
+      if (!bot) return;
+      if (!files.length) return actions.send(text);
+      const results: AttachResult[] = [];
+      for (const f of files) {
+        try {
+          results.push(await bridge.request("chat.attach", { bot, kind: f.attach, name: f.name, data_base64: await f.read() }));
+        } catch (e) {
+          throw new Error(`Couldn't attach ${f.name} · ${errText(e)}`);
+        }
+      }
+      const sent = promptText(text, results);
+      const id = `local-${++localSeq}`;
+      const shown: SentFile[] = files.map(({ name, size, kind, url }) => ({ name, size, kind, url }));
+      dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), files: shown, sent });
+      try {
+        await bridge.request("chat.send", { bot, text: sent });
+      } catch (e) {
+        dispatch({ type: "send.failed", bot, id, error: errText(e) });
+      }
+    },
     async interrupt() {
       const bot = state.selectedBot;
       if (!bot) return;
@@ -1242,6 +1310,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     panelTerminal: (bot) => bridge.request("panel.terminal", { bot }),
     panelWorktrees: (bot) => bridge.request("panel.worktrees", { bot }),
     panelDiff: (bot, path) => bridge.request("panel.diff", { bot, path }),
+    readMedia: (bot, path, info) => bridge.request("media.read", info ? { bot, path, info } : { bot, path }),
   };
 
   return {

@@ -227,6 +227,28 @@ async fn chat_close_all(shell: State<'_, Shell>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || chats.close_all()).await.map_err(|e| e.to_string())
 }
 
+/// Open a file the bot sent, with the system's default app, or show it in Finder / Explorer
+/// (`reveal: true`). Only a file the bridge just served through `media.read` (the bot named it in a
+/// `MEDIA:` line) may be opened; any other path is refused.
+#[tauri::command]
+async fn open_media(shell: State<'_, Shell>, path: String, reveal: Option<bool>) -> Result<(), String> {
+    let path = media_target(&path, |p| shell.bridge.served_media(p))?;
+    if reveal.unwrap_or(false) {
+        tauri_plugin_opener::reveal_item_in_dir(&path).map_err(|e| e.to_string())
+    } else {
+        tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string())
+    }
+}
+
+/// The path to open, when `served` knows it and it is still a plain file.
+pub(crate) fn media_target<S: Fn(&str) -> bool>(path: &str, served: S) -> Result<PathBuf, String> {
+    let p = PathBuf::from(path);
+    if path.is_empty() || !p.is_absolute() || !served(path) || !p.is_file() {
+        return Err("not a file this bot sent".into());
+    }
+    Ok(p)
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -255,7 +277,8 @@ pub fn run() {
             chat_start,
             chat_input,
             chat_close,
-            chat_close_all
+            chat_close_all,
+            open_media
         ])
         .setup(|app| {
             let bridge = Bridge::new();
@@ -286,7 +309,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::allowed_external;
+    use super::{allowed_external, media_target};
 
     #[test]
     fn opens_only_thread_links() {
@@ -308,5 +331,25 @@ mod tests {
         assert!(allowed_external(&discord_app_url("https://discord.com/channels/1/2").unwrap()));
         assert_eq!(discord_app_url("slack://channel?team=T1&id=C1"), None);
         assert_eq!(discord_app_url("https://t.me/x"), None);
+    }
+
+    #[test]
+    fn open_media_refuses_paths_the_bridge_did_not_serve() {
+        let dir = std::env::temp_dir().join(format!("omher-open-media-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("a.png");
+        std::fs::write(&file, b"x").unwrap();
+        let served = file.to_string_lossy().to_string();
+        let known = |p: &str| p == served;
+        assert_eq!(media_target(&served, known).unwrap(), file);
+        let other = dir.join("b.png");
+        std::fs::write(&other, b"x").unwrap();
+        assert!(media_target(&other.to_string_lossy(), known).is_err(), "unknown file");
+        assert!(media_target(&dir.to_string_lossy(), |_| true).is_err(), "a folder");
+        assert!(media_target("a.png", |_| true).is_err(), "relative");
+        assert!(media_target("", |_| true).is_err(), "empty");
+        std::fs::remove_file(&file).unwrap();
+        assert!(media_target(&served, known).is_err(), "gone since it was served");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

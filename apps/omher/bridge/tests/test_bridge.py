@@ -98,6 +98,14 @@ class FakeClient:
                     "model": "claude-opus-5-5", "provider": "claude-proxy"}
         if method == "session.mutate":
             return {"session_id": params["session_id"], "operation": params["operation"]}
+        if method == "image.attach_bytes":
+            if params["content_base64"] == "bad":
+                return {"attached": False, "message": "unsupported image"}
+            return {"attached": True, "path": "/h/images/upload_1.png", "text": "[User attached image: upload_1.png]"}
+        if method == "pdf.attach":
+            return {"attached": True, "text": f"[User attached PDF: {params['filename']} (2 page(s))]"}
+        if method == "file.attach":
+            return {"attached": True, "name": params["name"], "ref_text": f"@file:attachments/{params['name']}"}
         return {}
 
     def push(self, typ: str, payload: dict | None = None, sid: str = MAIN_RUNTIME, **extra) -> None:
@@ -705,7 +713,8 @@ class ReadOnlyRule(BridgeCase):
     """No Hermes call that attaches to or writes a session may carry any id but the bot's main chat."""
 
     GUARDED = ("prompt.submit", "session.resume", "session.interrupt", "approval.respond", "clarify.respond",
-               "session.mutate", "session.title", "session.steer", "session.redirect", "session.activate")
+               "session.mutate", "session.title", "session.steer", "session.redirect", "session.activate",
+               "image.attach_bytes", "pdf.attach", "file.attach")
 
     async def test_no_guarded_call_carries_a_foreign_session_id(self):
         foreign = "20261108_235229_aaaf70c4"
@@ -719,6 +728,7 @@ class ReadOnlyRule(BridgeCase):
                            ("approval.respond", {"request_id": "ap-x", "choice": "deny", "session_id": foreign}),
                            ("clarify.respond", {"request_id": "cl-x", "answer": "x", "session_id": foreign}),
                            ("chat.set_model", {"reasoning": "low", "session_id": foreign}),
+                           ("chat.attach", {"kind": "image", "name": "a.png", "data_base64": "iVBO", "session_id": foreign}),
                            ("models.options", {}), ("routines.list", {})]:
                 await s.req(op, bot="kami", **kw)
             c = env.clients["kami"]
@@ -731,7 +741,7 @@ class ReadOnlyRule(BridgeCase):
                 for k, v in params.items():  # and the foreign id appears nowhere but a history read
                     if v == foreign:
                         self.assertEqual(method, "session.history", f"{method}.{k}")
-            self.assertGreaterEqual(seen, 6)
+            self.assertGreaterEqual(seen, 7)
             self.assertEqual(len(c.find("prompt.submit")), 1)
 
     def test_source_has_exactly_one_submit_call_site(self):
@@ -887,6 +897,44 @@ class FolderChats(BridgeCase):
                 await s.until(lambda ev: any(e["event"] == "folder.closed" for e in ev))
                 end = [e for e in s.events if e["event"] == "turn.end" and e.get("session") == fid]
                 self.assertEqual(end[0]["outcome"], "error")
+
+
+class Attach(BridgeCase):
+    """chat.attach: Hermes' own attach calls, in the main chat only, with the bytes the app sent."""
+
+    async def test_each_kind_takes_its_hermes_call_with_the_main_id(self):
+        async with Env() as env:
+            s = await self.open(env)
+            img = await s.req("chat.attach", bot="kami", kind="image", name="a.png", data_base64="iVBO")
+            pdf = await s.req("chat.attach", bot="kami", kind="pdf", name="r.pdf", data_base64="JVBERi0=")
+            fil = await s.req("chat.attach", bot="kami", kind="file", name="clip.mp4", data_base64="AAAA",
+                              session_id="20261108_235229_aaaf70c4", path="/etc/hosts")
+            self.assertEqual(img["result"], {"kind": "image", "name": "a.png", "text": "[User attached image: upload_1.png]",
+                                             "ref_text": ""})
+            self.assertEqual(pdf["result"]["text"], "[User attached PDF: r.pdf (2 page(s))]")
+            self.assertEqual(fil["result"]["ref_text"], "@file:attachments/clip.mp4")
+            c = env.clients["kami"]
+            self.assertEqual(c.find("image.attach_bytes"), [{"session_id": MAIN_RUNTIME, "content_base64": "iVBO", "filename": "a.png"}])
+            self.assertEqual(c.find("pdf.attach"), [{"session_id": MAIN_RUNTIME, "content_base64": "JVBERi0=", "filename": "r.pdf"}])
+            # the client's session_id and path are never forwarded: bytes only, main chat only
+            self.assertEqual(c.find("file.attach"), [{"session_id": MAIN_RUNTIME, "name": "clip.mp4",
+                                                      "data_url": "data:application/octet-stream;base64,AAAA"}])
+            self.assertEqual(c.find("prompt.submit"), [])  # attaching never sends
+
+    async def test_refusals(self):
+        async with Env() as env:
+            s = await self.open(env)
+            bad = await s.req("chat.attach", bot="kami", kind="image", name="a.png", data_base64="bad")
+            self.assertEqual(bad["error"]["code"], "attach_failed")
+            self.assertIn("unsupported image", bad["error"]["message"])
+            for kw in ({"kind": "exe", "name": "a", "data_base64": "AA"}, {"kind": "file", "name": "", "data_base64": "AA"},
+                       {"kind": "file", "name": "a"}):
+                r = await s.req("chat.attach", bot="kami", **kw)
+                self.assertEqual(r["error"]["code"], "bad_request", kw)
+            big = await s.req("chat.attach", bot="kami", kind="file", name="big.bin", data_base64="A" * (ob.ATTACH_B64_MAX + 4))
+            self.assertEqual(big["error"]["code"], "too_big")
+            # only the well-formed one reached Hermes
+            self.assertEqual([m for m, _ in env.clients["kami"].calls if "attach" in m], ["image.attach_bytes"])
 
 
 class Discovery(unittest.TestCase):
@@ -1600,3 +1648,105 @@ class SidePanel(unittest.TestCase):
                 with mock.patch.object(ob.time, "monotonic", return_value=time.monotonic() + ob.WORKTREES_TTL + 1):
                     ob.read_diff(prof, trees[0]["path"])
                 self.assertIn("rev-parse", calls)  # stale: scanned again
+
+
+
+class Media(BridgeCase):
+    """media.read: only files the bot named in a MEDIA: line of its main chat or an elsewhere session."""
+
+    def _db(self, prof: Path, rows: list[tuple[str, str, str]]):
+        import sqlite3
+        con = sqlite3.connect(prof / "state.db")
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, title TEXT)")
+        con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT)")
+        con.executemany("INSERT INTO sessions VALUES (?, ?, ?)",
+                        [("main", "tui", ob.BOT_CHAT_TITLE), ("sl", "slack", None), ("cli", "cli", "scratch"),
+                         ("sub", "subagent", None)])
+        con.executemany("INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)", rows)
+        con.commit()
+        con.close()
+
+    def _files(self, d: Path) -> dict[str, Path]:
+        out = d / "out"
+        out.mkdir()
+        f = {"png": out / "a.png", "slack": out / "s.mp4", "user": out / "u.png", "cli": out / "c.png",
+             "sub": out / "sub.png", "prose": out / "p.png", "secret": d / "secret.txt"}
+        for p in f.values():
+            p.write_bytes(b"\x89PNG-ish")
+        (out / "link.png").symlink_to(f["secret"])
+        (out / "inner.png").symlink_to(f["png"])
+        (out / "dir.png").mkdir()
+        return f
+
+    async def test_serves_only_named_files(self):
+        async with Env() as env:
+            prof = env.home / "profiles" / "kami"
+            f = self._files(prof)
+            out = f["png"].parent
+            self._db(prof, [
+                ("main", "assistant", f"Here.\n\nMEDIA:{f['png']}\nMEDIA:{out / 'link.png'}\nMEDIA:{out / 'inner.png'}"
+                                      f"\nMEDIA:{out / 'dir.png'}"),
+                ("sl", "assistant", f"MEDIA:{f['slack']}"),
+                ("main", "user", f"MEDIA:{f['user']}"),
+                ("cli", "assistant", f"MEDIA:{f['cli']}"),
+                ("sub", "assistant", f"MEDIA:{f['sub']}"),
+                ("main", "assistant", f"see MEDIA:{f['prose']} and\n```\nMEDIA:{f['secret']}\n```"),
+            ])
+            s = await self.open(env)
+            r = await s.req("media.read", bot="kami", path=str(f["png"]))
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(r["result"]["mime"], "image/png")
+            self.assertEqual(r["result"]["size"], 8)
+            self.assertEqual(r["result"]["name"], "a.png")
+            import base64
+            self.assertEqual(base64.b64decode(r["result"]["data_base64"]), b"\x89PNG-ish")
+            info = await s.req("media.read", bot="kami", path=str(f["png"]), info=True)
+            self.assertNotIn("data_base64", info["result"])
+            self.assertEqual(info["result"]["size"], 8)
+            self.assertTrue((await s.req("media.read", bot="kami", path=str(f["slack"])))["ok"], "elsewhere session")
+            self.assertTrue((await s.req("media.read", bot="kami", path=str(out / "inner.png")))["ok"],
+                            "a symlink inside its own folder")
+            for path, why in [(f["user"], "a user message"), (f["cli"], "a cli session"), (f["sub"], "a subagent"),
+                              (f["prose"], "not a whole line"), (f["secret"], "fenced code"),
+                              (out / "link.png", "symlink escape"), (out / "dir.png", "a directory"),
+                              (out / "never.png", "never named"), (Path("/etc/hosts"), "never named")]:
+                r = await s.req("media.read", bot="kami", path=str(path))
+                self.assertFalse(r["ok"], why)
+                self.assertEqual(r["error"]["code"], "not_found", why)
+            r = await s.req("media.read", bot="kami", path="")
+            self.assertEqual(r["error"]["code"], "bad_request")
+
+    def test_too_big_is_never_read(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            prof = Path(d)
+            big = prof / "big.mp4"
+            with open(big, "wb") as fh:  # sparse: 25 MB + 1 without writing it
+                fh.truncate(ob.MEDIA_MAX + 1)
+            self._db(prof, [("main", "assistant", f"MEDIA:{big}")])
+            real_open = open
+            opened = []
+
+            def spy(path, *a, **kw):
+                opened.append(str(path))
+                return real_open(path, *a, **kw)
+
+            with mock.patch("builtins.open", spy):
+                r = ob.read_media(prof, str(big))
+            self.assertEqual(r["too_big"], True)
+            self.assertEqual(r["size"], ob.MEDIA_MAX + 1)
+            self.assertNotIn("data_base64", r)
+            self.assertNotIn(os.path.realpath(big), [os.path.realpath(p) for p in opened])
+
+    def test_state_db_is_opened_read_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof = Path(d)
+            (prof / "a.png").write_bytes(b"x")
+            self._db(prof, [("main", "assistant", f"MEDIA:{prof / 'a.png'}")])
+            before = (prof / "state.db").stat().st_mtime_ns
+            self.assertEqual(ob.read_media(prof, str(prof / "a.png"))["size"], 1)
+            self.assertEqual((prof / "state.db").stat().st_mtime_ns, before)
+
+    def test_media_lines_match_the_ui_parser(self):
+        text = "Done.\nMEDIA:/w/a.png\n  MEDIA: `/w/b c.mp4`\nsee MEDIA:/w/x.png\nMEDIA:rel.png\n```\nMEDIA:/w/f.png\n```"
+        self.assertEqual(ob.media_paths(text), ["/w/a.png", "/w/b c.mp4"])

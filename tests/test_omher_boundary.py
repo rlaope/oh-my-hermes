@@ -29,6 +29,8 @@ RULES = (
     "omher sends, answers and interrupts only in the bot's main chat, the session titled `Bot Chat`,",
     "and in folder chats the bridge created itself for an oh-my-hermes session (`folder.open`);",
     "the bridge has exactly one `prompt.submit` call site and it takes the main chat's id or such a folder chat's.",
+    "Files the person attaches go to that same chat only, as bytes through Hermes' own `image.attach_bytes`,",
+    "the bridge never opens the person's files.",
     "omher talks only to the person's own Hermes gateway on this machine, over loopback,",
     "omher makes no LLM or API call itself. Every model call is Hermes'.",
     "The bridge listens on 127.0.0.1 only and refuses any connection that lacks the random token",
@@ -47,6 +49,8 @@ RULES = (
     "The process is stopped when its session is closed and when the app exits.",
     "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing:",
     "The command is fixed in the shell; nothing from the page reaches it.",
+    "omher shows a file from disk only when the bot named it in a `MEDIA:` line of its own answer,",
+    "the desktop app opens only a file the bridge just served this way.",
 )
 SETUP_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "setup.rs"
 SHELL_SRC = ROOT / "apps" / "omher" / "src-tauri" / "src"
@@ -79,13 +83,12 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_twelve_numbered_rules(self) -> None:
-        # 12: rule 10 (the bridge's read-only git), rule 11 (SESSIONS' allow-listed agents) and rule 12
-        # (the one installer) each widened the boundary on purpose; the rules stay numbered 1..n with no gap
-        # or repeat.
-        text = DOC.read_text(encoding="utf-8")
-        rules = re.findall(r"^(\d+)\. ", text, re.M)
-        self.assertTrue(6 <= len(rules) <= 12, len(rules))
+    def test_boundary_is_between_six_and_thirteen_numbered_rules(self) -> None:
+        # 13: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
+        # rule 12 (the one installer) and rule 13 (media.read) each widened the boundary on purpose; the rules
+        # stay numbered 1..n with no gap or repeat.
+        rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
+        self.assertTrue(6 <= len(rules) <= 13, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -228,6 +231,29 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         opener = [f for f in ast.walk(self.tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == "op_folder_open"][0]
         self.assertIn("'session.create'", ast.unparse(opener))
         self.assertIn("cwd=cwd", ast.unparse(opener))
+
+    def test_media_read_checks_the_bots_own_messages_read_only(self) -> None:
+        """`media.read` serves a path only after looking it up in state.db (opened with ``ro_uri``)."""
+        fns = {n.name: n for n in ast.walk(self.tree) if isinstance(n, ast.FunctionDef)}
+        named = ast.unparse(fns["media_named"])
+        self.assertIn("ro_uri(db)", named)
+        self.assertIn("role = 'assistant'", named)
+        self.assertIn("media_named(profile_dir, path)", ast.unparse(fns["read_media"]))
+        lib = (ROOT / "apps" / "omher" / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
+        self.assertIn("media_target(&path, |p| shell.bridge.served_media(p))", lib)
+
+    def test_chat_attach_takes_the_main_chat_id_and_bytes_only(self) -> None:
+        """Every Hermes attach call is made by `op_chat_attach`, with the main chat's id, and no path."""
+        fns = {n.name: n for n in ast.walk(self.tree) if isinstance(n, ast.AsyncFunctionDef)}
+        attach = fns["op_chat_attach"]
+        body = ast.unparse(attach)
+        self.assertIn("main = await self._main(conn)", body)
+        self.assertIn("session_id=main", body)
+        self.assertNotIn("path", body)
+        self.assertNotIn("open(", body)
+        for name in ("image.attach_bytes", "pdf.attach", "file.attach", "image.attach"):
+            users = [f.name for f in fns.values() if any(isinstance(c, ast.Constant) and c.value == name for c in ast.walk(f))]
+            self.assertEqual(users, [] if name == "image.attach" else ["op_chat_attach"], name)
 
     def test_bridge_has_no_http_or_llm_client(self) -> None:
         banned = {"requests", "httpx", "aiohttp", "urllib3", "openai", "anthropic", "urllib.request", "http.client"}

@@ -9,6 +9,9 @@
 // mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open).
 import http from "node:http";
 import crypto from "node:crypto";
+import { readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const argv = process.argv.slice(2);
 const arg = (name, dflt) => {
@@ -41,8 +44,21 @@ const HISTORY_SEED = {
     ["user", "Summarise the Tauri 2 updater docs.", 5 * 3600],
     ["assistant", "The updater checks a signed manifest, downloads the bundle and swaps it on restart.", 5 * 3600 - 30],
   ],
-  default: [["assistant", "Hi, I'm Hermes. Ask me anything.", 24 * 3600]],
+  default: [
+    ["assistant", "Hi, I'm Hermes. Ask me anything.", 24 * 3600],
+    ["user", "Send me the chart, the clip and the report.", 2 * 3600],
+    ["assistant", "Here they are.\n\nMEDIA:/w/media/chart.png\nMEDIA:/w/media/clip.mp4\nMEDIA:/w/media/report.zip", 2 * 3600 - 20],
+  ],
 };
+
+// media.read serves these tiny real files (e2e/fixtures/media) for the paths the seeded answers name.
+const MEDIA_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "media");
+const MEDIA_TYPES = { png: "image/png", mp4: "video/mp4", zip: "application/zip" };
+const mediaLines = (text) =>
+  text
+    .split(/\r?\n/)
+    .map((l) => /^[ \t]*MEDIA:[ \t]*(.+?)[ \t]*$/.exec(l)?.[1])
+    .filter(Boolean);
 
 // Away sessions are stored as offsets from "now" so the timeline always looks fresh.
 const AWAY_SEED = {
@@ -508,6 +524,37 @@ const OPS = {
     const w = (PANEL_TREES[b.name] ?? []).find((t) => t.path === p.path);
     if (!w) throw new OpError("not_found", "not a worktree this bot worked in");
     return { path: w.path, branch: w.branch, repo: w.repo, truncated: false, ...PANEL_DIFF[w.path] };
+  },
+  "media.read": (p) => {
+    const b = needBot(p);
+    const path = needStr(p, "path");
+    const named = history[b.name].some((m) => m.role === "assistant" && mediaLines(m.text).includes(path));
+    const name = path.split("/").pop();
+    const file = join(MEDIA_DIR, name);
+    let size;
+    try {
+      if (!named || !path.startsWith("/w/media/")) throw new Error("not named");
+      size = statSync(file).size;
+    } catch {
+      throw new OpError("not_found", "not a file this bot sent");
+    }
+    const out = { path, name, mime: MEDIA_TYPES[name.split(".").pop()] ?? "application/octet-stream", size };
+    if (p.info === true) return out;
+    return { ...out, data_base64: readFileSync(file).toString("base64") };
+  },
+  // Stages a file for the next chat.send, like Hermes' image.attach_bytes / pdf.attach / file.attach.
+  // A name starting with "fail" is refused, so the e2e can check that nothing is sent after a failed attach.
+  "chat.attach": (p) => {
+    needBot(p);
+    const kind = needStr(p, "kind");
+    const name = needStr(p, "name");
+    const data = needStr(p, "data_base64");
+    if (!["image", "pdf", "file"].includes(kind)) throw new OpError("bad_request", "need kind image|pdf|file");
+    if (name.startsWith("fail")) throw new OpError("attach_failed", `unsupported ${kind}`);
+    const bytes = Buffer.from(data, "base64").length;
+    if (kind === "image") return { kind, name, text: `[User attached image: ${name}]`, ref_text: "", bytes };
+    if (kind === "pdf") return { kind, name, text: `[User attached PDF: ${name} (1 page(s))]`, ref_text: "", bytes };
+    return { kind, name, text: "", ref_text: `@file:.hermes/attachments/${name}`, bytes };
   },
   "routines.list": (p) => ({
     routines: (ROUTINE_SEED[needBot(p).name] ?? []).map((r) => ({

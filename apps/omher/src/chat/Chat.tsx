@@ -31,6 +31,7 @@ export function Chat() {
           asking={asking}
           offline={bot.status === "offline"}
           onSend={(t) => void s.send(t)}
+          onSendFiles={(t, files) => s.sendWithFiles(t, files)}
           onStop={() => void s.interrupt()}
           reply={s.replyTo[bot.name] ?? null}
           onClearReply={() => s.setReplyTo(null, bot.name)}

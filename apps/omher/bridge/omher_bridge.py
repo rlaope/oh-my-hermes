@@ -15,6 +15,7 @@ Boundary rules the code keeps:
   bot's main chat (the session titled ``Bot Chat``) and the folder chats it created itself for an
   oh-my-hermes SESSIONS entry (``folder.open``; closed with ``folder.close``). Every other session is
   only listed or read (list / history), never attached.
+  Files the person attaches go to the main chat only.
 """
 from __future__ import annotations
 
@@ -52,6 +53,11 @@ PEEK_CHARS = 400
 THINKING_MIN_GAP = 1.0
 CONNECT_TIMEOUT = 60.0
 OFFLINE_COOLDOWN = 10.0
+# chat.attach: one 100 MB file arrives base64'd in one frame; Hermes' own attach calls cap images (25 MB) and
+# PDFs (50 MB) lower and say so. pdf.attach renders pages, so it gets more than the default RPC deadline.
+ATTACH_B64_MAX = (100 * 1024 * 1024 + 2) // 3 * 4
+UI_FRAME_MAX = ATTACH_B64_MAX + 64 * 1024
+ATTACH_TIMEOUT = 180.0
 def default_hermes_home(environ=None, platform: str | None = None) -> Path:
     """Hermes' own default home: `HERMES_HOME`, else `~/.hermes`, or `%LOCALAPPDATA%\\hermes` on Windows
     (the same rule as Hermes' `hermes_constants`, kept here so the bridge needs no Hermes import to start)."""
@@ -594,6 +600,113 @@ def read_diff(profile_dir: Path, path: str, runs: list[dict] | None = None) -> d
             "patch": patch[:DIFF_MAX], "truncated": truncated}
 
 
+# ---------------------------------------------------------------- media the bot sent (read-only)
+
+MEDIA_MAX = 25 * 1024 * 1024   # larger files come back as `too_big` and are never read
+MEDIA_SCAN = 50                # newest assistant rows naming the path that are checked line by line
+MEDIA_READY_PREFIX = "OMHER_MEDIA_SERVED "  # stdout line the app reads: the only paths it may open
+_MEDIA_LINE = re.compile(r"^[ \t]*MEDIA:[ \t]*(.+?)[ \t]*$")
+_MEDIA_PATH = re.compile(r"^(?:/|~/|[A-Za-z]:[\\/])")
+_MEDIA_FENCE = re.compile(r"^[ \t]*(```|~~~)")
+MEDIA_TYPES = {
+    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp",
+    "heic": "image/heic", "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm", "m4v": "video/x-m4v",
+    "mp3": "audio/mpeg", "m4a": "audio/mp4", "wav": "audio/wav", "ogg": "audio/ogg", "pdf": "application/pdf",
+    "zip": "application/zip",
+}
+# The main chat by title, and every elsewhere place (what `elsewhere.list` shows); never subagent rows.
+_MEDIA_SESSIONS = ("(s.title = ? OR s.source NOT IN ("
+                   + ",".join("?" * (len(LOCAL_SOURCES) + 2)) + "))")
+
+
+def media_paths(text: str) -> list[str]:
+    """Paths named by whole `MEDIA:<path>` lines, in order (fenced code is skipped). The UI parses the same
+    way (src/chat/parts/mediaLines.ts), so a path the UI shows is a path this bridge will serve."""
+    out, fence = [], False
+    for line in (text or "").splitlines():
+        if _MEDIA_FENCE.match(line):
+            fence = not fence
+            continue
+        m = None if fence else _MEDIA_LINE.match(line)
+        if not m:
+            continue
+        p = m.group(1)
+        if len(p) >= 2 and p[0] == p[-1] and p[0] in "`\"'":
+            p = p[1:-1].strip()
+        if _MEDIA_PATH.match(p):
+            out.append(p)
+    return out
+
+
+def media_named(profile_dir: Path, path: str) -> bool:
+    """True when an assistant message of the bot's main chat or one of its elsewhere sessions has a
+    `MEDIA:` line naming exactly *path*. state.db is opened read-only."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not path or not db.is_file():
+        return False
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            rows = con.execute(
+                "SELECT m.content FROM messages m JOIN sessions s ON s.id = m.session_id"
+                f" WHERE m.role = 'assistant' AND instr(m.content, ?) > 0 AND {_MEDIA_SESSIONS}"
+                " ORDER BY m.id DESC LIMIT ?",
+                (path, BOT_CHAT_TITLE, *sorted(LOCAL_SOURCES), "subagent", "oneshot", MEDIA_SCAN)).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return False
+    return any(isinstance(c, str) and path in media_paths(c) for (c,) in rows)
+
+
+def media_file(path: str) -> str | None:
+    """The real file behind *path*, or None: not absolute, missing, a directory, or a symlink that leads
+    out of its own folder."""
+    p = Path(os.path.expanduser(path))
+    if not p.is_absolute():
+        return None
+    try:
+        os.lstat(p)
+    except OSError:
+        return None
+    real = os.path.realpath(p)
+    if os.path.islink(p):
+        base = os.path.realpath(p.parent)
+        try:
+            if os.path.commonpath([base, real]) != base:
+                return None
+        except ValueError:  # another drive on Windows
+            return None
+    return real if os.path.isfile(real) else None
+
+
+def read_media(profile_dir: Path, path: str, info: bool = False) -> dict:
+    """`media.read`: one file the bot itself named, base64, up to MEDIA_MAX (`info`: name, type and size
+    only, for a file card). Anything else is `not_found`."""
+    import base64
+    real = media_file(path) if media_named(profile_dir, path) else None
+    if real is None:
+        raise BridgeError("not_found", "not a file this bot sent")
+    ext = real.rsplit(".", 1)[-1].lower() if "." in os.path.basename(real) else ""
+    import mimetypes
+    mime = MEDIA_TYPES.get(ext) or mimetypes.guess_type(real)[0] or "application/octet-stream"
+    size = os.path.getsize(real)
+    out = {"path": real, "name": os.path.basename(real), "mime": mime, "size": size}
+    if size > MEDIA_MAX:
+        return {**out, "too_big": True}
+    if info:
+        return out
+    try:
+        with open(real, "rb") as f:
+            data = f.read(MEDIA_MAX + 1)
+    except OSError:
+        raise BridgeError("not_found", "could not read the file")
+    if len(data) > MEDIA_MAX:  # grew since stat
+        return {**out, "size": len(data), "too_big": True}
+    return {**out, "size": len(data), "data_base64": base64.b64encode(data).decode("ascii")}
+
+
 def read_bot_facts(profile_dir: Path) -> dict:
     """What the bot has done, for the bot page: sessions per place, first and last activity, skills
     and routines. Read from the profile's own files; ``state.db`` is opened read-only."""
@@ -984,15 +1097,17 @@ class Bridge:
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
-            "panel.diff": self.op_panel_diff,
+            "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
+            "chat.attach": self.op_chat_attach,
         }
+        self.announce_media = False  # amain: tell the app (stdout) which files it may open
 
     # ------------------------------------------------------------ lifecycle
 
     async def start(self, host: str = "127.0.0.1", port: int = 0, *, watch: bool = True) -> int:
         from websockets.asyncio.server import serve
         self.server = await serve(self._handler, host, port, process_request=self._process_request,
-                                  max_size=4 * 1024 * 1024)
+                                  max_size=UI_FRAME_MAX)
         self.port = self.server.sockets[0].getsockname()[1]
         if watch:
             self._spawn(self._watch())
@@ -1501,6 +1616,30 @@ class Bridge:
             caps = {}
         conn.clarify_batch = isinstance(caps, dict) and caps.get("canonical_clarify_batch") is True
 
+    async def op_chat_attach(self, p) -> dict:
+        """Stage one file the person picked for the next ``chat.send``, in the main chat only, through Hermes'
+        own attach calls. The bytes come from the app; the bridge never opens a file for this."""
+        kind, name, data = p.get("kind"), p.get("name"), p.get("data_base64")
+        if kind not in ("image", "pdf", "file") or not isinstance(name, str) or not name.strip():
+            raise BridgeError("bad_request", "need kind image|pdf|file and a name")
+        if not isinstance(data, str) or not data:
+            raise BridgeError("bad_request", "missing data_base64")
+        if len(data) > ATTACH_B64_MAX:
+            raise BridgeError("too_big", "files over 100 MB are not sent")
+        conn = await self._conn(p.get("bot"))
+        main = await self._main(conn)
+        if kind == "image":
+            method, source = "image.attach_bytes", {"content_base64": data, "filename": name}
+        elif kind == "pdf":
+            method, source = "pdf.attach", {"content_base64": data, "filename": name}
+        else:
+            method, source = "file.attach", {"data_url": f"data:application/octet-stream;base64,{data}", "name": name}
+        res = await self._call(conn, method, session_id=main, _timeout=ATTACH_TIMEOUT, **source)
+        res = res if isinstance(res, dict) else {}
+        if res.get("attached") is False:
+            raise BridgeError("attach_failed", str(res.get("message") or f"could not attach {name}"))
+        return {"kind": kind, "name": name, "text": str(res.get("text") or ""), "ref_text": str(res.get("ref_text") or "")}
+
     async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str):
         # The single place a turn is sent. It takes the main chat's id or a folder chat's that this bridge
         # created (both from _target), and nothing else.
@@ -1735,6 +1874,16 @@ class Bridge:
             raise BridgeError("bad_request", "missing path")
         return await asyncio.to_thread(read_diff, bot["path"], path)
 
+    async def op_media_read(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        path = p.get("path")
+        if not isinstance(path, str) or not path or len(path) > 4096 or "\n" in path or "\0" in path:
+            raise BridgeError("bad_request", "missing path")
+        out = await asyncio.to_thread(read_media, bot["path"], path, p.get("info") is True)
+        if self.announce_media:
+            print(MEDIA_READY_PREFIX + json.dumps({"path": out["path"]}), flush=True)
+        return out
+
     async def op_routines_list(self, p) -> dict:
         return {"routines": read_routines(self._bot(p.get("bot"))["path"])}
 
@@ -1897,6 +2046,7 @@ def _stop_on_signals(loop, stop: asyncio.Event) -> None:
 
 async def amain(args) -> int:
     bridge = Bridge(token=args.token, hermes_home=Path(args.hermes_home) if args.hermes_home else None, eager=args.eager)
+    bridge.announce_media = True
     port = await bridge.start("127.0.0.1", args.port)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
