@@ -1,24 +1,27 @@
 // Subscription usage at the bottom of the sidebar: one agent mark per CLI the person uses, with a ring that
-// fills to the larger of its windows (only when the CLI's own files give a %). Hover or click opens a card
-// with each window. Read-only: the numbers come from `usage.read`, refreshed every minute.
-import { useCallback, useEffect, useRef, useState } from "react";
+// fills to the larger of its windows (only when the CLI's own files give a %; no % means no ring at all). Hover
+// or click opens a card pointing at its mark, with each window. Read-only: the numbers come from `usage.read`,
+// refreshed every minute.
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { UsageProvider } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { AgentIcon } from "../ui";
-import { PROVIDER_NAME, meterLabel, planText, ringLevel, stateText, topPercent, windowRow } from "./usageFormat";
+import { PROVIDER_NAME, meterDot, meterLabel, planText, ringLevel, stateText, topPercent, windowRow } from "./usageFormat";
 
 const REFRESH_MS = 60_000;
 const R = 11.5;
 const C = 2 * Math.PI * R;
 
-/** The usage ring (also used per account in Settings › Accounts). */
+/** The usage ring (also used per account in Settings › Accounts). Nothing at all when the source gave no %:
+ *  an empty track would read as a reading of zero. */
 export function Ring({ p }: { p: UsageProvider }) {
   const pct = topPercent(p);
-  const fill = pct === null ? 0 : Math.max(0, Math.min(100, pct));
+  if (pct === null) return null;
+  const fill = Math.max(0, Math.min(100, pct));
   return (
     <svg className="usage-ring" width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
       <circle cx="13" cy="13" r={R} className="usage-track" />
-      {pct !== null && fill > 0 && (
+      {fill > 0 && (
         <circle cx="13" cy="13" r={R} className={`usage-fill lv-${ringLevel(pct)}`} strokeDasharray={`${(fill / 100) * C} ${C}`}
           transform="rotate(-90 13 13)" data-testid="usage-fill" />
       )}
@@ -26,26 +29,37 @@ export function Ring({ p }: { p: UsageProvider }) {
   );
 }
 
-function Card({ p, now }: { p: UsageProvider; now: number }) {
+function Card({ p, now, caret }: { p: UsageProvider; now: number; caret: number }) {
   const plan = planText(p.plan);
   return (
     <div className="usage-card ui-pop ui-pop-top ui-pop-left" role="dialog" aria-label={`${PROVIDER_NAME[p.id] ?? p.id} usage`}
-      data-testid="usage-card">
+      style={{ "--caret": `${caret}px` } as CSSProperties} data-testid="usage-card">
       <div className="uc-head">
         <AgentIcon id={p.id} size={14} />
         <b>{PROVIDER_NAME[p.id] ?? p.id}</b>
-        {plan && <span className="uc-plan">{plan}</span>}
+        {/* nothing to show: the state takes the plan's place, so the card stays one line */}
+        {p.windows.length === 0 ? (
+          <span className="uc-plan" data-testid="usage-empty">{plan ? `${plan} · ${stateText(p)}` : stateText(p)}</span>
+        ) : (
+          plan && <span className="uc-plan">{plan}</span>
+        )}
       </div>
-      {p.windows.length === 0 ? (
-        <div className="uc-row uc-note">{stateText(p)}</div>
-      ) : (
+      {p.windows.length === 0 ? null : (
         p.windows.map((w, i) => {
           const [label, pct, note] = windowRow(p, w, now);
+          const level = pct ? ringLevel(w.used_percent!) : null;
           return (
-            <div className={`uc-row${pct ? "" : " no-pct"}`} key={i} data-testid="usage-window">
-              <span className="uc-label">{label}</span>
-              {pct && <span className="uc-pct">{pct}</span>}
-              <span className={`uc-note${note === "stale" ? " stale" : ""}`}>{note}</span>
+            <div className={`uc-w${pct ? "" : " no-pct"}`} key={i} data-testid="usage-window">
+              <div className="uc-r1">
+                <span className="uc-label">{label}</span>
+                {pct ? <span className="uc-pct">{pct}</span> : <span className={`uc-state st-${p.state}`}>{note}</span>}
+              </div>
+              {pct && (
+                <div className="uc-bar" aria-hidden="true">
+                  <i className={`lv-${level}`} style={{ width: `${Math.max(0, Math.min(100, w.used_percent!))}%` }} />
+                </div>
+              )}
+              {pct && note && <div className="uc-note">{note}</div>}
             </div>
           );
         })
@@ -60,6 +74,7 @@ export function Usage() {
   const [open, setOpen] = useState<{ id: string; pinned: boolean } | null>(null);
   const [now, setNow] = useState(() => Date.now() / 1000);
   const ref = useRef<HTMLDivElement>(null);
+  const marks = useRef(new Map<string, HTMLButtonElement>());
 
   const load = useCallback(() => {
     getStore()
@@ -96,11 +111,19 @@ export function Usage() {
 
   if (providers.length === 0) return null;
   const shown = providers.find((p) => p.id === open?.id);
+  // the caret points at the middle of the open mark (measured from the card's own left edge)
+  const btn = shown ? marks.current.get(shown.id) : undefined;
+  const first = providers.length ? marks.current.get(providers[0].id) : undefined;
+  const caret = btn && first ? btn.offsetLeft - first.offsetLeft + btn.offsetWidth / 2 : 0;
   return (
     <div className="usage" ref={ref} data-testid="usage" onMouseLeave={() => !open?.pinned && setOpen(null)}>
       {providers.map((p) => (
         <button
           key={p.id}
+          ref={(el) => {
+            if (el) marks.current.set(p.id, el);
+            else marks.current.delete(p.id);
+          }}
           type="button"
           className={`usage-m${open?.id === p.id ? " on" : ""}`}
           data-testid={`usage-${p.id}`}
@@ -113,11 +136,10 @@ export function Usage() {
         >
           <Ring p={p} />
           <AgentIcon id={p.id} size={14} className="usage-mark" />
-          {topPercent(p) === null && <span className={`usage-dot st-${p.state}`} aria-hidden="true" />}
-          {topPercent(p) !== null && p.state === "limited" && <span className="usage-dot st-limited" aria-hidden="true" />}
+          {meterDot(p) && <span className={`usage-dot st-${meterDot(p)}`} aria-hidden="true" />}
         </button>
       ))}
-      {shown && <Card p={shown} now={now} />}
+      {shown && <Card p={shown} now={now} caret={caret} />}
     </div>
   );
 }

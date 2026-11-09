@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UsageProvider } from "../lib/protocol";
-import { duration, meterLabel, ringLevel, topPercent, windowRow } from "./usageFormat";
+import { duration, limitName, meterDot, meterLabel, ringLevel, topPercent, windowRow } from "./usageFormat";
 
 const NOW = 1_794_200_000;
 const codex: UsageProvider = {
@@ -19,9 +19,10 @@ describe("usage format", () => {
   });
 
   it("card rows read like the brief: label, %, resets in", () => {
-    expect(windowRow(codex, codex.windows[0], NOW)).toEqual(["5 hours", "73%", "resets in 1h 47m"]);
-    expect(windowRow(codex, codex.windows[1], NOW)).toEqual(["Weekly", "60%", "resets in 4d 23h"]);
+    expect(windowRow(codex, codex.windows[0], NOW)).toEqual(["5-hour limit", "73% used", "Resets in 1h 47m"]);
+    expect(windowRow(codex, codex.windows[1], NOW)).toEqual(["Weekly limit", "60% used", "Resets in 4d 23h"]);
     expect([duration(59), duration(600), duration(7200), duration(86400)]).toEqual(["<1m", "10m", "2h", "1d"]);
+    expect(["5 hours", "Weekly", "2h", "1 day", "2d"].map(limitName)).toEqual(["5-hour limit", "Weekly limit", "2h", "1-day limit", "2d"]);
   });
 
   it("never shows a % the source did not give", () => {
@@ -32,12 +33,15 @@ describe("usage format", () => {
     expect(meterLabel(claude)).toBe("Claude Code usage: Limited");
     const connected: UsageProvider = { id: "grok", state: "connected", source_mtime: null, windows: [] };
     expect(topPercent(connected)).toBeNull();
-    expect(meterLabel(connected)).toBe("Grok usage: Connected · no usage record");
+    expect(meterLabel(connected)).toBe("Grok usage: No usage yet");
+    // a dot only for a state worth a glance: none for "no usage yet" or a plain ring
+    expect([meterDot(connected), meterDot(claude), meterDot(codex)]).toEqual([null, "limited", null]);
   });
 
-  it("a stale window says stale, with no number even if one leaked through", () => {
+  it("a stale window says it has no recent record, with no number even if one leaked through", () => {
     const stale: UsageProvider = { id: "codex", state: "stale", source_mtime: 1, windows: [{ label: "Weekly", used_percent: 40, resets_at: NOW - 5, stale: true }] };
     expect(topPercent(stale)).toBeNull();
-    expect(windowRow(stale, stale.windows[0], NOW)).toEqual(["Weekly", "", "stale"]);
+    expect(windowRow(stale, stale.windows[0], NOW)).toEqual(["Weekly limit", "", "No recent record"]);
+    expect(meterDot(stale)).toBe("stale");
   });
 });

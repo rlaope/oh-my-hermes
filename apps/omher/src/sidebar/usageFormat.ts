@@ -36,13 +36,26 @@ export function clock(ts: number, now: number): string {
   return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${hm}`;
 }
 
-/** One card row: [label, percent text ("" when the source gave none), note]. */
+/** What a window past its reset time says (no number: the record is old). */
+export const STALE = "No recent record";
+/** What a CLI that is here but has written no usage record says. */
+export const NO_USAGE = "No usage yet";
+
+/** A window's name as a limit: "5 hours" -> "5-hour limit", "Weekly" -> "Weekly limit" (Settings › Accounts says the same). */
+export function limitName(label: string): string {
+  if (label === "Weekly") return "Weekly limit";
+  const m = /^(\d+) (hour|day)s?$/.exec(label);
+  return m ? `${m[1]}-${m[2]} limit` : label;
+}
+
+/** One card row: [limit name, "73% used" ("" when the source gave none), note]. */
 export function windowRow(p: UsageProvider, w: UsageWindow, now: number): [string, string, string] {
-  const pct = !w.stale && typeof w.used_percent === "number" ? `${Math.round(w.used_percent)}%` : "";
-  if (w.stale) return [w.label, pct, "stale"];
-  if (p.state === "limited" && pct === "" && typeof w.resets_at === "number") return [w.label, pct, `Limited until ${clock(w.resets_at, now)}`];
-  if (typeof w.resets_at === "number") return [w.label, pct, `resets in ${duration(w.resets_at - now)}`];
-  return [w.label, pct, ""];
+  const name = limitName(w.label);
+  const pct = !w.stale && typeof w.used_percent === "number" ? `${Math.round(w.used_percent)}% used` : "";
+  if (w.stale) return [name, pct, STALE];
+  if (p.state === "limited" && pct === "" && typeof w.resets_at === "number") return [name, pct, `Limited until ${clock(w.resets_at, now)}`];
+  if (typeof w.resets_at === "number") return [name, pct, `Resets in ${duration(w.resets_at - now)}`];
+  return [name, pct, ""];
 }
 
 /** The card's one-line state when there is no window to show (or for the header). */
@@ -53,9 +66,9 @@ export function stateText(p: UsageProvider): string {
     case "near":
       return "Near the limit";
     case "stale":
-      return "stale";
+      return STALE;
     case "connected":
-      return "Connected · no usage record";
+      return NO_USAGE;
     default:
       return "OK";
   }
@@ -63,6 +76,13 @@ export function stateText(p: UsageProvider): string {
 
 export function planText(plan?: string): string {
   return plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "";
+}
+
+/** The small dot on a meter: only for a state worth a glance (limited, near, stale). A ring carries the rest. */
+export function meterDot(p: UsageProvider): "limited" | "near" | "stale" | null {
+  if (p.state === "limited") return "limited";
+  if (topPercent(p) !== null) return null;
+  return p.state === "near" || p.state === "stale" ? p.state : null;
 }
 
 /** Accessible name for a meter button: provider, then the % or the state. */

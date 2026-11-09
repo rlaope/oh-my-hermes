@@ -303,26 +303,33 @@
   --usage-amber: #c4801c;
   --usage-red: #d64545;
 }
+/* the marks sit on the nav icons' column: each 26px mark is centred where the 18px nav icons and the 20px
+   user initial are (--side-x + 9..10px) */
 .usage {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px calc(var(--side-x) - 2px) 0;
-  margin-top: 6px;
+  gap: 6px;
+  padding: 2px calc(var(--side-x) - 4px);
+  margin-top: 4px;
 }
+/* round, so the gray hover disc and the usage ring are one shape */
 .usage-m {
   position: relative;
   width: 26px;
   height: 26px;
-  border-radius: var(--r);
+  border-radius: 50%;
   display: grid;
   place-items: center;
   color: var(--muted);
 }
-.usage-m:hover,
-.usage-m.on {
+.usage-m:hover {
   background: var(--hover);
+  color: var(--ink);
+}
+/* the mark whose card is open: the gray selection, like an open nav row */
+.usage-m.on {
+  background: var(--raise2);
   color: var(--ink);
 }
 .usage-m > * {
@@ -350,6 +357,7 @@
 .usage-fill.lv-red {
   stroke: var(--usage-red);
 }
+/* a dot only for a state worth a glance (limited, near, stale); a CLI with nothing to report shows just its mark */
 .usage-dot {
   position: absolute;
   right: 1px;
@@ -360,30 +368,48 @@
   box-shadow: 0 0 0 1.5px var(--side);
   background: var(--quiet);
 }
-.usage-dot.st-ok {
-  background: var(--ok);
-}
 .usage-dot.st-near {
   background: var(--usage-amber);
 }
 .usage-dot.st-limited {
   background: var(--usage-red);
 }
+/* the card: from the first mark's edge to the same inset on the right, so it covers the nav rows it sits on whole
+   (a narrower card left their "Soon" tags peeking out beside it); a caret points at its mark (--caret, the mark's
+   centre) */
 .usage-card {
-  left: 0;
-  right: 0;
+  left: calc(var(--side-x) - 4px);
+  right: calc(var(--side-x) - 4px);
   width: auto;
-  padding: 8px 10px;
+  padding: 10px 12px;
   font-size: 12px;
   border-radius: 8px;
   color: var(--body);
+  overflow: visible;
+  /* the shadow goes up, away from the marks: the popovers' usual drop shadow dimmed the open mark under it */
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+[data-theme="light"] .usage-card {
+  box-shadow: 0 -6px 20px rgba(40, 20, 40, 0.12);
+}
+.usage-card::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: calc(var(--caret, 20px) - 5px);
+  width: 9px;
+  height: 9px;
+  background: var(--pop);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  transform: rotate(45deg);
 }
 .uc-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 7px;
   color: var(--ink);
+  font-size: 12.5px;
 }
 .uc-head b {
   font-weight: 600;
@@ -393,35 +419,55 @@
   font-size: 11px;
   color: var(--muted);
 }
-.uc-row {
-  display: grid;
-  grid-template-columns: 56px 34px 1fr;
+.uc-w {
+  margin-top: 8px;
+}
+.uc-r1 {
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
-  padding: 2px 0;
+  justify-content: space-between;
+  column-gap: 8px;
 }
 .uc-label {
-  color: var(--muted);
+  color: var(--body);
 }
 .uc-pct {
   color: var(--ink);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+}
+.uc-bar {
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.uc-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--muted);
+}
+.uc-bar > i.lv-amber {
+  background: var(--usage-amber);
+}
+.uc-bar > i.lv-red {
+  background: var(--usage-red);
 }
 .uc-note {
+  margin-top: 4px;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11px;
   white-space: nowrap;
 }
-.uc-note.stale {
-  color: var(--quiet);
-  font-style: italic;
+.uc-state {
+  color: var(--muted);
+  font-size: 11.5px;
 }
-.uc-row.uc-note {
-  display: block;
-}
-.uc-row.no-pct {
-  grid-template-columns: 56px 1fr;
+.uc-state.st-limited {
+  color: var(--usage-red);
 }
 
 /* ---- Needs you: approvals and questions waiting on the person ------------------------------------

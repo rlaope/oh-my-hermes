@@ -198,7 +198,9 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
   return (
     <section className="acc-g" data-testid={`accounts-${g.cli}`}>
       <div className="acc-gh">
-        <AgentIcon id={g.cli} size={15} />
+        <span className="acc-gh-i">
+          <AgentIcon id={g.cli} size={15} />
+        </span>
         <b>{CLI_NAME[g.cli]}</b>
       </div>
       {note && (

@@ -50,6 +50,17 @@ test("one mark per provider above the user row; rings only where the source gave
   await expect(page.getByTestId("usage-claude").getByTestId("usage-fill")).toHaveCount(0);
   await expect(page.getByTestId("usage-claude").locator(".usage-dot")).toHaveClass(/st-limited/);
   await expect(page.getByTestId("usage-grok").getByTestId("usage-fill")).toHaveCount(0);
+  // no % from the source: no ring at all (an empty track reads as 0 %), and no dot when nothing is wrong
+  await expect(page.getByTestId("usage-grok").locator(".usage-ring")).toHaveCount(0);
+  await expect(page.getByTestId("usage-grok").locator(".usage-dot")).toHaveCount(0);
+  await expect(page.getByTestId("usage-claude").locator(".usage-ring")).toHaveCount(0);
+  // the marks sit on the nav icons' column: the first mark's centre matches the Settings icon's and the "Y"
+  const cx = await page.evaluate(() => {
+    const mid = (el: Element | null) => { const r = el!.getBoundingClientRect(); return r.left + r.width / 2; };
+    return [mid(document.querySelector(".usage-m .usage-mark")), mid(document.querySelector("[data-testid=nav-settings] svg")), mid(document.querySelector(".me-i"))];
+  });
+  expect(Math.abs(cx[0] - cx[1]), `mark ${cx[0]} vs nav icon ${cx[1]}`).toBeLessThanOrEqual(1.5);
+  expect(Math.abs(cx[0] - cx[2]), `mark ${cx[0]} vs user initial ${cx[2]}`).toBeLessThanOrEqual(1.5);
   await expect(page.getByTestId("usage-codex")).toHaveAttribute("aria-label", "Codex usage: 73%");
   // the meter calls only the read op
   const ops = (await mock("mock.calls")).calls.map((c: { op: string }) => c.op);
@@ -65,10 +76,35 @@ test("hover shows the card: plan, then each window with % and reset", async ({ p
   await expect(card.locator(".uc-plan")).toHaveText("Pro");
   const rows = card.getByTestId("usage-window");
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toHaveText(/^5 hours\s*73%\s*resets in 1h 4[67]m$/);
-  await expect(rows.nth(1)).toHaveText(/^Weekly\s*60%\s*resets in 4d 2[23]h$/);
+  await expect(rows.nth(0)).toHaveText(/^5-hour limit\s*73% used\s*Resets in 1h 4[67]m$/);
+  await expect(rows.nth(1)).toHaveText(/^Weekly limit\s*60% used\s*Resets in 4d 2[23]h$/);
+  // each window with a % gets a bar filled to it, coloured like the ring
+  await expect(rows.nth(0).locator(".uc-bar > i")).toHaveClass(/lv-amber/);
+  await expect(rows.nth(1).locator(".uc-bar > i")).toHaveClass(/lv-gray/);
+  const w = await rows.nth(0).locator(".uc-bar").evaluate((b) => (b.firstElementChild as HTMLElement).offsetWidth / (b as HTMLElement).clientWidth);
+  expect(w).toBeGreaterThan(0.7);
+  expect(w).toBeLessThan(0.76);
   const radius = await card.evaluate((e) => getComputedStyle(e).borderRadius);
   expect(radius).toBe("8px");
+  // the caret points at the hovered mark
+  for (const id of ["codex", "claude"]) {
+    await page.getByTestId(`usage-${id}`).hover();
+    const [caret, mark] = await page.evaluate((id) => {
+      const c = document.querySelector("[data-testid=usage-card]")!;
+      const a = getComputedStyle(c, "::after");
+      const left = c.getBoundingClientRect().left + parseFloat(a.left) + parseFloat(a.width) / 2;
+      const m = document.querySelector(`[data-testid=usage-${id}]`)!.getBoundingClientRect();
+      return [left, m.left + m.width / 2];
+    }, id);
+    expect(Math.abs(caret - mark), id).toBeLessThanOrEqual(1.5);
+  }
+  // the card starts on the first mark's edge and covers the nav rows' "Soon" tags whole (never cuts one in half)
+  const [cardBox, first, soon] = await Promise.all([
+    page.getByTestId("usage-card").boundingBox(), page.getByTestId("usage-codex").boundingBox(),
+    page.locator("[data-testid=nav-plugins] .nav-soon").boundingBox(),
+  ]);
+  expect(Math.abs(cardBox!.x - first!.x)).toBeLessThanOrEqual(0.5);
+  expect(cardBox!.x + cardBox!.width).toBeGreaterThanOrEqual(soon!.x + soon!.width);
   // moving away closes a hover card; a click pins it until outside click / Escape
   await page.getByTestId("bot-friren").hover();
   await expect(card).toHaveCount(0);
@@ -85,14 +121,17 @@ test("Claude shows Limited until … and never a %", async ({ page }) => {
   const card = page.getByTestId("usage-card");
   await expect(card.locator(".uc-head")).toContainText("Claude Code");
   await expect(card.getByTestId("usage-window")).toHaveCount(1);
-  await expect(card.getByTestId("usage-window")).toContainText(/Weekly\s*Limited until (\w{3} )?\d{2}:\d{2}/);
+  await expect(card.getByTestId("usage-window")).toContainText(/Weekly limit\s*Limited until (\w{3} )?\d{2}:\d{2}/);
   await expect(card).not.toContainText("%");
   await page.getByTestId("usage-grok").hover();
-  await expect(page.getByTestId("usage-card")).toContainText("Connected · no usage record");
+  await expect(page.getByTestId("usage-card").getByTestId("usage-empty")).toHaveText("No usage yet");
+  // one line: the state sits in the head, where a plan would
+  await expect(page.getByTestId("usage-card").locator(".uc-head [data-testid=usage-empty]")).toHaveCount(1);
+  await expect(page.getByTestId("usage-card").locator(".uc-bar")).toHaveCount(0);
   await expect(page.getByTestId("usage-card")).not.toContainText("%");
 });
 
-test("a record past its reset time shows stale, with no number and no ring", async ({ page }) => {
+test("a record past its reset time says No recent record, with no number and no ring", async ({ page }) => {
   await mock("mock.usage", { fixture: "stale" });
   await open(page);
   await expect(page.getByTestId("usage").locator(".usage-m")).toHaveCount(1);
@@ -101,7 +140,8 @@ test("a record past its reset time shows stale, with no number and no ring", asy
   await page.getByTestId("usage-codex").hover();
   const rows = page.getByTestId("usage-card").getByTestId("usage-window");
   await expect(rows).toHaveCount(2);
-  for (const i of [0, 1]) await expect(rows.nth(i)).toContainText("stale");
+  for (const i of [0, 1]) await expect(rows.nth(i)).toContainText("No recent record");
+  await expect(page.getByTestId("usage-codex").locator(".usage-dot")).toHaveClass(/st-stale/);
   await expect(page.getByTestId("usage-card")).not.toContainText("%");
 });
 

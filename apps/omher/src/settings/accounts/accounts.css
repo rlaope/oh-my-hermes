@@ -1,5 +1,11 @@
-/* Settings › Accounts. Quiet rows like the rest of Settings; selection and pills stay gray. */
+/* Settings › Accounts. Quiet rows like the rest of Settings; selection and pills stay gray.
+   Two text edges only: page lines (the title, the lead, "Not on this computer") start on the card's outer edge;
+   everything that belongs to one CLI (its heading's name, its rows' names, the lines under its card) starts on the
+   rows' name column (--acc-text: 1px border + 12px padding + the 26px mark column + a 10px gap). The heading's
+   mark sits in the rows' mark column (--acc-in). */
 .acc {
+  --acc-in: 13px;
+  --acc-text: 49px;
   --usage-amber: #e3a54a;
   --usage-red: #f08a8a;
 }
@@ -7,10 +13,13 @@
   --usage-amber: #94600f;
   --usage-red: #d64545;
 }
+.acc .st-gh {
+  padding-left: 0;
+}
 .acc-lead {
   font-size: 12.5px;
   color: var(--muted);
-  margin: -2px 0 4px 2px;
+  margin: -2px 0 4px;
 }
 .acc-g {
   margin-top: 20px;
@@ -18,11 +27,17 @@
 .acc-gh {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   margin: 0 0 7px;
-  padding-left: 2px;
+  padding-left: var(--acc-in);
   color: var(--ink);
   font-size: 13px;
+}
+.acc-gh-i {
+  width: 26px;
+  display: grid;
+  place-items: center;
+  flex: none;
 }
 .acc-gh b {
   font-weight: 600;
@@ -42,7 +57,7 @@
   gap: 8px;
   min-height: 16px;
   line-height: 16px;
-  margin: 8px 0 0 2px;
+  margin: 8px 0 0 var(--acc-text);
   font-size: 11.5px;
   color: var(--muted);
 }
@@ -195,12 +210,13 @@
   align-items: center;
   gap: 10px;
   margin-top: 8px;
+  padding-left: var(--acc-text);
 }
 .acc-addbtn {
   font-size: 12px;
   color: var(--body);
   padding: 3px 6px;
-  margin-left: -4px;
+  margin-left: -6px;
   border-radius: var(--r-sm);
 }
 .acc-addbtn:disabled {
@@ -269,20 +285,19 @@
     transform: rotate(360deg);
   }
 }
-/* the lines under a group (auto-switch, "Also found", a message, + Add account) and the page's last line keep one
-   8px rhythm: each sits 8px under whatever is above it, line height fixed so the gaps measure the same */
+/* the lines under a group (auto-switch, "Also found", a message, + Add account) keep one 8px rhythm: each sits
+   8px under whatever is above it, line height fixed so the gaps measure the same */
 .acc-also,
 .acc-msg,
 .acc-missing {
   font-size: 11.5px;
   line-height: 16px;
   color: var(--muted);
-  margin: 8px 0 0 2px;
+  margin: 8px 0 0 var(--acc-text);
 }
-/* the page's own last line (not one group's): a hairline sets it apart; the gap above it stays 8px */
+/* the page's own last line (not one group's): a group's distance below the last group, on the page edge */
 .acc-missing {
-  padding-top: 8px;
-  border-top: 1px solid var(--line-soft);
+  margin: 20px 0 0;
 }
 .acc-link {
   font: inherit;

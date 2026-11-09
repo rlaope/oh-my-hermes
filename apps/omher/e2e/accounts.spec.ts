@@ -127,11 +127,11 @@ test("This computer: Claude's own login from its status: email, then source · p
   for (const k of ["access_token", "refresh_token", "id_token", "api_key", "OPENAI_API_KEY"]) expect(html).not.toContain(k);
 });
 
-test("the lines under each group and the page's last line keep one 8px rhythm", async ({ page }) => {
+test("the lines under each group keep one 8px rhythm", async ({ page }) => {
   await openAccounts(page);
   const gaps = await page.getByTestId("accounts-page").evaluate((p) => {
     const out: [string, number][] = [];
-    for (const el of p.querySelectorAll(".acc-auto, .acc-also, .acc-msg, .acc-foot, .acc-missing")) {
+    for (const el of p.querySelectorAll(".acc-auto, .acc-also, .acc-msg, .acc-foot")) {
       const prev = el.previousElementSibling as HTMLElement | null;
       if (!prev) continue;
       out.push([el.className, Math.round(el.getBoundingClientRect().top - prev.getBoundingClientRect().bottom)]);
@@ -140,6 +140,27 @@ test("the lines under each group and the page's last line keep one 8px rhythm", 
   });
   expect(gaps.length).toBeGreaterThanOrEqual(4);
   for (const [cls, gap] of gaps) expect(gap, cls).toBe(8);
+});
+
+test("two left edges: page lines on the card's edge, each CLI's heading, names and lines on the rows' text column", async ({ page }) => {
+  await openAccounts(page);
+  const x = await page.getByTestId("accounts-page").evaluate((p) => {
+    const left = (sel: string, root: Element = p) => Math.round(root.querySelector(sel)!.getBoundingClientRect().left * 2) / 2;
+    const g = p.querySelector("[data-testid=accounts-claude]")!;
+    const ring = g.querySelector(".acc-row .acc-ring")!.getBoundingClientRect();
+    const head = g.querySelector(".acc-gh-i")!.getBoundingClientRect();
+    return {
+      title: left(".st-gh"), lead: left(".acc-lead"), card: left(".st-grp"), missing: left(".acc-missing"),
+      gh: left(".acc-gh b", g), name: left(".acc-n", g), also: left(".acc-also", g), add: left(".acc-addbtn", g),
+      ring: ring.left + ring.width / 2, headMark: head.left + head.width / 2,
+    };
+  });
+  for (const k of ["title", "lead", "missing"] as const) expect(x[k], k).toBe(x.card);
+  expect(x.gh, "heading name vs row name").toBe(x.name);
+  expect(Math.abs(x.headMark - x.ring), "heading mark vs row mark").toBeLessThanOrEqual(0.5);
+  expect(x.also, "Also found vs row names").toBe(x.name);
+  // + Add account's text (inside its 6px hover padding) on the names' column
+  expect(Math.abs(x.add + 6 - x.name), "+ Add account vs row names").toBeLessThanOrEqual(0.5);
 });
 
 test("+ Add account runs the CLI's own sign-in; when it ends signed in, the row shows the email and plan", async ({ page }) => {
