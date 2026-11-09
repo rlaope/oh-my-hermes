@@ -95,7 +95,45 @@ def owner_named_as_doer(text: str, phrase: str) -> bool:
                 tail[len(suffix):].startswith(neg) or tail.startswith(neg)
                 for suffix in suffixes if tail.startswith(suffix) for neg in negated_tails
             )
-            if led or trailed or suffixed:
+            if led or trailed or suffixed or _addressed_as_doer(head, tail):
                 return True
         start = text.find(phrase, start + 1)
+    return False
+
+
+# Forms that address the CLI as the one to act, each pinned beside a negative in `OwnerCueTests`.
+_REQUEST_VERBS: tuple[str, ...] = (
+    "fix", "implement", "build", "write", "add", "update", "refactor", "handle", "make", "do", "take", "change",
+)
+# A Korean request ending somewhere after "가"/"이" makes the name the subject of a request ("codex가 해줘"),
+# never of a question about it ("codex가 왜 죽어").
+_KO_REQUEST_ENDINGS: tuple[str, ...] = (
+    "해줘", "해 줘", "해주세요", "해 주세요", "고쳐", "구현해", "만들어", "작성해", "수정해", "처리해", "맡아", "진행해", "해봐",
+)
+
+
+@lru_cache(maxsize=1)
+def _folded_request_endings() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    return (tuple(normalized_phrase(value) for value in _KO_REQUEST_ENDINGS),
+            tuple(normalized_phrase(value) for value in ("가 ", "이 ")))
+
+
+def _addressed_as_doer(head: str, tail: str) -> bool:
+    """"codex가 고쳐줘", "codex, fix ...", "get codex to ...", "codex please ...", "can codex fix ...", "codexに…させ"."""
+    endings, particles = _folded_request_endings()
+    question = tail.rstrip().endswith("?")
+    if tail.startswith(particles) and not question:
+        clause = tail[2:].split(".")[0]
+        if any(ending in clause for ending in endings):
+            return True
+    if not head.strip() and tail.startswith(",") and not question:
+        return True
+    if head.endswith("get ") and tail.startswith(" to "):
+        return True
+    if tail.startswith(" please") and not question:
+        return True
+    if head.endswith(("can ", "could ")) and any(tail.startswith(" " + verb + " ") for verb in _REQUEST_VERBS):
+        return True
+    if tail.startswith("に") and "させ" in tail.split("。")[0]:
+        return True
     return False

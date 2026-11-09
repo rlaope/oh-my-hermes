@@ -220,22 +220,52 @@ class OwnerCueEntryPointTests(unittest.TestCase):
 
     SUBJECT = "fix the codex adapter tests and open a pr"
 
-    def test_a_cli_named_as_the_subject_leaves_the_profile_default_in_charge(self) -> None:
-        # Mutation: read a bare product word as an owner again; Codex then runs and is recorded as chosen.
+    def test_a_mentioned_cli_that_is_not_the_doer_is_asked_for_not_run(self) -> None:
+        # Mutation: drop the safety net; the profile default (claude-code) then runs with codex named in the request.
+        for message in (self.SUBJECT, "fix the login bug in codex", "codex에서 로그인 버그 고쳐줘"):
+            with TemporaryDirectory() as tmp:
+                homes = _Homes(Path(tmp))
+                for entry, payload in (
+                    ("chat interact", homes.cli("chat", "interact", "--json", "--source", "discord", message)),
+                    ("chat session start", homes.cli("chat", "session", "start", "--source", "discord", message)),
+                ):
+                    interaction = _interaction(payload)
+                    with self.subTest(message=message, entry=entry):
+                        self.assertEqual(interaction["executor_resolution"]["source"], "mentioned_owner_unclear")
+                        self.assertEqual(interaction["executor_resolution"]["offered_owner"], "codex")
+                        self.assertEqual(interaction["next_action"], "choose_executor")
+                        self.assertNotEqual(interaction["delegation"].get("selected_executor_profile"), "claude-code")
+                delegated = homes.cli("coding", "delegate", message)
+                stored = homes.store.exists()
+            with self.subTest(message=message, entry="coding delegate"):
+                self.assertNotEqual(delegated.get("selected_executor_profile"), "claude-code")
+                self.assertNotEqual(delegated.get("selected_executor_profile"), "codex")
+                self.assertFalse(stored)
+
+    def test_a_subject_mention_with_no_profile_still_asks(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh, hermes = root / ".omh", root / ".hermes"
+            status, stdout, _ = run_cli(["--omh-home", str(omh), "--hermes-home", str(hermes),
+                                         "chat", "interact", "--json", "--source", "discord", self.SUBJECT])
+        payload = json.loads(stdout)
+        self.assertEqual(status, 0)
+        self.assertEqual(payload["executor_resolution"]["source"], "caller_default")
+        self.assertEqual(payload["next_action"], "choose_executor")
+
+    def test_a_status_card_reports_the_same_owner_in_the_decision(self) -> None:
         with TemporaryDirectory() as tmp:
             homes = _Homes(Path(tmp))
-            for entry, payload in (
-                ("chat interact", homes.cli("chat", "interact", "--json", "--source", "discord", self.SUBJECT)),
-                ("chat session start", homes.cli("chat", "session", "start", "--source", "discord", self.SUBJECT)),
-            ):
-                interaction = _interaction(payload)
-                with self.subTest(entry=entry):
-                    self.assertEqual(interaction["executor_resolution"]["source"], "setup_profile")
-                    self.assertEqual(interaction["delegation"]["selected_executor_profile"], "claude-code")
-            delegated = homes.cli("coding", "delegate", self.SUBJECT)
-            stored = homes.store.exists()
-        self.assertEqual(delegated["selected_executor_profile"], "claude-code")
-        self.assertFalse(stored)
+            payload = homes.cli("chat", "interact", "--json", "--source", "discord", "Codex session looks stuck")
+        self.assertEqual(payload["executor_resolution"]["resolved_executor_target"], "codex")
+        self.assertEqual(payload["coding_route_decision"]["selected_owner"], "codex")
+
+    def test_a_dag_ulw_request_that_only_mentions_a_cli_exports_nothing(self) -> None:
+        from omh.plugin_bundle.omh.named_owner_choice import named_owners
+
+        for text in ("/dag-ulw fix the login bug in codex", "/dag-ulw codex에서 로그인 버그 고쳐줘"):
+            with self.subTest(text=text):
+                self.assertEqual(named_owners(text), ())
 
     def test_the_plugin_tool_reads_the_same_cue(self) -> None:
         from omh.plugin_bundle.omh.tools import chat_tool
@@ -247,8 +277,8 @@ class OwnerCueEntryPointTests(unittest.TestCase):
                     "message": self.SUBJECT, "source": "discord", "record_session": False,
                     "omh_home": str(homes.omh), "hermes_home": str(homes.hermes),
                 }))
-        self.assertEqual(_interaction(payload)["executor_resolution"]["source"], "setup_profile")
-        self.assertEqual(_interaction(payload)["delegation"]["selected_executor_profile"], "claude-code")
+        self.assertEqual(_interaction(payload)["executor_resolution"]["source"], "mentioned_owner_unclear")
+        self.assertNotEqual(_interaction(payload)["delegation"].get("selected_executor_profile"), "claude-code")
 
 
 class ProfileOwnerDecisionTests(unittest.TestCase):

@@ -244,6 +244,15 @@ class OwnerCueTests(unittest.TestCase):
         "codex로 하지 마",
         # A status question names the CLI it asks about; the wrapper keeps it as the card's subject only.
         "codex 세션 지금 실행 중이야?",
+        # Beside each addressed form (#2679 r3): a question, a noun after "get", a capability, a topic.
+        "codex가 왜 죽어",
+        "codex, is it free?",
+        "get the codex logs",
+        "can codex read pdfs?",
+        "codexに関する資料",
+        # Where the work is, not who does it: the safety net asks when a different CLI would run.
+        "fix the login bug in codex",
+        "codex에서 로그인 버그 고쳐줘",
     )
     OWNER = (
         ("use codex to fix the login bug", ("codex",)),
@@ -263,6 +272,15 @@ class OwnerCueTests(unittest.TestCase):
         ("opencode로 이 버그 고쳐줘", ("pi-family-runtime",)),
         ("use codex or claude code to fix the login bug", ("codex", "claude-code")),
         ("codex 말고 claude code로 구현해줘", ("claude-code",)),
+        # The CLI addressed as the one to act (#2679 r3).
+        ("codex가 로그인 버그 고쳐줘", ("codex",)),
+        ("codex가 해줘", ("codex",)),
+        ("claude code가 이거 구현해줘", ("claude-code",)),
+        ("codex, fix the login bug and open a pr", ("codex",)),
+        ("get codex to fix the login bug", ("codex",)),
+        ("codex please fix the login bug", ("codex",)),
+        ("can codex fix the login bug", ("codex",)),
+        ("codexにログインバグを直させて", ("codex",)),
     )
 
     def test_a_cli_named_as_the_subject_is_not_an_owner(self) -> None:
@@ -276,6 +294,19 @@ class OwnerCueTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertEqual(named_executor_owners(normalized_phrase(message)), owners)
 
+    def test_a_mention_that_is_not_the_doer_never_runs_a_different_profile_cli(self) -> None:
+        # Mutation: drop the safety net; the profile default (claude-code) then runs with codex named in the request.
+        for message in ("fix the login bug in codex", "codex에서 로그인 버그 고쳐줘", "fix the codex adapter tests"):
+            with self.subTest(message=message):
+                decision = _decision(message, recorded_owner="claude-code")
+                self.assertEqual(decision.next_action, USER_CHOICE_NEXT_ACTION)
+                self.assertEqual(decision.offered_owner, "codex")
+        # No conflict: the profile names the mentioned CLI, or Hermes, which starts no CLI.
+        self.assertEqual(_decision("fix the login bug in codex", recorded_owner="codex").next_action,
+                         RECORDED_OWNER_NEXT_ACTION)
+        self.assertEqual(_decision("fix the login bug in codex", recorded_owner="hermes").next_action,
+                         RECORDED_OWNER_NEXT_ACTION)
+
     def test_the_wrapper_reads_the_same_cue(self) -> None:
         from omh.wrapper.contract import executor_target_named_in_message
 
@@ -284,9 +315,10 @@ class OwnerCueTests(unittest.TestCase):
                 self.assertEqual(executor_target_named_in_message(message), "")
         for message, owners in self.OWNER:
             # The wrapper's own name table spells the pi family by its runtime names, not by "opencode".
-            if len(owners) == 1 and owners != ("pi-family-runtime",):
+            if owners != ("pi-family-runtime",):
                 with self.subTest(message=message):
-                    self.assertEqual(executor_target_named_in_message(message), owners[0])
+                    # Two owners named as the doer are the user's choice: the wrapper names neither.
+                    self.assertEqual(executor_target_named_in_message(message), owners[0] if len(owners) == 1 else "")
 
 
 class CodingRouteActionGuardTests(unittest.TestCase):

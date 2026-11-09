@@ -7,6 +7,7 @@ from typing import Any, Mapping
 from .executor_cues import (
     NAMED_CODING_AGENT_PHRASES,
     PI_FAMILY_CODING_AGENT_PHRASES,
+    contains_boundary_phrase,
     owner_named_as_doer,
 )
 from .localization import normalized_phrase
@@ -126,6 +127,8 @@ UNSAFE_AUTOMATIC_SELECTION_PHRASES: tuple[str, ...] = (
 )
 
 RECORDED_OWNER_UNSET_VALUES: frozenset[str] = frozenset({"", "choose"})
+# Owners that start no external coding CLI; a mention of another CLI cannot make them run the wrong one.
+NON_CLI_OWNERS: frozenset[str] = frozenset({"hermes", "generic"})
 
 CODING_ROUTE_DECISION_CLAIM_BOUNDARY = (
     "A coding route decision selects a prepared handoff shape only. It is not executor dispatch, "
@@ -152,6 +155,8 @@ class CodingRouteDecision:
     owner_preference_override_available: bool = False
     owner_preference_reset_available: bool = False
     owner_preference_reset_reason: str = ""
+    # A coding CLI the request mentions but not as the one to do the work, offered first when the owner is asked.
+    offered_owner: str = ""
 
 
 def resolve_coding_route_decision(
@@ -238,6 +243,27 @@ def resolve_coding_route_decision(
         )
 
     normalized_recorded_owner = str(recorded_owner or "").strip().casefold()
+    mentioned = [owner for owner in mentioned_executor_owners(normalized_query) if owner != normalized_recorded_owner]
+    if (
+        normalized_recorded_owner and normalized_recorded_owner not in RECORDED_OWNER_UNSET_VALUES
+        and normalized_recorded_owner not in NON_CLI_OWNERS and not owners and mentioned
+    ):
+        # Safety net: the request mentions another CLI in a way the cue list does not read as the doer ("fix the
+        # login bug in codex"). Running the profile default would silently pick the other CLI, so the user picks,
+        # with the mentioned one offered first.
+        return CodingRouteDecision(
+            next_action=USER_CHOICE_NEXT_ACTION,
+            source="user_choice_required",
+            reason=(
+                f"The request mentions `{mentioned[0]}` but not as the one to do the work, and the setup profile "
+                f"names `{normalized_recorded_owner}`, so the user picks."
+            ),
+            confidence="low",
+            choice_required=True,
+            matched_cues=(f"mentioned_owner:{mentioned[0]}",),
+            offered_owner=mentioned[0],
+            **preference_fields,
+        )
     if normalized_recorded_owner and normalized_recorded_owner not in RECORDED_OWNER_UNSET_VALUES:
         return CodingRouteDecision(
             next_action=RECORDED_OWNER_NEXT_ACTION,
@@ -274,6 +300,14 @@ def resolve_coding_route_decision(
     )
 
 
+def mentioned_executor_owners(normalized_query: str) -> tuple[str, ...]:
+    """The executor profile ids the request mentions at a word boundary, as the doer or not."""
+    return tuple(
+        owner for owner, phrases in NAMED_EXECUTOR_OWNER_PHRASES
+        if contains_boundary_phrase(normalized_query, _normalized_options(phrases))
+    )
+
+
 def named_executor_owners(normalized_query: str) -> tuple[str, ...]:
     """Return the distinct executor profile ids an already-normalized request names as the one to do the work.
 
@@ -306,6 +340,7 @@ def coding_route_decision_payload(decision: CodingRouteDecision) -> dict[str, ob
         "owner_preference_override_available": decision.owner_preference_override_available,
         "owner_preference_reset_available": decision.owner_preference_reset_available,
         "owner_preference_reset_reason": decision.owner_preference_reset_reason,
+        "offered_owner": decision.offered_owner,
         "lane_next_action": CODING_ROUTE_LANE_NEXT_ACTION,
         "user_choice_next_action": USER_CHOICE_NEXT_ACTION,
         "claim_boundary": CODING_ROUTE_DECISION_CLAIM_BOUNDARY,

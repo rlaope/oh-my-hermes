@@ -47,7 +47,7 @@ from ..routing.chat import (
     route_explanation_payload,
     route_question_observation,
 )
-from ..routing.coding_route_actions import coding_route_decision_payload, resolve_coding_route_decision
+from ..routing.coding_route_actions import NON_CLI_OWNERS, coding_route_decision_payload, resolve_coding_route_decision
 from ..routing.executor_cues import owner_named_as_doer
 from ..routing.localization import normalized_phrase
 from ..routing.route_plan import public_workflow_identifier, with_public_skill_names
@@ -6037,6 +6037,7 @@ def _resolve_delegate_executor_target(
     executor_target: str, paths: OmhPaths | None, *, message: str = "", status_subject: bool = False
 ) -> tuple[str, dict[str, object]]:
     requested = str(executor_target or "choose").strip() or "choose"
+    offered_owner = ""
     # An owner named as the doer ("use codex"). A status question about a CLI ("is the codex session stuck?")
     # names the CLI it asks about; that is the subject of the card, not a choice of who writes code.
     message_hint = _executor_choice_from_message(message) or (
@@ -6064,6 +6065,13 @@ def _resolve_delegate_executor_target(
     elif setup_available:
         resolved = setup_default
         source = "setup_profile"
+        mentioned = _executor_target_from_message(message)
+        if mentioned and mentioned != resolved and mentioned != "hermes" and resolved not in NON_CLI_OWNERS:
+            # Safety net: another CLI is mentioned, but not as the doer ("fix the login bug in codex"). Running the
+            # profile default would silently pick a different CLI than the one named, so ask, offering it first.
+            resolved = "choose"
+            source = "mentioned_owner_unclear"
+            offered_owner = mentioned
     else:
         # An earlier request's choice never selects the owner: the person chooses again.
         resolved = "choose"
@@ -6077,6 +6085,8 @@ def _resolve_delegate_executor_target(
         "default_executor": setup_default,
         "resolved_executor_target": resolved,
         "explicit_override": requested != "choose",
+        "status_subject": bool(status_subject and message_hint and source == "message_mention"),
+        "offered_owner": offered_owner,
         "claim_boundary": "Executor default resolution is routing preference only; it is not dispatch, execution, review, CI, or merge evidence.",
     }
 
@@ -6084,6 +6094,11 @@ def _resolve_delegate_executor_target(
 def executor_target_named_in_message(message: str) -> str:
     """The coding owner the message names as the doer, read as the chat wrapper reads it (`message_mention`), or ""."""
     return _executor_choice_from_message(message)
+
+
+def executor_target_mentioned_in_message(message: str) -> str:
+    """A coding owner the message mentions at all, as the doer or not, or ""."""
+    return _executor_target_from_message(message)
 
 
 @lru_cache(maxsize=4096)
@@ -6095,14 +6110,16 @@ def _executor_choice_from_message(message: str) -> str:
     """
     folded = normalized_phrase(message)
     lowered = f" {message.lower()} "
+    named: list[str] = []
     for target, hints in _MESSAGE_EXECUTOR_HINTS:
         # Hermes's hints are already doer phrases ("hermes coding", "with hermes", "헤르메스만으로").
         if target == "hermes":
             if any(hint in lowered for hint in hints):
-                return target
+                named.append(target)
         elif any(owner_named_as_doer(folded, normalized_phrase(hint)) for hint in hints):
-            return target
-    return ""
+            named.append(target)
+    # Two owners named as the doer ("use codex or claude code") are the user's choice, as in the route decision.
+    return named[0] if len(named) == 1 else ""
 
 
 @lru_cache(maxsize=4096)
@@ -6241,7 +6258,11 @@ def _coding_route_decision_for_delegation(
     return coding_route_decision_payload(
         resolve_coding_route_decision(
             normalized_phrase(message),
-            requested_owner=str(executor_resolution.get("requested_executor_target", "") or ""),
+            # A status card's subject CLI is the owner it reports on, in the decision as in the resolution.
+            requested_owner=str(
+                executor_resolution.get("resolved_executor_target", "") if executor_resolution.get("status_subject")
+                else executor_resolution.get("requested_executor_target", "") or ""
+            ),
             recorded_owner=str(executor_resolution.get("default_executor", "") or ""),
             owner_preference_state=read_owner_preference(paths) if paths else None,
         )
@@ -8465,6 +8486,11 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "in parallel. Main coding stays delegated."
             )
         owner_preference_state = _owner_preference_state(delegation_payload)
+        offered = str(_nested(delegation_payload, "coding_route_decision").get("offered_owner", "") or "")
+        if offered:
+            # The safety net asked instead of running the profile default: name the CLI the request mentioned first.
+            body = (f"The request mentions {executor_label(offered)} but not as the one to do the work, so pick the "
+                    f"coding agent: {executor_label(offered)}, or another one. {body}")
         choice_actions, choice_next_action = _apply_action_gate_arbitration(
             [
                 _action("choose_executor", "Choose coding agent", "primary"),

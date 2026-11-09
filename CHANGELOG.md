@@ -500,7 +500,13 @@ All notable changes will be documented here.
   names what the work is about and chooses no owner, on every entry point and
   in the route decision, where a bare product name used to pick the owner.
   A dag-ulw request reads the same cue: "/dag-ulw fix the codex adapter tests"
-  no longer sends a node that names `owner: codex` to Codex. The plugin tool and the turn's route
+  no longer sends a node that names `owner: codex` to Codex.
+  The CLI addressed as the one to act counts too ("codex가 고쳐줘", "codex,
+  fix ...", "get codex to ...", "codex please ...", "can codex fix ...",
+  "codexに…させて"). When a request mentions a coding CLI but not as the one
+  to do the work, and the profile default is a different CLI, nothing runs:
+  the owner is asked for, with the mentioned CLI named first ("fix the login
+  bug in codex", "codex에서 로그인 버그 고쳐줘"). The plugin tool and the turn's route
   hint now say `owner_set_in_setup_profile` when the profile holds the owner,
   where they said the owner had to be asked for.
 
