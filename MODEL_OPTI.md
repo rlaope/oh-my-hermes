@@ -18,7 +18,9 @@ from the runtime that actually ran the model.
    effort per category; `omh_delegate_route` writes them as explicit Hermes
    delegation keys. Any token-shaped model id is accepted — if the provider
    cannot serve it, the error comes back as a normal result and the chain
-   falls over to its next entry (Hermes itself has no provider-side fallback).
+   falls over to its next entry. Hermes falls a pinned child over on its own
+   only to `delegation.fallback_providers` (or a model_map option's own
+   `fallback_providers`); a pinned child never borrows the main chat's chain.
 2. **The model id is classified into a family.** `model_family()` in
    `src/coding/model_routing.py` strips a provider prefix
    (`opencode/kimi-k3` → `kimi-k3`) and matches by prefix. Unknown ids get

@@ -556,7 +556,7 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
         "have to clear at the end; call clear only to put the previous values back sooner. "
         "A restore is skipped, and says so, when the keys no longer hold what OMH wrote -- "
         "a value someone else set is never overwritten. Children already running keep their model. "
-        "Hermes has NO provider-side fallback: a child whose model the billing account "
+        "Unless delegation.fallback_providers is set, a child whose model the account "
         "cannot serve dies on an HTTP 400 yet its delegation still reports completed with "
         "the error text as the result — a completed child with no recorded model usage "
         "means exactly this. When that happens call action=fallback to advance the route "
