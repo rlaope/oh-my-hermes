@@ -9,11 +9,13 @@ import { Chat } from "../chat/Chat";
 import { DetailsFallback } from "./DetailsFallback";
 import { SettingsView } from "./SettingsView";
 import { useLookAttributes, useThemeAttribute } from "./theme";
+import { useShortcuts } from "./shortcuts";
 
 export function App() {
   const s = useStore();
   useThemeAttribute(s.ui.theme);
   useLookAttributes(s.ui.look);
+  useShortcuts();
   useEffect(() => {
     void s.init();
     // init is idempotent in the store; run once on mount

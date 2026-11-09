@@ -57,13 +57,13 @@ export function Sidebar() {
         {needle && bots.length === 0 && <div className="bot-empty">No bot named “{q.trim()}”</div>}
       </nav>
       <div className="side-foot">
-        <button type="button" className="nav" disabled title="Not in this version">
+        <button type="button" className="nav" disabled title="Coming in a later version" data-testid="nav-automations">
           <CalendarIcon />
-          Automations
+          Automations<span className="nav-soon">Soon</span>
         </button>
-        <button type="button" className="nav" disabled title="Not in this version">
+        <button type="button" className="nav" disabled title="Coming in a later version" data-testid="nav-plugins">
           <GridIcon />
-          Plugins
+          Plugins<span className="nav-soon">Soon</span>
         </button>
         <button
           type="button"

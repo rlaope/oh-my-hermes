@@ -1,7 +1,7 @@
 // One-line plain fallbacks used until a feature node registers its slot.
 import { useEffect, useState } from "react";
 import type { ActivitySlotProps, CardsSlotProps, ElsewhereLineSlotProps, RoutineLineSlotProps } from "../../features";
-import { Spinner } from "../../ui";
+import { SourceIcon, Spinner } from "../../ui";
 import { elapsed, hhmm } from "../../app/time";
 
 export function ActivityFallback({ item, live }: ActivitySlotProps) {
@@ -51,7 +51,7 @@ export function ElsewhereFallback({ item }: ElsewhereLineSlotProps) {
   const a = item.away;
   return (
     <div className="line" data-testid="away-fallback">
-      <span className={`src-sq src-${a.source}`} />
+      <SourceIcon source={a.source} size={12} />
       <span className="line-src">{sourceName(a.source)}</span>
       <span className="line-t strong">{a.label}</span>
       <span className="line-tm">{a.running ? "working" : hhmm(new Date(a.last_active * 1000))}</span>

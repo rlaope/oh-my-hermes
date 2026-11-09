@@ -53,7 +53,9 @@ test("sidebar lists the mock bots and search filters them", async ({ page }) => 
   const side = page.getByTestId("sidebar");
   for (const name of ["Kami", "Friren", "Hermes"]) await expect(side.getByText(name, { exact: true })).toBeVisible();
   await expect(side.getByText("omher", { exact: true })).toBeVisible();
-  for (const nav of ["Automations", "Plugins", "Settings", "You"]) await expect(side.getByText(nav, { exact: true })).toBeVisible();
+  for (const nav of ["Settings", "You"]) await expect(side.getByText(nav, { exact: true })).toBeVisible();
+  // not in this version yet: shown, disabled, tagged Soon
+  for (const id of ["nav-automations", "nav-plugins"]) await expect(side.getByTestId(id)).toHaveText(/(Automations|Plugins)Soon/);
   // Kami starts running in the mock -> live dot
   await expect(page.getByTestId("bot-kami").getByTestId("live-dot")).toBeVisible();
   await page.getByLabel("Search bots").fill("fri");

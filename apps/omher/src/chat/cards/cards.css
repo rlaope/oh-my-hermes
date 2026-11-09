@@ -18,6 +18,30 @@
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
+/* A risky command gets a red rail and one warning line; the buttons stay exactly as they are. */
+.card.risky {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+.card-risk {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--danger);
+}
+.card-risk-ic {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  flex: none;
+}
 .card-cmd {
   margin: 0;
   font-family: var(--mono);
@@ -53,6 +77,14 @@
   background: var(--raise2);
   box-shadow: inset 0 0 0 1px var(--line);
   color: var(--ink);
+}
+/* Light theme: the card sits on a near-white page, so the buttons need a firmer edge to read as buttons. */
+[data-theme="light"] .card-btn.soft {
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-strong), 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .card {
+  border-color: var(--line-strong);
 }
 .card-btn.soft:not(:disabled):hover {
   background: var(--line-strong);

@@ -57,6 +57,7 @@ async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![bridge_url, bridge_status, bridge_retry, open_external])
         .setup(|app| {
             let bridge = Bridge::new();
