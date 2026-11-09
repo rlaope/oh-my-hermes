@@ -1,0 +1,19 @@
+{"id":"omher-1","type":"response","command":"get_state","success":true,"data":{"model":{"id":"claude-sonnet-4-20250514","name":"Claude Sonnet 4","provider":"anthropic"},"thinkingLevel":"medium","isStreaming":false,"sessionId":"abc123","messageCount":0}}
+{"id":"omher-2","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"claude-sonnet-4-20250514","name":"Claude Sonnet 4","provider":"anthropic"},{"id":"gpt-5.5","name":"GPT-5.5","provider":"openai"}]}}
+{"id":"omher-3","type":"response","command":"prompt","success":true,"data":{"disposition":"started"}}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"assistant","content":[]}}
+{"type":"message_update","usage":{},"assistantMessageEvent":{"type":"toolcall_start","contentIndex":0,"id":"tc1","toolName":"bash"}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"tc1","name":"bash","arguments":{"command":"ls src/*.ts"}}],"stopReason":"toolUse"}}
+{"type":"tool_execution_start","toolCallId":"tc1","toolName":"bash","args":{"command":"ls src/*.ts"}}
+{"type":"tool_execution_end","toolCallId":"tc1","toolName":"bash","result":{"content":[{"type":"text","text":"src/a.ts\nsrc/b.ts"}]},"isError":false}
+{"type":"turn_end","message":{"role":"assistant","content":[]},"toolResults":[]}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"assistant","content":[]}}
+{"type":"message_update","usage":{},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Two files: "}}
+{"type":"message_update","usage":{},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"a.ts and b.ts."}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Two files: a.ts and b.ts."}],"stopReason":"stop"}}
+{"type":"turn_end","message":{"role":"assistant","content":[]},"toolResults":[]}
+{"type":"agent_end","messages":[]}
+{"type":"agent_settled"}

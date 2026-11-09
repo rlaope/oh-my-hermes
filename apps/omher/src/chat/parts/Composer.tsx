@@ -16,6 +16,7 @@ export function Composer({
   onStop,
   reply,
   onClearReply,
+  offlineText,
 }: {
   bot: Bot;
   running: boolean;
@@ -26,6 +27,8 @@ export function Composer({
   onStop: () => void;
   reply?: ReplyChip | null;
   onClearReply?: () => void;
+  /** Placeholder while `offline` (default: "<bot> is offline"). */
+  offlineText?: string;
 }) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -90,7 +93,7 @@ export function Composer({
             disabled={offline}
             placeholder={
               offline
-                ? `${bot.display_name} is offline`
+                ? (offlineText ?? `${bot.display_name} is offline`)
                 : reply
                   ? `Tell ${bot.display_name} what to post there`
                   : asking

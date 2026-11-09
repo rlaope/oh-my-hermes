@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   activityText,
+  chatRoute,
   createStore,
+  folderKey,
+  setChatRoute,
   initialState,
   reduce,
   replyChipFor,
@@ -432,5 +435,57 @@ describe("store", () => {
     expect(f.calls.filter((c) => c.op === "chat.send").at(-1)!.params).toEqual({ bot: "kami", text: "there" });
     f.emit({ event: "turn.end", bot: "kami", outcome: "done" });
     expect(lists()).toBe(before + 1);
+  });
+});
+
+describe("SESSIONS chats in the same reducer", () => {
+  it("a folder chat's events (tagged session) land under their own key and never move the bot's chat", () => {
+    let s = reduce(initialState(), { type: "chat.opened", bot: "kami", res: opened(), now: T0 });
+    const key = folderKey("kami", "f1");
+    s = run(s, realTurn("kami").map((e) => ({ ...e, session: "f1" }) as BridgeEvent));
+    s = reduce(s, { type: "event", ev: { event: "bot.status", bot: "kami", session: "f1", status: "online", running: true }, now: T0 });
+    expect(s.chats[key].messages.map((m) => m.text)).toEqual(["`echo omher-probe` 결과 `omher-probe`가 출력됐고 exit code는 0입니다."]);
+    expect(s.chats[key].lastTurn?.steps.map((x) => x.detail)).toEqual(["echo omher-probe"]);
+    expect(s.chats.kami.items.filter((i) => i.kind !== "user")).toEqual([]); // the bot's own chat is untouched
+    expect(s.chats.kami.turn).toBeNull();
+  });
+
+  it("answers on a session chat go to its route, not to the bridge's main chat", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    const got: string[] = [];
+    setChatRoute("agent:s9", {
+      label: "Claude Code · app",
+      open: () => undefined,
+      send: async () => undefined,
+      interrupt: async () => undefined,
+      approve: async (id, choice) => void got.push(`${id}:${choice}`),
+      clarify: async (id, a) => void got.push(`${id}=${a}`),
+    });
+    store.dispatch({ type: "event", ev: { event: "approval.request", bot: "agent:s9", request_id: "r1", title: "Run this command?", command: "rm -rf build", choices: ["deny", "once", "session"] }, now: T0 });
+    await store.actions.respondApproval("r1", "session", "agent:s9");
+    expect(got).toEqual(["r1:session"]);
+    expect(f.calls.some((c) => c.op === "approval.respond")).toBe(false);
+    expect(store.getState().chats["agent:s9"].items.find((i) => i.kind === "approval")).toMatchObject({ resolved: "session" });
+    // a closed session refuses instead of answering the bot's main chat
+    setChatRoute("agent:s9", null);
+    expect(chatRoute("agent:s9")).toBeUndefined();
+    store.dispatch({ type: "event", ev: { event: "approval.request", bot: "agent:s9", request_id: "r2", title: "t", command: "c", choices: ["once"] }, now: T0 });
+    await store.actions.respondApproval("r2", "once", "agent:s9");
+    expect(f.calls.some((c) => c.op === "approval.respond")).toBe(false);
+    expect(store.getState().lastError).toMatch(/ended/);
+  });
+
+  it("losing the bridge ends Hermes chats' turns but not a shell agent chat's", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    store.dispatch({ type: "event", ev: { event: "turn.start", bot: "agent:s1" }, now: T0 });
+    f.emit({ event: "turn.start", bot: "kami", session: "f1" });
+    f.status("closed");
+    const s = store.getState();
+    expect(s.chats["agent:s1"].turn).not.toBeNull();
+    expect(s.chats[folderKey("kami", "f1")].turn).toBeNull();
   });
 });

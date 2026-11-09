@@ -1,23 +1,36 @@
-// The agent programs a session can run, and the pure helpers the sidebar and the terminal view share.
+// The agent programs a session can run, and the pure helpers the sidebar and the session views share.
 // The list is fixed and mirrors `AGENTS` in src-tauri/src/sessions.rs (the shell refuses anything else).
+// `mode` says how a new session opens: `chat` = the agent's structured mode shown as an omher chat,
+// `hermes` = a Hermes chat in the folder (oh-my-hermes, through the bridge), `terminal` = its own TUI.
 
 export type AgentId = "claude" | "codex" | "omh" | "pi" | "omp" | "grok";
+
+export type AgentMode = "chat" | "hermes" | "terminal";
 
 export interface AgentDef {
   id: AgentId;
   /** What the person types in a terminal to start it. */
   program: string;
   label: string;
+  mode: AgentMode;
 }
 
 export const AGENTS: readonly AgentDef[] = [
-  { id: "claude", program: "claude", label: "Claude Code" },
-  { id: "codex", program: "codex", label: "Codex" },
-  { id: "omh", program: "omh", label: "oh-my-hermes" },
-  { id: "pi", program: "pi", label: "pi" },
-  { id: "omp", program: "omp", label: "oh-my-pi" },
-  { id: "grok", program: "grok", label: "Grok" },
+  { id: "claude", program: "claude", label: "Claude Code", mode: "chat" },
+  { id: "codex", program: "codex", label: "Codex", mode: "chat" },
+  { id: "omh", program: "omh", label: "oh-my-hermes", mode: "hermes" },
+  { id: "pi", program: "pi", label: "pi", mode: "chat" },
+  { id: "omp", program: "omp", label: "oh-my-pi", mode: "chat" },
+  { id: "grok", program: "grok", label: "Grok", mode: "terminal" },
 ];
+
+/** Tooltip on the session header's Terminal toggle: whether the terminal view continues the same
+ *  conversation or starts the agent's own terminal UI fresh. */
+export function terminalNote(agent: AgentId): string {
+  if (agent === "claude") return "Terminal view: Claude Code's own terminal, continuing this conversation (--resume). Back to chat continues it too.";
+  if (agent === "omh") return "Terminal view: starts oh-my-hermes in a new terminal; this chat stays as it is.";
+  return `Terminal view: starts ${agentDef(agent).label} fresh in its own terminal; this chat stays as it is.`;
+}
 
 export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && AGENTS.some((a) => a.id === v);
 
@@ -27,6 +40,8 @@ export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === i
 export interface AgentInfo {
   id: AgentId;
   label: string;
+  /** Missing from older shells: the UI list's mode then applies. */
+  mode?: AgentMode;
   path: string | null;
 }
 
@@ -67,14 +82,33 @@ export interface SessionRec {
   /** exit code when exited; null after a signal (closed, killed) */
   exitCode?: number | null;
   error?: string;
+  /** What the main column shows: the chat or the terminal. */
+  view: "chat" | "terminal";
+  /** The chat's own session id (Claude Code session, Codex thread, pi session), when the agent said. */
+  agentSession?: string;
+  /** The chat's model, when known. */
+  model?: string;
+  /** Hermes profile a folder chat (oh-my-hermes) runs on. */
+  bot?: string;
+}
+
+/** Live state of a session's chat that the row needs (from the store). */
+export interface ChatLive {
+  /** a turn is running */
+  turn: boolean;
+  /** an approval or question waits for the person */
+  needsYou: boolean;
 }
 
 /** What one sidebar row shows. */
-export function rowModel(s: SessionRec): { title: string; sub: string; live: boolean; ts: number } {
+export function rowModel(s: SessionRec, chat?: ChatLive): { title: string; sub: string; live: boolean; needsYou: boolean; ts: number } {
   const label = agentDef(s.agent).label;
-  // While running the live dot says it, so the line is just the agent.
-  const state =
-    s.status === "running"
+  const alive = s.status === "running" || s.status === "starting";
+  const needsYou = alive && !!chat?.needsYou;
+  // While running the ring (chat) or the live dot (terminal) says it, so the line is just the agent.
+  const state = needsYou
+    ? "Needs you"
+    : s.status === "running"
       ? ""
       : s.status === "starting"
         ? "Starting…"
@@ -83,10 +117,13 @@ export function rowModel(s: SessionRec): { title: string; sub: string; live: boo
           : s.exitCode === 0 || s.exitCode === null || s.exitCode === undefined
             ? "Ended"
             : `Ended · exit ${s.exitCode}`;
+  // A chat is live while a turn runs; a terminal while its program runs.
+  const live = s.view === "chat" && chat ? alive && chat.turn : alive;
   return {
     title: folderName(s.cwd),
     sub: state ? `${label} · ${state}` : label,
-    live: s.status === "running" || s.status === "starting",
+    live,
+    needsYou,
     ts: s.startedAt / 1000,
   };
 }

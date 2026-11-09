@@ -1,11 +1,12 @@
 // App-wide keyboard shortcuts. ⌘ on macOS, Ctrl elsewhere:
 //   ⌘1…⌘9  open bot 1 to 9 (sidebar order)      ⌘K  focus the bot search
 //   ⌘.     show or hide Details                    ⌘,  Settings
-//   ⌘J     jump to the next approval or question waiting on you (any bot)
+//   ⌘J     jump to the next approval or question waiting on you (any bot or SESSIONS chat)
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
 // An approval card's own 1/2/3 keys live on the card (src/chat/cards), never here.
 import { useEffect } from "react";
 import { getStore, selectAsks, selectSidebarBots, type Ask, type FocusAsk } from "../state/store";
+import { getSessions } from "../sessions/sessions";
 
 export const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -52,6 +53,14 @@ export function useShortcuts(): void {
         if (s.ui.view === "chat" && bot && s.chats[bot]?.turn) {
           e.preventDefault();
           void a.interrupt();
+        } else if (s.ui.view === "session" && s.ui.session) {
+          // a SESSIONS chat: Esc is the agent's own interrupt (Claude Code `interrupt`, Codex `turn/interrupt`,
+          // pi `abort`, Hermes `session.interrupt`)
+          const key = getSessions().chatKey(s.ui.session);
+          if (key && s.chats[key]?.turn) {
+            e.preventDefault();
+            void getSessions().interrupt(s.ui.session);
+          }
         }
         return;
       }

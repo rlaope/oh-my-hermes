@@ -128,23 +128,36 @@ export interface ChatOpenResult {
   reasoning: string;
 }
 
-/** op name -> { params, result }. `bot` is always the profile name. */
+/** A Hermes chat the bridge created in a picked folder (SESSIONS > oh-my-hermes). */
+export interface FolderOpenResult {
+  session: string;
+  cwd: string;
+  model: string;
+  provider: string;
+  reasoning: string;
+}
+
+/** op name -> { params, result }. `bot` is always the profile name. `session` (optional) names a folder chat
+ *  the bridge created with `folder.open`; without it an op acts on the bot's main chat. */
 export interface OpMap {
   hello: { params: Record<string, never>; result: HelloResult };
   "bots.list": { params: Record<string, never>; result: { bots: Bot[] } };
   "chat.open": { params: { bot: string }; result: ChatOpenResult };
-  /** `reply_to` = an elsewhere session id: the bridge adds that thread as context for the bot. omher posts nothing. */
-  "chat.send": { params: { bot: string; text: string; reply_to?: string }; result: { input_id: string } };
-  "chat.interrupt": { params: { bot: string }; result: Record<string, never> };
+  /** `reply_to` = an elsewhere session id: the bridge adds that thread as context for the bot.
+   *  omher posts nothing. */
+  "chat.send": { params: { bot: string; text: string; session?: string; reply_to?: string }; result: { input_id: string } };
+  "chat.interrupt": { params: { bot: string; session?: string }; result: Record<string, never> };
   "approval.respond": {
-    params: { bot: string; request_id: string; choice: ApprovalChoice };
+    params: { bot: string; request_id: string; choice: ApprovalChoice; session?: string };
     result: Record<string, never>;
   };
   /** One answer (`answer`) for a single question, or every answer of an interview at once (`answers`). */
   "clarify.respond": {
-    params: { bot: string; request_id: string; answer?: string; answers?: ClarifyAnswers };
+    params: { bot: string; request_id: string; answer?: string; answers?: ClarifyAnswers; session?: string };
     result: Record<string, never>;
   };
+  "folder.open": { params: { bot: string; cwd: string }; result: FolderOpenResult };
+  "folder.close": { params: { bot: string; session: string }; result: Record<string, never> };
   "elsewhere.list": { params: { bot: string }; result: { sessions: Away[] } };
   "elsewhere.peek": {
     params: { bot: string; session_id: string; limit?: number };
@@ -153,7 +166,7 @@ export interface OpMap {
   "routines.list": { params: { bot: string }; result: { routines: Routine[] } };
   "models.options": { params: { bot: string }; result: ModelOptions };
   "chat.set_model": {
-    params: { bot: string; model?: string; provider?: string; reasoning?: string };
+    params: { bot: string; model?: string; provider?: string; reasoning?: string; session?: string };
     result: ModelCurrent;
   };
   /** Display name only; "" goes back to the profile's own name. The profile id never changes. */
@@ -228,6 +241,8 @@ export type ReplyFrame =
 
 interface EventBase {
   bot: string;
+  /** Set on events of a folder chat (`folder.open`); absent for the bot's main chat. */
+  session?: string;
 }
 
 export type BridgeEvent =
@@ -264,6 +279,7 @@ export type BridgeEvent =
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
   | (EventBase & { event: "bots.update" })
+  | (EventBase & { event: "folder.closed"; reason?: string })
   | (EventBase & {
       event: "routine.ran";
       routine_id: string;

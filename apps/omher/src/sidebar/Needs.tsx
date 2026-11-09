@@ -1,11 +1,12 @@
-// "Needs you": approvals and questions waiting on the person in any bot, pinned above the BOTS list. One line
+// "Needs you": approvals and questions waiting on the person in any bot or SESSIONS chat, pinned above the BOTS list. One line
 // ("2 need you"); clicking it expands the list in place, pushing BOTS down (never over it, so the open bot stays in
 // view): each ask with the bot's face, a type tag (Approve / Question), the ask on up to two lines, and its age. An
 // item opens that bot's chat with the card scrolled into view and focused. ⌘J does the same for the next ask. Esc
 // or a click outside closes the list.
 import { useEffect, useRef, useState } from "react";
 import { useNow } from "../elsewhere/useNow";
-import { askText, useStore, type Ask } from "../state/store";
+import { askFrom, askText, isSessionChat, useStore, type Ask } from "../state/store";
+import { SessionFace } from "../sessions/SessionFace";
 import { Avatar, ChevronDown } from "../ui";
 
 /** An ask as one plain line, with `code` spans set in mono instead of showing raw backticks. */
@@ -41,7 +42,7 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
     if (!asks.length) setOpen(false);
   }, [asks.length]);
   if (!asks.length) return null;
-  const name = (bot: string) => s.bots.find((b) => b.name === bot)?.display_name ?? bot;
+  const name = (bot: string) => askFrom(s, bot);
   const n = asks.length;
   return (
     <div
@@ -90,7 +91,7 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
                 void s.jumpToAsk(a.bot, a.item.id);
               }}
             >
-              <Avatar bot={a.bot} size={20} />
+              {isSessionChat(a.bot) ? <SessionFace chatKey={a.bot} size={20} /> : <Avatar bot={a.bot} size={20} />}
               <span className="needs-m">
                 <span className="needs-r1">
                   <span className="needs-b">{name(a.bot)}</span>
