@@ -1,7 +1,7 @@
 // The agent programs a session can run, and the pure helpers the sidebar and the terminal view share.
 // The list is fixed and mirrors `AGENTS` in src-tauri/src/sessions.rs (the shell refuses anything else).
 
-export type AgentId = "claude" | "codex" | "omh" | "pi" | "omp";
+export type AgentId = "claude" | "codex" | "omh" | "pi" | "omp" | "grok";
 
 export interface AgentDef {
   id: AgentId;
@@ -16,6 +16,7 @@ export const AGENTS: readonly AgentDef[] = [
   { id: "omh", program: "omh", label: "oh-my-hermes" },
   { id: "pi", program: "pi", label: "pi" },
   { id: "omp", program: "omp", label: "oh-my-pi" },
+  { id: "grok", program: "grok", label: "Grok" },
 ];
 
 export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && AGENTS.some((a) => a.id === v);

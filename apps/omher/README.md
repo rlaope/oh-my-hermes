@@ -54,7 +54,7 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **Sessions** (`src-tauri/src/sessions.rs`, `src/sessions/`): the SESSIONS `+` lists the agent programs found on
   `PATH` and in the usual install folders (`~/.local/bin`, Homebrew, npm/pnpm/bun globals, `%APPDATA%\npm`), asks
   for a folder, and starts the program in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
-  Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omh`, `pi`, `omp`); the shell
+  Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omh`, `pi`, `omp`, `grok`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead.
 
@@ -64,7 +64,7 @@ Rules the code keeps:
   sessions are listed and their history read, never resumed, answered, interrupted or written to.
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
 - **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
-- **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omh`, `pi` or `omp`,
+- **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omh`, `pi`, `omp` or `grok`,
   with no arguments, in the folder you picked; stopped when the session is closed or the app quits.
 
 ## Develop

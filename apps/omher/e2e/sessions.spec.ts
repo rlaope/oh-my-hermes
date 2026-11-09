@@ -75,16 +75,16 @@ test("+ lists the agent CLIs with their marks; missing ones are disabled", async
   const menu = page.getByTestId("session-menu");
   await expect(menu).toBeVisible();
   const rows = menu.locator("[data-testid^=session-agent-]");
-  await expect(rows).toHaveCount(5);
+  await expect(rows).toHaveCount(6);
   expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
-    ["claude", "codex", "omh", "pi", "omp"].map((a) => `session-agent-${a}`),
+    ["claude", "codex", "omh", "pi", "omp", "grok"].map((a) => `session-agent-${a}`),
   );
   await expect(menu.getByTestId("session-agent-claude")).toContainText("Claude Code");
   await expect(menu.getByTestId("session-agent-claude").locator('svg[data-mark="claude"]')).toHaveCount(1);
   await expect(menu.getByTestId("session-agent-codex").locator('svg[data-mark="openai"]')).toHaveCount(1);
   await expect(menu.getByTestId("session-agent-omh").locator('[data-mark="omh"]')).toHaveCount(1);
   for (const a of ["claude", "codex", "omh"]) await expect(menu.getByTestId(`session-agent-${a}`)).toBeEnabled();
-  for (const a of ["pi", "omp"]) {
+  for (const a of ["pi", "omp", "grok"]) {
     await expect(menu.getByTestId(`session-agent-${a}`)).toBeDisabled();
     await expect(menu.getByTestId(`session-agent-${a}`)).toContainText("Not installed");
   }

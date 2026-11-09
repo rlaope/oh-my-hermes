@@ -89,6 +89,7 @@ const BANNER: Record<AgentId, string> = {
   omh: "\x1b[38;2;211;60;141m◆\x1b[0m \x1b[1moh-my-hermes\x1b[0m \x1b[2m(mock)\x1b[0m",
   pi: "\x1b[1mπ pi\x1b[0m \x1b[2m(mock)\x1b[0m",
   omp: "\x1b[1mπ oh-my-pi\x1b[0m \x1b[2m(mock)\x1b[0m",
+  grok: "\x1b[1m𝕏 Grok\x1b[0m \x1b[2m(mock)\x1b[0m",
 };
 const PROMPT = "\x1b[2m›\x1b[0m ";
 

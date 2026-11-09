@@ -14,7 +14,7 @@ DOC = ROOT / "docs" / "OMHER-BOUNDARY.md"
 BRIDGE = ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py"
 SHELL = ROOT / "apps" / "omher" / "src-tauri" / "src"
 UI_AGENTS = ROOT / "apps" / "omher" / "src" / "sessions" / "agents.ts"
-SESSION_AGENTS = ("claude", "codex", "omh", "pi", "omp")
+SESSION_AGENTS = ("claude", "codex", "omh", "pi", "omp", "grok")
 CONTEXT = ROOT / "CONTEXT.md"
 DOCS_INDEX = ROOT / "docs" / "README.md"
 
@@ -30,7 +30,7 @@ RULES = (
     "The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.",
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
-    " fixed allow-list: `claude`, `codex`, `omh`, `pi`, `omp`, with no arguments,",
+    " fixed allow-list: `claude`, `codex`, `omh`, `pi`, `omp`, `grok`, with no arguments,",
     "The UI sends an agent id, never a command line or arguments; the shell refuses any other id.",
     "The process is stopped when its session is closed and when the app exits.",
 )

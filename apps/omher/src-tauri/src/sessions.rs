@@ -32,12 +32,13 @@ pub struct Agent {
 }
 
 /// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 10).
-pub const AGENTS: [Agent; 5] = [
+pub const AGENTS: [Agent; 6] = [
     Agent { id: "claude", program: "claude", label: "Claude Code" },
     Agent { id: "codex", program: "codex", label: "Codex" },
     Agent { id: "omh", program: "omh", label: "oh-my-hermes" },
     Agent { id: "pi", program: "pi", label: "pi" },
     Agent { id: "omp", program: "omp", label: "oh-my-pi" },
+    Agent { id: "grok", program: "grok", label: "Grok" },
 ];
 
 /// The allow-list entry for `id`, or `None` for anything else (paths, command lines, other programs).
@@ -409,7 +410,7 @@ mod tests {
     #[test]
     fn allow_list_is_exactly_the_five_agents() {
         let ids: Vec<&str> = AGENTS.iter().map(|a| a.id).collect();
-        assert_eq!(ids, ["claude", "codex", "omh", "pi", "omp"]);
+        assert_eq!(ids, ["claude", "codex", "omh", "pi", "omp", "grok"]);
         for a in &AGENTS {
             assert_eq!(a.id, a.program, "the id is the program name; nothing else is ever run");
         }

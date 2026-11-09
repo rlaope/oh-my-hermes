@@ -3,14 +3,14 @@ import { AGENTS, folderName, isAgentId, parentPath, parseRecent, pushRecent, REC
 import { MockHost } from "./host";
 
 describe("session agents", () => {
-  it("is the fixed list of five, in menu order, matching the Rust allow-list", () => {
-    expect(AGENTS.map((a) => a.id)).toEqual(["claude", "codex", "omh", "pi", "omp"]);
-    expect(AGENTS.map((a) => a.label)).toEqual(["Claude Code", "Codex", "oh-my-hermes", "pi", "oh-my-pi"]);
+  it("is the fixed list of six, in menu order, matching the Rust allow-list", () => {
+    expect(AGENTS.map((a) => a.id)).toEqual(["claude", "codex", "omh", "pi", "omp", "grok"]);
+    expect(AGENTS.map((a) => a.label)).toEqual(["Claude Code", "Codex", "oh-my-hermes", "pi", "oh-my-pi", "Grok"]);
     for (const a of AGENTS) expect(a.program).toBe(a.id);
   });
 
   it("accepts only those ids", () => {
-    for (const id of ["claude", "codex", "omh", "pi", "omp"]) expect(isAgentId(id)).toBe(true);
+    for (const id of ["claude", "codex", "omh", "pi", "omp", "grok"]) expect(isAgentId(id)).toBe(true);
     for (const bad of ["", "sh", "/bin/sh", "claude --yolo", "Claude", " claude", null, 1, {}]) expect(isAgentId(bad)).toBe(false);
   });
 
@@ -74,9 +74,9 @@ describe("mock session host", () => {
     expect((g.__omherSessionCalls as { op: string }[]).map((c) => c.op)).toEqual(["start", "write", "write", "write"]);
   });
 
-  it("reports claude, codex and omh installed and pi, omp missing", async () => {
+  it("reports claude, codex and omh installed and pi, omp, grok missing", async () => {
     const list = await new MockHost({}).agents();
     expect(list.filter((a) => a.path).map((a) => a.id)).toEqual(["claude", "codex", "omh"]);
-    expect(list.filter((a) => !a.path).map((a) => a.id)).toEqual(["pi", "omp"]);
+    expect(list.filter((a) => !a.path).map((a) => a.id)).toEqual(["pi", "omp", "grok"]);
   });
 });
