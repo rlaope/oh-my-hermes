@@ -1,21 +1,25 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { Bot } from "../lib/protocol";
 import { askText, type Ask, type Chat } from "../state/store";
-import { Avatar } from "../ui";
+import { Avatar, LiveRing, Ticker, TypingDots } from "../ui";
 import { AskLine } from "./Needs";
 import { shortTime } from "../app/time";
 
-/** One-line preview: live turn status while running, else the last assistant text. */
+/** The live step the activity line shows ("Reading gateway.log", "Running pnpm test"); "Thinking…" until there
+ *  is one ("Working…" is only the placeholder of a turn found running on open). */
+const liveText = (status: string | undefined) => (status && status !== "Working…" ? status : "Thinking…");
+
+/** One-line preview: the live step while running, else the last assistant text. */
 export function preview(bot: Bot, chat: Chat | undefined): { text: string; live: boolean; ts: number | null } {
   if (bot.status === "offline") return { text: "Not connected", live: false, ts: null };
-  if (chat?.turn) return { text: chat.turn.status || "Working…", live: true, ts: chat.turn.startedAt / 1000 };
+  if (chat?.turn) return { text: liveText(chat.turn.status), live: true, ts: chat.turn.startedAt / 1000 };
   const items = chat?.items ?? [];
   for (let i = items.length - 1; i >= 0; i -= 1) {
     const it = items[i];
     if (it.kind === "assistant") return { text: plain(it.text), live: false, ts: it.ts };
   }
   const last = items[items.length - 1];
-  if (bot.running) return { text: "Working…", live: true, ts: null };
+  if (bot.running) return { text: liveText(""), live: true, ts: null };
   return { text: bot.description || "", live: false, ts: last ? last.ts : null };
 }
 
@@ -126,6 +130,7 @@ export function BotRow({
   const running = bot.running || !!chat?.turn;
   const needs = asks.length;
   const text = needs ? askText(asks[asks.length - 1].item) : p.text;
+  const live = p.live && !needs;
   const onContext = (e: MouseEvent) => {
     if (!menu) return;
     e.preventDefault();
@@ -140,8 +145,10 @@ export function BotRow({
         aria-current={active ? "true" : undefined}
         data-testid={`bot-${bot.name}`}
       >
-        <Avatar bot={bot.name} size={34} />
-        {running && <span className="live-dot" data-testid="live-dot" aria-label="running" />}
+        {/* answering: a thin rotating ring around the face; an open ask stops it (the amber dot takes over) */}
+        <LiveRing on={running && !needs} size={34} gap={3.5} label="Answering" seed={bot.name}>
+          <Avatar bot={bot.name} size={34} />
+        </LiveRing>
         <span className="bot-m">
           <span className="bot-r1">
             <span className="bot-n">
@@ -152,9 +159,10 @@ export function BotRow({
             {needs > 0 && <span className="bot-t">{shortTime(asks[asks.length - 1].ts)}</span>}
           </span>
           <span className="bot-r2">
-            <span className={`bot-p${p.live && !needs ? " live" : ""}${needs ? " ask" : ""}`} data-testid="bot-sub">
-              {needs ? <AskLine text={text} /> : text}
+            <span className={`bot-p${live ? " live" : ""}${needs ? " ask" : ""}`} data-testid="bot-sub">
+              {needs ? <AskLine text={text} /> : live ? <Ticker text={text} /> : text}
             </span>
+            {live && <TypingDots size={4} testId="bot-typing" />}
             {needs > 0 ? (
               // a plain amber dot, no number: a count here would read as unread (the strip carries the count)
               <span className="needs-dot" data-testid="needs" role="status" aria-label="Needs your answer" title="Needs your answer" />

@@ -118,20 +118,6 @@
 .bot.active {
   background: var(--active-row);
 }
-.bot .live-dot {
-  position: absolute;
-  left: 34px;
-  top: 32px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--spin);
-  border: 2px solid var(--side);
-  animation: pulse 1.4s infinite;
-}
-.bot.active .live-dot {
-  border-color: var(--active-row);
-}
 .bot-m {
   flex: 1;
   min-width: 0;
@@ -178,6 +164,24 @@
 }
 .bot-p.live {
   color: var(--muted);
+}
+/* the live step slides up in place, one line high */
+.bot-p.live .ui-tick,
+.bot-p.live .ui-tick-t {
+  height: 17px;
+  line-height: 17px;
+}
+/* the typing dots end the preview text (not the row): the live preview only takes the width it needs */
+.bot-p.live {
+  flex: 0 1 auto;
+}
+.bot-r2 .ui-typing {
+  margin-left: 7px;
+  /* sit on the x-height middle of the 12px preview, not the line box middle */
+  transform: translateY(1.5px);
+}
+.bot-r2 .ui-typing i {
+  background: var(--quiet);
 }
 .badge {
   margin-left: 6px;

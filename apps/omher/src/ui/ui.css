@@ -77,3 +77,126 @@ button.ui-pill:hover {
 .ui-pop-left {
   left: 0;
 }
+
+/* Answer in progress: the ring around a face or mark, typing dots, the one-line ticker (Live.tsx).
+   The ring is the one brand-gradient "live" point, so it uses the accent set; it sits outside the
+   wrapped element and never takes layout space. */
+.ui-ring-w {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  line-height: 0;
+}
+.ui-ring {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+  animation: ui-ring-turn 1.2s linear infinite;
+}
+.ui-ring-track {
+  stroke: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+/* on dark the accent stops are lifted a little so a 1.5px arc still reads; light keeps them as they are */
+.ui-ring-s1 {
+  stop-color: color-mix(in srgb, var(--a1) 58%, #fff);
+}
+.ui-ring-s2 {
+  stop-color: color-mix(in srgb, var(--a2) 80%, #fff);
+}
+.ui-ring-s3 {
+  stop-color: color-mix(in srgb, var(--a3) 85%, #fff);
+}
+[data-theme="light"] .ui-ring-s1 {
+  stop-color: var(--a1);
+}
+[data-theme="light"] .ui-ring-s2 {
+  stop-color: var(--a2);
+}
+[data-theme="light"] .ui-ring-s3 {
+  stop-color: var(--a3);
+}
+@keyframes ui-ring-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ui-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--dot) * 0.6);
+  height: calc(var(--dot) * 2.4);
+  flex: none;
+}
+.ui-typing i {
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.6;
+  animation: ui-typing-hop 1s ease-in-out infinite;
+}
+.ui-typing i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.ui-typing i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+@keyframes ui-typing-hop {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  30% {
+    transform: translateY(calc(var(--dot) * -0.4));
+    opacity: 0.95;
+  }
+}
+.ui-tick {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  min-width: 0;
+}
+.ui-tick-t {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-tick-t.out {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  animation: ui-tick-out 0.22s ease forwards;
+}
+.ui-tick-t.in {
+  animation: ui-tick-in 0.22s ease both;
+}
+@keyframes ui-tick-out {
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+@keyframes ui-tick-in {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+/* still: a static arc and three resting dots (no rotation, no bounce, no slide) */
+@media (prefers-reduced-motion: reduce) {
+  .ui-ring,
+  .ui-typing i,
+  .ui-tick-t.in {
+    animation: none !important;
+  }
+  .ui-typing i {
+    opacity: 0.8;
+  }
+  .ui-tick-t.out {
+    display: none;
+  }
+}

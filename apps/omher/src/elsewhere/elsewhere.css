@@ -72,6 +72,11 @@
   flex: none;
   transition: transform 0.15s ease;
 }
+/* room for the live ring around the mark, kept whether or not it runs so nothing moves when it stops */
+.ew-link .ui-ring-w,
+.ew-where .ui-ring-w {
+  margin-inline: 4px 3px;
+}
 .ew-link:hover .src-ic {
   transform: scale(1.12);
 }
