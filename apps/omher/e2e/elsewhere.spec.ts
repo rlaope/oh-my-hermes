@@ -51,9 +51,11 @@ test("header chip counts the other places and toggles the panel", async ({ page 
   await open(page);
   const chip = page.getByTestId("places");
   await expect(chip).toHaveText("3 other places");
-  await expect(chip.locator(".src-sq")).toHaveCount(3);
-  await expect(chip.locator(".src-sq.src-slack")).toHaveCount(1);
-  await expect(chip.locator(".src-sq.src-discord")).toHaveCount(2);
+  // one app mark per place (1 Slack + 2 Discord sessions -> Slack and Discord marks), not one per session
+  await expect(chip.locator(".src-ic")).toHaveCount(2);
+  await expect(chip.locator(".src-ic-slack")).toHaveCount(1);
+  await expect(chip.locator(".src-ic-discord")).toHaveCount(1);
+  await expect(chip.locator(".src-sq")).toHaveCount(0);
   // the header right keeps exactly one control
   await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(1);
 
@@ -98,7 +100,15 @@ test("elsewhere shows the bot's last answer as a bubble with a link to the threa
   const link = slack.getByTestId("away-link");
   await expect(link).toHaveText("Slack #og-dev");
   await expect(link).toHaveAttribute("href", /^slack:\/\/channel\?/);
-  await expect(link).toHaveCSS("text-decoration-line", "underline");
+  // the Slack mark sits right before the underlined place name, inside the same link
+  const mark = link.locator("svg.src-ic-slack");
+  await expect(mark).toBeVisible();
+  const [mb, tb] = await Promise.all([mark.boundingBox(), link.locator(".ew-lt").boundingBox()]);
+  expect(mb!.x + mb!.width).toBeLessThanOrEqual(tb!.x + 1);
+  expect(Math.abs(mb!.y + mb!.height / 2 - (tb!.y + tb!.height / 2))).toBeLessThan(3);
+  await expect(link.locator(".ew-lt")).toHaveCSS("text-decoration-line", "underline");
+  const discord = tl.locator('[data-testid=away][data-source=discord]').first();
+  await expect(discord.locator("svg.src-ic-discord")).toBeVisible();
 
   await link.click();
   await expect.poll(() => opened).toEqual([expect.stringMatching(/^slack:\/\/channel\?team=T1&id=C1/)]);

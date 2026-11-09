@@ -3,7 +3,54 @@
   "productName": "omher",
   "version": "0.1.0",
   "identifier": "dev.ohmyhermes.omher",
-  "build": { "beforeDevCommand": "pnpm dev", "devUrl": "http://localhost:5207", "beforeBuildCommand": "pnpm build", "frontendDist": "../dist" },
-  "app": { "windows": [{ "title": "omher", "width": 1280, "height": 820, "minWidth": 900, "minHeight": 600 }], "security": { "csp": null } },
-  "bundle": { "active": true, "resources": { "../bridge/omher_bridge.py": "bridge/omher_bridge.py" }, "targets": ["dmg", "app"], "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.png"] }
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:5207",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "omher",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 900,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "resources": {
+      "../bridge/omher_bridge.py": "bridge/omher_bridge.py"
+    },
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "category": "Productivity",
+    "shortDescription": "Your Hermes bots in one window",
+    "copyright": "MIT License, oh-my-hermes contributors",
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "11.0"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
+  }
 }

@@ -1,0 +1,135 @@
+name: omher release
+
+# Open-source builds of the omher desktop app, attached to a GitHub Release. No App Store, no Apple
+# Developer certificate and no Windows code-signing certificate: macOS builds carry an ad-hoc signature
+# (`signingIdentity: "-"`), Windows installers are unsigned. The README tells people how to open them
+# the first time (right-click > Open on macOS, "More info > Run anyway" on Windows SmartScreen).
+#
+# Cut a release by pushing a tag `omher-vX.Y.Z` whose version matches apps/omher/src-tauri/tauri.conf.json,
+# or run this workflow by hand on an existing tag.
+
+on:
+  push:
+    tags:
+      - "omher-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing omher-vX.Y.Z tag to (re)build
+        required: true
+        type: string
+
+concurrency:
+  group: omher-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+            label: macos-arm64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bundles: app,dmg
+            label: macos-x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis,msi
+            label: windows-x64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Check the tag matches the app version
+        working-directory: apps/omher
+        run: |
+          want="omher-v$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          test "$TAG" = "$want" || { echo "tag $TAG does not match app version ($want)"; exit 1; }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Install pnpm
+        run: npm install --global pnpm@11
+      - name: Add the Rust target
+        run: rustup target add ${{ matrix.target }}
+      - name: Install dependencies
+        working-directory: apps/omher
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        working-directory: apps/omher
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+      - name: Collect the installers
+        run: |
+          out="$RUNNER_TEMP/out"; mkdir -p "$out"
+          b="apps/omher/src-tauri/target/${{ matrix.target }}/release/bundle"
+          v="${TAG#omher-v}"
+          case "${{ matrix.label }}" in
+            macos-*) cp "$b"/dmg/*.dmg "$out/omher-$v-${{ matrix.label }}.dmg" ;;
+            windows-*)
+              cp "$b"/nsis/*.exe "$out/omher-$v-${{ matrix.label }}-setup.exe"
+              cp "$b"/msi/*.msi "$out/omher-$v-${{ matrix.label }}.msi" ;;
+          esac
+          ls -la "$out"
+      - name: Check the macOS app is ad-hoc signed and carries the bridge
+        if: runner.os == 'macOS'
+        run: |
+          app=$(ls -d apps/omher/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app)
+          test -f "$app/Contents/Resources/bridge/omher_bridge.py"
+          codesign --verify --deep --strict "$app"
+          codesign -dv "$app" 2>&1 | grep -q "Signature=adhoc"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: omher-${{ matrix.label }}
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Create or update the release
+        run: |
+          v="${TAG#omher-v}"
+          cat > notes.md <<EOF
+          omher $v, the desktop app for your Hermes bots. Needs Hermes Agent installed on the same machine.
+
+          - **macOS (Apple Silicon):** \`omher-$v-macos-arm64.dmg\`
+          - **macOS (Intel):** \`omher-$v-macos-x64.dmg\`
+          - **Windows:** \`omher-$v-windows-x64-setup.exe\` (or the \`.msi\`)
+
+          These builds are open source and not notarized. The first time on macOS, right-click omher in
+          Applications and choose **Open**. On Windows, if SmartScreen appears, choose **More info**, then
+          **Run anyway**. Checksums are in \`SHA256SUMS.txt\`.
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "omher $v" --notes-file notes.md --latest=false
+          fi
