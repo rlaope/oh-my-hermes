@@ -1316,7 +1316,11 @@ class ReviewCategoryLintTests(unittest.TestCase):
                 self.assertIn("review_not_review_category:diff", record_of(home)["lint"])
 
     def test_a_model_map_backend_with_no_judgement_option_drops_no_judgement_node_from_the_reply(self) -> None:
-        """Mutation: keep the finding when no option serves a judgement category, or drop it when one does."""
+        """Mutation: keep the finding when no option serves `ultrabrain`, or drop it when one does.
+
+        An `architect` or `forensics` option alone does not keep it: the advice names `ultrabrain`, and an
+        `ultrabrain` node with no matching option runs on the backend's default.
+        """
         def options(*rows: tuple[str, str, str]) -> str:
             lines = ["delegation:", "  backend: model_map", "  backends:", "    model_map:",
                      f"      default: {rows[-1][0]}", "      options:"]
@@ -1324,16 +1328,20 @@ class ReviewCategoryLintTests(unittest.TestCase):
                 lines += [f"        - name: {name}", f"          model: {model}", f"          reasoning_effort: {effort}"]
             return "\n".join(lines) + "\n"
 
-        # Opus at xhigh is on the `architect` and `forensics` chains; at medium it serves only the ladder.
+        # Astra at xhigh is the `ultrabrain` chain; Opus at xhigh is on `architect` and `forensics` only, and at
+        # medium it serves only the ladder.
         unserved = options(("sol", "openai/gpt-6.1-sol", "medium"), ("opus", "claude-opus-5-5", "medium"),
                            ("flash", "glm-5.3-flash", "low"))
-        served = options(("sol", "openai/gpt-6.1-sol", "medium"), ("opus-x", "claude-opus-5-5", "xhigh"),
+        architect_only = options(("sol", "openai/gpt-6.1-sol", "medium"), ("opus-x", "claude-opus-5-5", "xhigh"),
+                                 ("flash", "glm-5.3-flash", "low"))
+        served = options(("sol", "openai/gpt-6.1-sol", "medium"), ("astra", "openai/gpt-6-astra", "xhigh"),
                          ("flash", "glm-5.3-flash", "low"))
         definitions = [node("api", scope=("src/api.py",)), node("ui", category="unspecified-low", scope=("src/ui.py",)),
                        node("diff", category="review", depends_on=("api", "ui"), role="review"),
                        node("check", category="unspecified-high", depends_on=("api", "ui", "diff"), role="verify")]
-        for name, config, shown in (("judgement unserved", unserved, False), ("judgement served", served, True),
-                                    ("default backend", "", True)):
+        for name, config, shown in (("judgement unserved", unserved, False),
+                                    ("architect and forensics only", architect_only, False),
+                                    ("ultrabrain served", served, True), ("default backend", "", True)):
             with self.subTest(case=name), homes() as home:
                 slots_table(home)
                 if config:

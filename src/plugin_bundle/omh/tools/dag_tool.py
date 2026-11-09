@@ -880,15 +880,16 @@ def _local_say(held: list[str], backend: Mapping[str, Any] | None) -> str:
 def served_lint(findings: list[str], omh_home: Path, hermes_home: Path) -> list[str]:
     """The run's lint as the parent reads it, so the advice never moves a node to a category the user's options cannot
     run: under Hermes' model_map backend, `review_not_review_category` is dropped where no option serves `review` but
-    some serve `unspecified-high`, and `no_judgement_node` where no option serves any of
-    ``dag_run.JUDGEMENT_CATEGORIES``. The stored record keeps both findings."""
+    some serve `unspecified-high`, and `no_judgement_node` where no option serves `ultrabrain`, the category its
+    advice names (an `architect` or `forensics` option does not run an `ultrabrain` node). The stored record keeps
+    both findings."""
     marker = "review_not_review_category:"
     if not any(finding.startswith(marker) or finding == "no_judgement_node" for finding in findings):
         return findings
     # Empty unless model_map options were read; once read, every category has a (possibly empty) list.
     options = (delegation_backend(omh_home, hermes_home) or {}).get("options") or {}
     drop_review = bool(options.get("unspecified-high")) and not options.get("review")
-    drop_judgement = bool(options) and not any(options.get(category) for category in dag_run.JUDGEMENT_CATEGORIES)
+    drop_judgement = bool(options) and not options.get("ultrabrain")
     return [finding for finding in findings
             if not (drop_review and finding.startswith(marker))
             and not (drop_judgement and finding == "no_judgement_node")]

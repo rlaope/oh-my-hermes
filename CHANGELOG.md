@@ -15,8 +15,8 @@ All notable changes will be documented here.
   `omh_dag define` adds the advice `no_judgement_node` to a graph of 4+ nodes
   with no `ultrabrain`, `architect` or `forensics` node, with an exit (go on
   when no node decides the run). Repair and extend rounds do not raise it,
-  and the reply leaves it out when the user's `model_map` options serve none
-  of those categories. Like all lint it never refuses a run.
+  and the reply leaves it out when the user's `model_map` options have no
+  `ultrabrain` option. Like all lint it never refuses a run.
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
   your existing login and no extra command.** The TUI's runtime is now a
   Hermes profile, `<root>/profiles/omh-tui`, whose copied config says
