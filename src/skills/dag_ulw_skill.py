@@ -81,8 +81,8 @@ DEFINITION = SkillDefinition(
         "Split first: many small nodes beat one big one, but never split one shared write scope or one judgement.",
         "Climb the difficulty ladder `quick` -> `unspecified-low` -> `unspecified-high` with a one-line reason per "
         "climb. When one build node's judgement decides the run (a design decision, a root cause, a contested "
-        "trade-off), give it `ultrabrain`, at most one; a graph whose every node is `deep` or `deep-work` is a "
-        "routing failure. A `role=review` node takes category `review` where your routes serve it; a "
+        "trade-off), give it `ultrabrain` where your routes serve it, at most one; a graph whose every node is "
+        "`deep` or `deep-work` is a routing failure. A `role=review` node takes category `review` where your routes serve it; a "
         "`role=baseline` node stays `quick` or `unspecified-low`; a `role=verify` node judges the run goal and "
         "baseline exemptions, so climb the ladder for it; it is not the `ultrabrain` node.",
         "Write every node prompt self-contained, in order: TASK, DELIVERABLE, SCOPE (what it may read and write), "

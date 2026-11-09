@@ -1015,7 +1015,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72561
 # 545091 -> 545209: dag-ulw's ladder quality bar gives `ultrabrain` to the one build node whose judgement decides
 # the run (a design decision, a root cause, a contested trade-off), at most one, and says the verify node is not
 # that node (+118); no other row moved. Measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545209
+# 545209 -> 545236: the same sentence gives `ultrabrain` only "where your routes serve it", as the review clause
+# says for `review` (+27); no other row moved. Measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545236
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
