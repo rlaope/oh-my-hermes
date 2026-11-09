@@ -5621,6 +5621,31 @@ Pointer rollback alone does not prove shared-resource restoration or reverse
 all user/plugin state. Run `omh doctor` after recovery and inspect any remaining
 profile failures before treating the install as healthy.
 
+A staged generation's venv is created from the same stable base interpreter
+the installer used, not from the base the running `omh` resolves to. Run from
+inside a venv, `python -m venv` links the new venv to that venv's base with
+every symlink resolved, which on a Homebrew framework build is the
+version-pinned keg (`/opt/homebrew/Cellar/python@3.15/3.15.0/...`); a later
+`brew upgrade` plus cleanup removed it and left `omh` failing with
+`bad interpreter`. The update reads the running venv's `pyvenv.cfg`, follows
+its `command` back to the interpreter that created it (through the bootstrap
+venv for a generation an older `omh` staged), then tries its `home`
+directory's `pythonX.Y` (`python.exe` on Windows). It takes the first one that
+runs the same major.minor as the running `omh`, and otherwise keeps the
+interpreter it would have used before. A move to another minor release
+(3.15 to 3.16) still needs a fresh install.
+
+A generation staged before this fix may already point at a removed keg. `omh`
+cannot start from it, so its own recovery cannot run either. Repair that
+generation's venv in place from the stable interpreter, then update as usual:
+
+```sh
+gen=~/.local/share/omh/generations/<id>/venv   # the id the launcher's error names
+rm "$gen/bin/python3.15"                        # the dangling link; --upgrade stops on it
+/opt/homebrew/opt/python@3.15/bin/python3.15 -m venv --upgrade "$gen"
+omh --version
+```
+
 `omh update --recover-known-good` refuses rather than guesses when no retained
 generation exists. If the activation state file is unreadable or carries a schema
 this version does not know, the update fails closed, names the file, and points

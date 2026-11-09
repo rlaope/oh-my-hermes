@@ -299,6 +299,20 @@ All notable changes will be documented here.
   the capture result lists it. Approved and rejected candidates are left as
   they are, and no person is asked.
 
+- **A Homebrew Python patch upgrade no longer breaks a self-updated `omh`.**
+  `omh update` created each generation's venv from the running venv's
+  interpreter, so `python -m venv` linked it to the resolved base, the
+  version-pinned keg (`/opt/homebrew/Cellar/python@3.15/3.15.0/...`); after
+  `brew upgrade` and cleanup the launcher failed with `bad interpreter`. The
+  update now reads the running venv's `pyvenv.cfg`, follows its `command` back
+  to the interpreter the installer ran (through the bootstrap venv when an
+  older `omh` staged the generation), then tries its `home`, and uses the
+  first that runs the same major.minor; otherwise it keeps the old choice.
+  No vendor paths: it reads python.org, pyenv, uv and Windows
+  (`Scripts\python.exe`) venvs the same way. A generation staged before the
+  fix can be repaired in place; [Installation](docs/INSTALLATION.md) gives the
+  three commands. (#2683)
+
 - **`/gateway restart` says what each choice stops.** In a named profile the
   shared gateway serves, "Restart this profile" now says that profile's
   running turns stop now, since Hermes re-serves it without waiting. The

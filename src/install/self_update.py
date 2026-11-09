@@ -19,6 +19,7 @@ try:
     from ..maintenance.hermes_gateway import recorded_gateway_starts, refresh_skill_dir_caches
     from ..system.local_store import FileLockTimeout, file_lock
     from ..system.paths import managed_command_venv_dir, resolve_paths
+    from .self_update_base_python import base_python_candidates
     from .self_update_platform import SelfUpdatePlatform
     from .self_update_state import CleanupResult, GenerationEntry, collect_garbage, commit_activation, generation_entry, interrupted_activation, load_state, mark_activation, mark_switched, migrate_legacy, pointer_target, record_pointer, recovery_target, restore_known_good, save_state, state_path, switch_current
     from .self_update_state_validation import require_generation_path, same_existing_path
@@ -28,6 +29,7 @@ except ImportError:  # pragma: no cover - direct-source installer smoke.
     from maintenance.hermes_gateway import recorded_gateway_starts, refresh_skill_dir_caches
     from system.local_store import FileLockTimeout, file_lock
     from system.paths import managed_command_venv_dir, resolve_paths
+    from install.self_update_base_python import base_python_candidates
     from install.self_update_platform import SelfUpdatePlatform
     from install.self_update_state import CleanupResult, GenerationEntry, collect_garbage, commit_activation, generation_entry, interrupted_activation, load_state, mark_activation, mark_switched, migrate_legacy, pointer_target, record_pointer, recovery_target, restore_known_good, save_state, state_path, switch_current
     from install.self_update_state_validation import require_generation_path, same_existing_path
@@ -35,6 +37,8 @@ except ImportError:  # pragma: no cover - direct-source installer smoke.
 RESULT_SCHEMA_VERSION = "command_package_self_update/v1"
 IDENTITY_CHANGE_SCHEMA_VERSION = "update_identity_change/v1"
 REENTRY_TIMEOUT_SECONDS = 600.0
+BASE_PYTHON_PROBE_TIMEOUT_SECONDS = 30.0
+BASE_PYTHON_PROBE = "import sys; print('%d.%d' % sys.version_info[:2])"
 # `omh update` exits with this when its own home refreshed and only a bot
 # profile failed. The activated generation runs; rolling it back cannot repair
 # a profile (the previous generation fails on the same profile), so a staged
@@ -158,6 +162,27 @@ def _run(runner: Runner, command: list[str], *, env: dict[str, str] | None = Non
 
 def _detail(value: subprocess.CompletedProcess[str], fallback: str) -> str:
     return str(value.stderr or value.stdout or fallback).strip()[:2000]
+
+
+def stable_base_python(seed: str, *, runner: Runner, platform: SelfUpdatePlatform, version: tuple[int, int] | None = None) -> str:
+    """The interpreter to create a generation venv from: the first stable base that runs this major.minor, else `seed`.
+
+    `seed` run with `-m venv` from inside a venv links the generation to its
+    resolved base, a version-pinned path on Homebrew (#2683). The candidates
+    come from the `pyvenv.cfg` chain (`self_update_base_python`); each is run
+    once, isolated, and kept only when it reports the running major.minor, so
+    a `python3` that moved to another minor release is never picked.
+    """
+    expected = version or (sys.version_info.major, sys.version_info.minor)
+    wanted = f"{expected[0]}.{expected[1]}"
+    for candidate in base_python_candidates(seed, version=expected, is_windows=platform.is_windows):
+        try:
+            probed = _run(runner, [candidate, "-I", "-c", BASE_PYTHON_PROBE], timeout=BASE_PYTHON_PROBE_TIMEOUT_SECONDS)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if probed.returncode == 0 and str(probed.stdout or "").strip() == wanted:
+            return candidate
+    return seed
 
 
 def _stage(candidate: Path, package_url: str, base_python: str, *, runner: Runner, json_mode: bool, platform: SelfUpdatePlatform) -> tuple[bool, str]:
@@ -374,7 +399,8 @@ def run_installer_self_update(args: Any, plan: Mapping[str, object], *, runner: 
                 return _recover_known_good(root, state, args, runner, selected, result, hermes_home=paths.hermes_home)
             if not package_url:
                 raise OmhError("cannot update command package because no package URL is available")
-            staged, reason = _stage(candidate, package_url, str(plan.get("python") or sys.executable), runner=runner, json_mode=bool(getattr(args, "json", False)), platform=selected)
+            base_python = stable_base_python(str(plan.get("python") or sys.executable), runner=runner, platform=selected)
+            staged, reason = _stage(candidate, package_url, base_python, runner=runner, json_mode=bool(getattr(args, "json", False)), platform=selected)
             result.update(phase="staging", staging={"status": "ok" if staged else "failed", "reason": reason})
             if not staged:
                 _cleanup_candidate(root, candidate)
