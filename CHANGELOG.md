@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **dag-ulw names the node whose judgement decides the run, and gives it
+  `ultrabrain`.** The skill told the model to climb `quick` ->
+  `unspecified-low` -> `unspecified-high` and capped `ultrabrain` at one
+  node, but never said when to use it; on the owner's machine no node in recent
+  dag-ulw graphs used it. The skill now says the one node whose judgement
+  decides the run (a design decision, a root cause, a contested trade-off)
+  takes `ultrabrain`, at most one, while every other node keeps the ladder.
+  `omh_dag define` adds the advice `no_judgement_node` to a graph of 4+ nodes
+  with no `ultrabrain`, `architect` or `forensics` node; like all lint it
+  never refuses a run.
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
   your existing login and no extra command.** The TUI's runtime is now a
   Hermes profile, `<root>/profiles/omh-tui`, whose copied config says

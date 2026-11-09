@@ -112,6 +112,10 @@ MAX_LOST_REOFFERS_LIMIT: Final = 10
 BIND_SLACK_SECONDS: Final = 2.0
 CATEGORIES: Final = tuple(HERMES_MIXTURE_CATEGORY_CHAINS)
 DEEP_CATEGORIES: Final = frozenset({"deep", "deep-work"})
+# The categories that carry the one judgement deciding a run (a design decision, a root cause, a contested
+# trade-off); a graph this wide with none of them is told to give that node `ultrabrain` (`no_judgement_node`).
+JUDGEMENT_CATEGORIES: Final = frozenset({"ultrabrain", "architect", "forensics"})
+JUDGEMENT_GRAPH_NODES: Final = 4
 OUTCOMES: Final = ("accepted", "failed", "blocked", "parked")
 # The ``origin`` kinds of a node added after define: ``repair:<root>`` and ``extend:<round>``.
 ADDED_ORIGIN_KINDS: Final = ("repair", "extend")
@@ -579,6 +583,8 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
         findings.append("all_nodes_deep")
     if sum(1 for node in nodes if node["category"] == "ultrabrain") > 1:
         findings.append("ultrabrain_more_than_once")
+    if len(nodes) >= JUDGEMENT_GRAPH_NODES and not any(node["category"] in JUDGEMENT_CATEGORIES for node in nodes):
+        findings.append("no_judgement_node")
     # Only a declared review: a guessed one (a role-less or stored node) is not asked to move. Verify nodes are left
     # alone: they judge the run goal, which can need a high category.
     findings += [f"review_not_review_category:{node['id']}" for node in nodes
