@@ -1220,6 +1220,16 @@ All notable changes will be documented here.
   `delegation.fallback_providers` when the user sets them (Hermes 2026.9.7
   and later).
 
+- **omher.app has a skill guide: every OMH skill outside the ULW engine, in
+  plain words.** `docs/skills/` lists the 145 skills by work lane, each as a
+  card that opens to what the skill is for, when it fits, an example request,
+  what it is not for, and what has to be true before it calls the work done,
+  with search, lane filters and deep links (`#omh-finance-analysis`). The page
+  is rendered from `skills/*/SKILL.md` by `tools/render_site_skills.py`, and the
+  Pages workflow re-renders it on every deploy, so it follows skill edits
+  without a manual regen. Checklist lines shared by three or more skills (the
+  common rail) are left out so each card shows only its own checks.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and
