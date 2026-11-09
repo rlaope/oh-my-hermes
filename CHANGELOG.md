@@ -4,6 +4,33 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The `ultrabrain` chain is Claude Fable 5.1, GPT-6 Astra, then Claude
+  Opus 5.5, all at `xhigh`** (owner decision, 2026-11-09). It was GPT-6 Astra
+  alone, so a user without OpenAI access fell straight back to the parent
+  model. Fable 5.1 heading this one category does not change the Opus 5.5
+  before Fable 5.1 order anywhere else. A child on Fable 5.1 at `xhigh` is
+  now labelled `ultrabrain` (it was `architect`), and one on GPT-6 Astra at
+  `xhigh` is labelled `forensics` (it was `ultrabrain`) when no route record
+  names its lane, unless the machine's recorded providers put GPT-6 Astra
+  first in `ultrabrain`: the label follows the chains as shaped by those
+  providers. Pricing is unchanged: no model was added.
+
+- **Planning work runs on `ultrabrain`.** The `brain` role chain for Codex,
+  Claude Code and a category-maestro table now heads on `ultrabrain` and
+  keeps `deep` and `unspecified-low` behind it, so `omh coding model-route
+  --role brain` names GPT-6 Astra at `xhigh` on Codex and the Opus 5.5 chain
+  at `xhigh` on Claude Code. A Hermes-owner `brain`, `research` depth
+  `deep` or scale `large` unit reads `ultrabrain` and, when no generative
+  model there is confirmed active, steps to `deep` before the shared last
+  resort, never into a cheaper tier: a set without an `ultrabrain` model keeps
+  `deep`'s effort. No route moves down, every other unit resolves as before,
+  and a requested category is never widened. On the Hermes lane,
+  `ulw-work` routes planning, decomposition and hard-debugging lanes to
+  `ultrabrain` and ideation to `deep`, and `ulw-plan` and `omh-plan` set
+  `omh_delegate_route` to `ultrabrain` before dispatching a planner or critic
+  child and clear it afterwards. Planning itself still runs in the parent
+  session.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

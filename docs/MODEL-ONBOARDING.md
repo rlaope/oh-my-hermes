@@ -443,11 +443,16 @@ Rules that have held across every onboarding so far:
 - The Claude vendor order inside any chain is Opus 5.5 → Fable 5.1 (owner
   decision, 2026-10-13), which reverses the 2026-09-06 Fable → Opus order.
   The Hermes lane and the Maestro lane are different surfaces and both
-  follow it. The Maestro lane's Claude Code frontier chain is
-  `claude-opus-5-5` → `claude-fable-5-1` → `opus` (owner decision,
-  2026-10-13): the pinned Opus 5.5 id heads it, Fable 5.1 is the
-  fall-through, and the `opus` alias is the always-resolving tail. The setup
-  interview seeds the Claude Code `--model` preference with that head.
+  follow it, with one explicit exception: the Hermes-lane `ultrabrain`
+  chain is Fable 5.1 → GPT-6 Astra → Opus 5.5. It was GPT-6 Astra alone,
+  so the Claude entries give a user without OpenAI access a frontier
+  fallback; putting Fable 5.1 ahead of Astra is the owner's choice
+  (2026-11-09) and covers that category only. The Maestro lane's Claude
+  Code frontier chain is `claude-opus-5-5` → `claude-fable-5-1` → `opus`
+  (owner decision, 2026-10-13): the pinned Opus 5.5 id heads it, Fable
+  5.1 is the fall-through, and the `opus` alias is the always-resolving
+  tail. The setup interview seeds the Claude Code `--model` preference
+  with that head.
 - Know whether a slot names a pinned id or a vendor-tracking alias before
   deciding it needs an edit. The Hermes lane names pinned ids
   (`claude-opus-5-5`), so a generation bump is a repo change, and since
