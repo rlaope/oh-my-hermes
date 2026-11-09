@@ -153,14 +153,15 @@ class GeneratedChainTableTests(unittest.TestCase):
 class ChainTableFailureSurfaceTests(unittest.TestCase):
     def test_stale_row_is_named_with_both_orders(self) -> None:
         text = _installation_text().replace(
-            "| `ultrabrain` | Deepest reasoning | GPT-6 Astra (`xhigh`) |",
+            "| `ultrabrain` | Deepest reasoning | Claude Fable 5.1 (`xhigh`), GPT-6 Astra (`xhigh`), "
+            "Claude Opus 5.5 (`xhigh`) |",
             "| `ultrabrain` | Deepest reasoning | GPT-5.6 Sol (`xhigh`) |",
         )
         findings = model_chain_table_drift(text)
         self.assertEqual(len(findings), 1, findings)
         self.assertIn("`ultrabrain`", findings[0])
         self.assertIn("GPT-5.6 Sol (`xhigh`)", findings[0])
-        self.assertIn("GPT-6 Astra (`xhigh`)", findings[0])
+        self.assertIn("Claude Fable 5.1 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`)", findings[0])
 
     def test_stale_purpose_is_reported_as_that_row(self) -> None:
         text = _installation_text().replace(

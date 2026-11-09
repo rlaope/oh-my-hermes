@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 /**
  * Anchored popover: render it inside a `position: relative` wrapper next to its trigger.
- * Closes on outside click and on Escape.
+ * Closes on outside click and on Escape; `onClose` gets which one, so a trigger can take focus back on Escape.
  */
 export function Popover({
   open,
@@ -15,7 +15,7 @@ export function Popover({
   label,
 }: {
   open: boolean;
-  onClose: () => void;
+  onClose: (why: "escape" | "outside") => void;
   children: ReactNode;
   align?: "left" | "right";
   side?: "top" | "bottom";
@@ -29,10 +29,10 @@ export function Popover({
     const onDown = (e: MouseEvent) => {
       const el = ref.current;
       const anchor = el?.parentElement;
-      if (el && anchor && !anchor.contains(e.target as Node)) onClose();
+      if (el && anchor && !anchor.contains(e.target as Node)) onClose("outside");
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onClose("escape");
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);

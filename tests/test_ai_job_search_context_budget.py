@@ -170,10 +170,15 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # model-compression row reproduces main's cbc66058...36bc.
             # Merged with main again: 538044 + 3975 = 542019; dropping only the
             # model-compression row reproduces main's 3cb600bd...e829.
-            # release-cut's required inputs then say "every file that carries the version" instead of a
-            # version surface (542019 -> 542033); only that row moves, and the pin before it was 4fff984f...c1d6.
-            (skill_capabilities, 542033, FULL_ROW_DELTA_CAP,
-             '4571f8b1661056a5f1a1004d85c09256e933ddeaefddd9f206c44799759a2e9e',
+            # 542019 -> 542041 and the digest re-derived: ultrawork's handoff policy routes planning,
+            # decomposition and hard-debugging lanes to ultrabrain and ideation to deep (+22, itemized at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was
+            # 4fff984f...c1d6.
+            # Merged with the plain-words branch: release-cut's required inputs say "every file that carries
+            # the version" instead of a version surface (+14); 542041 -> 542055. That branch's pin was
+            # 4571f8b1...2e9e, and main's was ad568c74...fce5.
+            (skill_capabilities, 542055, FULL_ROW_DELTA_CAP,
+             '628aade6bc7f7933535d6cbe945d28446df02c5d49192f3d40b5cf8735a76717',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -450,12 +455,17 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # spend-gate moves, and the pin before it was 7cd26de4...73da.
         # Every body's one reply line then takes back the turn-ending rule, so every body moves; the pin
         # before it was ed82a2da...ba22.
-        # Skill verdicts and labels then read in plain words in the reply (build-failure-triage, code-review,
-        # commit-pr-authoring, release-cut); only those bodies move, and the pin before it was 18512bc6...beff.
-        # Its review then drops the reply-language words, reads the code-review verdict without a merge claim and
-        # scopes it to replies to the person, and gives ROUTE_TO_VERIFICATION_GATE its second trigger; only
-        # build-failure-triage and code-review move, and the pin before it was 2a2ae18e...a2ca42.
-        self.assertEqual(_digest(legacy_hashes), 'a8919f8849182e3ece1bc5bd8a6b4cf146b6404de407d001800ec8b9a3cb258d')
+        # Planning children then route to ultrabrain: plan and ralplan gain the child-route line and
+        # ultrawork's handoff policy sends planning lanes to ultrabrain; only those three move, and the
+        # pin before it was 18512bc6...beff. Its review then has the child-route line clear the route once
+        # the planning children are dispatched; only plan and ralplan move, and the pin before it was
+        # 52bbf25d...00ff.
+        # Merged with the ultrabrain chain branch: model-setup's chain sentence names Fable 5.1 -> Astra
+        # -> Opus 5.5; that branch's pin was b40a640d...731df, and this branch's was 88ddc8a4...71bf.
+        # Merged with the plain-words branch: build-failure-triage, code-review, commit-pr-authoring and
+        # release-cut read verdicts and labels in plain words; that branch's pin was a8919f88...258d, and
+        # main's was 0b3c71d9...1783.
+        self.assertEqual(_digest(legacy_hashes), 'd76164cde82514284717a3541214af05c286a1496b95795d7e02668b47a591a7')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -505,7 +515,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 72561,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1).
+            'plugin_tool_schema_chars': 72566,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 4051,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78).
