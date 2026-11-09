@@ -1585,13 +1585,15 @@ def _has_generative_candidate(
     resolution: Mapping[str, object],
     active_models: tuple[str | Mapping[str, object], ...],
 ) -> bool:
-    """Whether a category resolved to a confirmed-active model that can write code."""
+    """Whether a category resolved to a confirmed-active model that can write code.
+
+    The class rule stays in `_generative_chain`; its skip records go to a
+    scratch list because this only decides which category the lane shapes.
+    """
     if resolution.get("source") != "recommendation_chain":
         return False
-    return any(
-        model_class(str(entry.get("model_id", ""))) != NON_GENERATIVE_MODEL_CLASS
-        for entry in _hermes_recommendation_chain(resolution, active_models=active_models)
-    )
+    chain = _hermes_recommendation_chain(resolution, active_models=active_models)
+    return bool(_generative_chain(tuple(chain), []))
 
 
 def _recommendation_binding(resolution: Mapping[str, object]) -> str:
