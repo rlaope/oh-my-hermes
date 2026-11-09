@@ -1,5 +1,7 @@
 // SESSIONS: the sidebar half under BOTS, the + menu of agent CLIs, a mock terminal session (the browser
 // build has no Tauri shell, so the MockHost echoes), switching between a bot chat and a session, closing.
+// Grok is the agent that opens as a terminal (the others open as chats: e2e/sessions-chat.spec.ts), so
+// these tests install it in the mock host.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -22,11 +24,15 @@ async function mock(op: string): Promise<void> {
   ws.close();
 }
 
-async function open(page: Page, folder = "/Users/you/code/oh-my-hermes") {
-  await page.addInitScript((f) => {
-    if (!sessionStorage.getItem("__kept")) localStorage.removeItem("omher.sessions.recent");
-    (window as unknown as { __omherPickFolder: string }).__omherPickFolder = f;
-  }, folder);
+async function open(page: Page, folder = "/Users/you/code/oh-my-hermes", installed = ["claude", "codex", "omh", "grok"]) {
+  await page.addInitScript(
+    ([f, agents]) => {
+      if (!sessionStorage.getItem("__kept")) localStorage.removeItem("omher.sessions.recent");
+      (window as unknown as { __omherPickFolder: string }).__omherPickFolder = f as string;
+      (window as unknown as { __omherMockAgents: string[] }).__omherMockAgents = agents as string[];
+    },
+    [folder, installed] as const,
+  );
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
 }
@@ -70,7 +76,7 @@ test("bots and sessions split the sidebar about half and half", async ({ page })
 });
 
 test("+ lists the agent CLIs with their marks; missing ones are disabled", async ({ page }) => {
-  await open(page);
+  await open(page, undefined, ["claude", "codex", "omh"]);
   await page.getByTestId("session-new").click();
   const menu = page.getByTestId("session-menu");
   await expect(menu).toBeVisible();
@@ -92,16 +98,16 @@ test("+ lists the agent CLIs with their marks; missing ones are disabled", async
   await expect(menu).toHaveCount(0);
 });
 
-test("start a mock session, type, see the echo, then switch to a bot chat and back", async ({ page }) => {
+test("start a mock terminal session, type, see the echo, then switch to a bot chat and back", async ({ page }) => {
   await open(page);
-  await startSession(page, "claude");
+  await startSession(page, "grok");
   const header = page.getByTestId("header");
-  await expect(page.getByTestId("session-title")).toHaveText("Claude Code");
+  await expect(page.getByTestId("session-title")).toHaveText("Grok");
   await expect(page.getByTestId("session-cwd")).toHaveText("~/code/oh-my-hermes");
   await expect(header.locator("button")).toHaveCount(0); // no extra header icons
   const row = page.locator("[data-testid=session-list] .ss-row").first();
   await expect(row).toContainText("oh-my-hermes");
-  await expect(row.locator(".bot-p")).toHaveText("Claude Code");
+  await expect(row.locator(".bot-p")).toHaveText("Grok");
   await expect(page.getByTestId("session-status")).toHaveText("Running");
   await expect(row.getByTestId("live-dot")).toBeVisible();
   await expect(row).toHaveClass(/active/);
@@ -109,7 +115,7 @@ test("start a mock session, type, see the echo, then switch to a bot chat and ba
 
   // only the agent id and folder went to the host: no command line
   const start = (await calls(page)).find((c) => c.op === "start")!;
-  expect(start).toMatchObject({ agent: "claude", cwd: "/Users/you/code/oh-my-hermes" });
+  expect(start).toMatchObject({ agent: "grok", cwd: "/Users/you/code/oh-my-hermes" });
   expect(Object.keys(start).sort()).toEqual(["agent", "cols", "cwd", "id", "op", "rows"]);
 
   await page.locator(".xterm-helper-textarea").focus();
@@ -136,14 +142,14 @@ test("start a mock session, type, see the echo, then switch to a bot chat and ba
 
 test("a second session, recent folders, and exit ends a session", async ({ page }) => {
   await open(page);
-  await startSession(page, "claude");
+  await startSession(page, "grok");
   await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/work/api"));
-  await startSession(page, "codex");
+  await startSession(page, "grok");
   const rows = page.locator("[data-testid=session-list] .ss-row");
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText("api");
-  await expect(rows.first()).toContainText("Codex");
-  await expect(page.getByTestId("session-title")).toHaveText("Codex");
+  await expect(rows.first()).toContainText("Grok");
+  await expect(page.getByTestId("session-title")).toHaveText("Grok");
 
   // the + menu opens inside the sidebar, and offers the recent agent+folder pairs
   await page.getByTestId("session-new").click();
@@ -160,20 +166,20 @@ test("a second session, recent folders, and exit ends a session", async ({ page 
   await page.keyboard.type("exit");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("session-status")).toHaveText("Ended");
-  await expect(rows.first()).toContainText("Codex · Ended");
+  await expect(rows.first()).toContainText("Grok · Ended");
   await expect(rows.first().getByTestId("live-dot")).toHaveCount(0);
-  await expect(page.locator(".xterm-rows")).toContainText("Codex ended");
+  await expect(page.locator(".xterm-rows")).toContainText("Grok ended");
 });
 
 test("closing a running session asks first and stops the program", async ({ page }) => {
   await open(page);
-  await startSession(page, "omh");
+  await startSession(page, "grok");
   const row = page.locator("[data-testid=session-list] .ss-row").first();
   const id = (await row.getAttribute("data-testid"))!.replace("session-", "");
   await row.hover();
   await row.getByTestId("session-close").click();
   const confirm = page.getByTestId(`session-confirm-${id}`);
-  await expect(confirm).toContainText("Stop oh-my-hermes?");
+  await expect(confirm).toContainText("Stop Grok?");
   await confirm.getByRole("button", { name: "Cancel" }).click();
   await expect(row).toBeVisible();
   expect((await calls(page)).some((c) => c.op === "close")).toBe(false);
@@ -191,7 +197,7 @@ test("closing a running session asks first and stops the program", async ({ page
 
 test("an ended session closes without asking", async ({ page }) => {
   await open(page);
-  await startSession(page, "claude");
+  await startSession(page, "grok");
   await page.locator(".xterm-helper-textarea").focus();
   await page.keyboard.type("exit");
   await page.keyboard.press("Enter");
@@ -204,7 +210,7 @@ test("an ended session closes without asking", async ({ page }) => {
 
 test("the terminal follows the light theme", async ({ page }) => {
   await open(page);
-  await startSession(page, "claude");
+  await startSession(page, "grok");
   // what shows: the theme background on the scrollable element, through a transparent viewport
   expect(await page.locator(".xterm-viewport").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
   const bg = () => page.locator(".xterm-scrollable-element").evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -220,11 +226,11 @@ test("screenshots: sidebar with sessions and an open session, dark and light", a
   test.skip(!SHOTS, "set OMHER_SHOTS to a folder to save screenshots");
   mkdirSync(SHOTS, { recursive: true });
   await open(page, "/Users/you/code/oh-my-hermes");
-  await startSession(page, "codex");
+  await startSession(page, "grok");
   await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/work/api-server"));
-  await startSession(page, "omh");
+  await startSession(page, "grok");
   await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/omher"));
-  await startSession(page, "claude");
+  await startSession(page, "grok");
   await page.locator(".xterm-helper-textarea").focus();
   await page.keyboard.type("explain the sessions feature");
   await page.keyboard.press("Enter");

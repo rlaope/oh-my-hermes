@@ -1,7 +1,22 @@
-// Where session processes run. In the desktop app: the Tauri shell (src-tauri/src/sessions.rs), which
-// starts an allow-listed agent in a pseudo-terminal. In a plain browser (dev, e2e against the mock
-// bridge) there is no shell, so a mock host echoes what you type and prints a "(mock)" banner.
+// Where session processes run. In the desktop app: the Tauri shell, which starts an allow-listed agent
+// in a pseudo-terminal (src-tauri/src/sessions.rs) or in its structured chat mode on pipes
+// (src-tauri/src/agent_chat.rs). In a plain browser (dev, e2e against the mock bridge) there is no shell,
+// so a mock host echoes terminal typing and a mock agent answers chats with the same events.
 import { AGENTS, agentDef, type AgentId, type AgentInfo } from "./agents";
+import type { ApprovalChoice } from "../lib/protocol";
+
+/** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. */
+export type ChatInput =
+  | { kind: "send"; text: string }
+  | { kind: "interrupt" }
+  | { kind: "approve"; request_id: string; choice: ApprovalChoice }
+  | { kind: "clarify"; request_id: string; answer: string }
+  | { kind: "model"; model: string };
+
+/** An event from a chat agent: the bot chat's events (`turn.start`, `tool.start`, `delta`, `message`,
+ *  `approval.request`, `turn.end`, …) plus `session.info`, `session.models`, `session.error` and, once,
+ *  `exit`. */
+export type ChatEvent = { event: string; [k: string]: unknown };
 
 export interface SessionHost {
   readonly kind: "tauri" | "mock";
@@ -11,7 +26,8 @@ export interface SessionHost {
   home(): Promise<string>;
   /** Native folder picker; null when the person cancels. */
   pickFolder(defaultPath: string): Promise<string | null>;
-  /** Start `agent` in `cwd`. Only the agent id goes to the shell: never a command line. */
+  /** Start `agent` in `cwd` in a terminal. Only the agent id goes to the shell: never a command line.
+   *  `resume` is a Claude Code session id (the terminal view of a chat); the shell checks it is one. */
   start(
     agent: AgentId,
     cwd: string,
@@ -19,10 +35,15 @@ export interface SessionHost {
     rows: number,
     onData: (data: Uint8Array | string) => void,
     onExit: (code: number | null) => void,
+    resume?: string,
   ): Promise<number>;
   write(id: number, data: string): Promise<void>;
   resize(id: number, cols: number, rows: number): Promise<void>;
   close(id: number): Promise<void>;
+  /** Start `agent` in its chat mode in `cwd` (`resume`: a Claude Code session id to continue). */
+  chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string): Promise<number>;
+  chatInput(id: number, input: ChatInput): Promise<void>;
+  chatClose(id: number): Promise<void>;
 }
 
 // ---- Tauri ----------------------------------------------------------------------------------
@@ -34,7 +55,7 @@ export class TauriHost implements SessionHost {
   }
   async reset() {
     const { invoke } = await this.core();
-    await invoke("session_close_all");
+    await Promise.all([invoke("session_close_all"), invoke("chat_close_all")]);
   }
   async agents() {
     const { invoke } = await this.core();
@@ -49,13 +70,27 @@ export class TauriHost implements SessionHost {
     const r = await open({ directory: true, multiple: false, defaultPath, title: "Choose a folder for the session" });
     return typeof r === "string" ? r : null;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string) {
     const { invoke, Channel } = await this.core();
     const data = new Channel<ArrayBuffer>();
     data.onmessage = (b) => onData(new Uint8Array(b));
     const exit = new Channel<number | null>();
     exit.onmessage = (c) => onExit(c);
-    return invoke<number>("session_start", { agent, cwd, cols, rows, onData: data, onExit: exit });
+    return invoke<number>("session_start", { agent, cwd, resume: resume ?? null, cols, rows, onData: data, onExit: exit });
+  }
+  async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string) {
+    const { invoke, Channel } = await this.core();
+    const ch = new Channel<ChatEvent>();
+    ch.onmessage = (ev) => onEvent(ev);
+    return invoke<number>("chat_start", { agent, cwd, resume: resume ?? null, onEvent: ch });
+  }
+  async chatInput(id: number, input: ChatInput) {
+    const { invoke } = await this.core();
+    await invoke("chat_input", { id, input });
+  }
+  async chatClose(id: number) {
+    const { invoke } = await this.core();
+    await invoke("chat_close", { id });
   }
   async write(id: number, data: string) {
     const { invoke } = await this.core();
@@ -74,13 +109,15 @@ export class TauriHost implements SessionHost {
 // ---- mock (browser, e2e) --------------------------------------------------------------------
 
 export interface MockCall {
-  op: "start" | "write" | "resize" | "close";
+  op: "start" | "write" | "resize" | "close" | "chat.start" | "chat.input" | "chat.close";
   id?: number;
   agent?: string;
   cwd?: string;
   data?: string;
   cols?: number;
   rows?: number;
+  resume?: string;
+  input?: ChatInput;
 }
 
 const BANNER: Record<AgentId, string> = {
@@ -110,7 +147,7 @@ export class MockHost implements SessionHost {
   }
   async agents(): Promise<AgentInfo[]> {
     const installed = this.g.__omherMockAgents ?? ["claude", "codex", "omh"];
-    return AGENTS.map((a) => ({ id: a.id, label: a.label, path: installed.includes(a.id) ? `/usr/local/bin/${a.program}` : null }));
+    return AGENTS.map((a) => ({ id: a.id, label: a.label, mode: a.mode, path: installed.includes(a.id) ? `/usr/local/bin/${a.program}` : null }));
   }
   async home() {
     return "/Users/you";
@@ -119,9 +156,9 @@ export class MockHost implements SessionHost {
     const v = this.g.__omherPickFolder;
     return v === undefined ? defaultPath : v;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string) {
     const id = ++this.next;
-    this.log({ op: "start", id, agent, cwd, cols, rows });
+    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}) });
     this.live.set(id, { line: "", out: onData, exit: onExit });
     setTimeout(() => {
       onData(`${BANNER[agent]}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
@@ -167,6 +204,139 @@ export class MockHost implements SessionHost {
   async close(id: number) {
     this.log({ op: "close", id });
     this.live.delete(id);
+  }
+
+  // ---- chat: a scripted agent with the same events the Rust adapters emit -------------------
+  private chats = new Map<number, MockChat>();
+  async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string) {
+    const id = ++this.next;
+    this.log({ op: "chat.start", id, agent, cwd, ...(resume ? { resume } : {}) });
+    const c = new MockChat(agent, onEvent, resume);
+    this.chats.set(id, c);
+    c.boot();
+    return id;
+  }
+  async chatInput(id: number, input: ChatInput) {
+    this.log({ op: "chat.input", id, input });
+    const c = this.chats.get(id);
+    if (!c) throw new Error("no such session");
+    c.input(input);
+  }
+  async chatClose(id: number) {
+    this.log({ op: "chat.close", id });
+    this.chats.get(id)?.stop();
+    this.chats.delete(id);
+  }
+}
+
+const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
+  claude: [
+    { id: "opus", label: "Opus 5.5" },
+    { id: "sonnet", label: "Sonnet 5.5" },
+    { id: "haiku", label: "Haiku 5.5" },
+  ],
+  codex: [
+    { id: "gpt-5.5-codex", label: "GPT-5.5 Codex" },
+    { id: "gpt-5.5", label: "GPT-5.5" },
+  ],
+  pi: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
+  omp: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
+};
+
+/** One mock chat agent. `/approve` asks to run `rm -rf ./build`; `/slow` streams long enough to stop with
+ *  Esc; `/exit` ends the program; anything else gets a short answer after one tool step. */
+class MockChat {
+  private timers: ReturnType<typeof setTimeout>[] = [];
+  private turn = false;
+  private seq = 0;
+  private waiting: string | null = null;
+  private model: string;
+  private session: string;
+  constructor(private agent: AgentId, private emit: (ev: ChatEvent) => void, resume?: string) {
+    this.model = MOCK_MODELS[agent]?.[0]?.label ?? agentDef(agent).label;
+    this.session = resume ?? `${agent}-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
+    if (agent === "claude" && !resume) this.session = "11111111-2222-4333-8444-555555555555";
+  }
+  private at(ms: number, fn: () => void) {
+    this.timers.push(setTimeout(fn, ms));
+  }
+  boot() {
+    this.at(20, () => {
+      this.emit({ event: "session.info", agent_session: this.session, model: this.model });
+      this.emit({ event: "session.models", options: (MOCK_MODELS[this.agent] ?? []).map((m) => ({ ...m, detail: "" })) });
+    });
+  }
+  stop() {
+    this.timers.forEach(clearTimeout);
+    this.timers = [];
+  }
+  private end(outcome: "done" | "interrupted" | "error", error?: string) {
+    if (!this.turn) return;
+    this.stop();
+    this.turn = false;
+    this.waiting = null;
+    this.emit({ event: "turn.end", outcome, ...(error ? { error } : {}) });
+  }
+  private say(text: string, at: number) {
+    const parts = [text.slice(0, Math.ceil(text.length / 2)), text.slice(Math.ceil(text.length / 2))];
+    this.at(at, () => this.emit({ event: "delta", text: parts[0] }));
+    this.at(at + 120, () => this.emit({ event: "delta", text: parts[1] }));
+    this.at(at + 240, () => this.emit({ event: "message", id: `m${++this.seq}`, text }));
+  }
+  input(i: ChatInput) {
+    if (i.kind === "send") {
+      if (!this.turn) {
+        this.turn = true;
+        this.emit({ event: "turn.start" });
+      }
+      const text = i.text.trim();
+      if (text === "/exit") {
+        this.at(30, () => {
+          this.end("error", "the agent stopped");
+          this.emit({ event: "exit", code: 0, error: "" });
+        });
+        return;
+      }
+      if (text.startsWith("/approve")) {
+        const rid = `req-${++this.seq}`;
+        this.at(60, () => this.emit({ event: "tool.start", tool_id: "t-rm", name: "terminal", detail: "rm -rf ./build" }));
+        this.at(140, () => {
+          this.waiting = rid;
+          this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "rm -rf ./build", choices: ["deny", "once", "session"] });
+        });
+        return;
+      }
+      if (text.startsWith("/slow")) {
+        for (let k = 0; k < 40; k++) this.at(100 + k * 250, () => this.emit({ event: "delta", text: `line ${k + 1}\n` }));
+        return;
+      }
+      this.at(60, () => this.emit({ event: "tool.start", tool_id: `t${this.seq}`, name: "read_file", detail: "README.md" }));
+      this.at(300, () => this.emit({ event: "tool.end", tool_id: `t${this.seq}`, name: "", ok: true, ms: 240 }));
+      this.say(`(mock ${agentDef(this.agent).label}) You said: ${text}`, 360);
+      this.at(800, () => this.end("done"));
+    } else if (i.kind === "interrupt") {
+      if (!this.turn) throw new Error("nothing is running");
+      this.at(20, () => this.end("interrupted"));
+    } else if (i.kind === "approve") {
+      if (i.request_id !== this.waiting) throw new Error("no such request");
+      this.waiting = null;
+      if (i.choice === "deny") {
+        this.at(40, () => this.emit({ event: "tool.end", tool_id: "t-rm", name: "", ok: false, ms: 0 }));
+        this.say("Okay, I left the build folder alone.", 80);
+        this.at(500, () => this.end("done"));
+      } else {
+        this.at(80, () => this.emit({ event: "tool.end", tool_id: "t-rm", name: "", ok: true, ms: 300 }));
+        this.say(`Cleaned the build folder (${i.choice === "session" ? "allowed for this session" : "allowed once"}).`, 140);
+        this.at(560, () => this.end("done"));
+      }
+    } else if (i.kind === "model") {
+      const m = (MOCK_MODELS[this.agent] ?? []).find((x) => x.id === i.model);
+      if (!m) throw new Error(`unknown model ${i.model}`);
+      this.model = m.label;
+      this.at(20, () => this.emit({ event: "session.info", model: this.model }));
+    } else {
+      throw new Error("no question is open");
+    }
   }
 }
 

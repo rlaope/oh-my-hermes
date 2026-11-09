@@ -1,11 +1,12 @@
-// SESSIONS in the sidebar: the `+` menu that starts claude / codex / omh / pi / omp in a folder, and one
-// row per session started in this run of the app.
+// SESSIONS in the sidebar: the `+` menu that starts claude / codex / omh / pi / omp / grok in a folder,
+// and one row per session started in this run of the app (live dot while a turn runs, "Needs you" while
+// an approval or question waits).
 import { useEffect, useState } from "react";
-import { useStore } from "../state/store";
+import { useStore, type AppState } from "../state/store";
 import { CloseIcon, PlusIcon, Popover } from "../ui";
 import { shortTime } from "../app/time";
 import { AgentMark } from "./AgentMark";
-import { agentDef, folderName, parentPath, rowModel, tildePath, type AgentId, type SessionRec } from "./agents";
+import { agentDef, folderName, parentPath, rowModel, tildePath, type AgentId, type ChatLive, type SessionRec } from "./agents";
 import { getSessions, useSessions } from "./sessions";
 
 export function SessionsHeader() {
@@ -140,14 +141,29 @@ export function SessionList() {
   );
 }
 
+/** The row's view of a session's chat: a turn running, and an approval or question still open. */
+function chatLive(s: AppState, key: string | null): ChatLive | undefined {
+  const c = key ? s.chats[key] : undefined;
+  if (!c) return undefined;
+  let needsYou = false;
+  if (c.turn) {
+    const since = c.turn.startedAt / 1000 - 1;
+    needsYou = c.items.some(
+      (i) => i.ts >= since && ((i.kind === "approval" && !i.resolved) || (i.kind === "clarify" && i.answer === undefined)),
+    );
+  }
+  return { turn: !!c.turn, needsYou };
+}
+
 function Row({ rec, active, onClose }: { rec: SessionRec; active: boolean; onClose: () => void }) {
   const s = useStore();
-  const m = rowModel(rec);
+  const m = rowModel(rec, rec.view === "chat" ? chatLive(s, getSessions().chatKey(rec.id)) : undefined);
   return (
     <div
       className={`ss-row bot${active ? " active" : ""}`}
       data-testid={`session-${rec.id}`}
       data-status={rec.status}
+      data-needs-you={m.needsYou ? "true" : undefined}
       onContextMenu={(e) => {
         e.preventDefault();
         onClose();
@@ -170,7 +186,9 @@ function Row({ rec, active, onClose }: { rec: SessionRec; active: boolean; onClo
             <span className="bot-t">{shortTime(m.ts)}</span>
           </span>
           <span className="bot-r2">
-            <span className="bot-p">{m.sub}</span>
+            <span className={`bot-p${m.needsYou ? " ss-needs" : ""}`} data-testid="session-sub">
+              {m.sub}
+            </span>
           </span>
         </span>
       </button>

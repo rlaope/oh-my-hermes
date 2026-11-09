@@ -10,6 +10,7 @@ import type {
   BridgeEvent,
   ChatOpenResult,
   HelloResult,
+  FolderOpenResult,
   ModelCurrent,
   ModelOptions,
   PeekMsg,
@@ -338,7 +339,41 @@ export type Action =
   | { type: "ui.closeSettings" }
   | { type: "ui.session"; id: string | null };
 
+// ---- chats that are not a bot's main chat ------------------------------------------------------
+//
+// SESSIONS chats reuse this reducer and the bot chat's timeline, cards and composer under their own key:
+// `fold:<bot>:<id>` for a Hermes chat in a folder (bridge `folder.open`, events tagged `session`) and
+// `agent:<id>` for a Claude Code / Codex / pi chat run by the desktop shell. A route says where the
+// person's answers go.
+
+export interface ChatRoute {
+  send(text: string): Promise<void>;
+  interrupt(): Promise<void>;
+  approve(requestId: string, choice: ApprovalChoice): Promise<void>;
+  clarify(requestId: string, answer: string): Promise<void>;
+  /** Name for notifications. */
+  label: string;
+  /** Show this chat (a notification was clicked). */
+  open(): void;
+}
+
+const chatRoutes = new Map<string, ChatRoute>();
+/** Register (or with null, remove) where chat `key`'s answers go. */
+export function setChatRoute(key: string, route: ChatRoute | null): void {
+  if (route) chatRoutes.set(key, route);
+  else chatRoutes.delete(key);
+}
+export const chatRoute = (key: string): ChatRoute | undefined => chatRoutes.get(key);
+/** Key of a folder chat's events. */
+export const folderKey = (bot: string, session: string) => `fold:${bot}:${session}`;
+/** True for a SESSIONS chat key (not a bot's main chat). */
+export const isSessionChat = (key: string) => key.startsWith("fold:") || key.startsWith("agent:");
+
 function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
+  if (ev.session && ev.event !== "folder.closed") {
+    if (ev.event === "bot.status") return state; // a folder chat's turn never moves the bot's own status
+    return reduceEvent(state, { ...ev, bot: folderKey(ev.bot, ev.session), session: undefined }, now);
+  }
   const bot = ev.bot;
   switch (ev.event) {
     case "turn.start":
@@ -464,7 +499,9 @@ export function reduce(state: AppState, a: Action): AppState {
       // running:false must not turn them into "done").
       const t = a.now ?? Date.now();
       const chats: AppState["chats"] = {};
-      for (const [b, c] of Object.entries(state.chats)) chats[b] = c.turn ? endTurn(c, t, "interrupted", "Connection to Hermes lost") : c;
+      // agent:<id> chats run in the desktop shell, not through Hermes: a bridge outage does not touch them
+      for (const [b, c] of Object.entries(state.chats))
+        chats[b] = c.turn && !b.startsWith("agent:") ? endTurn(c, t, "interrupted", "Connection to Hermes lost") : c;
       return { ...state, conn: a.status, chats };
     }
     case "chat.failed":
@@ -624,6 +661,15 @@ export interface Actions {
   closeSettings(): void;
   /** Show terminal session `id` in the main column; null goes back to the selected bot's chat. */
   openSession(id: string | null): void;
+  /** A new Hermes chat for `bot` in folder `cwd` (SESSIONS > oh-my-hermes). */
+  folderOpen(bot: string, cwd: string): Promise<FolderOpenResult>;
+  folderClose(bot: string, session: string): Promise<void>;
+  /** Change the model of folder chat `session`. */
+  folderSetModel(bot: string, session: string, change: { model: string; provider?: string }): Promise<ModelCurrent>;
+  folderSend(bot: string, session: string, text: string): Promise<void>;
+  folderInterrupt(bot: string, session: string): Promise<void>;
+  folderApprove(bot: string, session: string, requestId: string, choice: ApprovalChoice): Promise<void>;
+  folderClarify(bot: string, session: string, requestId: string, answer: string): Promise<void>;
   /** Re-read bots.list (names, status, picture revisions). */
   reloadBots(): Promise<void>;
   renameBot(bot: string, name: string): Promise<void>;
@@ -650,6 +696,13 @@ export interface StoreOptions {
   now?: () => number;
   /** Called for every bridge event after it is applied; the app uses it for system notifications. */
   onEvent?: (ev: BridgeEvent, state: AppState) => void;
+}
+
+/** Every bridge event, after the store applied it (SESSIONS listens for `folder.closed`). */
+const bridgeListeners = new Set<(ev: BridgeEvent) => void>();
+export function onBridgeEvent(fn: (ev: BridgeEvent) => void): () => void {
+  bridgeListeners.add(fn);
+  return () => bridgeListeners.delete(fn);
 }
 
 export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store {
@@ -737,7 +790,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     } catch (e) {
       return fail(e);
     }
-    const loaded = Object.entries(state.chats).filter(([, c]) => c.loaded).map(([n]) => n);
+    const names = new Set(state.bots.map((b) => b.name));
+    const loaded = Object.entries(state.chats).filter(([n, c]) => c.loaded && names.has(n)).map(([n]) => n);
     await Promise.allSettled([...loaded.map(loadChat), loadElsewhere(), loadRoutines()]);
   };
 
@@ -755,7 +809,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       });
       bridge.onAny((ev) => {
         dispatch({ type: "event", ev, now: now() });
-        opts.onEvent?.(ev, state);
+        for (const l of [...bridgeListeners]) l(ev);
+        opts.onEvent?.(ev.session ? { ...ev, bot: folderKey(ev.bot, ev.session) } : ev, state);
         if (ev.event === "elsewhere.update") void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
         if (ev.event === "bots.update") void reloadBots();
@@ -801,7 +856,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const b = botArg(bot);
       if (!b) return;
       try {
-        await bridge.request("approval.respond", { bot: b, request_id: requestId, choice });
+        const route = chatRoute(b);
+        if (route) await route.approve(requestId, choice);
+        else if (isSessionChat(b)) throw new Error("this session has ended");
+        else await bridge.request("approval.respond", { bot: b, request_id: requestId, choice });
         dispatch({ type: "approval.resolved", bot: b, request_id: requestId, choice });
       } catch (e) {
         fail(e);
@@ -811,7 +869,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const b = botArg(bot);
       if (!b) return;
       try {
-        await bridge.request("clarify.respond", { bot: b, request_id: requestId, answer });
+        const route = chatRoute(b);
+        if (route) await route.clarify(requestId, answer);
+        else if (isSessionChat(b)) throw new Error("this session has ended");
+        else await bridge.request("clarify.respond", { bot: b, request_id: requestId, answer });
         dispatch({ type: "clarify.resolved", bot: b, request_id: requestId, answer });
       } catch (e) {
         fail(e);
@@ -862,6 +923,23 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     openSettings: (page) => dispatch({ type: "ui.settings", page }),
     closeSettings: () => dispatch({ type: "ui.closeSettings" }),
     openSession: (id) => dispatch({ type: "ui.session", id }),
+    folderOpen: (bot, cwd) => bridge.request("folder.open", { bot, cwd }),
+    async folderClose(bot, session) {
+      await bridge.request("folder.close", { bot, session });
+    },
+    folderSetModel: (bot, session, change) => bridge.request("chat.set_model", { bot, session, ...change }),
+    async folderSend(bot, session, text) {
+      await bridge.request("chat.send", { bot, session, text });
+    },
+    async folderInterrupt(bot, session) {
+      await bridge.request("chat.interrupt", { bot, session });
+    },
+    async folderApprove(bot, session, requestId, choice) {
+      await bridge.request("approval.respond", { bot, session, request_id: requestId, choice });
+    },
+    async folderClarify(bot, session, requestId, answer) {
+      await bridge.request("clarify.respond", { bot, session, request_id: requestId, answer });
+    },
     reloadBots,
     async renameBot(bot, name) {
       const r = await bridge.request("bots.rename", { bot, name });
@@ -910,13 +988,33 @@ let singleton: Store | null = null;
 export function getStore(): Store {
   return (singleton ??= createStore(new BridgeClient(), {
     onEvent(ev, state) {
-      if (!notifyEnabled()) return;
-      const watching = (bot: string) => windowWatched() && state.ui.view === "chat" && state.selectedBot === bot;
-      const name = (bot: string) => state.bots.find((b) => b.name === bot)?.display_name ?? bot;
-      const note = noteFor(ev, { name, watching });
-      if (note) void showNote(note, () => void singleton?.actions.selectBot(note.bot));
+      notifySessionEvent(ev, state);
     },
   }));
+}
+
+/** A system notification for a chat event, unless the person is looking at that chat. SESSIONS chats
+ *  (`fold:` / `agent:` keys) name themselves through their route and open their own view. */
+export function notifySessionEvent(ev: BridgeEvent, state: AppState): void {
+  if (!notifyEnabled()) return;
+  const watching = (bot: string) => {
+    if (!windowWatched()) return false;
+    if (isSessionChat(bot)) return state.ui.view === "session" && sessionKeyOf?.(state.ui.session) === bot;
+    return state.ui.view === "chat" && state.selectedBot === bot;
+  };
+  const name = (bot: string) => chatRoute(bot)?.label ?? state.bots.find((b) => b.name === bot)?.display_name ?? bot;
+  const note = noteFor(ev, { name, watching });
+  if (note) void showNote(note, () => {
+    const route = chatRoute(note.bot);
+    if (route) route.open();
+    else void singleton?.actions.selectBot(note.bot);
+  });
+}
+
+/** Set by SESSIONS: the chat key shown for a session id (so its own notifications stay quiet). */
+let sessionKeyOf: ((id: string | null) => string | null) | null = null;
+export function setSessionKeyLookup(fn: (id: string | null) => string | null): void {
+  sessionKeyOf = fn;
 }
 
 /** The whole view model plus actions. Re-renders on any state change. */
