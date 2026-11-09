@@ -3,14 +3,14 @@
 // (src-tauri/src/agent_chat.rs). In a plain browser (dev, e2e against the mock bridge) there is no shell,
 // so a mock host echoes terminal typing and a mock agent answers chats with the same events.
 import { AGENTS, agentDef, type AgentId, type AgentInfo } from "./agents";
-import type { ApprovalChoice } from "../lib/protocol";
+import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 
 /** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. */
 export type ChatInput =
   | { kind: "send"; text: string }
   | { kind: "interrupt" }
   | { kind: "approve"; request_id: string; choice: ApprovalChoice }
-  | { kind: "clarify"; request_id: string; answer: string }
+  | { kind: "clarify"; request_id: string; answer: string | ClarifyAnswers }
   | { kind: "model"; model: string };
 
 /** An event from a chat agent: the bot chat's events (`turn.start`, `tool.start`, `delta`, `message`,

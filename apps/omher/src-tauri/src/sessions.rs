@@ -47,7 +47,7 @@ pub enum Mode {
     Terminal,
 }
 
-/// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 10).
+/// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 11).
 pub const AGENTS: [Agent; 6] = [
     Agent { id: "claude", program: "claude", label: "Claude Code", mode: Mode::Chat },
     Agent { id: "codex", program: "codex", label: "Codex", mode: Mode::Chat },

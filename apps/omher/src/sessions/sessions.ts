@@ -13,7 +13,7 @@ import type { FitAddon } from "@xterm/addon-fit";
 import { agentDef, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
 import { folderKey, getStore, notifySessionEvent, onBridgeEvent, setChatRoute, setSessionKeyLookup, type Store } from "../state/store";
-import type { ApprovalChoice, BridgeEvent } from "../lib/protocol";
+import type { ApprovalChoice, BridgeEvent, ClarifyAnswers } from "../lib/protocol";
 
 export interface ModelOption {
   id: string;
@@ -267,7 +267,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
       send: (text) => send(id, text),
       interrupt: () => input(id, { kind: "interrupt" }),
       approve: (request_id: string, choice: ApprovalChoice) => input(id, { kind: "approve", request_id, choice }),
-      clarify: (request_id: string, answer: string) => input(id, { kind: "clarify", request_id, answer }),
+      clarify: (request_id: string, answer: string | ClarifyAnswers) => input(id, { kind: "clarify", request_id, answer }),
     });
   };
 

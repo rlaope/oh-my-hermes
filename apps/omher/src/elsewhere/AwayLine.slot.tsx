@@ -2,7 +2,7 @@
 // bubble with one link back to the thread at the end. omher never writes to that thread.
 import type { SlotProps } from "../features";
 import { openExternal } from "../lib/openExternal";
-import { SourceIcon, Spinner } from "../ui";
+import { LiveRing, SourceIcon } from "../ui";
 import { sourceName, workingFor } from "./format";
 import { useNow } from "./useNow";
 import "./elsewhere.css";
@@ -18,6 +18,12 @@ export default function AwayLine({ item }: SlotProps["elsewhereLine"]) {
   const job = a.source === "cron" ? (a.label || a.title || "").split(" · ")[0].trim() : "";
   const where = a.place ? `${src} ${a.place}` : job ? `${src} · ${job}` : src;
   const text = a.last_reply?.trim() || title;
+  // still working there: the same live ring as the sidebar, around the place's mark
+  const mark = (
+    <LiveRing on={a.running} size={12} gap={4} label={`${src} session working`} testId="away-ring" seed={a.id}>
+      <SourceIcon source={a.source} size={12} />
+    </LiveRing>
+  );
   const link = a.url ? (
     <a
       className="ew-link"
@@ -29,12 +35,12 @@ export default function AwayLine({ item }: SlotProps["elsewhereLine"]) {
         void openExternal(a.url!);
       }}
     >
-      <SourceIcon source={a.source} size={12} />
+      {mark}
       <span className="ew-lt">{where}</span>
     </a>
   ) : (
     <span className="ew-where">
-      <SourceIcon source={a.source} size={12} />
+      {mark}
       <span className="ew-lt">{where}</span>
     </span>
   );
@@ -44,7 +50,7 @@ export default function AwayLine({ item }: SlotProps["elsewhereLine"]) {
         <span data-testid="away-text">{text}</span> {link}
         {a.running && (
           <span className="ew-working" data-testid="away-time">
-            <Spinner size={10} label={`${src} session working`} /> working · {workingFor(a.started_at, now)}
+            working · {workingFor(a.started_at, now)}
           </span>
         )}
       </div>

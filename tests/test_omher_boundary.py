@@ -34,6 +34,8 @@ RULES = (
     "The app starts the bridge as a child process and stops it when the app exits.",
     "The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.",
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
+    "The only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`)",
+    "omher never commits, checks out, pushes or edits a repository.",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omh`, `pi`, `omp`, `grok`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
@@ -55,9 +57,12 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_ten_numbered_rules(self) -> None:
-        rules = re.findall(r"^\d+\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 10, len(rules))
+    def test_boundary_is_between_six_and_eleven_numbered_rules(self) -> None:
+        # 11: rule 10 (the bridge's read-only git, side panel) and rule 11 (SESSIONS' allow-listed agents)
+        # each widened the boundary on purpose; the rules stay numbered 1..n with no gap or repeat.
+        rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
+        self.assertTrue(6 <= len(rules) <= 11, len(rules))
+        self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
         context = CONTEXT.read_text(encoding="utf-8")
@@ -169,7 +174,7 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
 
 
 class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
-    """Rule 10: the Rust shell's allow-list, the commands that start a program, and the UI's list."""
+    """Rule 11: the Rust shell's allow-list, the commands that start a program, and the UI's list."""
 
     def setUp(self) -> None:
         self.sessions = (SHELL / "sessions.rs").read_text(encoding="utf-8")
@@ -193,7 +198,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertEqual(tuple(r[1].capitalize() for r in rows), SESSION_MODES)
 
     def test_chat_arguments_are_fixed_in_the_allow_list(self) -> None:
-        """The structured-mode argv per agent is part of the allow-list (rule 10) and nothing else adds one."""
+        """The structured-mode argv per agent is part of the allow-list (rule 11) and nothing else adds one."""
         claude = re.search(r"pub const CLAUDE_CHAT_ARGS: \[&str; (\d+)\] = \[(.*?)\];", self.prod, re.S)
         self.assertIsNotNone(claude)
         self.assertEqual(re.findall(r'"([^"]*)"', claude.group(2)), list(CLAUDE_CHAT_ARGS))

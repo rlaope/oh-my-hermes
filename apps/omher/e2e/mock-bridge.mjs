@@ -5,7 +5,8 @@
 //   node e2e/mock-bridge.mjs --port 5308 [--token T]
 //
 // Without --token it accepts `e2e` (playwright.config.ts) and `dev` (the UI's built-in default URL).
-// Test-control ops (not part of the protocol): mock.calls, mock.emit {events}, mock.reset.
+// Test-control ops (not part of the protocol): mock.calls, mock.emit {events}, mock.reset,
+// mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open).
 import http from "node:http";
 import crypto from "node:crypto";
 
@@ -81,6 +82,52 @@ const ROUTINE_SEED = {
   ],
   friren: [],
   default: [],
+};
+
+const PANEL_RUNS = {
+  kami: [
+    { id: "r3", command: "pytest tests/test_upstream.py -q", output: "............\n12 passed in 1.84s", exit_code: 0, cwd: "/w/gateway-keepalive", source: "tui", ago: 120 },
+    { id: "r2", command: 'rg -n "keepalive|idle_timeout" gateway/', output: "gateway/upstream.py:41:    idle_timeout = 75\ngateway/upstream.py:88:    keepalive=True,", exit_code: 0, cwd: "/w/gateway-keepalive", source: "tui", ago: 300 },
+    { id: "r1", command: "kubectl logs deploy/gateway --since=1h | grep -c 502", output: "37", exit_code: 0, cwd: "/w/gateway", source: "slack", ago: 900 },
+    { id: "r0", command: "git push origin fix/keepalive", output: "error: failed to push some refs", exit_code: 1, cwd: "/w/gateway-keepalive", source: "tui", ago: 1800 },
+  ],
+  friren: [],
+  default: [],
+};
+const PANEL_TREES = {
+  kami: [
+    { path: "/w/gateway-keepalive", branch: "fix/keepalive", head: "3f2c1a9e0", repo: "gateway", dirty: 2, ago: 120 },
+    { path: "/w/gateway", branch: "main", head: "a91b0c2d4", repo: "gateway", dirty: 0, ago: 900 },
+  ],
+  friren: [],
+  default: [],
+};
+const PANEL_DIFF = {
+  "/w/gateway-keepalive": {
+    scope: "uncommitted",
+    files: [
+      { path: "gateway/upstream.py", add: 1, del: 1 },
+      { path: "tests/test_upstream.py", add: 3, del: 0 },
+    ],
+    patch: [
+      "diff --git a/gateway/upstream.py b/gateway/upstream.py",
+      "--- a/gateway/upstream.py",
+      "+++ b/gateway/upstream.py",
+      "@@ -38,7 +38,7 @@ class Upstream:",
+      "     pool_size = 32",
+      "-    idle_timeout = 75",
+      "+    idle_timeout = 55  # under upstream's 60s",
+      "     retries = 2",
+      "diff --git a/tests/test_upstream.py b/tests/test_upstream.py",
+      "--- a/tests/test_upstream.py",
+      "+++ b/tests/test_upstream.py",
+      "@@ -1,3 +1,6 @@",
+      "+def test_idle_timeout_is_below_upstream():",
+      "+    assert Upstream().idle_timeout < 60",
+      "+",
+    ].join("\n"),
+  },
+  "/w/gateway": { scope: "last commit", files: [{ path: "README.md", add: 1, del: 0 }], patch: "a91b0c2 docs: note the 60s upstream limit\n\ndiff --git a/README.md b/README.md\n@@ -1 +1,2 @@\n # gateway\n+Upstream closes idle connections after 60s." },
 };
 
 const PROVIDERS = [
@@ -348,17 +395,27 @@ const OPS = {
     const wait = pending.get(id);
     if (!wait || wait.bot !== target || wait.kind !== "approval") throw new OpError("not_found", `no pending approval ${id}`);
     pending.delete(id);
+    clearTimeout(wait.timer);
     resumeApproval(target, choice);
     return {};
   },
   "clarify.respond": (p) => {
     const b = needBot(p);
     const id = needStr(p, "request_id");
-    if (typeof p.answer !== "string") throw new OpError("bad_request", "missing answer");
+    const answers = p.answers;
+    if (answers !== undefined) {
+      if (!answers || typeof answers !== "object" || Array.isArray(answers) ||
+          !Object.values(answers).every((v) => v === null || typeof v === "string"))
+        throw new OpError("bad_request", "answers must map question ids to text or null");
+    } else if (typeof p.answer !== "string") throw new OpError("bad_request", "missing answer");
     const wait = pending.get(id);
     if (!wait || wait.bot !== b.name || wait.kind !== "clarify") throw new OpError("not_found", `no pending clarification ${id}`);
     pending.delete(id);
-    resumeClarify(b.name, p.answer);
+    clearTimeout(wait.timer);
+    if (wait.qids) {
+      const given = wait.qids.filter((q) => answers?.[q] != null).length;
+      resumeClarify(b.name, `${given} of ${wait.qids.length} answers`);
+    } else resumeClarify(b.name, p.answer ?? Object.values(answers).find((v) => v !== null) ?? "");
     return {};
   },
   "elsewhere.list": (p) => ({ sessions: awayFor(needBot(p).name) }),
@@ -413,6 +470,18 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
+  "panel.terminal": (p) => ({
+    runs: (PANEL_RUNS[needBot(p).name] ?? []).map(({ ago, ...r }) => ({ ...r, session_id: "s-" + r.id, ts: now() - ago })),
+  }),
+  "panel.worktrees": (p) => ({
+    worktrees: (PANEL_TREES[needBot(p).name] ?? []).map(({ ago, ...w }) => ({ ...w, last: now() - ago })),
+  }),
+  "panel.diff": (p) => {
+    const b = needBot(p);
+    const w = (PANEL_TREES[b.name] ?? []).find((t) => t.path === p.path);
+    if (!w) throw new OpError("not_found", "not a worktree this bot worked in");
+    return { path: w.path, branch: w.branch, repo: w.repo, truncated: false, ...PANEL_DIFF[w.path] };
+  },
   "routines.list": (p) => ({
     routines: (ROUTINE_SEED[needBot(p).name] ?? []).map((r) => ({
       id: r.id,
@@ -456,6 +525,19 @@ const OPS = {
   "mock.reset": () => {
     reset();
     return {};
+  },
+  "mock.ask": (p) => {
+    const b = needBot(p);
+    const kind = p.kind ?? "approval";
+    if (!["approval", "clarify", "interview"].includes(kind)) throw new OpError("bad_request", "kind is approval, clarify or interview");
+    if (turns[b.name]) throw new OpError("bad_request", `${b.name} is busy`);
+    turns[b.name] = { timers: [], text: `(${kind})` };
+    bots[b.name].running = true;
+    ev(b.name, "bot.status", { status: bots[b.name].status, running: true });
+    ev(b.name, "turn.start");
+    const timeout = Number.isInteger(p.timeout_ms) && p.timeout_ms > 0 ? p.timeout_ms : 0;
+    const request_id = kind === "approval" ? raiseApproval(b.name, timeout) : kind === "clarify" ? raiseClarify(b.name, timeout) : raiseInterview(b.name, timeout);
+    return { request_id };
   },
 };
 
@@ -546,6 +628,7 @@ function startTurn(bot, text, folder) {
   ev(bot, "turn.start");
   if (text.startsWith("/approve")) return scriptApproval(bot);
   if (text.startsWith("/clarify")) return scriptClarify(bot);
+  if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
   scriptNormal(bot, text);
 }
 
@@ -605,6 +688,66 @@ function scriptClarify(bot) {
       ev(bot, "clarify.request", { request_id, question: "Which environment should I deploy to?", choices: ["staging", "production"] });
     }],
   ]);
+}
+
+// An ask the gateway gives up on: after `timeout` ms it stops waiting (prompt.expired) and the turn goes on.
+function expireLater(bot, request_id, timeout) {
+  if (!timeout) return undefined;
+  const t = turns[bot];
+  const h = setTimeout(() => {
+    if (!pending.has(request_id) || turns[bot] !== t) return;
+    pending.delete(request_id);
+    ev(bot, "prompt.expired", { request_id, reason: "timeout" });
+    say(bot, "No answer, so I left it as it was.");
+    endTurn(bot, "done");
+  }, timeout);
+  t.timers.push(h);
+  return h;
+}
+
+function raiseApproval(bot, timeout) {
+  const request_id = nextId("approval");
+  pending.set(request_id, { bot, kind: "approval", timer: expireLater(bot, request_id, timeout) });
+  ev(bot, "status", { text: "Preparing to clean the build folder…" });
+  ev(bot, "approval.request", {
+    request_id,
+    title: "Run shell command",
+    command: "rm -rf build/",
+    choices: ["once", "session", "always", "deny"],
+    ...(timeout ? { timeout_s: timeout / 1000 } : {}),
+  });
+  return request_id;
+}
+
+function raiseClarify(bot, timeout) {
+  const request_id = nextId("clarify");
+  pending.set(request_id, { bot, kind: "clarify", timer: expireLater(bot, request_id, timeout) });
+  ev(bot, "clarify.request", {
+    request_id,
+    question: "Which environment should I deploy to?",
+    choices: ["staging", "production"],
+    ...(timeout ? { timeout_s: timeout / 1000 } : {}),
+  });
+  return request_id;
+}
+
+// Hermes' clarify tool asking several questions at once: one interview card.
+const INTERVIEW = [
+  { qid: "q1", question: "Who is the release note for?", choices: ["Users", "Developers", "Both"] },
+  { qid: "q2", question: "Which sections should it have?", choices: ["Highlights", "Fixes", "Breaking changes", "Thanks"], multi_select: true },
+  { qid: "q3", question: "Anything to leave out?" },
+];
+function raiseInterview(bot, timeout) {
+  const request_id = nextId("interview");
+  pending.set(request_id, { bot, kind: "clarify", qids: INTERVIEW.map((q) => q.qid), timer: expireLater(bot, request_id, timeout) });
+  ev(bot, "status", { text: "Planning the release note…" });
+  ev(bot, "clarify.request", {
+    request_id,
+    question: INTERVIEW[0].question,
+    questions: INTERVIEW,
+    ...(timeout ? { timeout_s: timeout / 1000 } : {}),
+  });
+  return request_id;
 }
 
 function resumeClarify(bot, answer) {
