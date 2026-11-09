@@ -162,7 +162,8 @@ test("long model id ellipsizes and stays inside the header at 900x700 with the p
       panel.x + 4,
       panel.y + 20,
     ]);
-    expect(hit).not.toMatch(/^(model-|reasoning-)/);
+    // below 1100px the panel overlays the chat; what sits there may carry no test id, which is fine
+    expect(hit ?? "").not.toMatch(/^(model-|reasoning-)/);
   };
 
   // the longest id the mock offers, picked through the UI
