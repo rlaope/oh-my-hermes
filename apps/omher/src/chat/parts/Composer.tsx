@@ -12,6 +12,7 @@ export function Composer({
   offline,
   onSend,
   onStop,
+  offlineText,
 }: {
   bot: Bot;
   running: boolean;
@@ -20,6 +21,8 @@ export function Composer({
   offline: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
+  /** Placeholder while `offline` (default: "<bot> is offline"). */
+  offlineText?: string;
 }) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -61,7 +64,11 @@ export function Composer({
           value={text}
           disabled={offline}
           placeholder={
-            offline ? `${bot.display_name} is offline` : asking ? "Answer above, or type to reply" : `Message ${bot.display_name}`
+            offline
+              ? (offlineText ?? `${bot.display_name} is offline`)
+              : asking
+                ? "Answer above, or type to reply"
+                : `Message ${bot.display_name}`
           }
           aria-label={`Message ${bot.display_name}`}
           data-testid="composer"

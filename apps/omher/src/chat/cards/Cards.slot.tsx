@@ -40,16 +40,16 @@ const BUTTONS: { choice: ApprovalChoice; label: string; key: string }[] = [
 const handled = new Set<number>();
 
 /** Scrolls the card into view and focuses it when the Needs-you strip or ⌘J asked for it. */
-function useFocusRequest(id: string, ref: RefObject<HTMLElement | null>, open: boolean) {
+function useFocusRequest(bot: string, id: string, ref: RefObject<HTMLElement | null>, open: boolean) {
   const req = useStore().ui.focusAsk;
   useEffect(() => {
-    if (!open || !req || req.id !== id || handled.has(req.seq)) return;
+    if (!open || !req || req.bot !== bot || req.id !== id || handled.has(req.seq)) return;
     const el = ref.current;
     if (!el) return;
     handled.add(req.seq);
     el.scrollIntoView({ block: "center" });
     el.focus({ preventScroll: true });
-  }, [req, id, open, ref]);
+  }, [req, bot, id, open, ref]);
 }
 
 /** Runs a respond action. The store only marks the card answered after the bridge said ok, so a card that is
@@ -85,7 +85,7 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
   const [busy, setBusy] = useState<ApprovalChoice | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  useFocusRequest(item.id, ref, open);
+  useFocusRequest(bot, item.id, ref, open);
 
   if (item.resolved) {
     const denied = item.resolved === "deny";
@@ -315,7 +315,7 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
   const ref = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const interview = (item.questions?.length ?? 0) > 1;
-  useFocusRequest(item.id, interview ? formRef : ref, open);
+  useFocusRequest(bot, item.id, interview ? formRef : ref, open);
 
   const detail = interview ? `${item.questions!.length} questions` : item.question;
   if (item.answer !== undefined) return <Line icon="✓" text={`Answered: ${item.answer}`} detail={detail} testid="card-line" />;

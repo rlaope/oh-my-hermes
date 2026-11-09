@@ -1,11 +1,15 @@
-// SESSIONS in the sidebar: the `+` menu that starts claude / codex / omh / pi / omp in a folder, and one
-// row per session started in this run of the app.
+// SESSIONS in the sidebar: the `+` menu that starts claude / codex / omh / pi / omp / grok in a folder,
+// and one row per session started in this run of the app. A chat row shows the bot row's live states: the
+// answer ring around the agent mark and the turn's elapsed time while a turn runs, and the amber dot with
+// "waiting" while one of its approvals or questions is open (the same asks the Needs-you strip lists). A
+// terminal row keeps a live dot while its program runs: a terminal has no turn to ring for.
 import { useEffect, useState } from "react";
-import { useStore } from "../state/store";
-import { CloseIcon, PlusIcon, Popover } from "../ui";
-import { shortTime } from "../app/time";
+import { selectAsks, useStore, type AppState } from "../state/store";
+import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
+import { busyFor, shortTime } from "../app/time";
+import { useNow } from "../elsewhere/useNow";
 import { AgentMark } from "./AgentMark";
-import { agentDef, folderName, parentPath, rowModel, tildePath, type AgentId, type SessionRec } from "./agents";
+import { agentDef, folderName, parentPath, rowModel, tildePath, type AgentId, type ChatLive, type SessionRec } from "./agents";
 import { getSessions, useSessions } from "./sessions";
 
 export function SessionsHeader() {
@@ -23,10 +27,44 @@ export function SessionsHeader() {
           onClick={() => setOpen((v) => !v)}
           data-testid="session-new"
         >
-          <PlusIcon size={13} />
+          <PlusIcon size={14} />
         </button>
         {open && <NewSessionMenu onClose={() => setOpen(false)} />}
       </span>
+    </div>
+  );
+}
+
+/** The empty section: one row-sized "New session" button (opens the + menu), the installed agents under it. */
+function SessionStart() {
+  const ss = useSessions();
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (ss.agents === null) void getSessions().loadAgents();
+  }, [ss.agents]);
+  const installed = (ss.agents ?? []).filter((a) => a.path).slice(0, 4);
+  const names = installed.map((a) => agentDef(a.id).label).join(" · ");
+  return (
+    <div className="ss-none" data-testid="session-none">
+      <div className="ss-start-w">
+        <button type="button" className="ss-start" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid="session-start">
+          <PlusIcon size={14} />
+          New session
+        </button>
+        {open && <NewSessionMenu onClose={() => setOpen(false)} />}
+      </div>
+      {installed.length > 0 && (
+        // each mark next to its name; past two agents the rest show their mark only (all names in the tooltip)
+        <div className="ss-start-ag" data-testid="session-start-agents" title={names}>
+          {installed.map((a, i) => (
+            <span key={a.id} className="ss-start-a">
+              {i > 0 && <span className="ss-start-dot">·</span>}
+              <AgentMark agent={a.id} size={12} />
+              {i < 2 && <span className="ss-start-n">{agentDef(a.id).label}</span>}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -115,13 +153,7 @@ export function SessionList() {
     if (rec.status === "running" || rec.status === "starting") setConfirm(rec.id);
     else getSessions().close(rec.id);
   };
-  if (ss.list.length === 0) {
-    return (
-      <div className="ss-none" data-testid="session-none">
-        Start Claude Code, Codex or another agent in a folder with <b>+</b>
-      </div>
-    );
-  }
+  if (ss.list.length === 0) return <SessionStart />;
   return (
     <nav className="bot-list ss-list" aria-label="Sessions" data-testid="session-list">
       {ss.list.map((rec) =>
@@ -163,14 +195,29 @@ export function SessionList() {
   );
 }
 
+/** The row's view of a session's chat: a turn running, and an ask of it open (the Needs-you model). */
+function chatLive(s: AppState, key: string | null): ChatLive | undefined {
+  const c = key ? s.chats[key] : undefined;
+  if (!c) return undefined;
+  return { turn: !!c.turn, needsYou: selectAsks(s).some((a) => a.bot === key) };
+}
+
 function Row({ rec, active, onClose }: { rec: SessionRec; active: boolean; onClose: () => void }) {
   const s = useStore();
-  const m = rowModel(rec);
+  const key = getSessions().chatKey(rec.id);
+  const chat = rec.view === "chat" ? chatLive(s, key) : undefined;
+  const m = rowModel(rec, chat);
+  // a chat answers in turns (ring); a terminal just runs (dot)
+  const ring = rec.view === "chat" && m.live && !m.needsYou;
+  const dot = rec.view !== "chat" && m.live;
+  const busySince = ring && key ? (s.chats[key]?.turn?.startedAt ?? null) : null;
+  const now = useNow(busySince !== null, 1_000);
   return (
     <div
-      className={`ss-row bot${active ? " active" : ""}`}
+      className={`ss-row bot${active ? " active" : ""}${m.needsYou ? " needs" : ""}`}
       data-testid={`session-${rec.id}`}
       data-status={rec.status}
+      data-needs-you={m.needsYou ? "true" : undefined}
       onContextMenu={(e) => {
         e.preventDefault();
         onClose();
@@ -183,17 +230,38 @@ function Row({ rec, active, onClose }: { rec: SessionRec; active: boolean; onClo
         aria-current={active ? "true" : undefined}
         title={rec.cwd}
       >
-        <span className="ss-av">
-          <AgentMark agent={rec.agent} size={18} />
-          {m.live && <span className="live-dot" data-testid="live-dot" aria-label="running" />}
-        </span>
+        <LiveRing on={ring} size={34} gap={3.5} label="Answering" seed={rec.id}>
+          <span className="ss-av">
+            <AgentMark agent={rec.agent} size={18} />
+            {dot && <span className="live-dot" data-testid="live-dot" aria-label="running" />}
+          </span>
+        </LiveRing>
         <span className="bot-m">
           <span className="bot-r1">
             <span className="bot-n">{m.title}</span>
-            <span className="bot-t">{shortTime(m.ts)}</span>
+            {m.needsYou ? (
+              <span className="bot-t wait" data-testid="bot-time">
+                waiting
+              </span>
+            ) : busySince !== null ? (
+              <span className="bot-t busy" data-testid="bot-time">
+                {busyFor(now - busySince)}
+              </span>
+            ) : (
+              <span className="bot-t" data-testid="bot-time">
+                {shortTime(m.ts)}
+              </span>
+            )}
           </span>
           <span className="bot-r2">
-            <span className="bot-p">{m.sub}</span>
+            <span className={`bot-p${m.needsYou ? " ss-needs" : ring ? " live" : ""}`} data-testid="session-sub">
+              {m.sub}
+            </span>
+            {ring && <TypingDots size={3} testId="bot-typing" />}
+            {m.needsYou && (
+              // the bot row's plain amber dot: no number (the strip carries the count)
+              <span className="needs-dot" data-testid="needs" role="status" aria-label="Needs your answer" title="Needs your answer" />
+            )}
           </span>
         </span>
       </button>

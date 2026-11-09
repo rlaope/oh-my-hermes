@@ -85,7 +85,9 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   for a folder, and starts the program in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
   Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omh`, `pi`, `omp`, `grok`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
-  the program. In a plain browser (dev, e2e) a mock host echoes what you type instead.
+  the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A chat session's approvals
+  and questions are asks like a bot's: they join the Needs-you strip and ⌘J (named by folder and agent), and the
+  session row rings while a turn runs and shows the amber dot while it asks.
 
 Rules the code keeps:
 

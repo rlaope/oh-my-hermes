@@ -1,6 +1,6 @@
 // Needs you: open asks across bots, expiry, interview answers, ⌘J order, pinned/hidden sidebar order.
 import { describe, expect, it } from "vitest";
-import { askText, initialState, reduce, selectAsks, selectSidebarBots, type Action, type AppState } from "./store";
+import { askFrom, askText, folderKey, initialState, reduce, selectAsks, selectSidebarBots, setChatRoute, type Action, type AppState } from "./store";
 import type { Bot, BridgeEvent } from "../lib/protocol";
 import { answerOf } from "../chat/cards/answers";
 import { nextAsk, shortcutFor } from "../app/shortcuts";
@@ -88,6 +88,52 @@ describe("selectAsks", () => {
     s = reduce(s, { type: "clarify.resolved", bot: "kami", request_id: "iv", answer: "1 of 2", answers: { a: "x", b: null } });
     const it = s.chats.kami.items[0];
     expect(it.kind === "clarify" && [it.answer, it.answers]).toEqual(["1 of 2", { a: "x", b: null }]);
+  });
+});
+
+describe("SESSIONS chats in the one ask model", () => {
+  it("a session chat's ask (agent or Hermes folder chat) is listed with the bots', named by its route, and leaves with the chat", () => {
+    const fold = folderKey("kami", "f1");
+    let s = run(initialState(), [
+      { event: "turn.start", bot: "friren" },
+      approval("friren", "a1"),
+      { event: "turn.start", bot: "agent:s1" },
+      approval("agent:s1", "req-1"),
+      // a folder chat's events arrive tagged with `session` and land under the folder key
+      { event: "turn.start", bot: "kami", session: "f1" },
+      { event: "clarify.request", bot: "kami", session: "f1", request_id: "iv", question: "Who?", questions: [{ qid: "q1", question: "Who?" }, { qid: "q2", question: "When?" }], timeout_s: 60 },
+    ]);
+    expect(selectAsks(s).map((a) => [a.bot, a.item.request_id])).toEqual([
+      ["friren", "a1"],
+      ["agent:s1", "req-1"],
+      [fold, "iv"],
+    ]);
+    expect(s.chats.kami?.items ?? []).toEqual([]); // the bot's own chat never gets a folder chat's ask
+    setChatRoute("agent:s1", {
+      label: "web-app · Claude Code",
+      open: () => undefined,
+      send: async () => undefined,
+      interrupt: async () => undefined,
+      approve: async () => undefined,
+      clarify: async () => undefined,
+    });
+    expect(askFrom(s, "agent:s1")).toBe("web-app · Claude Code");
+    expect(askFrom(s, "agent:gone")).toBe("agent:gone");
+    setChatRoute("agent:s1", null);
+    // expiry of a folder chat's ask (prompt.expired tagged with `session`) closes it like a bot's
+    s = run(s, [{ event: "prompt.expired", bot: "kami", session: "f1", request_id: "iv", reason: "timeout" }]);
+    expect(selectAsks(s).map((a) => a.bot)).toEqual(["friren", "agent:s1"]);
+    // a closed session takes its open asks with it
+    s = reduce(s, { type: "chat.forget", bot: "agent:s1" });
+    expect(selectAsks(s).map((a) => a.bot)).toEqual(["friren"]);
+    expect(s.chats["agent:s1"]).toBeUndefined();
+  });
+
+  it("⌘J walks bot and session asks in one age order", () => {
+    const s = run(initialState(), [approval("friren", "a1"), approval("agent:s1", "req-1")]);
+    const asks = selectAsks(s);
+    expect(nextAsk(asks, { bot: "friren", id: "approval-a1", seq: 1 })).toMatchObject({ bot: "agent:s1" });
+    expect(nextAsk(asks, { bot: "agent:s1", id: "approval-req-1", seq: 2 })).toMatchObject({ bot: "friren" });
   });
 });
 

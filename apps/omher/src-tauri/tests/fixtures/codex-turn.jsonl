@@ -1,0 +1,17 @@
+{"id":1,"result":{"userAgent":"codex_cli_rs/0.130.0","serverInfo":{"name":"codex-app-server","version":"0.130.0"}}}
+{"id":2,"result":{"thread":{"id":"thr_1","preview":"","modelProvider":"openai","createdAt":1794200000},"model":"gpt-5.5-codex","modelProvider":"openai","cwd":"/w/proj","approvalPolicy":"on-request","sandbox":{"type":"workspaceWrite"},"reasoningEffort":"medium"}}
+{"method":"thread/started","params":{"thread":{"id":"thr_1"}}}
+{"id":3,"result":{"data":[{"id":"gpt-5.5-codex","model":"gpt-5.5-codex","displayName":"GPT-5.5 Codex","description":"Coding","hidden":false,"isDefault":true},{"id":"old","model":"old","displayName":"Old","description":"","hidden":true,"isDefault":false}],"nextCursor":null}}
+{"id":4,"result":{"turn":{"id":"turn_1","status":"inProgress","items":[],"error":null}}}
+{"method":"turn/started","params":{"threadId":"thr_1","turn":{"id":"turn_1","status":"inProgress","items":[],"error":null}}}
+{"method":"item/started","params":{"threadId":"thr_1","turnId":"turn_1","startedAtMs":1794200001000,"item":{"type":"userMessage","id":"u1","clientId":null,"content":[{"type":"text","text":"run the tests"}]}}}
+{"method":"item/started","params":{"threadId":"thr_1","turnId":"turn_1","startedAtMs":1794200002000,"item":{"type":"commandExecution","id":"call_1","command":"pnpm test","cwd":"/w/proj","processId":null,"source":"agent","status":"inProgress","commandActions":[],"aggregatedOutput":null,"exitCode":null,"durationMs":null}}}
+{"id":90,"method":"item/commandExecution/requestApproval","params":{"kind":"command","threadId":"thr_1","turnId":"turn_1","itemId":"call_1","startedAtMs":1794200002100,"environmentId":null,"command":"pnpm test","cwd":"/w/proj","reason":null}}
+{"method":"serverRequest/resolved","params":{"threadId":"thr_1","requestId":90}}
+{"method":"item/commandExecution/outputDelta","params":{"threadId":"thr_1","turnId":"turn_1","itemId":"call_1","delta":"12 passed\n"}}
+{"method":"item/completed","params":{"threadId":"thr_1","turnId":"turn_1","completedAtMs":1794200005000,"item":{"type":"commandExecution","id":"call_1","command":"pnpm test","cwd":"/w/proj","processId":null,"source":"agent","status":"completed","commandActions":[],"aggregatedOutput":"12 passed\n","exitCode":0,"durationMs":2900}}}
+{"method":"item/started","params":{"threadId":"thr_1","turnId":"turn_1","startedAtMs":1794200005100,"item":{"type":"agentMessage","id":"msg_1","text":"","phase":null,"moderation":null,"memoryCitation":null,"delivery":null,"questions":null}}}
+{"method":"item/agentMessage/delta","params":{"threadId":"thr_1","turnId":"turn_1","itemId":"msg_1","delta":"All 12 tests "}}
+{"method":"item/agentMessage/delta","params":{"threadId":"thr_1","turnId":"turn_1","itemId":"msg_1","delta":"pass."}}
+{"method":"item/completed","params":{"threadId":"thr_1","turnId":"turn_1","completedAtMs":1794200005600,"item":{"type":"agentMessage","id":"msg_1","text":"All 12 tests pass.","phase":null,"moderation":null,"memoryCitation":null,"delivery":null,"questions":null}}}
+{"method":"turn/completed","params":{"threadId":"thr_1","turn":{"id":"turn_1","status":"completed","items":[],"error":null,"durationMs":4600}}}

@@ -75,16 +75,16 @@ export function Sidebar() {
                 onShowHidden: hiddenCount ? () => setShowHidden(true) : undefined,
               }}
             />
-          );
-        })}
-        {needle && bots.length === 0 && <div className="bot-empty">No bot named “{q.trim()}”</div>}
-        {!needle && bots.length === 0 && hiddenCount > 0 && (
-          <button type="button" className="bot-empty bot-unhide" onClick={() => setShowHidden(true)}>
-            Show hidden bots ({hiddenCount})
-          </button>
-        )}
-        {showHidden && hiddenCount > 0 && <HiddenList onClose={closeHidden} />}
-      </nav>
+            );
+          })}
+          {needle && bots.length === 0 && <div className="bot-empty">No bot named “{q.trim()}”</div>}
+          {!needle && bots.length === 0 && hiddenCount > 0 && (
+            <button type="button" className="bot-empty bot-unhide" onClick={() => setShowHidden(true)}>
+              Show hidden bots ({hiddenCount})
+            </button>
+          )}
+          {showHidden && hiddenCount > 0 && <HiddenList onClose={closeHidden} />}
+        </nav>
       </section>
       <section className="side-sec" data-testid="side-sessions">
         <SessionsHeader />
