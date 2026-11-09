@@ -1,6 +1,8 @@
 // UI <-> bridge protocol v1. Mirrors the protocol table in the omher briefs (01-protocol.md).
 // The UI only ever talks to the bridge (real: Python, mock: e2e/mock-bridge.mjs).
 
+import type { AgentRunSummary, RunDetail } from "./runs";
+
 export type BotStatus = "online" | "offline" | "starting";
 
 export interface Bot {
@@ -144,6 +146,9 @@ export interface OpMap {
   "panel.terminal": { params: { bot: string }; result: { runs: TerminalRun[] } };
   "panel.worktrees": { params: { bot: string }; result: { worktrees: Worktree[] } };
   "panel.diff": { params: { bot: string; path: string }; result: WorktreeDiff };
+  /** Runs tab, read-only: the bot's agent runs (OMH dag runs today) and one run with its handoffs. */
+  "runs.list": { params: { bot: string }; result: { runs: AgentRunSummary[] } };
+  "runs.get": { params: { bot: string; run: string }; result: RunDetail };
 }
 
 export interface TerminalRun {

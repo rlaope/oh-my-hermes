@@ -472,6 +472,242 @@ def _to_ts(value) -> float:
         return time.time()
 
 
+# ---------------------------------------------------------------- runs: OMH dag records (read-only)
+
+DAG_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")  # OMH's own id rule for runs and nodes
+HANDOFF_MAX = 8000  # chars of one node's handoff sent to the UI
+_OUTCOME_STATE = {"accepted": "done", "failed": "failed", "blocked": "blocked", "parked": "parked", "retry": "waiting"}
+
+
+def omh_home_for(profile_dir: Path) -> Path:
+    """The OMH store a profile's plugin uses: its `plugins.entries.omh.settings.omh_home`, else `OMH_HOME`,
+    else `~/.omh` (OMH's own standalone order)."""
+    node = _load_yaml(profile_dir / "config.yaml")
+    for key in ("plugins", "entries", "omh", "settings"):
+        node = node.get(key) if isinstance(node, dict) else None
+    value = node.get("omh_home") if isinstance(node, dict) else None
+    if isinstance(value, str) and value.strip():
+        path = Path(os.path.expanduser(value.strip()))
+        return path if path.is_absolute() else profile_dir / path
+    env = (os.environ.get("OMH_HOME") or "").strip()
+    return Path(os.path.expanduser(env)) if env else Path.home() / ".omh"
+
+
+def _num(v) -> float | None:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def layer_of(nodes: list[dict]) -> dict[str, int]:
+    """Longest-path layer of each node from its deps (deps on unknown ids are ignored). A cycle raises."""
+    deps = {n["id"]: n["deps"] for n in nodes}
+    memo: dict[str, int] = {}
+    visiting: set[str] = set()
+
+    def visit(i: str) -> int:
+        if i in memo:
+            return memo[i]
+        if i in visiting:
+            raise ValueError(f"cycle through {i}")
+        visiting.add(i)
+        memo[i] = 1 + max((visit(d) for d in deps[i]), default=-1)
+        visiting.discard(i)
+        return memo[i]
+
+    for i in deps:
+        visit(i)
+    return memo
+
+
+def dag_to_run(record: dict, bot: str, handoffs=()) -> dict:
+    """One `omh_dag/v1` record as an AgentRun (src/lib/runs.ts has the same mapping as `fromDag`)."""
+    raw = [n for n in record.get("nodes") or [] if isinstance(n, dict) and isinstance(n.get("id"), str)]
+    ids = {n["id"] for n in raw}
+    cancelled = record.get("cancelled_at") is not None
+    nodes = []
+    for n in raw:
+        attempts = [a for a in n.get("attempts") or [] if isinstance(a, dict)]
+        last = attempts[-1] if attempts else None
+        state = "waiting" if last is None else _OUTCOME_STATE.get(str(last.get("outcome") or ""), "running")
+        if cancelled and state in ("running", "parked", "waiting"):
+            state = "cancelled"
+        node = {"id": n["id"], "label": str(n.get("label") or n["id"]),
+                "deps": [d for d in n.get("depends_on") or [] if d in ids], "state": state, "attempts": []}
+        if isinstance(n.get("category"), str) and n["category"]:
+            node["category"] = n["category"]
+        for a in attempts:
+            item = {"n": int(a["n"]) if isinstance(a.get("n"), int) else len(node["attempts"]) + 1,
+                    "outcome": str(a.get("outcome") or "") or "open"}
+            for src, dst in (("reason", "reason"), ("lane", "lane")):
+                if isinstance(a.get(src), str) and a[src]:
+                    item[dst] = a[src]
+            for src, dst in (("handed_out_at", "started"), ("settled_at", "ended")):
+                if _num(a.get(src)) is not None:
+                    item[dst] = _num(a.get(src))
+            node["attempts"].append(item)
+        if node["attempts"]:
+            first, end = node["attempts"][0], node["attempts"][-1]
+            if "lane" in end:
+                node["lane"] = end["lane"]
+            if "started" in first:
+                node["started"] = first["started"]
+            if state in ("done", "failed", "blocked") and "ended" in end:
+                node["ended"] = end["ended"]
+        if n["id"] in handoffs:
+            node["handoff"] = f"{n['id']}.md"
+        nodes.append(node)
+    layers = layer_of(nodes)
+    for node in nodes:
+        node["layer"] = layers[node["id"]]
+    by_id = {node["id"]: node for node in nodes}
+    repairs = record.get("repairs")
+    groups: dict = repairs if isinstance(repairs, dict) else {}
+    superseded = {m for g in groups.values() if isinstance(g, list) for older in g[:-1] if isinstance(older, list)
+                  for m in older if by_id.get(m, {}).get("state") != "done"}
+
+    def satisfied(node) -> bool:
+        if node["state"] == "done":
+            return True
+        latest = (groups.get(node["id"]) or [[]])[-1]
+        return node["state"] in ("failed", "blocked") and bool(latest) and all(
+            by_id.get(m, {}).get("state") == "done" for m in latest)
+
+    live = [node for node in nodes if node["id"] not in superseded]
+    if cancelled:
+        run_state = "cancelled"
+    elif all(satisfied(node) for node in live):
+        run_state = "done"
+    elif any(node["state"] in ("running", "parked") or node["state"] == "waiting" and all(
+            satisfied(by_id[d]) for d in node["deps"]) for node in live):
+        run_state = "running"
+    else:
+        run_state = "failed"
+    sid, run = str(record.get("session_id") or ""), str(record.get("run") or "")
+    out = {"id": f"dag:{sid}/{run}", "kind": "dag", "owner": {"type": "bot", "id": bot},
+           "title": str(record.get("name") or run), "state": run_state, "nodes": nodes,
+           "started": _num(record.get("defined_at")) or 0.0, "updated": _num(record.get("updated_at")) or 0.0}
+    if isinstance(record.get("goal"), str) and record["goal"]:
+        out["goal"] = record["goal"]
+    if run_state != "running":
+        ends = [a["ended"] for node in nodes for a in node["attempts"] if "ended" in a]
+        ended = _num(record.get("cancelled_at")) if cancelled else (max(ends) if ends else None)
+        if ended is not None:
+            out["ended"] = ended
+    return out
+
+
+def run_summary(run: dict) -> dict:
+    out = {k: v for k, v in run.items() if k != "nodes"}
+    states = [n["state"] for n in run["nodes"]]
+    out["counts"] = {"nodes": len(states), "done": states.count("done"), "running": states.count("running"),
+                     "failed": states.count("failed") + states.count("blocked")}
+    return out
+
+
+class DagRuns:
+    """Reads `<omh home>/runtime/dag/*/*.json` for one bot: a run belongs to the bot when its `session_id` is a
+    session in the bot's own state.db. A record caught mid-write keeps its last good parse (cache keyed by
+    mtime and size); nothing here writes, settles or retries a run."""
+
+    def __init__(self):
+        self._cache: dict[str, tuple[tuple[int, int], dict]] = {}
+
+    def _record(self, path: Path) -> dict | None:
+        key = str(path)
+        hit = self._cache.get(key)
+        try:
+            st = path.stat()
+        except OSError:
+            return None
+        stamp = (st.st_mtime_ns, st.st_size)
+        if hit and hit[0] == stamp:
+            return hit[1]
+        try:
+            rec = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return hit[1] if hit else None
+        if not isinstance(rec, dict) or not isinstance(rec.get("nodes"), list):
+            return hit[1] if hit else None
+        self._cache[key] = (stamp, rec)
+        return rec
+
+    @staticmethod
+    def _sessions(profile_dir: Path) -> set[str]:
+        import sqlite3
+        db = profile_dir / "state.db"
+        if not db.is_file():
+            return set()
+        try:
+            con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+            try:
+                return {str(r[0]) for r in con.execute("SELECT id FROM sessions")}
+            finally:
+                con.close()
+        except sqlite3.Error:
+            return set()
+
+    def _owned(self, bot: str, profile_dir: Path):
+        """(json path, record, AgentRun) for each of the bot's runs."""
+        root = omh_home_for(profile_dir) / "runtime" / "dag"
+        if not root.is_dir():
+            return []
+        mine = self._sessions(profile_dir)
+        out = []
+        for path in sorted(root.glob("*/*.json")):
+            if path.is_symlink() or path.parent.is_symlink() or not DAG_ID.match(path.stem):
+                continue
+            rec = self._record(path)
+            if rec is None or str(rec.get("session_id") or "") not in mine:
+                continue
+            try:
+                run = dag_to_run(rec, bot, self._handoff_names(root, path, rec))
+            except (ValueError, TypeError, KeyError, RecursionError):
+                continue  # a cycle or a malformed record: not drawable, skip it
+            out.append((path, rec, run))
+        return out
+
+    @staticmethod
+    def _handoff_file(root: Path, path: Path, node: str) -> Path | None:
+        """`<run>/<node>.md` next to the record, when it is a plain file inside the dag dir (no symlinks)."""
+        if not DAG_ID.match(node):
+            return None
+        folder = path.parent / path.stem
+        f = folder / f"{node}.md"
+        if folder.is_symlink() or f.is_symlink() or not f.is_file():
+            return None
+        real, top = os.path.realpath(f), os.path.realpath(root)
+        if os.path.commonpath([real, top]) != top:
+            return None
+        return f
+
+    def _handoff_names(self, root: Path, path: Path, rec: dict) -> set[str]:
+        ids = [str(n["id"]) for n in rec.get("nodes") or [] if isinstance(n, dict) and isinstance(n.get("id"), str)]
+        return {i for i in ids if self._handoff_file(root, path, i) is not None}
+
+    def list(self, bot: str, profile_dir: Path) -> list[dict]:
+        runs = [run_summary(run) for _, _, run in self._owned(bot, profile_dir)]
+        runs.sort(key=lambda r: (r["state"] != "running", -r["updated"]))
+        return runs
+
+    def get(self, bot: str, profile_dir: Path, run_id: str) -> dict:
+        root = omh_home_for(profile_dir) / "runtime" / "dag"
+        for path, _, run in self._owned(bot, profile_dir):
+            if run["id"] != run_id:
+                continue
+            handoffs = {}
+            for node in run["nodes"]:
+                f = self._handoff_file(root, path, node["id"]) if node.get("handoff") else None
+                if f is None:
+                    continue
+                try:
+                    with open(f, "rb") as fh:
+                        data = fh.read(HANDOFF_MAX * 4)
+                except OSError:
+                    continue
+                handoffs[node["id"]] = data.decode("utf-8", "replace")[:HANDOFF_MAX]
+            return {"run": run, "handoffs": handoffs}
+        raise BridgeError("not_found", f"no run {run_id} for {bot}")
+
+
 # ---------------------------------------------------------------- transcript helpers
 
 _AUTHOR_RE = re.compile(r"^\[(?P<author>[^\]|]+?)\s*\|[^\]]*\]\s*(?P<rest>.*)$", re.DOTALL)
@@ -693,8 +929,9 @@ class Bridge:
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
-            "panel.diff": self.op_panel_diff,
+            "panel.diff": self.op_panel_diff, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
         }
+        self.runs = DagRuns()
 
     # ------------------------------------------------------------ lifecycle
 
@@ -1250,6 +1487,17 @@ class Bridge:
         if not isinstance(path, str) or not path:
             raise BridgeError("bad_request", "missing path")
         return await asyncio.to_thread(read_diff, bot["path"], path)
+
+    async def op_runs_list(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return {"runs": await asyncio.to_thread(self.runs.list, bot["name"], bot["path"])}
+
+    async def op_runs_get(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        run = p.get("run")
+        if not isinstance(run, str) or not run:
+            raise BridgeError("bad_request", "missing run")
+        return await asyncio.to_thread(self.runs.get, bot["name"], bot["path"], run)
 
     async def op_routines_list(self, p) -> dict:
         return {"routines": read_routines(self._bot(p.get("bot"))["path"])}

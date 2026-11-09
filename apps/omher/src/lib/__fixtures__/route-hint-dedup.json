@@ -1,0 +1,100 @@
+{
+ "cancelled_at": null,
+ "claim_boundary": "The plan a parent agent declared for a dag-ulw run and the outcomes it settled. A settled outcome is the parent's judgement; a child's status is Hermes' report. Not execution, verification, review, CI or merge evidence.",
+ "defined_at": 1793158622.319177,
+ "digest": "b4dc4889ec307848",
+ "goal": "Route hint drops repeated text, routing tests and per-turn budgets green, one commit ready for PR",
+ "lint": [],
+ "name": "Route hint dedup",
+ "nodes": [
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793158622.319177,
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "a498a6994; scope matches; 392 tests OK, drift clean; handoff read",
+     "settled_at": 1793159842.3633559
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [],
+   "found_by": "",
+   "id": "implement",
+   "label": "Dedup route hint render",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "write_scope": [
+    "CHANGELOG.md",
+    "src/maintenance/release.py",
+    "src/plugin_bundle/omh/awareness.py",
+    "src/plugin_bundle/omh/turn_budget.py",
+    "tests/fixtures",
+    "tests/test_route_hint_dedup.py"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793159842.3633559,
+     "n": 1,
+     "outcome": "retry",
+     "provider_error": true,
+     "reason": "og glm-5.3 unavailable after 3 attempts; no work done",
+     "settled_at": 1793159877.568856
+    },
+    {
+     "fallback": true,
+     "handed_out_at": 1793159877.568856,
+     "n": 2,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "renders byte-identical on kept lines; 6 base failures pre-existing; drift clean",
+     "settled_at": 1793164791.1733289
+    }
+   ],
+   "category": "unspecified-low",
+   "cycle": 0,
+   "depends_on": [
+    "implement"
+   ],
+   "found_by": "",
+   "id": "verify",
+   "label": "Independent verify",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "write_scope": []
+  }
+ ],
+ "repairs": {},
+ "run": "route-hint-dedup",
+ "schema_version": "omh_dag/v1",
+ "session_id": "20261028_093610_1b12a114",
+ "topology": {
+  "bottlenecks": [
+   {
+    "blocks": 1,
+    "node": "implement"
+   }
+  ],
+  "critical_path": [
+   "implement",
+   "verify"
+  ],
+  "layers": [
+   [
+    "implement"
+   ],
+   [
+    "verify"
+   ]
+  ]
+ },
+ "updated_at": 1793164791.1733289
+}

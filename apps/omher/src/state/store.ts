@@ -19,8 +19,9 @@ import type {
   Worktree,
   WorktreeDiff,
 } from "../lib/protocol";
+import type { AgentRunSummary, RunDetail } from "../lib/runs";
 
-export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff";
+export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
 
 // ---- view model types -----------------------------------------------------------------------
 
@@ -129,6 +130,8 @@ export const PALETTES: Palette[] = ["omh", "graphite", "ocean", "forest", "sunse
 export interface Ui {
   panelOpen: boolean;
   panelTab: PanelTabId;
+  /** The run the Runs tab shows; null = the first in its list. */
+  runId: string | null;
   theme: Theme;
   look: Look;
   view: "chat" | "settings";
@@ -226,7 +229,7 @@ export function initialState(): AppState {
     peeks: {},
     routines: {},
     models: {},
-    ui: { panelOpen: false, panelTab: "details", theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general" },
+    ui: { panelOpen: false, panelTab: "details", runId: null, theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general" },
   };
 }
 
@@ -337,6 +340,7 @@ export type Action =
   | { type: "model.set"; bot: string; current: ModelCurrent }
   | { type: "ui.panel"; open?: boolean }
   | { type: "ui.panelTab"; tab: PanelTabId }
+  | { type: "ui.run"; run: string | null }
   | { type: "ui.theme"; theme: Theme }
   | { type: "ui.look"; look: Partial<Look> }
   | { type: "ui.settings"; page?: string }
@@ -560,6 +564,8 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, panelOpen: a.open ?? !state.ui.panelOpen } };
     case "ui.panelTab":
       return { ...state, ui: { ...state.ui, panelOpen: true, panelTab: a.tab } };
+    case "ui.run":
+      return { ...state, ui: { ...state.ui, panelOpen: true, panelTab: "runs", runId: a.run } };
     case "ui.theme":
       return { ...state, ui: { ...state.ui, theme: a.theme } };
     case "ui.look":
@@ -622,6 +628,8 @@ export interface Actions {
   togglePanel(open?: boolean): void;
   /** Open the side panel on one tab (Details, Terminal, Schedule, Worktrees, Diff). */
   setPanelTab(tab: PanelTabId): void;
+  /** Open the Runs tab on one run (null: the first in the list). */
+  openRun(run: string | null): void;
   setTheme(theme: Theme): void;
   setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
@@ -636,6 +644,9 @@ export interface Actions {
   panelTerminal(bot: string): Promise<{ runs: TerminalRun[] }>;
   panelWorktrees(bot: string): Promise<{ worktrees: Worktree[] }>;
   panelDiff(bot: string, path: string): Promise<WorktreeDiff>;
+  /** Runs tab reads (read-only: nothing here retries or cancels a run). */
+  runsList(bot: string): Promise<{ runs: AgentRunSummary[] }>;
+  runsGet(bot: string, run: string): Promise<RunDetail>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -850,6 +861,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     togglePanel: (open) => dispatch({ type: "ui.panel", open }),
     setPanelTab: (tab) => dispatch({ type: "ui.panelTab", tab }),
+    openRun: (run) => dispatch({ type: "ui.run", run }),
     setTheme(theme) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem("omher.theme", theme);
@@ -882,6 +894,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     panelTerminal: (bot) => bridge.request("panel.terminal", { bot }),
     panelWorktrees: (bot) => bridge.request("panel.worktrees", { bot }),
     panelDiff: (bot, path) => bridge.request("panel.diff", { bot, path }),
+    runsList: (bot) => bridge.request("runs.list", { bot }),
+    runsGet: (bot, run) => bridge.request("runs.get", { bot, run }),
   };
 
   return {

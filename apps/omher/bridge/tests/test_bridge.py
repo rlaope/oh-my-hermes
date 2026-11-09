@@ -1034,3 +1034,154 @@ class SidePanel(unittest.TestCase):
             with self.assertRaises(ob.BridgeError) as e:
                 ob.read_diff(prof, str(Path(d)))
             self.assertEqual(e.exception.code, "not_found")
+
+
+DAG_FIXTURES = HERE / "fixtures" / "dag"
+FAN, CANCELLED, SMALL = (
+    "20261102_235818_fcfb1bdd-96bc7f91f27a766c", "20261026_134438_3ae70257-dac2fb5045223e90",
+    "20261028_093610_1b12a114-ba5ac497c940e83f")
+
+
+def _runs_profile(root: Path, sessions, dag_src: Path = DAG_FIXTURES) -> tuple[Path, Path]:
+    """A profile whose config points OMH at `root/omh`, a copy of the dag dir there, and a state.db holding
+    `sessions`. Returns (profile dir, dag dir)."""
+    import shutil
+    import sqlite3
+    prof, dag = root / "prof", root / "omh" / "runtime" / "dag"
+    prof.mkdir(parents=True)
+    shutil.copytree(dag_src, dag, symlinks=True)
+    (prof / "config.yaml").write_text(
+        f"plugins:\n  entries:\n    omh:\n      settings:\n        omh_home: '{root / 'omh'}'\n", encoding="utf-8")
+    con = sqlite3.connect(prof / "state.db")
+    con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT)")
+    con.executemany("INSERT INTO sessions VALUES (?, 'discord')", [(s,) for s in sessions])
+    con.commit()
+    con.close()
+    return prof, dag
+
+
+def _mtimes(*roots: Path) -> dict:
+    return {p: p.lstat().st_mtime_ns for r in roots for p in ([r] if r.is_file() else r.rglob("*"))}
+
+
+class Runs(unittest.TestCase):
+    """runs.list / runs.get over OMH dag records: read-only, owned by the bot through its state.db sessions."""
+
+    def test_list_and_get_only_the_bots_runs_and_write_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261102_235818_fcfb1bdd", "20261026_134438_3ae70257"])
+            before = _mtimes(dag, prof)
+            runs = ob.DagRuns().list("kami", prof)
+            self.assertEqual([r["id"] for r in runs], ["dag:20261102_235818_fcfb1bdd/codex-coexist",
+                                                       "dag:20261026_134438_3ae70257/omh-dap"])  # newest first
+            fan, cancelled = runs
+            self.assertEqual((fan["state"], fan["counts"]), ("done", {"nodes": 6, "done": 5, "running": 0, "failed": 1}))
+            self.assertEqual(cancelled["state"], "cancelled")
+            self.assertNotIn("nodes", fan)
+            got = ob.DagRuns().get("kami", prof, fan["id"])
+            nodes = {n["id"]: n for n in got["run"]["nodes"]}
+            self.assertEqual(nodes["t1-discovery"]["state"], "failed")
+            self.assertEqual(nodes["t5-verify"]["layer"], 2)
+            self.assertEqual(sum(len(n["deps"]) for n in nodes.values()), 4)
+            self.assertEqual(sorted(got["handoffs"]), ["t1-hermes", "t2-status-update", "t3-doctor", "t4-fence", "t5-verify"])
+            self.assertNotIn("handoff", nodes["t1-discovery"])
+            self.assertTrue(all(len(t) <= ob.HANDOFF_MAX for t in got["handoffs"].values()))
+            self.assertEqual(len(got["handoffs"]["t5-verify"]), ob.HANDOFF_MAX)  # 12.5k on disk, clipped
+            with self.assertRaises(ob.BridgeError) as e:  # a run of another bot's session
+                ob.DagRuns().get("kami", prof, "dag:20261028_093610_1b12a114/route-hint-dedup")
+            self.assertEqual(e.exception.code, "not_found")
+            self.assertEqual(_mtimes(dag, prof), before, "a runs read wrote something")
+
+    def test_a_record_cut_mid_write_keeps_the_last_good_parse(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261028_093610_1b12a114"])
+            reader = ob.DagRuns()
+            first = reader.list("kami", prof)
+            self.assertEqual([r["state"] for r in first], ["done"])
+            rec = dag / SMALL / "route-hint-dedup.json"
+            rec.write_text((HERE / "fixtures" / "dag-truncated.json").read_text(encoding="utf-8"), encoding="utf-8")
+            st = rec.stat()
+            os.utime(rec, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+            self.assertEqual(reader.list("kami", prof), first)
+            self.assertEqual(reader.get("kami", prof, first[0]["id"])["run"]["state"], "done")
+            # a fresh reader that never saw it whole skips it rather than raising
+            self.assertEqual(ob.DagRuns().list("kami", prof), [])
+
+    def test_symlinked_handoffs_and_folders_are_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261028_093610_1b12a114", "20261026_134438_3ae70257"])
+            secret = Path(d) / "outside.md"
+            secret.write_text("outside the dag dir", encoding="utf-8")
+            small = dag / SMALL / "route-hint-dedup"
+            (small / "verify.md").unlink()
+            try:
+                (small / "verify.md").symlink_to(secret)
+            except OSError:
+                self.skipTest("this system cannot make symlinks (Windows without the privilege)")
+            folder = dag / CANCELLED / "omh-dap"
+            import shutil
+            shutil.move(str(folder), str(Path(d) / "moved"))
+            folder.symlink_to(Path(d) / "moved", target_is_directory=True)
+            reader = ob.DagRuns()
+            got = reader.get("kami", prof, "dag:20261028_093610_1b12a114/route-hint-dedup")
+            self.assertEqual(sorted(got["handoffs"]), ["implement"])
+            self.assertNotIn("handoff", got["run"]["nodes"][1])
+            got = reader.get("kami", prof, "dag:20261026_134438_3ae70257/omh-dap")
+            self.assertEqual(got["handoffs"], {})
+            self.assertFalse(any("outside the dag dir" in t for t in got["handoffs"].values()))
+
+    def test_no_dag_dir_or_no_state_db_means_no_runs(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(ob.DagRuns().list("kami", Path(d)), [])
+
+    def test_a_cyclic_record_is_skipped_not_raised(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261028_093610_1b12a114"])
+            rec = dag / SMALL / "route-hint-dedup.json"
+            data = json.loads(rec.read_text(encoding="utf-8"))
+            data["nodes"][0]["depends_on"] = ["verify"]
+            rec.write_text(json.dumps(data), encoding="utf-8")
+            self.assertEqual(ob.DagRuns().list("kami", prof), [])
+            with self.assertRaises(ValueError):
+                ob.layer_of([{"id": "a", "deps": ["b"]}, {"id": "b", "deps": ["a"]}])
+
+    def test_a_copy_of_the_real_dag_dir_lists_runs(self):
+        """Real `~/.omh/runtime/dag`, copied to a temp dir, owned through the real sessions it names."""
+        real = Path.home() / ".omh" / "runtime" / "dag"
+        if not real.is_dir() or not any(real.glob("*/*.json")):
+            self.skipTest("no real dag runs on this machine")
+        sids = set()
+        for f in real.glob("*/*.json"):
+            try:
+                sids.add(json.loads(f.read_text(encoding="utf-8"))["session_id"])
+            except (ValueError, KeyError, OSError):
+                continue
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), sorted(sids), dag_src=real)
+            runs = ob.DagRuns().list("kami", prof)
+            self.assertGreaterEqual(len(runs), 1)
+            states = [r["state"] for r in runs]
+            self.assertEqual(states, sorted(states, key=lambda s: s != "running"))  # running first
+            got = ob.DagRuns().get("kami", prof, runs[0]["id"])
+            self.assertEqual(len(got["run"]["nodes"]), runs[0]["counts"]["nodes"])
+
+
+class RunsOps(BridgeCase):
+    async def test_runs_ops_over_the_socket(self):
+        async with Env() as env:
+            kami = env.home / "profiles" / "kami"
+            (kami / "config.yaml").unlink()
+            _runs_profile(env.home / "r", ["20261028_093610_1b12a114"])
+            import shutil
+            for f in (env.home / "r" / "prof").iterdir():
+                shutil.move(str(f), str(kami / f.name))
+            s = await self.open(env)
+            r = await s.req("runs.list", bot="kami")
+            self.assertTrue(r["ok"], r)
+            self.assertEqual([x["title"] for x in r["result"]["runs"]], ["Route hint dedup"])
+            run_id = r["result"]["runs"][0]["id"]
+            r = await s.req("runs.get", bot="kami", run=run_id)
+            self.assertEqual(sorted(r["result"]["handoffs"]), ["implement", "verify"])
+            self.assertEqual((await s.req("runs.get", bot="kami"))["error"]["code"], "bad_request")
+            self.assertEqual((await s.req("runs.get", bot="kami", run="dag:x/y"))["error"]["code"], "not_found")
+            self.assertEqual((await s.req("runs.list", bot="nobody"))["error"]["code"], "unknown_bot")
