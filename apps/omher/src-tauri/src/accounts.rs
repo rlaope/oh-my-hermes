@@ -452,20 +452,37 @@ impl Logins {
         self.live.lock().unwrap().insert(id, Arc::clone(&child));
         let me = Arc::clone(self);
         thread::spawn(move || {
-            for raw in rx {
+            // Watch the process, not the pipes: a helper the CLI started (a browser opener, a shell's `sleep`) can
+            // keep stdout open after the CLI itself has exited or was cancelled, and waiting for EOF would then hold
+            // the Exit event (and Cancel) until that helper ends.
+            let mut emit_line = |raw: String| {
                 if let Some(text) = clean_line(&raw) {
                     emit(LoginEvent::Line { text });
                 }
-            }
-            for r in readers {
-                let _ = r.join();
-            }
+            };
             let code = loop {
+                match rx.recv_timeout(Duration::from_millis(30)) {
+                    Ok(raw) => {
+                        emit_line(raw);
+                        continue;
+                    }
+                    // both pipes closed: the process is ending; poll its status without spinning
+                    Err(mpsc::RecvTimeoutError::Disconnected) => thread::sleep(Duration::from_millis(30)),
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                }
                 if let Ok(Some(st)) = child.lock().unwrap().try_wait() {
                     break st.code();
                 }
-                thread::sleep(Duration::from_millis(30));
             };
+            // lines already written before the exit still go out, but never wait long for a helper's pipe
+            let grace = Instant::now() + Duration::from_millis(200);
+            while let Some(left) = grace.checked_duration_since(Instant::now()) {
+                match rx.recv_timeout(left) {
+                    Ok(raw) => emit_line(raw),
+                    Err(_) => break,
+                }
+            }
+            drop(readers); // detached: a reader blocked on a helper's pipe ends when that helper does
             me.live.lock().unwrap().remove(&id);
             emit(LoginEvent::Exit { code });
         });
