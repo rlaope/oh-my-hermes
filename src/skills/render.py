@@ -4391,14 +4391,14 @@ Load this while deciding a release or a rollback. OMH prepares; the host, CI, or
 
 | Order | Step | Failure it prevents |
 | --- | --- | --- |
-| 1 | Land the prep change: changelog entry, and any version surface that gained a check | a bump that leaves a surface behind and turns the release branch red |
+| 1 | Land the prep change: changelog entry, and any file carrying the version that gained a check | a bump that leaves one of those files behind and turns the release branch red |
 | 2 | Freeze the release branch: nothing merges until the tag is pushed | a merge in the window breaks the atomic push of the bump commit and the tag |
-| 3 | Run the cut (a release workflow or command) that bumps every version surface, runs the suite on the bumped tree, and pushes the bump commit and the tag atomically | a tag that points at a tree nobody tested |
+| 3 | Run the cut (a release workflow or command) that bumps every file carrying the version, runs the suite on the bumped tree, and pushes the bump commit and the tag atomically | a tag that points at a tree nobody tested |
 | 4 | Pass the approval gate (a protected environment or a manual approval) | an unreviewed publish |
 | 5 | Publish, then check each channel moved: package registry, container registry, installers, site | a release visible on one channel and missing on another |
 | 6 | Curate the notes on top of the generated change list | a list of titles nobody can act on |
 
-Wait for the release branch's own CI on its last merge before starting the cut. After the cut, compare every version surface against the tag.
+Wait for the release branch's own CI on its last merge before starting the cut. After the cut, compare every file carrying the version against the tag.
 
 ## 3. Rollout stages
 

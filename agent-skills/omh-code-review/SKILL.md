@@ -49,6 +49,7 @@ Bad example:
 - The closing carries the checked-and-clean list and the could-not-assess list, each naming its surfaces.
 - The dispatch schema matches the return, candidate validation states remain distinct, and selected checks are not reported as observed coverage.
 - Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.
+- The reply uses plain words in the person's language: the verdict as ready or not ready to merge, the spec axis as whether the change does what was asked, gaps as what could not be checked and why; `no_ship`, `not_assessed`, `spec_axis`, `verification_gaps`, and `could_not_assess` stay in the structured return, never in the reply.
 
 ## Recovery Notes
 

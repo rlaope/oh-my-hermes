@@ -1012,7 +1012,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72561
 # re-derived from the producer.
 # Merged with main again: 541116 (main) + 3975 for the `model-compression` row =
 # 545091, re-derived from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545091
+# 545091 -> 545105: release-cut's required inputs say "every file that carries the version" where they said
+# "every version surface", a skill term replies copied to people (+14, only that row). Measured from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545105
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

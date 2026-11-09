@@ -169,6 +169,16 @@ All notable changes will be documented here.
   Codex's app-server runtime keeps the word-list gate and gets no
   instruction, so Hermes' "returned only a silence marker" notice never
   appears.
+- **Skill replies say verdicts and labels in plain words.** Live replies
+  copied skill vocabulary to people: release-cut's "version surface",
+  build-failure-triage's handoff and its `FIX_READY` / `NEEDS_MORE_LOGS`
+  verdicts, code-review's `no_ship`, `not_assessed`, `spec_axis` and
+  `verification_gaps`, and "run record" inside commit text. The
+  build-failure-triage, code-review and commit-pr-authoring checklists now
+  give each verdict a plain reading in the person's language and keep the
+  tokens in the record or structured return; release-cut says "every file
+  that carries the version". No schema, tool contract or record field
+  changes, and routing is unchanged.
 - **`omh coding model-routing status` names each discovered model once.**
   Session history yields one observation per session, so the human line
   repeated one model id hundreds of times. It now reads

@@ -170,8 +170,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # model-compression row reproduces main's cbc66058...36bc.
             # Merged with main again: 538044 + 3975 = 542019; dropping only the
             # model-compression row reproduces main's 3cb600bd...e829.
-            (skill_capabilities, 542019, FULL_ROW_DELTA_CAP,
-             '4fff984f2984445112daabeb15919cd7ac283527ed42b13267aa549eead1c1d6',
+            # release-cut's required inputs then say "every file that carries the version" instead of a
+            # version surface (542019 -> 542033); only that row moves, and the pin before it was 4fff984f...c1d6.
+            (skill_capabilities, 542033, FULL_ROW_DELTA_CAP,
+             '4571f8b1661056a5f1a1004d85c09256e933ddeaefddd9f206c44799759a2e9e',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -448,7 +450,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # spend-gate moves, and the pin before it was 7cd26de4...73da.
         # Every body's one reply line then takes back the turn-ending rule, so every body moves; the pin
         # before it was ed82a2da...ba22.
-        self.assertEqual(_digest(legacy_hashes), '18512bc6fe9492e38d1362409508b289f1f820c4b39f74843322de7bfa84beff')
+        # Skill verdicts and labels then read in plain words in the reply (build-failure-triage, code-review,
+        # commit-pr-authoring, release-cut); only those bodies move, and the pin before it was 18512bc6...beff.
+        self.assertEqual(_digest(legacy_hashes), '2a2ae18e58ab4c90fec42d90ffc264729a1e1cf1606fe31921e2e5a414a2ca42')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

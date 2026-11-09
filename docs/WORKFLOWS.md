@@ -3570,7 +3570,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The proposed remediation is minimal, scoped to affected files, and separated from implementation evidence.
   - Every cluster carries an origin, and no FIX_READY handoff covers a `pre_existing` or `unknown` one.
   - The rerun ladder names targeted, broad local, CI, and DCO checks without claiming they already passed.
-  - The final verdict is FIX_READY, NEEDS_MORE_LOGS, BLOCKED_BY_ENVIRONMENT, or ROUTE_TO_VERIFICATION_GATE.
+  - The final verdict is FIX_READY, NEEDS_MORE_LOGS, BLOCKED_BY_ENVIRONMENT, or ROUTE_TO_VERIFICATION_GATE in the record; the reply says it in plain words in the person's language (ready to fix, more of the log is needed, blocked by the environment, needs a fresh observed rerun), and record names such as handoff, cluster matrix, or evidence boundary are never reply headings.
 - Recovery notes:
   - If the log is missing or stale, fetch it when `gh` is authenticated (`gh run view <id> --log-failed`); otherwise ask for the smallest fresh command output or CI job URL.
   - If the failure looks environmental or credentialed, mark BLOCKED_BY_ENVIRONMENT and avoid patch handoff.
@@ -5134,6 +5134,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The closing carries the checked-and-clean list and the could-not-assess list, each naming its surfaces.
   - The dispatch schema matches the return, candidate validation states remain distinct, and selected checks are not reported as observed coverage.
   - Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.
+  - The reply uses plain words in the person's language: the verdict as ready or not ready to merge, the spec axis as whether the change does what was asked, gaps as what could not be checked and why; `no_ship`, `not_assessed`, `spec_axis`, `verification_gaps`, and `could_not_assess` stay in the structured return, never in the reply.
 - Recovery notes:
   - If no diff, file set, PR, or artifact is available, inspect the requested target or ask one target question before reviewing.
   - If tests fail or are missing, cite the exact command gap and do not approve the change as verified.
@@ -6939,8 +6940,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Every prepared, skipped, or unobserved command is under `Not-tested:` (or "Not run" where the log has no trailers) with its reason.
   - The draft lists the paths to stage, and any state-claiming subject prefix maps to an observed ledger row.
   - Nothing was committed, pushed, or opened by OMH.
+  - The commit text and the reply say what was not run in plain words; run record and evidence ledger are bookkeeping terms that stay out of both.
 - Recovery notes:
-  - If no run records exist, draft with an empty `Tested:` and every command under `Not-tested:`, and ask for the observed output.
+  - If no command run was observed, draft with an empty `Tested:` and every command under `Not-tested:`, and ask for the observed output.
   - If the repository has no template or visible convention, say so and use a plain subject and body rather than importing one.
 - Required inputs:
   - the change: the diff, the staged files, or the branch compared with its base
@@ -7758,7 +7760,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `release-cut`, `release cut`, `cut a release`, `cut the release`, `cut a new release`, `tag a release`, `tag the release`, `release candidate`, `what goes in the release`, `version the release`, `semver bump`, `roll back the last deploy`, `roll back the deploy`, `roll back the release`, `roll back to the previous version`, `rollback trigger`, `rollback command`, `canary`, `canary release`, `canary deploy`, `set up a canary`, `staged rollout`, `progressive rollout`, `percentage rollout`
 - Good example:
   - Prompt: cut a release and tag it
-  - Expected behavior: List what goes in and what is held, derive the version, and prepare release_plan/v1: freeze, bump every version surface, tag, run the release workflow, pass its approval, publish, and curate notes, with rollback_trigger/v1 naming the signal, the threshold, and the exact command.
+  - Expected behavior: List what goes in and what is held, derive the version, and prepare release_plan/v1: freeze, bump every file that carries the version, tag, run the release workflow, pass its approval, publish, and curate notes, with rollback_trigger/v1 naming the signal, the threshold, and the exact command.
   - Why: A release whose rollback is decided during the outage is a release with no rollback.
 - Bad example:
   - Prompt: ship it, we will figure out rollback if something breaks
@@ -7777,11 +7779,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The readiness verdict is ready only when the trigger and the command are named.
   - Nothing was tagged, published, deployed, or rolled back by OMH.
 - Recovery notes:
-  - If the release mechanism is unknown, ask for the workflow or command and every version surface it bumps before proposing a cut.
+  - If the release mechanism is unknown, ask for the workflow or command and every file that carries the version it bumps before proposing a cut.
   - If there is no traffic split, stage by environment or by cohort and say that the canary is coarse.
 - Required inputs:
   - the changes since the last release, and the current version and versioning scheme
-  - how a release is cut here: the workflow or command, the approval gates, and every version surface it bumps
+  - how a release is cut here: the workflow or command, the approval gates, and every file that carries the version it bumps
   - the deploy target, the traffic split available, and the health signals with their normal range
   - the rollback mechanism: redeploy of the previous artifact, a flag, or a revert, and who may run it
   - observed evidence for any published, promoted, or rolled-back claim
@@ -7793,7 +7795,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - release_readiness_verdict/v1
 - Artifact expectations:
   - release_scope/v1 lists what goes in and what is held back, and derives the version from the change classes: a breaking change, a feature, or a fix
-  - release_plan/v1 orders the cut: freeze the release branch, bump every version surface, tag, run the release workflow, pass its approval gate, publish, and curate the notes
+  - release_plan/v1 orders the cut: freeze the release branch, bump every file that carries the version, tag, run the release workflow, pass its approval gate, publish, and curate the notes
   - rollout_stages/v1 gives each stage its traffic share, its bake time, and the promotion criterion read from a named health signal
   - rollback_trigger/v1 names the signal and threshold that trigger the rollback, the exact command that performs it, and who runs it
   - release_readiness_verdict/v1 reads ready only when a named rollback trigger and its exact command are stated; otherwise it names what is missing
