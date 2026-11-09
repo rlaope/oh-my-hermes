@@ -58,6 +58,15 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
             {model}
           </span>
         </div>
+        <button
+          type="button"
+          className="details-edit"
+          onClick={() => s.openSettings(`bot:${bot.name}`)}
+          title="Picture, name and profile"
+          data-testid="details-edit"
+        >
+          Edit
+        </button>
       </div>
       <div className="ew-scroll">
         <div className="ew-sec" data-testid="where-sec">

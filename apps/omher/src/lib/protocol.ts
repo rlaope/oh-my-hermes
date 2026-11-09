@@ -12,6 +12,17 @@ export interface Bot {
   description: string;
   status: BotStatus;
   running: boolean;
+  /** Changes whenever the bot's own picture changes; null = no picture, the built-in face is used. */
+  avatar_rev?: number | null;
+}
+
+/** What a bot has done, for its page: sessions per place (slack, discord, cron…), skills, routines. */
+export interface BotInfo {
+  places: Record<string, number>;
+  first_active: number | null;
+  last_active: number | null;
+  skills: number;
+  routines: number;
 }
 
 /** One row of a bot's main chat. `ts` is seconds since epoch (float). */
@@ -121,6 +132,14 @@ export interface OpMap {
     params: { bot: string; model?: string; provider?: string; reasoning?: string };
     result: ModelCurrent;
   };
+  /** Display name only; "" goes back to the profile's own name. The profile id never changes. */
+  "bots.rename": { params: { bot: string; name: string }; result: { display_name: string } };
+  "bots.avatar": { params: { bot: string }; result: { rev: number | null; data: string | null } };
+  "bots.set_avatar": {
+    params: { bot: string; data?: string; clear?: boolean };
+    result: { avatar_rev: number | null };
+  };
+  "bots.info": { params: { bot: string }; result: BotInfo };
 }
 
 export type Op = keyof OpMap;
@@ -168,6 +187,7 @@ export type BridgeEvent =
   | (EventBase & { event: "turn.end"; outcome: "done" | "interrupted" | "error"; error?: string })
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
+  | (EventBase & { event: "bots.update" })
   | (EventBase & {
       event: "routine.ran";
       routine_id: string;

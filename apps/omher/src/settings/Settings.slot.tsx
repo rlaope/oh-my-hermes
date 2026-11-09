@@ -1,14 +1,15 @@
 // Settings view (main column while `ui.view === "settings"`). Left list: Bots (one page per bot: Profile,
 // Model, Work) and App (General, Providers, Computer). Pages are `bot:<name>` and the App page names; the
 // page lives in the store (`ui.settingsPage`) so the model popover can deep-link to a bot.
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "./settings.css";
 import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
 import { useStore, type Theme } from "../state/store";
-import { Avatar } from "../ui";
+import { Avatar, GridIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
+import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 
 export const slot = "settings";
 
@@ -30,15 +31,26 @@ export default function Settings({ page }: SlotProps["settings"]) {
   const s = useStore();
   const botName = page.startsWith("bot:") ? page.slice(4) : null;
   const bot = botName ? s.bots.find((b) => b.name === botName) : undefined;
-  const current = bot ? `bot:${bot.name}` : APP_PAGES.some((p) => p.id === page) ? page : "general";
+  const current = bot
+    ? `bot:${bot.name}`
+    : page === "bots" || APP_PAGES.some((p) => p.id === page)
+      ? page
+      : "general";
 
   return (
     <div className="st" data-testid="settings-view">
       <nav className="st-nav" aria-label="Settings sections">
         <div className="st-sh">Bots</div>
+        <NavItem id="bots" current={current} onPick={s.openSettings}>
+          <span className="st-nav-i" aria-hidden="true">
+            <GridIcon />
+          </span>
+          All bots<span className="st-count">{s.bots.length}</span>
+        </NavItem>
         {s.bots.map((b) => (
           <NavItem key={b.name} id={`bot:${b.name}`} current={current} onPick={s.openSettings}>
-            {b.display_name}
+            <Avatar bot={b.name} size={18} />
+            <span className="st-nav-n">{b.display_name}</span>
           </NavItem>
         ))}
         <div className="st-sh st-sh2">App</div>
@@ -51,6 +63,8 @@ export default function Settings({ page }: SlotProps["settings"]) {
       <div className="st-body" data-testid={`settings-page-${current.replace(":", "-")}`}>
         {bot ? (
           <BotPage bot={bot} />
+        ) : current === "bots" ? (
+          <BotsPage />
         ) : current === "providers" ? (
           <ProvidersPage />
         ) : current === "computer" ? (
@@ -117,6 +131,9 @@ function BotPage({ bot }: { bot: Bot }) {
   const provider = chat?.provider || opts?.current.provider || bot.provider;
   const reasoning = chat?.reasoning || opts?.current.reasoning || "";
   const offline = bot.status === "offline";
+  const info = useBotInfo(bot);
+  const picture = usePictureEditor(bot);
+  const live = (bot.running || !!chat?.turn) && !offline;
 
   useEffect(() => {
     if (offline) return;
@@ -128,33 +145,32 @@ function BotPage({ bot }: { bot: Bot }) {
 
   return (
     <div className="st-page">
-      <div className="st-title">
-        <Avatar bot={bot.name} size={36} />
-        <div>
-          <b>{bot.display_name}</b>
-          <span>Engine: Hermes Agent · profile “{bot.name}”</span>
+      <div className="be-head" data-testid="bot-head">
+        <AvatarEditor bot={bot} ed={picture} />
+        <div className="be-id">
+          <NameEditor bot={bot} />
+          <span className="be-sub">
+            <i className={`st-dot ${live ? "working" : bot.status}`} aria-hidden="true" />
+            {live ? "Working" : STATUS[bot.status] ?? bot.status}
+          </span>
+          {bot.description && <p className="be-desc">{bot.description}</p>}
+          <div className="be-acts">
+            <button type="button" className="st-btn" onClick={() => void s.selectBot(bot.name)} data-testid="bot-open-chat">
+              Open chat
+            </button>
+            <PictureActions ed={picture} />
+          </div>
         </div>
       </div>
+      <BotFacts info={info} />
 
-      <div className="st-gh st-gh0">Profile</div>
+      <div className="st-gh">Profile</div>
       <div className="st-grp">
-        <Row title="Name">
-          <Value>{bot.display_name}</Value>
-        </Row>
-        <Row title="Hermes profile" hint={bot.is_default ? "The default profile" : undefined}>
+        <Row
+          title="Profile id"
+          hint={bot.is_default ? "The default Hermes profile. Name and picture are saved here" : "Name and picture are saved in this Hermes profile"}
+        >
           <Value mono>{bot.name}</Value>
-        </Row>
-        {bot.description && (
-          <Row title="Description">
-            <Value>{bot.description}</Value>
-          </Row>
-        )}
-        <Row title="Status">
-          <Value>
-            <i className={`st-dot ${bot.status}`} aria-hidden="true" />
-            {STATUS[bot.status] ?? bot.status}
-            {bot.running && !offline ? " · working" : ""}
-          </Value>
         </Row>
       </div>
 
@@ -171,7 +187,7 @@ function BotPage({ bot }: { bot: Bot }) {
         </Row>
         <Row title="Change" hint="Pick a model and reasoning from the pill in the chat header">
           <button type="button" className="st-btn" onClick={() => void s.selectBot(bot.name)} disabled={offline}>
-            Open chat
+            Change in chat
           </button>
         </Row>
       </div>
@@ -182,7 +198,12 @@ function BotPage({ bot }: { bot: Bot }) {
           <Value>{chat?.loaded ? `${chat.messages.length} messages` : "—"}</Value>
         </Row>
         <Row title="Routines" hint="Scheduled jobs from this profile">
-          <Value>{routines ? `${routines.length} ${routines.length === 1 ? "routine" : "routines"}` : "—"}</Value>
+          <Value>
+            {(() => {
+              const n = routines?.length ?? info?.routines;
+              return n === undefined ? "—" : `${n} ${n === 1 ? "routine" : "routines"}`;
+            })()}
+          </Value>
         </Row>
         <Row title="Ask before" hint="Approvals follow this profile’s Hermes settings">
           <Value>Set in Hermes</Value>
@@ -192,6 +213,85 @@ function BotPage({ bot }: { bot: Bot }) {
         </Row>
       </div>
     </div>
+  );
+}
+
+/** Every bot at a glance: picture, name, status, what it is doing and where it works. */
+function BotsPage() {
+  const s = useStore();
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const bots = needle
+    ? s.bots.filter((b) =>
+        [b.display_name, b.name, b.description, b.model].some((t) => (t ?? "").toLowerCase().includes(needle)),
+      )
+    : s.bots;
+  const online = s.bots.filter((b) => b.status === "online").length;
+  const working = s.bots.filter((b) => b.running || !!s.chats[b.name]?.turn).length;
+  return (
+    <div className="st-page st-wide">
+      <div className="bots-h">
+        <div>
+          <b>Bots</b>
+          <span>
+            {s.bots.length} {s.bots.length === 1 ? "bot" : "bots"} · {online} connected
+            {working > 0 && ` · ${working} working`}
+          </span>
+        </div>
+        <input
+          type="search"
+          className="bots-q"
+          placeholder="Find a bot"
+          aria-label="Find a bot"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          data-testid="bots-search"
+        />
+      </div>
+      <div className="bots-grid" data-testid="bots-grid">
+        {bots.map((b) => (
+          <BotCard key={b.name} bot={b} />
+        ))}
+        {needle && bots.length === 0 && <div className="bots-empty">No bot matches “{q.trim()}”</div>}
+      </div>
+    </div>
+  );
+}
+
+function BotCard({ bot }: { bot: Bot }) {
+  const s = useStore();
+  const info = useBotInfo(bot);
+  const places = info ? Object.entries(info.places).slice(0, 3) : [];
+  const live = bot.running || !!s.chats[bot.name]?.turn;
+  return (
+    <button
+      type="button"
+      className="bot-card"
+      onClick={() => s.openSettings(`bot:${bot.name}`)}
+      data-testid={`bot-card-${bot.name}`}
+    >
+      <span className="bc-top">
+        <Avatar bot={bot.name} size={40} />
+        <span className="bc-id">
+          <b>{bot.display_name}</b>
+          <span>
+            <i className={`st-dot ${live ? "working" : bot.status}`} aria-hidden="true" />
+            {live ? "Working" : STATUS[bot.status] ?? bot.status}
+            {bot.name !== bot.display_name.toLowerCase() && <code>{bot.name}</code>}
+          </span>
+        </span>
+      </span>
+      {bot.description && <span className="bc-desc">{bot.description}</span>}
+      <span className="bc-foot">
+        <span className="bc-model">{bot.model || "—"}</span>
+        {places.map(([src, n]) => (
+          <span key={src} className="bc-place" title={`${n} ${placeName(src)} sessions`}>
+            <i className={`src-sq src-${src}`} />
+            {n}
+          </span>
+        ))}
+      </span>
+    </button>
   );
 }
 

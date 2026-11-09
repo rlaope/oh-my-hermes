@@ -25,6 +25,7 @@ RULES = (
     "The bridge listens on 127.0.0.1 only and refuses any connection that lacks the random token",
     "The app starts the bridge as a child process and stops it when the app exits.",
     "The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.",
+    "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
 )
 
 
@@ -108,6 +109,15 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn(ast.unparse(session[0]), {"chat.runtime_id", "chat.session_id", "main_id", "runtime_id", "sid"})
         params = {a.arg for a in fn.args.args + fn.args.kwonlyargs}
         self.assertNotIn("session_id", params, "the submitting function must not take a session id from its caller")
+
+    def test_profile_writes_are_only_name_and_picture(self) -> None:
+        """Every Hermes profile method the bridge names is a read, except set_asset (the avatar)."""
+        names = {n.value for n in ast.walk(self.tree)
+                 if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("profiles.")}
+        self.assertTrue(names <= {"profiles.list", "profiles.set_asset"}, sorted(names))
+        writes = {n.value for n in ast.walk(self.tree)
+                  if isinstance(n, ast.Constant) and n.value in {"profiles.configure", "profiles.create", "profile.yaml"}}
+        self.assertEqual(writes, {"profile.yaml"})  # named only by the display-name writer
 
     def test_bridge_has_no_http_or_llm_client(self) -> None:
         banned = {"requests", "httpx", "aiohttp", "urllib3", "openai", "anthropic", "urllib.request", "http.client"}

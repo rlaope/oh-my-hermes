@@ -119,6 +119,127 @@ def discover_bots(home: Path) -> list[dict]:
     return found
 
 
+AVATAR_TYPES = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}
+AVATAR_MAX = 2_000_000
+NAME_MAX = 64
+
+
+def read_avatar(profile_dir: Path) -> tuple[int | None, str | None]:
+    """(revision, data URL) of the profile's avatar, the file Hermes keeps at ``assets/avatar.<ext>``
+    (its desktop app reads the same one). (None, None) when the bot has no picture of its own."""
+    import base64
+    for ext, mime in AVATAR_TYPES.items():
+        path = profile_dir / "assets" / f"avatar.{ext}"
+        try:
+            st = path.stat()
+            if st.st_size > AVATAR_MAX:
+                continue
+            blob = path.read_bytes()
+        except OSError:
+            continue
+        return st.st_mtime_ns, f"data:{mime};base64,{base64.b64encode(blob).decode('ascii')}"
+    return None, None
+
+
+_AVATAR_MAGIC = {"png": [(0, 8, b"\x89PNG\r\n\x1a\n")], "jpg": [(0, 3, b"\xff\xd8\xff")],
+                 "webp": [(0, 4, b"RIFF"), (8, 12, b"WEBP")]}
+
+
+def write_avatar(profile_dir: Path, data: str | None) -> None:
+    """``assets/avatar.<ext>`` exactly as Hermes' ``profiles.set_asset`` writes it (format sniffed,
+    2 MB cap, one file, atomic), for when the bot's gateway is not running. ``None`` clears it."""
+    import base64
+    assets = profile_dir / "assets"
+    if data is not None:
+        m = re.match(r"^data:image/[a-z+.-]+;base64,(.*)$", data, re.DOTALL)
+        try:
+            blob = base64.b64decode(m.group(1) if m else "", validate=True)
+        except ValueError:
+            raise BridgeError("bad_request", "picture is not valid base64")
+        if len(blob) > AVATAR_MAX:
+            raise BridgeError("bad_request", "picture is larger than 2 MB")
+        ext = next((e for e, mg in _AVATAR_MAGIC.items() if all(blob[a:b] == x for a, b, x in mg)), None)
+        if ext is None:
+            raise BridgeError("bad_request", "use a PNG, JPEG or WebP picture")
+    for e in AVATAR_TYPES:
+        with contextlib.suppress(FileNotFoundError):
+            (assets / f"avatar.{e}").unlink()
+    if data is None:
+        return
+    assets.mkdir(parents=True, exist_ok=True)
+    tmp = assets / f"avatar.{ext}.tmp"
+    tmp.write_bytes(blob)
+    tmp.replace(assets / f"avatar.{ext}")
+
+
+def avatar_rev(profile_dir: Path) -> int | None:
+    for ext in AVATAR_TYPES:
+        with contextlib.suppress(OSError):
+            return (profile_dir / "assets" / f"avatar.{ext}").stat().st_mtime_ns
+    return None
+
+
+def clean_display_name(raw) -> str:
+    if not isinstance(raw, str):
+        raise BridgeError("bad_request", "name must be text")
+    name = " ".join(raw.split())
+    if len(name) > NAME_MAX:
+        raise BridgeError("bad_request", f"name is too long ({len(name)} characters, max {NAME_MAX})")
+    return name
+
+
+def write_display_name(profile_dir: Path, name: str) -> None:
+    """Set (or clear, with "") the profile's display name in ``profile.yaml``. Only the name apps show
+    changes: the profile id, its folder and every session stay as they are. Uses Hermes' own writer when
+    the bridge runs on Hermes' venv; the fallback writes the same key the same way."""
+    try:
+        from hermes_cli.profiles import write_profile_meta
+        write_profile_meta(profile_dir, display_name=name)
+        return
+    except ImportError:
+        pass  # Hermes' writer (or its lazy `utils` import) is not reachable: it failed before writing anything
+    import yaml
+    path = profile_dir / "profile.yaml"
+    data = _load_yaml(path)
+    if name:
+        data["display_name"] = name
+    else:
+        data.pop("display_name", None)
+    tmp = path.with_name(f".profile.yaml.{uuid.uuid4().hex}.tmp")
+    tmp.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    tmp.replace(path)
+
+
+def read_bot_facts(profile_dir: Path) -> dict:
+    """What the bot has done, for the bot page: sessions per place, first and last activity, skills
+    and routines. Read from the profile's own files; ``state.db`` is opened read-only."""
+    import sqlite3
+    places: dict[str, int] = {}
+    first = last = None
+    db = profile_dir / "state.db"
+    if db.is_file():
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
+            try:
+                for source, n, lo, hi in con.execute(
+                        "SELECT source, COUNT(*), MIN(started_at), MAX(COALESCE(last_activity_at, started_at)) "
+                        "FROM sessions GROUP BY source"):
+                    src = str(source or "")
+                    if src in ("subagent", "oneshot") or src in LOCAL_SOURCES:
+                        continue
+                    places[src] = int(n)
+                    first = lo if first is None or (lo is not None and lo < first) else first
+                    last = hi if last is None or (hi is not None and hi > last) else last
+            finally:
+                con.close()
+        except sqlite3.Error:
+            pass
+    skills_dir = profile_dir / "skills"
+    skills = sum(1 for _ in skills_dir.rglob("SKILL.md")) if skills_dir.is_dir() else 0
+    return {"places": dict(sorted(places.items(), key=lambda kv: -kv[1])), "first_active": first,
+            "last_active": last, "skills": skills, "routines": len(read_routines(profile_dir))}
+
+
 def read_routines(profile_dir: Path) -> list[dict]:
     try:
         data = json.loads((profile_dir / "cron" / "jobs.json").read_text(encoding="utf-8"))
@@ -365,6 +486,8 @@ class Bridge:
             "elsewhere.list": self.op_elsewhere_list, "elsewhere.peek": self.op_elsewhere_peek,
             "routines.list": self.op_routines_list, "models.options": self.op_models_options,
             "chat.set_model": self.op_set_model,
+            "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
+            "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
         }
 
     # ------------------------------------------------------------ lifecycle
@@ -859,8 +982,53 @@ class Bridge:
                          "is_default": b["is_default"], "model": str(row.get("model") or b["model"]),
                          "provider": str(row.get("provider") or b["provider"]),
                          "description": str(row.get("description") or b["description"]),
-                         "status": status, "running": bool(conn and conn.in_turn)})
+                         "status": status, "running": bool(conn and conn.in_turn),
+                         "avatar_rev": avatar_rev(b["path"])})
         return {"bots": bots}
+
+    # ------------------------------------------------------------ bot profile: name, picture, facts
+    # The only writes omher makes to a profile. Both are presentation-only in Hermes: the profile id,
+    # its folder, config and sessions never change.
+
+    async def op_bots_rename(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        name = clean_display_name(p.get("name"))
+        await asyncio.to_thread(write_display_name, bot["path"], name)
+        shown = discover_bots(self.home)
+        display = next((b["display_name"] for b in shown if b["name"] == bot["name"]), name)
+        await self.emit("bots.update", bot["name"])
+        return {"display_name": display}
+
+    async def op_bots_avatar(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        rev, data = await asyncio.to_thread(read_avatar, bot["path"])
+        return {"rev": rev, "data": data}
+
+    async def op_bots_set_avatar(self, p) -> dict:
+        """Hand the picture to Hermes' own ``profiles.set_asset`` (it checks the format and size and
+        writes ``assets/avatar.<ext>``); ``clear: true`` goes back to the built-in face."""
+        bot = self._bot(p.get("bot"))
+        clear = p.get("clear") is True
+        data = p.get("data")
+        if not clear and (not isinstance(data, str) or not data.startswith("data:image/")):
+            raise BridgeError("bad_request", "data must be an image data URL")
+        params = {"name": bot["name"], "asset": "avatar"}
+        params.update({"clear": True} if clear else {"data": data})
+        try:
+            conn = await self._conn(bot["name"])
+        except BridgeError as e:
+            if e.code != "bot_offline":
+                raise
+            # gateway down: same checks and same file, written here
+            await asyncio.to_thread(write_avatar, bot["path"], None if clear else data)
+        else:
+            await self._call(conn, "profiles.set_asset", **params)
+        await self.emit("bots.update", bot["name"])
+        return {"avatar_rev": avatar_rev(bot["path"])}
+
+    async def op_bots_info(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return await asyncio.to_thread(read_bot_facts, bot["path"])
 
     async def op_routines_list(self, p) -> dict:
         return {"routines": read_routines(self._bot(p.get("bot"))["path"])}

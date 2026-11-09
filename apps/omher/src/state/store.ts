@@ -13,6 +13,7 @@ import type {
   ModelOptions,
   PeekMsg,
   Routine,
+  BotInfo,
 } from "../lib/protocol";
 
 // ---- view model types -----------------------------------------------------------------------
@@ -396,6 +397,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         bots: state.bots.map((b) => (b.name === bot ? { ...b, status: ev.status, running: ev.running } : b)),
       };
     case "elsewhere.update":
+    case "bots.update":
       return state; // the store refetches; nothing to change here
     case "routine.ran": {
       const next = touchChat(state, bot, (c) =>
@@ -578,6 +580,12 @@ export interface Actions {
   setTheme(theme: Theme): void;
   openSettings(page?: string): void;
   closeSettings(): void;
+  /** Re-read bots.list (names, status, picture revisions). */
+  reloadBots(): Promise<void>;
+  renameBot(bot: string, name: string): Promise<void>;
+  setAvatar(bot: string, data: string | null): Promise<void>;
+  botInfo(bot: string): Promise<BotInfo>;
+  avatarOf(bot: string): Promise<{ rev: number | null; data: string | null }>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -662,6 +670,15 @@ export function createStore(bridge: BridgeLike, opts: { now?: () => number } = {
     await Promise.all(jobs);
   };
 
+  const reloadBots = async () => {
+    try {
+      const r = await bridge.request("bots.list", {});
+      dispatch({ type: "bots", bots: r.bots });
+    } catch (e) {
+      fail(e);
+    }
+  };
+
   /** After a reconnect: events were missed, so re-read the lists and every loaded chat. */
   const resync = async () => {
     try {
@@ -690,6 +707,7 @@ export function createStore(bridge: BridgeLike, opts: { now?: () => number } = {
         dispatch({ type: "event", ev, now: now() });
         if (ev.event === "elsewhere.update") void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
+        if (ev.event === "bots.update") void reloadBots();
       });
       await bridge.connect();
       try {
@@ -784,6 +802,17 @@ export function createStore(bridge: BridgeLike, opts: { now?: () => number } = {
     },
     openSettings: (page) => dispatch({ type: "ui.settings", page }),
     closeSettings: () => dispatch({ type: "ui.closeSettings" }),
+    reloadBots,
+    async renameBot(bot, name) {
+      const r = await bridge.request("bots.rename", { bot, name });
+      dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, display_name: r.display_name } : b)) });
+    },
+    async setAvatar(bot, data) {
+      const r = await bridge.request("bots.set_avatar", data === null ? { bot, clear: true } : { bot, data });
+      dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, avatar_rev: r.avatar_rev } : b)) });
+    },
+    botInfo: (bot) => bridge.request("bots.info", { bot }),
+    avatarOf: (bot) => bridge.request("bots.avatar", { bot }),
   };
 
   return {
