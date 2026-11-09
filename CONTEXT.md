@@ -447,7 +447,9 @@ bridge). One Hermes profile is one bot; each bot has one main chat, the
 session titled `Bot Chat`, and omher shows its other sessions read-only. The
 app starts the bridge, which reaches the person's own Hermes gateway over
 loopback through Hermes' `connect_gateway`; omher makes no model or API call
-and is not part of the `omh` Python package. Boundary:
+and is not part of the `omh` Python package. Its SESSIONS list starts one of a
+fixed set of agent programs (`claude`, `codex`, `omh`, `pi`, `omp`) in a
+terminal in a folder the person picks. Boundary:
 `docs/OMHER-BOUNDARY.md`.
 _Avoid_: counting omher as an OMH execution surface, the OMH TUI, a Hermes
 Desktop plugin

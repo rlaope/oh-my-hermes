@@ -16,9 +16,11 @@ is in `apps/omher/README.md`.
 7. The app starts the bridge as a child process and stops it when the app exits.
 8. The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.
 9. omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture (`assets/avatar.*`, through Hermes' `profiles.set_asset` when the gateway runs); the profile id, folder, config and sessions never change.
+10. omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a fixed allow-list: `claude`, `codex`, `omh`, `pi`, `omp`, with no arguments, in a pseudo-terminal in the folder the person picked. The UI sends an agent id, never a command line or arguments; the shell refuses any other id. The process is stopped when its session is closed and when the app exits. What the agent then does in that folder is the agent's own, as if the person had typed its name in a terminal.
 
 ## What this does not claim
 
 omher is not an execution surface for OMH workflows, and none of OMH's routing, handoffs or evidence run
-through it. These rules describe the code in this repository; they are not a sandbox, and an allowed Hermes
+through it. A SESSIONS terminal is the person's own terminal hosted in a window: omher does not type into it,
+read its output for any purpose but drawing it, or keep it after the app quits. These rules describe the code in this repository; they are not a sandbox, and an allowed Hermes
 call made with other arguments is Hermes' to answer.
