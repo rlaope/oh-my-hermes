@@ -95,22 +95,29 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* an agent row: the label gives way (ellipsis) before the account suffix does */
+/* an agent row: the menu is at most the sidebar less 8px a side, too narrow for "Claude Code as work@…" and the
+   command on one line, so the account gets its own muted line under the agent; each ellipsizes only if it must
+   (the row's title has both) */
 .ss-n-as {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
 }
-.ss-l {
-  min-width: 0;
+.ss-l,
+.ss-as {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.ss-item:has(.ss-as) {
+  height: 40px;
+}
 .ss-as {
-  /* which account the session will use: quiet, read-only */
-  flex: none;
+  /* which account the session will use: muted, read-only */
   font-size: 11px;
-  color: var(--quiet);
+  line-height: 14px;
+  color: var(--muted);
 }
 .ss-cmd {
   font-size: 10.5px;

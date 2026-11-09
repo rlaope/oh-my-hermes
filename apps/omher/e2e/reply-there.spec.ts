@@ -41,6 +41,9 @@ const ALLOWED = new Set([
   "elsewhere.list",
   "routines.list",
   "models.options",
+  // the sidebar's usage ring and the accounts behind it: read on boot, never written here
+  "usage.read",
+  "accounts.list",
 ]);
 
 /** Screenshot after every running animation (chip / menu `pop`) has finished; under load they start late. */

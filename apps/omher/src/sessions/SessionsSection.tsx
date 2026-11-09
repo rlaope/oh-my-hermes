@@ -100,7 +100,7 @@ function NewSessionMenu({ onClose }: { onClose: () => void }) {
   };
   const installed = new Set((ss.agents ?? []).filter((a) => a.path).map((a) => a.id));
   return (
-    <Popover open onClose={onClose} align="left" width={240} label="New session" className="ss-pop">
+    <Popover open onClose={onClose} align="left" width="min(240px, calc(var(--side-w) - 16px))" label="New session" className="ss-pop">
       <div data-testid="session-menu">
         <div className="ss-h">New session</div>
         {ss.agents === null && <div className="ss-empty">Looking for agents…</div>}
@@ -120,7 +120,7 @@ function NewSessionMenu({ onClose }: { onClose: () => void }) {
               <span className="ss-ic">
                 <AgentMark agent={a.id} />
               </span>
-              <span className="ss-n ss-n-as">
+              <span className="ss-n ss-n-as" title={account ? `${def.label} ${account}` : def.label}>
                 <span className="ss-l">{def.label}</span>
                 {account && (
                   <span className="ss-as" data-testid={`session-account-${a.id}`}>

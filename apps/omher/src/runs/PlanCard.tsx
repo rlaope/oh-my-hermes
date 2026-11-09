@@ -131,7 +131,13 @@ function useFits(ref: React.RefObject<HTMLElement | null>, on: boolean, n: numbe
   useLayoutEffect(() => {
     const el = ref.current;
     if (!on || !el) return;
-    const read = () => setFits(el.scrollWidth <= el.clientWidth + 1);
+    const read = () => {
+      const fits = el.scrollWidth <= el.clientWidth + 1;
+      // hide the row now, not on the re-render: the Runs panel sizes its graph box from where the box starts, in
+      // the same layout pass (useRoom), and a late hide left that box 26px short until a later resize
+      el.parentElement?.classList.toggle("rp-hide", !(fits && n > 1));
+      setFits(fits);
+    };
     read();
     const ro = new ResizeObserver(read);
     ro.observe(el);

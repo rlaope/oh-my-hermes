@@ -112,24 +112,37 @@ test("the menu says which account a new session uses; This computer says nothing
   await expect(menu.getByTestId("session-agent-claude")).toContainText(/Claude Code\s*as work@…/);
   await expect(menu.getByTestId("session-account-claude")).not.toContainText("example.com");
   await expect(menu.getByTestId("session-account-codex")).toHaveText("as Work");
-  // the suffix is shown whole inside its row, never cut off
+  // the menu stays 8px inside both sidebar edges, so the account sits on its own muted line under the agent;
+  // both are whole at the default sidebar width, and the row's tooltip names both
+  const side = (await page.getByTestId("sidebar").boundingBox())!;
+  const pop = (await menu.locator("..").boundingBox())!;
+  expect(Math.round(pop.x - side.x)).toBe(8);
+  expect(Math.round(side.x + side.width - (pop.x + pop.width))).toBe(8);
   for (const a of ["claude", "codex"]) {
     const fits = await menu.getByTestId(`session-agent-${a}`).evaluate((row) => {
       const as = row.querySelector(".ss-as")!;
       const r = as.getBoundingClientRect();
       const box = row.querySelector(".ss-n")!.getBoundingClientRect();
       const label = row.querySelector(".ss-l")!;
+      const l = label.getBoundingClientRect();
       const cmd = row.querySelector(".ss-cmd")!.getBoundingClientRect();
       return {
-        whole: as.scrollWidth <= Math.ceil(r.width) && r.right <= box.right + 0.5 && r.width > 0,
+        whole: as.scrollWidth <= as.clientWidth && r.right <= box.right + 0.5 && r.width > 0,
         label: label.scrollWidth <= label.clientWidth,
-        gap: Math.round(cmd.left - r.right),
+        under: r.top >= l.bottom - 1 && Math.abs(r.left - l.left) < 1,
+        gap: Math.round(cmd.left - Math.max(r.right, l.right)),
+        muted: getComputedStyle(as).color === getComputedStyle(row.querySelector(".ss-cmd")!).color,
+        inRow: r.bottom <= row.getBoundingClientRect().bottom,
       };
     });
-    expect(fits.whole, a).toBe(true);
+    expect(fits.whole, `${a} account cut off`).toBe(true);
     expect(fits.label, `${a} label cut off`).toBe(true);
+    expect(fits.under, `${a} account on its own line`).toBe(true);
     expect(fits.gap, `${a} gap to the command`).toBeGreaterThanOrEqual(8);
+    expect(fits.muted, `${a} account in --muted`).toBe(true);
+    expect(fits.inRow, `${a} account inside its row`).toBe(true);
   }
+  await expect(menu.getByTestId("session-agent-claude").locator(".ss-n")).toHaveAttribute("title", "Claude Code as work@…");
   // omh has no login; pi has one but its sessions do not take an account yet
   for (const a of ["omh", "pi", "omp", "grok"]) await expect(menu.getByTestId(`session-account-${a}`)).toHaveCount(0);
   if (SHOTS) {

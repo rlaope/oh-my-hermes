@@ -571,6 +571,19 @@
 .needs-w.open .needs-chev {
   transform: rotate(180deg);
 }
+/* a command in the row preview is one unit: it never breaks across lines (`git status --short` split at `--`
+   read as a different command); the line around it wraps and clamps as a whole, and a command longer than the
+   row ellipsizes itself */
+.bot-p code {
+  white-space: nowrap;
+}
+.bot-p.ask code {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
 .bot-p.ask code,
 .needs-q code {
   font-family: var(--mono);
