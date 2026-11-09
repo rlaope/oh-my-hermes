@@ -65,6 +65,65 @@
   letter-spacing: 0.07em;
   padding: 4px 6px 2px;
 }
+/* search field at the top of the popover */
+.mp-search {
+  height: 28px;
+  border-radius: var(--r);
+  background: var(--raise);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  color: var(--quiet);
+  cursor: text;
+}
+.mp-search:focus-within {
+  border-color: var(--line-strong);
+}
+.mp-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: 0;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.mp-search input::placeholder {
+  color: var(--quiet);
+}
+.mp-search input::-webkit-search-cancel-button {
+  display: none;
+}
+/* vendor chips: All plus one per company that has a model; the chosen one is gray */
+.mp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 7px 0 3px;
+}
+.mp-chip {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.mp-chip:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+.mp-chip.on {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 11%, transparent);
+  border-color: transparent;
+}
 .mp-h2 {
   margin-top: 6px;
 }
@@ -93,12 +152,14 @@
   color: var(--body);
   text-align: left;
 }
-.mp-opt:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
+/* one highlight row, moved by the mouse or by Up/Down from the search field */
+.mp-opt.kb:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
+/* the current model: check mark and full ink; the fill belongs to the highlight row only */
 .mp-opt.on {
   color: var(--ink);
-  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  font-weight: 500;
 }
 .mp-n {
   min-width: 0;
