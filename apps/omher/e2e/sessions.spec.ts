@@ -98,6 +98,107 @@ test("+ lists the agent CLIs with their marks; missing ones are disabled", async
   await expect(menu).toHaveCount(0);
 });
 
+/** WCAG contrast of each selector's text colour on `bg` (an rgb() string). */
+async function contrast(page: Page, sels: string[], bg: string) {
+  return page.evaluate(
+    ([s, b]) => {
+      const rgb = (c: string) => c.match(/[\d.]+/g)!.slice(0, 3).map(Number);
+      const lum = (c: number[]) => {
+        const [r, g, bl] = c.map((v) => {
+          v /= 255;
+          return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+      };
+      const back = lum(rgb(b as string));
+      return (s as string[]).map((sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return [sel, 0] as const;
+        const a = lum(rgb(getComputedStyle(el).color));
+        return [sel, (Math.max(a, back) + 0.05) / (Math.min(a, back) + 0.05)] as const;
+      });
+    },
+    [sels, bg] as const,
+  );
+}
+
+for (const theme of ["dark", "light"] as const) {
+  test(`empty SESSIONS: one New session button over the installed agents, the menu inset 8px (${theme})`, async ({ page }) => {
+    await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
+    await open(page, undefined, ["claude", "codex", "omh", "pi", "omp"]);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    const none = page.getByTestId("session-none");
+    const start = none.getByTestId("session-start");
+    await expect(start).toHaveText("New session");
+    await expect(start.locator("svg")).toHaveCount(1); // the + icon
+    // the official marks of up to 4 installed agents; the first two carry their names, every name in the tooltip
+    const ag = none.getByTestId("session-start-agents");
+    expect(await ag.locator("[data-mark]").evaluateAll((els) => els.map((e) => e.getAttribute("data-mark")))).toEqual(["claude", "openai", "omh", "pi"]);
+    await expect(ag).toHaveText(/^Claude Code\s*·\s*Codex/);
+    await expect(ag).toHaveAttribute("title", "Claude Code · Codex · oh-my-hermes · pi");
+    // no long hint: at most 2 lines tall (button + agent line), so BOTS and SESSIONS stay balanced
+    expect((await none.boundingBox())!.height).toBeLessThanOrEqual(60);
+    await expect(none).not.toContainText("Start Claude Code");
+
+    // the header: the BOTS label colour, a --muted + with a 24px target and a gray hover fill
+    const head = page.locator("[data-testid=side-sessions] .side-sh");
+    const bots = page.locator("[data-testid=side-bots] .side-sh");
+    const plus = page.getByTestId("session-new");
+    expect(await head.evaluate((e) => getComputedStyle(e).color)).toBe(await bots.evaluate((e) => getComputedStyle(e).color));
+    const muted = await page.evaluate(() => {
+      const p = document.createElement("span");
+      p.style.color = "var(--muted)";
+      document.body.append(p);
+      const c = getComputedStyle(p).color;
+      p.remove();
+      return c;
+    });
+    expect(await plus.evaluate((e) => getComputedStyle(e).color)).toBe(muted);
+    const pb = (await plus.boundingBox())!;
+    expect(pb.width).toBe(24);
+    expect(pb.height).toBe(24);
+    await expect(plus).toHaveAttribute("title", "New session");
+    await plus.hover();
+    await expect.poll(() => plus.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+    await page.mouse.move(900, 780);
+
+    const side = (await page.getByTestId("sidebar").boundingBox())!;
+    const sideBg = await page.getByTestId("sidebar").evaluate((e) => getComputedStyle(e).backgroundColor);
+    for (const [sel, r] of await contrast(page, ["[data-testid=side-sessions] .side-sh", "[data-testid=session-new]", ".ss-start-n"], sideBg))
+      expect(r, sel).toBeGreaterThanOrEqual(4.5);
+
+    // the button opens the same menu, 8px in from both sidebar edges; its secondary labels meet 4.5:1
+    for (const opener of [start, plus]) {
+      await opener.click();
+      const menu = page.getByTestId("session-menu");
+      await expect(menu).toBeVisible();
+      await expect(menu.locator("[data-testid^=session-agent-]")).toHaveCount(6);
+      const pop = (await menu.locator("..").boundingBox())!;
+      expect(Math.round(pop.x - side.x)).toBe(8);
+      expect(Math.round(side.x + side.width - (pop.x + pop.width))).toBe(8);
+      const popBg = await menu.locator("..").evaluate((e) => getComputedStyle(e).backgroundColor);
+      const sec = await contrast(page, [".ss-pop .ss-h", ".ss-pop .ss-cmd", ".ss-pop .ss-missing", ".ss-pop .ss-item:disabled .ss-n"], popBg);
+      for (const [sel, r] of sec) expect(r, sel).toBeGreaterThanOrEqual(4.5);
+      await page.keyboard.press("Escape");
+      await expect(menu).toHaveCount(0);
+    }
+    await page.mouse.move(900, 780);
+    if (SHOTS) {
+      mkdirSync(SHOTS, { recursive: true });
+      await page.waitForTimeout(350);
+      await page.screenshot({ path: join(SHOTS, `sessions-empty-${theme}.png`), clip: { x: 0, y: 380, width: 560, height: 220 } });
+      await start.click();
+      await page.screenshot({ path: join(SHOTS, `sessions-empty-menu-${theme}.png`), clip: { x: 0, y: 380, width: 560, height: 420 }, animations: "disabled" });
+    }
+  });
+}
+
+test("the empty section shows no agent line when no agent is installed", async ({ page }) => {
+  await open(page, undefined, []);
+  await expect(page.getByTestId("session-start")).toBeVisible();
+  await expect(page.getByTestId("session-start-agents")).toHaveCount(0);
+});
+
 test("start a mock terminal session, type, see the echo, then switch to a bot chat and back", async ({ page }) => {
   await open(page);
   await startSession(page, "grok");

@@ -89,6 +89,17 @@ test("Claude Code opens as a chat: bubbles, one progress line, no terminal", asy
   expect((await bridgeCalls()).filter((c) => c.op === "chat.send")).toHaveLength(0);
 });
 
+test("the empty section's New session button starts a chat session, then gives way to the session row", async ({ page }) => {
+  await open(page);
+  await expect(page.getByTestId("session-start-agents")).toContainText("Claude Code");
+  await page.getByTestId("session-start").click();
+  await page.getByTestId("session-agent-claude").click();
+  await expect(page.getByTestId("session-chat")).toBeVisible();
+  await expect(page.getByTestId("session-none")).toHaveCount(0);
+  await expect(page.locator("[data-testid=session-list] .ss-row")).toHaveCount(1);
+  expect((await calls(page)).find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher" });
+});
+
 test("an approval card in a session: Deny first, answered with Allow for session, row says Needs you", async ({ page }) => {
   await open(page);
   await start(page, "claude");

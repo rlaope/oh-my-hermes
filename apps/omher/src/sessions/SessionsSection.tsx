@@ -27,10 +27,44 @@ export function SessionsHeader() {
           onClick={() => setOpen((v) => !v)}
           data-testid="session-new"
         >
-          <PlusIcon size={13} />
+          <PlusIcon size={14} />
         </button>
         {open && <NewSessionMenu onClose={() => setOpen(false)} />}
       </span>
+    </div>
+  );
+}
+
+/** The empty section: one row-sized "New session" button (opens the + menu), the installed agents under it. */
+function SessionStart() {
+  const ss = useSessions();
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (ss.agents === null) void getSessions().loadAgents();
+  }, [ss.agents]);
+  const installed = (ss.agents ?? []).filter((a) => a.path).slice(0, 4);
+  const names = installed.map((a) => agentDef(a.id).label).join(" · ");
+  return (
+    <div className="ss-none" data-testid="session-none">
+      <div className="ss-start-w">
+        <button type="button" className="ss-start" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid="session-start">
+          <PlusIcon size={14} />
+          New session
+        </button>
+        {open && <NewSessionMenu onClose={() => setOpen(false)} />}
+      </div>
+      {installed.length > 0 && (
+        // each mark next to its name; past two agents the rest show their mark only (all names in the tooltip)
+        <div className="ss-start-ag" data-testid="session-start-agents" title={names}>
+          {installed.map((a, i) => (
+            <span key={a.id} className="ss-start-a">
+              {i > 0 && <span className="ss-start-dot">·</span>}
+              <AgentMark agent={a.id} size={12} />
+              {i < 2 && <span className="ss-start-n">{agentDef(a.id).label}</span>}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -119,13 +153,7 @@ export function SessionList() {
     if (rec.status === "running" || rec.status === "starting") setConfirm(rec.id);
     else getSessions().close(rec.id);
   };
-  if (ss.list.length === 0) {
-    return (
-      <div className="ss-none" data-testid="session-none">
-        Start Claude Code, Codex or another agent in a folder with <b>+</b>
-      </div>
-    );
-  }
+  if (ss.list.length === 0) return <SessionStart />;
   return (
     <nav className="bot-list ss-list" aria-label="Sessions" data-testid="session-list">
       {ss.list.map((rec) =>

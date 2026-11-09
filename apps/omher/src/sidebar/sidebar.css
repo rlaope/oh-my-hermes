@@ -64,7 +64,7 @@
 .side-sh {
   font-size: 10.5px;
   font-weight: 500;
-  color: var(--quiet);
+  color: var(--muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 0 var(--side-x) 6px;
