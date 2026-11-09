@@ -1,8 +1,13 @@
 /* Primitives: avatar, icon button, pill, spinner, popover. */
+/* Built-in faces have their own silhouette (ghost hem, star points): draw them whole. Only a picture the
+   person uploaded is cropped to a circle. */
 .ui-av {
-  border-radius: 50%;
   display: block;
   flex: none;
+  object-fit: contain;
+}
+.ui-av[data-own] {
+  border-radius: 50%;
   object-fit: cover;
 }
 .ui-ib {
